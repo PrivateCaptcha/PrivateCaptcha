@@ -40,12 +40,10 @@ jobs:
 
     - name: Build web
       run: make build-js
-      working-directory: ./web
 
     ##############
     ## Build Go ##
     ##############
-
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
