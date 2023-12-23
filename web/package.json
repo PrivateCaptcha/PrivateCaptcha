@@ -1,0 +1,14 @@
+{
+  "name": "web",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "esbuild": "^0.19.5"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+  }
+}

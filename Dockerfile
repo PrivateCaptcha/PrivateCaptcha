@@ -1,0 +1,36 @@
+# Stage 1: Frontend build
+FROM node:latest AS frontend-builder
+
+COPY ./web /app/web
+
+WORKDIR /app/web
+
+# Install dependencies and build the frontend
+RUN npm install
+RUN npm run build
+
+# Stage 2: Backend build
+FROM golang:latest AS backend-builder
+
+# Copy the backend source code
+COPY . /app/
+
+COPY --from=frontend-builder /app/web/static /app/web/static
+
+WORKDIR /app
+
+RUN mkdir bin
+
+ARG GIT_COMMIT=HEAD
+RUN env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
+
+# Final stage: Production container
+FROM golang:latest
+
+COPY --from=backend-builder /app/bin/server /app/server
+
+ENV HOST 0.0.0.0
+ENV PORT 8080
+EXPOSE 8080
+
+CMD ["/app/server"]
