@@ -10,6 +10,8 @@ on:
     - '**/.*.yml'
     - '.vscode/**'
     - '.devcontainer/**'
+    - 'docker-compose.yml'
+    - 'Dockerfile'
     tags-ignore:
     - '*'
   pull_request:

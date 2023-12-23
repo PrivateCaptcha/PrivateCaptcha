@@ -32,12 +32,12 @@ func main() {
 	router.Handle("/", api.Logged(web.Handler()))
 	server.Setup(router)
 
-	host := os.Getenv("HOST")
+	host := os.Getenv("PC_HOST")
 	if host == "" {
 		host = "localhost"
 	}
 
-	port := os.Getenv("PORT")
+	port := os.Getenv("PC_PORT")
 	if port == "" {
 		port = "8080"
 	}
