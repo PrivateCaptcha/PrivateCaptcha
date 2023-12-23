@@ -27,4 +27,3 @@ jobs:
         INCLUDE_PATTERN: "\\.(go|js|css)$"
         EXCLUDE_PATTERN: "(vendor|node_modules)/.*"
         COMMENT_ON_ISSUES: 1
-        DRY_RUN: 1
