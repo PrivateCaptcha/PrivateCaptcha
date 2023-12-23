@@ -1,0 +1,30 @@
+name: TODOs
+on:
+  push:
+    branches:
+    - '*'
+    paths-ignore:
+    - 'docs/**'
+    - '**.md'
+    - '**/.*.yml'
+    - '.vscode/**'
+    tags-ignore:
+    - '*.*'
+
+jobs:
+  build:
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run tdg github action
+      uses: ribtoks/tdg-github-action@master
+      with:
+        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        REPO: ${{ github.repository }}
+        SHA: ${{ github.sha }}
+        REF: ${{ github.ref }}
+        INCLUDE_PATTERN: "\\.(go|js|css)$"
+        EXCLUDE_PATTERN: "(vendor|node_modules)/.*"
+        COMMENT_ON_ISSUES: 1
+        DRY_RUN: 1
