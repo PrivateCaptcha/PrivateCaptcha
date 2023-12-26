@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -8,6 +9,8 @@ import (
 	"log/slog"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
@@ -16,11 +19,14 @@ var (
 )
 
 func main() {
-	opts := &slog.HandlerOptions{
-		Level: slog.LevelDebug,
+	stage := os.Getenv("STAGE")
+	common.SetupLogs(stage, os.Getenv("VERBOSE") == "1")
+
+	pool, err := db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
+	if err != nil {
+		os.Exit(1)
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
-	slog.SetDefault(logger)
+	defer pool.Close()
 
 	server := &api.Server{
 		Prefix: "api",
@@ -48,6 +54,6 @@ func main() {
 		Addr:    host + ":" + port,
 		Handler: router,
 	}
-	err := s.ListenAndServe()
+	err = s.ListenAndServe()
 	slog.Error("Server failed", "error", err)
 }
