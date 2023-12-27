@@ -9,17 +9,17 @@ import (
 )
 
 type Property struct {
-	ID         int32
-	ExternalID pgtype.UUID
-	UserID     pgtype.Int4
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID         int32              `db:"id" json:"id"`
+	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type User struct {
-	ID         int32
-	ExternalID pgtype.UUID
-	UserName   string
-	CreatedAt  pgtype.Timestamptz
-	UpdatedAt  pgtype.Timestamptz
+	ID         int32              `db:"id" json:"id"`
+	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	UserName   string             `db:"user_name" json:"user_name"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
