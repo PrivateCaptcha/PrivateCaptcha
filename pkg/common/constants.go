@@ -5,4 +5,5 @@ const (
 	HeaderContentLength = "Content-Length"
 	HeaderAuthorization = "Authorization"
 	ContentTypePlain    = "text/plain"
+	ParamSiteKey        = "sitekey"
 )

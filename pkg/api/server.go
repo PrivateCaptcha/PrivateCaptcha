@@ -22,6 +22,7 @@ const (
 )
 
 type Server struct {
+	Auth   *AuthMiddleware
 	Prefix string
 	Salt   []byte
 }
@@ -37,8 +38,7 @@ func (s *Server) Setup(router *http.ServeMux) {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	// TODO: add user authentication middleware using sitekey
-	router.HandleFunc(prefix+common.PuzzleEndpoint, s.puzzle)
+	router.HandleFunc(prefix+common.PuzzleEndpoint, s.Auth.Authorized(s.puzzle))
 	router.HandleFunc(prefix+common.SubmitEndpoint, Method(http.MethodPost, s.submit))
 }
 

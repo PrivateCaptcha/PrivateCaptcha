@@ -8,6 +8,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Property struct {
+	ID         int32
+	ExternalID pgtype.UUID
+	UserID     pgtype.Int4
+	CreatedAt  pgtype.Timestamptz
+	UpdatedAt  pgtype.Timestamptz
+}
+
 type User struct {
 	ID         int32
 	ExternalID pgtype.UUID
