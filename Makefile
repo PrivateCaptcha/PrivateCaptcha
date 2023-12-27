@@ -35,3 +35,6 @@ run:
 run-docker:
 	echo "Will listen at http://localhost:8080/"
 	docker run --rm -p 8080:8080 $(DOCKER_IMAGE)
+
+sqlc:
+	cd pkg/db && sqlc generate
