@@ -6,4 +6,5 @@ const (
 	IPAddressContextKey ContextKey = iota
 	TraceIDContextKey   ContextKey = iota
 	ClaimsContextKey    ContextKey = iota
+	PropertyContextKey  ContextKey = iota
 )

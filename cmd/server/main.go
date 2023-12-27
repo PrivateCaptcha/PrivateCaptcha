@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
@@ -29,6 +30,9 @@ func main() {
 	defer pool.Close()
 
 	server := &api.Server{
+		Auth: &api.AuthMiddleware{
+			Queries: dbgen.New(pool),
+		},
 		Prefix: "api",
 		Salt:   []byte("salt"),
 	}
