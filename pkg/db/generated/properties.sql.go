@@ -11,11 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createProperty = `-- name: CreateProperty :one
+INSERT INTO properties (
+  user_id
+) VALUES (
+  $1
+)
+RETURNING id, external_id, user_id, created_at, updated_at
+`
+
+func (q *Queries) CreateProperty(ctx context.Context, userID pgtype.Int4) (*Property, error) {
+	row := q.db.QueryRow(ctx, createProperty, userID)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.ExternalID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const getPropertyByExternalID = `-- name: GetPropertyByExternalID :one
 SELECT id, external_id, user_id, created_at, updated_at FROM properties WHERE external_id = $1
 `
 
-func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (Property, error) {
+func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error) {
 	row := q.db.QueryRow(ctx, getPropertyByExternalID, externalID)
 	var i Property
 	err := row.Scan(
@@ -25,5 +47,5 @@ func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
-	return i, err
+	return &i, err
 }

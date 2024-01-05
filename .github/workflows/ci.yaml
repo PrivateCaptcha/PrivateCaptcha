@@ -22,6 +22,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    # Service containers to run with `build`
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_DB: privatecaptcha
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Cancel Previous Runs
       uses: styfle/cancel-workflow-action@0.12.0
@@ -54,5 +73,10 @@ jobs:
     - name: Build server
       run: make build-server
 
-    - name: Test
-      run: make test
+    - name: Unit Tests
+      run: make test-unit
+
+    - name: Integration Tests
+      run: make test-integration
+      env:
+        PC_POSTGRES: postgres://postgres:postgres@db:5432/privatecaptcha?sslmode=disable

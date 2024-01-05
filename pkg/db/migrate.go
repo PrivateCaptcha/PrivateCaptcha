@@ -30,7 +30,7 @@ func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
-	d, err := iofs.New(migrationsFS, "sql")
+	d, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from migrations IOFS", common.ErrAttr(err))
 		return nil, err

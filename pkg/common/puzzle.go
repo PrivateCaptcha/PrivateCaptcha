@@ -10,48 +10,56 @@ import (
 )
 
 const (
-	NonceSize    = 16
-	UserDataSize = 16
+	NonceSize      = 16
+	PropertyIDSize = 16
+	UserDataSize   = 16
 )
 
 type Puzzle struct {
 	Version        uint8
 	Difficulty     uint8
 	SolutionsCount uint8
-	AccountID      int32
-	PropertyID     int32
-	Nonce          []byte
+	Nonce          [NonceSize]byte
+	PropertyID     [PropertyIDSize]byte
 	Expiration     time.Time
 	UserData       []byte
 }
 
 func NewPuzzle() (*Puzzle, error) {
 	p := &Puzzle{
-		Nonce:          make([]byte, NonceSize),
 		UserData:       make([]byte, UserDataSize),
 		Expiration:     time.Now().Add(6 * time.Hour),
 		Difficulty:     65,
 		SolutionsCount: 16,
 		Version:        1,
 	}
-	if _, err := io.ReadFull(rand.Reader, p.Nonce); err != nil {
-		slog.With("error", err).Error("Failed to read random nonce")
+
+	if _, err := io.ReadFull(rand.Reader, p.Nonce[:]); err != nil {
+		slog.Error("Failed to read random nonce", ErrAttr(err))
 		return nil, err
 	}
 
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
-		slog.With("error", err).Error("Failed to read random user data")
+		slog.Error("Failed to read random user data", ErrAttr(err))
 		return nil, err
 	}
 
 	return p, nil
 }
 
+func (p *Puzzle) Valid() bool {
+	return (p.Version > 0) &&
+		(p.Difficulty > 0) &&
+		(p.SolutionsCount > 0) &&
+		//(len(p.Nonce) == NonceSize) &&
+		(!p.Expiration.IsZero()) &&
+		(len(p.UserData) == UserDataSize)
+}
+
 func (p *Puzzle) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 
 	binary.Write(&buf, binary.LittleEndian, p.Version)
-	binary.Write(&buf, binary.LittleEndian, p.AccountID)
 	binary.Write(&buf, binary.LittleEndian, p.PropertyID)
 	binary.Write(&buf, binary.LittleEndian, p.Nonce)
 	binary.Write(&buf, binary.LittleEndian, p.Difficulty)
@@ -63,7 +71,7 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 }
 
 func (p *Puzzle) UnmarshalBinary(data []byte) error {
-	if len(data) < (NonceSize + UserDataSize + 15) {
+	if len(data) < (PropertyIDSize + NonceSize + UserDataSize + 7) {
 		return io.ErrShortBuffer
 	}
 
@@ -72,14 +80,10 @@ func (p *Puzzle) UnmarshalBinary(data []byte) error {
 	p.Version = data[0]
 	offset += 1
 
-	p.AccountID = int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	offset += 4
+	copy(p.PropertyID[:], data[offset:offset+PropertyIDSize])
+	offset += PropertyIDSize
 
-	p.PropertyID = int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	offset += 4
-
-	p.Nonce = make([]byte, NonceSize)
-	copy(p.Nonce, data[offset:offset+NonceSize])
+	copy(p.Nonce[:], data[offset:offset+NonceSize])
 	offset += NonceSize
 
 	p.Difficulty = data[offset]

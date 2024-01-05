@@ -29,9 +29,13 @@ func main() {
 	}
 	defer pool.Close()
 
+	store := &db.Store{
+		Queries: dbgen.New(pool),
+	}
+
 	server := &api.Server{
 		Auth: &api.AuthMiddleware{
-			Queries: dbgen.New(pool),
+			Store: store,
 		},
 		Prefix: "api",
 		Salt:   []byte("salt"),

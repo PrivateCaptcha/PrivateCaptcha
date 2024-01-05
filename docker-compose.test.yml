@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  testserver:
+    build:
+      context: .
+      dockerfile: ./Dockerfile.test
+    ports:
+      - 8080:8080
+    environment:
+      PC_PORT: 8080
+      PC_POSTGRES: postgres://postgres:postgres@db:5432/privatecaptcha?sslmode=disable
+    depends_on:
+      - db
+    networks:
+      - test_db_network
+
+  db:
+    image: postgres:alpine
+    environment:
+      POSTGRES_DB: privatecaptcha
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    networks:
+      - test_db_network
+    volumes:
+      - test_postgres_data_volume:/var/lib/postgresql/data
+
+networks:
+  test_db_network:
+
+volumes:
+  test_postgres_data_volume:
