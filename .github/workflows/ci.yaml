@@ -79,4 +79,4 @@ jobs:
     - name: Integration Tests
       run: make test-integration
       env:
-        PC_POSTGRES: postgres://postgres:postgres@db:5432/privatecaptcha?sslmode=disable
+        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?sslmode=disable
