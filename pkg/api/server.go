@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 const (
@@ -28,18 +29,32 @@ type Server struct {
 }
 
 func (s *Server) Setup(router *http.ServeMux) {
-	prefix := s.Prefix
-	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + s.Prefix
-	}
+	if len(s.Prefix) > 0 {
+		prefix := s.Prefix
+		if !strings.HasPrefix(prefix, "/") {
+			prefix = "/" + s.Prefix
+		}
 
-	s.setupWithPrefix(prefix, router)
-	//router.HandleFunc("/", catchAll)
+		s.setupWithPrefix(prefix, router)
+	} else {
+		s.setupWithPrefix("", router)
+	}
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	router.HandleFunc(prefix+common.PuzzleEndpoint, s.Auth.Authorized(s.puzzle))
+	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Authorized(s.puzzle)))
 	router.HandleFunc(prefix+common.SubmitEndpoint, Method(http.MethodPost, s.submit))
+}
+
+func (s *Server) puzzleForProperty(property *dbgen.Property) (*common.Puzzle, error) {
+	puzzle, err := common.NewPuzzle()
+	if err != nil {
+		return nil, err
+	}
+
+	puzzle.PropertyID = property.ExternalID.Bytes
+
+	return puzzle, nil
 }
 
 func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
@@ -57,23 +72,25 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	puzzle, err := common.NewPuzzle()
+	ctx := r.Context()
+	property := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
+	puzzle, err := s.puzzleForProperty(property)
 	if err != nil {
-		slog.Error("Failed to create puzzle", "error", err)
+		slog.ErrorContext(ctx, "Failed to create puzzle", "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	puzzleBytes, err := puzzle.MarshalBinary()
 	if err != nil {
-		slog.Error("Failed to serialize puzzle", "error", err)
+		slog.ErrorContext(ctx, "Failed to serialize puzzle", "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	hasher := hmac.New(sha1.New, s.Salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
-		slog.Error("Failed to hash puzzle bytes", "error", werr)
+		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", "error", werr)
 	}
 
 	hash := hasher.Sum(nil)
@@ -83,12 +100,13 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 
 	// pause for FE spinner debugging
 	time.Sleep(time.Duration(500+rand.Intn(1000)) * time.Millisecond)
+	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
 	w.Header().Set(common.HeaderContentLength, strconv.Itoa(len(response)))
 	if _, werr := w.Write(response); werr != nil {
-		slog.Error("Failed to write puzzle response", "error", werr)
+		slog.ErrorContext(ctx, "Failed to write puzzle response", "error", werr)
 	}
 }
 
@@ -133,7 +151,8 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var puzzle common.Puzzle
-	if err := puzzle.UnmarshalBinary(puzzleBytes); err != nil {
+	if uerr := puzzle.UnmarshalBinary(puzzleBytes); uerr != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", "error", uerr)
 		http.Error(w, "Failed to unmarshal Puzzle data", http.StatusBadRequest)
 		return
 	}

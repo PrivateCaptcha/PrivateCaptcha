@@ -2,22 +2,38 @@ package common
 
 import (
 	"bytes"
+	"io"
+	"math/rand"
 	"testing"
-	"time"
 )
+
+func randInit(data []byte) {
+	for i := range data {
+		data[i] = byte(rand.Intn(256))
+	}
+}
+
+func TestPuzzleUnmarshalFail(t *testing.T) {
+	puzzle, _ := NewPuzzle()
+
+	randInit(puzzle.PropertyID[:])
+
+	data, err := puzzle.MarshalBinary()
+	if err != nil {
+		t.Fatalf("Error marshalling: %v", err)
+	}
+
+	var newPuzzle Puzzle
+	if err := newPuzzle.UnmarshalBinary(data[:len(data)-1]); err != io.ErrShortBuffer {
+		t.Error("Buffer is not too short")
+	}
+}
 
 func TestPuzzleMarshalling(t *testing.T) {
 	// Create a sample Puzzle
-	puzzle := Puzzle{
-		AccountID:      123,
-		PropertyID:     456,
-		Nonce:          []byte("example nonce 16"),
-		UserData:       []byte("userdata is 16 !"),
-		Expiration:     time.Now(),
-		Difficulty:     3,
-		SolutionsCount: 5,
-		Version:        1,
-	}
+	puzzle, _ := NewPuzzle()
+
+	randInit(puzzle.PropertyID[:])
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()
@@ -31,15 +47,11 @@ func TestPuzzleMarshalling(t *testing.T) {
 		t.Fatalf("Error unmarshalling: %v", err)
 	}
 
-	if puzzle.AccountID != newPuzzle.AccountID {
-		t.Errorf("AccountID does not match")
-	}
-
-	if puzzle.PropertyID != newPuzzle.PropertyID {
+	if !bytes.Equal(puzzle.PropertyID[:], newPuzzle.PropertyID[:]) {
 		t.Errorf("PropertyID does not match")
 	}
 
-	if !bytes.Equal(puzzle.Nonce, newPuzzle.Nonce) {
+	if !bytes.Equal(puzzle.Nonce[:], newPuzzle.Nonce[:]) {
 		t.Errorf("Nonce does not match")
 	}
 

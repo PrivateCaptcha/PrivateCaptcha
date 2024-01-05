@@ -4,8 +4,16 @@ STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
 DOCKER_IMAGE ?= private-captcha
 
-test:
-	go test ./...
+test-unit:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v -short ./...
+
+test-integration:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v ./...
+
+test-docker:
+	@docker-compose -f docker-compose.test.yml down -v
+	@docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate
+	@docker-compose -f docker-compose.test.yml down -v
 
 vendors:
 	go mod tidy
