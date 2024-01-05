@@ -6,8 +6,7 @@ import (
 	"net/http"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
 func Logged(h http.Handler) http.Handler {
@@ -31,7 +30,7 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 }
 
 type AuthMiddleware struct {
-	Queries *dbgen.Queries
+	Store *db.Store
 }
 
 func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {
@@ -53,21 +52,21 @@ func (am *AuthMiddleware) Authorized(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 		sitekey := am.retrieveSiteKey(r)
-		eid := &pgtype.UUID{}
 
-		if err := eid.UnmarshalJSON([]byte(sitekey)); err != nil || !eid.Valid {
-			slog.ErrorContext(ctx, "Cannot parse sitekey", "sitekey", sitekey, common.ErrAttr(err))
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-
+		// TODO: Add property caching in Redis
+		// Also we need to cache misses so we don't hit Postgres every time
+		property, err := am.Store.GetPropertyBySitekey(ctx, sitekey)
+		if err != nil {
+			if err == db.ErrInvalidInput {
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			} else {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
 			return
 		}
 
-		// TODO: Add property caching in Redis
-		property, err := am.Queries.GetPropertyByExternalID(ctx, *eid)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve property by external ID", "eid", sitekey, common.ErrAttr(err))
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-
+		if property == nil {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 

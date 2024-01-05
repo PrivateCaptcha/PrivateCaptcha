@@ -11,11 +11,33 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createUser = `-- name: CreateUser :one
+INSERT INTO users (
+  user_name
+) VALUES (
+  $1
+)
+RETURNING id, external_id, user_name, created_at, updated_at
+`
+
+func (q *Queries) CreateUser(ctx context.Context, userName string) (*User, error) {
+	row := q.db.QueryRow(ctx, createUser, userName)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.ExternalID,
+		&i.UserName,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const getUserByExternalID = `-- name: GetUserByExternalID :one
 SELECT id, external_id, user_name, created_at, updated_at FROM users WHERE external_id = $1
 `
 
-func (q *Queries) GetUserByExternalID(ctx context.Context, externalID pgtype.UUID) (User, error) {
+func (q *Queries) GetUserByExternalID(ctx context.Context, externalID pgtype.UUID) (*User, error) {
 	row := q.db.QueryRow(ctx, getUserByExternalID, externalID)
 	var i User
 	err := row.Scan(
@@ -25,14 +47,14 @@ func (q *Queries) GetUserByExternalID(ctx context.Context, externalID pgtype.UUI
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
-	return i, err
+	return &i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, external_id, user_name, created_at, updated_at FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
+func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i User
 	err := row.Scan(
@@ -42,5 +64,5 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
-	return i, err
+	return &i, err
 }
