@@ -1,0 +1,7 @@
+FROM golang:alpine
+
+COPY . /app/
+
+WORKDIR /app
+
+CMD GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v ./...
