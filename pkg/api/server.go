@@ -63,6 +63,7 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// TODO: Set CORS for the domain, associated with property
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "x-pc-captcha-version, Content-Type")

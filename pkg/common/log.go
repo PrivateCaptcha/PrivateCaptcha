@@ -55,7 +55,7 @@ func SetupLogs(stage string, verbose bool) {
 	}
 	if verbose {
 		opts.Level = LevelTrace
-		opts.AddSource = true
+		// opts.AddSource = true
 	}
 	handler := slog.NewJSONHandler(os.Stdout, opts)
 	ctxHandler := &contextHandler{handler}

@@ -13,6 +13,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -25,7 +26,7 @@ func main() {
 
 	pool, err := db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
 	if err != nil {
-		os.Exit(1)
+		panic(err)
 	}
 	defer pool.Close()
 
@@ -33,9 +34,20 @@ func main() {
 		Queries: dbgen.New(pool),
 	}
 
+	opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
+	if err != nil {
+		panic(err)
+	}
+	rdb := redis.NewClient(opts)
+
+	cache := &db.Cache{
+		Redis: rdb,
+	}
+
 	server := &api.Server{
 		Auth: &api.AuthMiddleware{
 			Store: store,
+			Cache: cache,
 		},
 		Prefix: "api",
 		Salt:   []byte("salt"),

@@ -6,6 +6,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const (
+	SitekeyLen = 32
+)
+
 var (
 	invalidUUID = pgtype.UUID{Valid: false}
 )
@@ -19,7 +23,7 @@ func UUIDToSiteKey(uuid pgtype.UUID) string {
 }
 
 func UUIDFromSiteKey(s string) pgtype.UUID {
-	if len(s) != 32 {
+	if len(s) != SitekeyLen {
 		return invalidUUID
 	}
 

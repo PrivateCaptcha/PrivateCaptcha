@@ -9,25 +9,36 @@ services:
       - 8080:8080
     environment:
       PC_PORT: 8080
-      PC_POSTGRES: postgres://postgres:postgres@db:5432/privatecaptcha?sslmode=disable
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
+      PC_REDIS: redis://redis:6379
     depends_on:
-      - db
+      - postgres
+      - redis
     networks:
-      - test_db_network
+      - test_postgres_network
+      - test_redis_network
 
-  db:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    networks:
+      - test_redis_network
+
+  postgres:
     image: postgres:alpine
     environment:
       POSTGRES_DB: privatecaptcha
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     networks:
-      - test_db_network
+      - test_postgres_network
     volumes:
       - test_postgres_data_volume:/var/lib/postgresql/data
 
 networks:
-  test_db_network:
+  test_postgres_network:
+  test_redis_network:
 
 volumes:
   test_postgres_data_volume:

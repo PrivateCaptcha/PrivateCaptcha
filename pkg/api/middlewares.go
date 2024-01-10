@@ -4,9 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 )
 
 func Logged(h http.Handler) http.Handler {
@@ -31,6 +33,7 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 
 type AuthMiddleware struct {
 	Store *db.Store
+	Cache *db.Cache
 }
 
 func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {
@@ -52,22 +55,32 @@ func (am *AuthMiddleware) Authorized(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 		sitekey := am.retrieveSiteKey(r)
-
-		// TODO: Add property caching in Redis
-		// Also we need to cache misses so we don't hit Postgres every time
-		property, err := am.Store.GetPropertyBySitekey(ctx, sitekey)
-		if err != nil {
-			if err == db.ErrInvalidInput {
-				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			} else {
-				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-			}
+		if len(sitekey) != utils.SitekeyLen {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		if property == nil {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
+		property, err := am.Cache.GetProperty(ctx, sitekey)
+		if property == nil || err != nil {
+			property, err = am.Store.GetPropertyBySitekey(ctx, sitekey)
+			if err != nil {
+				if err == db.ErrInvalidInput {
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				} else {
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				}
+				return
+			}
+
+			if property == nil {
+				// TODO: Cache misses so we don't hit Postgres every time
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				return
+			}
+
+			_ = am.Cache.SetProperty(ctx, property, 1*time.Minute)
+		} else {
+			_ = am.Cache.UpdateExpiration(ctx, sitekey, 1*time.Minute)
 		}
 
 		ctx = context.WithValue(ctx, common.PropertyContextKey, property)
