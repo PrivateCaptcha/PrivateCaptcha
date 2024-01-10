@@ -9,9 +9,11 @@ import (
 	"os"
 	"testing"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -27,15 +29,24 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	// common.SetupLogs("test", false)
+	common.SetupLogs("test", true)
 
 	var err error
 
 	pool, err = db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
 
 	if err != nil {
-		fmt.Printf("Failed to connect to DB: %v\n", err)
-		os.Exit(1)
+		panic(err)
+	}
+
+	opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
+	if err != nil {
+		panic(err)
+	}
+	rdb := redis.NewClient(opts)
+
+	cache := &db.Cache{
+		Redis: rdb,
 	}
 
 	defer pool.Close()
@@ -49,6 +60,7 @@ func TestMain(m *testing.M) {
 	server = &Server{
 		Auth: &AuthMiddleware{
 			Store: store,
+			Cache: cache,
 		},
 		Prefix: "",
 		Salt:   []byte("salt"),
