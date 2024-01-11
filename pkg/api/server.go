@@ -6,6 +6,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -19,8 +20,7 @@ import (
 )
 
 const (
-	PageSuccess = "/submit-success.html"
-	PageFailure = "/submit-failure.html"
+	maxSolutionsBodySize = 256 * 1024
 )
 
 type Server struct {
@@ -44,7 +44,8 @@ func (s *Server) Setup(router *http.ServeMux) {
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Authorized(s.puzzle)))
-	router.HandleFunc(prefix+common.SubmitEndpoint, Method(http.MethodPost, s.submit))
+	// TODO: Add authentication for submit endpoint
+	router.HandleFunc(prefix+common.VerifyEndpoint, Method(http.MethodPost, s.verify))
 }
 
 func (s *Server) puzzleForProperty(property *dbgen.Property) (*puzzle.Puzzle, error) {
@@ -112,13 +113,21 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
+func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	data := r.FormValue("private-captcha-solution")
+	r.Body = http.MaxBytesReader(w, r.Body, maxSolutionsBodySize)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	data := string(body)
 	parts := strings.Split(data, ".")
 	if len(parts) != 3 {
 		slog.ErrorContext(ctx, "Wrong number of parts", "count", len(parts))
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -133,7 +142,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	hasher := hmac.New(sha1.New, s.Salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
 		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", "error", werr)
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -142,13 +151,13 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	requestHash, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode hash bytes", "error", err)
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
 	if !bytes.Equal(hash, requestHash) {
 		slog.ErrorContext(ctx, "Puzzle hash is not equal", "error", err)
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -164,7 +173,7 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	solutions, err := puzzle.NewSolutions(solutionsData)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode solutions bytes", "error", err)
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
@@ -177,11 +186,13 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, p.Difficulty)
 	if (err != nil) || (solutionsCount != int(p.SolutionsCount)) {
 		slog.ErrorContext(ctx, "Failed to verify solutions", "error", err, "expected", p.SolutionsCount, "actual", solutionsCount)
-		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
+		http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)
 		return
 	}
 
-	http.Redirect(w, r, PageSuccess, http.StatusSeeOther)
+	slog.Log(ctx, common.LevelTrace, "Verified solutions", "count", solutionsCount)
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

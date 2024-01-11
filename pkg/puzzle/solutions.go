@@ -49,6 +49,10 @@ func NewSolutions(data string) (*Solutions, error) {
 	}, nil
 }
 
+func (s *Solutions) String() string {
+	return base64.StdEncoding.EncodeToString(s.Buffer)
+}
+
 // map difficulty [0, 256) -> threshold [0, 2^32)
 // with the reverse meaning (max difficulty -> min threshold)
 // f(x) = 2^((256 - x)/8)
