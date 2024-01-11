@@ -1,4 +1,4 @@
-package common
+package puzzle
 
 import (
 	"bytes"
@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 const (
@@ -35,12 +37,12 @@ func NewPuzzle() (*Puzzle, error) {
 	}
 
 	if _, err := io.ReadFull(rand.Reader, p.Nonce[:]); err != nil {
-		slog.Error("Failed to read random nonce", ErrAttr(err))
+		slog.Error("Failed to read random nonce", common.ErrAttr(err))
 		return nil, err
 	}
 
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
-		slog.Error("Failed to read random user data", ErrAttr(err))
+		slog.Error("Failed to read random user data", common.ErrAttr(err))
 		return nil, err
 	}
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 const (
@@ -46,8 +47,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(prefix+common.SubmitEndpoint, Method(http.MethodPost, s.submit))
 }
 
-func (s *Server) puzzleForProperty(property *dbgen.Property) (*common.Puzzle, error) {
-	puzzle, err := common.NewPuzzle()
+func (s *Server) puzzleForProperty(property *dbgen.Property) (*puzzle.Puzzle, error) {
+	puzzle, err := puzzle.NewPuzzle()
 	if err != nil {
 		return nil, err
 	}
@@ -151,8 +152,8 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var puzzle common.Puzzle
-	if uerr := puzzle.UnmarshalBinary(puzzleBytes); uerr != nil {
+	var p puzzle.Puzzle
+	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", "error", uerr)
 		http.Error(w, "Failed to unmarshal Puzzle data", http.StatusBadRequest)
 		return
@@ -160,22 +161,22 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: verify puzzle's account & property & Origin etc.
 
-	solutions, err := common.NewSolutions(solutionsData)
+	solutions, err := puzzle.NewSolutions(solutionsData)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode solutions bytes", "error", err)
 		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
 		return
 	}
 
-	if len(puzzleBytes) < common.PuzzleBytesLength {
-		extendedPuzzleBytes := make([]byte, common.PuzzleBytesLength)
+	if len(puzzleBytes) < puzzle.PuzzleBytesLength {
+		extendedPuzzleBytes := make([]byte, puzzle.PuzzleBytesLength)
 		copy(extendedPuzzleBytes, puzzleBytes)
 		puzzleBytes = extendedPuzzleBytes
 	}
 
-	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, puzzle.Difficulty)
-	if (err != nil) || (solutionsCount != int(puzzle.SolutionsCount)) {
-		slog.ErrorContext(ctx, "Failed to verify solutions", "error", err, "expected", puzzle.SolutionsCount, "actual", solutionsCount)
+	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, p.Difficulty)
+	if (err != nil) || (solutionsCount != int(p.SolutionsCount)) {
+		slog.ErrorContext(ctx, "Failed to verify solutions", "error", err, "expected", p.SolutionsCount, "actual", solutionsCount)
 		http.Redirect(w, r, PageFailure, http.StatusSeeOther)
 		return
 	}
