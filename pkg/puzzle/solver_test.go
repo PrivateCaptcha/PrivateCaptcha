@@ -1,0 +1,68 @@
+package puzzle
+
+import (
+	"context"
+	"fmt"
+	"testing"
+)
+
+func TestDifficultyToThreshold(t *testing.T) {
+	testCases := []struct {
+		difficulty byte
+		threshold  uint32
+	}{
+		{0, 0xffffffff},
+		{255, 1},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("difficulty_%v", i), func(t *testing.T) {
+			threshold := thresholdFromDifficulty(tc.difficulty)
+			if threshold != tc.threshold {
+				t.Errorf("Actual threshold (%v) is different from expected (%v)", threshold, tc.threshold)
+			}
+		})
+	}
+}
+
+func TestSolver(t *testing.T) {
+	times := 10
+	difficulty := uint8(165)
+
+	if testing.Short() {
+		times = 1
+		difficulty = 160
+	}
+
+	for i := 0; i < times; i++ {
+		t.Run(fmt.Sprintf("solver_%v", i), func(t *testing.T) {
+			p, err := NewPuzzle()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			p.Difficulty = difficulty
+
+			solver := &Solver{}
+			solutions, err := solver.Solve(p)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if err := solutions.CheckUnique(context.TODO()); err != nil {
+				t.Fatal(err)
+			}
+
+			puzzleBytes, _ := p.MarshalBinary()
+			puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
+			found, err := solutions.Verify(context.TODO(), puzzleBytes, difficulty)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if found != int(p.SolutionsCount) {
+				t.Errorf("Found %v solutions, but expected %v", found, p.SolutionsCount)
+			}
+		})
+	}
+}

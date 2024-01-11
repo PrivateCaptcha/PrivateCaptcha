@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 
 	"golang.org/x/crypto/blake2b"
 )
@@ -47,8 +49,29 @@ func NewSolutions(data string) (*Solutions, error) {
 	}, nil
 }
 
+// map difficulty [0, 256) -> threshold [0, 2^32)
+// with the reverse meaning (max difficulty -> min threshold)
+// f(x) = 2^((256 - x)/8)
 func thresholdFromDifficulty(difficulty uint8) uint32 {
-	return 1 << ((256 - uint32(difficulty)) / 8)
+	return uint32(math.Pow(2, (255.999999999-float64(difficulty))/8.0))
+}
+
+func (s *Solutions) CheckUnique(ctx context.Context) error {
+	uniqueSolutions := make(map[uint64]bool)
+
+	for start := 0; start < len(s.Buffer); start += SolutionLength {
+		solution := s.Buffer[start:(start + SolutionLength)]
+		uint64Value := binary.LittleEndian.Uint64(solution)
+
+		if _, ok := uniqueSolutions[uint64Value]; ok {
+			sIndex := solution[0]
+			return fmt.Errorf("duplicated solution found at index %v", sIndex)
+		}
+
+		uniqueSolutions[uint64Value] = true
+	}
+
+	return nil
 }
 
 func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty uint8) (int, error) {
