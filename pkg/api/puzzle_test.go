@@ -12,6 +12,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	_ "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -94,13 +95,13 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatalf("Failed to parse the body: %v", err)
 	}
 
-	puzzle := new(common.Puzzle)
-	err = puzzle.UnmarshalBinary(decodedData)
+	p := new(puzzle.Puzzle)
+	err = p.UnmarshalBinary(decodedData)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !puzzle.Valid() {
+	if !p.Valid() {
 		t.Errorf("Response puzzle is not valid")
 	}
 }
