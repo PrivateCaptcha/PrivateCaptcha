@@ -83,6 +83,8 @@ func (am *AuthMiddleware) Authorized(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 
+			// TODO: Verify if user is an active subscriber
+			// also not blacklisted etc.
 			if property == nil {
 				am.Cache.SetMissing(ctx, sitekey, negativeCacheDuration)
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)

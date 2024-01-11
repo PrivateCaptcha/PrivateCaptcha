@@ -6,6 +6,8 @@ import (
 )
 
 func TestUniqueSolutions(t *testing.T) {
+	t.Parallel()
+
 	solution := make([]byte, SolutionLength)
 	for i := 0; i < SolutionLength; i++ {
 		solution[i] = byte(i)

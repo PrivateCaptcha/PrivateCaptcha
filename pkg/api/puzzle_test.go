@@ -12,6 +12,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	_ "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -59,6 +60,36 @@ func TestGetPuzzleUnauthorized(t *testing.T) {
 	}
 }
 
+func fetchPuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", err
+	}
+	responseStr := string(body)
+	puzzleStr, _, _ := strings.Cut(responseStr, ".")
+	decodedData, err := base64.StdEncoding.DecodeString(puzzleStr)
+	if err != nil {
+		return nil, "", err
+	}
+
+	p := new(puzzle.Puzzle)
+	err = p.UnmarshalBinary(decodedData)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return p, responseStr, nil
+}
+
+func setupProperty(ctx context.Context, testName string) (*dbgen.Property, error) {
+	user, err := queries.CreateUser(ctx, testName)
+	if err != nil {
+		return nil, err
+	}
+
+	return queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+}
+
 func TestGetPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -66,12 +97,7 @@ func TestGetPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, t.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	property, err := queries.CreateProperty(context.TODO(), pgtype.Int4{Int32: user.ID, Valid: true})
+	property, err := setupProperty(ctx, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,18 +111,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	puzzleStr, _, _ := strings.Cut(string(body), ".")
-	decodedData, err := base64.StdEncoding.DecodeString(puzzleStr)
-	if err != nil {
-		t.Fatalf("Failed to parse the body: %v", err)
-	}
-
-	p := new(puzzle.Puzzle)
-	err = p.UnmarshalBinary(decodedData)
+	p, _, err := fetchPuzzle(resp)
 	if err != nil {
 		t.Fatal(err)
 	}

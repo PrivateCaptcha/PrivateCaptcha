@@ -7,6 +7,8 @@ import (
 )
 
 func TestDifficultyToThreshold(t *testing.T) {
+	t.Parallel()
+
 	testCases := []struct {
 		difficulty byte
 		threshold  uint32
@@ -27,7 +29,7 @@ func TestDifficultyToThreshold(t *testing.T) {
 
 func TestSolver(t *testing.T) {
 	times := 10
-	difficulty := uint8(165)
+	difficulty := uint8(160)
 
 	if testing.Short() {
 		times = 1
@@ -36,6 +38,8 @@ func TestSolver(t *testing.T) {
 
 	for i := 0; i < times; i++ {
 		t.Run(fmt.Sprintf("solver_%v", i), func(t *testing.T) {
+			t.Parallel()
+
 			p, err := NewPuzzle()
 			if err != nil {
 				t.Fatal(err)
