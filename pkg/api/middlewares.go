@@ -11,6 +11,12 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 )
 
+const (
+	// TODO: Adjust caching durations mindfully
+	cacheDuration         = 1 * time.Minute
+	negativeCacheDuration = 1 * time.Minute
+)
+
 func Logged(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Processing file request", "path", r.URL.Path, "method", r.Method)
@@ -61,6 +67,11 @@ func (am *AuthMiddleware) Authorized(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		property, err := am.Cache.GetProperty(ctx, sitekey)
+		if err == db.ErrNegativeCacheHit {
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
 		if property == nil || err != nil {
 			property, err = am.Store.GetPropertyBySitekey(ctx, sitekey)
 			if err != nil {
@@ -73,14 +84,14 @@ func (am *AuthMiddleware) Authorized(next http.HandlerFunc) http.HandlerFunc {
 			}
 
 			if property == nil {
-				// TODO: Cache misses so we don't hit Postgres every time
+				am.Cache.SetMissing(ctx, sitekey, negativeCacheDuration)
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
 
-			_ = am.Cache.SetProperty(ctx, property, 1*time.Minute)
+			_ = am.Cache.SetProperty(ctx, property, cacheDuration)
 		} else {
-			_ = am.Cache.UpdateExpiration(ctx, sitekey, 1*time.Minute)
+			_ = am.Cache.UpdateExpiration(ctx, sitekey, cacheDuration)
 		}
 
 		ctx = context.WithValue(ctx, common.PropertyContextKey, property)
