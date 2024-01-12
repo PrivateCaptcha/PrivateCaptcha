@@ -7,4 +7,6 @@ const (
 	ContentTypePlain      = "text/plain"
 	ContentTypeURLEncoded = "application/x-www-form-urlencoded"
 	ParamSiteKey          = "sitekey"
+	ParamSecret           = "secret"
+	ParamResponse         = "response"
 )

@@ -39,3 +39,24 @@ func (s *Store) GetPropertyBySitekey(ctx context.Context, sitekey string) (*dbge
 
 	return property, nil
 }
+
+func (s *Store) GetAPIKeyBySecret(ctx context.Context, secret string) (*dbgen.APIKey, error) {
+	eid := utils.UUIDFromSecret(secret)
+
+	if !eid.Valid {
+		return nil, ErrInvalidInput
+	}
+
+	apiKey, err := s.Queries.GetAPIKeyByExternalID(ctx, eid)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve API Key by external ID", "secret", secret, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	return apiKey, nil
+}

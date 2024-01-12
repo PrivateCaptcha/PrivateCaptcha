@@ -9,49 +9,46 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/redis/go-redis/v9"
 )
 
 var (
 	missingData         = []byte{0xC0, 0x00, 0x10, 0xFF} // cool off
 	ErrNegativeCacheHit = errors.New("negative hit")
+	ErrCacheMiss        = errors.New("cache miss")
 )
 
 type Cache struct {
 	Redis *redis.Client
 }
 
-func (c *Cache) GetProperty(ctx context.Context, sitekey string) (*dbgen.Property, error) {
-	val, err := c.Redis.Get(ctx, sitekey).Bytes()
+func (c *Cache) GetItem(ctx context.Context, key string, dst any) error {
+	val, err := c.Redis.Get(ctx, key).Bytes()
 	if err == redis.Nil {
-		slog.Log(ctx, common.LevelTrace, "Property is missing from cache", "sitekey", sitekey)
-		return nil, nil
+		slog.Log(ctx, common.LevelTrace, "Item is missing from cache", "key", key)
+		return ErrCacheMiss
 	}
 
 	if bytes.Equal(val, missingData) {
-		return nil, ErrNegativeCacheHit
+		return ErrNegativeCacheHit
 	}
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to get item from Redis", common.ErrAttr(err))
-		return nil, err
+		return err
 	}
-
-	property := &dbgen.Property{}
 
 	buffer := bytes.NewBuffer(val)
 	decoder := gob.NewDecoder(buffer)
 
-	if err := decoder.Decode(&property); err != nil {
-		slog.ErrorContext(ctx, "Failed to parse property from Redis data", common.ErrAttr(err))
-		return nil, err
+	if err := decoder.Decode(dst); err != nil {
+		slog.ErrorContext(ctx, "Failed to parse item from Redis data", common.ErrAttr(err))
+		return err
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Serving property from cache", "pid", property.ID)
+	slog.Log(ctx, common.LevelTrace, "Found item in cache", "key", key)
 
-	return property, nil
+	return nil
 }
 
 func (c *Cache) UpdateExpiration(ctx context.Context, key string, expiration time.Duration) error {
@@ -74,22 +71,20 @@ func (c *Cache) SetMissing(ctx context.Context, key string, expiration time.Dura
 	return err
 }
 
-func (c *Cache) SetProperty(ctx context.Context, property *dbgen.Property, expiration time.Duration) error {
+func (c *Cache) SetItem(ctx context.Context, key string, t any, expiration time.Duration) error {
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
-	if err := encoder.Encode(property); err != nil {
-		slog.ErrorContext(ctx, "Failed to serialize property", common.ErrAttr(err))
+	if err := encoder.Encode(t); err != nil {
+		slog.ErrorContext(ctx, "Failed to serialize item", common.ErrAttr(err))
 		return err
 	}
 
-	sitekey := utils.UUIDToSiteKey(property.ExternalID)
-
-	err := c.Redis.Set(ctx, sitekey, buffer.Bytes(), expiration).Err()
+	err := c.Redis.Set(ctx, key, buffer.Bytes(), expiration).Err()
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to save property to cache", "pid", property.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to save item to cache", "pid", key, common.ErrAttr(err))
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Cached property", "pid", property.ID)
+	slog.Log(ctx, common.LevelTrace, "Saved item to cache", "key", key)
 
 	return err
 }
