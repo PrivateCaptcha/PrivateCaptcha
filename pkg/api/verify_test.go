@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -95,7 +97,7 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 }
 
-func TestVerifyUnauthenticated(t *testing.T) {
+func TestVerifyInvalidKey(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -103,6 +105,44 @@ func TestVerifyUnauthenticated(t *testing.T) {
 	t.Parallel()
 
 	resp, err := verifySuite("a.b.c", utils.UUIDToSecret(*randomUUID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestVerifyExpiredKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := context.TODO()
+
+	user, err := queries.CreateUser(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, err := queries.CreateAPIKey(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = queries.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
+		ExpiresAt:  utils.Timestampz(time.Now().AddDate(0, 0, -1)),
+		ExternalID: apikey.ExternalID,
+		Enabled:    utils.Bool(true),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := verifySuite("a.b.c", utils.UUIDToSecret(apikey.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/hex"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -16,6 +17,21 @@ const (
 var (
 	invalidUUID = pgtype.UUID{Valid: false}
 )
+
+func Bool(b bool) pgtype.Bool {
+	return pgtype.Bool{
+		Bool:  b,
+		Valid: true,
+	}
+}
+
+func Timestampz(t time.Time) pgtype.Timestamptz {
+	return pgtype.Timestamptz{
+		Time:             t,
+		InfinityModifier: pgtype.Finite,
+		Valid:            true,
+	}
+}
 
 func UUIDToSiteKey(uuid pgtype.UUID) string {
 	if !uuid.Valid {

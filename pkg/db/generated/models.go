@@ -15,6 +15,7 @@ type APIKey struct {
 	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	Notes      pgtype.Text        `db:"notes" json:"notes"`
 }
 
 type Property struct {
