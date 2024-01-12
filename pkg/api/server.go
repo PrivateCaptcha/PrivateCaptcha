@@ -42,9 +42,9 @@ func (s *Server) Setup(router *http.ServeMux) {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Public(s.puzzle)))
+	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Sitekey(s.puzzle)))
 	// TODO: Add authentication for submit endpoint
-	router.HandleFunc(prefix+common.VerifyEndpoint, Logged(SafeFormPost(s.Auth.Private(s.verify), maxSolutionsBodySize)))
+	router.HandleFunc(prefix+common.VerifyEndpoint, Logged(SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
 }
 
 func (s *Server) puzzleForProperty(property *dbgen.Property) (*puzzle.Puzzle, error) {
