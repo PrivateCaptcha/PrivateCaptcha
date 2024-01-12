@@ -82,7 +82,7 @@ func (am *AuthMiddleware) retrieveSecret(r *http.Request) string {
 	return ""
 }
 
-func (am *AuthMiddleware) Public(next http.HandlerFunc) http.HandlerFunc {
+func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
@@ -132,7 +132,7 @@ func (am *AuthMiddleware) Public(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (am *AuthMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
+func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)
