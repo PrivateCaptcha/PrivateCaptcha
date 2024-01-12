@@ -99,7 +99,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
