@@ -122,3 +122,38 @@ func TestGetPuzzle(t *testing.T) {
 		t.Errorf("Response puzzle is not valid")
 	}
 }
+
+// setup is the same as for successful test, but we tombstone key in cache
+func TestPuzzleCachePriority(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	user, err := queries.CreateUser(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := utils.UUIDToSiteKey(property.ExternalID)
+
+	err = cache.SetMissing(ctx, sitekey, propertyCacheDuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := puzzleSuite(sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+}
