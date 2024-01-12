@@ -94,3 +94,20 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
 	}
 }
+
+func TestVerifyUnauthenticated(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	resp, err := verifySuite("a.b.c", utils.UUIDToSecret(*randomUUID()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
