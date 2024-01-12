@@ -20,6 +20,7 @@ var (
 	pool    *pgxpool.Pool
 	server  *Server
 	queries *dbgen.Queries
+	cache   *db.Cache
 )
 
 func TestMain(m *testing.M) {
@@ -45,7 +46,7 @@ func TestMain(m *testing.M) {
 	}
 	rdb := redis.NewClient(opts)
 
-	cache := &db.Cache{
+	cache = &db.Cache{
 		Redis: rdb,
 	}
 

@@ -132,6 +132,24 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func (am *AuthMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
+	if key == nil {
+		return false
+	}
+
+	if !key.Enabled.Valid || !key.Enabled.Bool {
+		slog.WarnContext(ctx, "API key is disabled")
+		return false
+	}
+
+	if !key.ExpiresAt.Valid || key.ExpiresAt.Time.Before(tnow) {
+		slog.WarnContext(ctx, "API key is expired", "expiresAt", key.ExpiresAt)
+		return false
+	}
+
+	return true
+}
+
 func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -159,8 +177,8 @@ func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 
-			// TODO: Verify if API key is not blocked
-			if apiKey == nil {
+			now := time.Now().UTC()
+			if !am.isAPIKeyValid(ctx, apiKey, now) {
 				am.Cache.SetMissing(ctx, secret, negativeCacheDuration)
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
