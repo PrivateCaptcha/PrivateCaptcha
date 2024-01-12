@@ -15,7 +15,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func verifySuite(response, secret string) (*http.Response, error) {
@@ -57,12 +56,12 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	apikey, err := queries.CreateAPIKey(ctx, utils.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +127,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	apikey, err := queries.CreateAPIKey(ctx, utils.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
