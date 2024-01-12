@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"log/slog"
 
@@ -71,9 +72,14 @@ func main() {
 	slog.Info("Starting", "address", fmt.Sprintf("http://%v:%v", host, port), "version", GitCommit)
 
 	s := &http.Server{
-		Addr:    host + ":" + port,
-		Handler: router,
+		Addr:              host + ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 4 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		MaxHeaderBytes:    256 * 1024,
+		WriteTimeout:      10 * time.Second,
 	}
+
 	err = s.ListenAndServe()
 	slog.Error("Server failed", "error", err)
 }
