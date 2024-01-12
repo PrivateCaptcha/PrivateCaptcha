@@ -39,17 +39,24 @@ func puzzleSuite(sitekey string) (*http.Response, error) {
 	return resp, nil
 }
 
+func randomUUID() *pgtype.UUID {
+	eid := &pgtype.UUID{Valid: true}
+
+	for i := range eid.Bytes {
+		eid.Bytes[i] = byte(rand.Int())
+	}
+
+	return eid
+}
+
 func TestGetPuzzleUnauthorized(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	eid := &pgtype.UUID{Valid: true}
-	for i := range eid.Bytes {
-		eid.Bytes[i] = byte(rand.Int())
-	}
+	t.Parallel()
 
-	resp, err := puzzleSuite(utils.UUIDToSiteKey(*eid))
+	resp, err := puzzleSuite(utils.UUIDToSiteKey(*randomUUID()))
 	if err != nil {
 		t.Fatal(err)
 	}
