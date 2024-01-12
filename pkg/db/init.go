@@ -8,4 +8,5 @@ import (
 
 func init() {
 	gob.Register(dbgen.Property{})
+	gob.Register(dbgen.APIKey{})
 }

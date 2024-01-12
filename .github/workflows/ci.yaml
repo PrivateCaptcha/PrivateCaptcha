@@ -93,4 +93,4 @@ jobs:
       run: make test-integration
       env:
         PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?sslmode=disable
-        PC_REDIS: redis://redis:6379
+        PC_REDIS: redis://localhost:6379
