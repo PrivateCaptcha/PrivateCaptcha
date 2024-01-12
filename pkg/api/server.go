@@ -6,7 +6,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -43,9 +42,9 @@ func (s *Server) Setup(router *http.ServeMux) {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Authorized(s.puzzle)))
+	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Public(s.puzzle)))
 	// TODO: Add authentication for submit endpoint
-	router.HandleFunc(prefix+common.VerifyEndpoint, Method(http.MethodPost, s.verify))
+	router.HandleFunc(prefix+common.VerifyEndpoint, Logged(SafeFormPost(s.Auth.Private(s.verify), maxSolutionsBodySize)))
 }
 
 func (s *Server) puzzleForProperty(property *dbgen.Property) (*puzzle.Puzzle, error) {
@@ -115,15 +114,8 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	r.Body = http.MaxBytesReader(w, r.Body, maxSolutionsBodySize)
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
 
-	data := string(body)
+	data := r.FormValue(common.ParamResponse)
 	parts := strings.Split(data, ".")
 	if len(parts) != 3 {
 		slog.ErrorContext(ctx, "Wrong number of parts", "count", len(parts))

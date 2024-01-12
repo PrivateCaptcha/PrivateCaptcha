@@ -12,7 +12,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	_ "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -81,15 +80,6 @@ func fetchPuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
 	return p, responseStr, nil
 }
 
-func setupProperty(ctx context.Context, testName string) (*dbgen.Property, error) {
-	user, err := queries.CreateUser(ctx, testName)
-	if err != nil {
-		return nil, err
-	}
-
-	return queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
-}
-
 func TestGetPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -97,7 +87,12 @@ func TestGetPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	property, err := setupProperty(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,26 +5,36 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func verifySuite(result string) (*http.Response, error) {
+func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	server.Setup(srv)
 
 	//srv.HandleFunc("/", catchAll)
 
-	req, err := http.NewRequest(http.MethodPost, common.VerifyEndpoint, strings.NewReader(result))
+	data := url.Values{}
+	data.Set(common.ParamSecret, secret)
+	data.Set(common.ParamResponse, response)
+
+	encoded := data.Encode()
+
+	req, err := http.NewRequest(http.MethodPost, common.VerifyEndpoint, strings.NewReader(encoded))
 	if err != nil {
 		return nil, err
 	}
 
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(encoded)))
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -40,7 +50,17 @@ func TestVerifyPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	property, err := setupProperty(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, err := queries.CreateAPIKey(ctx, pgtype.Int4{Int32: user.ID, Valid: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +85,7 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 	solutionsStr := solutions.String()
-	resp, err = verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+	resp, err = verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), utils.UUIDToSecret(apikey.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}

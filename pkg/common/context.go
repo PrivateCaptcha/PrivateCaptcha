@@ -7,4 +7,5 @@ const (
 	TraceIDContextKey   ContextKey = iota
 	ClaimsContextKey    ContextKey = iota
 	PropertyContextKey  ContextKey = iota
+	APIKeyContextKey    ContextKey = iota
 )

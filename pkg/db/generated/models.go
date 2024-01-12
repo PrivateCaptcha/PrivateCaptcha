@@ -8,6 +8,15 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type APIKey struct {
+	ID         int32              `db:"id" json:"id"`
+	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
+	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+}
+
 type Property struct {
 	ID         int32              `db:"id" json:"id"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
