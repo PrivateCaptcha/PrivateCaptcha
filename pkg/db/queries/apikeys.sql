@@ -8,3 +8,7 @@ INSERT INTO apikeys (
   $1
 )
 RETURNING *;
+
+-- name: UpdateAPIKey :exec
+UPDATE apikeys SET expires_at = $1, enabled = $2
+WHERE external_id = $3;
