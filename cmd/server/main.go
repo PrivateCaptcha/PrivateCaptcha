@@ -31,25 +31,18 @@ func main() {
 	}
 	defer pool.Close()
 
-	store := &db.Store{
-		Queries: dbgen.New(pool),
-	}
-
 	opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
 	if err != nil {
 		panic(err)
 	}
-	rdb := redis.NewClient(opts)
-
-	cache := &db.Cache{
-		Redis: rdb,
-	}
+	cache := db.NewRedisCache(opts)
+	store := db.NewStore(dbgen.New(pool), cache)
 
 	server := &api.Server{
 		Auth: &api.AuthMiddleware{
 			Store: store,
-			Cache: cache,
 		},
+		Store:  store,
 		Prefix: "api",
 		Salt:   []byte("salt"),
 	}

@@ -20,7 +20,7 @@ var (
 	pool    *pgxpool.Pool
 	server  *Server
 	queries *dbgen.Queries
-	cache   *db.Cache
+	cache   common.Cache
 )
 
 func TestMain(m *testing.M) {
@@ -44,25 +44,19 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	rdb := redis.NewClient(opts)
-
-	cache = &db.Cache{
-		Redis: rdb,
-	}
+	cache = db.NewRedisCache(opts)
 
 	defer pool.Close()
 
 	queries = dbgen.New(pool)
 
-	store := &db.Store{
-		Queries: queries,
-	}
+	store := db.NewStore(queries, cache)
 
 	server = &Server{
 		Auth: &AuthMiddleware{
 			Store: store,
-			Cache: cache,
 		},
+		Store:  store,
 		Prefix: "",
 		Salt:   []byte("salt"),
 	}
