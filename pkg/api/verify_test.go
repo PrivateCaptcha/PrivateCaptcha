@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 )
 
 func verifySuite(response, secret string) (*http.Response, error) {
@@ -56,17 +56,17 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
+	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, utils.Int(user.ID))
+	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := puzzleSuite(utils.UUIDToSiteKey(property.ExternalID))
+	resp, err := puzzleSuite(db.UUIDToSiteKey(property.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 	solutionsStr := solutions.String()
-	resp, err = verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), utils.UUIDToSecret(apikey.ExternalID))
+	resp, err = verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestVerifyInvalidKey(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := verifySuite("a.b.c", utils.UUIDToSecret(*randomUUID()))
+	resp, err := verifySuite("a.b.c", db.UUIDToSecret(*randomUUID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,21 +127,21 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, utils.Int(user.ID))
+	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = queries.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
-		ExpiresAt:  utils.Timestampz(time.Now().AddDate(0, 0, -1)),
+		ExpiresAt:  db.Timestampz(time.Now().AddDate(0, 0, -1)),
 		ExternalID: apikey.ExternalID,
-		Enabled:    utils.Bool(true),
+		Enabled:    db.Bool(true),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := verifySuite("a.b.c", utils.UUIDToSecret(apikey.ExternalID))
+	resp, err := verifySuite("a.b.c", db.UUIDToSecret(apikey.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}
