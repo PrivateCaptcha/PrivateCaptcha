@@ -44,6 +44,30 @@ func verifySuite(response, secret string) (*http.Response, error) {
 	return resp, nil
 }
 
+func solutionsSuite(ctx context.Context, sitekey string) (string, string, error) {
+	resp, err := puzzleSuite(sitekey)
+	if err != nil {
+		return "", "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("Unexpected puzzle status code %d", resp.StatusCode)
+	}
+
+	p, puzzleStr, err := fetchPuzzle(resp)
+	if err != nil {
+		return puzzleStr, "", err
+	}
+
+	solver := &puzzle.Solver{}
+	solutions, err := solver.Solve(p)
+	if err != nil {
+		return puzzleStr, "", err
+	}
+
+	return puzzleStr, solutions.String(), nil
+}
+
 func TestVerifyPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -61,37 +85,60 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := puzzleSuite(db.UUIDToSiteKey(property.ExternalID))
+	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Unexpected puzzle status code %d", resp.StatusCode)
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+// same as successful test (TestVerifyPuzzle), but invalidates api key in cache
+func TestVerifyCachePriority(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
 	}
 
-	p, puzzleStr, err := fetchPuzzle(resp)
+	ctx := context.TODO()
+
+	user, err := queries.CreateUser(ctx, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	solver := &puzzle.Solver{}
-	solutions, err := solver.Solve(p)
-	if err != nil {
-		t.Fatal(err)
-	}
-	solutionsStr := solutions.String()
-	resp, err = verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID))
+	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apiKeyID := randomUUID()
+	secret := db.UUIDToSecret(*apiKeyID)
+
+	cache.SetMissing(ctx, secret, apiKeyCacheDuration)
+
+	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
 	}
 }
