@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	_ "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -56,7 +56,7 @@ func TestGetPuzzleUnauthorized(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := puzzleSuite(utils.UUIDToSiteKey(*randomUUID()))
+	resp, err := puzzleSuite(db.UUIDToSiteKey(*randomUUID()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,12 +99,12 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
+	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err := puzzleSuite(utils.UUIDToSiteKey(property.ExternalID))
+	resp, err := puzzleSuite(db.UUIDToSiteKey(property.ExternalID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,12 +136,12 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, utils.Int(user.ID))
+	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sitekey := utils.UUIDToSiteKey(property.ExternalID)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
 	err = cache.SetMissing(ctx, sitekey, propertyCacheDuration)
 	if err != nil {

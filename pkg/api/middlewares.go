@@ -9,7 +9,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 )
 
 const (
@@ -91,7 +90,7 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 		sitekey := am.retrieveSiteKey(r)
-		if len(sitekey) != utils.SitekeyLen {
+		if len(sitekey) != db.SitekeyLen {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
@@ -154,7 +153,7 @@ func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)
-		if len(secret) != utils.SecretLen {
+		if len(secret) != db.SecretLen {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}

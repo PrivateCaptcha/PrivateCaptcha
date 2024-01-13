@@ -7,11 +7,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -100,8 +98,6 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 	encodedHash := base64.StdEncoding.EncodeToString(hash)
 	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
 
-	// pause for FE spinner debugging
-	time.Sleep(time.Duration(500+rand.Intn(1000)) * time.Millisecond)
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
 	w.WriteHeader(http.StatusOK)
@@ -175,6 +171,7 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		puzzleBytes = extendedPuzzleBytes
 	}
 
+	// TODO: Cache submitted solutions to protect against replay attacks
 	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, p.Difficulty)
 	if (err != nil) || (solutionsCount != int(p.SolutionsCount)) {
 		slog.ErrorContext(ctx, "Failed to verify solutions", "error", err, "expected", p.SolutionsCount, "actual", solutionsCount)

@@ -7,7 +7,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/utils"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -20,7 +19,7 @@ type Store struct {
 }
 
 func (s *Store) GetPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
-	eid := utils.UUIDFromSiteKey(sitekey)
+	eid := UUIDFromSiteKey(sitekey)
 
 	if !eid.Valid {
 		return nil, ErrInvalidInput
@@ -41,7 +40,7 @@ func (s *Store) GetPropertyBySitekey(ctx context.Context, sitekey string) (*dbge
 }
 
 func (s *Store) GetAPIKeyBySecret(ctx context.Context, secret string) (*dbgen.APIKey, error) {
-	eid := utils.UUIDFromSecret(secret)
+	eid := UUIDFromSecret(secret)
 
 	if !eid.Valid {
 		return nil, ErrInvalidInput
