@@ -150,6 +150,10 @@ func checkVerifyError(resp *http.Response, expected verifyError) error {
 }
 
 func TestVerifyPuzzleReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	payload, apiKey, err := setupVerifySuite(t.Name())
 	if err != nil {
 		t.Fatal(err)
