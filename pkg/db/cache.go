@@ -18,6 +18,8 @@ var (
 	ErrCacheMiss        = errors.New("cache miss")
 )
 
+// TODO: Add local limited cache before accessing Redis
+// smth like map[string]interface{}
 type cache struct {
 	redis *redis.Client
 }
@@ -28,20 +30,35 @@ func NewRedisCache(opts *redis.Options) *cache {
 
 var _ common.Cache = (*cache)(nil)
 
-func (c *cache) GetItem(ctx context.Context, key string, dst any) error {
-	val, err := c.redis.Get(ctx, key).Bytes()
+func (c *cache) Ping(ctx context.Context) error {
+	return c.redis.Ping(ctx).Err()
+}
+
+func (c *cache) GetAndExpireItem(ctx context.Context, key string, expiration time.Duration, dst any) error {
+	txPipeline := c.redis.TxPipeline()
+
+	getCmd := txPipeline.Get(ctx, key)
+	_ = txPipeline.Expire(ctx, key, expiration)
+
+	_, err := txPipeline.Exec(ctx)
 	if err == redis.Nil {
 		slog.Log(ctx, common.LevelTrace, "Item is missing from cache", "key", key)
 		return ErrCacheMiss
 	}
 
-	if bytes.Equal(val, missingData) {
-		return ErrNegativeCacheHit
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute operation with Redis", common.ErrAttr(err))
+		return err
 	}
 
+	val, err := getCmd.Bytes()
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to get item from Redis", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to get READ response", common.ErrAttr(err))
 		return err
+	}
+
+	if bytes.Equal(val, missingData) {
+		return ErrNegativeCacheHit
 	}
 
 	buffer := bytes.NewBuffer(val)

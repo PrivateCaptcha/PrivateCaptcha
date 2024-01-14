@@ -43,6 +43,7 @@ const (
 	puzzleExpiredError      verifyError = 6
 	invalidPropertyError    verifyError = 7
 	wrongOwnerError         verifyError = 8
+	verifiedBeforeError     verifyError = 9
 )
 
 type verifyResponse struct {
@@ -185,7 +186,8 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, verr := s.verifyPuzzleValid(ctx, puzzleBytes)
+	tnow := time.Now().UTC()
+	p, verr := s.verifyPuzzleValid(ctx, puzzleBytes, tnow)
 	if verr != verifyNoError {
 		s.sendVerifyErrors(ctx, w, verr)
 		return
@@ -196,10 +198,12 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = s.Store.CachePuzzle(ctx, p, tnow)
+
 	SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
 
-func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte) (*puzzle.Puzzle, verifyError) {
+func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, verifyError) {
 	p := new(puzzle.Puzzle)
 
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
@@ -207,10 +211,13 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte) (*pu
 		return nil, parseResponseError
 	}
 
-	tnow := time.Now().UTC()
-	if p.Expiration.After(tnow) {
+	if !tnow.Before(p.Expiration) {
 		slog.WarnContext(ctx, "Puzzle is expired", "expiration", p.Expiration, "now", tnow)
 		return p, puzzleExpiredError
+	}
+
+	if s.Store.CheckPuzzleCached(ctx, p) {
+		return p, verifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
@@ -239,8 +246,13 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte) (*pu
 func (s *Server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
 	solutions, err := puzzle.NewSolutions(solutionsData)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to decode solutions bytes", "error", err)
+		slog.ErrorContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
 		return parseResponseError
+	}
+
+	if uerr := solutions.CheckUnique(ctx); uerr != nil {
+		slog.ErrorContext(ctx, "Solutions are not unique", common.ErrAttr(uerr))
+		return duplicateSolutionsError
 	}
 
 	if len(puzzleBytes) < puzzle.PuzzleBytesLength {
@@ -249,10 +261,14 @@ func (s *Server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puz
 		puzzleBytes = extendedPuzzleBytes
 	}
 
-	// TODO: Cache submitted solutions to protect against replay attacks
 	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, p.Difficulty)
-	if (err != nil) || (solutionsCount != int(p.SolutionsCount)) {
-		slog.ErrorContext(ctx, "Failed to verify solutions", "error", err, "expected", p.SolutionsCount, "actual", solutionsCount)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to verify solutions", common.ErrAttr(err))
+		return invalidSolutionError
+	}
+
+	if solutionsCount != int(p.SolutionsCount) {
+		slog.WarnContext(ctx, "Invalid solutions count", "expected", p.SolutionsCount, "actual", solutionsCount)
 		return invalidSolutionError
 	}
 

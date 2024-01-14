@@ -36,6 +36,10 @@ func main() {
 		panic(err)
 	}
 	cache := db.NewRedisCache(opts)
+	err = cache.Ping(context.TODO())
+	if err != nil {
+		panic(err)
+	}
 	store := db.NewStore(dbgen.New(pool), cache)
 
 	server := &api.Server{

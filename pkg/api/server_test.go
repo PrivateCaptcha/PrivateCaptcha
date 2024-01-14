@@ -35,18 +35,21 @@ func TestMain(m *testing.M) {
 	var err error
 
 	pool, err = db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
-
 	if err != nil {
 		panic(err)
 	}
+	defer pool.Close()
 
 	opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
 	if err != nil {
 		panic(err)
 	}
-	cache = db.NewRedisCache(opts)
-
-	defer pool.Close()
+	dbCache := db.NewRedisCache(opts)
+	err = dbCache.Ping(context.TODO())
+	if err != nil {
+		panic(err)
+	}
+	cache = dbCache
 
 	queries = dbgen.New(pool)
 
