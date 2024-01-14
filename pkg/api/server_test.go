@@ -20,7 +20,7 @@ var (
 	pool    *pgxpool.Pool
 	server  *Server
 	queries *dbgen.Queries
-	cache   *db.Cache
+	cache   common.Cache
 )
 
 func TestMain(m *testing.M) {
@@ -35,34 +35,31 @@ func TestMain(m *testing.M) {
 	var err error
 
 	pool, err = db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
-
 	if err != nil {
 		panic(err)
 	}
+	defer pool.Close()
 
 	opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
 	if err != nil {
 		panic(err)
 	}
-	rdb := redis.NewClient(opts)
-
-	cache = &db.Cache{
-		Redis: rdb,
+	dbCache := db.NewRedisCache(opts)
+	err = dbCache.Ping(context.TODO())
+	if err != nil {
+		panic(err)
 	}
-
-	defer pool.Close()
+	cache = dbCache
 
 	queries = dbgen.New(pool)
 
-	store := &db.Store{
-		Queries: queries,
-	}
+	store := db.NewStore(queries, cache)
 
 	server = &Server{
 		Auth: &AuthMiddleware{
 			Store: store,
-			Cache: cache,
 		},
+		Store:  store,
 		Prefix: "",
 		Salt:   []byte("salt"),
 	}
