@@ -5,6 +5,7 @@ const (
 	HeaderContentLength   = "Content-Length"
 	HeaderAuthorization   = "Authorization"
 	ContentTypePlain      = "text/plain"
+	ContentTypeJSON       = "application/json"
 	ContentTypeURLEncoded = "application/x-www-form-urlencoded"
 	ParamSiteKey          = "sitekey"
 	ParamSecret           = "secret"

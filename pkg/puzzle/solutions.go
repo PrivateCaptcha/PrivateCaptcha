@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"math"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -108,6 +109,8 @@ func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty u
 
 		validSolutions++
 	}
+
+	slog.Log(ctx, common.LevelTrace, "Verified solutions", "count", validSolutions)
 
 	return validSolutions, nil
 }

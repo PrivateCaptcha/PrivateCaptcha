@@ -18,24 +18,47 @@ var (
 	ErrCacheMiss        = errors.New("cache miss")
 )
 
-type Cache struct {
-	Redis *redis.Client
+// TODO: Add local limited cache before accessing Redis
+// smth like map[string]interface{}
+type cache struct {
+	redis *redis.Client
 }
 
-func (c *Cache) GetItem(ctx context.Context, key string, dst any) error {
-	val, err := c.Redis.Get(ctx, key).Bytes()
+func NewRedisCache(opts *redis.Options) *cache {
+	return &cache{redis: redis.NewClient(opts)}
+}
+
+var _ common.Cache = (*cache)(nil)
+
+func (c *cache) Ping(ctx context.Context) error {
+	return c.redis.Ping(ctx).Err()
+}
+
+func (c *cache) GetAndExpireItem(ctx context.Context, key string, expiration time.Duration, dst any) error {
+	txPipeline := c.redis.TxPipeline()
+
+	getCmd := txPipeline.Get(ctx, key)
+	_ = txPipeline.Expire(ctx, key, expiration)
+
+	_, err := txPipeline.Exec(ctx)
 	if err == redis.Nil {
 		slog.Log(ctx, common.LevelTrace, "Item is missing from cache", "key", key)
 		return ErrCacheMiss
 	}
 
-	if bytes.Equal(val, missingData) {
-		return ErrNegativeCacheHit
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute operation with Redis", common.ErrAttr(err))
+		return err
 	}
 
+	val, err := getCmd.Bytes()
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to get item from Redis", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to get READ response", common.ErrAttr(err))
 		return err
+	}
+
+	if bytes.Equal(val, missingData) {
+		return ErrNegativeCacheHit
 	}
 
 	buffer := bytes.NewBuffer(val)
@@ -51,8 +74,8 @@ func (c *Cache) GetItem(ctx context.Context, key string, dst any) error {
 	return nil
 }
 
-func (c *Cache) UpdateExpiration(ctx context.Context, key string, expiration time.Duration) error {
-	err := c.Redis.Expire(ctx, key, expiration).Err()
+func (c *cache) UpdateExpiration(ctx context.Context, key string, expiration time.Duration) error {
+	err := c.redis.Expire(ctx, key, expiration).Err()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update key expiration in Redis", "key", key, common.ErrAttr(err))
 	}
@@ -60,8 +83,8 @@ func (c *Cache) UpdateExpiration(ctx context.Context, key string, expiration tim
 	return err
 }
 
-func (c *Cache) SetMissing(ctx context.Context, key string, expiration time.Duration) error {
-	err := c.Redis.Set(ctx, key, missingData, expiration).Err()
+func (c *cache) SetMissing(ctx context.Context, key string, expiration time.Duration) error {
+	err := c.redis.Set(ctx, key, missingData, expiration).Err()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to cache missing item", "key", key, common.ErrAttr(err))
 	}
@@ -71,7 +94,7 @@ func (c *Cache) SetMissing(ctx context.Context, key string, expiration time.Dura
 	return err
 }
 
-func (c *Cache) SetItem(ctx context.Context, key string, t any, expiration time.Duration) error {
+func (c *cache) SetItem(ctx context.Context, key string, t any, expiration time.Duration) error {
 	var buffer bytes.Buffer
 	encoder := gob.NewEncoder(&buffer)
 	if err := encoder.Encode(t); err != nil {
@@ -79,7 +102,7 @@ func (c *Cache) SetItem(ctx context.Context, key string, t any, expiration time.
 		return err
 	}
 
-	err := c.Redis.Set(ctx, key, buffer.Bytes(), expiration).Err()
+	err := c.redis.Set(ctx, key, buffer.Bytes(), expiration).Err()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to save item to cache", "pid", key, common.ErrAttr(err))
 	}

@@ -11,13 +11,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-const (
-	// TODO: Adjust caching durations mindfully
-	propertyCacheDuration = 1 * time.Minute
-	apiKeyCacheDuration   = 1 * time.Minute
-	negativeCacheDuration = 1 * time.Minute
-)
-
 func Logged(h http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		slog.Debug("Processing API request", "path", r.URL.Path, "method", r.Method)
@@ -60,7 +53,6 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 
 type AuthMiddleware struct {
 	Store *db.Store
-	Cache *db.Cache
 }
 
 func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {
@@ -95,37 +87,21 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		property := &dbgen.Property{}
-		err := am.Cache.GetItem(ctx, sitekey, property)
-		if err == db.ErrNegativeCacheHit {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		property, err := am.Store.RetrieveProperty(ctx, sitekey)
+
+		if err != nil {
+			if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			} else if err == db.ErrInvalidInput {
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			} else {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
 			return
 		}
 
-		if err != nil {
-			property, err = am.Store.GetPropertyBySitekey(ctx, sitekey)
-			if err != nil {
-				if err == db.ErrInvalidInput {
-					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-				} else {
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				}
-				return
-			}
-
-			// TODO: Verify if user is an active subscriber
-			// also not blacklisted etc.
-			if property == nil {
-				am.Cache.SetMissing(ctx, sitekey, negativeCacheDuration)
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-				return
-			}
-
-			_ = am.Cache.SetItem(ctx, sitekey, property, propertyCacheDuration)
-		} else {
-			_ = am.Cache.UpdateExpiration(ctx, sitekey, propertyCacheDuration)
-		}
-
+		// TODO: Verify if user is an active subscriber
+		// also not blacklisted etc.
 		ctx = context.WithValue(ctx, common.PropertyContextKey, property)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
@@ -158,34 +134,23 @@ func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		apiKey := &dbgen.APIKey{}
-		err := am.Cache.GetItem(ctx, secret, apiKey)
-		if err == db.ErrNegativeCacheHit {
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		apiKey, err := am.Store.RetrieveAPIKey(ctx, secret)
+		if err != nil {
+			if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
+				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			} else if err == db.ErrInvalidInput {
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			} else {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			}
 			return
 		}
 
-		if err != nil {
-			apiKey, err = am.Store.GetAPIKeyBySecret(ctx, secret)
-			if err != nil {
-				if err == db.ErrInvalidInput {
-					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-				} else {
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				}
-				return
-			}
-
-			now := time.Now().UTC()
-			if !am.isAPIKeyValid(ctx, apiKey, now) {
-				am.Cache.SetMissing(ctx, secret, negativeCacheDuration)
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-				return
-			}
-
-			_ = am.Cache.SetItem(ctx, secret, apiKey, apiKeyCacheDuration)
-		} else {
-			_ = am.Cache.UpdateExpiration(ctx, secret, apiKeyCacheDuration)
+		now := time.Now().UTC()
+		if !am.isAPIKeyValid(ctx, apiKey, now) {
+			// am.Cache.SetMissing(ctx, secret, negativeCacheDuration)
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
 		}
 
 		ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
