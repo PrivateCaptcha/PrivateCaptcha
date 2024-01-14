@@ -30,7 +30,7 @@ type Puzzle struct {
 func NewPuzzle() (*Puzzle, error) {
 	p := &Puzzle{
 		UserData:       make([]byte, UserDataSize),
-		Expiration:     time.Now().Add(6 * time.Hour),
+		Expiration:     time.Now().UTC().Add(6 * time.Hour),
 		Difficulty:     65,
 		SolutionsCount: 16,
 		Version:        1,

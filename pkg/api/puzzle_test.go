@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -143,7 +144,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	err = cache.SetMissing(ctx, sitekey, propertyCacheDuration)
+	err = cache.SetMissing(ctx, sitekey, 1*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

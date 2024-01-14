@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -68,40 +70,112 @@ func solutionsSuite(ctx context.Context, sitekey string) (string, string, error)
 	return puzzleStr, solutions.String(), nil
 }
 
+func setupVerifySuite(username string) (string, string, error) {
+	ctx := context.TODO()
+
+	user, err := queries.CreateUser(ctx, username)
+	if err != nil {
+		return "", "", err
+	}
+
+	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
+	if err != nil {
+		return "", "", err
+	}
+
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
+	if err != nil {
+		return "", "", err
+	}
+
+	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID), nil
+}
+
 func TestVerifyPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
-
-	user, err := queries.CreateUser(ctx, t.Name())
+	payload, apiKey, err := setupVerifySuite(t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID))
+	resp, err := verifySuite(payload, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func checkVerifyError(resp *http.Response, expected verifyError) error {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	response := &verifyResponse{}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return err
+	}
+
+	if expected == verifyNoError {
+		if !response.Success {
+			return fmt.Errorf("Expected successful verification")
+		}
+
+		if len(response.ErrorCodes) > 0 {
+			return fmt.Errorf("Error codes present in response")
+		}
+	} else {
+		if len(response.ErrorCodes) == 0 {
+			return fmt.Errorf("No error codes in response")
+		}
+
+		if response.ErrorCodes[0] != expected {
+			return fmt.Errorf("Unexpected error code: %v", response.ErrorCodes[0])
+		}
+	}
+
+	return nil
+}
+
+func TestVerifyPuzzleReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	payload, apiKey, err := setupVerifySuite(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := verifySuite(payload, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	// now second time the same
+	resp, err = verifySuite(payload, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := checkVerifyError(resp, verifiedBeforeError); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -131,7 +205,7 @@ func TestVerifyCachePriority(t *testing.T) {
 	apiKeyID := randomUUID()
 	secret := db.UUIDToSecret(*apiKeyID)
 
-	cache.SetMissing(ctx, secret, apiKeyCacheDuration)
+	cache.SetMissing(ctx, secret, 1*time.Minute)
 
 	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), secret)
 	if err != nil {
