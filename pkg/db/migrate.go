@@ -17,7 +17,7 @@ const (
 	migrationsSchema = "public"
 )
 
-//go:embed migrations/*.sql
+//go:embed migrations/postgres/*.sql
 var migrationsFS embed.FS
 
 func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
@@ -30,7 +30,7 @@ func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
-	d, err := iofs.New(migrationsFS, "migrations")
+	d, err := iofs.New(migrationsFS, "migrations/postgres")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from migrations IOFS", common.ErrAttr(err))
 		return nil, err
