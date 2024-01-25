@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	var err error
 
-	pool, err = db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
+	pool, err = db.ConnectPostgres(context.TODO(), os.Getenv("PC_POSTGRES"))
 	if err != nil {
 		panic(err)
 	}
