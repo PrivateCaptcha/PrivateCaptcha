@@ -11,9 +11,9 @@ test-integration:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v ./...
 
 test-docker:
-	@docker-compose -f docker-compose.test.yml down -v
-	@docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate
-	@docker-compose -f docker-compose.test.yml down -v
+	@docker-compose -f docker/docker-compose.test.yml down -v
+	@docker-compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate
+	@docker-compose -f docker/docker-compose.test.yml down -v
 
 vendors:
 	go mod tidy
@@ -28,7 +28,7 @@ deploy:
 	echo "Nothing here"
 
 build-docker:
-	docker build --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(DOCKER_IMAGE):latest .
+	docker build -f ./docker/Dockerfile --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(DOCKER_IMAGE):latest .
 
 build-js:
 	rm -v web/static/js/* || echo 'Nothing to remove'
