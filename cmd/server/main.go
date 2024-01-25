@@ -25,7 +25,7 @@ func main() {
 	stage := os.Getenv("STAGE")
 	common.SetupLogs(stage, os.Getenv("VERBOSE") == "1")
 
-	pool, err := db.Connect(context.TODO(), os.Getenv("PC_POSTGRES"))
+	pool, err := db.ConnectPostgres(context.TODO(), os.Getenv("PC_POSTGRES"))
 	if err != nil {
 		panic(err)
 	}
