@@ -14,13 +14,13 @@ import (
 )
 
 const (
-	migrationsSchema = "public"
+	pgMigrationsSchema = "public"
 )
 
 //go:embed migrations/postgres/*.sql
-var migrationsFS embed.FS
+var pgMigrationsFS embed.FS
 
-func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+func ConnectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
@@ -30,7 +30,7 @@ func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
-	d, err := iofs.New(migrationsFS, "migrations/postgres")
+	d, err := iofs.New(pgMigrationsFS, "migrations/postgres")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from migrations IOFS", common.ErrAttr(err))
 		return nil, err
@@ -39,7 +39,7 @@ func Connect(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	// NOTE: beware the run migrations twice problem with migrate, related to search_path
 	// https://github.com/golang-migrate/migrate/blob/master/database/postgres/TUTORIAL.md#fix-issue-where-migrations-run-twice
 	// the fix is to add '&search_path=public' to the connection string to force specific schema (for migrations table only)
-	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{SchemaName: migrationsSchema})
+	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{SchemaName: pgMigrationsSchema})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create migrate driver", common.ErrAttr(err))
 		return nil, err
