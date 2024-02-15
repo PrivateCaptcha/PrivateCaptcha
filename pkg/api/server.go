@@ -16,6 +16,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -27,6 +28,7 @@ const (
 type Server struct {
 	Auth   *AuthMiddleware
 	Store  *db.Store
+	Levels *difficulty.Levels
 	Prefix string
 	Salt   []byte
 }
@@ -72,13 +74,21 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(prefix+common.VerifyEndpoint, Logged(SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
 }
 
-func (s *Server) puzzleForProperty(property *dbgen.Property) (*puzzle.Puzzle, error) {
+func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	puzzle, err := puzzle.NewPuzzle()
 	if err != nil {
 		return nil, err
 	}
 
+	ctx := r.Context()
+	property := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
+
 	puzzle.PropertyID = property.ExternalID.Bytes
+
+	// TODO: anonymize user agent
+	puzzle.Difficulty = s.Levels.Difficulty(r.UserAgent(), property)
+
+	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
 	return puzzle, nil
 }
@@ -100,8 +110,7 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	property := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
-	puzzle, err := s.puzzleForProperty(property)
+	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", "error", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -124,8 +133,6 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 	encodedPuzzle := base64.StdEncoding.EncodeToString(puzzleBytes)
 	encodedHash := base64.StdEncoding.EncodeToString(hash)
 	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
-
-	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)

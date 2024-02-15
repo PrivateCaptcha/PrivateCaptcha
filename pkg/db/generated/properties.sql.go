@@ -17,7 +17,7 @@ INSERT INTO properties (
 ) VALUES (
   $1
 )
-RETURNING id, external_id, user_id, created_at, updated_at
+RETURNING id, external_id, user_id, difficulty_level, difficulty_growth, created_at, updated_at
 `
 
 func (q *Queries) CreateProperty(ctx context.Context, userID pgtype.Int4) (*Property, error) {
@@ -27,6 +27,8 @@ func (q *Queries) CreateProperty(ctx context.Context, userID pgtype.Int4) (*Prop
 		&i.ID,
 		&i.ExternalID,
 		&i.UserID,
+		&i.DifficultyLevel,
+		&i.DifficultyGrowth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -34,7 +36,7 @@ func (q *Queries) CreateProperty(ctx context.Context, userID pgtype.Int4) (*Prop
 }
 
 const getPropertyByExternalID = `-- name: GetPropertyByExternalID :one
-SELECT id, external_id, user_id, created_at, updated_at FROM properties WHERE external_id = $1
+SELECT id, external_id, user_id, difficulty_level, difficulty_growth, created_at, updated_at FROM properties WHERE external_id = $1
 `
 
 func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error) {
@@ -44,6 +46,8 @@ func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype
 		&i.ID,
 		&i.ExternalID,
 		&i.UserID,
+		&i.DifficultyLevel,
+		&i.DifficultyGrowth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

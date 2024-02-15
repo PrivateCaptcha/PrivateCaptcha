@@ -7,6 +7,9 @@ DOCKER_IMAGE ?= private-captcha
 test-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v -short ./...
 
+bench-unit:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -bench=. -benchtime=6s -short ./...
+
 test-integration:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v ./...
 
@@ -41,8 +44,10 @@ run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
 
 run-docker:
-	echo "Will listen at http://localhost:8080/"
-	docker run --rm -p 8080:8080 $(DOCKER_IMAGE)
+	@docker-compose -f docker/docker-compose.yml up --build
+
+clean-docker:
+	@docker-compose -f docker/docker-compose.yml down -v
 
 sqlc:
 	cd pkg/db && sqlc generate
