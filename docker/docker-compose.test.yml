@@ -11,15 +11,25 @@ services:
       PC_PORT: 8080
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
       PC_REDIS: redis://redis:6379
+      PC_CLICKHOUSE_HOST: clickhouse
+      PC_CLICKHOUSE_DB: privatecaptcha
+      # VERBOSE: 1
     depends_on:
       - postgres
       - redis
+      - clickhouse
     networks:
       - test_postgres_network
       - test_redis_network
+      - test_clickhouse_network
 
   redis:
     image: "redis:alpine"
+    healthcheck:
+      test: redis-cli ping
+      interval: 3s
+      timeout: 3s
+      retries: 3
     ports:
       - "6379:6379"
     networks:
@@ -31,14 +41,45 @@ services:
       POSTGRES_DB: privatecaptcha
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: pg_isready -U postgres -d privatecaptcha
+      interval: 3s
+      timeout: 3s
+      retries: 3
     networks:
       - test_postgres_network
     volumes:
       - test_postgres_data_volume:/var/lib/postgresql/data
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    environment:
+      CLICKHOUSE_DB: privatecaptcha
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/?query=SELECT%201 || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 3
+    ports:
+      - '9000:9000' # Native client interface
+      #- '8123:8123' # HTTP interface
+    networks:
+      - test_clickhouse_network
+    volumes:
+      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml
+      - test_clickhouse_data_volume:/var/lib/clickhouse
+      # uncomment for debugging
+      # - ./clickhouse-logs:/var/log/clickhouse-server/
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
 networks:
   test_postgres_network:
   test_redis_network:
+  test_clickhouse_network:
 
 volumes:
   test_postgres_data_volume:
+  test_clickhouse_data_volume:
