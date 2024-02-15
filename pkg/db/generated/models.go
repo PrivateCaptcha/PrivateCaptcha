@@ -5,8 +5,97 @@
 package generated
 
 import (
+	"database/sql/driver"
+	"fmt"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type DifficultyGrowth string
+
+const (
+	DifficultyGrowthSlow   DifficultyGrowth = "slow"
+	DifficultyGrowthMedium DifficultyGrowth = "medium"
+	DifficultyGrowthFast   DifficultyGrowth = "fast"
+)
+
+func (e *DifficultyGrowth) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DifficultyGrowth(s)
+	case string:
+		*e = DifficultyGrowth(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DifficultyGrowth: %T", src)
+	}
+	return nil
+}
+
+type NullDifficultyGrowth struct {
+	DifficultyGrowth DifficultyGrowth `json:"difficulty_growth"`
+	Valid            bool             `json:"valid"` // Valid is true if DifficultyGrowth is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDifficultyGrowth) Scan(value interface{}) error {
+	if value == nil {
+		ns.DifficultyGrowth, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DifficultyGrowth.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DifficultyGrowth), nil
+}
+
+type DifficultyLevel string
+
+const (
+	DifficultyLevelSmall  DifficultyLevel = "small"
+	DifficultyLevelMedium DifficultyLevel = "medium"
+	DifficultyLevelHigh   DifficultyLevel = "high"
+)
+
+func (e *DifficultyLevel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DifficultyLevel(s)
+	case string:
+		*e = DifficultyLevel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DifficultyLevel: %T", src)
+	}
+	return nil
+}
+
+type NullDifficultyLevel struct {
+	DifficultyLevel DifficultyLevel `json:"difficulty_level"`
+	Valid           bool            `json:"valid"` // Valid is true if DifficultyLevel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDifficultyLevel) Scan(value interface{}) error {
+	if value == nil {
+		ns.DifficultyLevel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DifficultyLevel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDifficultyLevel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DifficultyLevel), nil
+}
 
 type APIKey struct {
 	ID         int32              `db:"id" json:"id"`
@@ -19,17 +108,18 @@ type APIKey struct {
 }
 
 type Property struct {
-	ID         int32              `db:"id" json:"id"`
-	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
-	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	ID               int32              `db:"id" json:"id"`
+	ExternalID       pgtype.UUID        `db:"external_id" json:"external_id"`
+	UserID           pgtype.Int4        `db:"user_id" json:"user_id"`
+	DifficultyLevel  DifficultyLevel    `db:"difficulty_level" json:"difficulty_level"`
+	DifficultyGrowth DifficultyGrowth   `db:"difficulty_growth" json:"difficulty_growth"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type User struct {
-	ID         int32              `db:"id" json:"id"`
-	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
-	UserName   string             `db:"user_name" json:"user_name"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	ID        int32              `db:"id" json:"id"`
+	UserName  string             `db:"user_name" json:"user_name"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }

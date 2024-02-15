@@ -18,22 +18,27 @@ const (
 )
 
 //go:embed migrations/postgres/*.sql
-var pgMigrationsFS embed.FS
+var postgresMigrationsFS embed.FS
 
 func ConnectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	slog.Debug("Connecting to Postgres...")
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
 		return nil, err
 	}
 
+	return pool, nil
+}
+
+func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
-	d, err := iofs.New(pgMigrationsFS, "migrations/postgres")
+	d, err := iofs.New(postgresMigrationsFS, "migrations/postgres")
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read from migrations IOFS", common.ErrAttr(err))
-		return nil, err
+		slog.ErrorContext(ctx, "Failed to read from Postgres migrations IOFS", common.ErrAttr(err))
+		return err
 	}
 
 	// NOTE: beware the run migrations twice problem with migrate, related to search_path
@@ -42,23 +47,23 @@ func ConnectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{SchemaName: pgMigrationsSchema})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create migrate driver", common.ErrAttr(err))
-		return nil, err
+		return err
 	}
 
 	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create migration engine", common.ErrAttr(err))
-		return nil, err
+		slog.ErrorContext(ctx, "Failed to create migration engine for Postgres", common.ErrAttr(err))
+		return err
 	}
 
-	slog.DebugContext(ctx, "Running migrations...")
+	slog.DebugContext(ctx, "Running Postgres migrations...")
 	err = m.Up()
 	if err != nil && err != migrate.ErrNoChange {
-		slog.ErrorContext(ctx, "Failed to apply migrations", common.ErrAttr(err))
-		return nil, err
+		slog.ErrorContext(ctx, "Failed to apply migrations in Postgres", common.ErrAttr(err))
+		return err
 	}
 
-	slog.InfoContext(ctx, "Database migrated")
+	slog.DebugContext(ctx, "Postgres migrated")
 
-	return pool, nil
+	return nil
 }

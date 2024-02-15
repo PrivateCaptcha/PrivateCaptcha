@@ -90,11 +90,12 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		property, err := am.Store.RetrieveProperty(ctx, sitekey)
 
 		if err != nil {
-			if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
+			switch err {
+			case db.ErrNegativeCacheHit, db.ErrRecordNotFound:
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			} else if err == db.ErrInvalidInput {
+			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			} else {
+			default:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 			return

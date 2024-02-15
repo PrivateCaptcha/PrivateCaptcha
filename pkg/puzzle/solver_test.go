@@ -70,3 +70,54 @@ func TestSolver(t *testing.T) {
 		})
 	}
 }
+
+func benchmarkDifficulty(difficulty uint8, b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		p, err := NewPuzzle()
+		if err != nil {
+			b.Fatal(err)
+		}
+		p.Difficulty = difficulty
+
+		solver := &Solver{}
+		solutions, err := solver.Solve(p)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		puzzleBytes, _ := p.MarshalBinary()
+		puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
+		_, err = solutions.Verify(context.TODO(), puzzleBytes, difficulty)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkDifficulty10(b *testing.B) {
+	benchmarkDifficulty(10, b)
+}
+
+func BenchmarkDifficulty50(b *testing.B) {
+	benchmarkDifficulty(50, b)
+}
+
+func BenchmarkDifficulty100(b *testing.B) {
+	benchmarkDifficulty(100, b)
+}
+
+func BenchmarkDifficulty130(b *testing.B) {
+	benchmarkDifficulty(130, b)
+}
+
+func BenchmarkDifficulty150(b *testing.B) {
+	benchmarkDifficulty(150, b)
+}
+
+func BenchmarkDifficulty165(b *testing.B) {
+	benchmarkDifficulty(165, b)
+}
+
+func BenchmarkDifficulty180(b *testing.B) {
+	benchmarkDifficulty(180, b)
+}
