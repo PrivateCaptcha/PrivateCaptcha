@@ -10,20 +10,16 @@ services:
     environment:
       PC_PORT: 8080
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
-      PC_REDIS: redis://redis:6379
         #PC_CLICKHOUSE: clickhouse://pcuser:pcpwd@clickhouse:9000/privatecaptcha?x-multi-statement=true&debug=true
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_started
       clickhouse:
         condition: service_healthy
     networks:
       - postgres_network
-      - redis_network
       - clickhouse_network
 
   postgres:
@@ -41,18 +37,6 @@ services:
       - postgres_network
     volumes:
       - postgres_data_volume:/var/lib/postgresql/data
-
-  redis:
-    image: "redis"
-    healthcheck:
-      test: redis-cli ping
-      interval: 3s
-      timeout: 3s
-      retries: 3
-    ports:
-      - "6379:6379"
-    networks:
-      - redis_network
 
   clickhouse:
     image: clickhouse/clickhouse-server:23.8-alpine
@@ -80,7 +64,6 @@ services:
 
 networks:
   postgres_network:
-  redis_network:
   clickhouse_network:
 
 volumes:

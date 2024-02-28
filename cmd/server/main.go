@@ -17,14 +17,12 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/sync/errgroup"
 )
 
 var (
 	GitCommit  string
 	pool       *pgxpool.Pool // Postgres will be needed by http server for dashboard and API
-	cache      common.Cache  // cache will be needed by everybody
 	clickhouse *sql.DB       // clickhouse will be needed by API server and dashboard
 )
 
@@ -68,17 +66,6 @@ func main() {
 		return db.MigratePostgres(ctx, pool)
 	})
 
-	errs.Go(func() error {
-		opts, err := redis.ParseURL(os.Getenv("PC_REDIS"))
-		if err != nil {
-			return err
-		}
-
-		redis := db.NewRedisCache(opts)
-		cache = redis
-		return redis.Ping(ctx)
-	})
-
 	if err := errs.Wait(); err != nil {
 		panic(err)
 	}
@@ -86,13 +73,14 @@ func main() {
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	store := db.NewStore(dbgen.New(pool), cache)
+	store := db.NewStore(dbgen.New(pool), db.NewMemoryCache(1*time.Minute))
+	go store.CleanupCache(context.Background(), 5*time.Minute)
 
 	levels := difficulty.NewLevels(clickhouse, levelsBatchSize, propertyBucketSize)
 	// TODO: Cancel context during graceful shutdown
 	go levels.ProcessAccessLog(context.Background(), 2*time.Second)
 	go levels.BackfillDifficulty(context.Background(), propertyBucketSize)
-	go levels.CleanupStats()
+	go levels.CleanupStats(context.Background())
 
 	server := &api.Server{
 		Auth: &api.AuthMiddleware{

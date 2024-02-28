@@ -181,7 +181,7 @@ func (l *Levels) recordAccess(fingerprint string, p *dbgen.Property, tnow time.T
 	l.accessChan <- ar
 }
 
-func cleanupStatsImpl(maxInterval time.Duration, defaultChunkSize int, deleter func(t time.Time, size int) int) {
+func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChunkSize int, deleter func(t time.Time, size int) int) {
 	b := &backoff.Backoff{
 		Min:    1 * time.Second,
 		Max:    maxInterval,
@@ -191,30 +191,35 @@ func cleanupStatsImpl(maxInterval time.Duration, defaultChunkSize int, deleter f
 
 	deleteChunk := defaultChunkSize
 
-	for {
-		time.Sleep(b.Duration())
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+		default:
+			time.Sleep(b.Duration())
 
-		deleted := deleter(time.Now().UTC(), deleteChunk)
-		if deleted == 0 {
-			deleteChunk = defaultChunkSize
-			continue
-		}
+			deleted := deleter(time.Now().UTC(), deleteChunk)
+			if deleted == 0 {
+				deleteChunk = defaultChunkSize
+				continue
+			}
 
-		slog.Debug("Deleted expired property counts", "count", deleted)
+			slog.Debug("Deleted expired property counts", "count", deleted)
 
-		// in case of any deletes, we want to go back to small interval first
-		b.Reset()
+			// in case of any deletes, we want to go back to small interval first
+			b.Reset()
 
-		if deleted == deleteChunk {
-			deleteChunk *= 2
+			if deleted == deleteChunk {
+				deleteChunk *= 2
+			}
 		}
 	}
 }
 
-func (l *Levels) CleanupStats() {
+func (l *Levels) CleanupStats(ctx context.Context) {
 	// bucket window is currently 5 minutes so it may change at a minute step
 	// here we have 30 seconds since 1 minute sounds way too long
-	cleanupStatsImpl(30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
+	cleanupStatsImpl(ctx, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
 		return l.counts.Cleanup(t, 5 /*buckets*/, size)
 	})
 }

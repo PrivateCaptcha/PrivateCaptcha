@@ -205,7 +205,9 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = s.Store.CachePuzzle(ctx, p, tnow)
+	if cerr := s.Store.CachePuzzle(ctx, p, tnow); cerr != nil {
+		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
+	}
 
 	SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
