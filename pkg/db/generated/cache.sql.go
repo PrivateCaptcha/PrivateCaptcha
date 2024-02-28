@@ -36,7 +36,7 @@ func (q *Queries) DeleteExpiredCache(ctx context.Context) error {
 }
 
 const getCachedByKey = `-- name: GetCachedByKey :one
-SELECT value FROM cache WHERE key = $1
+SELECT value FROM cache WHERE key = $1 AND expires_at >= NOW()
 `
 
 func (q *Queries) GetCachedByKey(ctx context.Context, key string) ([]byte, error) {
