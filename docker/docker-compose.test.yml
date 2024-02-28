@@ -10,30 +10,15 @@ services:
     environment:
       PC_PORT: 8080
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
-      PC_REDIS: redis://redis:6379
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
       # VERBOSE: 1
     depends_on:
       - postgres
-      - redis
       - clickhouse
     networks:
       - test_postgres_network
-      - test_redis_network
       - test_clickhouse_network
-
-  redis:
-    image: "redis:alpine"
-    healthcheck:
-      test: redis-cli ping
-      interval: 3s
-      timeout: 3s
-      retries: 3
-    ports:
-      - "6379:6379"
-    networks:
-      - test_redis_network
 
   postgres:
     image: postgres:alpine
@@ -77,7 +62,6 @@ services:
 
 networks:
   test_postgres_network:
-  test_redis_network:
   test_clickhouse_network:
 
 volumes:

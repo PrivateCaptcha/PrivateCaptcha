@@ -14,3 +14,15 @@ sql:
         emit_params_struct_pointers: true
         rename:
           apikey: "APIKey"
+        overrides:
+          - db_type: "pg_catalog.interval"
+            go_type: "time.Duration"
+          - db_type: "pg_catalog.interval"
+            # It seems like this could be the simpler `go_type: "*time.Duration"`, but
+            # that outputs double points like `**time.Duration` for reasons that are
+            # beyond me (bug?). The expanded version of `go_type` usage below works.
+            go_type:
+              import: "time"
+              type: "Duration"
+              pointer: true
+            nullable: true

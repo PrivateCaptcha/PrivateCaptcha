@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrInvalidInput   = errors.New("invalid input")
-	ErrRecordNotFound = errors.New("record not found")
-	markerData        = [4]byte{0xCC, 0xCC, 0xCC, 0xCC}
+	ErrInvalidInput     = errors.New("invalid input")
+	ErrRecordNotFound   = errors.New("record not found")
+	errInvalidCacheType = errors.New("cache record type does not match")
+	markerData          = []byte{'{', '}'}
 )
 
 type Store struct {
@@ -45,6 +46,36 @@ func NewStore(queries *dbgen.Queries, cache common.Cache) *Store {
 	}
 }
 
+func (s *Store) CleanupCache(ctx context.Context, interval time.Duration) {
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+		default:
+			time.Sleep(interval)
+
+			err := s.db.DeleteExpiredCache(ctx)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to delete expired items", common.ErrAttr(err))
+				continue
+			}
+		}
+	}
+}
+
+func fetchCached[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) (*T, error) {
+	data, err := cache.GetAndExpireItem(ctx, key, expiration)
+	if err != nil {
+		return nil, err
+	}
+
+	if t, ok := data.(*T); ok {
+		return t, nil
+	}
+
+	return nil, errInvalidCacheType
+}
+
 // Fetches property from DB, backed by cache
 func (s *Store) RetrieveProperty(ctx context.Context, sitekey string) (*dbgen.Property, error) {
 	eid := UUIDFromSiteKey(sitekey)
@@ -52,8 +83,7 @@ func (s *Store) RetrieveProperty(ctx context.Context, sitekey string) (*dbgen.Pr
 		return nil, ErrInvalidInput
 	}
 
-	property := &dbgen.Property{}
-	if err := s.cache.GetAndExpireItem(ctx, sitekey, s.PropertyCacheDuration, property); err == nil {
+	if property, err := fetchCached[dbgen.Property](ctx, s.cache, sitekey, s.PropertyCacheDuration); err == nil {
 		return property, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -85,8 +115,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 		return nil, ErrInvalidInput
 	}
 
-	apiKey := &dbgen.APIKey{}
-	if err := s.cache.GetAndExpireItem(ctx, secret, s.APIKeyCacheDuration, apiKey); err == nil {
+	if apiKey, err := fetchCached[dbgen.APIKey](ctx, s.cache, secret, s.APIKeyCacheDuration); err == nil {
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -112,15 +141,17 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 }
 
 func (s *Store) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	marker := new(puzzleCacheMarker)
 	key := hex.EncodeToString(p.Nonce[:])
-	err := s.cache.GetAndExpireItem(ctx, key, s.PuzzleCacheDuration, marker)
-	if err != nil {
+
+	data, err := s.db.GetCachedByKey(ctx, key)
+	if err == pgx.ErrNoRows {
+		return false
+	} else if err != nil {
 		slog.ErrorContext(ctx, "Failed to check if puzzle is cached", common.ErrAttr(err))
 		return false
 	}
 
-	return bytes.Equal(marker.Data[:], markerData[:])
+	return bytes.Equal(data[:], markerData[:])
 }
 
 func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
@@ -130,10 +161,12 @@ func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Tim
 		return nil
 	}
 
-	marker := &puzzleCacheMarker{
-		Data: markerData,
-	}
 	key := hex.EncodeToString(p.Nonce[:])
 	diff := p.Expiration.Sub(tnow)
-	return s.cache.SetItem(ctx, key, marker, diff)
+
+	return s.db.CreateCache(ctx, &dbgen.CreateCacheParams{
+		Key:     key,
+		Value:   markerData[:],
+		Column3: diff,
+	})
 }
