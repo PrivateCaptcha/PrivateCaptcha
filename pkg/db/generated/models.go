@@ -107,6 +107,13 @@ type APIKey struct {
 	Notes      pgtype.Text        `db:"notes" json:"notes"`
 }
 
+type Cache struct {
+	ID        int32            `db:"id" json:"id"`
+	Key       string           `db:"key" json:"key"`
+	Value     []byte           `db:"value" json:"value"`
+	ExpiresAt pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+}
+
 type Property struct {
 	ID               int32              `db:"id" json:"id"`
 	ExternalID       pgtype.UUID        `db:"external_id" json:"external_id"`
