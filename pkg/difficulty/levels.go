@@ -41,16 +41,18 @@ func (br *backfillRequest) Key() string {
 }
 
 type Levels struct {
-	clickhouse   *sql.DB
-	counts       *Counts
-	accessChan   chan *accessRecord
-	backfillChan chan *backfillRequest
-	batchSize    int
-	tableName    string
+	clickhouse      *sql.DB
+	counts          *Counts
+	accessChan      chan *accessRecord
+	backfillChan    chan *backfillRequest
+	batchSize       int
+	tableName       string
+	accessLogCancel context.CancelFunc
+	cleanupCancel   context.CancelFunc
 }
 
-func NewLevels(cf *sql.DB, batchSize int, bucketSize time.Duration) *Levels {
-	return &Levels{
+func NewLevelsEx(cf *sql.DB, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
+	levels := &Levels{
 		clickhouse:   cf,
 		counts:       newCounts(bucketSize),
 		accessChan:   make(chan *accessRecord, 3*batchSize/2),
@@ -58,6 +60,22 @@ func NewLevels(cf *sql.DB, batchSize int, bucketSize time.Duration) *Levels {
 		batchSize:    batchSize,
 		tableName:    tableName,
 	}
+
+	var accessCtx context.Context
+	accessCtx, levels.accessLogCancel = context.WithCancel(context.Background())
+	go levels.processAccessLog(accessCtx, accessLogInterval)
+
+	go levels.backfillDifficulty(context.Background(), backfillInterval)
+
+	var cancelCtx context.Context
+	cancelCtx, levels.cleanupCancel = context.WithCancel(context.Background())
+	go levels.cleanupStats(cancelCtx)
+
+	return levels
+}
+
+func NewLevels(cf *sql.DB, batchSize int, bucketSize time.Duration) *Levels {
+	return NewLevelsEx(cf, batchSize, bucketSize, 2*time.Second, bucketSize)
 }
 
 func decayRateForLevel(level dbgen.DifficultyGrowth) float64 {
@@ -120,8 +138,11 @@ func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.Dif
 }
 
 func (l *Levels) Shutdown() {
-	close(l.backfillChan)
+	slog.Debug("Shutting down levels routines")
 	close(l.accessChan)
+	l.accessLogCancel()
+	close(l.backfillChan)
+	l.cleanupCancel()
 }
 
 func (l *Levels) DifficultyEx(fingerprint string, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
@@ -189,15 +210,15 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 		Jitter: true,
 	}
 
+	slog.DebugContext(ctx, "Starting cleaning up stats")
+
 	deleteChunk := defaultChunkSize
 
 	for running := true; running; {
 		select {
 		case <-ctx.Done():
 			running = false
-		default:
-			time.Sleep(b.Duration())
-
+		case <-time.After(b.Duration()):
 			deleted := deleter(time.Now().UTC(), deleteChunk)
 			if deleted == 0 {
 				deleteChunk = defaultChunkSize
@@ -214,9 +235,11 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 			}
 		}
 	}
+
+	slog.DebugContext(ctx, "Finished cleaning up stats")
 }
 
-func (l *Levels) CleanupStats(ctx context.Context) {
+func (l *Levels) cleanupStats(ctx context.Context) {
 	// bucket window is currently 5 minutes so it may change at a minute step
 	// here we have 30 seconds since 1 minute sounds way too long
 	cleanupStatsImpl(ctx, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
@@ -228,7 +251,7 @@ func (l *Levels) Reset() {
 	l.counts.Clear()
 }
 
-func (l *Levels) BackfillDifficulty(ctx context.Context, cacheDuration time.Duration) {
+func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Duration) {
 	slog.DebugContext(ctx, "Backfilling difficulty")
 
 	cache := make(map[string]time.Time)
@@ -280,6 +303,8 @@ func (l *Levels) BackfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			lastCleanupTime = time.Now()
 		}
 	}
+
+	slog.DebugContext(ctx, "Finished backfilling difficulty")
 }
 
 func queryPropertyStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketSize time.Duration) ([]*TimeCount, error) {
@@ -346,7 +371,7 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func (l *Levels) ProcessAccessLog(ctx context.Context, delay time.Duration) {
+func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 	var batch []*accessRecord
 	slog.DebugContext(ctx, "Processing access log")
 

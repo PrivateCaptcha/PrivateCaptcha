@@ -3,7 +3,6 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"flag"
 	"os"
@@ -15,11 +14,9 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
-	pool       *pgxpool.Pool
 	server     *Server
 	queries    *dbgen.Queries
 	cache      common.Cache
@@ -35,51 +32,21 @@ func TestMain(m *testing.M) {
 
 	common.SetupLogs("test", true)
 
-	errs, ctx := errgroup.WithContext(context.Background())
-
-	errs.Go(func() error {
-		var err error
-		pool, err = db.ConnectPostgres(ctx, os.Getenv("PC_POSTGRES"))
-		if err != nil {
-			return err
-		}
-		if err := pool.Ping(ctx); err != nil {
-			return err
-		}
-
-		return db.MigratePostgres(ctx, pool)
-	})
-
-	errs.Go(func() error {
-		opts := db.ClickHouseConnectOpts{
-			Host:     os.Getenv("PC_CLICKHOUSE_HOST"),
-			Database: os.Getenv("PC_CLICKHOUSE_DB"),
-			User:     "default",
-			Password: "",
-			Verbose:  os.Getenv("VERBOSE") == "1",
-		}
-		clickhouse = db.ConnectClickhouse(opts)
-		if err := clickhouse.Ping(); err != nil {
-			return err
-		}
-
-		return db.MigrateClickhouse(ctx, clickhouse, opts.Database)
-	})
-
-	if err := errs.Wait(); err != nil {
-		panic(err)
+	var pool *pgxpool.Pool
+	var dberr error
+	pool, clickhouse, dberr = db.Connect(os.Getenv)
+	if dberr != nil {
+		panic(dberr)
 	}
 
 	levels := difficulty.NewLevels(clickhouse, 100, 5*time.Minute)
-	go levels.ProcessAccessLog(context.Background(), 2*time.Second)
-	go levels.BackfillDifficulty(context.Background(), 5*time.Minute)
-	go levels.CleanupStats(context.Background())
+	defer levels.Shutdown()
 
 	queries = dbgen.New(pool)
 	cache = db.NewMemoryCache(1 * time.Minute)
 
-	store := db.NewStore(queries, cache)
-	go store.CleanupCache(context.Background(), 5*time.Second)
+	store := db.NewStore(queries, cache, 5*time.Second)
+	defer store.Shutdown()
 
 	server = &Server{
 		Auth: &AuthMiddleware{

@@ -28,15 +28,16 @@ type Store struct {
 	PropertyCacheDuration time.Duration
 	APIKeyCacheDuration   time.Duration
 	PuzzleCacheDuration   time.Duration
+	cancelFunc            context.CancelFunc
 }
 
 type puzzleCacheMarker struct {
 	Data [4]byte
 }
 
-func NewStore(queries *dbgen.Queries, cache common.Cache) *Store {
+func NewStore(queries *dbgen.Queries, cache common.Cache, cleanupInterval time.Duration) *Store {
 	// TODO: Adjust caching durations mindfully
-	return &Store{
+	s := &Store{
 		db:                    queries,
 		cache:                 cache,
 		NegativeCacheDuration: 1 * time.Minute,
@@ -44,16 +45,25 @@ func NewStore(queries *dbgen.Queries, cache common.Cache) *Store {
 		APIKeyCacheDuration:   1 * time.Minute,
 		PuzzleCacheDuration:   1 * time.Minute,
 	}
+
+	var ctx context.Context
+	ctx, s.cancelFunc = context.WithCancel(context.Background())
+	go s.cleanupCache(ctx, cleanupInterval)
+
+	return s
 }
 
-func (s *Store) CleanupCache(ctx context.Context, interval time.Duration) {
+func (s *Store) Shutdown() {
+	s.cancelFunc()
+}
+
+func (s *Store) cleanupCache(ctx context.Context, interval time.Duration) {
+	slog.Debug("Store cache cleanup started")
 	for running := true; running; {
 		select {
 		case <-ctx.Done():
 			running = false
-		default:
-			time.Sleep(interval)
-
+		case <-time.After(interval):
 			err := s.db.DeleteExpiredCache(ctx)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to delete expired items", common.ErrAttr(err))
@@ -61,6 +71,7 @@ func (s *Store) CleanupCache(ctx context.Context, interval time.Duration) {
 			}
 		}
 	}
+	slog.Debug("Store cache cleanup finished")
 }
 
 func fetchCached[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) (*T, error) {
