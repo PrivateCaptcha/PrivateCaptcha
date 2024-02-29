@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"log/slog"
 	"math/rand"
 	"testing"
@@ -23,10 +22,11 @@ func TestBackfillLevels(t *testing.T) {
 	}
 
 	// minutes per bucket
-	levels := difficulty.NewLevels(clickhouse, 200, testBucketSize)
+	levels := difficulty.NewLevelsEx(clickhouse, 200,
+		testBucketSize,
+		500*time.Millisecond, /*access log*/
+		700*time.Millisecond /*backfill*/)
 	defer levels.Shutdown()
-	go levels.ProcessAccessLog(context.Background(), 500*time.Millisecond)
-	go levels.BackfillDifficulty(context.Background(), 700*time.Millisecond)
 	tnow := time.Now()
 
 	fingerprints := []string{"qwerty", "abcde"}

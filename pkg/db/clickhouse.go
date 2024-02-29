@@ -26,7 +26,7 @@ type ClickHouseConnectOpts struct {
 	Verbose  bool
 }
 
-func ConnectClickhouse(opts ClickHouseConnectOpts) *sql.DB {
+func connectClickhouse(opts ClickHouseConnectOpts) *sql.DB {
 	slog.Debug("Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
 	conn := clickhouse.OpenDB(&clickhouse.Options{
 		Addr: []string{opts.Host + ":9000"},
@@ -55,7 +55,7 @@ func ConnectClickhouse(opts ClickHouseConnectOpts) *sql.DB {
 	return conn
 }
 
-func MigrateClickhouse(ctx context.Context, db *sql.DB, dbName string) error {
+func migrateClickhouse(ctx context.Context, db *sql.DB, dbName string) error {
 	d, err := iofs.New(clickhouseMigrationsFS, "migrations/clickhouse")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from Clickhouse migrations IOFS", common.ErrAttr(err))

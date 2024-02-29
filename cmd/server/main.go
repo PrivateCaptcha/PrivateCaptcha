@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"log/slog"
@@ -16,14 +19,10 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/sync/errgroup"
 )
 
 var (
-	GitCommit  string
-	pool       *pgxpool.Pool // Postgres will be needed by http server for dashboard and API
-	clickhouse *sql.DB       // clickhouse will be needed by API server and dashboard
+	GitCommit string
 )
 
 const (
@@ -31,56 +30,24 @@ const (
 	levelsBatchSize    = 100
 )
 
-func main() {
-	stage := os.Getenv("STAGE")
-	common.SetupLogs(stage, os.Getenv("VERBOSE") == "1")
+func run(ctx context.Context, getenv func(string) string) error {
+	stage := getenv("STAGE")
+	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
-	errs, ctx := errgroup.WithContext(context.Background())
-
-	errs.Go(func() error {
-		opts := db.ClickHouseConnectOpts{
-			Host:     os.Getenv("PC_CLICKHOUSE_HOST"),
-			Database: os.Getenv("PC_CLICKHOUSE_DB"),
-			User:     "default",
-			Password: "",
-			Verbose:  os.Getenv("VERBOSE") == "1",
-		}
-		clickhouse = db.ConnectClickhouse(opts)
-		if err := clickhouse.Ping(); err != nil {
-			return err
-		}
-
-		return db.MigrateClickhouse(ctx, clickhouse, opts.Database)
-	})
-
-	errs.Go(func() error {
-		var err error
-		pool, err = db.ConnectPostgres(ctx, os.Getenv("PC_POSTGRES"))
-		if err != nil {
-			return err
-		}
-		if err := pool.Ping(ctx); err != nil {
-			return err
-		}
-
-		return db.MigratePostgres(ctx, pool)
-	})
-
-	if err := errs.Wait(); err != nil {
-		panic(err)
+	pool, clickhouse, dberr := db.Connect(getenv)
+	if dberr != nil {
+		return dberr
 	}
 
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	store := db.NewStore(dbgen.New(pool), db.NewMemoryCache(1*time.Minute))
-	go store.CleanupCache(context.Background(), 5*time.Minute)
+	store := db.NewStore(dbgen.New(pool), db.NewMemoryCache(1*time.Minute), 5*time.Minute)
 
 	levels := difficulty.NewLevels(clickhouse, levelsBatchSize, propertyBucketSize)
-	// TODO: Cancel context during graceful shutdown
-	go levels.ProcessAccessLog(context.Background(), 2*time.Second)
-	go levels.BackfillDifficulty(context.Background(), propertyBucketSize)
-	go levels.CleanupStats(context.Background())
+
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
 	server := &api.Server{
 		Auth: &api.AuthMiddleware{
@@ -97,20 +64,18 @@ func main() {
 	router.Handle("/", api.Logged(web.Handler()))
 	server.Setup(router)
 
-	host := os.Getenv("PC_HOST")
+	host := getenv("PC_HOST")
 	if host == "" {
 		host = "localhost"
 	}
 
-	port := os.Getenv("PC_PORT")
+	port := getenv("PC_PORT")
 	if port == "" {
 		port = "8080"
 	}
 
-	slog.Info("Listening", "address", fmt.Sprintf("http://%v:%v", host, port), "version", GitCommit)
-
-	s := &http.Server{
-		Addr:              host + ":" + port,
+	httpServer := &http.Server{
+		Addr:              net.JoinHostPort(host, port),
 		Handler:           router,
 		ReadHeaderTimeout: 4 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -118,6 +83,35 @@ func main() {
 		WriteTimeout:      10 * time.Second,
 	}
 
-	err := s.ListenAndServe()
-	slog.Error("Server failed", "error", err)
+	go func() {
+		slog.Info("Listening", "address", httpServer.Addr, "version", GitCommit)
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Error listening and serving", "error", err)
+		}
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		levels.Shutdown()
+		store.Shutdown()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+		}
+	}()
+
+	wg.Wait()
+	return nil
+}
+
+func main() {
+	ctx := context.Background()
+	if err := run(ctx, os.Getenv); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
+	}
 }
