@@ -20,7 +20,7 @@ const (
 //go:embed migrations/postgres/*.sql
 var postgresMigrationsFS embed.FS
 
-func ConnectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+func connectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	slog.Debug("Connecting to Postgres...")
 	pool, err := pgxpool.New(ctx, dbURL)
 	if err != nil {
@@ -31,7 +31,7 @@ func ConnectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func MigratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
+func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 	defer db.Close()
 
