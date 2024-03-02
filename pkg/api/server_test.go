@@ -34,7 +34,7 @@ func TestMain(m *testing.M) {
 
 	var pool *pgxpool.Pool
 	var dberr error
-	pool, clickhouse, dberr = db.Connect(os.Getenv)
+	pool, clickhouse, dberr = db.Migrate(os.Getenv)
 	if dberr != nil {
 		panic(dberr)
 	}
