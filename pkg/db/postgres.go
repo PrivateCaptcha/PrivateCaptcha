@@ -9,6 +9,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
@@ -20,9 +21,33 @@ const (
 //go:embed migrations/postgres/*.sql
 var postgresMigrationsFS embed.FS
 
-func connectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+type myQueryTracer struct {
+}
+
+func (tracer *myQueryTracer) TraceQueryStart(
+	ctx context.Context,
+	_ *pgx.Conn,
+	data pgx.TraceQueryStartData) context.Context {
+	slog.Log(ctx, common.LevelTrace, "Starting SQL command", "sql", data.SQL, "args", data.Args, "source", "postgres")
+	return ctx
+}
+
+func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
+	if data.Err != nil {
+		slog.Log(ctx, common.LevelTrace, "SQL command failed", common.ErrAttr(data.Err), "source", "postgres")
+	}
+}
+
+func connectPostgres(ctx context.Context, dbURL string, verbose bool) (*pgxpool.Pool, error) {
 	slog.Debug("Connecting to Postgres...")
-	pool, err := pgxpool.New(ctx, dbURL)
+	config, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		return nil, err
+	}
+	if verbose {
+		config.ConnConfig.Tracer = &myQueryTracer{}
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
 		return nil, err
@@ -33,7 +58,6 @@ func connectPostgres(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 
 func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
-	defer db.Close()
 
 	d, err := iofs.New(postgresMigrationsFS, "migrations/postgres")
 	if err != nil {
@@ -55,6 +79,17 @@ func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 		slog.ErrorContext(ctx, "Failed to create migration engine for Postgres", common.ErrAttr(err))
 		return err
 	}
+
+	defer func() {
+		srcErr, dstErr := m.Close()
+		if srcErr != nil {
+			slog.ErrorContext(ctx, "Source error when running migrations", common.ErrAttr(srcErr))
+		}
+		if dstErr != nil {
+			slog.ErrorContext(ctx, "Destination error when running migrations", common.ErrAttr(dstErr))
+		}
+		slog.DebugContext(ctx, "Closed Postgres migrate connection")
+	}()
 
 	slog.DebugContext(ctx, "Running Postgres migrations...")
 	err = m.Up()
