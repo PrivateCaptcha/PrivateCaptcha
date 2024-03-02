@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -30,7 +31,22 @@ const (
 	levelsBatchSize    = 100
 )
 
-func run(ctx context.Context, getenv func(string) string) error {
+func migrate(getenv func(string) string) error {
+	stage := getenv("STAGE")
+	common.SetupLogs(stage, getenv("VERBOSE") == "1")
+
+	pool, clickhouse, dberr := db.Migrate(getenv)
+	if dberr != nil {
+		return dberr
+	}
+
+	defer pool.Close()
+	defer clickhouse.Close()
+
+	return nil
+}
+
+func run(ctx context.Context, getenv func(string) string, stderr io.Writer) error {
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
@@ -100,7 +116,7 @@ func run(ctx context.Context, getenv func(string) string) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
 		}
 	}()
 
@@ -109,9 +125,22 @@ func run(ctx context.Context, getenv func(string) string) error {
 }
 
 func main() {
-	ctx := context.Background()
-	if err := run(ctx, os.Getenv); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+	if len(os.Args) <= 1 {
 		os.Exit(1)
+	}
+
+	command := os.Args[1]
+	switch command {
+	case "run":
+		ctx := context.Background()
+		if err := run(ctx, os.Getenv, os.Stderr); err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			os.Exit(1)
+		}
+	case "migrate":
+		if err := migrate(os.Getenv); err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			os.Exit(1)
+		}
 	}
 }

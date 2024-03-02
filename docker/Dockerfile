@@ -29,8 +29,11 @@ FROM golang:latest
 
 COPY --from=backend-builder /app/bin/server /app/server
 
+COPY docker/entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
 ENV PC_HOST 0.0.0.0
 ENV PC_PORT 8080
 EXPOSE 8080
 
-CMD ["/app/server"]
+ENTRYPOINT ["entrypoint.sh"]
