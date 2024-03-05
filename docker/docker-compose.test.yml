@@ -39,7 +39,7 @@ services:
       - test_postgres_data_volume:/var/lib/postgresql/data
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23.8-alpine
+    image: clickhouse/clickhouse-server:23.8.9-alpine
     environment:
       CLICKHOUSE_DB: privatecaptcha
     healthcheck:
