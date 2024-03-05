@@ -12,6 +12,7 @@ services:
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
+      PC_CLICKHOUSE_USER: default
       # VERBOSE: 1
     depends_on:
       - postgres
