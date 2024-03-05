@@ -27,3 +27,5 @@
 **/web/static/js
 
 fly.toml
+
+**/*.env

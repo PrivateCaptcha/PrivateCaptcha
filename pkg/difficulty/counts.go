@@ -7,7 +7,7 @@ import (
 )
 
 type accessRecord struct {
-	Fingerprint string
+	Fingerprint TFingerprint
 	UserID      int32
 	PropertyID  int32
 	Timestamp   time.Time
@@ -167,7 +167,7 @@ func (c *Counts) fetchStats(key int32) propertyStats {
 	return st
 }
 
-func (c *Counts) Inc(pid int32, fingerprint string, t time.Time) uint32 {
+func (c *Counts) Inc(pid int32, fingerprint TFingerprint, t time.Time) uint32 {
 	st := c.fetchStats(pid)
 	st.perUser.Inc(fingerprint, t, c.bucketSize)
 	timeKey := t.Truncate(c.bucketSize).Unix()
@@ -179,7 +179,7 @@ func (c *Counts) BackfillProperty(pid int32, counts []*TimeCount) {
 	st.perTime.backfill(c.bucketSize, counts)
 }
 
-func (c *Counts) BackfillUser(pid int32, fingerprint string, counts []*TimeCount) {
+func (c *Counts) BackfillUser(pid int32, fingerprint TFingerprint, counts []*TimeCount) {
 	st := c.fetchStats(pid)
 	st.perUser.Backfill(fingerprint, counts, c.bucketSize)
 }
@@ -217,7 +217,7 @@ func (st *Stats) Sum(decayRate float64) float64 {
 	return sum
 }
 
-func (c *Counts) FetchStats(pid int32, fingerprint string, t time.Time) Stats {
+func (c *Counts) FetchStats(pid int32, fingerprint TFingerprint, t time.Time) Stats {
 	var ps propertyStats
 	var ok bool
 	{
@@ -344,17 +344,17 @@ func (ss *singleStats) inc(t int64, count uint32) uint32 {
 
 type userStats struct {
 	// user stats map from fingerprint to stats
-	counts map[string]*singleStats
+	counts map[TFingerprint]*singleStats
 	lock   sync.RWMutex
 }
 
 func newUserStats() *userStats {
 	return &userStats{
-		counts: make(map[string]*singleStats),
+		counts: make(map[TFingerprint]*singleStats),
 	}
 }
 
-func (us *userStats) fetchStats(key string) *singleStats {
+func (us *userStats) fetchStats(key TFingerprint) *singleStats {
 	var st *singleStats
 	var ok bool
 
@@ -380,13 +380,13 @@ func (us *userStats) fetchStats(key string) *singleStats {
 	return st
 }
 
-func (us *userStats) Inc(key string, t time.Time, bucketSize time.Duration) uint32 {
+func (us *userStats) Inc(key TFingerprint, t time.Time, bucketSize time.Duration) uint32 {
 	timeKey := t.Truncate(bucketSize).Unix()
 	st := us.fetchStats(key)
 	return st.inc(timeKey, 1)
 }
 
-func (us *userStats) Backfill(key string, counts []*TimeCount, bucketSize time.Duration) {
+func (us *userStats) Backfill(key TFingerprint, counts []*TimeCount, bucketSize time.Duration) {
 	st := us.fetchStats(key)
 	for _, c := range counts {
 		timeKey := c.Timestamp.Truncate(bucketSize).Unix()
@@ -397,11 +397,11 @@ func (us *userStats) Backfill(key string, counts []*TimeCount, bucketSize time.D
 func (us *userStats) Clear() {
 	us.lock.Lock()
 	defer us.lock.Unlock()
-	us.counts = make(map[string]*singleStats)
+	us.counts = make(map[TFingerprint]*singleStats)
 }
 
-func (us *userStats) Count(key string, t time.Time, bucketSize time.Duration) (uint32, bool) {
-	if len(key) == 0 {
+func (us *userStats) Count(key TFingerprint, t time.Time, bucketSize time.Duration) (uint32, bool) {
+	if key == 0 {
 		return 0, false
 	}
 
@@ -426,7 +426,7 @@ func (us *userStats) Cleanup(t time.Time, bucketSize time.Duration, maxToDelete 
 
 	before := t.Add(-bucketSize).Unix()
 
-	toDelete := make([]string, 0)
+	toDelete := make([]TFingerprint, 0)
 	{
 		us.lock.RLock()
 		for key, value := range us.counts {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -26,15 +27,21 @@ const (
 	tableName5m = "privatecaptcha.request_logs_5m"
 )
 
+type TFingerprint = uint64
+
+func RandomFingerprint() TFingerprint {
+	return uint64(rand.Int63())
+}
+
 type backfillRequest struct {
 	UserID      int32
 	PropertyID  int32
-	Fingerprint string
+	Fingerprint TFingerprint
 }
 
 func (br *backfillRequest) Key() string {
-	if len(br.Fingerprint) > 0 {
-		return fmt.Sprintf("%d/%s", br.PropertyID, br.Fingerprint)
+	if br.Fingerprint > 0 {
+		return fmt.Sprintf("%d/%d", br.PropertyID, br.Fingerprint)
 	}
 
 	return strconv.Itoa(int(br.PropertyID))
@@ -145,7 +152,7 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint string, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
+func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
 	l.recordAccess(fingerprint, p, tnow)
 
 	stats := l.counts.FetchStats(p.ID, fingerprint, tnow)
@@ -163,7 +170,7 @@ func (l *Levels) DifficultyEx(fingerprint string, p *dbgen.Property, tnow time.T
 	return requestsToDifficulty(sum, minDifficulty, p.DifficultyGrowth), stats
 }
 
-func (l *Levels) Difficulty(fingerprint string, p *dbgen.Property) uint8 {
+func (l *Levels) Difficulty(fingerprint TFingerprint, p *dbgen.Property) uint8 {
 	tnow := time.Now().UTC()
 	d, _ := l.DifficultyEx(fingerprint, p, tnow)
 	return d
@@ -173,12 +180,12 @@ func (l *Levels) backfillProperty(p *dbgen.Property) {
 	br := &backfillRequest{
 		UserID:      p.UserID.Int32,
 		PropertyID:  p.ID,
-		Fingerprint: "",
+		Fingerprint: 0,
 	}
 	l.backfillChan <- br
 }
 
-func (l *Levels) backfillUser(p *dbgen.Property, fingerprint string) {
+func (l *Levels) backfillUser(p *dbgen.Property, fingerprint TFingerprint) {
 	br := &backfillRequest{
 		UserID:      p.UserID.Int32,
 		PropertyID:  p.ID,
@@ -187,7 +194,7 @@ func (l *Levels) backfillUser(p *dbgen.Property, fingerprint string) {
 	l.backfillChan <- br
 }
 
-func (l *Levels) recordAccess(fingerprint string, p *dbgen.Property, tnow time.Time) {
+func (l *Levels) recordAccess(fingerprint TFingerprint, p *dbgen.Property, tnow time.Time) {
 	if (p == nil) || !p.ExternalID.Valid {
 		return
 	}
@@ -269,7 +276,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 
 		var counts []*TimeCount
 		var err error
-		queryProperty := len(r.Fingerprint) == 0
+		queryProperty := r.Fingerprint == 0
 		if queryProperty {
 			counts, err = queryPropertyStats(ctx, l.clickhouse, r, l.counts.bucketSize)
 		} else {
@@ -343,12 +350,12 @@ func queryUserStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketS
 	timeFrom := time.Now().UTC().Add(-bucketSize)
 	query := `SELECT timestamp, count
 FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND property_id = {property_id:UInt32} AND fingerprint = {fingerprint:String} AND timestamp >= {timestamp:DateTime}
+WHERE user_id = {user_id:UInt32} AND property_id = {property_id:UInt32} AND fingerprint = {fingerprint:UInt64} AND timestamp >= {timestamp:DateTime}
 ORDER BY timestamp`
 	rows, err := db.Query(fmt.Sprintf(query, tableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
-		clickhouse.Named("fingerprint", r.Fingerprint),
+		clickhouse.Named("fingerprint", strconv.FormatUint(r.Fingerprint, 10)),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute backfill user stats query", common.ErrAttr(err))
