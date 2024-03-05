@@ -6,8 +6,11 @@ import (
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -19,6 +22,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/crypto/blake2b"
 )
 
 const (
@@ -30,6 +34,7 @@ type Server struct {
 	Store  *db.Store
 	Levels *difficulty.Levels
 	Prefix string
+	UAKey  [64]byte
 	Salt   []byte
 }
 
@@ -47,6 +52,37 @@ const (
 	wrongOwnerError         verifyError = 8
 	verifiedBeforeError     verifyError = 9
 )
+
+var (
+	errIPNotFound = errors.New("no valid IP address found")
+)
+
+func parseRequestIP(r *http.Request) (string, error) {
+	ip := r.Header.Get("X-REAL-IP")
+	netIP := net.ParseIP(ip)
+	if netIP != nil {
+		return ip, nil
+	}
+
+	ips := r.Header.Get("X-FORWARDED-FOR")
+	splitIps := strings.Split(ips, ",")
+	for _, ip := range splitIps {
+		netIP := net.ParseIP(ip)
+		if netIP != nil {
+			return ip, nil
+		}
+	}
+
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return "", err
+	}
+	netIP = net.ParseIP(ip)
+	if netIP != nil {
+		return ip, nil
+	}
+	return "", errIPNotFound
+}
 
 type verifyResponse struct {
 	Success    bool          `json:"success"`
@@ -85,8 +121,24 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 
 	puzzle.PropertyID = property.ExternalID.Bytes
 
-	// TODO: anonymize user agent
-	puzzle.Difficulty = s.Levels.Difficulty(r.UserAgent(), property)
+	var fingerprint difficulty.TFingerprint
+	hash, err := blake2b.New256(s.UAKey[:])
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
+		// TODO: handle calculating hash with error
+		fingerprint = difficulty.RandomFingerprint()
+	} else {
+		hash.Write([]byte(r.UserAgent()))
+		if ip, err := parseRequestIP(r); err == nil {
+			hash.Write([]byte(ip))
+		}
+		// TODO: Add property domain here when it will be available
+		// hash.Write(property.Domain)
+		hmac := hash.Sum(nil)
+		truncatedHmac := hmac[:8]
+		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
+	}
+	puzzle.Difficulty = s.Levels.Difficulty(fingerprint, property)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 

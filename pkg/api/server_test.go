@@ -4,7 +4,9 @@ package api
 
 import (
 	"database/sql"
+	"encoding/hex"
 	"flag"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -56,6 +58,12 @@ func TestMain(m *testing.M) {
 		Levels: levels,
 		Prefix: "",
 		Salt:   []byte("salt"),
+	}
+
+	if byteArray, err := hex.DecodeString(os.Getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
+		copy(server.UAKey[:], byteArray[:])
+	} else {
+		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
 	}
 
 	// TODO: seed data

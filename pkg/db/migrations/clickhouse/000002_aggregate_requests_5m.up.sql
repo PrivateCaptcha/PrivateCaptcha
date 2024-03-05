@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS privatecaptcha.request_logs_5m
 (
     user_id UInt32,
     property_id UInt32,
-    fingerprint String,
+    fingerprint UInt64,
     timestamp DateTime,
     count UInt32
 )

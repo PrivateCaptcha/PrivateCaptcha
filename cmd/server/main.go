@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -60,6 +61,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		Salt:   []byte("salt"),
 	}
 
+	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
+		copy(server.UAKey[:], byteArray[:])
+	} else {
+		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
+	}
+
 	router := http.NewServeMux()
 
 	router.Handle("/", api.Logged(web.Handler()))
@@ -87,7 +94,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	go func() {
 		slog.Info("Listening", "address", httpServer.Addr, "version", GitCommit)
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Error listening and serving", "error", err)
+			slog.Error("Error listening and serving", common.ErrAttr(err))
 		}
 	}()
 
@@ -96,6 +103,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
+		slog.Debug("Shutting down gracefully...")
 		levels.Shutdown()
 		store.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -103,6 +111,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
 		}
+		slog.Debug("Shutdown finished")
 	}()
 
 	wg.Wait()

@@ -1,7 +1,6 @@
 package difficulty
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 	"time"
@@ -17,7 +16,7 @@ func TestUserStatsInc(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := "key"
+	key := RandomFingerprint()
 
 	if st, ok := stats.Count(key, tnow, testBucketSize); ok || st != 0 {
 		t.Errorf("Unexpected empty stats: %v", st)
@@ -49,7 +48,7 @@ func TestUserStatsBackfill(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := "key"
+	key := RandomFingerprint()
 
 	for i := 0; i < 10; i++ {
 		_ = stats.Inc(key, tnow, testBucketSize)
@@ -78,7 +77,7 @@ func TestUserStatsCleanup(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := "key"
+	key := RandomFingerprint()
 
 	for i := 0; i < 10; i++ {
 		_ = stats.Inc(key, tnow, testBucketSize)
@@ -106,7 +105,7 @@ func TestPropertyStatsInc(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := "qwerty"
+	fingerprint := RandomFingerprint()
 	counts := newCounts(testBucketSize)
 
 	for i := 0; i < 10; i++ {
@@ -115,13 +114,13 @@ func TestPropertyStatsInc(t *testing.T) {
 		}
 	}
 
-	if stats := counts.FetchStats(pid, "", tnow); !stats.HasProperty || !slices.Equal(stats.Property, []uint32{0, 0, 0, 0, 10}) {
+	if stats := counts.FetchStats(pid, RandomFingerprint(), tnow); !stats.HasProperty || !slices.Equal(stats.Property, []uint32{0, 0, 0, 0, 10}) {
 		t.Errorf("Unexpected counts after increment: %v", stats.Property)
 	}
 
 	// now we set 1 request per each previous bucket
 	for i := 0; i < 5; i++ {
-		if st := counts.Inc(pid, fmt.Sprintf("fp_%v", i), tnow.Add(-time.Duration(i+1)*testBucketSize).Add(-time.Second)); st != 1 {
+		if st := counts.Inc(pid, RandomFingerprint(), tnow.Add(-time.Duration(i+1)*testBucketSize).Add(-time.Second)); st != 1 {
 			t.Errorf("Unexpected stats: %v (iteration %v)", st, i)
 		}
 	}
@@ -141,7 +140,7 @@ func TestPropertyStatsCleanup(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := "qwerty"
+	fingerprint := RandomFingerprint()
 
 	counts := newCounts(testBucketSize)
 
@@ -177,7 +176,7 @@ func TestPropertyStatsBackfill(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := "qwerty"
+	fingerprint := RandomFingerprint()
 
 	counts := newCounts(testBucketSize)
 
