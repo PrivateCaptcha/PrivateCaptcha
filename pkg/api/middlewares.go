@@ -73,6 +73,20 @@ func (am *AuthMiddleware) retrieveSecret(r *http.Request) string {
 	return ""
 }
 
+func isSiteKeyValid(sitekey string) bool {
+	if len(sitekey) != db.SitekeyLen {
+		return false
+	}
+
+	for _, c := range sitekey {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
@@ -82,7 +96,7 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx := r.Context()
 		sitekey := am.retrieveSiteKey(r)
-		if len(sitekey) != db.SitekeyLen {
+		if !isSiteKeyValid(sitekey) {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
