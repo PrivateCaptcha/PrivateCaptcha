@@ -29,7 +29,7 @@ func TestBackfillLevels(t *testing.T) {
 	defer levels.Shutdown()
 	tnow := time.Now()
 
-	fingerprints := []string{"qwerty", "abcde"}
+	fingerprints := []difficulty.TFingerprint{difficulty.RandomFingerprint(), difficulty.RandomFingerprint()}
 	prop1 := &dbgen.Property{
 		ID:               123,
 		ExternalID:       *randomUUID(),
