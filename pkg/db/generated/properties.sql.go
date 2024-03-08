@@ -13,43 +13,58 @@ import (
 
 const createProperty = `-- name: CreateProperty :one
 INSERT INTO properties (
-  user_id
+  org_id
 ) VALUES (
   $1
 )
-RETURNING id, external_id, user_id, difficulty_level, difficulty_growth, created_at, updated_at
+RETURNING id, external_id, org_id, difficulty_level, difficulty_growth, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) CreateProperty(ctx context.Context, userID pgtype.Int4) (*Property, error) {
-	row := q.db.QueryRow(ctx, createProperty, userID)
+func (q *Queries) CreateProperty(ctx context.Context, orgID pgtype.Int4) (*Property, error) {
+	row := q.db.QueryRow(ctx, createProperty, orgID)
 	var i Property
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
-		&i.UserID,
+		&i.OrgID,
 		&i.DifficultyLevel,
 		&i.DifficultyGrowth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return &i, err
 }
 
-const getPropertyByExternalID = `-- name: GetPropertyByExternalID :one
-SELECT id, external_id, user_id, difficulty_level, difficulty_growth, created_at, updated_at FROM properties WHERE external_id = $1
+const propertyAndOrgByExternalID = `-- name: PropertyAndOrgByExternalID :one
+SELECT p.id, p.external_id, p.org_id, p.difficulty_level, p.difficulty_growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
+INNER JOIN organizations o ON p.org_id = o.id
+WHERE p.external_id = $1
 `
 
-func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error) {
-	row := q.db.QueryRow(ctx, getPropertyByExternalID, externalID)
-	var i Property
+type PropertyAndOrgByExternalIDRow struct {
+	Property     Property     `db:"property" json:"property"`
+	Organization Organization `db:"organization" json:"organization"`
+}
+
+func (q *Queries) PropertyAndOrgByExternalID(ctx context.Context, externalID pgtype.UUID) (*PropertyAndOrgByExternalIDRow, error) {
+	row := q.db.QueryRow(ctx, propertyAndOrgByExternalID, externalID)
+	var i PropertyAndOrgByExternalIDRow
 	err := row.Scan(
-		&i.ID,
-		&i.ExternalID,
-		&i.UserID,
-		&i.DifficultyLevel,
-		&i.DifficultyGrowth,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		&i.Property.ID,
+		&i.Property.ExternalID,
+		&i.Property.OrgID,
+		&i.Property.DifficultyLevel,
+		&i.Property.DifficultyGrowth,
+		&i.Property.CreatedAt,
+		&i.Property.UpdatedAt,
+		&i.Property.DeletedAt,
+		&i.Organization.ID,
+		&i.Organization.OrgName,
+		&i.Organization.UserID,
+		&i.Organization.CreatedAt,
+		&i.Organization.UpdatedAt,
+		&i.Organization.DeletedAt,
 	)
 	return &i, err
 }

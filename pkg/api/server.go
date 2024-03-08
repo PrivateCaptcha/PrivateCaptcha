@@ -117,7 +117,8 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	}
 
 	ctx := r.Context()
-	property := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
+	propertyAndOrg := ctx.Value(common.PropertyAndOrgContextKey).(*dbgen.PropertyAndOrgByExternalIDRow)
+	property, org := propertyAndOrg.Property, propertyAndOrg.Organization
 
 	puzzle.PropertyID = property.ExternalID.Bytes
 
@@ -138,7 +139,8 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		truncatedHmac := hmac[:8]
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
-	puzzle.Difficulty = s.Levels.Difficulty(fingerprint, property)
+
+	puzzle.Difficulty = s.Levels.Difficulty(fingerprint, &property, org.UserID.Int32)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
@@ -282,7 +284,8 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	property, err := s.Store.RetrieveProperty(ctx, sitekey)
+	propertyAndOrg, err := s.Store.RetrievePropertyAndOrg(ctx, sitekey)
+	_, org := propertyAndOrg.Property, propertyAndOrg.Organization
 
 	if err != nil {
 		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
@@ -295,9 +298,9 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 
 	apiKey := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey)
 
-	if property.UserID != apiKey.UserID {
-		slog.WarnContext(ctx, "Property owner does not match API key owner", "api_key_user", apiKey.UserID.Int32,
-			"property_user", property.UserID.Int32)
+	if org.UserID != apiKey.UserID {
+		slog.WarnContext(ctx, "Org owner does not match API key owner", "api_key_user", apiKey.UserID.Int32,
+			"org_user", org.UserID.Int32)
 		return p, wrongOwnerError
 	}
 

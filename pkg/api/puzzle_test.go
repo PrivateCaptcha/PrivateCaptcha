@@ -13,7 +13,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	_ "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -100,7 +100,12 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +142,12 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
 	if err != nil {
 		t.Fatal(err)
 	}

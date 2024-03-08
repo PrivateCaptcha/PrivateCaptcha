@@ -33,7 +33,7 @@ func TestBackfillLevels(t *testing.T) {
 	prop1 := &dbgen.Property{
 		ID:               123,
 		ExternalID:       *randomUUID(),
-		UserID:           db.Int(678),
+		OrgID:            db.Int(678),
 		DifficultyLevel:  dbgen.DifficultyLevelSmall,
 		DifficultyGrowth: dbgen.DifficultyGrowthFast,
 		CreatedAt:        db.Timestampz(tnow),
@@ -43,12 +43,13 @@ func TestBackfillLevels(t *testing.T) {
 	var diff uint8
 	var stats difficulty.Stats
 	buckets := []int{0, 0, 0, 0, 1, 1, 2, 3, 4}
+	userID := int32(123)
 
 	for i := 0; i < 10000; i++ {
 		bucket := buckets[rand.Intn(len(buckets))]
-		diff, stats = levels.DifficultyEx(fingerprints[i%2], prop1, time.Now().Add(-time.Duration(bucket)*testBucketSize).UTC())
+		diff, stats = levels.DifficultyEx(fingerprints[i%2], prop1, userID, time.Now().Add(-time.Duration(bucket)*testBucketSize).UTC())
 		if (i+1)%2000 == 0 {
-			slog.Debug("Simulating requests", "difficulty", diff, "property", stats.Property, "user", stats.User)
+			slog.Debug("Simulating requests", "difficulty", diff, "property", stats.Property, "user", stats.Fingerprint)
 		}
 	}
 
@@ -63,7 +64,7 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d := levels.Difficulty(fingerprints[0], prop1); d != difficulty.LevelSmall {
+	if d := levels.Difficulty(fingerprints[0], prop1, userID); d != difficulty.LevelSmall {
 		t.Errorf("Unexpected difficulty after stats reset: %v", d)
 	}
 
@@ -73,13 +74,13 @@ func TestBackfillLevels(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
-		actualDifficulty, stats = levels.DifficultyEx(fingerprints[0], prop1, time.Now().UTC())
+		actualDifficulty, stats = levels.DifficultyEx(fingerprints[0], prop1, userID, time.Now().UTC())
 		if actualDifficulty >= diff {
 			backfilled = true
 			break
 		}
 
-		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "property", stats.Property, "user", stats.User)
+		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "property", stats.Property, "user", stats.Fingerprint)
 	}
 
 	if !backfilled {
