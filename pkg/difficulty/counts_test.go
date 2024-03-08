@@ -130,8 +130,8 @@ func TestPropertyStatsInc(t *testing.T) {
 		t.Errorf("Unexpected property counts after increment: %v", stats.Property)
 	}
 
-	if !stats.HasUser || (stats.User != 10) {
-		t.Errorf("Unexpected user counts after increment: %v", stats.User)
+	if !stats.HasFingerprint || (stats.Fingerprint != 10) {
+		t.Errorf("Unexpected user counts after increment: %v", stats.Fingerprint)
 	}
 }
 

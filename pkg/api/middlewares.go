@@ -101,7 +101,7 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		property, err := am.Store.RetrieveProperty(ctx, sitekey)
+		propertyAndOrg, err := am.Store.RetrievePropertyAndOrg(ctx, sitekey)
 
 		if err != nil {
 			switch err {
@@ -117,7 +117,7 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 
 		// TODO: Verify if user is an active subscriber
 		// also not blacklisted etc.
-		ctx = context.WithValue(ctx, common.PropertyContextKey, property)
+		ctx = context.WithValue(ctx, common.PropertyAndOrgContextKey, propertyAndOrg)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }

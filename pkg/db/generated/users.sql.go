@@ -15,7 +15,7 @@ INSERT INTO users (
 ) VALUES (
   $1
 )
-RETURNING id, user_name, created_at, updated_at
+RETURNING id, user_name, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) CreateUser(ctx context.Context, userName string) (*User, error) {
@@ -26,12 +26,13 @@ func (q *Queries) CreateUser(ctx context.Context, userName string) (*User, error
 		&i.UserName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return &i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, user_name, created_at, updated_at FROM users WHERE id = $1
+SELECT id, user_name, created_at, updated_at, deleted_at FROM users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
@@ -42,6 +43,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
 		&i.UserName,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return &i, err
 }

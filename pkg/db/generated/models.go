@@ -11,6 +11,48 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AccessLevel string
+
+const (
+	AccessLevelRead  AccessLevel = "read"
+	AccessLevelWrite AccessLevel = "write"
+)
+
+func (e *AccessLevel) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AccessLevel(s)
+	case string:
+		*e = AccessLevel(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AccessLevel: %T", src)
+	}
+	return nil
+}
+
+type NullAccessLevel struct {
+	AccessLevel AccessLevel `json:"access_level"`
+	Valid       bool        `json:"valid"` // Valid is true if AccessLevel is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAccessLevel) Scan(value interface{}) error {
+	if value == nil {
+		ns.AccessLevel, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AccessLevel.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAccessLevel) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AccessLevel), nil
+}
+
 type DifficultyGrowth string
 
 const (
@@ -114,14 +156,31 @@ type Cache struct {
 	ExpiresAt pgtype.Timestamp `db:"expires_at" json:"expires_at"`
 }
 
+type Organization struct {
+	ID        int32              `db:"id" json:"id"`
+	OrgName   string             `db:"org_name" json:"org_name"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+}
+
+type OrganizationUser struct {
+	OrgID     int32              `db:"org_id" json:"org_id"`
+	UserID    int32              `db:"user_id" json:"user_id"`
+	Level     AccessLevel        `db:"level" json:"level"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+}
+
 type Property struct {
 	ID               int32              `db:"id" json:"id"`
 	ExternalID       pgtype.UUID        `db:"external_id" json:"external_id"`
-	UserID           pgtype.Int4        `db:"user_id" json:"user_id"`
+	OrgID            pgtype.Int4        `db:"org_id" json:"org_id"`
 	DifficultyLevel  DifficultyLevel    `db:"difficulty_level" json:"difficulty_level"`
 	DifficultyGrowth DifficultyGrowth   `db:"difficulty_growth" json:"difficulty_growth"`
 	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }
 
 type User struct {
@@ -129,4 +188,5 @@ type User struct {
 	UserName  string             `db:"user_name" json:"user_name"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }

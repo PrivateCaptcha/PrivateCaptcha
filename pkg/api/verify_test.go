@@ -78,7 +78,12 @@ func setupVerifySuite(username string) (string, string, error) {
 		return "", "", err
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: username})
+	if err != nil {
+		return "", "", err
+	}
+
+	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
 	if err != nil {
 		return "", "", err
 	}
@@ -192,7 +197,12 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(user.ID))
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
 	if err != nil {
 		t.Fatal(err)
 	}
