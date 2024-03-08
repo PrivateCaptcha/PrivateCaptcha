@@ -88,19 +88,19 @@ func fetchCached[T any](ctx context.Context, cache common.Cache, key string, exp
 }
 
 // Fetches property from DB, backed by cache
-func (s *Store) RetrieveProperty(ctx context.Context, sitekey string) (*dbgen.Property, error) {
+func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*dbgen.PropertyAndOrgByExternalIDRow, error) {
 	eid := UUIDFromSiteKey(sitekey)
 	if !eid.Valid {
 		return nil, ErrInvalidInput
 	}
 
-	if property, err := fetchCached[dbgen.Property](ctx, s.cache, sitekey, s.PropertyCacheDuration); err == nil {
+	if property, err := fetchCached[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, sitekey, s.PropertyCacheDuration); err == nil {
 		return property, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
 	}
 
-	property, err := s.db.GetPropertyByExternalID(ctx, eid)
+	propertyAndOrg, err := s.db.PropertyAndOrgByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			s.cache.SetMissing(ctx, sitekey, s.NegativeCacheDuration)
@@ -112,11 +112,11 @@ func (s *Store) RetrieveProperty(ctx context.Context, sitekey string) (*dbgen.Pr
 		return nil, err
 	}
 
-	if property != nil {
-		_ = s.cache.SetItem(ctx, sitekey, property, s.PropertyCacheDuration)
+	if propertyAndOrg != nil {
+		_ = s.cache.SetItem(ctx, sitekey, propertyAndOrg, s.PropertyCacheDuration)
 	}
 
-	return property, nil
+	return propertyAndOrg, nil
 }
 
 // Fetches API keyfrom DB, backed by cache

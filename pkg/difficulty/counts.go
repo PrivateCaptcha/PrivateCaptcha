@@ -9,6 +9,7 @@ import (
 type accessRecord struct {
 	Fingerprint TFingerprint
 	UserID      int32
+	OrgID       int32
 	PropertyID  int32
 	Timestamp   time.Time
 }
@@ -192,10 +193,10 @@ func (c *Counts) Clear() {
 
 type Stats struct {
 	// last 5 buckets of stats before time {t} (first element is the furthest in time)
-	Property    []uint32
-	User        uint32
-	HasProperty bool
-	HasUser     bool
+	Property       []uint32
+	Fingerprint    uint32
+	HasProperty    bool
+	HasFingerprint bool
 }
 
 func (st *Stats) Sum(decayRate float64) float64 {
@@ -205,13 +206,13 @@ func (st *Stats) Sum(decayRate float64) float64 {
 		sum = sum*(1.0-decayRate) + float64(c)
 	}
 
-	if (len(st.Property) > 0) && (st.Property[len(st.Property)-1] > st.User) && (st.User > 0) {
+	if (len(st.Property) > 0) && (st.Property[len(st.Property)-1] > st.Fingerprint) && (st.Fingerprint > 0) {
 		// don't count userCounts twice since it's already included in the last time bucket of this property
-		sum -= float64(st.User)
+		sum -= float64(st.Fingerprint)
 	}
 
-	if st.User > 0 {
-		sum = sum*(1.0-decayRate) + float64(st.User)
+	if st.Fingerprint > 0 {
+		sum = sum*(1.0-decayRate) + float64(st.Fingerprint)
 	}
 
 	return sum
@@ -242,7 +243,7 @@ func (c *Counts) FetchStats(pid int32, fingerprint TFingerprint, t time.Time) St
 		tunix-1*bucketSize,
 		tunix)
 
-	stats.User, stats.HasUser = ps.perUser.Count(fingerprint, t, c.bucketSize)
+	stats.Fingerprint, stats.HasFingerprint = ps.perUser.Count(fingerprint, t, c.bucketSize)
 
 	return stats
 }

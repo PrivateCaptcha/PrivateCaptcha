@@ -34,6 +34,7 @@ func RandomFingerprint() TFingerprint {
 }
 
 type backfillRequest struct {
+	OrgID       int32
 	UserID      int32
 	PropertyID  int32
 	Fingerprint TFingerprint
@@ -152,15 +153,15 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
-	l.recordAccess(fingerprint, p, tnow)
+func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) (uint8, Stats) {
+	l.recordAccess(fingerprint, p, userID, tnow)
 
 	stats := l.counts.FetchStats(p.ID, fingerprint, tnow)
 	if !stats.HasProperty {
-		l.backfillProperty(p)
+		l.backfillProperty(p, userID)
 	}
-	if !stats.HasUser {
-		l.backfillUser(p, fingerprint)
+	if !stats.HasFingerprint {
+		l.backfillFingerprint(fingerprint, p, userID)
 	}
 
 	decayRate := decayRateForLevel(p.DifficultyGrowth)
@@ -170,38 +171,41 @@ func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, tnow 
 	return requestsToDifficulty(sum, minDifficulty, p.DifficultyGrowth), stats
 }
 
-func (l *Levels) Difficulty(fingerprint TFingerprint, p *dbgen.Property) uint8 {
+func (l *Levels) Difficulty(fingerprint TFingerprint, p *dbgen.Property, userID int32) uint8 {
 	tnow := time.Now().UTC()
-	d, _ := l.DifficultyEx(fingerprint, p, tnow)
+	d, _ := l.DifficultyEx(fingerprint, p, userID, tnow)
 	return d
 }
 
-func (l *Levels) backfillProperty(p *dbgen.Property) {
+func (l *Levels) backfillProperty(p *dbgen.Property, userID int32) {
 	br := &backfillRequest{
-		UserID:      p.UserID.Int32,
+		OrgID:       p.OrgID.Int32,
+		UserID:      userID,
 		PropertyID:  p.ID,
 		Fingerprint: 0,
 	}
 	l.backfillChan <- br
 }
 
-func (l *Levels) backfillUser(p *dbgen.Property, fingerprint TFingerprint) {
+func (l *Levels) backfillFingerprint(fingerprint TFingerprint, p *dbgen.Property, userID int32) {
 	br := &backfillRequest{
-		UserID:      p.UserID.Int32,
+		OrgID:       p.OrgID.Int32,
+		UserID:      userID,
 		PropertyID:  p.ID,
 		Fingerprint: fingerprint,
 	}
 	l.backfillChan <- br
 }
 
-func (l *Levels) recordAccess(fingerprint TFingerprint, p *dbgen.Property, tnow time.Time) {
+func (l *Levels) recordAccess(fingerprint TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) {
 	if (p == nil) || !p.ExternalID.Valid {
 		return
 	}
 
 	ar := &accessRecord{
 		Fingerprint: fingerprint,
-		UserID:      p.UserID.Int32,
+		UserID:      userID,
+		OrgID:       p.OrgID.Int32,
 		PropertyID:  p.ID,
 		Timestamp:   tnow,
 	}
@@ -280,7 +284,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		if queryProperty {
 			counts, err = queryPropertyStats(ctx, l.clickhouse, r, l.counts.bucketSize)
 		} else {
-			counts, err = queryUserStats(ctx, l.clickhouse, r, l.counts.bucketSize)
+			counts, err = queryFingerprintStats(ctx, l.clickhouse, r, l.counts.bucketSize)
 		}
 
 		if err != nil {
@@ -318,11 +322,12 @@ func queryPropertyStats(ctx context.Context, db *sql.DB, r *backfillRequest, buc
 	timeFrom := time.Now().UTC().Add(-time.Duration(5) * bucketSize)
 	query := `SELECT timestamp, sum(count) as count
 FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
+WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
 	rows, err := db.Query(fmt.Sprintf(query, tableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
+		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
 	if err != nil {
@@ -346,14 +351,15 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func queryUserStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketSize time.Duration) ([]*TimeCount, error) {
+func queryFingerprintStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketSize time.Duration) ([]*TimeCount, error) {
 	timeFrom := time.Now().UTC().Add(-bucketSize)
 	query := `SELECT timestamp, count
 FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND property_id = {property_id:UInt32} AND fingerprint = {fingerprint:UInt64} AND timestamp >= {timestamp:DateTime}
+WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND fingerprint = {fingerprint:UInt64} AND timestamp >= {timestamp:DateTime}
 ORDER BY timestamp`
 	rows, err := db.Query(fmt.Sprintf(query, tableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
+		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
 		clickhouse.Named("fingerprint", strconv.FormatUint(r.Fingerprint, 10)),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
@@ -434,7 +440,7 @@ func (l *Levels) processAccessLogBatch(ctx context.Context, records []*accessRec
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.PropertyID, r.Fingerprint, r.Timestamp)
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
