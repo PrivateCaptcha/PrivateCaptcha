@@ -93,21 +93,17 @@ type verifyResponse struct {
 }
 
 func (s *Server) Setup(router *http.ServeMux) {
-	if len(s.Prefix) > 0 {
-		prefix := s.Prefix
-		if !strings.HasPrefix(prefix, "/") {
-			prefix = "/" + s.Prefix
-		}
-
-		s.setupWithPrefix(prefix, router)
-	} else {
-		s.setupWithPrefix("", router)
+	prefix := s.Prefix
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + s.Prefix
 	}
+
+	s.setupWithPrefix(prefix, router)
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	router.HandleFunc(prefix+common.PuzzleEndpoint, Method(http.MethodGet, s.Auth.Sitekey(s.puzzle)))
-	router.HandleFunc(prefix+common.VerifyEndpoint, Logged(SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
+	router.HandleFunc(prefix+common.PuzzleEndpoint, common.Method(http.MethodGet, s.Auth.Sitekey(s.puzzle)))
+	router.HandleFunc(prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
 }
 
 func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {

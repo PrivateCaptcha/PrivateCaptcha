@@ -1,6 +1,7 @@
 package common
 
 const (
-	PuzzleEndpoint = "/puzzle"
-	VerifyEndpoint = "/verify"
+	PuzzleEndpoint = "puzzle"
+	VerifyEndpoint = "verify"
+	LoginEndpoint  = "login"
 )

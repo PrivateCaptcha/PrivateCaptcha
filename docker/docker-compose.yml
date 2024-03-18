@@ -17,6 +17,14 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: ../web
+        - action: rebuild
+          path: ../pkg
+        - action: rebuild
+          path: ../cmd
     networks:
       - postgres_network
       - clickhouse_network
