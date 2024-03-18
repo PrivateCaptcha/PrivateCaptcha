@@ -31,7 +31,7 @@ func verifySuite(response, secret string) (*http.Response, error) {
 
 	encoded := data.Encode()
 
-	req, err := http.NewRequest(http.MethodPost, common.VerifyEndpoint, strings.NewReader(encoded))
+	req, err := http.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(encoded))
 	if err != nil {
 		return nil, err
 	}

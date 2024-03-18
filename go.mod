@@ -9,6 +9,7 @@ require (
 	github.com/jpillora/backoff v1.0.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	golang.org/x/crypto v0.17.0
+	golang.org/x/net v0.19.0
 	golang.org/x/sync v0.6.0
 )
 
