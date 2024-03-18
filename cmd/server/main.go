@@ -20,6 +20,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/providers/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
@@ -51,7 +54,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	server := &api.Server{
+	apiServer := &api.Server{
 		Auth: &api.AuthMiddleware{
 			Store: store,
 		},
@@ -62,15 +65,27 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	}
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
-		copy(server.UAKey[:], byteArray[:])
+		copy(apiServer.UAKey[:], byteArray[:])
 	} else {
 		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
 	}
 
+	portalServer := &portal.Server{
+		Store:  store,
+		Prefix: "portal",
+		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 24 * time.Hour},
+		Session: session.Manager{
+			CookieName:  "sid",
+			Provider:    memory.New(),
+			MaxLifetime: 24 * time.Hour,
+		},
+	}
+
 	router := http.NewServeMux()
 
-	router.Handle("/", api.Logged(web.Handler()))
-	server.Setup(router)
+	apiServer.Setup(router)
+	portalServer.Setup(router)
+	router.Handle("/", web.Static())
 
 	host := getenv("PC_HOST")
 	if host == "" {

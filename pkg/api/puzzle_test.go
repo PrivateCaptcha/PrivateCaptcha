@@ -24,7 +24,7 @@ func puzzleSuite(sitekey string) (*http.Response, error) {
 
 	//srv.HandleFunc("/", catchAll)
 
-	req, err := http.NewRequest(http.MethodGet, common.PuzzleEndpoint, nil)
+	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
 	if err != nil {
 		return nil, err
 	}
