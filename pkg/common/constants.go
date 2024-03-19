@@ -10,4 +10,5 @@ const (
 	ParamSiteKey          = "sitekey"
 	ParamSecret           = "secret"
 	ParamResponse         = "response"
+	ParamEmail            = "email"
 )

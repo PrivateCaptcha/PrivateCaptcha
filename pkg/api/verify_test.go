@@ -19,6 +19,11 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
+func testEmail(username string) string {
+	login := strings.ReplaceAll(username, " ", "_")
+	return login + "@privatecaptcha.com"
+}
+
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	server.Setup(srv)
@@ -73,7 +78,7 @@ func solutionsSuite(ctx context.Context, sitekey string) (string, string, error)
 func setupVerifySuite(username string) (string, string, error) {
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, username)
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: username, Email: testEmail(username)})
 	if err != nil {
 		return "", "", err
 	}
@@ -192,7 +197,7 @@ func TestVerifyCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +220,7 @@ func TestVerifyCachePriority(t *testing.T) {
 	apiKeyID := randomUUID()
 	secret := db.UUIDToSecret(*apiKeyID)
 
-	cache.SetMissing(ctx, secret, 1*time.Minute)
+	cache.SetMissing(ctx, "apikey/"+secret, 1*time.Minute)
 
 	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), secret)
 	if err != nil {
@@ -253,7 +258,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}

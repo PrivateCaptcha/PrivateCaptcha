@@ -95,7 +95,7 @@ func TestGetPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, t.Name())
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	err = cache.SetMissing(ctx, sitekey, 1*time.Minute)
+	err = cache.SetMissing(ctx, "proporg/"+sitekey, 1*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
