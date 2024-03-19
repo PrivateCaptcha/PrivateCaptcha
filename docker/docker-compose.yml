@@ -25,6 +25,8 @@ services:
           path: ../pkg
         - action: rebuild
           path: ../cmd
+        - action: rebuild
+          path: Dockerfile
     networks:
       - postgres_network
       - clickhouse_network

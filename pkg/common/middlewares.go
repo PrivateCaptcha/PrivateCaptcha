@@ -26,6 +26,7 @@ func SafeFormPost(h http.HandlerFunc, maxSize int64) http.HandlerFunc {
 		if err != nil {
 			slog.ErrorContext(r.Context(), "Failed to read request body", ErrAttr(err))
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
 		}
 
 		h.ServeHTTP(w, r)

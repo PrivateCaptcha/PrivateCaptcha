@@ -16,6 +16,15 @@ import (
 var staticFiles embed.FS
 
 func Static() http.Handler {
+	_ = fs.WalkDir(staticFiles, ".", func(path string, d fs.DirEntry, _ error) error {
+		if d.IsDir() {
+			return nil
+		}
+
+		slog.Debug("Static filepath found", "filepath", path)
+
+		return nil
+	})
 	sub, _ := fs.Sub(staticFiles, "static")
 	return http.FileServer(http.FS(sub))
 }
