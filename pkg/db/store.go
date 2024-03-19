@@ -21,14 +21,18 @@ var (
 	markerData          = []byte{'{', '}'}
 )
 
+const (
+	negativeCacheDuration = 1 * time.Minute
+	propertyCacheDuration = 1 * time.Minute
+	apiKeyCacheDuration   = 1 * time.Minute
+	userCacheDuration     = 1 * time.Minute
+	puzzleCacheDuration   = 1 * time.Minute
+)
+
 type Store struct {
-	db                    *dbgen.Queries
-	cache                 common.Cache
-	NegativeCacheDuration time.Duration
-	PropertyCacheDuration time.Duration
-	APIKeyCacheDuration   time.Duration
-	PuzzleCacheDuration   time.Duration
-	cancelFunc            context.CancelFunc
+	db         *dbgen.Queries
+	cache      common.Cache
+	cancelFunc context.CancelFunc
 }
 
 type puzzleCacheMarker struct {
@@ -38,12 +42,8 @@ type puzzleCacheMarker struct {
 func NewStore(queries *dbgen.Queries, cache common.Cache, cleanupInterval time.Duration) *Store {
 	// TODO: Adjust caching durations mindfully
 	s := &Store{
-		db:                    queries,
-		cache:                 cache,
-		NegativeCacheDuration: 1 * time.Minute,
-		PropertyCacheDuration: 1 * time.Minute,
-		APIKeyCacheDuration:   1 * time.Minute,
-		PuzzleCacheDuration:   1 * time.Minute,
+		db:    queries,
+		cache: cache,
 	}
 
 	var ctx context.Context
@@ -94,7 +94,9 @@ func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*db
 		return nil, ErrInvalidInput
 	}
 
-	if property, err := fetchCached[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, sitekey, s.PropertyCacheDuration); err == nil {
+	cacheKey := "proporg/" + sitekey
+
+	if property, err := fetchCached[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
 		return property, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -103,7 +105,7 @@ func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*db
 	propertyAndOrg, err := s.db.PropertyAndOrgByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, sitekey, s.NegativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
 			return nil, ErrRecordNotFound
 		}
 
@@ -113,7 +115,7 @@ func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*db
 	}
 
 	if propertyAndOrg != nil {
-		_ = s.cache.SetItem(ctx, sitekey, propertyAndOrg, s.PropertyCacheDuration)
+		_ = s.cache.SetItem(ctx, cacheKey, propertyAndOrg, propertyCacheDuration)
 	}
 
 	return propertyAndOrg, nil
@@ -126,7 +128,9 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 		return nil, ErrInvalidInput
 	}
 
-	if apiKey, err := fetchCached[dbgen.APIKey](ctx, s.cache, secret, s.APIKeyCacheDuration); err == nil {
+	cacheKey := "apikey/" + secret
+
+	if apiKey, err := fetchCached[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -135,7 +139,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 	apiKey, err := s.db.GetAPIKeyByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, secret, s.NegativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
 			return nil, ErrRecordNotFound
 		}
 
@@ -145,7 +149,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 	}
 
 	if apiKey != nil {
-		_ = s.cache.SetItem(ctx, secret, apiKey, s.APIKeyCacheDuration)
+		_ = s.cache.SetItem(ctx, cacheKey, apiKey, apiKeyCacheDuration)
 	}
 
 	return apiKey, nil
@@ -180,4 +184,35 @@ func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Tim
 		Value:   markerData[:],
 		Column3: diff,
 	})
+}
+
+func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error) {
+	if len(email) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	cacheKey := "email/" + email
+	if user, err := fetchCached[dbgen.User](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+		return user, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
+	}
+
+	user, err := s.db.GetUserByEmail(ctx, email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve user by email", "email", email, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if user != nil {
+		_ = s.cache.SetItem(ctx, cacheKey, user, userCacheDuration)
+	}
+
+	return user, nil
 }
