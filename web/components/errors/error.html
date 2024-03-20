@@ -1,0 +1,24 @@
+{{template "base.html" .}}
+
+{{define "title"}}Error{{end}}
+
+{{define "body_class"}}flex flex-col min-h-screen{{end}}
+
+{{define "main"}}
+<main class="flex flex-1 min-h-full place-items-center bg-white px-6 py-24 sm:py-32 lg:px-8">
+  <div class="text-center mx-auto">
+      <p class="text-base font-semibold text-red-500">{{.ErrorCode}}</p>
+      <h1 class="mt-4 text-3xl font-bold tracking-tight text-gray-900 sm:text-5xl">{{.ErrorMessage}}</h1>
+    <p class="mt-6 text-base leading-7 text-gray-600">Sorry, an unexpected error has occurred. Our team has been notified.</p>
+    <div class="mt-10 flex items-center justify-center gap-x-6">
+        <a
+            href='{{ relURL "/" }}'
+            type="button"
+            class="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold leading-5 text-white transition-all duration-200 bg-gray-900 border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 hover:bg-gray-700"
+        >
+            Go back home
+        </a>
+    </div>
+  </div>
+</main>
+{{end}}

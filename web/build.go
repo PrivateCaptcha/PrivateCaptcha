@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -16,20 +17,11 @@ import (
 var staticFiles embed.FS
 
 func Static() http.Handler {
-	_ = fs.WalkDir(staticFiles, ".", func(path string, d fs.DirEntry, _ error) error {
-		if d.IsDir() {
-			return nil
-		}
-
-		slog.Debug("Static filepath found", "filepath", path)
-
-		return nil
-	})
 	sub, _ := fs.Sub(staticFiles, "static")
 	return http.FileServer(http.FS(sub))
 }
 
-//go:embed components/*.html
+//go:embed components/*.html components/*/*.html
 var templateFiles embed.FS
 
 type Template struct {
@@ -37,7 +29,33 @@ type Template struct {
 }
 
 func NewTemplates(funcs template.FuncMap) *Template {
-	templates := template.Must(template.New("").Funcs(funcs).ParseFS(templateFiles, "components/*.html"))
+	root := "components"
+	templates := template.New("").Funcs(funcs)
+	err := fs.WalkDir(templateFiles, root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Read the file content
+		data, err := fs.ReadFile(templateFiles, path)
+		if err != nil {
+			return err
+		}
+		// Use the relative file path as the template name, ensuring to trim any leading slash
+		name := strings.TrimPrefix(path, root+"/")
+		// Associate the file content with the template name
+		_, err = templates.New(name).Parse(string(data))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	slog.Debug("Parsed templates", "templates", templates.DefinedTemplates())
 	return &Template{
 		templates: templates,

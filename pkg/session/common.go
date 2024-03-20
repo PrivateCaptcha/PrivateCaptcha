@@ -4,6 +4,12 @@ import "time"
 
 type Key int
 
+const (
+	KeyLoginStep = iota
+	KeyUserEmail
+	KeyTwoFactorCode
+)
+
 type Session interface {
 	Set(key Key, value interface{}) error
 	Get(key Key) interface{}
