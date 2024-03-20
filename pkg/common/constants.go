@@ -11,4 +11,5 @@ const (
 	ParamSecret           = "secret"
 	ParamResponse         = "response"
 	ParamEmail            = "email"
+	ParamCsrfToken        = "csrf-token"
 )

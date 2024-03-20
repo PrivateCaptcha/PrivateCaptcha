@@ -79,6 +79,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 			Provider:    memory.New(),
 			MaxLifetime: 24 * time.Hour,
 		},
+		Mailer: &portal.StubMailer{},
 	}
 
 	router := http.NewServeMux()
