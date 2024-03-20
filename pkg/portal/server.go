@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -16,6 +15,8 @@ import (
 
 const (
 	maxLoginFormSizeBytes = 10 * 1024
+	loginStepTwoFactor    = 1
+	loginStepConfirmed    = 2
 )
 
 func funcMap(prefix string) template.FuncMap {
@@ -25,9 +26,7 @@ func funcMap(prefix string) template.FuncMap {
 			return template.HTML(s)
 		},
 		"relURL": func(s string) any {
-			s = strings.TrimPrefix(s, "/")
-			p := strings.TrimSuffix(prefix, "/")
-			return p + "/" + s
+			return common.RelURL(prefix, s)
 		},
 	}
 }
@@ -38,11 +37,15 @@ type Server struct {
 	template *web.Template
 	XSRF     XSRFMiddleware
 	Session  session.Manager
+	Mailer   Mailer
 }
 
 func (s *Server) Setup(router *http.ServeMux) {
-	prefix := "/" + strings.Trim(s.Prefix, "/") + "/"
-	s.setupWithPrefix(prefix, router)
+	s.setupWithPrefix(s.relURL("/"), router)
+}
+
+func (s *Server) relURL(url string) string {
+	return common.RelURL(s.Prefix, url)
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
@@ -52,57 +55,45 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	s.template = web.NewTemplates(funcMap(prefix))
 
 	router.HandleFunc(prefix+common.LoginEndpoint, common.Logged(s.login))
-	//router.HandleFunc(prefix+"/", common.Logged(s.Session.Auth()))
+	router.HandleFunc(prefix+common.TwoFactorEndpoint, common.Logged(s.twofactor))
+	router.HandleFunc(prefix, common.Logged(common.Method(http.MethodGet, s.root)))
 }
 
 func (s *Server) render(ctx context.Context, w http.ResponseWriter, name string, data interface{}) {
 	if err := s.template.Render(ctx, w, name, data); err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", common.ErrAttr(err))
-		// TODO: Redirect to internal error status page instead
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		s.renderError(ctx, w, http.StatusInternalServerError)
 	}
 }
 
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	switch r.Method {
-	case http.MethodGet:
-		data := struct {
-			Token  string
-			Prefix string
-		}{
-			Token:  s.XSRF.Token("", actionLogin),
-			Prefix: s.Prefix,
-		}
-
-		s.render(ctx, w, "login.html", data)
-	case http.MethodPost:
-		r.Body = http.MaxBytesReader(w, r.Body, maxLoginFormSizeBytes)
-		err := r.ParseForm()
-		if err != nil {
-			slog.ErrorContext(r.Context(), "Failed to read request body", common.ErrAttr(err))
-			// TODO: Redirect to error page instead
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-
-		email := r.FormValue(common.ParamEmail)
-		_, err = s.Store.FindUser(ctx, email)
-		if err != nil {
-			data := struct {
-				Error string
-			}{
-				Error: "User with such email does not exist",
-			}
-
-			s.render(ctx, w, "login-email-error.html", data)
-			return
-		}
-		// TODO: Do the actual authentication
-		// redirect to email 2fa
-		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
-	default:
-		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code int) {
+	data := struct {
+		ErrorCode    int
+		ErrorMessage string
+	}{
+		ErrorCode:    code,
+		ErrorMessage: http.StatusText(code),
 	}
+
+	s.render(ctx, w, "errors/error.html", data)
+}
+
+func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("HX-Redirect", url)
+}
+
+func (s *Server) root(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != s.relURL("/") {
+		s.renderError(r.Context(), w, http.StatusNotFound)
+		return
+	}
+
+	sess := s.Session.SessionStart(w, r)
+	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepConfirmed {
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	s.renderError(r.Context(), w, http.StatusNotImplemented)
 }
