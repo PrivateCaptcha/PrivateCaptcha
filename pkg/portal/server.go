@@ -56,6 +56,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 
 	router.HandleFunc(prefix+common.LoginEndpoint, common.Logged(s.login))
 	router.HandleFunc(prefix+common.TwoFactorEndpoint, common.Logged(s.twofactor))
+	router.HandleFunc(prefix+common.ResendEndpoint, common.Logged(common.Method(http.MethodPost, s.resend2fa)))
 	router.HandleFunc(prefix, common.Logged(common.Method(http.MethodGet, s.root)))
 }
 
@@ -89,8 +90,8 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 }
 
 func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set("HX-Redirect", url)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) root(w http.ResponseWriter, r *http.Request) {
