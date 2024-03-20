@@ -70,9 +70,19 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	data := struct {
 		ErrorCode    int
 		ErrorMessage string
+		Detail       string
 	}{
 		ErrorCode:    code,
 		ErrorMessage: http.StatusText(code),
+	}
+
+	switch code {
+	case http.StatusNotFound:
+		data.Detail = "This page does not exist."
+	case http.StatusUnauthorized:
+		data.Detail = "You need to log in to view this page."
+	default:
+		data.Detail = "Sorry, an unexpected error has occurred. Our team has been notified."
 	}
 
 	s.render(ctx, w, "errors/error.html", data)
