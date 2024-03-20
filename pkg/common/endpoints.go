@@ -5,4 +5,5 @@ const (
 	VerifyEndpoint    = "verify"
 	LoginEndpoint     = "login"
 	TwoFactorEndpoint = "2fa"
+	ResendEndpoint    = "resend"
 )

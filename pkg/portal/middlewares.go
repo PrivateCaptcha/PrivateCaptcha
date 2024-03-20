@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	actionLogin = "login"
+	actionLogin  = "login"
+	actionVerify = "verify"
 )
 
 type XSRFMiddleware struct {
