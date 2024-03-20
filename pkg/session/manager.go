@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
@@ -23,21 +22,6 @@ func (m *Manager) sessionID() string {
 		return ""
 	}
 	return base64.URLEncoding.EncodeToString(b)
-}
-
-func (m *Manager) Auth(success, fail http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(m.CookieName)
-		if err != nil || cookie.Value == "" {
-			if err != nil {
-				slog.ErrorContext(r.Context(), "Failed to fetch cookie", "cookie", m.CookieName)
-			}
-			fail.ServeHTTP(w, r)
-			return
-		}
-
-		success.ServeHTTP(w, r)
-	})
 }
 
 func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session Session) {
