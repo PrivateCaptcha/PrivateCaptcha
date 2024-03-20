@@ -45,3 +45,9 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 		next.ServeHTTP(w, r)
 	}
 }
+
+func Redirect(url string, w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Location", url)
+	// w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.Redirect(w, r, url, http.StatusSeeOther)
+}
