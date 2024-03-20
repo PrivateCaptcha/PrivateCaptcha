@@ -15,11 +15,9 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		data := struct {
 			Token     string
-			Prefix    string
 			TokenName string
 		}{
 			Token:     s.XSRF.Token("", actionLogin),
-			Prefix:    s.Prefix,
 			TokenName: common.ParamCsrfToken,
 		}
 
@@ -72,15 +70,66 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) twofactor(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	switch r.Method {
 	case http.MethodGet:
 		sess := s.Session.SessionStart(w, r)
 		if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepTwoFactor {
+			slog.ErrorContext(ctx, "User session is not valid")
 			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 			return
 		}
+
+		email, ok := sess.Get(session.KeyUserEmail).(string)
+		if !ok {
+			slog.ErrorContext(ctx, "Failed to get email from session")
+			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+			return
+		}
+
+		data := struct {
+			Token     string
+			TokenName string
+			Email     string
+		}{
+			Token:     s.XSRF.Token(email, actionVerify),
+			TokenName: common.ParamCsrfToken,
+			Email:     common.MaskEmail(email, '*'),
+		}
+
+		s.render(ctx, w, "login/twofactor.html", data)
 	case http.MethodPost:
 		// TODO: Verify two factor code stored in session
 		http.Error(w, http.StatusText(http.StatusNotImplemented), http.StatusNotImplemented)
 	}
+}
+
+func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	sess := s.Session.SessionStart(w, r)
+	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepTwoFactor {
+		slog.ErrorContext(ctx, "User session is not valid")
+		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	code := twoFactorCode()
+	sess.Set(session.KeyTwoFactorCode, code)
+
+	if err := s.Mailer.SendTwoFactor(ctx, email, code); err != nil {
+		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
+		s.render(ctx, w, "login/resend-error.html", struct{}{})
+		return
+	}
+
+	s.render(ctx, w, "login/resend.html", struct{}{})
 }
