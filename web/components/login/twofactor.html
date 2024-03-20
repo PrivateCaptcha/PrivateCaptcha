@@ -14,7 +14,7 @@
                     <div class="flex items-center justify-between">
                         <h1 class="text-xl font-bold text-gray-900 font-pj">Verify your account</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL "/login" }}' title="" class="font-bold rounded hover:underline focus:outline-none focus:ring-1 focus:ring-gray-900 focus:ring-offset-2">Back to Login</a></p>
+                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL "/login" }}' title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Back to Login</a></p>
                     </div>
 
                     <form hx-post='{{ relURL "/twofactor" }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
@@ -28,7 +28,7 @@
 
                             <div class="relative flex items-center mt-4">
                                 <div class="text-base" hx-target="this" hx-swap="innerHTML">
-                                    <p class="text-base font-normal text-gray-900 font-pj">Did not receive the code? <a hx-post='{{ relURL "/resend" }}' href="#" title="" class="font-bold rounded hover:underline focus:outline-none focus:ring-1 focus:ring-gray-900 focus:ring-offset-2">Resend</a></p>
+                                    <p class="text-base font-normal text-gray-900 font-pj">Did not receive the code? <a hx-post='{{ relURL "/resend" }}' href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Resend</a></p>
                                 </div>
                             </div>
                         </div>
