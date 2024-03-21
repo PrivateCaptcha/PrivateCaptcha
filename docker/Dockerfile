@@ -10,7 +10,7 @@ RUN npm install
 RUN npm run build
 
 # Stage 2: Backend build
-FROM golang:latest AS backend-builder
+FROM golang:1.22.1 AS backend-builder
 
 # Copy the backend source code
 COPY . /app/
@@ -29,7 +29,7 @@ ARG GIT_COMMIT=HEAD
 RUN env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
 
 # Final stage: Production container
-FROM golang:latest
+FROM golang:1.22.1
 
 COPY --from=backend-builder /app/bin/server /app/server
 

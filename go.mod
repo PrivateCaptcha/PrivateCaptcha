@@ -1,6 +1,6 @@
 module github.com/PrivateCaptcha/PrivateCaptcha
 
-go 1.21.4
+go 1.22.1
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.17.1
@@ -8,6 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.5.1
 	github.com/jpillora/backoff v1.0.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/rs/xid v1.5.0
 	golang.org/x/crypto v0.17.0
 	golang.org/x/net v0.19.0
 	golang.org/x/sync v0.6.0

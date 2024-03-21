@@ -3,12 +3,15 @@ package common
 import (
 	"log/slog"
 	"net/http"
+
+	"github.com/rs/xid"
 )
 
 func Logged(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Debug("Processing request", "path", r.URL.Path, "method", r.Method)
-		h.ServeHTTP(w, r)
+		ctx := TraceContext(r.Context(), xid.New().String())
+		slog.DebugContext(ctx, "Processing request", "path", r.URL.Path, "method", r.Method)
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
@@ -41,7 +44,7 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		slog.Debug("Processing request", "path", r.URL.Path, "method", r.Method)
+		slog.DebugContext(r.Context(), "Processing request", "path", r.URL.Path, "method", r.Method)
 		next.ServeHTTP(w, r)
 	}
 }
