@@ -6,4 +6,5 @@ const (
 	LoginEndpoint     = "login"
 	TwoFactorEndpoint = "2fa"
 	ResendEndpoint    = "resend"
+	ErrorEndpoint     = "error"
 )

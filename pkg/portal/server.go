@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -13,10 +14,18 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
-const (
-	maxLoginFormSizeBytes = 10 * 1024
-	loginStepTwoFactor    = 1
-	loginStepConfirmed    = 2
+var (
+	renderConstants = struct {
+		LoginEndpoint     string
+		TwoFactorEndpoint string
+		ResendEndpoint    string
+		TokenName         string
+	}{
+		LoginEndpoint:     common.LoginEndpoint,
+		TwoFactorEndpoint: common.TwoFactorEndpoint,
+		ResendEndpoint:    common.ResendEndpoint,
+		TokenName:         common.ParamCsrfToken,
+	}
 )
 
 func funcMap(prefix string) template.FuncMap {
@@ -54,20 +63,41 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	s.Session.Path = prefix
 	s.template = web.NewTemplates(funcMap(prefix))
 
-	router.HandleFunc(prefix+common.LoginEndpoint, common.Logged(s.login))
-	router.HandleFunc(prefix+common.TwoFactorEndpoint, common.Logged(s.twofactor))
-	router.HandleFunc(prefix+common.ResendEndpoint, common.Logged(common.Method(http.MethodPost, s.resend2fa)))
-	router.HandleFunc(prefix, common.Logged(common.Method(http.MethodGet, s.root)))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.LoginEndpoint, s.getLogin)
+	router.HandleFunc(http.MethodPost+" "+prefix+common.LoginEndpoint, common.Logged(s.postLogin))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.TwoFactorEndpoint, s.getTwoFactor)
+	router.HandleFunc(http.MethodPost+" "+prefix+common.TwoFactorEndpoint, common.Logged(s.postTwoFactor))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.ResendEndpoint, common.Logged(s.resend2fa))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", common.Logged(func(w http.ResponseWriter, r *http.Request) {
+		code, _ := strconv.Atoi(r.PathValue("code"))
+		s.renderError(r.Context(), w, code)
+	}))
+	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.root)
+	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
 
 func (s *Server) render(ctx context.Context, w http.ResponseWriter, name string, data interface{}) {
-	if err := s.template.Render(ctx, w, name, data); err != nil {
+	actualData := struct {
+		Params interface{}
+		Const  interface{}
+	}{
+		Params: data,
+		Const:  renderConstants,
+	}
+	if err := s.template.Render(ctx, w, name, actualData); err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", common.ErrAttr(err))
 		s.renderError(ctx, w, http.StatusInternalServerError)
 	}
 }
 
+func (s *Server) htmxRedirectError(code int, w http.ResponseWriter, r *http.Request) {
+	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
+	s.htmxRedirect(url, w, r)
+}
+
 func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code int) {
+	slog.DebugContext(ctx, "Rendering error page", "code", code)
+
 	data := struct {
 		ErrorCode    int
 		ErrorMessage string
@@ -94,14 +124,13 @@ func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) root(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != s.relURL("/") {
-		s.renderError(r.Context(), w, http.StatusNotFound)
-		return
-	}
+func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
+	s.renderError(r.Context(), w, http.StatusNotFound)
+}
 
+func (s *Server) root(w http.ResponseWriter, r *http.Request) {
 	sess := s.Session.SessionStart(w, r)
-	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepConfirmed {
+	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepCompleted {
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
