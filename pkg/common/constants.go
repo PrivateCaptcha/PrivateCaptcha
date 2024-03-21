@@ -12,4 +12,5 @@ const (
 	ParamResponse         = "response"
 	ParamEmail            = "email"
 	ParamCsrfToken        = "csrf-token"
+	ParamVerificationCode = "code"
 )

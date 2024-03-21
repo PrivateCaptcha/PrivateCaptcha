@@ -1,16 +1,20 @@
 <div class="space-y-4">
     <div>
-        <label for="" class="text-base font-medium text-gray-900 font-pj"> Email </label>
+        <label for="email" class="text-base font-medium text-gray-900 font-pj"> Enter the code sent to <span class="italic">{{.Params.Email}}</span> </label>
         <div class="mt-2.5 relative">
             <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
                 <svg class="w-5 h-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                 </svg>
             </div>
-            <input type="email" name="email" id="" placeholder="Email address" class="block w-full px-4 py-4 text-red-800 placeholder-gray-600 bg-white border border-red-200 rounded-xl focus:border-red-500 focus:ring-red-500 caret-red-500 focus:outline-none" requied />
+            <input type="text" name="code" id="" placeholder="XXXXXX" class="block w-full px-4 py-4 text-red-800 placeholder-gray-600 bg-white border border-red-200 rounded-xl focus:border-red-500 focus:ring-red-500 caret-red-500 focus:outline-none" pattern="[0-9]{6}" required />
         </div>
+    </div>
 
-        <p class="mt-1 text-sm font-medium text-red-500">{{.Params.Error}}</p>
+    <div class="relative flex items-center mt-4">
+        <div class="text-base" hx-target="this" hx-swap="innerHTML">
+            <p class="text-base font-normal text-gray-900 font-pj"><span class="text-red-500">{{.Params.Error}}</span> <a hx-post='{{ relURL .Const.ResendEndpoint }}' href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Resend</a></p>
+        </div>
     </div>
 </div>
 <input type="hidden" name="{{.Const.TokenName}}" value="{{.Params.Token}}" />
@@ -19,5 +23,5 @@
     type="submit"
     class="flex items-center justify-center w-full px-8 py-4 mt-8 text-base font-bold text-white transition-all duration-200 bg-gray-900 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 font-pj hover:bg-gray-600"
 >
-    Sign in
+    Verify
 </button>

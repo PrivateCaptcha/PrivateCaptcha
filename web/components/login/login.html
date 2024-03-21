@@ -17,7 +17,7 @@
                         <p class="text-base font-normal text-gray-900 font-pj">Don’t have an account? <a href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Join now</a></p>
                     </div>
 
-                    <form hx-post='{{ relURL "/login" }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
+                    <form hx-post='{{ relURL .Const.LoginEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
                         <div class="space-y-4">
                             <div>
                                 <label for="email" class="text-base font-medium text-gray-900 font-pj"> Email </label>
@@ -26,7 +26,7 @@
                                 </div>
                             </div>
                         </div>
-                        <input type="hidden" name="{{.TokenName}}" value="{{.Token}}" />
+                        <input type="hidden" name="{{.Const.TokenName}}" value="{{.Params.Token}}" />
 
                         <button
                             type="submit"

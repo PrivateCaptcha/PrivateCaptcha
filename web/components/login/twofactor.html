@@ -14,13 +14,13 @@
                     <div class="flex items-center justify-between">
                         <h1 class="text-xl font-bold text-gray-900 font-pj">Verify your account</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL "/login" }}' title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Back to Login</a></p>
+                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL .Const.LoginEndpoint }}' title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Back to Login</a></p>
                     </div>
 
-                    <form hx-post='{{ relURL "/twofactor" }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
+                    <form hx-post='{{ relURL .Const.TwoFactorEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
                         <div class="space-y-4">
                             <div>
-                                <label for="email" class="text-base font-medium text-gray-900 font-pj"> Enter the code sent to <span class="italic">{{.Email}}</span> </label>
+                                <label for="email" class="text-base font-medium text-gray-900 font-pj"> Enter the code sent to <span class="italic">{{.Params.Email}}</span> </label>
                                 <div class="mt-2.5">
                                     <input type="text" name="code" id="" placeholder="XXXXXX" class="block w-full px-4 py-4 text-gray-900 placeholder-gray-600 bg-white border border-gray-400 rounded-xl focus:border-gray-900 focus:ring-gray-900 caret-gray-900 focus:outline-none" pattern="[0-9]{6}" required />
                                 </div>
@@ -28,11 +28,11 @@
 
                             <div class="relative flex items-center mt-4">
                                 <div class="text-base" hx-target="this" hx-swap="innerHTML">
-                                    <p class="text-base font-normal text-gray-900 font-pj">Did not receive the code? <a hx-post='{{ relURL "/resend" }}' href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Resend</a></p>
+                                    <p class="text-base font-normal text-gray-900 font-pj">Did not receive the code? <a hx-post='{{ relURL .Const.ResendEndpoint }}' href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Resend</a></p>
                                 </div>
                             </div>
                         </div>
-                        <input type="hidden" name="{{.TokenName}}" value="{{.Token}}" />
+                        <input type="hidden" name="{{.Const.TokenName}}" value="{{.Params.Token}}" />
 
                         <button
                             type="submit"

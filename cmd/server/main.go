@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -12,8 +13,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"log/slog"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -73,7 +72,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	portalServer := &portal.Server{
 		Store:  store,
 		Prefix: "portal",
-		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 24 * time.Hour},
+		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "sid",
 			Provider:    memory.New(),
@@ -86,7 +85,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	apiServer.Setup(router)
 	portalServer.Setup(router)
-	router.Handle("/", web.Static())
+	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 
 	host := getenv("PC_HOST")
 	if host == "" {
