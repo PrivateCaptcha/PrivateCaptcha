@@ -220,7 +220,7 @@ func TestVerifyCachePriority(t *testing.T) {
 	apiKeyID := randomUUID()
 	secret := db.UUIDToSecret(*apiKeyID)
 
-	cache.SetMissing(ctx, "apikey/"+secret, 1*time.Minute)
+	cache.SetMissing(ctx, db.APIKeyCachePrefix+secret, 1*time.Minute)
 
 	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), secret)
 	if err != nil {

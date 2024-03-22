@@ -1,6 +1,6 @@
 {{template "base.html" .}}
 
-{{define "title"}}Login{{end}}
+{{define "title"}}Verify{{end}}
 
 {{define "body_class"}}flex flex-col min-h-screen{{end}}
 
@@ -12,13 +12,13 @@
             <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
                 <div class="px-4 py-6 sm:px-8">
                     <div class="flex items-center justify-between">
-                        <h1 class="text-xl font-bold text-gray-900 font-pj">Sign in</h1>
+                        <h1 class="text-xl font-bold text-gray-900 font-pj">Verify your account</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj">Don’t have an account? <a href="{{ relURL .Const.RegisterEndpoint }}" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Join now</a></p>
+                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL .Const.LoginEndpoint }}' title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Back to Login</a></p>
                     </div>
 
-                    <form hx-post='{{ relURL .Const.LoginEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
-                        {{template "login/form.html" .}}
+                    <form hx-post='{{ relURL .Const.TwoFactorEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
+                        {{template "twofactor/form.html" .}}
                     </form>
 
                     <svg class="w-auto h-4 mx-auto mt-8 text-gray-300" viewBox="0 0 172 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -47,6 +47,7 @@
                         <line y1="-0.5" x2="18.0278" y2="-0.5" transform="matrix(-0.5547 0.83205 0.83205 0.5547 109 1)" />
                         <line y1="-0.5" x2="18.0278" y2="-0.5" transform="matrix(-0.5547 0.83205 0.83205 0.5547 144 1)" />
                     </svg>
+
                 </div>
             </div>
         </div>
