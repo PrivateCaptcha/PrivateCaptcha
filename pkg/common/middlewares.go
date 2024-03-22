@@ -17,12 +17,6 @@ func Logged(h http.HandlerFunc) http.HandlerFunc {
 
 func SafeFormPost(h http.HandlerFunc, maxSize int64) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			slog.ErrorContext(r.Context(), "Incorrect http method", "actual", r.Method, "expected", http.MethodPost)
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-
 		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
 		err := r.ParseForm()
