@@ -7,4 +7,6 @@ const (
 	TwoFactorEndpoint = "2fa"
 	ResendEndpoint    = "resend"
 	ErrorEndpoint     = "error"
+	RegisterEndpoint  = "signup"
+	ExpiredEndpoint   = "expired"
 )

@@ -8,6 +8,7 @@ const (
 	KeyLoginStep = iota
 	KeyUserEmail
 	KeyTwoFactorCode
+	KeyUserName
 )
 
 type Session interface {

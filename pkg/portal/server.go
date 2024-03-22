@@ -19,12 +19,20 @@ var (
 		LoginEndpoint     string
 		TwoFactorEndpoint string
 		ResendEndpoint    string
-		TokenName         string
+		RegisterEndpoint  string
+		Token             string
+		Email             string
+		Name              string
+		VerificationCode  string
 	}{
 		LoginEndpoint:     common.LoginEndpoint,
 		TwoFactorEndpoint: common.TwoFactorEndpoint,
 		ResendEndpoint:    common.ResendEndpoint,
-		TokenName:         common.ParamCsrfToken,
+		RegisterEndpoint:  common.RegisterEndpoint,
+		Token:             common.ParamCsrfToken,
+		Email:             common.ParamEmail,
+		Name:              common.ParamName,
+		VerificationCode:  common.ParamVerificationCode,
 	}
 )
 
@@ -65,13 +73,13 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LoginEndpoint, s.getLogin)
 	router.HandleFunc(http.MethodPost+" "+prefix+common.LoginEndpoint, common.Logged(s.postLogin))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.RegisterEndpoint, s.getRegister)
+	router.HandleFunc(http.MethodPost+" "+prefix+common.RegisterEndpoint, common.Logged(s.postRegister))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.TwoFactorEndpoint, s.getTwoFactor)
 	router.HandleFunc(http.MethodPost+" "+prefix+common.TwoFactorEndpoint, common.Logged(s.postTwoFactor))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.ResendEndpoint, common.Logged(s.resend2fa))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", common.Logged(func(w http.ResponseWriter, r *http.Request) {
-		code, _ := strconv.Atoi(r.PathValue("code"))
-		s.renderError(r.Context(), w, code)
-	}))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
+	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.root)
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
@@ -90,33 +98,14 @@ func (s *Server) render(ctx context.Context, w http.ResponseWriter, name string,
 	}
 }
 
+func (s *Server) error(w http.ResponseWriter, r *http.Request) {
+	code, _ := strconv.Atoi(r.PathValue("code"))
+	s.renderError(r.Context(), w, code)
+}
+
 func (s *Server) htmxRedirectError(code int, w http.ResponseWriter, r *http.Request) {
 	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
 	s.htmxRedirect(url, w, r)
-}
-
-func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code int) {
-	slog.DebugContext(ctx, "Rendering error page", "code", code)
-
-	data := struct {
-		ErrorCode    int
-		ErrorMessage string
-		Detail       string
-	}{
-		ErrorCode:    code,
-		ErrorMessage: http.StatusText(code),
-	}
-
-	switch code {
-	case http.StatusNotFound:
-		data.Detail = "This page does not exist."
-	case http.StatusUnauthorized:
-		data.Detail = "You need to log in to view this page."
-	default:
-		data.Detail = "Sorry, an unexpected error has occurred. Our team has been notified."
-	}
-
-	s.render(ctx, w, "errors/error.html", data)
 }
 
 func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request) {
