@@ -1,45 +1,24 @@
 {{template "base.html" .}}
 
-{{define "title"}}Verify{{end}}
+{{define "title"}}Sign up{{end}}
 
 {{define "body_class"}}flex flex-col min-h-screen{{end}}
 
 {{define "main"}}
 <div class="flex flex-1 items-center bg-gray-50">
-<section class="py-12 sm:py-16 lg:py-20 flex-1">
+<section class="py-12 bg-gray-50 sm:py-16 lg:py-20 flex-1">
     <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div class="relative max-w-md mx-auto lg:max-w-lg">
             <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
                 <div class="px-4 py-6 sm:px-8">
                     <div class="flex items-center justify-between">
-                        <h1 class="text-xl font-bold text-gray-900 font-pj">Verify your account</h1>
+                        <h1 class="text-xl font-bold text-gray-900 font-pj">Sign up</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj"><a href='{{ relURL .Const.LoginEndpoint }}' title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Back to Login</a></p>
+                        <p class="text-base font-normal text-gray-900 font-pj">Already joined? <a href="{{ relURL .Const.LoginEndpoint }}" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Login now</a></p>
                     </div>
 
-                    <form hx-post='{{ relURL .Const.TwoFactorEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
-                        <div class="space-y-4">
-                            <div>
-                                <label for="email" class="text-base font-medium text-gray-900 font-pj"> Enter the code sent to <span class="italic">{{.Params.Email}}</span> </label>
-                                <div class="mt-2.5">
-                                    <input type="text" name="code" id="" placeholder="XXXXXX" class="block w-full px-4 py-4 text-gray-900 placeholder-gray-600 bg-white border border-gray-400 rounded-xl focus:border-gray-900 focus:ring-gray-900 caret-gray-900 focus:outline-none" pattern="[0-9]{6}" required />
-                                </div>
-                            </div>
-
-                            <div class="relative flex items-center mt-4">
-                                <div class="text-base" hx-target="this" hx-swap="innerHTML">
-                                    <p class="text-base font-normal text-gray-900 font-pj">Did not receive the code? <a hx-post='{{ relURL .Const.ResendEndpoint }}' href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Resend</a></p>
-                                </div>
-                            </div>
-                        </div>
-                        <input type="hidden" name="{{.Const.TokenName}}" value="{{.Params.Token}}" />
-
-                        <button
-                            type="submit"
-                            class="flex items-center justify-center w-full px-8 py-4 mt-8 text-base font-bold text-white transition-all duration-200 bg-gray-900 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 font-pj hover:bg-gray-600"
-                        >
-                            Verify
-                        </button>
+                    <form hx-post='{{ relURL .Const.RegisterEndpoint }}' hx-target="this" hx-swap="innerHTML" class="mt-12">
+                        {{template "register/form.html" .}}
                     </form>
 
                     <svg class="w-auto h-4 mx-auto mt-8 text-gray-300" viewBox="0 0 172 16" fill="none" stroke="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -68,7 +47,6 @@
                         <line y1="-0.5" x2="18.0278" y2="-0.5" transform="matrix(-0.5547 0.83205 0.83205 0.5547 109 1)" />
                         <line y1="-0.5" x2="18.0278" y2="-0.5" transform="matrix(-0.5547 0.83205 0.83205 0.5547 144 1)" />
                     </svg>
-
                 </div>
             </div>
         </div>

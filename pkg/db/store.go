@@ -27,6 +27,9 @@ const (
 	apiKeyCacheDuration   = 1 * time.Minute
 	userCacheDuration     = 1 * time.Minute
 	puzzleCacheDuration   = 1 * time.Minute
+	emailCachePrefix      = "email/"
+	PropOrgCachePrefix    = "proporg/"
+	APIKeyCachePrefix     = "apikey/"
 )
 
 type Store struct {
@@ -94,7 +97,7 @@ func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*db
 		return nil, ErrInvalidInput
 	}
 
-	cacheKey := "proporg/" + sitekey
+	cacheKey := PropOrgCachePrefix + sitekey
 
 	if property, err := fetchCached[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
 		return property, nil
@@ -128,7 +131,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 		return nil, ErrInvalidInput
 	}
 
-	cacheKey := "apikey/" + secret
+	cacheKey := APIKeyCachePrefix + secret
 
 	if apiKey, err := fetchCached[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
 		return apiKey, nil
@@ -191,7 +194,7 @@ func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error)
 		return nil, ErrInvalidInput
 	}
 
-	cacheKey := "email/" + email
+	cacheKey := emailCachePrefix + email
 	if user, err := fetchCached[dbgen.User](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
 		return user, nil
 	} else if err == ErrNegativeCacheHit {
@@ -215,4 +218,36 @@ func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error)
 	}
 
 	return user, nil
+}
+
+func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {
+	user, err := s.db.CreateUser(ctx, &dbgen.CreateUserParams{
+		UserName: name,
+		Email:    email,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create user in DB", "email", email, common.ErrAttr(err))
+		return nil, err
+	}
+
+	if user != nil {
+		// we need to update cache as we just set user as missing when checking for it's existence
+		cacheKey := emailCachePrefix + email
+		_ = s.cache.SetItem(ctx, cacheKey, user, userCacheDuration)
+	}
+
+	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
+
+	org, err := s.db.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
+		OrgName: name,
+		UserID:  Int(user.ID),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create organization in DB", "name", name, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
+
+	return org, nil
 }
