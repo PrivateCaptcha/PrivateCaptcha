@@ -80,7 +80,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodPost+" "+prefix+common.ResendEndpoint, common.Logged(s.resend2fa))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
-	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.root)
+	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
 
@@ -92,6 +92,9 @@ func (s *Server) render(ctx context.Context, w http.ResponseWriter, name string,
 		Params: data,
 		Const:  renderConstants,
 	}
+
+	w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
+
 	if err := s.template.Render(ctx, w, name, actualData); err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", common.ErrAttr(err))
 		s.renderError(ctx, w, http.StatusInternalServerError)
@@ -109,6 +112,7 @@ func (s *Server) htmxRedirectError(code int, w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request) {
+	slog.Debug("Redirecting using htmx header", "url", url)
 	w.Header().Set("HX-Redirect", url)
 	w.WriteHeader(http.StatusOK)
 }
@@ -117,12 +121,14 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, http.StatusNotFound)
 }
 
-func (s *Server) root(w http.ResponseWriter, r *http.Request) {
-	sess := s.Session.SessionStart(w, r)
-	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepCompleted {
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
-	}
+func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sess := s.Session.SessionStart(w, r)
+		if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepCompleted {
+			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+			return
+		}
 
-	s.renderError(r.Context(), w, http.StatusNotImplemented)
+		next.ServeHTTP(w, r)
+	}
 }
