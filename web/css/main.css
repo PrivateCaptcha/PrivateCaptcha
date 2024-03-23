@@ -1,3 +1,117 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.pc-form-link {
+    @apply font-bold;
+    @apply rounded;
+    @apply underline;
+    @apply hover:text-gray-600;
+    @apply focus:outline-none;
+    @apply focus:text-gray-900;
+}
+
+.pc-form-text {
+    @apply text-base;
+    @apply font-normal;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-text-error {
+    @apply text-red-500;
+}
+
+.pc-form-button {
+    @apply flex;
+    @apply items-center;
+    @apply justify-center;
+    @apply w-full;
+    @apply px-8;
+    @apply py-4;
+    @apply mt-8;
+    @apply text-base;
+    @apply font-bold;
+    @apply text-white;
+    @apply transition-all;
+    @apply duration-200;
+    @apply bg-gray-900;
+    @apply border;
+    @apply border-transparent;
+    @apply rounded-xl;
+    @apply focus:outline-none;
+    @apply focus:ring-2;
+    @apply focus:ring-offset-2;
+    @apply focus:ring-gray-900;
+    @apply font-sans;
+    @apply hover:bg-gray-600;
+}
+
+.pc-form-input-base {
+    @apply block;
+    @apply w-full;
+    @apply px-4;
+    @apply py-4;
+    @apply placeholder-gray-600;
+    @apply bg-white;
+    @apply border;
+    @apply rounded-xl;
+    @apply focus:outline-none;
+}
+
+.pc-form-input-normal {
+    @apply border-gray-400;
+    @apply focus:border-gray-900;
+    @apply focus:ring-gray-900;
+    @apply caret-gray-900;
+}
+
+.pc-form-input-error {
+    @apply text-red-800;
+    @apply border-red-200;
+    @apply focus:border-red-500;
+    @apply focus:ring-red-500;
+    @apply caret-red-500;
+}
+
+h1.pc-form-caption {
+    @apply text-xl;
+    @apply font-bold;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+body.pc-vertical-stretch {
+    @apply flex;
+    @apply flex-col;
+    @apply min-h-screen;
+}
+
+.pc-form-error-text {
+    @apply mt-1;
+    @apply text-sm;
+    @apply font-medium;
+    @apply text-red-500;
+}
+
+.pc-form-label {
+    @apply text-base;
+    @apply font-medium;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-checkbox-label {
+    @apply font-normal;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-checkbox {
+    @apply w-5;
+    @apply h-5;
+    @apply text-gray-900;
+    @apply border-gray-300;
+    @apply rounded;
+    @apply focus:ring-gray-900;
+}

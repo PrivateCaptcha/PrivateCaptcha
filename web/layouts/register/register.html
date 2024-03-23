@@ -12,9 +12,9 @@
             <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
                 <div class="px-4 py-6 sm:px-8">
                     <div class="flex items-center justify-between">
-                        <h1 class="text-xl font-bold text-gray-900 font-pj">Sign up</h1>
+                        <h1 class="pc-form-caption">Sign up</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj">Already joined? <a href="{{ relURL .Const.LoginEndpoint }}" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Login now</a></p>
+                        <p class="pc-form-text">Already joined? <a href="{{ relURL .Const.LoginEndpoint }}" title="" class="pc-form-link">Login now</a></p>
                     </div>
 
                     <form hx-post='{{ relURL .Const.RegisterEndpoint }}' hx-target="this" hx-swap="innerHTML" class="mt-12">
