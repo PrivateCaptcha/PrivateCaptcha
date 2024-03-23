@@ -1,53 +1,40 @@
 <div class="space-y-4">
     <div>
-        <label for="" class="text-base font-medium text-gray-900 font-pj"> Full Name </label>
+        <label for="" class="pc-form-label"> Full Name </label>
         <div class="mt-2.5 relative">
             {{- if .Params.NameError -}}
-            <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                <svg class="w-5 h-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-            </div>
+            {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="input" name="name" id="" placeholder="Enter your full name" class="block w-full px-4 py-4 focus:outline-none text-gray-900 placeholder-gray-600 bg-white border border-gray-400 rounded-xl focus:border-gray-900 focus:ring-gray-900 caret-gray-900" pattern=".{3,}" required />
+            <input type="input" name="name" id="" placeholder="Enter your full name" class="pc-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern=".{3,}" required />
         </div>
         {{- if .Params.NameError -}}
-        <p class="mt-1 text-sm font-medium text-red-500">{{ .Params.NameError }}</p>
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
         {{- end -}}
     </div>
 
     <div>
-        <label for="{{ .Const.Email }}" class="text-base font-medium text-gray-900 font-pj"> Email </label>
+        <label for="{{ .Const.Email }}" class="pc-form-label"> Email </label>
         <div class="mt-2.5 relative">
             {{- if .Params.EmailError -}}
-            <div class="absolute inset-y-0 right-0 flex items-center pr-4 pointer-events-none">
-                <svg class="w-5 h-5 text-red-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-                </svg>
-            </div>
+            {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" id="" placeholder="Email address" class="block w-full px-4 py-4 focus:outline-none text-gray-900 placeholder-gray-600 bg-white border border-gray-400 rounded-xl focus:border-gray-900 focus:ring-gray-900 caret-gray-900" required />
+            <input type="email" name="{{ .Const.Email }}" id="" placeholder="Email address" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.EmailError -}}
-        <p class="mt-1 text-sm font-medium text-red-500">{{ .Params.EmailError }}</p>
+        <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
         {{- end -}}
     </div>
 
     <div class="relative flex items-center mt-4">
         <div class="flex items-center h-5">
-            <input type="checkbox" name="terms" id="terms" class="w-5 h-5 text-gray-900 border-gray-300 rounded focus:ring-gray-900" required />
+            <input type="checkbox" name="terms" id="terms" class="pc-form-checkbox" required />
         </div>
 
         <div class="ml-3 text-base">
-            <label for="terms" class="font-normal text-gray-900 font-pj"> I agree with <a href="#" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Terms & Conditions</a> </label>
+            <label for="terms" class="pc-form-checkbox-label"> I agree with <a href="#" title="" class="pc-form-link">Terms & Conditions</a> </label>
         </div>
     </div>
 </div>
 <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
 
-<button
-    type="submit"
-    class="flex items-center justify-center w-full px-8 py-4 mt-5 text-base font-bold text-white transition-all duration-200 bg-gray-900 border border-transparent rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 font-pj hover:bg-gray-600"
->
-    Sign up
-</button>
+<button type="submit" class="pc-form-button"> Sign up </button>
