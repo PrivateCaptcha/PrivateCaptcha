@@ -2,7 +2,7 @@
 
 {{define "title"}}Login{{end}}
 
-{{define "body_class"}}flex flex-col min-h-screen{{end}}
+{{define "body_class"}}pc-vertical-stretch{{end}}
 
 {{define "main"}}
 <div class="flex flex-1 items-center bg-gray-50">
@@ -12,9 +12,9 @@
             <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
                 <div class="px-4 py-6 sm:px-8">
                     <div class="flex items-center justify-between">
-                        <h1 class="text-xl font-bold text-gray-900 font-pj">Sign in</h1>
+                        <h1 class="pc-form-caption">Sign in</h1>
 
-                        <p class="text-base font-normal text-gray-900 font-pj">Don’t have an account? <a href="{{ relURL .Const.RegisterEndpoint }}" title="" class="font-bold rounded underline hover:text-gray-600 focus:outline-none focus:text-gray-900">Join now</a></p>
+                        <p class="pc-form-text">Don’t have an account? <a href="{{ relURL .Const.RegisterEndpoint }}" title="" class="pc-form-link">Join now</a></p>
                     </div>
 
                     <form hx-post='{{ relURL .Const.LoginEndpoint }}' class="mt-12" hx-target="this" hx-swap="innerHTML">
