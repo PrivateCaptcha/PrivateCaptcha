@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 type errorRenderContext struct {
@@ -20,6 +22,14 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		ErrorMessage: http.StatusText(code),
 	}
 
+	actualData := struct {
+		Params interface{}
+		Const  interface{}
+	}{
+		Params: data,
+		Const:  renderConstants,
+	}
+
 	switch code {
 	case http.StatusForbidden:
 		data.Detail = "You don't have access to this page."
@@ -31,7 +41,9 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		data.Detail = "Sorry, an unexpected error has occurred. Our team has been notified."
 	}
 
-	s.render(ctx, w, "errors/error.html", data)
+	if err := s.template.Render(ctx, w, "errors/error.html", actualData); err != nil {
+		slog.ErrorContext(ctx, "Failed to render error template", common.ErrAttr(err))
+	}
 }
 
 func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
