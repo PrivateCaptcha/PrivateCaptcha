@@ -26,7 +26,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 	data := &loginRenderContext{
 		Token: s.XSRF.Token("", actionLogin),
 	}
-	s.render(r.Context(), w, "login/login.html", data)
+	s.render(r.Context(), w, r, "login/login.html", data)
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +48,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if !s.XSRF.VerifyToken(token, "", actionLogin) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		data.Error = "Please try again."
-		s.render(ctx, w, loginFormTemplate, data)
+		s.render(ctx, w, r, loginFormTemplate, data)
 		return
 	}
 
@@ -56,7 +56,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if err = checkmail.ValidateFormat(email); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		data.Error = "Email address is not valid."
-		s.render(r.Context(), w, loginFormTemplate, data)
+		s.render(r.Context(), w, r, loginFormTemplate, data)
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to find user by email", "email", email)
 		data.Error = "User with such email does not exist."
-		s.render(ctx, w, loginFormTemplate, data)
+		s.render(ctx, w, r, loginFormTemplate, data)
 		return
 	}
 

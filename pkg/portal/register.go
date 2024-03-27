@@ -29,7 +29,7 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) {
 	data := &registerRenderContext{
 		Token: s.XSRF.Token("", actionRegister),
 	}
-	s.render(r.Context(), w, "register/register.html", data)
+	s.render(r.Context(), w, r, "register/register.html", data)
 }
 
 func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue(common.ParamName)
 	if len(name) < 3 {
 		data.EmailError = "Please use a longer name."
-		s.render(r.Context(), w, registerFormTemplate, data)
+		s.render(r.Context(), w, r, registerFormTemplate, data)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if err := checkmail.ValidateFormat(email); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
-		s.render(r.Context(), w, registerFormTemplate, data)
+		s.render(r.Context(), w, r, registerFormTemplate, data)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.Store.FindUser(ctx, email); err == nil {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.EmailError = "Such email is already registered. Login instead?"
-		s.render(ctx, w, registerFormTemplate, data)
+		s.render(ctx, w, r, registerFormTemplate, data)
 		return
 	}
 
