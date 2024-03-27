@@ -21,7 +21,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/providers/memory"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
@@ -46,7 +46,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	store := db.NewStore(dbgen.New(pool), db.NewMemoryCache(1*time.Minute), 5*time.Minute)
+	queries := dbgen.New(pool)
+	store := db.NewStore(queries, db.NewMemoryCache(1*time.Minute), 5*time.Minute)
 
 	levels := difficulty.NewLevels(clickhouse, levelsBatchSize, propertyBucketSize)
 
@@ -69,17 +70,21 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
 	}
 
+	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
+
 	portalServer := &portal.Server{
 		Store:  store,
 		Prefix: "portal",
 		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
-			CookieName:  "sid",
-			Provider:    memory.New(),
+			CookieName:  "pcsid",
+			Store:       sessionStore,
 			MaxLifetime: 24 * time.Hour,
 		},
 		Mailer: &portal.StubMailer{},
 	}
+
+	go portalServer.Session.GC()
 
 	router := http.NewServeMux()
 
@@ -120,6 +125,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		<-ctx.Done()
 		slog.Debug("Shutting down gracefully...")
 		levels.Shutdown()
+		sessionStore.Shutdown()
 		store.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

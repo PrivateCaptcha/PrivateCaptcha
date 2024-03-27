@@ -68,6 +68,17 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sess := s.Session.SessionStart(w, r)
+	if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
+		if step == loginStepCompleted {
+			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
+			s.htmxRedirect(s.relURL("/"), w, r)
+			return
+		} else {
+			slog.WarnContext(ctx, "Session present, but login not finished", "step", step, "email", email)
+		}
+	}
+
 	code := twoFactorCode()
 
 	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code); err != nil {
@@ -76,7 +87,6 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Session.SessionStart(w, r)
 	sess.Set(session.KeyLoginStep, loginStepSignInVerify)
 	sess.Set(session.KeyUserEmail, user.Email)
 	sess.Set(session.KeyTwoFactorCode, code)

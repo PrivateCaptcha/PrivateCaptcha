@@ -1,7 +1,7 @@
 CREATE UNLOGGED TABLE IF NOT EXISTS cache (
     id serial PRIMARY KEY,
     key text UNIQUE NOT NULL,
-    value jsonb NOT NULL DEFAULT '{}'::jsonb,
+    value bytea NOT NULL,
     expires_at timestamp DEFAULT CURRENT_TIMESTAMP + INTERVAL '5 minutes' NOT NULL
 );
 
