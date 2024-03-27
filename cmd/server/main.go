@@ -79,7 +79,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		Session: session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
-			MaxLifetime: 24 * time.Hour,
+			MaxLifetime: sessionStore.MaxLifetime(),
 		},
 		Mailer: &portal.StubMailer{},
 	}

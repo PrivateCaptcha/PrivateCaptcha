@@ -12,7 +12,7 @@ import (
 
 const (
 	sessionPrefix        = "session/"
-	sessionCacheDuration = 1 * time.Hour
+	sessionCacheDuration = 3 * time.Hour
 	sessionBatchSize     = 20
 )
 
@@ -42,6 +42,10 @@ func NewSessionStore(db *dbgen.Queries, fallback common.SessionStore, interval t
 }
 
 var _ common.SessionStore = (*SessionStore)(nil)
+
+func (ss *SessionStore) MaxLifetime() time.Duration {
+	return sessionCacheDuration
+}
 
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
@@ -139,12 +143,12 @@ func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Durati
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]bool) error {
-	slog.DebugContext(ctx, "Persisting session to DB", "count", len(batch))
+	slog.DebugContext(ctx, "Persisting sessions to DB", "count", len(batch))
 
 	for sid := range batch {
 		sess, err := ss.fallback.Read(ctx, sid)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to find session to persist", "sid", sid, common.ErrAttr(err))
+			slog.WarnContext(ctx, "Failed to find session to persist", "sid", sid, common.ErrAttr(err))
 			continue
 		}
 
