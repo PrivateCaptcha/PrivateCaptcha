@@ -6,7 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.17.1
 	github.com/badoux/checkmail v1.2.4
 	github.com/golang-migrate/migrate/v4 v4.17.0
-	github.com/jackc/pgx/v5 v5.5.1
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/jpillora/backoff v1.0.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/rs/xid v1.5.0
