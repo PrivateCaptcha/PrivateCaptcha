@@ -13,6 +13,8 @@ import (
 
 const createCache = `-- name: CreateCache :exec
 INSERT INTO cache (key, value, expires_at) VALUES ($1, $2, NOW() + $3::INTERVAL)
+ON CONFLICT (key) DO UPDATE 
+SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at
 `
 
 type CreateCacheParams struct {
@@ -23,6 +25,15 @@ type CreateCacheParams struct {
 
 func (q *Queries) CreateCache(ctx context.Context, arg *CreateCacheParams) error {
 	_, err := q.db.Exec(ctx, createCache, arg.Key, arg.Value, arg.Column3)
+	return err
+}
+
+const deleteCachedByKey = `-- name: DeleteCachedByKey :exec
+DELETE FROM cache WHERE key = $1
+`
+
+func (q *Queries) DeleteCachedByKey(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, deleteCachedByKey, key)
 	return err
 }
 

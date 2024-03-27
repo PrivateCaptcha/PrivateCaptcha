@@ -22,6 +22,7 @@ var (
 )
 
 const (
+	// TODO: Adjust caching durations mindfully
 	negativeCacheDuration = 1 * time.Minute
 	propertyCacheDuration = 1 * time.Minute
 	apiKeyCacheDuration   = 1 * time.Minute
@@ -30,6 +31,7 @@ const (
 	emailCachePrefix      = "email/"
 	PropOrgCachePrefix    = "proporg/"
 	APIKeyCachePrefix     = "apikey/"
+	PuzzlePrefix          = "puzzle/"
 )
 
 type Store struct {
@@ -43,7 +45,6 @@ type puzzleCacheMarker struct {
 }
 
 func NewStore(queries *dbgen.Queries, cache common.Cache, cleanupInterval time.Duration) *Store {
-	// TODO: Adjust caching durations mindfully
 	s := &Store{
 		db:    queries,
 		cache: cache,
@@ -57,6 +58,7 @@ func NewStore(queries *dbgen.Queries, cache common.Cache, cleanupInterval time.D
 }
 
 func (s *Store) Shutdown() {
+	slog.Debug("Shutting down cache cleanup")
 	s.cancelFunc()
 }
 
@@ -159,7 +161,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 }
 
 func (s *Store) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	key := hex.EncodeToString(p.Nonce[:])
+	key := PuzzlePrefix + hex.EncodeToString(p.Nonce[:])
 
 	data, err := s.db.GetCachedByKey(ctx, key)
 	if err == pgx.ErrNoRows {
@@ -179,7 +181,7 @@ func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Tim
 		return nil
 	}
 
-	key := hex.EncodeToString(p.Nonce[:])
+	key := PuzzlePrefix + hex.EncodeToString(p.Nonce[:])
 	diff := p.Expiration.Sub(tnow)
 
 	return s.db.CreateCache(ctx, &dbgen.CreateCacheParams{

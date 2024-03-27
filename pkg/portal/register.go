@@ -93,7 +93,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	s.htmxRedirect(s.relURL(common.TwoFactorEndpoint), w, r)
 }
 
-func (s *Server) doRegister(ctx context.Context, sess session.Session) error {
+func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")

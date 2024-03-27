@@ -124,11 +124,16 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		sess := s.Session.SessionStart(w, r)
-		if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || step != loginStepCompleted {
-			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-			return
+
+		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
+			if step == loginStepCompleted {
+				next.ServeHTTP(w, r)
+				return
+			} else {
+				slog.WarnContext(r.Context(), "Session present, but login not finished", "step", step, "sid", sess.SessionID())
+			}
 		}
 
-		next.ServeHTTP(w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 	}
 }

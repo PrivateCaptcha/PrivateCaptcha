@@ -1,0 +1,175 @@
+package db
+
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/jackc/pgx/v5"
+)
+
+const (
+	sessionPrefix        = "session/"
+	sessionCacheDuration = 1 * time.Hour
+	sessionBatchSize     = 20
+)
+
+type SessionStore struct {
+	db            *dbgen.Queries
+	fallback      common.SessionStore
+	persistChan   chan string
+	batchSize     int
+	processCancel context.CancelFunc
+	persistKey    common.SessionKey
+}
+
+func NewSessionStore(db *dbgen.Queries, fallback common.SessionStore, interval time.Duration, persistKey common.SessionKey) *SessionStore {
+	store := &SessionStore{
+		db:          db,
+		fallback:    fallback,
+		persistChan: make(chan string, sessionBatchSize),
+		batchSize:   sessionBatchSize,
+		persistKey:  persistKey,
+	}
+
+	var cancelCtx context.Context
+	cancelCtx, store.processCancel = context.WithCancel(context.Background())
+	go store.ProcessPersistent(cancelCtx, interval)
+
+	return store
+}
+
+var _ common.SessionStore = (*SessionStore)(nil)
+
+func (ss *SessionStore) Shutdown() {
+	slog.Debug("Shutting down persisting sessions")
+	close(ss.persistChan)
+	ss.processCancel()
+}
+
+func (ss *SessionStore) Init(ctx context.Context, s *common.Session) error {
+	return ss.fallback.Init(ctx, s)
+}
+
+func (ss *SessionStore) Read(ctx context.Context, sid string) (*common.Session, error) {
+	s, err := ss.fallback.Read(ctx, sid)
+
+	if err == common.ErrSessionMissing {
+		data, cerr := ss.db.GetCachedByKey(ctx, sessionPrefix+sid)
+		if (cerr == nil) && (len(data) > 0) {
+			slog.DebugContext(ctx, "Found session cached in DB", "sid", sid)
+			s = common.NewSession(sid, ss)
+			if uerr := s.UnmarshalBinary(data); uerr != nil {
+				slog.ErrorContext(ctx, "Failed to unmarshal session from cache", common.ErrAttr(uerr))
+				return nil, uerr
+			}
+			err = ss.Init(ctx, s)
+			return s, err
+		} else if cerr != pgx.ErrNoRows {
+			slog.ErrorContext(ctx, "Failed to read session from DB cache", common.ErrAttr(err))
+		} else {
+			slog.DebugContext(ctx, "Session not found in DB", "sid", sid)
+		}
+	}
+
+	return s, err
+}
+
+func (ss *SessionStore) Update(s *common.Session) error {
+	if err := ss.fallback.Update(s); err != nil {
+		return err
+	}
+
+	ss.persistChan <- s.SessionID()
+
+	return nil
+}
+
+func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
+	if err := ss.fallback.Destroy(ctx, sid); err != nil {
+		return err
+	}
+
+	return ss.db.DeleteCachedByKey(ctx, sessionPrefix+sid)
+}
+
+func (ss *SessionStore) GC(d time.Duration) {
+	ss.fallback.GC(d)
+}
+
+func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Duration) {
+	pendingSIDUpdates := make(map[string]bool)
+	slog.DebugContext(ctx, "Processing session updates")
+
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+
+		case sid, ok := <-ss.persistChan:
+			if !ok {
+				running = false
+				break
+			}
+
+			pendingSIDUpdates[sid] = true
+
+			if len(pendingSIDUpdates) >= ss.batchSize {
+				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
+					pendingSIDUpdates = make(map[string]bool)
+				} else {
+					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
+				}
+			}
+
+		case <-time.After(delay):
+			if len(pendingSIDUpdates) > 0 {
+				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
+					pendingSIDUpdates = make(map[string]bool)
+				} else {
+					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
+				}
+			}
+		}
+	}
+
+	slog.InfoContext(ctx, "Finished processing session updates")
+}
+
+func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]bool) error {
+	slog.DebugContext(ctx, "Persisting session to DB", "count", len(batch))
+
+	for sid := range batch {
+		sess, err := ss.fallback.Read(ctx, sid)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to find session to persist", "sid", sid, common.ErrAttr(err))
+			continue
+		}
+
+		if !sess.Has(ss.persistKey) {
+			slog.Log(ctx, common.LevelTrace, "Skipping persisting session without persist key", "sid", sid)
+			continue
+		}
+
+		data, err := sess.MarshalBinary()
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to marshal session", common.ErrAttr(err))
+			continue
+		}
+
+		err = ss.db.CreateCache(ctx, &dbgen.CreateCacheParams{
+			Key:     sessionPrefix + sid,
+			Value:   data,
+			Column3: sessionCacheDuration,
+		})
+
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to cache session", common.ErrAttr(err))
+		}
+	}
+
+	// we actually do not care if we failed to save sessions to cache
+	return nil
+}
