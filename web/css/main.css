@@ -115,3 +115,28 @@ body.pc-vertical-stretch {
     @apply rounded;
     @apply focus:ring-gray-900;
 }
+
+.pc-dashboard-menu-button {
+    @apply inline-flex;
+    @apply items-center;
+    @apply px-3;
+    @apply py-2;
+    @apply text-sm;
+    @apply font-medium;
+    @apply text-white;
+    @apply transition-all;
+    @apply duration-200;
+    @apply hover:bg-gray-700;
+    @apply rounded-lg;
+    @apply text-sm;
+    @apply font-medium;
+    @apply text-white;
+    @apply transition-all;
+    @apply duration-200;
+    @apply lg:text-base;
+    @apply focus:text-opacity-70;
+}
+
+.pc-dashboard-menu-button-current {
+    @apply text-opacity-70;
+}

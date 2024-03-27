@@ -34,5 +34,5 @@ func (s *Server) portal(w http.ResponseWriter, r *http.Request) {
 		UserName: user.UserName,
 	}
 
-	s.render(r.Context(), w, "portal/portal.html", renderCtx)
+	s.render(r.Context(), w, r, "portal/portal.html", renderCtx)
 }

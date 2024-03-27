@@ -41,7 +41,7 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 		Email: common.MaskEmail(email, '*'),
 	}
 
-	s.render(ctx, w, "twofactor/twofactor.html", data)
+	s.render(ctx, w, r, "twofactor/twofactor.html", data)
 }
 
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +94,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) {
 		data.Error = "Code is not valid."
 		slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, common.ErrAttr(err))
-		s.render(ctx, w, "twofactor/form.html", data)
+		s.render(ctx, w, r, "twofactor/form.html", data)
 		return
 	}
 
@@ -135,10 +135,10 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.render(ctx, w, "twofactor/resend-error.html", struct{}{})
+		s.render(ctx, w, r, "twofactor/resend-error.html", struct{}{})
 		return
 	}
 
 	sess.Set(session.KeyTwoFactorCode, code)
-	s.render(ctx, w, "twofactor/resend.html", struct{}{})
+	s.render(ctx, w, r, "twofactor/resend.html", struct{}{})
 }

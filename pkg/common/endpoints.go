@@ -9,4 +9,6 @@ const (
 	ErrorEndpoint     = "error"
 	RegisterEndpoint  = "signup"
 	ExpiredEndpoint   = "expired"
+	SettingsEndpoint  = "settings"
+	LogoutEndpoint    = "logout"
 )
