@@ -20,6 +20,8 @@ var (
 		TwoFactorEndpoint string
 		ResendEndpoint    string
 		RegisterEndpoint  string
+		SettingsEndpoint  string
+		LogoutEndpoint    string
 		Token             string
 		Email             string
 		Name              string
@@ -29,6 +31,8 @@ var (
 		TwoFactorEndpoint: common.TwoFactorEndpoint,
 		ResendEndpoint:    common.ResendEndpoint,
 		RegisterEndpoint:  common.RegisterEndpoint,
+		SettingsEndpoint:  common.SettingsEndpoint,
+		LogoutEndpoint:    common.LogoutEndpoint,
 		Token:             common.ParamCsrfToken,
 		Email:             common.ParamEmail,
 		Name:              common.ParamName,
@@ -84,13 +88,21 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
 
-func (s *Server) render(ctx context.Context, w http.ResponseWriter, name string, data interface{}) {
+func (s *Server) render(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+	reqCtx := struct {
+		Path string
+	}{
+		Path: r.URL.Path,
+	}
+
 	actualData := struct {
 		Params interface{}
 		Const  interface{}
+		Ctx    interface{}
 	}{
 		Params: data,
 		Const:  renderConstants,
+		Ctx:    reqCtx,
 	}
 
 	w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
