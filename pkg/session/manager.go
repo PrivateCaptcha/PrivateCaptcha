@@ -66,9 +66,11 @@ func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session 
 func (m *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(m.CookieName)
 	if err != nil || cookie.Value == "" {
+		slog.Log(r.Context(), common.LevelTrace, "Session cookie not found in the request", "path", r.URL.Path, "method", r.Method)
 		return
 	} else {
 		ctx := r.Context()
+		slog.Log(ctx, common.LevelTrace, "Session cookie found in the request", "sid", cookie.Value, "path", r.URL.Path, "method", r.Method)
 		if err := m.Store.Destroy(ctx, cookie.Value); err != nil {
 			slog.ErrorContext(ctx, "Failed to delete session from storage", common.ErrAttr(err))
 		}
@@ -81,6 +83,7 @@ func (m *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 			MaxAge:   -1,
 		}
 		http.SetCookie(w, &cookie)
+		w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
 	}
 }
 
