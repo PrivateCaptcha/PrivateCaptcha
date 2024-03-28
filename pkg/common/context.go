@@ -8,4 +8,5 @@ const (
 	ClaimsContextKey         ContextKey = iota
 	PropertyAndOrgContextKey ContextKey = iota
 	APIKeyContextKey         ContextKey = iota
+	LoggedInContextKey       ContextKey = iota
 )

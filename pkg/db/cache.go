@@ -39,6 +39,8 @@ func (c *memcache) GetAndExpireItem(ctx context.Context, key string, expiration 
 
 	slog.Log(ctx, common.LevelTrace, "Found item in memory cache", "key", key)
 
+	// TODO: update expiration in cache
+
 	return data, nil
 }
 

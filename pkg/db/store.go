@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"log/slog"
+	"sort"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -27,11 +29,14 @@ const (
 	propertyCacheDuration = 1 * time.Minute
 	apiKeyCacheDuration   = 1 * time.Minute
 	userCacheDuration     = 1 * time.Minute
+	orgCacheDuration      = 1 * time.Minute
 	puzzleCacheDuration   = 1 * time.Minute
 	emailCachePrefix      = "email/"
 	PropOrgCachePrefix    = "proporg/"
 	APIKeyCachePrefix     = "apikey/"
-	PuzzlePrefix          = "puzzle/"
+	puzzlePrefix          = "puzzle/"
+	orgsPrefix            = "orgs/"
+	orgPrefix             = "org/"
 )
 
 type Store struct {
@@ -161,7 +166,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 }
 
 func (s *Store) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	key := PuzzlePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzlePrefix + hex.EncodeToString(p.Nonce[:])
 
 	data, err := s.db.GetCachedByKey(ctx, key)
 	if err == pgx.ErrNoRows {
@@ -181,7 +186,7 @@ func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Tim
 		return nil
 	}
 
-	key := PuzzlePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzlePrefix + hex.EncodeToString(p.Nonce[:])
 	diff := p.Expiration.Sub(tnow)
 
 	return s.db.CreateCache(ctx, &dbgen.CreateCacheParams{
@@ -220,6 +225,55 @@ func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error)
 	}
 
 	return user, nil
+}
+
+func (s *Store) FindUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
+	orgs, err := s.db.GetUserOrganizations(ctx, Int(userID))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve orgs by user ID", "userID", userID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	// NOTE: We sort here instead in SQL to avoid confusing sqlc by ordering the UNION ALL result as a subquery
+	sort.Slice(orgs, func(i, j int) bool {
+		return orgs[i].Organization.CreatedAt.Time.Before(orgs[j].Organization.CreatedAt.Time)
+	})
+
+	// TODO: Also sort by orgs that have any properties in them
+	return orgs, nil
+}
+
+func (s *Store) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.Organization, error) {
+	cacheKey := orgPrefix + strconv.Itoa(int(orgID))
+
+	if org, err := fetchCached[dbgen.Organization](ctx, s.cache, cacheKey, orgCacheDuration); err == nil {
+		return org, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
+	}
+
+	apiKey, err := s.db.GetOrganizationByID(ctx, orgID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve organization by ID", "orgID", orgID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if apiKey != nil {
+		_ = s.cache.SetItem(ctx, cacheKey, apiKey, orgCacheDuration)
+	}
+
+	return apiKey, nil
 }
 
 func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {

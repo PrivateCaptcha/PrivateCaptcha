@@ -59,6 +59,18 @@
     @apply focus:outline-none;
 }
 
+.pc-internal-form-input-base {
+    @apply block;
+    @apply w-full;
+    @apply px-4;
+    @apply py-3;
+    @apply placeholder-gray-500;
+    @apply border;
+    @apply rounded-lg;
+    @apply sm:text-sm;
+    @apply focus:outline-none;
+}
+
 .pc-form-input-normal {
     @apply border-gray-400;
     @apply focus:border-gray-900;
@@ -101,6 +113,13 @@ body.pc-vertical-stretch {
     @apply font-sans;
 }
 
+.pc-internal-form-label {
+    @apply text-sm;
+    @apply font-bold;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
 .pc-form-checkbox-label {
     @apply font-normal;
     @apply text-gray-900;
@@ -139,4 +158,19 @@ body.pc-vertical-stretch {
 
 .pc-dashboard-menu-button-current {
     @apply text-opacity-70;
+}
+
+.pc-form-select {
+    @apply block;
+    @apply w-full;
+    @apply py-3;
+    @apply pl-4;
+    @apply pr-10;
+    @apply border;
+    @apply border-gray-300;
+    @apply rounded-lg;
+    @apply focus:outline-none;
+    @apply focus:ring-gray-900;
+    @apply focus:border-gray-900;
+    @apply sm:text-sm;
 }
