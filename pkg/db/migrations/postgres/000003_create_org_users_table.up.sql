@@ -1,4 +1,4 @@
-CREATE TYPE access_level AS ENUM ('read', 'write');
+CREATE TYPE access_level AS ENUM ('read', 'write', 'owner');
 
 CREATE TABLE IF NOT EXISTS organization_users(
     org_id INT REFERENCES organizations(id),

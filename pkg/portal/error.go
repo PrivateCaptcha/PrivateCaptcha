@@ -22,12 +22,20 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		ErrorMessage: http.StatusText(code),
 	}
 
+	reqCtx := struct {
+		LoggedIn bool
+	}{
+		LoggedIn: false,
+	}
+
 	actualData := struct {
 		Params interface{}
 		Const  interface{}
+		Ctx    interface{}
 	}{
 		Params: data,
 		Const:  renderConstants,
+		Ctx:    reqCtx,
 	}
 
 	switch code {

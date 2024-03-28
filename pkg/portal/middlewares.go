@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	actionLogin    = "login"
-	actionVerify   = "verify"
-	actionRegister = "register"
+	actionLogin       = "login"
+	actionVerify      = "verify"
+	actionRegister    = "register"
+	actionNewProperty = "property-new"
 )
 
 type XSRFMiddleware struct {

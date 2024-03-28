@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -16,27 +17,35 @@ import (
 
 var (
 	renderConstants = struct {
-		LoginEndpoint     string
-		TwoFactorEndpoint string
-		ResendEndpoint    string
-		RegisterEndpoint  string
-		SettingsEndpoint  string
-		LogoutEndpoint    string
-		Token             string
-		Email             string
-		Name              string
-		VerificationCode  string
+		LoginEndpoint      string
+		TwoFactorEndpoint  string
+		ResendEndpoint     string
+		RegisterEndpoint   string
+		SettingsEndpoint   string
+		LogoutEndpoint     string
+		NewEndpoint        string
+		OrgEndpoint        string
+		PropertiesEndpoint string
+		PropertyEndpoint   string
+		Token              string
+		Email              string
+		Name               string
+		VerificationCode   string
 	}{
-		LoginEndpoint:     common.LoginEndpoint,
-		TwoFactorEndpoint: common.TwoFactorEndpoint,
-		ResendEndpoint:    common.ResendEndpoint,
-		RegisterEndpoint:  common.RegisterEndpoint,
-		SettingsEndpoint:  common.SettingsEndpoint,
-		LogoutEndpoint:    common.LogoutEndpoint,
-		Token:             common.ParamCsrfToken,
-		Email:             common.ParamEmail,
-		Name:              common.ParamName,
-		VerificationCode:  common.ParamVerificationCode,
+		LoginEndpoint:      common.LoginEndpoint,
+		TwoFactorEndpoint:  common.TwoFactorEndpoint,
+		ResendEndpoint:     common.ResendEndpoint,
+		RegisterEndpoint:   common.RegisterEndpoint,
+		SettingsEndpoint:   common.SettingsEndpoint,
+		LogoutEndpoint:     common.LogoutEndpoint,
+		OrgEndpoint:        common.OrgEndpoint,
+		PropertiesEndpoint: common.PropertiesEndpoint,
+		PropertyEndpoint:   common.PropertyEndpoint,
+		NewEndpoint:        common.NewEndpoint,
+		Token:              common.ParamCsrfToken,
+		Email:              common.ParamEmail,
+		Name:               common.ParamName,
+		VerificationCode:   common.ParamVerificationCode,
 	}
 )
 
@@ -48,6 +57,9 @@ func funcMap(prefix string) template.FuncMap {
 		},
 		"relURL": func(s string) any {
 			return common.RelURL(prefix, s)
+		},
+		"partsURL": func(a ...string) any {
+			return common.RelURL(prefix, strings.Join(a, "/"))
 		},
 	}
 }
@@ -85,6 +97,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.getOrgProperties))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrgProperty))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
@@ -95,10 +109,14 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) render(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
+
 	reqCtx := struct {
-		Path string
+		Path     string
+		LoggedIn bool
 	}{
-		Path: r.URL.Path,
+		Path:     r.URL.Path,
+		LoggedIn: ok && loggedIn,
 	}
 
 	actualData := struct {
@@ -145,7 +163,8 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 
 		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 			if step == loginStepCompleted {
-				next.ServeHTTP(w, r)
+				ctx := context.WithValue(r.Context(), common.LoggedInContextKey, true)
+				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			} else {
 				slog.WarnContext(r.Context(), "Session present, but login not finished", "step", step, "sid", sess.SessionID())

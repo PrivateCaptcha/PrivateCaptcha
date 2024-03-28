@@ -16,6 +16,7 @@ type AccessLevel string
 const (
 	AccessLevelRead  AccessLevel = "read"
 	AccessLevelWrite AccessLevel = "write"
+	AccessLevelOwner AccessLevel = "owner"
 )
 
 func (e *AccessLevel) Scan(src interface{}) error {

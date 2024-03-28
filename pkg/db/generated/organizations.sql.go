@@ -33,3 +33,63 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 	)
 	return &i, err
 }
+
+const getOrganizationByID = `-- name: GetOrganizationByID :one
+SELECT id, org_name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
+`
+
+func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
+	row := q.db.QueryRow(ctx, getOrganizationByID, id)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.OrgName,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
+const getUserOrganizations = `-- name: GetUserOrganizations :many
+SELECT o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1
+UNION ALL
+SELECT o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
+FROM organizations o
+JOIN organization_users ou ON o.id = ou.org_id
+WHERE ou.user_id = $1
+`
+
+type GetUserOrganizationsRow struct {
+	Organization Organization `db:"organization" json:"organization"`
+	Level        string       `db:"level" json:"level"`
+}
+
+func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error) {
+	rows, err := q.db.Query(ctx, getUserOrganizations, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetUserOrganizationsRow
+	for rows.Next() {
+		var i GetUserOrganizationsRow
+		if err := rows.Scan(
+			&i.Organization.ID,
+			&i.Organization.OrgName,
+			&i.Organization.UserID,
+			&i.Organization.CreatedAt,
+			&i.Organization.UpdatedAt,
+			&i.Organization.DeletedAt,
+			&i.Level,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
