@@ -84,8 +84,14 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodPost+" "+prefix+common.ResendEndpoint, common.Logged(s.resend2fa))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
+	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	s.Session.SessionDestroy(w, r)
+	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 }
 
 func (s *Server) render(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, data interface{}) {
