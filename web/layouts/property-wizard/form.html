@@ -1,0 +1,65 @@
+<div class="space-y-4">
+    <div>
+        <label for="" class="pc-internal-form-label"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="" id="" placeholder="John Doe" value="" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="" class="pc-internal-form-label"> Domain </label>
+        <div class="mt-2 relative">
+            {{- if .Params.DomainError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="" id="" placeholder="example.com" value="" class="pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
+        </div>
+        {{- if .Params.DomainError -}}
+        <p class="pc-form-error-text">{{ .Params.DomainError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="" class="pc-internal-form-label"> Base difficulty </label>
+        <div class="mt-2">
+            <select class="pc-form-select">
+                <option>Easy</option>
+                <option selected="selected">Normal</option>
+                <option>Hard</option>
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <label for="" class="pc-internal-form-label"> Difficulty growth </label>
+        <div class="mt-2">
+            <select class="pc-form-select">
+                <option>Slow</option>
+                <option selected="selected">Normal</option>
+                <option>Fast</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="flex items-center justify-end mt-6 space-x-4">
+    <button
+        type="reset"
+        class="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold leading-5 text-gray-600 transition-all duration-200 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 hover:bg-gray-50 hover:text-gray-900"
+    >
+        Cancel
+    </button>
+
+    <button
+        type="submit"
+        class="inline-flex items-center justify-center px-6 py-3 text-sm font-semibold leading-5 text-white transition-all duration-200 bg-indigo-600 border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 hover:bg-indigo-500"
+    >
+        Create
+    </button>
+</div>
