@@ -97,7 +97,6 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(s.getOrgDashboard))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.getOrgProperties))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrgProperty))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
