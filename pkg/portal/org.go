@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -42,20 +41,6 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 		})
 	}
 	return result
-}
-
-func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
-	orgID, _ := strconv.Atoi(r.PathValue("org"))
-
-	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-	renderCtx, err := s.createOrgDashboardContext(ctx, int32(orgID), sess)
-	if err != nil {
-		s.htmxRedirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	s.render(w, r, "portal/org-dashboard.html", renderCtx)
 }
 
 func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *common.Session) (*orgDashboardRenderContext, error) {
