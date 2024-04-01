@@ -63,6 +63,7 @@ func NewTemplates(funcs template.FuncMap) *Template {
 
 	baseFiles := filesMap[defaultLayouts]
 	templates := make(map[string]*template.Template)
+	ctx := context.TODO()
 
 	for dir, files := range filesMap {
 		if dir == defaultLayouts {
@@ -71,9 +72,9 @@ func NewTemplates(funcs template.FuncMap) *Template {
 
 		filesToParse := append(baseFiles, files...)
 		name := strings.TrimPrefix(dir, root+"/")
-		slog.Debug("Parsing templates for directory", "dir", dir, "files", filesToParse)
+		slog.Log(ctx, common.LevelTrace, "Parsing templates for directory", "dir", dir, "files", filesToParse)
 		t := template.Must(template.New(name).Funcs(funcs).ParseFS(templateFiles, filesToParse...))
-		slog.Debug("Parsed template", "name", name, "templates", t.DefinedTemplates())
+		slog.Log(ctx, common.LevelTrace, "Parsed template", "name", name, "templates", t.DefinedTemplates())
 		templates[name] = t
 	}
 
@@ -91,7 +92,7 @@ func (t *Template) Render(ctx context.Context, w io.Writer, name string, data in
 	}
 
 	var buf bytes.Buffer
-	slog.DebugContext(ctx, "About to render template", "name", name)
+	slog.Log(ctx, common.LevelTrace, "About to render template", "name", name)
 	if err := tmpl.ExecuteTemplate(&buf, filepath.Base(name), data); err != nil {
 		slog.ErrorContext(ctx, "Failed to execute template", "name", name, common.ErrAttr(err))
 		return err

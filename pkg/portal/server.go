@@ -97,6 +97,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(s.getOrgDashboard))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.getOrgProperties))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrgProperty))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
@@ -108,7 +109,8 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 }
 
-func (s *Server) render(ctx context.Context, w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+	ctx := r.Context()
 	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
 
 	reqCtx := struct {

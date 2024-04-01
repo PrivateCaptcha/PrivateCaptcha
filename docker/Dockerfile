@@ -19,8 +19,8 @@ COPY --from=frontend-builder /app/web/static /app/web/static
 
 # "Build" JS (will possibly be replaced by esbuild/webpack in future)
 COPY --from=frontend-builder /app/web/js/index.js /app/web/static/js/bundle.js
-COPY --from=frontend-builder /app/web/js/htmx.min.js /app/web/static/js/htmx.min.js
-COPY --from=frontend-builder /app/web/js/alpine.min.js /app/web/static/js/alpine.min.js
+COPY --from=frontend-builder /app/web/js/htmx.min.js /app/web/static/js/
+COPY --from=frontend-builder /app/web/js/alpine.min.js /app/web/static/js/
 
 WORKDIR /app
 
