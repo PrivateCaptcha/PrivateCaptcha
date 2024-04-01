@@ -174,3 +174,12 @@ body.pc-vertical-stretch {
     @apply focus:border-gray-900;
     @apply sm:text-sm;
 }
+
+.pc-hidden {
+    visibility: hidden;
+}
+
+.pc-vflip {
+    @apply transform;
+    @apply rotate-180;
+}

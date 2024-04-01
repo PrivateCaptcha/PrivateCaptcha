@@ -18,13 +18,17 @@ type propertyWizardRenderContext struct {
 
 type orgPropertiesRenderContext struct {
 	Properties []interface{}
+	CurrentOrg *userOrg
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
-	// orgID, _ := strconv.Atoi(r.PathValue("org"))
-
-	data := &orgPropertiesRenderContext{Properties: []interface{}{}}
-	s.render(r.Context(), w, r, "portal/properties.html", data)
+	data := &orgPropertiesRenderContext{
+		Properties: []interface{}{},
+		CurrentOrg: &userOrg{
+			ID: r.PathValue("org"),
+		},
+	}
+	s.render(w, r, "portal/properties.html", data)
 }
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
@@ -61,5 +65,5 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	s.render(r.Context(), w, r, "property-wizard/wizard.html", data)
+	s.render(w, r, "property-wizard/wizard.html", data)
 }

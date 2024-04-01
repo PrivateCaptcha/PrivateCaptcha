@@ -61,5 +61,5 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 		Detail:       "Please begin again.",
 	}
 
-	s.render(r.Context(), w, r, "errors/error.html", data)
+	s.render(w, r, "errors/error.html", data)
 }
