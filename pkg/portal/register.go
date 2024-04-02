@@ -39,7 +39,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusBadRequest, w, r)
+		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	token := r.FormValue(common.ParamCsrfToken)
 	if !s.XSRF.VerifyToken(token, "", actionRegister) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		s.htmxRedirect(s.relURL(common.RegisterEndpoint), w, r)
+		common.Redirect(s.relURL(common.RegisterEndpoint), w, r)
 		return
 	}
 
@@ -80,7 +80,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusInternalServerError, w, r)
+		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -90,7 +90,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyUserName, name)
 	sess.Set(session.KeyTwoFactorCode, code)
 
-	s.htmxRedirect(s.relURL(common.TwoFactorEndpoint), w, r)
+	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)
 }
 
 func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
