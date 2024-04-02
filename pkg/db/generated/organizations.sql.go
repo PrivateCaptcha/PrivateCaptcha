@@ -12,20 +12,20 @@ import (
 )
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organizations (org_name, user_id) VALUES ($1, $2) RETURNING id, org_name, user_id, created_at, updated_at, deleted_at
+INSERT INTO organizations (name, user_id) VALUES ($1, $2) RETURNING id, name, user_id, created_at, updated_at, deleted_at
 `
 
 type CreateOrganizationParams struct {
-	OrgName string      `db:"org_name" json:"org_name"`
-	UserID  pgtype.Int4 `db:"user_id" json:"user_id"`
+	Name   string      `db:"name" json:"name"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
 func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizationParams) (*Organization, error) {
-	row := q.db.QueryRow(ctx, createOrganization, arg.OrgName, arg.UserID)
+	row := q.db.QueryRow(ctx, createOrganization, arg.Name, arg.UserID)
 	var i Organization
 	err := row.Scan(
 		&i.ID,
-		&i.OrgName,
+		&i.Name,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -35,7 +35,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, org_name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
+SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
 `
 
 func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
@@ -43,7 +43,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 	var i Organization
 	err := row.Scan(
 		&i.ID,
-		&i.OrgName,
+		&i.Name,
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -53,9 +53,9 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 }
 
 const getUserOrganizations = `-- name: GetUserOrganizations :many
-SELECT o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1
 UNION ALL
-SELECT o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
 FROM organizations o
 JOIN organization_users ou ON o.id = ou.org_id
 WHERE ou.user_id = $1
@@ -77,7 +77,7 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 		var i GetUserOrganizationsRow
 		if err := rows.Scan(
 			&i.Organization.ID,
-			&i.Organization.OrgName,
+			&i.Organization.Name,
 			&i.Organization.UserID,
 			&i.Organization.CreatedAt,
 			&i.Organization.UpdatedAt,

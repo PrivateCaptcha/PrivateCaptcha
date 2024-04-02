@@ -12,12 +12,15 @@ import (
 )
 
 const createProperty = `-- name: CreateProperty :one
-INSERT INTO properties (name, org_id, level, growth) VALUES ($1, $2, $3, $4) RETURNING id, name, external_id, org_id, level, growth, created_at, updated_at, deleted_at
+INSERT INTO properties (name, org_id, domain, level, growth)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, name, external_id, org_id, domain, level, growth, created_at, updated_at, deleted_at
 `
 
 type CreatePropertyParams struct {
 	Name   string           `db:"name" json:"name"`
 	OrgID  pgtype.Int4      `db:"org_id" json:"org_id"`
+	Domain string           `db:"domain" json:"domain"`
 	Level  DifficultyLevel  `db:"level" json:"level"`
 	Growth DifficultyGrowth `db:"growth" json:"growth"`
 }
@@ -26,6 +29,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 	row := q.db.QueryRow(ctx, createProperty,
 		arg.Name,
 		arg.OrgID,
+		arg.Domain,
 		arg.Level,
 		arg.Growth,
 	)
@@ -35,6 +39,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 		&i.Name,
 		&i.ExternalID,
 		&i.OrgID,
+		&i.Domain,
 		&i.Level,
 		&i.Growth,
 		&i.CreatedAt,
@@ -44,8 +49,43 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 	return &i, err
 }
 
+const getOrgProperties = `-- name: GetOrgProperties :many
+SELECT id, name, external_id, org_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 ORDER BY created_at
+`
+
+func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgProperties, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.Domain,
+			&i.Level,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
-SELECT id, name, external_id, org_id, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND name = $2
+SELECT id, name, external_id, org_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND name = $2
 `
 
 type GetOrgPropertyByNameParams struct {
@@ -61,6 +101,7 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 		&i.Name,
 		&i.ExternalID,
 		&i.OrgID,
+		&i.Domain,
 		&i.Level,
 		&i.Growth,
 		&i.CreatedAt,
@@ -71,7 +112,7 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 }
 
 const propertyAndOrgByExternalID = `-- name: PropertyAndOrgByExternalID :one
-SELECT p.id, p.name, p.external_id, p.org_id, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
+SELECT p.id, p.name, p.external_id, p.org_id, p.domain, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
 INNER JOIN organizations o ON p.org_id = o.id
 WHERE p.external_id = $1
 `
@@ -89,13 +130,14 @@ func (q *Queries) PropertyAndOrgByExternalID(ctx context.Context, externalID pgt
 		&i.Property.Name,
 		&i.Property.ExternalID,
 		&i.Property.OrgID,
+		&i.Property.Domain,
 		&i.Property.Level,
 		&i.Property.Growth,
 		&i.Property.CreatedAt,
 		&i.Property.UpdatedAt,
 		&i.Property.DeletedAt,
 		&i.Organization.ID,
-		&i.Organization.OrgName,
+		&i.Organization.Name,
 		&i.Organization.UserID,
 		&i.Organization.CreatedAt,
 		&i.Organization.UpdatedAt,
