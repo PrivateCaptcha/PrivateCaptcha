@@ -12,23 +12,57 @@ import (
 )
 
 const createProperty = `-- name: CreateProperty :one
-INSERT INTO properties (
-  org_id
-) VALUES (
-  $1
-)
-RETURNING id, external_id, org_id, difficulty_level, difficulty_growth, created_at, updated_at, deleted_at
+INSERT INTO properties (name, org_id, level, growth) VALUES ($1, $2, $3, $4) RETURNING id, name, external_id, org_id, level, growth, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) CreateProperty(ctx context.Context, orgID pgtype.Int4) (*Property, error) {
-	row := q.db.QueryRow(ctx, createProperty, orgID)
+type CreatePropertyParams struct {
+	Name   string           `db:"name" json:"name"`
+	OrgID  pgtype.Int4      `db:"org_id" json:"org_id"`
+	Level  DifficultyLevel  `db:"level" json:"level"`
+	Growth DifficultyGrowth `db:"growth" json:"growth"`
+}
+
+func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error) {
+	row := q.db.QueryRow(ctx, createProperty,
+		arg.Name,
+		arg.OrgID,
+		arg.Level,
+		arg.Growth,
+	)
 	var i Property
 	err := row.Scan(
 		&i.ID,
+		&i.Name,
 		&i.ExternalID,
 		&i.OrgID,
-		&i.DifficultyLevel,
-		&i.DifficultyGrowth,
+		&i.Level,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
+const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
+SELECT id, name, external_id, org_id, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND name = $2
+`
+
+type GetOrgPropertyByNameParams struct {
+	OrgID pgtype.Int4 `db:"org_id" json:"org_id"`
+	Name  string      `db:"name" json:"name"`
+}
+
+func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error) {
+	row := q.db.QueryRow(ctx, getOrgPropertyByName, arg.OrgID, arg.Name)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.Level,
+		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -37,7 +71,7 @@ func (q *Queries) CreateProperty(ctx context.Context, orgID pgtype.Int4) (*Prope
 }
 
 const propertyAndOrgByExternalID = `-- name: PropertyAndOrgByExternalID :one
-SELECT p.id, p.external_id, p.org_id, p.difficulty_level, p.difficulty_growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
+SELECT p.id, p.name, p.external_id, p.org_id, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.org_name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
 INNER JOIN organizations o ON p.org_id = o.id
 WHERE p.external_id = $1
 `
@@ -52,10 +86,11 @@ func (q *Queries) PropertyAndOrgByExternalID(ctx context.Context, externalID pgt
 	var i PropertyAndOrgByExternalIDRow
 	err := row.Scan(
 		&i.Property.ID,
+		&i.Property.Name,
 		&i.Property.ExternalID,
 		&i.Property.OrgID,
-		&i.Property.DifficultyLevel,
-		&i.Property.DifficultyGrowth,
+		&i.Property.Level,
+		&i.Property.Growth,
 		&i.Property.CreatedAt,
 		&i.Property.UpdatedAt,
 		&i.Property.DeletedAt,

@@ -164,11 +164,11 @@ func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, userI
 		l.backfillFingerprint(fingerprint, p, userID)
 	}
 
-	decayRate := decayRateForLevel(p.DifficultyGrowth)
+	decayRate := decayRateForLevel(p.Growth)
 	sum := stats.Sum(decayRate)
-	minDifficulty := minDifficultyForLevel(p.DifficultyLevel)
+	minDifficulty := minDifficultyForLevel(p.Level)
 
-	return requestsToDifficulty(sum, minDifficulty, p.DifficultyGrowth), stats
+	return requestsToDifficulty(sum, minDifficulty, p.Growth), stats
 }
 
 func (l *Levels) Difficulty(fingerprint TFingerprint, p *dbgen.Property, userID int32) uint8 {

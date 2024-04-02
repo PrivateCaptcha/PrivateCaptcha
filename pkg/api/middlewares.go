@@ -50,6 +50,7 @@ func isSiteKeyValid(sitekey string) bool {
 func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
+			// TODO: Return correct CORS headers
 			next.ServeHTTP(w, r)
 			return
 		}

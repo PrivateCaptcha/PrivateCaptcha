@@ -31,6 +31,9 @@ var (
 		Email              string
 		Name               string
 		VerificationCode   string
+		Domain             string
+		Difficulty         string
+		Growth             string
 	}{
 		LoginEndpoint:      common.LoginEndpoint,
 		TwoFactorEndpoint:  common.TwoFactorEndpoint,
@@ -46,6 +49,9 @@ var (
 		Email:              common.ParamEmail,
 		Name:               common.ParamName,
 		VerificationCode:   common.ParamVerificationCode,
+		Domain:             common.ParamDomain,
+		Difficulty:         common.ParamDifficulty,
+		Growth:             common.ParamGrowth,
 	}
 )
 
@@ -81,6 +87,10 @@ func (s *Server) relURL(url string) string {
 	return common.RelURL(s.Prefix, url)
 }
 
+func (s *Server) partsURL(a ...string) string {
+	return s.relURL(strings.Join(a, "/"))
+}
+
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	slog.Debug("Setting up the routes", "prefix", prefix)
 
@@ -97,9 +107,11 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.getOrgProperties))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrgProperty))
-	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.portal))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(s.org(s.getOrgDashboard)))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.org(s.getOrgProperties)))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.org(s.getNewOrgProperty)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.org(s.postNewOrgProperty)))
+	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getOrgDashboard))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
 
@@ -143,6 +155,12 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, code)
 }
 
+func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request) {
+	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
+	common.Redirect(url, w, r)
+}
+
+// for non-GET requests
 func (s *Server) htmxRedirectError(code int, w http.ResponseWriter, r *http.Request) {
 	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
 	s.htmxRedirect(url, w, r)
@@ -156,6 +174,28 @@ func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, http.StatusNotFound)
+}
+
+func (s *Server) org(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		value := r.PathValue("org")
+
+		orgID, err := strconv.Atoi(value)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to parse org ID from path parameter", "value", value, common.ErrAttr(err))
+
+			switch r.Method {
+			case http.MethodGet, http.MethodHead:
+				s.redirectError(http.StatusBadRequest, w, r)
+			default:
+				s.htmxRedirectError(http.StatusBadRequest, w, r)
+			}
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), common.OrgIDContextKey, orgID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
 }
 
 func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {

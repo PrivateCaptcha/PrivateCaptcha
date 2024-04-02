@@ -107,6 +107,7 @@ func (s *Server) Setup(router *http.ServeMux) {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
+	// TODO: Rate-limit Puzzle endpoint with reasonably high limit
 	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, s.Auth.Sitekey(s.puzzle))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
 }

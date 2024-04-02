@@ -174,14 +174,15 @@ type OrganizationUser struct {
 }
 
 type Property struct {
-	ID               int32              `db:"id" json:"id"`
-	ExternalID       pgtype.UUID        `db:"external_id" json:"external_id"`
-	OrgID            pgtype.Int4        `db:"org_id" json:"org_id"`
-	DifficultyLevel  DifficultyLevel    `db:"difficulty_level" json:"difficulty_level"`
-	DifficultyGrowth DifficultyGrowth   `db:"difficulty_growth" json:"difficulty_growth"`
-	CreatedAt        pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	ID         int32              `db:"id" json:"id"`
+	Name       string             `db:"name" json:"name"`
+	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	OrgID      pgtype.Int4        `db:"org_id" json:"org_id"`
+	Level      DifficultyLevel    `db:"level" json:"level"`
+	Growth     DifficultyGrowth   `db:"growth" json:"growth"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt  pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }
 
 type User struct {
