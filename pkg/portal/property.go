@@ -32,9 +32,29 @@ type propertyWizardRenderContext struct {
 	CurrentOrg  *userOrg
 }
 
+type userProperty struct {
+	ID     string
+	Name   string
+	Domain string
+}
+
 type orgPropertiesRenderContext struct {
-	Properties []interface{}
+	Properties []*userProperty
 	CurrentOrg *userOrg
+}
+
+func propertiesToUserProperties(properties []*dbgen.Property) []*userProperty {
+	result := make([]*userProperty, 0, len(properties))
+
+	for _, p := range properties {
+		result = append(result, &userProperty{
+			ID:     strconv.Itoa(int(p.ID)),
+			Name:   p.Name,
+			Domain: p.Domain,
+		})
+	}
+
+	return result
 }
 
 func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGrowth {
@@ -78,10 +98,19 @@ func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.Difficult
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+
+	properties, err := s.Store.RetrieveOrgProperties(ctx, int32(orgID))
+	if err != nil {
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
 	data := &orgPropertiesRenderContext{
-		Properties: []interface{}{},
+		Properties: propertiesToUserProperties(properties),
 		CurrentOrg: &userOrg{
-			ID: r.PathValue("org"),
+			ID: strconv.Itoa(orgID),
 		},
 	}
 	s.render(w, r, "portal/properties.html", data)
@@ -110,7 +139,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	data := &propertyWizardRenderContext{
 		Token: s.XSRF.Token(email, actionNewProperty),
 		CurrentOrg: &userOrg{
-			Name:  org.OrgName,
+			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
 			Level: "",
 		},
@@ -172,7 +201,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 
@@ -180,14 +209,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusBadRequest, w, r)
+		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
 	if !s.XSRF.VerifyToken(token, email, actionNewProperty) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		s.htmxRedirect(s.relURL(common.ExpiredEndpoint), w, r)
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
 	}
 
@@ -221,7 +250,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
-	_, err = s.Store.CreateProperty(ctx, name, org.ID, difficulty, growth)
+	_, err = s.Store.CreateProperty(ctx, name, org.ID, domain, difficulty, growth)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
@@ -229,5 +258,5 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// TODO: Redirect to property page instead of dashboard
-	s.htmxRedirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
 }

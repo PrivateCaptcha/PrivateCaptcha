@@ -25,19 +25,21 @@ var (
 
 const (
 	// TODO: Adjust caching durations mindfully
-	negativeCacheDuration = 1 * time.Minute
-	propertyCacheDuration = 1 * time.Minute
-	apiKeyCacheDuration   = 1 * time.Minute
-	userCacheDuration     = 1 * time.Minute
-	orgCacheDuration      = 1 * time.Minute
-	puzzleCacheDuration   = 1 * time.Minute
-	emailCachePrefix      = "email/"
-	PropOrgCachePrefix    = "proporg/"
-	APIKeyCachePrefix     = "apikey/"
-	puzzlePrefix          = "puzzle/"
-	orgsPrefix            = "orgs/"
-	orgPrefix             = "org/"
-	propertyPrefix        = "prop/"
+	negativeCacheDuration    = 1 * time.Minute
+	propertyCacheDuration    = 1 * time.Minute
+	apiKeyCacheDuration      = 1 * time.Minute
+	userCacheDuration        = 1 * time.Minute
+	orgCacheDuration         = 1 * time.Minute
+	puzzleCacheDuration      = 1 * time.Minute
+	emailCachePrefix         = "email/"
+	PropertyOrgCachePrefix   = "proporg/"
+	APIKeyCachePrefix        = "apikey/"
+	puzzleCachePrefix        = "puzzle/"
+	orgsCachePrefix          = "orgs/"
+	orgCachePrefix           = "org/"
+	orgPropertiesCachePrefix = "orgprops/"
+	propertyCachePrefix      = "prop/"
+	userOrgsCachePrefix      = "userorgs/"
 )
 
 type Store struct {
@@ -85,13 +87,26 @@ func (s *Store) cleanupCache(ctx context.Context, interval time.Duration) {
 	slog.Debug("Store cache cleanup finished")
 }
 
-func fetchCached[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) (*T, error) {
+func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) (*T, error) {
 	data, err := cache.GetAndExpireItem(ctx, key, expiration)
 	if err != nil {
 		return nil, err
 	}
 
 	if t, ok := data.(*T); ok {
+		return t, nil
+	}
+
+	return nil, errInvalidCacheType
+}
+
+func fetchCachedMany[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) ([]*T, error) {
+	data, err := cache.GetAndExpireItem(ctx, key, expiration)
+	if err != nil {
+		return nil, err
+	}
+
+	if t, ok := data.([]*T); ok {
 		return t, nil
 	}
 
@@ -105,9 +120,9 @@ func (s *Store) RetrievePropertyAndOrg(ctx context.Context, sitekey string) (*db
 		return nil, ErrInvalidInput
 	}
 
-	cacheKey := PropOrgCachePrefix + sitekey
+	cacheKey := PropertyOrgCachePrefix + sitekey
 
-	if property, err := fetchCached[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+	if property, err := fetchCachedOne[dbgen.PropertyAndOrgByExternalIDRow](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
 		return property, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -141,7 +156,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 
 	cacheKey := APIKeyCachePrefix + secret
 
-	if apiKey, err := fetchCached[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
+	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -167,7 +182,7 @@ func (s *Store) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKe
 }
 
 func (s *Store) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	key := puzzlePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzleCachePrefix + hex.EncodeToString(p.Nonce[:])
 
 	data, err := s.db.GetCachedByKey(ctx, key)
 	if err == pgx.ErrNoRows {
@@ -187,7 +202,7 @@ func (s *Store) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Tim
 		return nil
 	}
 
-	key := puzzlePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzleCachePrefix + hex.EncodeToString(p.Nonce[:])
 	diff := p.Expiration.Sub(tnow)
 
 	return s.db.CreateCache(ctx, &dbgen.CreateCacheParams{
@@ -203,7 +218,7 @@ func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error)
 	}
 
 	cacheKey := emailCachePrefix + email
-	if user, err := fetchCached[dbgen.User](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+	if user, err := fetchCachedOne[dbgen.User](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
 		return user, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -229,6 +244,12 @@ func (s *Store) FindUser(ctx context.Context, email string) (*dbgen.User, error)
 }
 
 func (s *Store) FindUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
+	cacheKey := userOrgsCachePrefix + strconv.Itoa(int(userID))
+
+	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+		return orgs, nil
+	}
+
 	orgs, err := s.db.GetUserOrganizations(ctx, Int(userID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -245,20 +266,22 @@ func (s *Store) FindUserOrganizations(ctx context.Context, userID int32) ([]*dbg
 		return orgs[i].Organization.CreatedAt.Time.Before(orgs[j].Organization.CreatedAt.Time)
 	})
 
+	if len(orgs) > 0 {
+		_ = s.cache.SetItem(ctx, cacheKey, orgs, userCacheDuration)
+	}
+
 	// TODO: Also sort by orgs that have any properties in them
 	return orgs, nil
 }
 
 func (s *Store) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.Organization, error) {
-	cacheKey := orgPrefix + strconv.Itoa(int(orgID))
+	cacheKey := orgCachePrefix + strconv.Itoa(int(orgID))
 
-	if org, err := fetchCached[dbgen.Organization](ctx, s.cache, cacheKey, orgCacheDuration); err == nil {
+	if org, err := fetchCachedOne[dbgen.Organization](ctx, s.cache, cacheKey, orgCacheDuration); err == nil {
 		return org, nil
-	} else if err == ErrNegativeCacheHit {
-		return nil, ErrNegativeCacheHit
 	}
 
-	apiKey, err := s.db.GetOrganizationByID(ctx, orgID)
+	org, err := s.db.GetOrganizationByID(ctx, orgID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
@@ -270,11 +293,11 @@ func (s *Store) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.O
 		return nil, err
 	}
 
-	if apiKey != nil {
-		_ = s.cache.SetItem(ctx, cacheKey, apiKey, orgCacheDuration)
+	if org != nil {
+		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
 	}
 
-	return apiKey, nil
+	return org, nil
 }
 
 func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {
@@ -296,8 +319,8 @@ func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbge
 	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
 
 	org, err := s.db.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
-		OrgName: name,
-		UserID:  Int(user.ID),
+		Name:   name,
+		UserID: Int(user.ID),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create organization in DB", "name", name, common.ErrAttr(err))
@@ -305,6 +328,11 @@ func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbge
 	}
 
 	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
+
+	if org != nil {
+		cacheKey := orgCachePrefix + strconv.Itoa(int(org.ID))
+		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+	}
 
 	return org, nil
 }
@@ -331,10 +359,11 @@ func (s *Store) FindOrgProperty(ctx context.Context, name string, orgID int32) (
 	return property, nil
 }
 
-func (s *Store) CreateProperty(ctx context.Context, name string, orgID int32, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+func (s *Store) CreateProperty(ctx context.Context, name string, orgID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	property, err := s.db.CreateProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:   name,
 		OrgID:  Int(orgID),
+		Domain: domain,
 		Level:  level,
 		Growth: growth,
 	})
@@ -346,8 +375,34 @@ func (s *Store) CreateProperty(ctx context.Context, name string, orgID int32, le
 
 	slog.DebugContext(ctx, "Created new property", "id", property.ID, "name", name, "org", orgID)
 
-	cacheKey := propertyPrefix + strconv.Itoa(int(property.ID))
+	cacheKey := propertyCachePrefix + strconv.Itoa(int(property.ID))
 	_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+	// invalidate org properties in cache as we just created a new property
+	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(orgID)))
 
 	return property, nil
+}
+
+func (s *Store) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
+	cacheKey := orgPropertiesCachePrefix + strconv.Itoa(int(orgID))
+
+	if properties, err := fetchCachedMany[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+		return properties, nil
+	}
+
+	properties, err := s.db.GetOrgProperties(ctx, Int(orgID))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*dbgen.Property{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve org properties", "org", orgID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	if len(properties) > 0 {
+		_ = s.cache.SetItem(ctx, cacheKey, properties, propertyCacheDuration)
+	}
+
+	return properties, err
 }
