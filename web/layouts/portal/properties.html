@@ -1,11 +1,39 @@
 {{ if .Params.Properties }}
-TODO
+<div class="flex-1 flex flex-wrap content-start mt-8">
+    <div class="shrink overflow-hidden bg-white border border-gray-200 rounded-xl">
+        {{ range $property := .Params.Properties }}
+        <div class="px-4 py-5 sm:p-6">
+            <div class="flex items-center justify-between space-x-12">
+                <div class="flex items-center flex-1">
+                    <img class="flex-shrink-0 object-cover w-10 h-10 rounded-full" src="https://landingfoliocom.imgix.net/store/collection/clarity-dashboard/images/table-stacked/4/avatar-female.png" alt="" />
+                    <div class="flex-1 min-w-0 ml-4">
+                        <p class="text-sm font-bold text-gray-900 truncate">{{ $property.Name }}</p>
+                        <p class="mt-1 text-sm font-medium text-gray-500 truncate">{{ $property.Domain }}</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end">
+                    <a
+                        href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.PropertyEndpoint $property.ID }}"
+                        type="button"
+                        class="inline-flex items-center justify-center w-10 h-10 text-gray-700 transition-all duration-200 bg-white border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600"
+                        >
+                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+        {{ end }}
+    </div>
+</div>
 {{ else }}
 <div class="flex flex-1 place-items-center bg-white px-6 lg:px-8">
-  <div class="text-center mx-auto px-36 py-20 border-2 border-dashed rounded-xl hover:border-gray-600">
-    <h1 class="mt-4 text-xl font-bold tracking-tight text-gray-600">No properties</h1>
-    <p class="mt-2 text-base leading-7 text-gray-600">Get started by creating a new property</p>
-    <div class="mt-4 flex items-center justify-center gap-x-6">
+  <div class="text-center mx-auto px-44 py-28 border-2 border-dashed rounded-xl hover:border-gray-600">
+    <h1 class="mt-6 text-xl font-bold tracking-tight text-gray-600">No properties</h1>
+    <p class="mt-4 text-base leading-7 text-gray-600">Get started by creating a new property</p>
+    <div class="mt-6 flex items-center justify-center gap-x-6">
         <a
             href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Const.NewEndpoint }}"
             type="button"

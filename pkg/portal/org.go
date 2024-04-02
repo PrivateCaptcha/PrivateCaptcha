@@ -29,12 +29,12 @@ type orgDashboardRenderContext struct {
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
-	Properties []interface{}
+	Properties []*userProperty
 }
 
 func orgToUserOrg(org *dbgen.Organization) *userOrg {
 	return &userOrg{
-		Name: org.OrgName,
+		Name: org.Name,
 		ID:   strconv.Itoa(int(org.ID)),
 	}
 }
@@ -43,7 +43,7 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 	result := make([]*userOrg, 0, len(orgs))
 	for _, org := range orgs {
 		result = append(result, &userOrg{
-			Name:  org.Organization.OrgName,
+			Name:  org.Organization.Name,
 			ID:    strconv.Itoa(int(org.Organization.ID)),
 			Level: org.Level,
 		})
@@ -75,7 +75,11 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		Orgs:     orgsToUserOrgs(orgs),
 	}
 
-	idx := slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
+	idx := -1
+	if orgID >= 0 {
+		idx = slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
+	}
+
 	if idx >= 0 {
 		renderCtx.CurrentOrg = renderCtx.Orgs[idx]
 	} else if len(renderCtx.Orgs) > 0 {
@@ -89,7 +93,17 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 			}
 		}
 
+		idx = earliestIdx
 		renderCtx.CurrentOrg = renderCtx.Orgs[earliestIdx]
+	} else {
+		renderCtx.CurrentOrg = &userOrg{ID: "-1"}
+	}
+
+	if (0 <= idx) && (idx < len(orgs)) {
+		properties, err := s.Store.RetrieveOrgProperties(ctx, orgs[idx].Organization.ID)
+		if err == nil {
+			renderCtx.Properties = propertiesToUserProperties(properties)
+		}
 	}
 
 	return renderCtx, nil

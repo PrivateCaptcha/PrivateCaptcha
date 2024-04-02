@@ -159,7 +159,7 @@ type Cache struct {
 
 type Organization struct {
 	ID        int32              `db:"id" json:"id"`
-	OrgName   string             `db:"org_name" json:"org_name"`
+	Name      string             `db:"name" json:"name"`
 	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
@@ -178,6 +178,7 @@ type Property struct {
 	Name       string             `db:"name" json:"name"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
 	OrgID      pgtype.Int4        `db:"org_id" json:"org_id"`
+	Domain     string             `db:"domain" json:"domain"`
 	Level      DifficultyLevel    `db:"level" json:"level"`
 	Growth     DifficultyGrowth   `db:"growth" json:"growth"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`

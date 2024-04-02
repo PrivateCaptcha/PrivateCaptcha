@@ -60,3 +60,11 @@ func (c *memcache) SetItem(ctx context.Context, key string, t any, expiration ti
 
 	return nil
 }
+
+func (c *memcache) Delete(ctx context.Context, key string) error {
+	c.store.Delete(key)
+
+	slog.Log(ctx, common.LevelTrace, "Deleted item from memory cache", "key", key)
+
+	return nil
+}

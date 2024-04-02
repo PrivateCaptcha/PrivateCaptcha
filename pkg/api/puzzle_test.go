@@ -100,7 +100,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	err = cache.SetMissing(ctx, db.PropOrgCachePrefix+sitekey, 1*time.Minute)
+	err = cache.SetMissing(ctx, db.PropertyOrgCachePrefix+sitekey, 1*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -83,7 +83,7 @@ func setupVerifySuite(username string) (string, string, error) {
 		return "", "", err
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: username})
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: username})
 	if err != nil {
 		return "", "", err
 	}
@@ -207,7 +207,7 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), OrgName: t.Name()})
+	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
 	if err != nil {
 		t.Fatal(err)
 	}
