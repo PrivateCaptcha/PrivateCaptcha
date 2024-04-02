@@ -160,18 +160,6 @@ func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request)
 	common.Redirect(url, w, r)
 }
 
-// for non-GET requests
-func (s *Server) htmxRedirectError(code int, w http.ResponseWriter, r *http.Request) {
-	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
-	s.htmxRedirect(url, w, r)
-}
-
-func (s *Server) htmxRedirect(url string, w http.ResponseWriter, r *http.Request) {
-	slog.Debug("Redirecting using htmx header", "url", url)
-	w.Header().Set("HX-Redirect", url)
-	w.WriteHeader(http.StatusOK)
-}
-
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, http.StatusNotFound)
 }
@@ -183,13 +171,7 @@ func (s *Server) org(next http.HandlerFunc) http.HandlerFunc {
 		orgID, err := strconv.Atoi(value)
 		if err != nil {
 			slog.ErrorContext(r.Context(), "Failed to parse org ID from path parameter", "value", value, common.ErrAttr(err))
-
-			switch r.Method {
-			case http.MethodGet, http.MethodHead:
-				s.redirectError(http.StatusBadRequest, w, r)
-			default:
-				s.htmxRedirectError(http.StatusBadRequest, w, r)
-			}
+			s.redirectError(http.StatusBadRequest, w, r)
 			return
 		}
 

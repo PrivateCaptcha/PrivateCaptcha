@@ -18,7 +18,7 @@
             {{- if .Params.DomainError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" value="" class="pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
+            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" maxlength="255" value="" class="pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
         </div>
         {{- if .Params.DomainError -}}
         <p class="pc-form-error-text">{{ .Params.DomainError }}</p>

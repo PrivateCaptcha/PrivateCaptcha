@@ -51,14 +51,14 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	step, ok := sess.Get(session.KeyLoginStep).(int)
 	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid")
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 
@@ -72,21 +72,21 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusBadRequest, w, r)
+		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
 	if !s.XSRF.VerifyToken(token, email, actionVerify) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		s.htmxRedirect(s.relURL(common.ExpiredEndpoint), w, r)
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
 	}
 
 	sentCode, ok := sess.Get(session.KeyTwoFactorCode).(int)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get verification code from session")
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 
@@ -102,7 +102,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
 		if err = s.doRegister(ctx, sess); err != nil {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
-			s.htmxRedirectError(http.StatusInternalServerError, w, r)
+			s.redirectError(http.StatusInternalServerError, w, r)
 			return
 		}
 	}
@@ -111,7 +111,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyPersistent, true)
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering
-	s.htmxRedirect(s.relURL("/"), w, r)
+	common.Redirect(s.relURL("/"), w, r)
 }
 
 func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
@@ -120,14 +120,14 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	sess := s.Session.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		s.htmxRedirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
 

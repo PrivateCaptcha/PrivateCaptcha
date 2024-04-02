@@ -5,7 +5,7 @@
             {{- if .Params.Error -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" id="" placeholder="Email address" class="pc-form-input-base {{ if .Params.Error }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" name="{{ .Const.Email }}" placeholder="Email address" class="pc-form-input-base {{ if .Params.Error }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.Error -}}
         <p class="pc-form-error-text">{{ .Params.Error }}</p>
