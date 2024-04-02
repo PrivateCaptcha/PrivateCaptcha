@@ -5,7 +5,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="input" name="name" id="" placeholder="Enter your full name" class="pc-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern=".{3,}" required />
+            <input type="input" name="{{ .Const.Name }}" placeholder="Enter your full name" class="pc-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern=".{3,}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
@@ -18,7 +18,7 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" id="" placeholder="Email address" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" name="{{ .Const.Email }}" placeholder="Email address" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>

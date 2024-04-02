@@ -7,6 +7,14 @@ import (
 	"github.com/rs/xid"
 )
 
+const (
+	headerHtmxRedirect = "HX-Redirect"
+)
+
+var (
+	headerHtmxRequest = http.CanonicalHeaderKey("HX-Request")
+)
+
 func Logged(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := TraceContext(r.Context(), xid.New().String())
@@ -44,7 +52,13 @@ func Method(m string, next http.HandlerFunc) http.HandlerFunc {
 }
 
 func Redirect(url string, w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Location", url)
-	// w.Header().Set("Cache-Control", "public, max-age=86400")
-	http.Redirect(w, r, url, http.StatusSeeOther)
+	if _, ok := r.Header[headerHtmxRequest]; ok {
+		slog.Log(r.Context(), LevelTrace, "Redirecting using htmx header", "url", url)
+		w.Header().Set(headerHtmxRedirect, url)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.Header().Set("Location", url)
+		// w.Header().Set("Cache-Control", "public, max-age=86400")
+		http.Redirect(w, r, url, http.StatusSeeOther)
+	}
 }

@@ -36,7 +36,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusBadRequest, w, r)
+		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 		if step == loginStepCompleted {
 			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
-			s.htmxRedirect(s.relURL("/"), w, r)
+			common.Redirect(s.relURL("/"), w, r)
 			return
 		} else {
 			slog.WarnContext(ctx, "Session present, but login not finished", "step", step, "email", email)
@@ -83,7 +83,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.htmxRedirectError(http.StatusInternalServerError, w, r)
+		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -91,5 +91,5 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyUserEmail, user.Email)
 	sess.Set(session.KeyTwoFactorCode, code)
 
-	s.htmxRedirect(s.relURL(common.TwoFactorEndpoint), w, r)
+	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)
 }
