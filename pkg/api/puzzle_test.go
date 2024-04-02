@@ -105,7 +105,12 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
+	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:   t.Name(),
+		OrgID:  db.Int(org.ID),
+		Level:  dbgen.DifficultyLevelMedium,
+		Growth: dbgen.DifficultyGrowthMedium,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +152,12 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := queries.CreateProperty(ctx, db.Int(org.ID))
+	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:   t.Name(),
+		OrgID:  db.Int(org.ID),
+		Level:  dbgen.DifficultyLevelMedium,
+		Growth: dbgen.DifficultyGrowthMedium,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

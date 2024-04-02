@@ -4,9 +4,7 @@ INNER JOIN organizations o ON p.org_id = o.id
 WHERE p.external_id = $1;
 
 -- name: CreateProperty :one
-INSERT INTO properties (
-  org_id
-) VALUES (
-  $1
-)
-RETURNING *;
+INSERT INTO properties (name, org_id, level, growth) VALUES ($1, $2, $3, $4) RETURNING *;
+
+-- name: GetOrgPropertyByName :one
+SELECT * from properties WHERE org_id = $1 AND name = $2;

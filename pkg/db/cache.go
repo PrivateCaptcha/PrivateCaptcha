@@ -45,6 +45,7 @@ func (c *memcache) GetAndExpireItem(ctx context.Context, key string, expiration 
 }
 
 func (c *memcache) SetMissing(ctx context.Context, key string, expiration time.Duration) error {
+	// TODO: Cache this based on the current cache size to prevent flood attacks
 	c.store.Set(key, missingData, expiration)
 
 	slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "key", key)
