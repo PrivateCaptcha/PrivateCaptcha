@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strconv"
 	"time"
@@ -27,8 +28,15 @@ type orgDashboardRenderContext struct {
 	UserName   string
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
-	// shortened from CurrentOrgProperties for usability
+	// shortened from CurrentOrgProperties for simplicity
 	Properties []interface{}
+}
+
+func orgToUserOrg(org *dbgen.Organization) *userOrg {
+	return &userOrg{
+		Name: org.OrgName,
+		ID:   strconv.Itoa(int(org.ID)),
+	}
 }
 
 func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
@@ -85,4 +93,22 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	}
 
 	return renderCtx, nil
+}
+
+func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	org, ok := ctx.Value(common.OrgIDContextKey).(int)
+	if !ok {
+		org = -1
+	}
+
+	sess := s.Session.SessionStart(w, r)
+	renderCtx, err := s.createOrgDashboardContext(ctx, int32(org), sess)
+	if err != nil {
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.render(w, r, "portal/portal.html", renderCtx)
 }

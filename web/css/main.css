@@ -179,7 +179,21 @@ body.pc-vertical-stretch {
     visibility: hidden;
 }
 
-.pc-vflip {
-    @apply transform;
-    @apply rotate-180;
+.htmx-indicator {
+    display: none;
 }
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+button[type=submit]:disabled,
+button[type=reset]:disabled,
+input[type=submit]:disabled {
+    cursor: not-allowed;
+}
+

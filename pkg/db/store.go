@@ -37,6 +37,7 @@ const (
 	puzzlePrefix          = "puzzle/"
 	orgsPrefix            = "orgs/"
 	orgPrefix             = "org/"
+	propertyPrefix        = "prop/"
 )
 
 type Store struct {
@@ -306,4 +307,47 @@ func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbge
 	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
 
 	return org, nil
+}
+
+func (s *Store) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
+	if len(name) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	property, err := s.db.GetOrgPropertyByName(ctx, &dbgen.GetOrgPropertyByNameParams{
+		OrgID: Int(orgID),
+		Name:  name,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve property by name", "name", name, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	return property, nil
+}
+
+func (s *Store) CreateProperty(ctx context.Context, name string, orgID int32, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+	property, err := s.db.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:   name,
+		OrgID:  Int(orgID),
+		Level:  level,
+		Growth: growth,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create property in DB", "name", name, "org", orgID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Created new property", "id", property.ID, "name", name, "org", orgID)
+
+	cacheKey := propertyPrefix + strconv.Itoa(int(property.ID))
+	_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+
+	return property, nil
 }

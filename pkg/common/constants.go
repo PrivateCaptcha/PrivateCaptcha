@@ -14,4 +14,7 @@ const (
 	ParamName             = "name"
 	ParamCsrfToken        = "csrf_token"
 	ParamVerificationCode = "vcode"
+	ParamDomain           = "domain"
+	ParamDifficulty       = "difficulty"
+	ParamGrowth           = "growth"
 )
