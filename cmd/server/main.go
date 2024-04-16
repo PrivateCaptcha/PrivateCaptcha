@@ -89,6 +89,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	router := http.NewServeMux()
 
 	apiServer.Setup(router)
+	portalServer.Init()
 	portalServer.Setup(router)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 
