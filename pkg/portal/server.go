@@ -79,6 +79,12 @@ type Server struct {
 	Mailer   Mailer
 }
 
+func (s *Server) Init() {
+	prefix := s.relURL("/")
+	s.template = web.NewTemplates(funcMap(prefix))
+	s.Session.Path = prefix
+}
+
 func (s *Server) Setup(router *http.ServeMux) {
 	s.setupWithPrefix(s.relURL("/"), router)
 }
@@ -93,9 +99,6 @@ func (s *Server) partsURL(a ...string) string {
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	slog.Debug("Setting up the routes", "prefix", prefix)
-
-	s.Session.Path = prefix
-	s.template = web.NewTemplates(funcMap(prefix))
 
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LoginEndpoint, s.getLogin)
 	router.HandleFunc(http.MethodPost+" "+prefix+common.LoginEndpoint, common.Logged(s.postLogin))

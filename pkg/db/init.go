@@ -3,17 +3,24 @@ package db
 import (
 	"context"
 	"database/sql"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 )
 
-func Connect(getenv func(string) string) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
-	return connectEx(getenv, false /*migrate*/)
-}
+var (
+	connectOnce      sync.Once
+	globalPool       *pgxpool.Pool
+	globalClickhouse *sql.DB
+	globalDBErr      error
+)
 
-func Migrate(getenv func(string) string) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
-	return connectEx(getenv, true /*migrate*/)
+func Migrate(getenv func(string) string) (*pgxpool.Pool, *sql.DB, error) {
+	connectOnce.Do(func() {
+		globalPool, globalClickhouse, globalDBErr = connectEx(getenv, true /*migrate*/)
+	})
+	return globalPool, globalClickhouse, globalDBErr
 }
 
 func connectEx(getenv func(string) string, migrate bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
