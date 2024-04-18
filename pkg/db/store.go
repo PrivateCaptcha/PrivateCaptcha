@@ -59,7 +59,8 @@ func NewStore(queries *dbgen.Queries, cache common.Cache, cleanupInterval time.D
 	}
 
 	var ctx context.Context
-	ctx, s.cancelFunc = context.WithCancel(context.Background())
+	ctx, s.cancelFunc = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_db_cache"))
 	go s.cleanupCache(ctx, cleanupInterval)
 
 	return s
