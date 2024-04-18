@@ -35,6 +35,7 @@
                                     hx-target="#properties"
                                     hx-trigger="click"
                                     hx-get="{{ partsURL $.Const.OrgEndpoint $org.ID $.Const.PropertiesEndpoint }}"
+                                    hx-replace-url="{{ partsURL $.Const.OrgEndpoint $org.ID }}"
                                     >
                                     {{ $org.Name }}
                                 </li>
