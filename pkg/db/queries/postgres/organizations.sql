@@ -4,6 +4,9 @@ INSERT INTO organizations (name, user_id) VALUES ($1, $2) RETURNING *;
 -- name: GetOrganizationByID :one
 SELECT * from organizations WHERE id = $1;
 
+-- name: GetUserOrgByName :one
+SELECT * from organizations WHERE user_id = $1 AND name = $2;
+
 -- name: GetUserOrganizations :many
 SELECT sqlc.embed(o), 'owner' as level FROM organizations o WHERE o.user_id = $1
 UNION ALL

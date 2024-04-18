@@ -10,12 +10,14 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 var (
 	errInvalidSession = errors.New("session contains invalid data")
+	maxOrgNameLength  = 255
 )
 
 type userOrg struct {
@@ -30,6 +32,11 @@ type orgDashboardRenderContext struct {
 	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
 	Properties []*userProperty
+}
+
+type orgWizardRenderContext struct {
+	Token     string
+	NameError string
 }
 
 func orgToUserOrg(org *dbgen.Organization) *userOrg {
@@ -49,6 +56,97 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 		})
 	}
 	return result
+}
+
+func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	sess := s.Session.SessionStart(w, r)
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok || (len(email) == 0) {
+		slog.ErrorContext(ctx, "Failed to get user email from context")
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	data := &orgWizardRenderContext{
+		Token: s.XSRF.Token(email, actionNewOrg),
+	}
+
+	s.render(w, r, "org-wizard/wizard.html", data)
+}
+
+func (s *Server) validateOrgName(ctx context.Context, name string, userID int32) string {
+	if (len(name) == 0) || (len(name) > maxOrgNameLength) {
+		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
+
+		if len(name) == 0 {
+			return "Name cannot be empty."
+		} else {
+			return "Name is too long."
+		}
+	}
+
+	if _, err := s.Store.FindOrg(ctx, name, userID); err != db.ErrRecordNotFound {
+		slog.WarnContext(ctx, "Org already exists", "name", name, common.ErrAttr(err))
+		return "Organization with this name already exists."
+	}
+
+	return ""
+}
+
+func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	token := r.FormValue(common.ParamCsrfToken)
+	if !s.XSRF.VerifyToken(token, email, actionNewOrg) {
+		slog.WarnContext(ctx, "Failed to verify CSRF token")
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
+		return
+	}
+
+	renderCtx := &orgWizardRenderContext{
+		Token: s.XSRF.Token(email, actionNewOrg),
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	name := r.FormValue(common.ParamName)
+	if nameError := s.validateOrgName(ctx, name, user.ID); len(nameError) > 0 {
+		renderCtx.NameError = nameError
+		s.render(w, r, createOrgFormTemplate, renderCtx)
+		return
+	}
+
+	org, err := s.Store.CreateNewOrganization(ctx, name, user.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create organization", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), w, r)
 }
 
 func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *common.Session) (*orgDashboardRenderContext, error) {
@@ -82,6 +180,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 	if idx >= 0 {
 		renderCtx.CurrentOrg = renderCtx.Orgs[idx]
+		slog.DebugContext(ctx, "Selected current org from path", "index", idx)
 	} else if len(renderCtx.Orgs) > 0 {
 		earliestIdx := 0
 		earliestDate := time.Now()
@@ -95,6 +194,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 		idx = earliestIdx
 		renderCtx.CurrentOrg = renderCtx.Orgs[earliestIdx]
+		slog.DebugContext(ctx, "Selected current org as earliest owned", "index", idx)
 	} else {
 		renderCtx.CurrentOrg = &userOrg{ID: "-1"}
 	}
