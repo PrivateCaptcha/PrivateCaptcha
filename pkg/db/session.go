@@ -35,7 +35,8 @@ func NewSessionStore(db *dbgen.Queries, fallback common.SessionStore, interval t
 	}
 
 	var cancelCtx context.Context
-	cancelCtx, store.processCancel = context.WithCancel(context.Background())
+	cancelCtx, store.processCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "persist_session"))
 	go store.ProcessPersistent(cancelCtx, interval)
 
 	return store

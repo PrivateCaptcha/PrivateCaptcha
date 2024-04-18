@@ -70,13 +70,16 @@ func NewLevelsEx(cf *sql.DB, batchSize int, bucketSize, accessLogInterval, backf
 	}
 
 	var accessCtx context.Context
-	accessCtx, levels.accessLogCancel = context.WithCancel(context.Background())
+	accessCtx, levels.accessLogCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "access_log"))
 	go levels.processAccessLog(accessCtx, accessLogInterval)
 
-	go levels.backfillDifficulty(context.Background(), backfillInterval)
+	go levels.backfillDifficulty(context.WithValue(context.Background(), common.TraceIDContextKey, "backfill_difficulty"),
+		backfillInterval)
 
 	var cancelCtx context.Context
-	cancelCtx, levels.cleanupCancel = context.WithCancel(context.Background())
+	cancelCtx, levels.cleanupCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_stats"))
 	go levels.cleanupStats(cancelCtx)
 
 	return levels
