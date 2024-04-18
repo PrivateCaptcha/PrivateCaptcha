@@ -52,6 +52,29 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 	return &i, err
 }
 
+const getUserOrgByName = `-- name: GetUserOrgByName :one
+SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2
+`
+
+type GetUserOrgByNameParams struct {
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+	Name   string      `db:"name" json:"name"`
+}
+
+func (q *Queries) GetUserOrgByName(ctx context.Context, arg *GetUserOrgByNameParams) (*Organization, error) {
+	row := q.db.QueryRow(ctx, getUserOrgByName, arg.UserID, arg.Name)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
 const getUserOrganizations = `-- name: GetUserOrganizations :many
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1
 UNION ALL

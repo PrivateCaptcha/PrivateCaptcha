@@ -18,6 +18,7 @@ import (
 const (
 	maxNewPropertyFormSizeBytes = 256 * 1024
 	createPropertyFormTemplate  = "property-wizard/form.html"
+	createOrgFormTemplate       = "org-wizard/form.html"
 	maxPropertyNameLength       = 255
 )
 
