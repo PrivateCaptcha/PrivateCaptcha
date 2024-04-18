@@ -271,6 +271,8 @@ func (s *Store) FindUserOrganizations(ctx context.Context, userID int32) ([]*dbg
 		_ = s.cache.SetItem(ctx, cacheKey, orgs, userCacheDuration)
 	}
 
+	slog.DebugContext(ctx, "Retrieved user organizations", "count", len(orgs))
+
 	// TODO: Also sort by orgs that have any properties in them
 	return orgs, nil
 }
@@ -301,6 +303,26 @@ func (s *Store) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.O
 	return org, nil
 }
 
+func (s *Store) CreateNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
+	org, err := s.db.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
+		Name:   name,
+		UserID: Int(userID),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create organization in DB", "name", name, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
+
+	if org != nil {
+		cacheKey := orgCachePrefix + strconv.Itoa(int(org.ID))
+		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+	}
+
+	return org, nil
+}
+
 func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {
 	user, err := s.db.CreateUser(ctx, &dbgen.CreateUserParams{
 		UserName: name,
@@ -319,23 +341,7 @@ func (s *Store) CreateNewAccount(ctx context.Context, email, name string) (*dbge
 
 	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
 
-	org, err := s.db.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
-		Name:   name,
-		UserID: Int(user.ID),
-	})
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create organization in DB", "name", name, common.ErrAttr(err))
-		return nil, err
-	}
-
-	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
-
-	if org != nil {
-		cacheKey := orgCachePrefix + strconv.Itoa(int(org.ID))
-		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
-	}
-
-	return org, nil
+	return s.CreateNewOrganization(ctx, name, user.ID)
 }
 
 func (s *Store) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
@@ -358,6 +364,28 @@ func (s *Store) FindOrgProperty(ctx context.Context, name string, orgID int32) (
 	}
 
 	return property, nil
+}
+
+func (s *Store) FindOrg(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
+	if len(name) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	org, err := s.db.GetUserOrgByName(ctx, &dbgen.GetUserOrgByNameParams{
+		UserID: Int(userID),
+		Name:   name,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve org by name", "name", name, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	return org, nil
 }
 
 func (s *Store) CreateProperty(ctx context.Context, name string, orgID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {

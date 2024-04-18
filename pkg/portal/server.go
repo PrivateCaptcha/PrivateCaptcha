@@ -110,10 +110,12 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
 	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrg))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(s.postNewOrg)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(s.org(s.getOrgDashboard)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertiesEndpoint, s.private(s.org(s.getOrgProperties)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.org(s.getNewOrgProperty)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(s.org(s.postNewOrgProperty)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(s.org(s.postNewOrgProperty))))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getOrgDashboard))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }

@@ -11,6 +11,7 @@ const (
 	actionVerify      = "verify"
 	actionRegister    = "register"
 	actionNewProperty = "property-new"
+	actionNewOrg      = "org-new"
 )
 
 type XSRFMiddleware struct {
