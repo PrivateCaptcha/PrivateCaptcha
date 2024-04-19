@@ -303,6 +303,32 @@ func (s *Store) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.O
 	return org, nil
 }
 
+func (s *Store) RetrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
+	cacheKey := propertyCachePrefix + strconv.Itoa(int(propID))
+
+	if prop, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+		return prop, nil
+	}
+
+	property, err := s.db.GetPropertyByID(ctx, propID)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve property by ID", "propID", propID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if property != nil {
+		_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+	}
+
+	return property, nil
+}
+
 func (s *Store) CreateNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
 	org, err := s.db.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
 		Name:   name,

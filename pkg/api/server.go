@@ -204,7 +204,7 @@ func (s *Server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, er
 		ErrorCodes: errors,
 	}
 
-	SendJSONResponse(ctx, w, response, map[string]string{})
+	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
 func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +265,7 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 	}
 
-	SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
+	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
 
 func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, verifyError) {

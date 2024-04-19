@@ -1,0 +1,120 @@
+{{define "scripts"}}
+<script defer src="/assets/js/htmx.min.js" type="text/javascript"></script>
+<script defer src="/assets/js/alpine.min.js" type="text/javascript"></script>
+<script defer src="/assets/js/d3.v7.min.js" type="text/javascript" charset="utf-8"></script>
+<script src="/assets/js/bundle.js" type="text/javascript"></script>
+
+<script>
+    function chartComponent() {
+        // Declare 'chart' with 'let' to prevent it from being reactive in Alpine.js. 
+        let chart;
+
+        const setChartData = (element, data, timeFormat) => {
+            // Convert unix timestamp to JavaScript Date object
+            data.forEach(d => {
+                d.x = new Date(d.x * 1000);
+            });
+
+            let margin = {top: 20, right: 30, bottom: 60, left: 80};
+
+            let rect = element.getBoundingClientRect();
+            let chartFullHeight = rect.height;
+            let width = rect.width - margin.left - margin.right;
+            let height = chartFullHeight - margin.top - margin.bottom;
+            let d3Selection = d3.select(element);
+
+            d3Selection.select('svg').remove();
+
+            let svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            let chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            let formatTime = d3.timeFormat(timeFormat);
+
+            let x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
+            let y = d3.scaleLinear().range([height, 0]);
+
+            x.domain(data.map(function(d) { return d.x; }));
+            y.domain([0, d3.max(data, function(d) { return d.y; })]);
+
+            // Filter the domain of the X scale to include only every other value
+            let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
+
+            let xAxis = d3.axisBottom(x).tickValues(xTickValues).tickFormat(formatTime);
+            let yAxis = d3.axisLeft(y).ticks(6);
+
+            let maxBarWidth = 6;
+
+            // Append the rectangles for the bar chart
+            chartElement.selectAll("bar")
+                .data(data)
+                .enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", function(d) { 
+                    let barWidth = Math.min(x.bandwidth(), maxBarWidth);
+                    // Adjust the x position to center the bar over the tick
+                    return x(d.x) + (x.bandwidth() - barWidth) / 2;
+                })
+                .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth); })
+                .attr("y", function(d) { return y(d.y); })
+                .attr("height", function(d) { return height - y(d.y); })
+                .attr("rx", 3)
+                .attr("ry", 3);
+
+            // Add the x-axis
+            chartElement.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xAxis)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .attr("dx", "-.8em")
+                .attr("dy", "-.55em")
+                .attr("transform", "rotate(-90)" );
+
+            // Add the y-axis
+            chartElement.append("g")
+                .attr("class", "y axis")
+                .call(yAxis);
+        };
+
+        const fetchChartData = async (period) => {
+            this.isLoading = true;
+            try {
+                const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.Stats }}/' + period);
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching chart data:', error);
+                return null;
+            } finally {
+                this.isLoading = false;
+            }
+        };
+
+        return {
+            // https://d3js.org/d3-time-format#locale_format
+            timeFormat: {
+                '7d': '%H',
+                '30d': '%d',
+                '6m': '%d %b',
+                '1y': '%b'
+            },
+            isLoading: false,
+            period: '7d',
+            async init() {
+                this.updateChart();
+            },
+            async updateChart() {
+                const data = await fetchChartData(this.period);
+                if (!data) { return; }
+                setChartData(this.$refs.chart, data, this.timeFormat[this.period]);
+            }
+        }
+    }
+</script>
+{{end}}

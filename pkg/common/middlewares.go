@@ -1,8 +1,10 @@
 package common
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/xid"
 )
@@ -60,5 +62,36 @@ func Redirect(url string, w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", url)
 		// w.Header().Set("Cache-Control", "public, max-age=86400")
 		http.Redirect(w, r, url, http.StatusSeeOther)
+	}
+}
+
+func IntArg(next http.HandlerFunc, name string, key ContextKey, failURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		value := r.PathValue(name)
+
+		i, err := strconv.Atoi(value)
+		if err != nil {
+			slog.ErrorContext(r.Context(), "Failed to parse path parameter", "name", name, "value", value, ErrAttr(err))
+			Redirect(failURL, w, r)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), key, i)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}
+}
+
+func StrArg(next http.HandlerFunc, name string, key ContextKey, failURL string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		value := r.PathValue(name)
+
+		if len(value) == 0 {
+			slog.ErrorContext(r.Context(), "Path parameter is empty", "name", name)
+			Redirect(failURL, w, r)
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), key, value)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
