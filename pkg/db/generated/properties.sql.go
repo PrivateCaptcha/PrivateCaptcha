@@ -111,6 +111,28 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 	return &i, err
 }
 
+const getPropertyByID = `-- name: GetPropertyByID :one
+SELECT id, name, external_id, org_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE id = $1
+`
+
+func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, error) {
+	row := q.db.QueryRow(ctx, getPropertyByID, id)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.Domain,
+		&i.Level,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
 const propertyAndOrgByExternalID = `-- name: PropertyAndOrgByExternalID :one
 SELECT p.id, p.name, p.external_id, p.org_id, p.domain, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at, o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at FROM properties p
 INNER JOIN organizations o ON p.org_id = o.id

@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -19,6 +20,7 @@ const (
 	maxNewPropertyFormSizeBytes = 256 * 1024
 	createPropertyFormTemplate  = "property-wizard/form.html"
 	createOrgFormTemplate       = "org-wizard/form.html"
+	propertyDashboardTemplate   = "property/dashboard.html"
 	maxPropertyNameLength       = 255
 )
 
@@ -35,6 +37,7 @@ type propertyWizardRenderContext struct {
 
 type userProperty struct {
 	ID     string
+	OrgID  string
 	Name   string
 	Domain string
 }
@@ -44,15 +47,24 @@ type orgPropertiesRenderContext struct {
 	CurrentOrg *userOrg
 }
 
+type propertyDashboardRenderContext struct {
+	Property *userProperty
+}
+
+func propertyToUserProperty(p *dbgen.Property) *userProperty {
+	return &userProperty{
+		ID:     strconv.Itoa(int(p.ID)),
+		OrgID:  strconv.Itoa(int(p.OrgID.Int32)),
+		Name:   p.Name,
+		Domain: p.Domain,
+	}
+}
+
 func propertiesToUserProperties(properties []*dbgen.Property) []*userProperty {
 	result := make([]*userProperty, 0, len(properties))
 
 	for _, p := range properties {
-		result = append(result, &userProperty{
-			ID:     strconv.Itoa(int(p.ID)),
-			Name:   p.Name,
-			Domain: p.Domain,
-		})
+		result = append(result, propertyToUserProperty(p))
 	}
 
 	return result
@@ -260,4 +272,65 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Redirect to property page instead of dashboard
 	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+}
+
+func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	period := ctx.Value(common.PeriodContextKey).(string)
+
+	type point struct {
+		Date  int64 `json:"x"`
+		Value int   `json:"y"`
+	}
+
+	points := []*point{}
+
+	var interval time.Duration
+	var count int
+
+	switch period {
+	case "7d":
+		count = 7 * (24 / 3)
+		interval = 7 * 24 * time.Hour
+	case "30d":
+		interval = 30 * 24 * time.Hour
+		count = 30
+	case "6m":
+		interval = 6 * 30 * 24 * time.Hour
+		count = 6 * (30 / 5)
+	case "1y":
+		interval = 12 * 30 * 24 * time.Hour
+		count = 12 * (30 / 10)
+	default:
+		slog.ErrorContext(ctx, "Incorrect period", "period", period)
+		interval = 24 * time.Hour
+		count = 24
+	}
+
+	step := interval / time.Duration(count)
+
+	for i := 0; i < count; i++ {
+		points = append(points, &point{time.Now().Add(time.Duration(-i) * step).Unix(), rand.Intn(100000)})
+	}
+
+	// TODO: add CORS headers for chart response
+	common.SendJSONResponse(ctx, w, points, map[string]string{})
+}
+
+func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+
+	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
+		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
+		s.redirectError(http.StatusNotFound, w, r)
+		return
+	}
+
+	renderCtx := &propertyDashboardRenderContext{
+		Property: propertyToUserProperty(property),
+	}
+	s.render(w, r, propertyDashboardTemplate, renderCtx)
 }
