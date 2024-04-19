@@ -11,5 +11,8 @@ RETURNING *;
 -- name: GetOrgPropertyByName :one
 SELECT * from properties WHERE org_id = $1 AND name = $2;
 
+-- name: GetPropertyByID :one
+SELECT * from properties WHERE id = $1;
+
 -- name: GetOrgProperties :many
 SELECT * from properties WHERE org_id = $1 ORDER BY created_at;

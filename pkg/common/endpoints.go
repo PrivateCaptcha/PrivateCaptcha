@@ -15,4 +15,5 @@ const (
 	OrgEndpoint        = "org"
 	PropertiesEndpoint = "properties"
 	NewEndpoint        = "new"
+	StatsEndpoint      = "stats"
 )

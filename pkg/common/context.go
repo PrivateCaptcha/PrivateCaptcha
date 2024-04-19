@@ -10,4 +10,6 @@ const (
 	APIKeyContextKey         ContextKey = iota
 	LoggedInContextKey       ContextKey = iota
 	OrgIDContextKey          ContextKey = iota
+	PropertyIDContextKey     ContextKey = iota
+	PeriodContextKey         ContextKey = iota
 )
