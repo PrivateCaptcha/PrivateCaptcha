@@ -1,7 +1,7 @@
 {{define "scripts"}}
 <script defer src="/assets/js/htmx.min.js" type="text/javascript"></script>
-<script defer src="/assets/js/alpine.min.js" type="text/javascript"></script>
 <script defer src="/assets/js/d3.v7.min.js" type="text/javascript" charset="utf-8"></script>
+<script defer src="/assets/js/alpine.min.js" type="text/javascript"></script>
 <script src="/assets/js/bundle.js" type="text/javascript"></script>
 
 <script>
@@ -9,21 +9,55 @@
         // Declare 'chart' with 'let' to prevent it from being reactive in Alpine.js. 
         let chart;
 
-        const setChartData = (element, data, timeFormat) => {
-            // Convert unix timestamp to JavaScript Date object
-            data.forEach(d => {
-                d.x = new Date(d.x * 1000);
-            });
+        const yTicksCount = 7;
 
-            let margin = {top: 20, right: 30, bottom: 60, left: 80};
+        const backgroundColor = '#e4e4e7';
+        const requestsColor = '#4f46e5';
 
-            let rect = element.getBoundingClientRect();
-            let chartFullHeight = rect.height;
+        const weekdayFormat = d3.timeFormat("%a");
+        const monthlyFormat = d3.timeFormat("%b");
+        const monthDayFormat = d3.timeFormat("%d %b");
+
+        const monthlyTicks = (date, i) => {
+            var day = date.getDate();
+            var month = date.getMonth();
+            if ((day == 1) && (month == 0)) {
+                return date.getFullYear();
+            } else {
+                return monthDayFormat(date);
+            }
+        };
+
+        const tickFunction = {
+            '7d': function(date, i) {
+                var hour = date.getHours();
+                if (hour == 0) {
+                    return weekdayFormat(date);
+                } else {
+                    return hour;
+                }
+            },
+            '30d': function(date, i) {
+                var day = date.getDate();
+                if (day == 1) {
+                    return monthlyFormat(date);
+                } else {
+                    return day;
+                }
+            },
+            '6m': monthlyTicks,
+            '1y': monthlyTicks
+        };
+
+        const drawNoData = (element) => {
+            const margin = {top: 20, right: 30, bottom: 60, left: 30};
+            const rect = element.getBoundingClientRect();
+
             let width = rect.width - margin.left - margin.right;
-            let height = chartFullHeight - margin.top - margin.bottom;
-            let d3Selection = d3.select(element);
+            let height = rect.height - margin.top - margin.bottom;
 
-            d3Selection.select('svg').remove();
+            let d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
 
             let svg = d3Selection
                 .append('svg')
@@ -34,24 +68,90 @@
                 .attr('class', 'charts')
                 .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-            let formatTime = d3.timeFormat(timeFormat);
+            // Create x scale
+            let x = d3.scaleTime().range([0, width]);
+            
+            x.domain([d3.timeDay.offset(new Date(), -7), new Date()]);                
+            
+            let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
+
+            let xAxis = d3.axisBottom(x)
+                .tickValues(xTickValues)
+                .tickFormat(tickFunction['7d']);
+
+            // Create y scale
+            let y = d3.scaleLinear().range([height, 0]);
+
+            // Create x axis
+            chartElement.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(x))
+                .style("color", backgroundColor)
+                .style("stroke-width", 2)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("color", "#000")
+                .attr("dx", "-.8em")
+                .attr("dy", "-.55em")
+                .attr("transform", "rotate(-90)" );
+
+            // Create y axis with horizontal gridlines
+            chartElement.append('g')
+                .call(d3.axisLeft(y).ticks(yTicksCount).tickSize(-width).tickFormat(''))
+                .style("color", backgroundColor)
+                .selectAll(".domain").remove();
+        }
+
+        const setChartData = (element, data, xTickFormat) => {
+            // Convert unix timestamp to JavaScript Date object
+            data.forEach(d => {
+                d.x = new Date(d.x * 1000);
+            });
+
+            const legendHeight = 50;
+            const margin = {top: 20, right: 30, bottom: 30, left: 30};
+            const rect = element.getBoundingClientRect();
+
+            const width = rect.width - margin.left - margin.right;
+            const height = rect.height - legendHeight - margin.top - margin.bottom;
+
+            let d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
+
+            let svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + legendHeight + margin.top + margin.bottom);
+
+            let chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
             let x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
             let y = d3.scaleLinear().range([height, 0]);
 
             x.domain(data.map(function(d) { return d.x; }));
-            y.domain([0, d3.max(data, function(d) { return d.y; })]);
+            y.domain([0, d3.max(data, function(d) { return d.y; }) * 1.2]);
 
             // Filter the domain of the X scale to include only every other value
             let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
 
-            let xAxis = d3.axisBottom(x).tickValues(xTickValues).tickFormat(formatTime);
-            let yAxis = d3.axisLeft(y).ticks(6);
+            let xAxis = d3.axisBottom(x)
+                .tickValues(xTickValues)
+                .tickFormat(xTickFormat);
+            let yAxis = d3.axisLeft(y).ticks(yTicksCount);
+
+            // Add the grid lines
+            chartElement.append("g")
+                .attr("class", "grid")
+                .call(yAxis.tickSize(-width).tickFormat(""))
+                .style("color", backgroundColor)
+                .selectAll(".domain").remove();
 
             let maxBarWidth = 6;
 
             // Append the rectangles for the bar chart
-            chartElement.selectAll("bar")
+            var bars = chartElement.selectAll("bar")
                 .data(data)
                 .enter().append("rect")
                 .attr("class", "bar")
@@ -64,23 +164,50 @@
                 .attr("y", function(d) { return y(d.y); })
                 .attr("height", function(d) { return height - y(d.y); })
                 .attr("rx", 3)
-                .attr("ry", 3);
+                .attr("ry", 3)
+                .attr("fill", requestsColor)
+                .attr("opacity", 1)
+                .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
+                .on("mouseout", function() { d3.select(this).attr("opacity", 1); });
+            
+            bars.append("title")
+                .text(function(d) { return d.y; });
 
             // Add the x-axis
             chartElement.append("g")
                 .attr("class", "x axis")
                 .attr("transform", "translate(0," + height + ")")
                 .call(xAxis)
+                .style("color", backgroundColor)
+                .style("stroke-width", 2)
                 .selectAll("text")
                 .style("text-anchor", "end")
+                .style("color", "#000")
                 .attr("dx", "-.8em")
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );
 
-            // Add the y-axis
-            chartElement.append("g")
-                .attr("class", "y axis")
-                .call(yAxis);
+            // Add the legend
+            var legend = chartElement.append("g")
+                .attr("class", "legend")
+                .attr("transform", "translate(" + (width / 2) + "," + (margin.top + height + legendHeight/2) + ")");
+
+            // Add the legend color guide
+            legend.append("circle")
+                .attr("cx", -16)
+                .attr("cy", 0)
+                .attr("r", 6)
+                .style("fill", requestsColor);
+
+            // Add the legend text
+            legend.append("text")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("dy", ".35em")
+                .text("Requests")
+                .attr("class", "textselected")
+                .style("text-anchor", "start")
+                .style("font-size", "14px");
         };
 
         const fetchChartData = async (period) => {
@@ -98,12 +225,6 @@
 
         return {
             // https://d3js.org/d3-time-format#locale_format
-            timeFormat: {
-                '7d': '%H',
-                '30d': '%d',
-                '6m': '%d %b',
-                '1y': '%b'
-            },
             isLoading: false,
             period: '7d',
             async init() {
@@ -111,8 +232,11 @@
             },
             async updateChart() {
                 const data = await fetchChartData(this.period);
-                if (!data) { return; }
-                setChartData(this.$refs.chart, data, this.timeFormat[this.period]);
+                if (data) {
+                    setChartData(this.$refs.chart, data, tickFunction[this.period]);
+                } else {
+                    drawNoData(this.$refs.chart);
+                }
             }
         }
     }
