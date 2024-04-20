@@ -229,30 +229,29 @@
                 .attr("class", "legend-verified")
                 .attr("transform", "translate(" + (legendSpace - legendItemSize) + ",0)");
             setLegend(legend2, 'Verified', verifiedColor);
-        };
-
-        const fetchChartData = async (period) => {
-            this.isLoading = true;
-            try {
-                const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.Stats }}/' + period);
-                return await response.json();
-            } catch (error) {
-                console.error('Error fetching chart data:', error);
-                return null;
-            } finally {
-                this.isLoading = false;
-            }
-        };
+        }; 
 
         return {
             // https://d3js.org/d3-time-format#locale_format
             isLoading: false,
             period: '7d',
             async init() {
-                this.updateChart();
+                this.updateChart('7d');
+            },
+            async fetchChartData(period) {
+                this.isLoading = true;
+                try {
+                    const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.Stats }}/' + period);
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error fetching chart data:', error);
+                    return null;
+                } finally {
+                    this.isLoading = false;
+                }
             },
             async updateChart() {
-                const data = await fetchChartData(this.period);
+                const data = await this.fetchChartData(this.period);
                 if (data) {
                     setChartData(this.$refs.chart, data, tickFunction[this.period]);
                 } else {
