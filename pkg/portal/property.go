@@ -274,6 +274,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
 }
 
+// TODO: Add min/max points for each of the periods respectively
+// so that scaling on charts will be OK
 func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	period := ctx.Value(common.PeriodContextKey).(string)
@@ -283,38 +285,49 @@ func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) 
 		Value int   `json:"y"`
 	}
 
-	points := []*point{}
+	requested := []*point{}
+	verified := []*point{}
 
 	var interval time.Duration
 	var count int
 
 	switch period {
 	case "7d":
-		count = 7 * (24 / 3)
+		count = 7 * (24 / 3) / 2
 		interval = 7 * 24 * time.Hour
 	case "30d":
 		interval = 30 * 24 * time.Hour
 		count = 30
 	case "6m":
 		interval = 6 * 30 * 24 * time.Hour
-		count = 6 * (30 / 5)
+		count = 6 * (30 / 2) / 2
 	case "1y":
 		interval = 12 * 30 * 24 * time.Hour
-		count = 12 * (30 / 10)
+		count = 12 * (30 / 5 / 2)
 	default:
 		slog.ErrorContext(ctx, "Incorrect period", "period", period)
 		interval = 24 * time.Hour
-		count = 24
+		count = 24 / 2
 	}
 
 	step := interval / time.Duration(count)
 
 	for i := 0; i < count; i++ {
-		points = append(points, &point{time.Now().Add(time.Duration(-i) * step).Unix(), rand.Intn(100000)})
+		n := rand.Intn(100000)
+		requested = append(requested, &point{time.Now().Add(time.Duration(-i) * step).Unix(), n})
+		verified = append(verified, &point{time.Now().Add(time.Duration(-i) * step).Unix(), rand.Intn(n)})
+	}
+
+	response := struct {
+		Requested []*point `json:"requested"`
+		Verified  []*point `json:"verified"`
+	}{
+		Requested: requested,
+		Verified:  verified,
 	}
 
 	// TODO: add CORS headers for chart response
-	common.SendJSONResponse(ctx, w, points, map[string]string{})
+	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
 func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) {
