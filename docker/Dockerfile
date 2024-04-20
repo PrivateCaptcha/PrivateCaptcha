@@ -6,14 +6,18 @@ COPY ./web /app/web
 WORKDIR /app/web
 
 # Install dependencies and build the frontend
-RUN npm install
-RUN npm run build
+RUN --mount=type=cache,target=/cache/npm npm install
+RUN --mount=type=cache,target=/cache/npm,sharing=locked npm run build
 
 # Stage 2: Backend build
 FROM golang:1.22.1 AS backend-builder
 
 # Copy the backend source code
-COPY . /app/
+COPY ./go.mod ./go.sum /app/
+COPY ./vendor /app/vendor
+COPY ./cmd /app/cmd
+COPY ./pkg /app/pkg
+COPY ./web /app/web
 
 COPY --from=frontend-builder /app/web/static /app/web/static
 
@@ -27,8 +31,11 @@ WORKDIR /app
 
 RUN mkdir bin
 
+ENV GOMODCACHE=/cache/gomod
+ENV GOCACHE=/cache/gobuild
+
 ARG GIT_COMMIT=HEAD
-RUN env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
+RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
 
 # Final stage: Production container
 FROM golang:1.22.1
