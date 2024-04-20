@@ -10,9 +10,11 @@
         let chart;
 
         const yTicksCount = 7;
+        const maxBarWidth = 7;
 
         const backgroundColor = '#e4e4e7';
-        const requestsColor = '#4f46e5';
+        const requestedColor = '#4f46e5';
+        const verifiedColor = '#ffa600';
 
         const weekdayFormat = d3.timeFormat("%a");
         const monthlyFormat = d3.timeFormat("%b");
@@ -70,9 +72,9 @@
 
             // Create x scale
             let x = d3.scaleTime().range([0, width]);
-            
+
             x.domain([d3.timeDay.offset(new Date(), -7), new Date()]);                
-            
+
             let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
 
             let xAxis = d3.axisBottom(x)
@@ -102,11 +104,52 @@
                 .selectAll(".domain").remove();
         }
 
+        const setBarAttributes = (bars, x, y, height, color, sign) => {
+            const barSpacing = 2;
+            bars.enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", function(d) { 
+                    let barWidth = Math.min(x.bandwidth(), maxBarWidth) + sign*barSpacing/2;
+                    // Adjust the x position to center the bar over the tick
+                    return x(d.x) + (x.bandwidth() + sign*barWidth) / 2;
+                })
+                .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth) - barSpacing/2; })
+                .attr("y", function(d) { return y(d.y); })
+                .attr("height", function(d) { return height - y(d.y); })
+                .attr("rx", 3)
+                .attr("ry", 3)
+                .attr("fill", color)
+                .attr("opacity", 1)
+                .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
+                .on("mouseout", function() { d3.select(this).attr("opacity", 1); })
+                .append("title").text(function(d) { return d.y; });
+        };
+
+        const setLegend = (legend, text, color) => {
+            // Add the legend color guide
+            legend.append("circle")
+                .attr("cx", -16)
+                .attr("cy", 0)
+                .attr("r", 6)
+                .style("fill", color);
+
+            // Add the legend text
+            legend.append("text")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("dy", ".35em")
+                .text(text)
+                .attr("class", "textselected")
+                .style("text-anchor", "start")
+                .style("font-size", "14px");
+        };
+
         const setChartData = (element, data, xTickFormat) => {
+            const requested = data.requested;
+            const verified = data.verified;
             // Convert unix timestamp to JavaScript Date object
-            data.forEach(d => {
-                d.x = new Date(d.x * 1000);
-            });
+            requested.forEach(d => { d.x = new Date(d.x * 1000); });
+            verified.forEach(d => { d.x = new Date(d.x * 1000); });
 
             const legendHeight = 50;
             const margin = {top: 20, right: 30, bottom: 30, left: 30};
@@ -130,8 +173,9 @@
             let x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
             let y = d3.scaleLinear().range([height, 0]);
 
-            x.domain(data.map(function(d) { return d.x; }));
-            y.domain([0, d3.max(data, function(d) { return d.y; }) * 1.2]);
+            // we will always have more or equal requested to verified
+            x.domain(requested.map(function(d) { return d.x; }));
+            y.domain([0, d3.max(requested, function(d) { return d.y; }) * 1.2]);
 
             // Filter the domain of the X scale to include only every other value
             let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
@@ -148,30 +192,12 @@
                 .style("color", backgroundColor)
                 .selectAll(".domain").remove();
 
-            let maxBarWidth = 6;
-
             // Append the rectangles for the bar chart
-            var bars = chartElement.selectAll("bar")
-                .data(data)
-                .enter().append("rect")
-                .attr("class", "bar")
-                .attr("x", function(d) { 
-                    let barWidth = Math.min(x.bandwidth(), maxBarWidth);
-                    // Adjust the x position to center the bar over the tick
-                    return x(d.x) + (x.bandwidth() - barWidth) / 2;
-                })
-                .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth); })
-                .attr("y", function(d) { return y(d.y); })
-                .attr("height", function(d) { return height - y(d.y); })
-                .attr("rx", 3)
-                .attr("ry", 3)
-                .attr("fill", requestsColor)
-                .attr("opacity", 1)
-                .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
-                .on("mouseout", function() { d3.select(this).attr("opacity", 1); });
-            
-            bars.append("title")
-                .text(function(d) { return d.y; });
+            let barsRequested = chartElement.selectAll("bar-requested").data(requested);
+            setBarAttributes(barsRequested, x, y, height, requestedColor, -1);
+
+            let barsVerified = chartElement.selectAll("bar-verified").data(verified);
+            setBarAttributes(barsVerified, x, y, height, verifiedColor, 1);
 
             // Add the x-axis
             chartElement.append("g")
@@ -187,27 +213,22 @@
                 .attr("dy", "-.55em")
                 .attr("transform", "rotate(-90)" );
 
-            // Add the legend
-            var legend = chartElement.append("g")
-                .attr("class", "legend")
-                .attr("transform", "translate(" + (width / 2) + "," + (margin.top + height + legendHeight/2) + ")");
+            const legendSpace = width/3;
+            const legendItemSize = 100;
+            const xAxisHeight = 30;
 
-            // Add the legend color guide
-            legend.append("circle")
-                .attr("cx", -16)
-                .attr("cy", 0)
-                .attr("r", 6)
-                .style("fill", requestsColor);
+            let legendParent = chartElement.append("g")
+                .attr("class", "legendParent")
+                .attr("transform", "translate(" + (width / 2 - legendItemSize) + "," + (xAxisHeight + height + legendHeight/2) + ")");
 
-            // Add the legend text
-            legend.append("text")
-                .attr("x", 0)
-                .attr("y", 0)
-                .attr("dy", ".35em")
-                .text("Requests")
-                .attr("class", "textselected")
-                .style("text-anchor", "start")
-                .style("font-size", "14px");
+            let legend1 = legendParent.append("g")
+                .attr("class", "legend-requested");
+            setLegend(legend1, 'Requested', requestedColor);
+
+            let legend2 = legendParent.append("g")
+                .attr("class", "legend-verified")
+                .attr("transform", "translate(" + (legendSpace - legendItemSize) + ",0)");
+            setLegend(legend2, 'Verified', verifiedColor);
         };
 
         const fetchChartData = async (period) => {
