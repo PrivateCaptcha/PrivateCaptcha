@@ -1,12 +1,16 @@
 # Stage 1: Frontend build
 FROM node:latest AS frontend-builder
 
-COPY ./web /app/web
-
+# has to be done first because `npm install` fails otherwise
 WORKDIR /app/web
 
 # Install dependencies and build the frontend
+COPY ./web/package.json /app/web/package.json
 RUN --mount=type=cache,target=/cache/npm npm install
+
+# copy the rest
+COPY ./web /app/web
+
 RUN --mount=type=cache,target=/cache/npm,sharing=locked npm run build
 
 # Stage 2: Backend build
