@@ -47,21 +47,22 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	defer clickhouse.Close()
 
 	queries := dbgen.New(pool)
-	store := db.NewStore(queries, db.NewMemoryCache(1*time.Minute), 5*time.Minute)
+	businessDB := db.NewBusiness(queries, db.NewMemoryCache(1*time.Minute), 5*time.Minute)
+	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
-	levels := difficulty.NewLevels(clickhouse, levelsBatchSize, propertyBucketSize)
+	levels := difficulty.NewLevels(timeSeriesDB, levelsBatchSize, propertyBucketSize)
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	apiServer := &api.Server{
 		Auth: &api.AuthMiddleware{
-			Store: store,
+			Store: businessDB,
 		},
-		Store:  store,
-		Levels: levels,
-		Prefix: "api",
-		Salt:   []byte("salt"),
+		BusinessDB: businessDB,
+		Levels:     levels,
+		Prefix:     "api",
+		Salt:       []byte("salt"),
 	}
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
@@ -73,7 +74,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	portalServer := &portal.Server{
-		Store:  store,
+		Store:  businessDB,
 		Prefix: "portal",
 		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
@@ -127,7 +128,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		slog.Debug("Shutting down gracefully...")
 		levels.Shutdown()
 		sessionStore.Shutdown()
-		store.Shutdown()
+		businessDB.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {

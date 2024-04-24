@@ -4,20 +4,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
-
-type accessRecord struct {
-	Fingerprint TFingerprint
-	UserID      int32
-	OrgID       int32
-	PropertyID  int32
-	Timestamp   time.Time
-}
-
-type TimeCount struct {
-	Timestamp time.Time
-	Count     uint32
-}
 
 type timeStats struct {
 	m sync.Mutex
@@ -72,7 +61,7 @@ func (s *timeStats) inc(key int64, value uint32) uint32 {
 	return result
 }
 
-func (s *timeStats) backfill(bucketSize time.Duration, counts []*TimeCount) {
+func (s *timeStats) backfill(bucketSize time.Duration, counts []*common.TimeCount) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -168,19 +157,19 @@ func (c *Counts) fetchStats(key int32) propertyStats {
 	return st
 }
 
-func (c *Counts) Inc(pid int32, fingerprint TFingerprint, t time.Time) uint32 {
+func (c *Counts) Inc(pid int32, fingerprint common.TFingerprint, t time.Time) uint32 {
 	st := c.fetchStats(pid)
 	st.perUser.Inc(fingerprint, t, c.bucketSize)
 	timeKey := t.Truncate(c.bucketSize).Unix()
 	return st.perTime.inc(timeKey, 1)
 }
 
-func (c *Counts) BackfillProperty(pid int32, counts []*TimeCount) {
+func (c *Counts) BackfillProperty(pid int32, counts []*common.TimeCount) {
 	st := c.fetchStats(pid)
 	st.perTime.backfill(c.bucketSize, counts)
 }
 
-func (c *Counts) BackfillUser(pid int32, fingerprint TFingerprint, counts []*TimeCount) {
+func (c *Counts) BackfillUser(pid int32, fingerprint common.TFingerprint, counts []*common.TimeCount) {
 	st := c.fetchStats(pid)
 	st.perUser.Backfill(fingerprint, counts, c.bucketSize)
 }
@@ -218,7 +207,7 @@ func (st *Stats) Sum(decayRate float64) float64 {
 	return sum
 }
 
-func (c *Counts) FetchStats(pid int32, fingerprint TFingerprint, t time.Time) Stats {
+func (c *Counts) FetchStats(pid int32, fingerprint common.TFingerprint, t time.Time) Stats {
 	var ps propertyStats
 	var ok bool
 	{
@@ -345,17 +334,17 @@ func (ss *singleStats) inc(t int64, count uint32) uint32 {
 
 type userStats struct {
 	// user stats map from fingerprint to stats
-	counts map[TFingerprint]*singleStats
+	counts map[common.TFingerprint]*singleStats
 	lock   sync.RWMutex
 }
 
 func newUserStats() *userStats {
 	return &userStats{
-		counts: make(map[TFingerprint]*singleStats),
+		counts: make(map[common.TFingerprint]*singleStats),
 	}
 }
 
-func (us *userStats) fetchStats(key TFingerprint) *singleStats {
+func (us *userStats) fetchStats(key common.TFingerprint) *singleStats {
 	var st *singleStats
 	var ok bool
 
@@ -381,13 +370,13 @@ func (us *userStats) fetchStats(key TFingerprint) *singleStats {
 	return st
 }
 
-func (us *userStats) Inc(key TFingerprint, t time.Time, bucketSize time.Duration) uint32 {
+func (us *userStats) Inc(key common.TFingerprint, t time.Time, bucketSize time.Duration) uint32 {
 	timeKey := t.Truncate(bucketSize).Unix()
 	st := us.fetchStats(key)
 	return st.inc(timeKey, 1)
 }
 
-func (us *userStats) Backfill(key TFingerprint, counts []*TimeCount, bucketSize time.Duration) {
+func (us *userStats) Backfill(key common.TFingerprint, counts []*common.TimeCount, bucketSize time.Duration) {
 	st := us.fetchStats(key)
 	for _, c := range counts {
 		timeKey := c.Timestamp.Truncate(bucketSize).Unix()
@@ -398,10 +387,10 @@ func (us *userStats) Backfill(key TFingerprint, counts []*TimeCount, bucketSize 
 func (us *userStats) Clear() {
 	us.lock.Lock()
 	defer us.lock.Unlock()
-	us.counts = make(map[TFingerprint]*singleStats)
+	us.counts = make(map[common.TFingerprint]*singleStats)
 }
 
-func (us *userStats) Count(key TFingerprint, t time.Time, bucketSize time.Duration) (uint32, bool) {
+func (us *userStats) Count(key common.TFingerprint, t time.Time, bucketSize time.Duration) (uint32, bool) {
 	if key == 0 {
 		return 0, false
 	}
@@ -427,7 +416,7 @@ func (us *userStats) Cleanup(t time.Time, bucketSize time.Duration, maxToDelete 
 
 	before := t.Add(-bucketSize).Unix()
 
-	toDelete := make([]TFingerprint, 0)
+	toDelete := make([]common.TFingerprint, 0)
 	{
 		us.lock.RLock()
 		for key, value := range us.counts {
