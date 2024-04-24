@@ -54,7 +54,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := api.NewServer(businessDB, levels, os.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, levels, 30*time.Second, os.Getenv)
 
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
 
@@ -115,6 +115,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		slog.Debug("Shutting down gracefully...")
 		levels.Shutdown()
 		sessionStore.Shutdown()
+		apiServer.Shutdown()
 		businessDB.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
