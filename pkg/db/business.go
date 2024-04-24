@@ -3,7 +3,6 @@ package db
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"log/slog"
 	"sort"
@@ -183,7 +182,7 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 }
 
 func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	key := puzzleCachePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzleCachePrefix + strconv.FormatUint(p.PuzzleID, 16)
 
 	data, err := s.db.GetCachedByKey(ctx, key)
 	if err == pgx.ErrNoRows {
@@ -203,7 +202,7 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 		return nil
 	}
 
-	key := puzzleCachePrefix + hex.EncodeToString(p.Nonce[:])
+	key := puzzleCachePrefix + strconv.FormatUint(p.PuzzleID, 16)
 	diff := p.Expiration.Sub(tnow)
 
 	return s.db.CreateCache(ctx, &dbgen.CreateCacheParams{

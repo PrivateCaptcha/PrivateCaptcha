@@ -6,13 +6,13 @@ import (
 	"encoding/binary"
 	"io"
 	"log/slog"
+	randv2 "math/rand/v2"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 const (
-	NonceSize      = 16
 	PropertyIDSize = 16
 	UserDataSize   = 16
 )
@@ -21,8 +21,8 @@ type Puzzle struct {
 	Version        uint8
 	Difficulty     uint8
 	SolutionsCount uint8
-	Nonce          [NonceSize]byte
 	PropertyID     [PropertyIDSize]byte
+	PuzzleID       uint64
 	Expiration     time.Time
 	UserData       []byte
 }
@@ -36,10 +36,7 @@ func NewPuzzle() (*Puzzle, error) {
 		Version:        1,
 	}
 
-	if _, err := io.ReadFull(rand.Reader, p.Nonce[:]); err != nil {
-		slog.Error("Failed to read random nonce", common.ErrAttr(err))
-		return nil, err
-	}
+	p.PuzzleID = randv2.Uint64()
 
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
 		slog.Error("Failed to read random user data", common.ErrAttr(err))
@@ -63,7 +60,7 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 
 	binary.Write(&buf, binary.LittleEndian, p.Version)
 	binary.Write(&buf, binary.LittleEndian, p.PropertyID)
-	binary.Write(&buf, binary.LittleEndian, p.Nonce)
+	binary.Write(&buf, binary.LittleEndian, p.PuzzleID)
 	binary.Write(&buf, binary.LittleEndian, p.Difficulty)
 	binary.Write(&buf, binary.LittleEndian, p.SolutionsCount)
 	binary.Write(&buf, binary.LittleEndian, uint32(p.Expiration.Unix()))
@@ -73,7 +70,7 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 }
 
 func (p *Puzzle) UnmarshalBinary(data []byte) error {
-	if len(data) < (PropertyIDSize + NonceSize + UserDataSize + 7) {
+	if len(data) < (PropertyIDSize + 8 + UserDataSize + 7) {
 		return io.ErrShortBuffer
 	}
 
@@ -85,8 +82,8 @@ func (p *Puzzle) UnmarshalBinary(data []byte) error {
 	copy(p.PropertyID[:], data[offset:offset+PropertyIDSize])
 	offset += PropertyIDSize
 
-	copy(p.Nonce[:], data[offset:offset+NonceSize])
-	offset += NonceSize
+	p.PuzzleID = binary.LittleEndian.Uint64(data[offset : offset+8])
+	offset += 8
 
 	p.Difficulty = data[offset]
 	offset += 1

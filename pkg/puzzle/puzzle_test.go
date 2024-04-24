@@ -54,8 +54,8 @@ func TestPuzzleMarshalling(t *testing.T) {
 		t.Errorf("PropertyID does not match")
 	}
 
-	if !bytes.Equal(puzzle.Nonce[:], newPuzzle.Nonce[:]) {
-		t.Errorf("Nonce does not match")
+	if puzzle.PuzzleID != newPuzzle.PuzzleID {
+		t.Errorf("PuzzleID does not match")
 	}
 
 	if puzzle.Expiration.Unix() != newPuzzle.Expiration.Unix() {
