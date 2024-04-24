@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	randv2 "math/rand/v2"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -53,6 +54,10 @@ func (p *Puzzle) Valid() bool {
 		//(len(p.Nonce) == NonceSize) &&
 		(!p.Expiration.IsZero()) &&
 		(len(p.UserData) == UserDataSize)
+}
+
+func (p *Puzzle) PuzzleIDString() string {
+	return strconv.FormatUint(p.PuzzleID, 16)
 }
 
 func (p *Puzzle) MarshalBinary() ([]byte, error) {

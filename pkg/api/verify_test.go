@@ -26,7 +26,7 @@ func testEmail(username string) string {
 
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	server.Setup(srv)
+	s.Setup(srv, "", auth)
 
 	//srv.HandleFunc("/", catchAll)
 

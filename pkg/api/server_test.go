@@ -4,9 +4,7 @@ package api
 
 import (
 	"database/sql"
-	"encoding/hex"
 	"flag"
-	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -19,10 +17,11 @@ import (
 )
 
 var (
-	server     *Server
+	s          *server
 	queries    *dbgen.Queries
 	cache      common.Cache
 	timeSeries *db.TimeSeriesStore
+	auth       *AuthMiddleware
 )
 
 func TestMain(m *testing.M) {
@@ -52,21 +51,9 @@ func TestMain(m *testing.M) {
 	store := db.NewBusiness(queries, cache, 5*time.Second)
 	defer store.Shutdown()
 
-	server = &Server{
-		Auth: &AuthMiddleware{
-			Store: store,
-		},
-		BusinessDB: store,
-		Levels:     levels,
-		Prefix:     "",
-		Salt:       []byte("salt"),
-	}
+	auth = &AuthMiddleware{Store: store}
 
-	if byteArray, err := hex.DecodeString(os.Getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
-		copy(server.UAKey[:], byteArray[:])
-	} else {
-		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
-	}
+	s = NewServer(store, levels, os.Getenv)
 
 	// TODO: seed data
 
