@@ -22,7 +22,7 @@ var (
 	server     *Server
 	queries    *dbgen.Queries
 	cache      common.Cache
-	clickhouse *sql.DB
+	timeSeries *db.TimeSeriesStore
 )
 
 func TestMain(m *testing.M) {
@@ -35,29 +35,31 @@ func TestMain(m *testing.M) {
 	common.SetupLogs("test", true)
 
 	var pool *pgxpool.Pool
+	var clickhouse *sql.DB
 	var dberr error
 	pool, clickhouse, dberr = db.Migrate(os.Getenv)
 	if dberr != nil {
 		panic(dberr)
 	}
 
-	levels := difficulty.NewLevels(clickhouse, 100, 5*time.Minute)
+	timeSeries = db.NewTimeSeries(clickhouse)
+	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
 	defer levels.Shutdown()
 
 	queries = dbgen.New(pool)
 	cache = db.NewMemoryCache(1 * time.Minute)
 
-	store := db.NewStore(queries, cache, 5*time.Second)
+	store := db.NewBusiness(queries, cache, 5*time.Second)
 	defer store.Shutdown()
 
 	server = &Server{
 		Auth: &AuthMiddleware{
 			Store: store,
 		},
-		Store:  store,
-		Levels: levels,
-		Prefix: "",
-		Salt:   []byte("salt"),
+		BusinessDB: store,
+		Levels:     levels,
+		Prefix:     "",
+		Salt:       []byte("salt"),
 	}
 
 	if byteArray, err := hex.DecodeString(os.Getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {

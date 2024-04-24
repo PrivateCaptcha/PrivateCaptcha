@@ -30,12 +30,12 @@ const (
 )
 
 type Server struct {
-	Auth   *AuthMiddleware
-	Store  *db.Store
-	Levels *difficulty.Levels
-	Prefix string
-	UAKey  [64]byte
-	Salt   []byte
+	Auth       *AuthMiddleware
+	BusinessDB *db.BusinessStore
+	Levels     *difficulty.Levels
+	Prefix     string
+	UAKey      [64]byte
+	Salt       []byte
 }
 
 type verifyError int
@@ -124,12 +124,12 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 
 	puzzle.PropertyID = property.ExternalID.Bytes
 
-	var fingerprint difficulty.TFingerprint
+	var fingerprint common.TFingerprint
 	hash, err := blake2b.New256(s.UAKey[:])
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
 		// TODO: handle calculating hash with error
-		fingerprint = difficulty.RandomFingerprint()
+		fingerprint = common.RandomFingerprint()
 	} else {
 		hash.Write([]byte(r.UserAgent()))
 		if ip, err := parseRequestIP(r); err == nil {
@@ -261,7 +261,7 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cerr := s.Store.CachePuzzle(ctx, p, tnow); cerr != nil {
+	if cerr := s.BusinessDB.CachePuzzle(ctx, p, tnow); cerr != nil {
 		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 	}
 
@@ -281,12 +281,12 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 		return p, puzzleExpiredError
 	}
 
-	if s.Store.CheckPuzzleCached(ctx, p) {
+	if s.BusinessDB.CheckPuzzleCached(ctx, p) {
 		return p, verifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	propertyAndOrg, err := s.Store.RetrievePropertyAndOrg(ctx, sitekey)
+	propertyAndOrg, err := s.BusinessDB.RetrievePropertyAndOrg(ctx, sitekey)
 	_, org := propertyAndOrg.Property, propertyAndOrg.Organization
 
 	if err != nil {
