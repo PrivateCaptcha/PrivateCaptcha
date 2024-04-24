@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	verifyLogTableName   = "privatecaptcha.verify_logs"
 	accessLogTableName   = "privatecaptcha.request_logs"
 	accessLogTableName5m = "privatecaptcha.request_logs_5m"
 )
@@ -42,6 +43,30 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 
 	for i, r := range records {
 		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
+			return err
+		}
+	}
+
+	return scope.Commit()
+}
+
+func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*common.VerifyRecord) error {
+	scope, err := ts.clickhouse.Begin()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
+		return err
+	}
+
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", verifyLogTableName))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
+		return err
+	}
+
+	for i, r := range records {
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.PuzzleID, r.Timestamp)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err

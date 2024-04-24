@@ -28,29 +28,44 @@ import (
 
 const (
 	maxSolutionsBodySize = 256 * 1024
+	verifyBatchSize      = 100
 )
 
 type server struct {
-	businessDB *db.BusinessStore
-	levels     *difficulty.Levels
-	uaKey      [64]byte
-	salt       []byte
+	businessDB      *db.BusinessStore
+	timeSeries      *db.TimeSeriesStore
+	levels          *difficulty.Levels
+	uaKey           [64]byte
+	salt            []byte
+	verifyLogChan   chan *common.VerifyRecord
+	verifyLogCancel context.CancelFunc
 }
 
-func NewServer(store *db.BusinessStore, levels *difficulty.Levels, getenv func(string) string) *server {
-	s := &server{
-		businessDB: store,
-		levels:     levels,
-		salt:       []byte(getenv("API_SALT")),
+func NewServer(store *db.BusinessStore,
+	timeSeries *db.TimeSeriesStore,
+	levels *difficulty.Levels,
+	verifyFlushInterval time.Duration,
+	getenv func(string) string) *server {
+	srv := &server{
+		businessDB:    store,
+		timeSeries:    timeSeries,
+		levels:        levels,
+		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
+		salt:          []byte(getenv("API_SALT")),
 	}
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
-		copy(s.uaKey[:], byteArray[:])
+		copy(srv.uaKey[:], byteArray[:])
 	} else {
 		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
 	}
 
-	return s
+	var cancelCtx context.Context
+	cancelCtx, srv.verifyLogCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "flush_verify_log"))
+	go srv.flushVerifyLog(cancelCtx, verifyFlushInterval)
+
+	return srv
 }
 
 type verifyError int
@@ -117,6 +132,12 @@ func (s *server) Setup(router *http.ServeMux, prefix string, auth *AuthMiddlewar
 	}
 
 	s.setupWithPrefix(prefix, router, auth)
+}
+
+func (s *server) Shutdown() {
+	slog.Debug("Shutting down API server routines")
+	close(s.verifyLogChan)
+	s.verifyLogCancel()
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *AuthMiddleware) {
@@ -263,63 +284,78 @@ func (s *server) verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tnow := time.Now().UTC()
-	p, verr := s.verifyPuzzleValid(ctx, puzzleBytes, tnow)
+	puzzle, propertyAndOrg, verr := s.verifyPuzzleValid(ctx, puzzleBytes, tnow)
 	if verr != verifyNoError {
 		s.sendVerifyErrors(ctx, w, verr)
 		return
 	}
 
-	if verr := s.verifySolutionsValid(ctx, p, puzzleBytes, solutionsData); verr != verifyNoError {
+	if verr := s.verifySolutionsValid(ctx, puzzle, puzzleBytes, solutionsData); verr != verifyNoError {
 		s.sendVerifyErrors(ctx, w, verr)
 		return
 	}
 
-	if cerr := s.businessDB.CachePuzzle(ctx, p, tnow); cerr != nil {
+	if cerr := s.businessDB.CachePuzzle(ctx, puzzle, tnow); cerr != nil {
 		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 	}
+
+	s.addVerifyRecord(ctx, puzzle, propertyAndOrg)
 
 	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
 
-func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, verifyError) {
+func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, propertyAndOrg *dbgen.PropertyAndOrgByExternalIDRow) {
+	property, org := &propertyAndOrg.Property, &propertyAndOrg.Organization
+
+	vr := &common.VerifyRecord{
+		UserID:     org.UserID.Int32,
+		OrgID:      property.OrgID.Int32,
+		PropertyID: property.ID,
+		PuzzleID:   p.PuzzleID,
+		Timestamp:  time.Now().UTC(),
+	}
+
+	s.verifyLogChan <- vr
+}
+
+func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, *dbgen.PropertyAndOrgByExternalIDRow, verifyError) {
 	p := new(puzzle.Puzzle)
 
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
-		return nil, parseResponseError
+		return nil, nil, parseResponseError
 	}
 
 	if !tnow.Before(p.Expiration) {
 		slog.WarnContext(ctx, "Puzzle is expired", "expiration", p.Expiration, "now", tnow)
-		return p, puzzleExpiredError
+		return p, nil, puzzleExpiredError
 	}
 
 	if s.businessDB.CheckPuzzleCached(ctx, p) {
-		return p, verifiedBeforeError
+		return p, nil, verifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
 	propertyAndOrg, err := s.businessDB.RetrievePropertyAndOrg(ctx, sitekey)
-	_, org := propertyAndOrg.Property, propertyAndOrg.Organization
-
 	if err != nil {
 		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
-			return p, invalidPropertyError
+			return p, nil, invalidPropertyError
 		}
 
 		slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
-		return p, verifyErrorOther
+		return p, nil, verifyErrorOther
 	}
 
+	org := &propertyAndOrg.Organization
 	apiKey := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey)
 
 	if org.UserID != apiKey.UserID {
 		slog.WarnContext(ctx, "Org owner does not match API key owner", "api_key_user", apiKey.UserID.Int32,
 			"org_user", org.UserID.Int32)
-		return p, wrongOwnerError
+		return p, propertyAndOrg, wrongOwnerError
 	}
 
-	return p, verifyNoError
+	return p, propertyAndOrg, verifyNoError
 }
 
 func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
@@ -352,6 +388,46 @@ func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puz
 	}
 
 	return verifyNoError
+}
+
+func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
+	var batch []*common.VerifyRecord
+	slog.DebugContext(ctx, "Processing verify log", "interval", delay)
+
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+
+		case vr, ok := <-s.verifyLogChan:
+			if !ok {
+				running = false
+				break
+			}
+
+			batch = append(batch, vr)
+
+			if len(batch) >= verifyBatchSize {
+				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
+					slog.DebugContext(ctx, "Inserted batch of verify records", "size", len(batch))
+					batch = []*common.VerifyRecord{}
+				} else {
+					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
+				}
+			}
+		case <-time.After(delay):
+			if len(batch) > 0 {
+				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
+					slog.DebugContext(ctx, "Inserted batch of access records after delay", "size", len(batch))
+					batch = []*common.VerifyRecord{}
+				} else {
+					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
+				}
+			}
+		}
+	}
+
+	slog.InfoContext(ctx, "Finished processing verify log")
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

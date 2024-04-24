@@ -192,7 +192,7 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 		Jitter: true,
 	}
 
-	slog.DebugContext(ctx, "Starting cleaning up stats")
+	slog.DebugContext(ctx, "Starting cleaning up stats", "maxInterval", maxInterval)
 
 	deleteChunk := defaultChunkSize
 
@@ -234,7 +234,7 @@ func (l *Levels) Reset() {
 }
 
 func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Duration) {
-	slog.DebugContext(ctx, "Backfilling difficulty")
+	slog.DebugContext(ctx, "Backfilling difficulty", "cacheDuration", cacheDuration)
 
 	cache := make(map[string]time.Time)
 	const maxCacheSize = 250
@@ -291,7 +291,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 
 func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 	var batch []*common.AccessRecord
-	slog.DebugContext(ctx, "Processing access log")
+	slog.DebugContext(ctx, "Processing access log", "interval", delay)
 
 	for running := true; running; {
 		select {

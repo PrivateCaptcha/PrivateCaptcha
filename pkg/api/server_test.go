@@ -53,7 +53,8 @@ func TestMain(m *testing.M) {
 
 	auth = &AuthMiddleware{Store: store}
 
-	s = NewServer(store, levels, os.Getenv)
+	s = NewServer(store, timeSeries, levels, 2*time.Second, os.Getenv)
+	defer s.Shutdown()
 
 	// TODO: seed data
 
