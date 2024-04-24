@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 const (
@@ -16,7 +18,7 @@ func TestUserStatsInc(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := RandomFingerprint()
+	key := common.RandomFingerprint()
 
 	if st, ok := stats.Count(key, tnow, testBucketSize); ok || st != 0 {
 		t.Errorf("Unexpected empty stats: %v", st)
@@ -48,7 +50,7 @@ func TestUserStatsBackfill(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := RandomFingerprint()
+	key := common.RandomFingerprint()
 
 	for i := 0; i < 10; i++ {
 		_ = stats.Inc(key, tnow, testBucketSize)
@@ -58,13 +60,13 @@ func TestUserStatsBackfill(t *testing.T) {
 		t.Errorf("Count() result is not 10")
 	}
 
-	stats.Backfill(key, []*TimeCount{{Timestamp: tnow, Count: 9}}, testBucketSize)
+	stats.Backfill(key, []*common.TimeCount{{Timestamp: tnow, Count: 9}}, testBucketSize)
 
 	if st, _ := stats.Count(key, tnow, testBucketSize); st != 10 {
 		t.Errorf("Backfill overwrote with lower value")
 	}
 
-	stats.Backfill(key, []*TimeCount{{Timestamp: tnow, Count: 11}}, testBucketSize)
+	stats.Backfill(key, []*common.TimeCount{{Timestamp: tnow, Count: 11}}, testBucketSize)
 
 	if st, _ := stats.Count(key, tnow, testBucketSize); st != 11 {
 		t.Errorf("Backfill did not overwrite with higher value")
@@ -77,7 +79,7 @@ func TestUserStatsCleanup(t *testing.T) {
 	stats := newUserStats()
 
 	tnow := time.Now()
-	key := RandomFingerprint()
+	key := common.RandomFingerprint()
 
 	for i := 0; i < 10; i++ {
 		_ = stats.Inc(key, tnow, testBucketSize)
@@ -105,7 +107,7 @@ func TestPropertyStatsInc(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := RandomFingerprint()
+	fingerprint := common.RandomFingerprint()
 	counts := newCounts(testBucketSize)
 
 	for i := 0; i < 10; i++ {
@@ -114,13 +116,13 @@ func TestPropertyStatsInc(t *testing.T) {
 		}
 	}
 
-	if stats := counts.FetchStats(pid, RandomFingerprint(), tnow); !stats.HasProperty || !slices.Equal(stats.Property, []uint32{0, 0, 0, 0, 10}) {
+	if stats := counts.FetchStats(pid, common.RandomFingerprint(), tnow); !stats.HasProperty || !slices.Equal(stats.Property, []uint32{0, 0, 0, 0, 10}) {
 		t.Errorf("Unexpected counts after increment: %v", stats.Property)
 	}
 
 	// now we set 1 request per each previous bucket
 	for i := 0; i < 5; i++ {
-		if st := counts.Inc(pid, RandomFingerprint(), tnow.Add(-time.Duration(i+1)*testBucketSize).Add(-time.Second)); st != 1 {
+		if st := counts.Inc(pid, common.RandomFingerprint(), tnow.Add(-time.Duration(i+1)*testBucketSize).Add(-time.Second)); st != 1 {
 			t.Errorf("Unexpected stats: %v (iteration %v)", st, i)
 		}
 	}
@@ -140,7 +142,7 @@ func TestPropertyStatsCleanup(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := RandomFingerprint()
+	fingerprint := common.RandomFingerprint()
 
 	counts := newCounts(testBucketSize)
 
@@ -176,7 +178,7 @@ func TestPropertyStatsBackfill(t *testing.T) {
 
 	tnow := time.Now()
 	pid := int32(12345)
-	fingerprint := RandomFingerprint()
+	fingerprint := common.RandomFingerprint()
 
 	counts := newCounts(testBucketSize)
 
@@ -189,7 +191,7 @@ func TestPropertyStatsBackfill(t *testing.T) {
 		t.Errorf("Unexpected counts after increment: %v", counts)
 	}
 
-	backfillCounts := []*TimeCount{
+	backfillCounts := []*common.TimeCount{
 		{Timestamp: tnow, Count: 11},
 		{Timestamp: tnow.Add(-testBucketSize), Count: 9},
 		{Timestamp: tnow.Add(-2 * testBucketSize), Count: 9},

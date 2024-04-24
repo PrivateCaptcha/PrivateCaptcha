@@ -2,16 +2,12 @@ package difficulty
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"log/slog"
 	"math"
-	"math/rand"
-	"strconv"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jpillora/backoff"
 )
@@ -22,51 +18,23 @@ const (
 	LevelHigh   = 160
 )
 
-const (
-	tableName   = "privatecaptcha.request_logs"
-	tableName5m = "privatecaptcha.request_logs_5m"
-)
-
-type TFingerprint = uint64
-
-func RandomFingerprint() TFingerprint {
-	return uint64(rand.Int63())
-}
-
-type backfillRequest struct {
-	OrgID       int32
-	UserID      int32
-	PropertyID  int32
-	Fingerprint TFingerprint
-}
-
-func (br *backfillRequest) Key() string {
-	if br.Fingerprint > 0 {
-		return fmt.Sprintf("%d/%d", br.PropertyID, br.Fingerprint)
-	}
-
-	return strconv.Itoa(int(br.PropertyID))
-}
-
 type Levels struct {
-	clickhouse      *sql.DB
+	timeSeries      *db.TimeSeriesStore
 	counts          *Counts
-	accessChan      chan *accessRecord
-	backfillChan    chan *backfillRequest
+	accessChan      chan *common.AccessRecord
+	backfillChan    chan *common.BackfillRequest
 	batchSize       int
-	tableName       string
 	accessLogCancel context.CancelFunc
 	cleanupCancel   context.CancelFunc
 }
 
-func NewLevelsEx(cf *sql.DB, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
+func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
 	levels := &Levels{
-		clickhouse:   cf,
+		timeSeries:   timeSeries,
 		counts:       newCounts(bucketSize),
-		accessChan:   make(chan *accessRecord, 3*batchSize/2),
-		backfillChan: make(chan *backfillRequest, batchSize),
+		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
+		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
-		tableName:    tableName,
 	}
 
 	var accessCtx context.Context
@@ -85,8 +53,8 @@ func NewLevelsEx(cf *sql.DB, batchSize int, bucketSize, accessLogInterval, backf
 	return levels
 }
 
-func NewLevels(cf *sql.DB, batchSize int, bucketSize time.Duration) *Levels {
-	return NewLevelsEx(cf, batchSize, bucketSize, 2*time.Second, bucketSize)
+func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
+	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize)
 }
 
 func decayRateForLevel(level dbgen.DifficultyGrowth) float64 {
@@ -156,7 +124,7 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) (uint8, Stats) {
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) (uint8, Stats) {
 	l.recordAccess(fingerprint, p, userID, tnow)
 
 	stats := l.counts.FetchStats(p.ID, fingerprint, tnow)
@@ -174,14 +142,14 @@ func (l *Levels) DifficultyEx(fingerprint TFingerprint, p *dbgen.Property, userI
 	return requestsToDifficulty(sum, minDifficulty, p.Growth), stats
 }
 
-func (l *Levels) Difficulty(fingerprint TFingerprint, p *dbgen.Property, userID int32) uint8 {
+func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, userID int32) uint8 {
 	tnow := time.Now().UTC()
 	d, _ := l.DifficultyEx(fingerprint, p, userID, tnow)
 	return d
 }
 
 func (l *Levels) backfillProperty(p *dbgen.Property, userID int32) {
-	br := &backfillRequest{
+	br := &common.BackfillRequest{
 		OrgID:       p.OrgID.Int32,
 		UserID:      userID,
 		PropertyID:  p.ID,
@@ -190,8 +158,8 @@ func (l *Levels) backfillProperty(p *dbgen.Property, userID int32) {
 	l.backfillChan <- br
 }
 
-func (l *Levels) backfillFingerprint(fingerprint TFingerprint, p *dbgen.Property, userID int32) {
-	br := &backfillRequest{
+func (l *Levels) backfillFingerprint(fingerprint common.TFingerprint, p *dbgen.Property, userID int32) {
+	br := &common.BackfillRequest{
 		OrgID:       p.OrgID.Int32,
 		UserID:      userID,
 		PropertyID:  p.ID,
@@ -200,12 +168,12 @@ func (l *Levels) backfillFingerprint(fingerprint TFingerprint, p *dbgen.Property
 	l.backfillChan <- br
 }
 
-func (l *Levels) recordAccess(fingerprint TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) {
+func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) {
 	if (p == nil) || !p.ExternalID.Valid {
 		return
 	}
 
-	ar := &accessRecord{
+	ar := &common.AccessRecord{
 		Fingerprint: fingerprint,
 		UserID:      userID,
 		OrgID:       p.OrgID.Int32,
@@ -281,13 +249,13 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			continue
 		}
 
-		var counts []*TimeCount
+		var counts []*common.TimeCount
 		var err error
 		queryProperty := r.Fingerprint == 0
 		if queryProperty {
-			counts, err = queryPropertyStats(ctx, l.clickhouse, r, l.counts.bucketSize)
+			counts, err = l.timeSeries.ReadPropertyStats(ctx, r, l.counts.bucketSize)
 		} else {
-			counts, err = queryFingerprintStats(ctx, l.clickhouse, r, l.counts.bucketSize)
+			counts, err = l.timeSeries.ReadFingerprintStats(ctx, r, l.counts.bucketSize)
 		}
 
 		if err != nil {
@@ -321,74 +289,8 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 	slog.DebugContext(ctx, "Finished backfilling difficulty")
 }
 
-func queryPropertyStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketSize time.Duration) ([]*TimeCount, error) {
-	timeFrom := time.Now().UTC().Add(-time.Duration(5) * bucketSize)
-	query := `SELECT timestamp, sum(count) as count
-FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
-GROUP BY timestamp
-ORDER BY timestamp`
-	rows, err := db.Query(fmt.Sprintf(query, tableName5m),
-		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
-		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
-		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
-		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to execute backfill stats query", common.ErrAttr(err))
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	results := make([]*TimeCount, 0)
-
-	for rows.Next() {
-		bc := &TimeCount{}
-		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
-			slog.ErrorContext(ctx, "Failed to read row from backfill property stats query", common.ErrAttr(err))
-			return nil, err
-		}
-		results = append(results, bc)
-	}
-
-	return results, nil
-}
-
-func queryFingerprintStats(ctx context.Context, db *sql.DB, r *backfillRequest, bucketSize time.Duration) ([]*TimeCount, error) {
-	timeFrom := time.Now().UTC().Add(-bucketSize)
-	query := `SELECT timestamp, count
-FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND fingerprint = {fingerprint:UInt64} AND timestamp >= {timestamp:DateTime}
-ORDER BY timestamp`
-	rows, err := db.Query(fmt.Sprintf(query, tableName5m),
-		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
-		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
-		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
-		clickhouse.Named("fingerprint", strconv.FormatUint(r.Fingerprint, 10)),
-		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to execute backfill user stats query", common.ErrAttr(err))
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	results := make([]*TimeCount, 0)
-
-	for rows.Next() {
-		bc := &TimeCount{}
-		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
-			slog.ErrorContext(ctx, "Failed to read row from backfill stats query", common.ErrAttr(err))
-			return nil, err
-		}
-		results = append(results, bc)
-	}
-
-	return results, nil
-}
-
 func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
-	var batch []*accessRecord
+	var batch []*common.AccessRecord
 	slog.DebugContext(ctx, "Processing access log")
 
 	for running := true; running; {
@@ -407,18 +309,18 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 			batch = append(batch, ar)
 
 			if len(batch) >= l.batchSize {
-				if err := l.processAccessLogBatch(ctx, batch); err == nil {
+				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
 					slog.DebugContext(ctx, "Inserted batch of access records", "size", len(batch))
-					batch = []*accessRecord{}
+					batch = []*common.AccessRecord{}
 				} else {
 					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
-				if err := l.processAccessLogBatch(ctx, batch); err == nil {
+				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
 					slog.DebugContext(ctx, "Inserted batch of access records after delay", "size", len(batch))
-					batch = []*accessRecord{}
+					batch = []*common.AccessRecord{}
 				} else {
 					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
@@ -427,28 +329,4 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 	}
 
 	slog.InfoContext(ctx, "Finished processing access log")
-}
-
-func (l *Levels) processAccessLogBatch(ctx context.Context, records []*accessRecord) error {
-	scope, err := l.clickhouse.Begin()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
-		return err
-	}
-
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", l.tableName))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
-		return err
-	}
-
-	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
-			return err
-		}
-	}
-
-	return scope.Commit()
 }

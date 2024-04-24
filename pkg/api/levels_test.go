@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
@@ -22,14 +23,14 @@ func TestBackfillLevels(t *testing.T) {
 	}
 
 	// minutes per bucket
-	levels := difficulty.NewLevelsEx(clickhouse, 200,
+	levels := difficulty.NewLevelsEx(timeSeries, 200,
 		testBucketSize,
 		500*time.Millisecond, /*access log*/
 		700*time.Millisecond /*backfill*/)
 	defer levels.Shutdown()
 	tnow := time.Now()
 
-	fingerprints := []difficulty.TFingerprint{difficulty.RandomFingerprint(), difficulty.RandomFingerprint()}
+	fingerprints := []common.TFingerprint{common.RandomFingerprint(), common.RandomFingerprint()}
 	prop1 := &dbgen.Property{
 		ID:         123,
 		ExternalID: *randomUUID(),

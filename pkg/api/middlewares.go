@@ -12,7 +12,7 @@ import (
 )
 
 type AuthMiddleware struct {
-	Store *db.Store
+	Store *db.BusinessStore
 }
 
 func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {

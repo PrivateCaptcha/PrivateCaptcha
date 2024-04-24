@@ -73,7 +73,7 @@ func funcMap(prefix string) template.FuncMap {
 }
 
 type Server struct {
-	Store    *db.Store
+	Store    *db.BusinessStore
 	Prefix   string
 	template *web.Template
 	XSRF     XSRFMiddleware
