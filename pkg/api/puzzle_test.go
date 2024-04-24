@@ -20,7 +20,7 @@ import (
 
 func puzzleSuite(sitekey string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	server.Setup(srv)
+	s.Setup(srv, "", auth)
 
 	//srv.HandleFunc("/", catchAll)
 
