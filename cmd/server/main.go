@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"log/slog"
@@ -55,21 +54,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := &api.Server{
-		Auth: &api.AuthMiddleware{
-			Store: businessDB,
-		},
-		BusinessDB: businessDB,
-		Levels:     levels,
-		Prefix:     "api",
-		Salt:       []byte("salt"),
-	}
-
-	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
-		copy(apiServer.UAKey[:], byteArray[:])
-	} else {
-		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
-	}
+	apiServer := api.NewServer(businessDB, levels, os.Getenv)
 
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
 
@@ -89,7 +74,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	router := http.NewServeMux()
 
-	apiServer.Setup(router)
+	apiAuth := &api.AuthMiddleware{Store: businessDB}
+
+	apiServer.Setup(router, "api", apiAuth)
 	portalServer.Init()
 	portalServer.Setup(router)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))

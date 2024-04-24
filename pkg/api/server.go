@@ -7,6 +7,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,13 +30,27 @@ const (
 	maxSolutionsBodySize = 256 * 1024
 )
 
-type Server struct {
-	Auth       *AuthMiddleware
-	BusinessDB *db.BusinessStore
-	Levels     *difficulty.Levels
-	Prefix     string
-	UAKey      [64]byte
-	Salt       []byte
+type server struct {
+	businessDB *db.BusinessStore
+	levels     *difficulty.Levels
+	uaKey      [64]byte
+	salt       []byte
+}
+
+func NewServer(store *db.BusinessStore, levels *difficulty.Levels, getenv func(string) string) *server {
+	s := &server{
+		businessDB: store,
+		levels:     levels,
+		salt:       []byte(getenv("API_SALT")),
+	}
+
+	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
+		copy(s.uaKey[:], byteArray[:])
+	} else {
+		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
+	}
+
+	return s
 }
 
 type verifyError int
@@ -92,27 +107,25 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *Server) Setup(router *http.ServeMux) {
-	prefix := s.Prefix
-
+func (s *server) Setup(router *http.ServeMux, prefix string, auth *AuthMiddleware) {
 	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + s.Prefix
+		prefix = "/" + prefix
 	}
 
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
 
-	s.setupWithPrefix(prefix, router)
+	s.setupWithPrefix(prefix, router, auth)
 }
 
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
+func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *AuthMiddleware) {
 	// TODO: Rate-limit Puzzle endpoint with reasonably high limit
-	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, s.Auth.Sitekey(s.puzzle))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(s.Auth.APIKey(s.verify), maxSolutionsBodySize)))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, auth.Sitekey(s.puzzle))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(auth.APIKey(s.verify), maxSolutionsBodySize)))
 }
 
-func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
+func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	puzzle, err := puzzle.NewPuzzle()
 	if err != nil {
 		return nil, err
@@ -125,7 +138,7 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	puzzle.PropertyID = property.ExternalID.Bytes
 
 	var fingerprint common.TFingerprint
-	hash, err := blake2b.New256(s.UAKey[:])
+	hash, err := blake2b.New256(s.uaKey[:])
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
 		// TODO: handle calculating hash with error
@@ -142,14 +155,14 @@ func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
-	puzzle.Difficulty = s.Levels.Difficulty(fingerprint, &property, org.UserID.Int32)
+	puzzle.Difficulty = s.levels.Difficulty(fingerprint, &property, org.UserID.Int32)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
 
 	return puzzle, nil
 }
 
-func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
+func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	if (r.Method != http.MethodGet) && (r.Method != http.MethodOptions) {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -180,7 +193,7 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasher := hmac.New(sha1.New, s.Salt)
+	hasher := hmac.New(sha1.New, s.salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
 		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", "error", werr)
 	}
@@ -198,7 +211,7 @@ func (s *Server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...verifyError) {
+func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...verifyError) {
 	response := &verifyResponse{
 		Success:    false,
 		ErrorCodes: errors,
@@ -207,7 +220,7 @@ func (s *Server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, er
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
-func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
+func (s *server) verify(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	data := r.FormValue(common.ParamResponse)
@@ -227,7 +240,7 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasher := hmac.New(sha1.New, s.Salt)
+	hasher := hmac.New(sha1.New, s.salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
 		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -261,14 +274,14 @@ func (s *Server) verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if cerr := s.BusinessDB.CachePuzzle(ctx, p, tnow); cerr != nil {
+	if cerr := s.businessDB.CachePuzzle(ctx, p, tnow); cerr != nil {
 		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 	}
 
 	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
 
-func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, verifyError) {
+func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, verifyError) {
 	p := new(puzzle.Puzzle)
 
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
@@ -281,12 +294,12 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 		return p, puzzleExpiredError
 	}
 
-	if s.BusinessDB.CheckPuzzleCached(ctx, p) {
+	if s.businessDB.CheckPuzzleCached(ctx, p) {
 		return p, verifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	propertyAndOrg, err := s.BusinessDB.RetrievePropertyAndOrg(ctx, sitekey)
+	propertyAndOrg, err := s.businessDB.RetrievePropertyAndOrg(ctx, sitekey)
 	_, org := propertyAndOrg.Property, propertyAndOrg.Organization
 
 	if err != nil {
@@ -309,7 +322,7 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 	return p, verifyNoError
 }
 
-func (s *Server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
+func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
 	solutions, err := puzzle.NewSolutions(solutionsData)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
