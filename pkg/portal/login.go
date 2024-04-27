@@ -89,6 +89,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	sess.Set(session.KeyLoginStep, loginStepSignInVerify)
 	sess.Set(session.KeyUserEmail, user.Email)
+	sess.Set(session.KeyUserName, user.Name)
 	sess.Set(session.KeyTwoFactorCode, code)
 
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)

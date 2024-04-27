@@ -111,25 +111,6 @@ func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.Difficult
 	}
 }
 
-func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-
-	properties, err := s.Store.RetrieveOrgProperties(ctx, int32(orgID))
-	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	data := &orgPropertiesRenderContext{
-		Properties: propertiesToUserProperties(properties),
-		CurrentOrg: &userOrg{
-			ID: strconv.Itoa(orgID),
-		},
-	}
-	s.render(w, r, "portal/properties.html", data)
-}
-
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

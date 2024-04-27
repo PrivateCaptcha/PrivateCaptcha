@@ -2,11 +2,14 @@
 
 {{define "title"}}Verify{{end}}
 
+{{define "header"}}{{block "header-signed-out" .}}{{end}}{{end}}
+{{define "footer"}}{{block "footer-signed-out" .}}{{end}}{{end}}
+
 {{define "body_class"}}pc-vertical-stretch{{end}}
 
 {{define "main"}}
 <div class="flex flex-1 items-center bg-gray-50">
-<section class="py-12 sm:py-16 lg:py-20 flex-1">
+<section class="-mt-20 flex-1">
     <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div class="relative max-w-md mx-auto lg:max-w-lg">
             <div class="relative overflow-hidden bg-white shadow-xl rounded-xl">
