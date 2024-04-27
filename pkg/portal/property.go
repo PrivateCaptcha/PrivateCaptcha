@@ -49,6 +49,7 @@ type orgPropertiesRenderContext struct {
 
 type propertyDashboardRenderContext struct {
 	Property *userProperty
+	Org      *userOrg
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -342,8 +343,16 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
 	renderCtx := &propertyDashboardRenderContext{
 		Property: propertyToUserProperty(property),
+		Org:      orgToUserOrg(org),
 	}
 	s.render(w, r, propertyDashboardTemplate, renderCtx)
 }
