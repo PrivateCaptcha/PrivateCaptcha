@@ -8,6 +8,7 @@
     "build-tw-min": "npx tailwindcss -i ./css/main.css -o ./static/css/style.css --minify"
   },
   "devDependencies": {
+    "@tailwindcss/forms": "^0.5.7",
     "tailwindcss": "^3.4.1"
   }
 }

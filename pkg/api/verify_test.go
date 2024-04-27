@@ -78,7 +78,7 @@ func solutionsSuite(ctx context.Context, sitekey string) (string, string, error)
 func setupVerifySuite(username string) (string, string, error) {
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: username, Email: testEmail(username)})
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: username, Email: testEmail(username)})
 	if err != nil {
 		return "", "", err
 	}
@@ -202,7 +202,7 @@ func TestVerifyCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{UserName: t.Name(), Email: testEmail(t.Name())})
+	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class='{{block "html_class" .}}h-full{{end}}'>
 <head>
     {{block "head" .}}
     <meta charset="UTF-8">
@@ -10,10 +10,11 @@
     {{end}}
     {{block "scripts" .}}
     <script defer src="/assets/js/htmx.min.js"></script>
+    <script defer src="/assets/js/alpine.min.js"></script>
     <script src="/assets/js/bundle.js"></script>
     {{end}}
 </head>
-<body class='{{block "body_class" .}}{{end}}'>
+<body class='{{block "body_class" .}}h-full{{end}}'>
     {{block "header" .}}{{end}}
     {{block "main" .}}{{end}}
     {{block "footer" .}}{{end}}
