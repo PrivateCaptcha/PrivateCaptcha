@@ -350,8 +350,8 @@ func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, 
 
 func (s *BusinessStore) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {
 	user, err := s.db.CreateUser(ctx, &dbgen.CreateUserParams{
-		UserName: name,
-		Email:    email,
+		Name:  name,
+		Email: email,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user in DB", "email", email, common.ErrAttr(err))

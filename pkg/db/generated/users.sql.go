@@ -10,20 +10,20 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (user_name, email) VALUES ($1, $2) RETURNING id, user_name, email, created_at, updated_at, deleted_at
+INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
-	UserName string `db:"user_name" json:"user_name"`
-	Email    string `db:"email" json:"email"`
+	Name  string `db:"name" json:"name"`
+	Email string `db:"email" json:"email"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.UserName, arg.Email)
+	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email)
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.UserName,
+		&i.Name,
 		&i.Email,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -33,7 +33,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, user_name, email, created_at, updated_at, deleted_at FROM users WHERE email = $1
+SELECT id, name, email, created_at, updated_at, deleted_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -41,7 +41,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.UserName,
+		&i.Name,
 		&i.Email,
 		&i.CreatedAt,
 		&i.UpdatedAt,

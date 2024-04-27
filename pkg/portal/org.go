@@ -27,7 +27,6 @@ type userOrg struct {
 }
 
 type orgDashboardRenderContext struct {
-	UserName   string
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
@@ -169,8 +168,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	}
 
 	renderCtx := &orgDashboardRenderContext{
-		UserName: user.UserName,
-		Orgs:     orgsToUserOrgs(orgs),
+		Orgs: orgsToUserOrgs(orgs),
 	}
 
 	idx := -1
@@ -209,7 +207,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	return renderCtx, nil
 }
 
-func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	org, ok := ctx.Value(common.OrgIDContextKey).(int)
@@ -225,4 +223,23 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, "portal/portal.html", renderCtx)
+}
+
+func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+
+	properties, err := s.Store.RetrieveOrgProperties(ctx, int32(orgID))
+	if err != nil {
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	data := &orgPropertiesRenderContext{
+		Properties: propertiesToUserProperties(properties),
+		CurrentOrg: &userOrg{
+			ID: strconv.Itoa(orgID),
+		},
+	}
+	s.render(w, r, "portal/org-dashboard.html", data)
 }

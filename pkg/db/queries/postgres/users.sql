@@ -2,4 +2,4 @@
 SELECT * FROM users WHERE email = $1;
 
 -- name: CreateUser :one
-INSERT INTO users (user_name, email) VALUES ($1, $2) RETURNING *;
+INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *;

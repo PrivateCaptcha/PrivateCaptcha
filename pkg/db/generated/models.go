@@ -188,7 +188,7 @@ type Property struct {
 
 type User struct {
 	ID        int32              `db:"id" json:"id"`
-	UserName  string             `db:"user_name" json:"user_name"`
+	Name      string             `db:"name" json:"name"`
 	Email     string             `db:"email" json:"email"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`

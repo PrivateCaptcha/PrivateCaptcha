@@ -4,7 +4,9 @@ module.exports = {
     theme: {
         extend: {},
     },
-    plugins: [],
+    plugins: [
+        require('@tailwindcss/forms')
+    ],
     safelist: [
         'rotate-180'
     ]

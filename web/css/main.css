@@ -136,31 +136,24 @@ body.pc-vertical-stretch {
 }
 
 .pc-dashboard-menu-button {
-    @apply inline-flex;
-    @apply items-center;
+    @apply text-gray-300;
+    @apply hover:bg-gray-700;
+    @apply hover:text-white;
+    @apply rounded-md;
     @apply px-3;
     @apply py-2;
     @apply text-sm;
     @apply font-medium;
-    @apply text-white;
-    @apply transition-all;
-    @apply duration-200;
-    @apply hover:bg-gray-700;
-    @apply rounded-lg;
-    @apply text-sm;
-    @apply font-medium;
-    @apply text-white;
-    @apply transition-all;
-    @apply duration-200;
-    @apply lg:text-base;
-    @apply focus:text-opacity-70;
+    @apply focus:text-white;
 }
 
 .pc-dashboard-menu-button-current {
-    @apply text-opacity-70;
+    @apply bg-gray-900;
+    @apply text-white;
 }
 
 .pc-form-select {
+    @apply bg-white;
     @apply block;
     @apply w-full;
     @apply py-3;
