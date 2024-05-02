@@ -17,11 +17,14 @@ import (
 )
 
 const (
-	maxNewPropertyFormSizeBytes = 256 * 1024
-	createPropertyFormTemplate  = "property-wizard/form.html"
-	createOrgFormTemplate       = "org-wizard/form.html"
-	propertyDashboardTemplate   = "property/dashboard.html"
-	maxPropertyNameLength       = 255
+	maxNewPropertyFormSizeBytes           = 256 * 1024
+	createPropertyFormTemplate            = "property-wizard/form.html"
+	createOrgFormTemplate                 = "org-wizard/form.html"
+	propertyDashboardTemplate             = "property/dashboard.html"
+	propertyDashboardReportsTemplate      = "property/reports.html"
+	propertyDashboardSettingsTemplate     = "property/settings.html"
+	propertyDashboardIntegrationsTemplate = "property/integrations.html"
+	maxPropertyNameLength                 = 255
 )
 
 var (
@@ -312,28 +315,30 @@ func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) 
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
-func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		orgID := ctx.Value(common.OrgIDContextKey).(int)
+		propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
-	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
-	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
-		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
-		s.redirectError(http.StatusNotFound, w, r)
-		return
-	}
+		property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+		if (err != nil) || (int(property.OrgID.Int32) != orgID) {
+			slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
+			s.redirectError(http.StatusNotFound, w, r)
+			return
+		}
 
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
+		org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
+			s.redirectError(http.StatusInternalServerError, w, r)
+			return
+		}
 
-	renderCtx := &propertyDashboardRenderContext{
-		Property: propertyToUserProperty(property),
-		Org:      orgToUserOrg(org),
+		renderCtx := &propertyDashboardRenderContext{
+			Property: propertyToUserProperty(property),
+			Org:      orgToUserOrg(org),
+		}
+		s.render(w, r, tpl, renderCtx)
 	}
-	s.render(w, r, propertyDashboardTemplate, renderCtx)
 }
