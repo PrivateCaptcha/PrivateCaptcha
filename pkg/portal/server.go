@@ -31,6 +31,7 @@ var (
 		TabEndpoint          string
 		ReportsEndpoint      string
 		IntegrationsEndpoint string
+		EditEndpoint         string
 		Token                string
 		Email                string
 		Name                 string
@@ -61,6 +62,7 @@ var (
 		TabEndpoint:          common.TabEndpoint,
 		ReportsEndpoint:      common.ReportsEndpoint,
 		IntegrationsEndpoint: common.IntegrationsEndpoint,
+		EditEndpoint:         common.EditEndpoint,
 	}
 )
 

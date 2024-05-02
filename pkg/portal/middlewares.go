@@ -12,6 +12,7 @@ const (
 	actionRegister    = "register"
 	actionNewProperty = "property-new"
 	actionNewOrg      = "org-new"
+	actionProperty    = "property"
 )
 
 type XSRFMiddleware struct {
