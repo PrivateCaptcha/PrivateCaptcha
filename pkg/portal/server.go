@@ -18,43 +18,49 @@ import (
 
 var (
 	renderConstants = struct {
-		LoginEndpoint     string
-		TwoFactorEndpoint string
-		ResendEndpoint    string
-		RegisterEndpoint  string
-		SettingsEndpoint  string
-		LogoutEndpoint    string
-		NewEndpoint       string
-		OrgEndpoint       string
-		PropertyEndpoint  string
-		DashboardEndpoint string
-		Token             string
-		Email             string
-		Name              string
-		VerificationCode  string
-		Domain            string
-		Difficulty        string
-		Growth            string
-		Stats             string
+		LoginEndpoint        string
+		TwoFactorEndpoint    string
+		ResendEndpoint       string
+		RegisterEndpoint     string
+		SettingsEndpoint     string
+		LogoutEndpoint       string
+		NewEndpoint          string
+		OrgEndpoint          string
+		PropertyEndpoint     string
+		DashboardEndpoint    string
+		TabEndpoint          string
+		ReportsEndpoint      string
+		IntegrationsEndpoint string
+		Token                string
+		Email                string
+		Name                 string
+		VerificationCode     string
+		Domain               string
+		Difficulty           string
+		Growth               string
+		Stats                string
 	}{
-		LoginEndpoint:     common.LoginEndpoint,
-		TwoFactorEndpoint: common.TwoFactorEndpoint,
-		ResendEndpoint:    common.ResendEndpoint,
-		RegisterEndpoint:  common.RegisterEndpoint,
-		SettingsEndpoint:  common.SettingsEndpoint,
-		LogoutEndpoint:    common.LogoutEndpoint,
-		OrgEndpoint:       common.OrgEndpoint,
-		PropertyEndpoint:  common.PropertyEndpoint,
-		DashboardEndpoint: common.DashboardEndpoint,
-		NewEndpoint:       common.NewEndpoint,
-		Token:             common.ParamCsrfToken,
-		Email:             common.ParamEmail,
-		Name:              common.ParamName,
-		VerificationCode:  common.ParamVerificationCode,
-		Domain:            common.ParamDomain,
-		Difficulty:        common.ParamDifficulty,
-		Growth:            common.ParamGrowth,
-		Stats:             common.StatsEndpoint,
+		LoginEndpoint:        common.LoginEndpoint,
+		TwoFactorEndpoint:    common.TwoFactorEndpoint,
+		ResendEndpoint:       common.ResendEndpoint,
+		RegisterEndpoint:     common.RegisterEndpoint,
+		SettingsEndpoint:     common.SettingsEndpoint,
+		LogoutEndpoint:       common.LogoutEndpoint,
+		OrgEndpoint:          common.OrgEndpoint,
+		PropertyEndpoint:     common.PropertyEndpoint,
+		DashboardEndpoint:    common.DashboardEndpoint,
+		NewEndpoint:          common.NewEndpoint,
+		Token:                common.ParamCsrfToken,
+		Email:                common.ParamEmail,
+		Name:                 common.ParamName,
+		VerificationCode:     common.ParamVerificationCode,
+		Domain:               common.ParamDomain,
+		Difficulty:           common.ParamDifficulty,
+		Growth:               common.ParamGrowth,
+		Stats:                common.StatsEndpoint,
+		TabEndpoint:          common.TabEndpoint,
+		ReportsEndpoint:      common.ReportsEndpoint,
+		IntegrationsEndpoint: common.IntegrationsEndpoint,
 	}
 )
 
@@ -133,7 +139,10 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.DashboardEndpoint, s.private(org(s.getOrgDashboard)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(org(s.getNewOrgProperty)))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(org(s.postNewOrgProperty))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}", s.private(org(property(s.getPropertyDashboard))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}", s.private(org(property(s.getPropertyDashboard(propertyDashboardTemplate)))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.ReportsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardReportsTemplate)))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardSettingsTemplate)))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.IntegrationsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardIntegrationsTemplate)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.StatsEndpoint+"/{period}", s.private(org(property(period(s.getRandomPropertyStats)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
