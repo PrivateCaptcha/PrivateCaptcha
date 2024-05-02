@@ -47,6 +47,41 @@
     @apply hover:bg-gray-600;
 }
 
+.pc-internal-form-button {
+    @apply inline-flex;
+    @apply items-center;
+    @apply justify-center;
+    @apply px-4;
+    @apply py-2.5;
+    @apply text-sm;
+    @apply font-semibold;
+    @apply font-sans;
+    @apply transition-all;
+    @apply duration-200;
+    @apply border;
+    @apply border-transparent;
+    @apply rounded-md;
+    @apply focus:outline-none;
+    @apply focus:ring-2;
+    @apply focus:ring-offset-2;
+}
+
+.pc-internal-form-button-primary {
+    @apply bg-indigo-600;
+    @apply focus:ring-indigo-600;
+    @apply hover:bg-indigo-500;
+    @apply text-white;
+}
+
+.pc-internal-form-button-secondary {
+    @apply border-gray-300;
+    @apply bg-white;
+    @apply text-gray-600;
+    @apply focus:ring-gray-500;
+    @apply hover:bg-gray-50;
+    @apply hover:text-gray-900;
+}
+
 .pc-form-input-base {
     @apply block;
     @apply w-full;
@@ -64,11 +99,11 @@
     @apply w-full;
     @apply px-4;
     @apply py-3;
-    @apply placeholder-gray-500;
+    @apply placeholder-gray-600;
     @apply border;
-    @apply rounded-lg;
-    @apply sm:text-sm;
+    @apply rounded-md;
     @apply focus:outline-none;
+    @apply text-sm;
 }
 
 .pc-form-input-normal {
@@ -84,6 +119,13 @@
     @apply focus:border-red-500;
     @apply focus:ring-red-500;
     @apply caret-red-500;
+}
+
+.pc-form-input-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-50;
+    @apply disabled:text-gray-500;
+    @apply disabled:ring-gray-200;
 }
 
 h1.pc-form-caption {

@@ -43,6 +43,8 @@ type userProperty struct {
 	OrgID  string
 	Name   string
 	Domain string
+	Level  int
+	Growth int
 }
 
 type orgPropertiesRenderContext struct {
@@ -51,8 +53,10 @@ type orgPropertiesRenderContext struct {
 }
 
 type propertyDashboardRenderContext struct {
-	Property *userProperty
-	Org      *userOrg
+	Property  *userProperty
+	Org       *userOrg
+	Token     string
+	NameError string
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -61,6 +65,8 @@ func propertyToUserProperty(p *dbgen.Property) *userProperty {
 		OrgID:  strconv.Itoa(int(p.OrgID.Int32)),
 		Name:   p.Name,
 		Domain: p.Domain,
+		Level:  difficultyLevelToIndex(p.Level),
+		Growth: growthLevelToIndex(p.Growth),
 	}
 }
 
@@ -72,6 +78,19 @@ func propertiesToUserProperties(properties []*dbgen.Property) []*userProperty {
 	}
 
 	return result
+}
+
+func growthLevelToIndex(level dbgen.DifficultyGrowth) int {
+	switch level {
+	case dbgen.DifficultyGrowthSlow:
+		return 0
+	case dbgen.DifficultyGrowthMedium:
+		return 1
+	case dbgen.DifficultyGrowthFast:
+		return 2
+	default:
+		return 1
+	}
 }
 
 func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGrowth {
@@ -91,6 +110,19 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	default:
 		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
 		return dbgen.DifficultyGrowthMedium
+	}
+}
+
+func difficultyLevelToIndex(level dbgen.DifficultyLevel) int {
+	switch level {
+	case dbgen.DifficultyLevelSmall:
+		return 0
+	case dbgen.DifficultyLevelMedium:
+		return 1
+	case dbgen.DifficultyLevelHigh:
+		return 2
+	default:
+		return 1
 	}
 }
 
@@ -335,9 +367,18 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 			return
 		}
 
+		sess := s.Session.SessionStart(w, r)
+		email, ok := sess.Get(session.KeyUserEmail).(string)
+		if !ok {
+			slog.ErrorContext(ctx, "Failed to get email from session")
+			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+			return
+		}
+
 		renderCtx := &propertyDashboardRenderContext{
 			Property: propertyToUserProperty(property),
 			Org:      orgToUserOrg(org),
+			Token:    s.XSRF.Token(email, actionProperty),
 		}
 		s.render(w, r, tpl, renderCtx)
 	}
