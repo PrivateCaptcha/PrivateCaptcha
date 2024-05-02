@@ -1,0 +1,49 @@
+<div class="space-y-4 border-b border-gray-900/10 pb-12">
+    <div>
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label"> Domain </label>
+        <div class="mt-2">
+            <input type="text" disabled name="{{ .Const.Domain }}" maxlength="255" value="{{ $.Params.Property.Domain }}" class="pc-internal-form-input-base pc-form-input-disabled" />
+        </div>
+    </div>
+
+    <div>
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label"> Base difficulty </label>
+        <div class="mt-2">
+            <select name="{{ .Const.Difficulty }}" class="pc-form-select">
+                <option value="0" {{ if eq $.Params.Property.Level 0 }}selected="selected"{{end}}>Easy</option>
+                <option value="1" {{ if eq $.Params.Property.Level 1 }}selected="selected"{{end}}>Normal</option>
+                <option value="2" {{ if eq $.Params.Property.Level 2 }}selected="selected"{{end}}>Hard</option>
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label"> Difficulty growth </label>
+        <div class="mt-2">
+            <select name="{{ .Const.Growth }}" class="pc-form-select">
+                <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Slow</option>
+                <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Normal</option>
+                <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Fast</option>
+            </select>
+        </div>
+    </div>
+
+    <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
+</div>
+
+<div class="mt-6 flex items-center justify-end gap-x-6">
+    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
+</div>

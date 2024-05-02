@@ -19,4 +19,5 @@ const (
 	TabEndpoint          = "tab"
 	ReportsEndpoint      = "reports"
 	IntegrationsEndpoint = "integrations"
+	EditEndpoint         = "edit"
 )
