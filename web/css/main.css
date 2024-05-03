@@ -66,6 +66,13 @@
     @apply focus:ring-offset-2;
 }
 
+.pc-internal-form-button-danger {
+    @apply bg-red-500;
+    @apply hover:bg-red-400;
+    @apply focus:ring-red-500;
+    @apply text-white;
+}
+
 .pc-internal-form-button-primary {
     @apply bg-indigo-600;
     @apply focus:ring-indigo-600;
@@ -98,7 +105,7 @@
     @apply block;
     @apply w-full;
     @apply px-4;
-    @apply py-3;
+    @apply py-2.5;
     @apply placeholder-gray-600;
     @apply border;
     @apply rounded-md;
@@ -198,7 +205,7 @@ body.pc-vertical-stretch {
     @apply bg-white;
     @apply block;
     @apply w-full;
-    @apply py-3;
+    @apply py-2.5;
     @apply pl-4;
     @apply pr-10;
     @apply border;
