@@ -1,5 +1,5 @@
-<div class="space-y-4 border-b border-gray-900/10 pb-12">
-    <div>
+<div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:max-w-lg sm:grid-cols-6">
+    <div class="col-span-full">
         <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
         <div class="mt-2 relative">
             {{- if .Params.NameError -}}
@@ -12,14 +12,14 @@
         {{- end -}}
     </div>
 
-    <div>
+    <div class="col-span-full">
         <label for="{{ .Const.Domain }}" class="pc-internal-form-label"> Domain </label>
         <div class="mt-2">
             <input type="text" disabled name="{{ .Const.Domain }}" maxlength="255" value="{{ $.Params.Property.Domain }}" class="pc-internal-form-input-base pc-form-input-disabled" />
         </div>
     </div>
 
-    <div>
+    <div class="col-span-full">
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label"> Base difficulty </label>
         <div class="mt-2">
             <select name="{{ .Const.Difficulty }}" class="pc-form-select">
@@ -30,7 +30,7 @@
         </div>
     </div>
 
-    <div>
+    <div class="col-span-full">
         <label for="{{ .Const.Growth }}" class="pc-internal-form-label"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" class="pc-form-select">
@@ -44,6 +44,6 @@
     <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
 </div>
 
-<div class="mt-6 flex items-center justify-end gap-x-6">
+<div class="mt-8 flex">
     <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
 </div>

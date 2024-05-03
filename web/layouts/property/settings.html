@@ -32,14 +32,30 @@
     </div>
 </div>
 
-<div class="overflow-hidden bg-white rounded-xl p-1">
-    <form
-        hx-post='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Const.EditEndpoint }}'
-        hx-target="this"
-        hx-swap="innerHTML"
-        hx-indicator="#spinner"
-        hx-disabled-elt="input, button"
-        class="mt-6 max-w-md">
-        {{template "settings-form.html" .}}
-    </form>
+<div class="divide-y divide-gray-200">
+    <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-12 sm:px-6 md:grid-cols-3 lg:px-8">
+        <div>
+            <h2 class="text-base font-semibold leading-7 text-gray-900">Basic settings</h2>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Change property's difficulty configuration or property name. To change the domain, you need to create another property.</p>
+        </div>
+        <form
+            hx-post='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Const.EditEndpoint }}'
+            hx-target="this"
+            hx-swap="innerHTML"
+            hx-indicator="#spinner"
+            hx-disabled-elt="input, button"
+            class="md:col-span-2 sm:max-w-lg">
+            {{template "settings-basic-form.html" .}}
+        </form>
+    </div>
+    <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
+        <div>
+            <h2 class="text-base font-semibold leading-7 text-gray-900">Delete property</h2>
+            <p class="mt-1 text-sm leading-6 text-gray-600">This action cannot be undone. All historical data related to this property will be deleted permanently.</p>
+        </div>
+
+        <form class="flex items-start md:col-span-2">
+            <button type="submit" class="pc-internal-form-button pc-internal-form-button-danger">Yes, delete this property</button>
+        </form>
+    </div>
 </div>
