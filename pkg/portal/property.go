@@ -53,10 +53,12 @@ type orgPropertiesRenderContext struct {
 }
 
 type propertyDashboardRenderContext struct {
-	Property  *userProperty
-	Org       *userOrg
-	Token     string
-	NameError string
+	Property      *userProperty
+	Org           *userOrg
+	Token         string
+	NameError     string
+	UpdateError   string
+	UpdateMessage string
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -382,4 +384,76 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 		}
 		s.render(w, r, tpl, renderCtx)
 	}
+}
+
+func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	token := r.FormValue(common.ParamCsrfToken)
+	if !s.XSRF.VerifyToken(token, email, actionProperty) {
+		slog.WarnContext(ctx, "Failed to verify CSRF token")
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
+		return
+	}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
+		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
+		s.redirectError(http.StatusNotFound, w, r)
+		return
+	}
+
+	renderCtx := &propertyDashboardRenderContext{
+		Property: propertyToUserProperty(property),
+		Org:      orgToUserOrg(org),
+		Token:    s.XSRF.Token(email, actionProperty),
+	}
+
+	name := r.FormValue(common.ParamName)
+	if name != property.Name {
+		if nameError := s.validatePropertyName(ctx, name, org.ID); len(nameError) > 0 {
+			renderCtx.NameError = nameError
+			s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
+			return
+		}
+	}
+
+	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
+	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
+
+	if (name != property.Name) || (difficulty != property.Level) || (growth != property.Growth) {
+		if err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
+			renderCtx.UpdateError = "Failed to update settings. Please try again."
+		} else {
+			renderCtx.UpdateMessage = "Settings were updated"
+		}
+
+	}
+
+	s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
 }

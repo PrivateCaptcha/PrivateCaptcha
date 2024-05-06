@@ -437,6 +437,29 @@ func (s *BusinessStore) CreateProperty(ctx context.Context, name string, orgID i
 	return property, nil
 }
 
+func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) error {
+	property, err := s.db.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
+		Name:   name,
+		Level:  level,
+		Growth: growth,
+		ID:     propID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update property in DB", "name", name, "propID", propID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated property", "name", name, "propID", propID)
+
+	cacheKey := propertyCachePrefix + strconv.Itoa(int(property.ID))
+	_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+	// invalidate org properties in cache as we just created a new property
+	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(property.OrgID.Int32)))
+
+	return nil
+}
+
 func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	cacheKey := orgPropertiesCachePrefix + strconv.Itoa(int(orgID))
 

@@ -142,6 +142,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(org(s.getNewOrgProperty)))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(org(s.postNewOrgProperty))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}", s.private(org(property(s.getPropertyDashboard(propertyDashboardTemplate)))))
+	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.EditEndpoint, s.private(org(property(s.putProperty))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.ReportsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardReportsTemplate)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardSettingsTemplate)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.IntegrationsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardIntegrationsTemplate)))))
