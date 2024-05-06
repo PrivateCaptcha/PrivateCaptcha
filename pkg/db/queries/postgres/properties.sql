@@ -8,6 +8,11 @@ INSERT INTO properties (name, org_id, domain, level, growth)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING *;
 
+-- name: UpdateProperty :one
+UPDATE properties SET name = $1, level = $2, growth = $3, updated_at = NOW()
+WHERE id = $4
+RETURNING *;
+
 -- name: GetOrgPropertyByName :one
 SELECT * from properties WHERE org_id = $1 AND name = $2;
 

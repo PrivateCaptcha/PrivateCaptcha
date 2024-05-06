@@ -39,10 +39,9 @@
             <p class="mt-1 text-sm leading-6 text-gray-600">Change property's difficulty configuration or property name. To change the domain, you need to create another property.</p>
         </div>
         <form
-            hx-post='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Const.EditEndpoint }}'
-            hx-target="this"
+            hx-put='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.EditEndpoint }}'
+            hx-target="#property-tabs"
             hx-swap="innerHTML"
-            hx-indicator="#spinner"
             hx-disabled-elt="input, button"
             class="md:col-span-2 sm:max-w-lg">
             {{template "settings-basic-form.html" .}}

@@ -167,3 +167,39 @@ func (q *Queries) PropertyAndOrgByExternalID(ctx context.Context, externalID pgt
 	)
 	return &i, err
 }
+
+const updateProperty = `-- name: UpdateProperty :one
+UPDATE properties SET name = $1, level = $2, growth = $3, updated_at = NOW()
+WHERE id = $4
+RETURNING id, name, external_id, org_id, domain, level, growth, created_at, updated_at, deleted_at
+`
+
+type UpdatePropertyParams struct {
+	Name   string           `db:"name" json:"name"`
+	Level  DifficultyLevel  `db:"level" json:"level"`
+	Growth DifficultyGrowth `db:"growth" json:"growth"`
+	ID     int32            `db:"id" json:"id"`
+}
+
+func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*Property, error) {
+	row := q.db.QueryRow(ctx, updateProperty,
+		arg.Name,
+		arg.Level,
+		arg.Growth,
+		arg.ID,
+	)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.Domain,
+		&i.Level,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
