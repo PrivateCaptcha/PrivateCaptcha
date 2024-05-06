@@ -18,6 +18,7 @@ import (
 var (
 	ErrInvalidInput     = errors.New("invalid input")
 	ErrRecordNotFound   = errors.New("record not found")
+	ErrSoftDeleted      = errors.New("record is marked as deleted")
 	errInvalidCacheType = errors.New("cache record type does not match")
 	markerData          = []byte{'{', '}'}
 )
@@ -142,6 +143,10 @@ func (s *BusinessStore) RetrievePropertyAndOrg(ctx context.Context, sitekey stri
 
 	if propertyAndOrg != nil {
 		_ = s.cache.SetItem(ctx, cacheKey, propertyAndOrg, propertyCacheDuration)
+
+		if propertyAndOrg.Property.DeletedAt.Valid || propertyAndOrg.Organization.DeletedAt.Valid {
+			return propertyAndOrg, ErrSoftDeleted
+		}
 	}
 
 	return propertyAndOrg, nil
@@ -460,6 +465,22 @@ func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name s
 	return nil
 }
 
+func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32) error {
+	if err := s.db.SoftDeleteProperty(ctx, propID); err != nil {
+		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", propID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Soft-deleted property", "propID", propID)
+
+	// update caches
+	_ = s.cache.SetMissing(ctx, propertyCachePrefix+strconv.Itoa(int(propID)), negativeCacheDuration)
+	// invalidate org properties in cache as we just deleted a property
+	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(propID)))
+
+	return nil
+}
+
 func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	cacheKey := orgPropertiesCachePrefix + strconv.Itoa(int(orgID))
 
@@ -477,6 +498,7 @@ func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) 
 		return nil, err
 	}
 
+	slog.Log(ctx, common.LevelTrace, "Retrieved properties", "count", len(properties))
 	if len(properties) > 0 {
 		_ = s.cache.SetItem(ctx, cacheKey, properties, propertyCacheDuration)
 	}

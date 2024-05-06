@@ -14,10 +14,13 @@ WHERE id = $4
 RETURNING *;
 
 -- name: GetOrgPropertyByName :one
-SELECT * from properties WHERE org_id = $1 AND name = $2;
+SELECT * from properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL;
 
 -- name: GetPropertyByID :one
 SELECT * from properties WHERE id = $1;
 
 -- name: GetOrgProperties :many
-SELECT * from properties WHERE org_id = $1 ORDER BY created_at;
+SELECT * from properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at;
+
+-- name: SoftDeleteProperty :exec
+UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1;

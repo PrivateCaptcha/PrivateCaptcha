@@ -72,10 +72,15 @@ func propertyToUserProperty(p *dbgen.Property) *userProperty {
 	}
 }
 
-func propertiesToUserProperties(properties []*dbgen.Property) []*userProperty {
+func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Property) []*userProperty {
 	result := make([]*userProperty, 0, len(properties))
 
 	for _, p := range properties {
+		if p.DeletedAt.Valid {
+			slog.WarnContext(ctx, "Skipping soft-deleted property", "propID", p.ID, "orgID", p.OrgID, "deleteAt", p.DeletedAt)
+			continue
+		}
+
 		result = append(result, propertyToUserProperty(p))
 	}
 
@@ -456,4 +461,23 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
+}
+
+func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+
+	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
+		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
+		s.redirectError(http.StatusNotFound, w, r)
+		return
+	}
+
+	if err := s.Store.SoftDeleteProperty(ctx, int32(propertyID)); err == nil {
+		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	} else {
+		s.redirectError(http.StatusInternalServerError, w, r)
+	}
 }
