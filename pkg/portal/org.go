@@ -200,7 +200,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	if (0 <= idx) && (idx < len(orgs)) {
 		properties, err := s.Store.RetrieveOrgProperties(ctx, orgs[idx].Organization.ID)
 		if err == nil {
-			renderCtx.Properties = propertiesToUserProperties(properties)
+			renderCtx.Properties = propertiesToUserProperties(ctx, properties)
 		}
 	}
 
@@ -236,7 +236,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &orgPropertiesRenderContext{
-		Properties: propertiesToUserProperties(properties),
+		Properties: propertiesToUserProperties(ctx, properties),
 		CurrentOrg: &userOrg{
 			ID: strconv.Itoa(orgID),
 		},

@@ -338,7 +338,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
 	propertyAndOrg, err := s.businessDB.RetrievePropertyAndOrg(ctx, sitekey)
 	if err != nil {
-		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
+		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) || (err == db.ErrSoftDeleted) {
 			return p, nil, invalidPropertyError
 		}
 

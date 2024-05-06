@@ -66,7 +66,7 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 
 		if err != nil {
 			switch err {
-			case db.ErrNegativeCacheHit, db.ErrRecordNotFound:
+			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -112,11 +112,12 @@ func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 
 		apiKey, err := am.Store.RetrieveAPIKey(ctx, secret)
 		if err != nil {
-			if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) {
+			switch err {
+			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			} else if err == db.ErrInvalidInput {
+			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			} else {
+			default:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 			return

@@ -12,6 +12,7 @@ sql:
         emit_json_tags: true
         emit_result_struct_pointers: true
         emit_params_struct_pointers: true
+        #emit_pointers_for_null_types: true
         rename:
           apikey: "APIKey"
         overrides:

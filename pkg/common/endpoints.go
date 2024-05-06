@@ -20,4 +20,5 @@ const (
 	ReportsEndpoint      = "reports"
 	IntegrationsEndpoint = "integrations"
 	EditEndpoint         = "edit"
+	DeleteEndpoint       = "delete"
 )
