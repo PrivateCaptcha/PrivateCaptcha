@@ -54,9 +54,10 @@ func TestMain(m *testing.M) {
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	server = &Server{
-		Store:  store,
-		Prefix: "",
-		XSRF:   XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+		Store:      store,
+		TimeSeries: timeSeries,
+		Prefix:     "",
+		XSRF:       XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,

@@ -3,7 +3,6 @@ package portal
 import (
 	"context"
 	"log/slog"
-	"math/rand"
 	"net"
 	"net/http"
 	"regexp"
@@ -298,11 +297,32 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
 }
 
-// TODO: Add min/max points for each of the periods respectively
-// so that scaling on charts will be OK
-func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	period := ctx.Value(common.PeriodContextKey).(string)
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+
+	periodStr := ctx.Value(common.PeriodContextKey).(string)
+	tnow := time.Now().UTC()
+	var period common.TimePeriod
+	var minTime time.Time
+	switch periodStr {
+	case "24h":
+		period = common.TimePeriodToday
+		minTime = tnow.AddDate(0, 0, -1)
+	case "7d":
+		period = common.TimePeriodWeek
+		minTime = tnow.AddDate(0, 0, -7)
+	case "1m":
+		period = common.TimePeriodMonth
+		minTime = tnow.AddDate(0, -1, 0)
+	case "1y":
+		period = common.TimePeriodYear
+		minTime = tnow.AddDate(-1, 0, 0)
+	default:
+		slog.ErrorContext(ctx, "Incorrect period argument", "period", periodStr)
+		period = common.TimePeriodToday
+	}
 
 	type point struct {
 		Date  int64 `json:"x"`
@@ -312,34 +332,23 @@ func (s *Server) getRandomPropertyStats(w http.ResponseWriter, r *http.Request) 
 	requested := []*point{}
 	verified := []*point{}
 
-	var interval time.Duration
-	var count int
+	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, int32(orgID), int32(propertyID), period); err == nil {
+		if (len(stats) == 0) || stats[0].Timestamp.After(minTime) {
+			requested = append(requested, &point{Date: minTime.Unix(), Value: 0})
+			verified = append(verified, &point{Date: minTime.Unix(), Value: 0})
+		}
 
-	switch period {
-	case "7d":
-		count = 7 * (24 / 3) / 2
-		interval = 7 * 24 * time.Hour
-	case "30d":
-		interval = 30 * 24 * time.Hour
-		count = 30
-	case "6m":
-		interval = 6 * 30 * 24 * time.Hour
-		count = 6 * (30 / 2) / 2
-	case "1y":
-		interval = 12 * 30 * 24 * time.Hour
-		count = 12 * (30 / 5 / 2)
-	default:
-		slog.ErrorContext(ctx, "Incorrect period", "period", period)
-		interval = 24 * time.Hour
-		count = 24 / 2
-	}
+		if (len(stats) == 0) || stats[len(stats)-1].Timestamp.Before(tnow) {
+			requested = append(requested, &point{Date: tnow.Unix(), Value: 0})
+			verified = append(verified, &point{Date: tnow.Unix(), Value: 0})
+		}
 
-	step := interval / time.Duration(count)
-
-	for i := 0; i < count; i++ {
-		n := rand.Intn(100000)
-		requested = append(requested, &point{time.Now().Add(time.Duration(-i) * step).Unix(), n})
-		verified = append(verified, &point{time.Now().Add(time.Duration(-i) * step).Unix(), rand.Intn(n)})
+		for _, st := range stats {
+			requested = append(requested, &point{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
+			verified = append(verified, &point{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve property stats", common.ErrAttr(err))
 	}
 
 	response := struct {

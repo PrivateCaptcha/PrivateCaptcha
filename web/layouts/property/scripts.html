@@ -30,15 +30,18 @@
             }
         };
 
+        const hourlyTicks = function(date, i) {
+            var hour = date.getHours();
+            if (hour == 0) {
+                return weekdayFormat(date);
+            } else {
+                return hour;
+            }
+        };
+
         const tickFunction = {
-            '7d': function(date, i) {
-                var hour = date.getHours();
-                if (hour == 0) {
-                    return weekdayFormat(date);
-                } else {
-                    return hour;
-                }
-            },
+            '24h': hourlyTicks,
+            '7d': hourlyTicks,
             '30d': function(date, i) {
                 var day = date.getDate();
                 if (day == 1) {
@@ -47,7 +50,6 @@
                     return day;
                 }
             },
-            '6m': monthlyTicks,
             '1y': monthlyTicks
         };
 
@@ -234,9 +236,9 @@
         return {
             // https://d3js.org/d3-time-format#locale_format
             isLoading: false,
-            period: '7d',
+            period: '24h',
             async init() {
-                this.updateChart('7d');
+                this.updateChart('24h');
             },
             async fetchChartData(period) {
                 this.isLoading = true;

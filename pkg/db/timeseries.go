@@ -1,11 +1,13 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -19,12 +21,25 @@ const (
 )
 
 type TimeSeriesStore struct {
-	clickhouse *sql.DB
+	clickhouse         *sql.DB
+	statsQueryTemplate *template.Template
 }
 
 func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesStore {
+	const statsQuery = `SELECT 
+{{.TimeFuncRequests}} AS agg_time,
+sum(requests.count) AS requests_count,
+sum(verifies.count) AS verifies_count
+FROM {{.RequestsTable}} AS requests
+LEFT OUTER JOIN {{.VerifiesTable}} AS verifies ON {{.TimeFuncRequests}} = {{.TimeFuncVerifies}} AND requests.org_id = verifies.org_id AND requests.property_id = verifies.property_id
+WHERE requests.org_id = {org_id:UInt32} AND requests.property_id = {property_id:UInt32} AND requests.timestamp >= {timestamp:DateTime}
+GROUP BY agg_time
+ORDER BY agg_time
+	`
+
 	return &TimeSeriesStore{
-		clickhouse: clickhouse,
+		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
+		clickhouse:         clickhouse,
 	}
 }
 
@@ -138,6 +153,82 @@ ORDER BY timestamp`
 		}
 		results = append(results, bc)
 	}
+
+	return results, nil
+}
+
+func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
+	tnow := time.Now().UTC()
+	var timeFrom time.Time
+	var requestsTable string
+	var verificationsTable string
+	var timeFunction string
+
+	switch period {
+	case common.TimePeriodToday:
+		timeFrom = tnow.AddDate(0, 0, -1)
+		requestsTable = "request_logs_1h"
+		verificationsTable = "verify_logs_1h"
+		timeFunction = "toStartOfHour(%s.timestamp)"
+	case common.TimePeriodWeek:
+		timeFrom = tnow.AddDate(0, 0, -7)
+		requestsTable = "request_logs_1d"
+		verificationsTable = "verify_logs_1d"
+		timeFunction = "toStartOfInterval(%s.timestamp, INTERVAL 12 HOUR)"
+	case common.TimePeriodMonth:
+		timeFrom = tnow.AddDate(0, -1, 0)
+		requestsTable = "request_logs_1d"
+		verificationsTable = "verify_logs_1d"
+		timeFunction = "toStartOfDay(%s.timestamp)"
+	case common.TimePeriodYear:
+		timeFrom = tnow.AddDate(-1, 0, 0)
+		requestsTable = "request_logs_1d"
+		verificationsTable = "verify_logs_1d"
+		timeFunction = "toStartOfMonth(%s.timestamp)"
+	}
+
+	data := struct {
+		RequestsTable    string
+		VerifiesTable    string
+		TimeFuncRequests string
+		TimeFuncVerifies string
+	}{
+		RequestsTable:    "privatecaptcha." + requestsTable,
+		VerifiesTable:    "privatecaptcha." + verificationsTable,
+		TimeFuncRequests: fmt.Sprintf(timeFunction, requestsTable),
+		TimeFuncVerifies: fmt.Sprintf(timeFunction, verificationsTable),
+	}
+
+	buf := &bytes.Buffer{}
+	if err := ts.statsQueryTemplate.Execute(buf, data); err != nil {
+		slog.ErrorContext(ctx, "Failed to execute stats query template", common.ErrAttr(err))
+		return nil, err
+	}
+	query := buf.String()
+
+	rows, err := ts.clickhouse.Query(query,
+		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
+		clickhouse.Named("property_id", strconv.Itoa(int(propertyID))),
+		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query property stats", common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.TimePeriodStat, 0)
+
+	for rows.Next() {
+		bc := &common.TimePeriodStat{}
+		if err := rows.Scan(&bc.Timestamp, &bc.RequestsCount, &bc.VerifiesCount); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from property stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, bc)
+	}
+
+	slog.DebugContext(ctx, "Fetched time period stats", "count", len(results), "orgID", orgID, "propID", propertyID)
 
 	return results, nil
 }

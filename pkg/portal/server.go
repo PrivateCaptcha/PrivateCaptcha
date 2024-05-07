@@ -84,12 +84,13 @@ func funcMap(prefix string) template.FuncMap {
 }
 
 type Server struct {
-	Store    *db.BusinessStore
-	Prefix   string
-	template *web.Template
-	XSRF     XSRFMiddleware
-	Session  session.Manager
-	Mailer   Mailer
+	Store      *db.BusinessStore
+	TimeSeries *db.TimeSeriesStore
+	Prefix     string
+	template   *web.Template
+	XSRF       XSRFMiddleware
+	Session    session.Manager
+	Mailer     Mailer
 }
 
 func (s *Server) Init() {
@@ -149,7 +150,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.ReportsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardReportsTemplate)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardSettingsTemplate)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.IntegrationsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardIntegrationsTemplate)))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.StatsEndpoint+"/{period}", s.private(org(property(period(s.getRandomPropertyStats)))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.StatsEndpoint+"/{period}", s.private(org(property(period(s.getPropertyStats)))))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }
