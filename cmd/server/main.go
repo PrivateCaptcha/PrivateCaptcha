@@ -59,9 +59,10 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	portalServer := &portal.Server{
-		Store:  businessDB,
-		Prefix: "portal",
-		XSRF:   portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+		Store:      businessDB,
+		TimeSeries: timeSeriesDB,
+		Prefix:     "portal",
+		XSRF:       portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
