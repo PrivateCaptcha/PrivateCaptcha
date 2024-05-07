@@ -46,13 +46,6 @@
                 </a>
 
                 <a href="#" title=""
-                    @click="period = '6m'; updateChart()"
-                    :class="period == '6m' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
-                    class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
-                    6 Months
-                </a>
-
-                <a href="#" title=""
                     @click="period = '30d'; updateChart()"
                     :class="period == '30d' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
@@ -64,6 +57,13 @@
                     :class="period == '7d' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     7 Days
+                </a>
+
+                <a href="#" title=""
+                    @click="period = '24h'; updateChart()"
+                    :class="period == '24h' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
+                    class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
+                    24 Hours
                 </a>
             </nav>
         </div>
