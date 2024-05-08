@@ -26,16 +26,17 @@ type TimeSeriesStore struct {
 }
 
 func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesStore {
+	// ClickHouse docs:
+	// The join (a search in the right table) is run before filtering in WHERE and before aggregation.
 	const statsQuery = `SELECT 
-{{.TimeFuncRequests}} AS agg_time,
+toDateTime({{.TimeFuncRequests}}) AS agg_time,
 sum(requests.count) AS requests_count,
 sum(verifies.count) AS verifies_count
 FROM {{.RequestsTable}} AS requests
 LEFT OUTER JOIN {{.VerifiesTable}} AS verifies ON {{.TimeFuncRequests}} = {{.TimeFuncVerifies}} AND requests.org_id = verifies.org_id AND requests.property_id = verifies.property_id
 WHERE requests.org_id = {org_id:UInt32} AND requests.property_id = {property_id:UInt32} AND requests.timestamp >= {timestamp:DateTime}
 GROUP BY agg_time
-ORDER BY agg_time
-	`
+ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}`
 
 	return &TimeSeriesStore{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
@@ -163,28 +164,33 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 	var requestsTable string
 	var verificationsTable string
 	var timeFunction string
+	var interval string
 
 	switch period {
 	case common.TimePeriodToday:
 		timeFrom = tnow.AddDate(0, 0, -1)
 		requestsTable = "request_logs_1h"
 		verificationsTable = "verify_logs_1h"
-		timeFunction = "toStartOfHour(%s.timestamp)"
+		timeFunction = "toStartOfHour(%s)"
+		interval = "INTERVAL 1 HOUR"
 	case common.TimePeriodWeek:
 		timeFrom = tnow.AddDate(0, 0, -7)
 		requestsTable = "request_logs_1d"
 		verificationsTable = "verify_logs_1d"
-		timeFunction = "toStartOfInterval(%s.timestamp, INTERVAL 12 HOUR)"
+		timeFunction = "toStartOfInterval(%s, INTERVAL 6 HOUR)"
+		interval = "INTERVAL 6 HOUR"
 	case common.TimePeriodMonth:
 		timeFrom = tnow.AddDate(0, -1, 0)
 		requestsTable = "request_logs_1d"
 		verificationsTable = "verify_logs_1d"
-		timeFunction = "toStartOfDay(%s.timestamp)"
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
 	case common.TimePeriodYear:
 		timeFrom = tnow.AddDate(-1, 0, 0)
 		requestsTable = "request_logs_1d"
 		verificationsTable = "verify_logs_1d"
-		timeFunction = "toStartOfMonth(%s.timestamp)"
+		timeFunction = "toStartOfMonth(%s)"
+		interval = "INTERVAL 1 MONTH"
 	}
 
 	data := struct {
@@ -192,11 +198,15 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 		VerifiesTable    string
 		TimeFuncRequests string
 		TimeFuncVerifies string
+		Interval         string
+		FillFrom         string
 	}{
 		RequestsTable:    "privatecaptcha." + requestsTable,
 		VerifiesTable:    "privatecaptcha." + verificationsTable,
-		TimeFuncRequests: fmt.Sprintf(timeFunction, requestsTable),
-		TimeFuncVerifies: fmt.Sprintf(timeFunction, verificationsTable),
+		TimeFuncRequests: fmt.Sprintf(timeFunction, requestsTable+".timestamp"),
+		TimeFuncVerifies: fmt.Sprintf(timeFunction, verificationsTable+".timestamp"),
+		Interval:         interval,
+		FillFrom:         fmt.Sprintf(timeFunction, "{timestamp:DateTime}"),
 	}
 
 	buf := &bytes.Buffer{}
@@ -228,7 +238,8 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 		results = append(results, bc)
 	}
 
-	slog.DebugContext(ctx, "Fetched time period stats", "count", len(results), "orgID", orgID, "propID", propertyID)
+	slog.InfoContext(ctx, "Fetched time period stats", "count", len(results), "orgID", orgID, "propID", propertyID,
+		"from", timeFrom, "period", period)
 
 	return results, nil
 }

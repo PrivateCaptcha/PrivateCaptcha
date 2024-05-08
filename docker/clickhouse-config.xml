@@ -29,6 +29,8 @@
   </merge_tree>
   <profiles>
     <default>
+      <!-- This is needed so that toStartOfMonth() returned DateTime instead of Date -->
+      <enable_extended_results_for_datetime_functions>1</enable_extended_results_for_datetime_functions>
       <!-- Wait up to 1000ms. -->
       <queue_max_wait_ms>1000</queue_max_wait_ms>
       <!-- Abort query after 10 seconds. -->
