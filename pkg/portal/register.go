@@ -107,7 +107,9 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
 		return errIncompleteSession
 	}
 
-	parts := strings.Split(name, " ")
+	parts := strings.FieldsFunc(name, func(c rune) bool {
+		return c == ' '
+	})
 	for i, p := range parts {
 		parts[i] = strings.ToLower(p)
 	}
