@@ -303,22 +303,16 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
 	periodStr := ctx.Value(common.PeriodContextKey).(string)
-	tnow := time.Now().UTC()
 	var period common.TimePeriod
-	var minTime time.Time
 	switch periodStr {
 	case "24h":
 		period = common.TimePeriodToday
-		minTime = tnow.AddDate(0, 0, -1)
 	case "7d":
 		period = common.TimePeriodWeek
-		minTime = tnow.AddDate(0, 0, -7)
-	case "1m":
+	case "30d":
 		period = common.TimePeriodMonth
-		minTime = tnow.AddDate(0, -1, 0)
 	case "1y":
 		period = common.TimePeriodYear
-		minTime = tnow.AddDate(-1, 0, 0)
 	default:
 		slog.ErrorContext(ctx, "Incorrect period argument", "period", periodStr)
 		period = common.TimePeriodToday
@@ -333,16 +327,6 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	verified := []*point{}
 
 	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, int32(orgID), int32(propertyID), period); err == nil {
-		if (len(stats) == 0) || stats[0].Timestamp.After(minTime) {
-			requested = append(requested, &point{Date: minTime.Unix(), Value: 0})
-			verified = append(verified, &point{Date: minTime.Unix(), Value: 0})
-		}
-
-		if (len(stats) == 0) || stats[len(stats)-1].Timestamp.Before(tnow) {
-			requested = append(requested, &point{Date: tnow.Unix(), Value: 0})
-			verified = append(verified, &point{Date: tnow.Unix(), Value: 0})
-		}
-
 		for _, st := range stats {
 			requested = append(requested, &point{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
 			verified = append(verified, &point{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})

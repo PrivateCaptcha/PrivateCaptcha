@@ -64,6 +64,11 @@ services:
       - clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       - ./clickhouse-logs:/var/log/clickhouse-server/
+    develop:
+      watch:
+        - action: sync+restart
+          path: clickhouse-config.xml
+          target: /etc/clickhouse-server/config.d/myconfig.xml
     ulimits:
       nofile:
         soft: 262144
