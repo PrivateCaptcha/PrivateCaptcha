@@ -26,7 +26,7 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label"> Base difficulty </label>
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
         <div class="mt-2">
             <select name="{{ .Const.Difficulty }}" class="pc-form-select">
                 <option value="0">Easy</option>
@@ -37,7 +37,7 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Growth }}" class="pc-internal-form-label"> Difficulty growth </label>
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" class="pc-form-select">
                 <option value="0">Slow</option>
