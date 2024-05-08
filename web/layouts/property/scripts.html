@@ -18,7 +18,7 @@
 
         const weekdayFormat = d3.timeFormat("%a");
         const monthlyFormat = d3.timeFormat("%b");
-        const monthDayFormat = d3.timeFormat("%d %b");
+        const monthDayFormat = d3.timeFormat("%e %b");
 
         const monthlyTicks = (date, i) => {
             var day = date.getDate();
@@ -38,6 +38,27 @@
                 return hour;
             }
         };
+
+        const yTickFormat = function(d) {
+            if (d >= 1000000000) {
+                return (d / 1000000000) + 'B'; // For values in billions
+            } else if (d >= 1000000) {
+                return (d / 1000000) + 'M'; // For values in millions
+            } else if (d >= 1000) {
+                return (d / 1000) + 'K'; // For values in thousands
+            }
+            return d; // For values less than 1000
+        };
+
+        const oddTickFilter = function(d, i) { return !(i % 2); };
+        const evenTickFilter = function(d, i) { return (i % 2); };
+
+        const tickFilter = {
+            '24h': evenTickFilter,
+            '7d': evenTickFilter,
+            '30d': evenTickFilter,
+            '1y': oddTickFilter 
+        }
 
         const tickFunction = {
             '24h': hourlyTicks,
@@ -146,7 +167,7 @@
                 .style("font-size", "14px");
         };
 
-        const setChartData = (element, data, xTickFormat) => {
+        const setChartData = (element, data, xTickFormat, xTickFilter) => {
             const requested = data.requested;
             const verified = data.verified;
             // Convert unix timestamp to JavaScript Date object
@@ -180,19 +201,21 @@
             y.domain([0, d3.max(requested, function(d) { return d.y; }) * 1.2]);
 
             // Filter the domain of the X scale to include only every other value
-            let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
+            let xTickValues = x.domain().filter(xTickFilter);
 
             let xAxis = d3.axisBottom(x)
                 .tickValues(xTickValues)
                 .tickFormat(xTickFormat);
-            let yAxis = d3.axisLeft(y).ticks(yTicksCount);
+            let yAxis = d3.axisLeft(y).ticks(yTicksCount).tickFormat(yTickFormat).tickPadding(5);
 
             // Add the grid lines
-            chartElement.append("g")
+            let yGrid = chartElement.append("g")
                 .attr("class", "grid")
-                .call(yAxis.tickSize(-width).tickFormat(""))
-                .style("color", backgroundColor)
-                .selectAll(".domain").remove();
+                .call(yAxis.tickSize(-width))
+                .style("color", backgroundColor);
+
+            yGrid.selectAll("text").style("color", "#6b7280");
+            yGrid.selectAll(".domain").remove();
 
             // Append the rectangles for the bar chart
             let barsRequested = chartElement.selectAll("bar-requested").data(requested);
@@ -255,7 +278,7 @@
             async updateChart() {
                 const data = await this.fetchChartData(this.period);
                 if (data) {
-                    setChartData(this.$refs.chart, data, tickFunction[this.period]);
+                    setChartData(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
                 } else {
                     drawNoData(this.$refs.chart);
                 }
