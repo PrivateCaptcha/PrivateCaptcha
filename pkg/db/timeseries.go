@@ -28,15 +28,34 @@ type TimeSeriesStore struct {
 func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesStore {
 	// ClickHouse docs:
 	// The join (a search in the right table) is run before filtering in WHERE and before aggregation.
-	const statsQuery = `SELECT 
+	const statsQuery = `WITH requests AS
+(
+SELECT
 toDateTime({{.TimeFuncRequests}}) AS agg_time,
+sum(count) AS count
+FROM {{.RequestsTable}} FINAL
+WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
+GROUP BY agg_time
+ORDER BY agg_time
+),
+verifies AS (
+SELECT
+toDateTime({{.TimeFuncVerifies}}) AS agg_time,
+sum(count) AS count
+FROM {{.VerifiesTable}} FINAL
+WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
+GROUP BY agg_time
+ORDER BY agg_time
+)
+SELECT
+requests.agg_time AS agg_time,
 sum(requests.count) AS requests_count,
 sum(verifies.count) AS verifies_count
-FROM {{.RequestsTable}} AS requests
-LEFT OUTER JOIN {{.VerifiesTable}} AS verifies ON {{.TimeFuncRequests}} = {{.TimeFuncVerifies}} AND requests.org_id = verifies.org_id AND requests.property_id = verifies.property_id
-WHERE requests.org_id = {org_id:UInt32} AND requests.property_id = {property_id:UInt32} AND requests.timestamp >= {timestamp:DateTime}
+FROM requests
+LEFT OUTER JOIN verifies ON verifies.agg_time = requests.agg_time
 GROUP BY agg_time
-ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}`
+ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
+SETTINGS use_query_cache = true`
 
 	return &TimeSeriesStore{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
@@ -235,6 +254,8 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 			slog.ErrorContext(ctx, "Failed to read row from property stats query", common.ErrAttr(err))
 			return nil, err
 		}
+		//slog.Log(ctx, common.LevelTrace, "Read property stats row", "timestamp", bc.Timestamp, "verifies", bc.VerifiesCount,
+		//	"requests", bc.RequestsCount)
 		results = append(results, bc)
 	}
 
