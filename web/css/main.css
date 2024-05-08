@@ -239,3 +239,41 @@ input[type=submit]:disabled {
     cursor: not-allowed;
 }
 
+.tooltip {
+  @apply relative;
+  @apply cursor-help;
+  @apply border-dashed;
+  @apply border-b;
+  @apply border-gray-400;
+}
+
+.tooltip:before {
+  content: attr(data-tooltip); /* here's the magic */
+  position: absolute;
+
+  /* vertically center */
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+
+  /* move to right */
+  left: 100%;
+  @apply ml-5;
+
+  @apply max-w-64;
+  @apply w-max;
+
+  @apply px-3;
+  @apply py-2;
+  @apply rounded-md;
+  @apply bg-gray-900;
+  @apply text-white;
+
+  text-align: center;
+
+  display:none; /* hide by default */
+}
+
+.tooltip:hover:before {
+  display:block;
+}
