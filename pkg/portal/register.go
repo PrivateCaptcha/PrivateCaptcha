@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -106,7 +107,14 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
 		return errIncompleteSession
 	}
 
-	_, err := s.Store.CreateNewAccount(ctx, email, name)
+	parts := strings.Split(name, " ")
+	for i, p := range parts {
+		parts[i] = strings.ToLower(p)
+	}
+
+	orgName := strings.Join(parts, "-")
+
+	_, err := s.Store.CreateNewAccount(ctx, email, name, orgName)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return err

@@ -353,7 +353,7 @@ func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, 
 	return org, nil
 }
 
-func (s *BusinessStore) CreateNewAccount(ctx context.Context, email, name string) (*dbgen.Organization, error) {
+func (s *BusinessStore) CreateNewAccount(ctx context.Context, email, name, orgName string) (*dbgen.Organization, error) {
 	user, err := s.db.CreateUser(ctx, &dbgen.CreateUserParams{
 		Name:  name,
 		Email: email,
@@ -371,7 +371,7 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, email, name string
 
 	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
 
-	return s.CreateNewOrganization(ctx, name, user.ID)
+	return s.CreateNewOrganization(ctx, orgName, user.ID)
 }
 
 func (s *BusinessStore) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
