@@ -68,7 +68,13 @@
         <div class="rounded-lg bg-white shadow flex flex-1">
             <div class="flex-1 px-12 pt-8 pb-12">
                 <div id="property-tabs">
+                    {{- if eq .Params.Tab 1 -}}
+                    {{template "integrations.html" .}}
+                    {{- else if eq .Params.Tab 2 -}}
+                    {{template "settings.html" .}}
+                    {{- else -}}
                     {{template "reports.html" .}}
+                    {{- end -}}
                 </div>
             </div>
         </div>
