@@ -53,7 +53,7 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 }
 
 const getUserOrgByName = `-- name: GetUserOrgByName :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2
+SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetUserOrgByNameParams struct {
@@ -76,12 +76,12 @@ func (q *Queries) GetUserOrgByName(ctx context.Context, arg *GetUserOrgByNamePar
 }
 
 const getUserOrganizations = `-- name: GetUserOrganizations :many
-SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
 UNION ALL
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
 FROM organizations o
 JOIN organization_users ou ON o.id = ou.org_id
-WHERE ou.user_id = $1
+WHERE ou.user_id = $1 AND o.deleted_at IS NULL
 `
 
 type GetUserOrganizationsRow struct {
@@ -115,4 +115,38 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const softDeleteOrganization = `-- name: SoftDeleteOrganization :exec
+UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, softDeleteOrganization, id)
+	return err
+}
+
+const updateOrganization = `-- name: UpdateOrganization :one
+UPDATE organizations SET name = $1, updated_at = NOW()
+WHERE id = $2
+RETURNING id, name, user_id, created_at, updated_at, deleted_at
+`
+
+type UpdateOrganizationParams struct {
+	Name string `db:"name" json:"name"`
+	ID   int32  `db:"id" json:"id"`
+}
+
+func (q *Queries) UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganization, arg.Name, arg.ID)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
 }

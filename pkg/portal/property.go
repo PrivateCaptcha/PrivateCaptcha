@@ -476,12 +476,12 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
 	if (name != property.Name) || (difficulty != property.Level) || (growth != property.Growth) {
-		if err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
+		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
 			renderCtx.UpdateError = "Failed to update settings. Please try again."
 		} else {
 			renderCtx.UpdateMessage = "Settings were updated"
+			renderCtx.Property = propertyToUserProperty(updatedProperty)
 		}
-
 	}
 
 	s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
