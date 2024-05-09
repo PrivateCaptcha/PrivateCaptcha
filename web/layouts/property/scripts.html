@@ -15,6 +15,7 @@
         const backgroundColor = '#e4e4e7';
         const requestedColor = '#4f46e5';
         const verifiedColor = '#ffa600';
+        const grayColor = "#6b7280";
 
         const weekdayFormat = d3.timeFormat("%a");
         const monthlyFormat = d3.timeFormat("%b");
@@ -50,6 +51,13 @@
             return d; // For values less than 1000
         };
 
+        const periodLength = {
+            '24h': 1,
+            '7d': 7,
+            '30d': 30,
+            '1y': 365 
+        }
+
         const oddTickFilter = function(d, i) { return !(i % 2); };
         const evenTickFilter = function(d, i) { return (i % 2); };
 
@@ -74,7 +82,7 @@
             '1y': monthlyTicks
         };
 
-        const drawNoData = (element) => {
+        const drawNoData = (element, period, periodLengthDays) => {
             const margin = {top: 20, right: 30, bottom: 60, left: 30};
             const rect = element.getBoundingClientRect();
 
@@ -96,13 +104,13 @@
             // Create x scale
             let x = d3.scaleTime().range([0, width]);
 
-            x.domain([d3.timeDay.offset(new Date(), -7), new Date()]);                
+            x.domain([d3.timeDay.offset(new Date(), -periodLengthDays), new Date()]);
 
             let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
 
             let xAxis = d3.axisBottom(x)
                 .tickValues(xTickValues)
-                .tickFormat(tickFunction['7d']);
+                .tickFormat(tickFunction[period]);
 
             // Create y scale
             let y = d3.scaleLinear().range([height, 0]);
@@ -125,6 +133,13 @@
                 .call(d3.axisLeft(y).ticks(yTicksCount).tickSize(-width).tickFormat(''))
                 .style("color", backgroundColor)
                 .selectAll(".domain").remove();
+
+            chartElement.append("g")
+              .attr("transform", "translate(" + (width / 2 - 80) + "," + (height / 2 + 5) + ")")
+              .append("text")
+              .text("No data available")
+              .style("font-size", "20px")
+              .style("fill", grayColor);
         }
 
         const setBarAttributes = (bars, x, y, height, color, sign) => {
@@ -138,7 +153,7 @@
                 })
                 .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth) - barSpacing/2; })
                 .attr("y", function(d) { return y(d.y); })
-                .attr("height", function(d) { return height - y(d.y); })
+                .attr("height", function(d) { return d.y > 1e-6 ? height - y(d.y) : 0; })
                 .attr("rx", 3)
                 .attr("ry", 3)
                 .attr("fill", color)
@@ -214,7 +229,7 @@
                 .call(yAxis.tickSize(-width))
                 .style("color", backgroundColor);
 
-            yGrid.selectAll("text").style("color", "#6b7280");
+            yGrid.selectAll("text").style("color", grayColor);
             yGrid.selectAll(".domain").remove();
 
             // Append the rectangles for the bar chart
@@ -277,10 +292,11 @@
             },
             async updateChart() {
                 const data = await this.fetchChartData(this.period);
-                if (data) {
+                if (data && data.verified && data.requested &&
+                    ((data.verified.length > 0) || (data.requested.length > 0))) {
                     setChartData(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
                 } else {
-                    drawNoData(this.$refs.chart);
+                    drawNoData(this.$refs.chart, this.period, periodLength[this.period]);
                 }
             }
         }
