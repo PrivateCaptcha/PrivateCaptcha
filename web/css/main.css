@@ -89,6 +89,12 @@
     @apply hover:text-gray-900;
 }
 
+.pc-internal-form-button-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-100;
+    @apply disabled:text-gray-500;
+}
+
 .pc-form-input-base {
     @apply block;
     @apply w-full;
