@@ -421,13 +421,14 @@ func (s *BusinessStore) FindOrg(ctx context.Context, name string, userID int32) 
 	return org, nil
 }
 
-func (s *BusinessStore) CreateProperty(ctx context.Context, name string, orgID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+func (s *BusinessStore) CreateProperty(ctx context.Context, name string, orgID int32, userID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	property, err := s.db.CreateProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:   name,
-		OrgID:  Int(orgID),
-		Domain: domain,
-		Level:  level,
-		Growth: growth,
+		Name:      name,
+		OrgID:     Int(orgID),
+		CreatorID: Int(userID),
+		Domain:    domain,
+		Level:     level,
+		Growth:    growth,
 	})
 
 	if err != nil {

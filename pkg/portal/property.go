@@ -60,6 +60,7 @@ type propertyDashboardRenderContext struct {
 	UpdateError   string
 	UpdateMessage string
 	Tab           int
+	CanEdit       bool
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -266,6 +267,13 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
 	renderCtx := &propertyWizardRenderContext{
 		Token:      s.XSRF.Token(email, actionNewProperty),
 		CurrentOrg: orgToUserOrg(org),
@@ -288,7 +296,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
-	property, err := s.Store.CreateProperty(ctx, name, org.ID, domain, difficulty, growth)
+	property, err := s.Store.CreateProperty(ctx, name, org.ID, user.ID, domain, difficulty, growth)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
@@ -404,11 +412,19 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 			tab = 0
 		}
 
+		user, err := s.Store.FindUser(ctx, email)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+			s.redirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+
 		renderCtx := &propertyDashboardRenderContext{
 			Property: propertyToUserProperty(property),
 			Org:      orgToUserOrg(org),
 			Token:    s.XSRF.Token(email, actionProperty),
 			Tab:      tab,
+			CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 		}
 		s.render(w, r, tpl, renderCtx)
 	}
@@ -448,6 +464,13 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
 	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
 	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
@@ -461,6 +484,13 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		Org:      orgToUserOrg(org),
 		Token:    s.XSRF.Token(email, actionProperty),
 		Tab:      2, // settings
+		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+	}
+
+	if !renderCtx.CanEdit {
+		renderCtx.UpdateError = "Insufficient permissions to update settings."
+		s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
+		return
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -499,7 +529,44 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.SoftDeleteProperty(ctx, int32(propertyID)); err == nil {
+	if property.OrgID.Int32 != int32(orgID) {
+		slog.ErrorContext(ctx, "Property org does not match", "orgID", property.OrgID.Int32, "pathOrgID", orgID)
+		s.redirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	canDelete := (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32)
+	if !canDelete {
+		slog.ErrorContext(ctx, "Not enough permissions to delete property", "userID", user.ID,
+			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
+		s.redirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	if err := s.Store.SoftDeleteProperty(ctx, int32(propertyID), int32(orgID)); err == nil {
 		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
 	} else {
 		s.redirectError(http.StatusInternalServerError, w, r)

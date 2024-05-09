@@ -352,8 +352,8 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
-	if org.UserID.Int32 != user.ID {
-		renderCtx.UpdateError = "Does not have permissions to update settings."
+	if !renderCtx.CanEdit {
+		renderCtx.UpdateError = "Insufficient permissions to update settings."
 		s.render(w, r, orgSettingsTemplate, renderCtx)
 		return
 	}
