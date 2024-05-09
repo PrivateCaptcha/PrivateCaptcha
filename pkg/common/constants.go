@@ -17,4 +17,5 @@ const (
 	ParamDomain           = "domain"
 	ParamDifficulty       = "difficulty"
 	ParamGrowth           = "growth"
+	ParamTab              = "tab"
 )

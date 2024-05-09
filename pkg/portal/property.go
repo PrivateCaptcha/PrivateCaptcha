@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -58,6 +59,7 @@ type propertyDashboardRenderContext struct {
 	NameError     string
 	UpdateError   string
 	UpdateMessage string
+	Tab           int
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -286,15 +288,16 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
-	_, err = s.Store.CreateProperty(ctx, name, org.ID, domain, difficulty, growth)
+	property, err := s.Store.CreateProperty(ctx, name, org.ID, domain, difficulty, growth)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	// TODO: Redirect to property page instead of dashboard
-	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	dashboardURL := s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID), common.PropertyEndpoint, strconv.Itoa(int(property.ID)))
+	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
+	common.Redirect(dashboardURL, w, r)
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
@@ -327,9 +330,19 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	verified := []*point{}
 
 	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, int32(orgID), int32(propertyID), period); err == nil {
+		anyNonZero := false
 		for _, st := range stats {
+			if (st.RequestsCount > 0) || (st.VerifiesCount > 0) {
+				anyNonZero = true
+			}
 			requested = append(requested, &point{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
 			verified = append(verified, &point{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
+		}
+
+		// we want to show "No data available" on the client
+		if !anyNonZero {
+			requested = []*point{}
+			verified = []*point{}
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve property stats", common.ErrAttr(err))
@@ -375,10 +388,27 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 			return
 		}
 
+		tabParam := r.URL.Query().Get(common.ParamTab)
+		var tab int
+		switch tabParam {
+		case "reports":
+			tab = 0
+		case "integrations":
+			tab = 1
+		case "settings":
+			tab = 2
+		default:
+			if len(tabParam) > 0 {
+				slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
+			}
+			tab = 0
+		}
+
 		renderCtx := &propertyDashboardRenderContext{
 			Property: propertyToUserProperty(property),
 			Org:      orgToUserOrg(org),
 			Token:    s.XSRF.Token(email, actionProperty),
+			Tab:      tab,
 		}
 		s.render(w, r, tpl, renderCtx)
 	}
@@ -430,6 +460,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		Property: propertyToUserProperty(property),
 		Org:      orgToUserOrg(org),
 		Token:    s.XSRF.Token(email, actionProperty),
+		Tab:      2, // settings
 	}
 
 	name := r.FormValue(common.ParamName)
