@@ -58,7 +58,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
@@ -75,7 +75,7 @@
     <div class="col-span-full">
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label"> Base difficulty </label>
         <div class="mt-2">
-            <select name="{{ .Const.Difficulty }}" class="pc-form-select">
+            <select name="{{ .Const.Difficulty }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.Level 0 }}selected="selected"{{end}}>Easy</option>
                 <option value="1" {{ if eq $.Params.Property.Level 1 }}selected="selected"{{end}}>Normal</option>
                 <option value="2" {{ if eq $.Params.Property.Level 2 }}selected="selected"{{end}}>Hard</option>
@@ -86,7 +86,7 @@
     <div class="col-span-full">
         <label for="{{ .Const.Growth }}" class="pc-internal-form-label"> Difficulty growth </label>
         <div class="mt-2">
-            <select name="{{ .Const.Growth }}" class="pc-form-select">
+            <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Slow</option>
                 <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Normal</option>
                 <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Fast</option>
@@ -98,5 +98,5 @@
 </div>
 
 <div class="mt-8 flex">
-    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
+    <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-primary{{ else }}pc-internal-form-button-disabled{{ end }}">Save</button>
 </div>

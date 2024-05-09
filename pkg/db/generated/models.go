@@ -178,6 +178,7 @@ type Property struct {
 	Name       string             `db:"name" json:"name"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
 	OrgID      pgtype.Int4        `db:"org_id" json:"org_id"`
+	CreatorID  pgtype.Int4        `db:"creator_id" json:"creator_id"`
 	Domain     string             `db:"domain" json:"domain"`
 	Level      DifficultyLevel    `db:"level" json:"level"`
 	Growth     DifficultyGrowth   `db:"growth" json:"growth"`

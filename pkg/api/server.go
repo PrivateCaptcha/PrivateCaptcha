@@ -176,6 +176,8 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
+	// perhaps quite important place: we record events for the user that owns the org where the property belongs
+	// effectively, who is billed for the org (NOTE: property also has a reference to the user who created it)
 	puzzle.Difficulty = s.levels.Difficulty(fingerprint, &property, org.UserID.Int32)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)

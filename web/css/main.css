@@ -207,7 +207,7 @@ body.pc-vertical-stretch {
     @apply text-white;
 }
 
-.pc-form-select {
+.pc-internal-form-select {
     @apply bg-white;
     @apply block;
     @apply w-full;
@@ -221,6 +221,12 @@ body.pc-vertical-stretch {
     @apply focus:ring-gray-900;
     @apply focus:border-gray-900;
     @apply sm:text-sm;
+}
+
+.pc-internal-form-select-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-100;
+    @apply disabled:text-gray-500;
 }
 
 .pc-hidden {
