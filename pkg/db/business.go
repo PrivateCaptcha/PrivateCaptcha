@@ -348,6 +348,9 @@ func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, 
 	if org != nil {
 		cacheKey := orgCachePrefix + strconv.Itoa(int(org.ID))
 		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+
+		// invalidate user orgs in cache as we just created another one
+		_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(org.UserID.Int32)))
 	}
 
 	return org, nil
@@ -442,7 +445,7 @@ func (s *BusinessStore) CreateProperty(ctx context.Context, name string, orgID i
 	return property, nil
 }
 
-func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) error {
+func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	property, err := s.db.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
 		Name:   name,
 		Level:  level,
@@ -452,7 +455,7 @@ func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name s
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update property in DB", "name", name, "propID", propID, common.ErrAttr(err))
-		return err
+		return nil, err
 	}
 
 	slog.DebugContext(ctx, "Updated property", "name", name, "propID", propID)
@@ -462,10 +465,10 @@ func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name s
 	// invalidate org properties in cache as we just created a new property
 	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(property.OrgID.Int32)))
 
-	return nil
+	return property, nil
 }
 
-func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32) error {
+func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
 	if err := s.db.SoftDeleteProperty(ctx, propID); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", propID, common.ErrAttr(err))
 		return err
@@ -476,7 +479,7 @@ func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32) er
 	// update caches
 	_ = s.cache.SetMissing(ctx, propertyCachePrefix+strconv.Itoa(int(propID)), negativeCacheDuration)
 	// invalidate org properties in cache as we just deleted a property
-	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(propID)))
+	_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(orgID)))
 
 	return nil
 }
@@ -504,4 +507,41 @@ func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) 
 	}
 
 	return properties, err
+}
+
+func (s *BusinessStore) UpdateOrganization(ctx context.Context, orgID int32, name string) (*dbgen.Organization, error) {
+	org, err := s.db.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
+		Name: name,
+		ID:   orgID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update org in DB", "name", name, "orgID", orgID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Updated organization", "name", name, "orgID", orgID)
+
+	cacheKey := orgCachePrefix + strconv.Itoa(int(org.ID))
+	_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+	// invalidate user orgs in cache as we just updated name
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(org.UserID.Int32)))
+
+	return org, nil
+}
+
+func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
+	if err := s.db.SoftDeleteOrganization(ctx, orgID); err != nil {
+		slog.ErrorContext(ctx, "Failed to mark organization as deleted in DB", "orgID", orgID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Soft-deleted organization", "orgID", orgID)
+
+	// update caches
+	_ = s.cache.SetMissing(ctx, orgCachePrefix+strconv.Itoa(int(orgID)), negativeCacheDuration)
+	// invalidate user orgs in cache as we just deleted one
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+
+	return nil
 }
