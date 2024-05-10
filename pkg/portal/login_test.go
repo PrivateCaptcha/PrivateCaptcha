@@ -1,8 +1,11 @@
 package portal
 
 import (
+	"bytes"
+	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -77,5 +80,52 @@ func TestGetLogin(t *testing.T) {
 
 	if !server.XSRF.VerifyToken(token, "", actionLogin) {
 		t.Error("Failed to verify token in Login form")
+	}
+}
+
+func TestPostLogin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	orgName := "org"
+	email := t.Name() + "@example.com"
+	if _, err := server.Store.CreateNewAccount(ctx, email, "username", orgName); err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.getLogin(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data
+	form := url.Values{}
+	form.Add(common.ParamCsrfToken, csrfToken)
+	form.Add(common.ParamEmail, email)
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	if rr.Code != http.StatusSeeOther {
+		t.Errorf("Unexpected post login code: %v", rr.Code)
+	}
+
+	// Check if the two-factor code is set in the StubMailer
+	stubMailer, ok := server.Mailer.(*StubMailer)
+	if !ok {
+		t.Fatal("failed to cast Mailer to StubMailer")
+	}
+	if stubMailer.lastCode == 0 {
+		t.Error("two-factor code not set in StubMailer")
 	}
 }
