@@ -248,7 +248,7 @@ func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User
 	return user, nil
 }
 
-func (s *BusinessStore) FindUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
+func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
 	cacheKey := userOrgsCachePrefix + strconv.Itoa(int(userID))
 
 	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
@@ -421,7 +421,7 @@ func (s *BusinessStore) FindOrg(ctx context.Context, name string, userID int32) 
 	return org, nil
 }
 
-func (s *BusinessStore) CreateProperty(ctx context.Context, name string, orgID int32, userID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+func (s *BusinessStore) CreateNewProperty(ctx context.Context, name string, orgID int32, userID int32, domain string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	property, err := s.db.CreateProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:      name,
 		OrgID:     Int(orgID),
