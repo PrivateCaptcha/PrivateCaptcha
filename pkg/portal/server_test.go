@@ -21,6 +21,7 @@ var (
 	queries    *dbgen.Queries
 	cache      common.Cache
 	timeSeries *db.TimeSeriesStore
+	store      *db.BusinessStore
 )
 
 func TestMain(m *testing.M) {
@@ -48,7 +49,7 @@ func TestMain(m *testing.M) {
 	queries = dbgen.New(pool)
 	cache = db.NewMemoryCache(1 * time.Minute)
 
-	store := db.NewBusiness(queries, cache, 5*time.Second)
+	store = db.NewBusiness(queries, cache, 5*time.Second)
 	defer store.Shutdown()
 
 	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
