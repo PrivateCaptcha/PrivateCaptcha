@@ -50,7 +50,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess := s.Session.SessionStart(w, r)
 	step, ok := sess.Get(session.KeyLoginStep).(int)
 	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
-		slog.WarnContext(ctx, "User session is not valid")
+		slog.WarnContext(ctx, "User session is not valid", "step", step)
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
 	}
