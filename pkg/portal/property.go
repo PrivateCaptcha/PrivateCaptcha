@@ -296,7 +296,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
-	property, err := s.Store.CreateProperty(ctx, name, org.ID, user.ID, domain, difficulty, growth)
+	property, err := s.Store.CreateNewProperty(ctx, name, org.ID, user.ID, domain, difficulty, growth)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)

@@ -178,7 +178,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		return nil, err
 	}
 
-	orgs, err := s.Store.FindUserOrganizations(ctx, user.ID)
+	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user orgs", common.ErrAttr(err))
 		return nil, err
