@@ -1,0 +1,72 @@
+package portal
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+)
+
+func TestPutPropertyInsufficientPermissions(t *testing.T) {
+	ctx := context.TODO()
+	orgName := "Org Name"
+	// Create a new user account and organization
+	email1 := t.Name() + "_owner@example.com"
+	org1, err := server.Store.CreateNewAccount(ctx, email1, "User Name", orgName)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a new property
+	property, err := server.Store.CreateNewProperty(ctx, "propertyName", org1.ID, org1.UserID.Int32, "example.com", dbgen.DifficultyLevelMedium, dbgen.DifficultyGrowthMedium)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	// Create another user account
+	email2 := t.Name() + "_intruder@example.com"
+	if _, err = server.Store.CreateNewAccount(ctx, email2, "User Name", orgName); err != nil {
+		t.Fatalf("Failed to create intruder account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(srv)
+
+	cookie, err := authenticateSuite(ctx, email2, srv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send PUT request as the second user to update the property
+	form := url.Values{}
+	form.Set(common.ParamCsrfToken, server.XSRF.Token(email2, actionProperty))
+	form.Set(common.ParamName, "Updated Property Name")
+	form.Set(common.ParamDifficulty, "0")
+	form.Set(common.ParamGrowth, "2")
+
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%d/property/%d/edit", org1.ID, property.ID),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("Failed to read response body: %v", err)
+	}
+
+	expectedError := "Insufficient permissions to update settings."
+	if !strings.Contains(string(body), expectedError) {
+		t.Error("Expected response body to contain permissions error")
+	}
+}

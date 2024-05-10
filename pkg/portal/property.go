@@ -488,6 +488,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !renderCtx.CanEdit {
+		slog.WarnContext(ctx, "Insufficient permissions to edit property", "userID", user.ID, "orgUserID", org.UserID.Int32,
+			"propUserID", property.CreatorID.Int32)
 		renderCtx.UpdateError = "Insufficient permissions to update settings."
 		s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
 		return
@@ -509,6 +511,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
 			renderCtx.UpdateError = "Failed to update settings. Please try again."
 		} else {
+			slog.DebugContext(ctx, "Edited property", "propID", propertyID, "orgID", orgID)
 			renderCtx.UpdateMessage = "Settings were updated"
 			renderCtx.Property = propertyToUserProperty(updatedProperty)
 		}
