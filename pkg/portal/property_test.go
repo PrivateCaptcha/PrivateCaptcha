@@ -15,6 +15,10 @@ import (
 )
 
 func TestPutPropertyInsufficientPermissions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	ctx := context.TODO()
 	orgName := "Org Name"
 	// Create a new user account and organization
