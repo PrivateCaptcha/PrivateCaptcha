@@ -276,7 +276,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 
 	renderCtx := &propertyWizardRenderContext{
 		Token:      s.XSRF.Token(email, actionNewProperty),
-		CurrentOrg: orgToUserOrg(org),
+		CurrentOrg: orgToUserOrg(org, user.ID),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -421,8 +421,8 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 
 		renderCtx := &propertyDashboardRenderContext{
 			Property: propertyToUserProperty(property),
-			Org:      orgToUserOrg(org),
-			Token:    s.XSRF.Token(email, actionProperty),
+			Org:      orgToUserOrg(org, user.ID),
+			Token:    s.XSRF.Token(email, actionPropertySettings),
 			Tab:      tab,
 			CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 		}
@@ -450,7 +450,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionProperty) {
+	if !s.XSRF.VerifyToken(token, email, actionPropertySettings) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -481,8 +481,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 
 	renderCtx := &propertyDashboardRenderContext{
 		Property: propertyToUserProperty(property),
-		Org:      orgToUserOrg(org),
-		Token:    s.XSRF.Token(email, actionProperty),
+		Org:      orgToUserOrg(org, user.ID),
+		Token:    s.XSRF.Token(email, actionPropertySettings),
 		Tab:      2, // settings
 		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}

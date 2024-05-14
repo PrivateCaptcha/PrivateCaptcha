@@ -50,7 +50,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	name := r.FormValue(common.ParamName)
 	if len(name) < 3 {
-		data.EmailError = "Please use a longer name."
+		data.NameError = "Please use a longer name."
 		s.render(w, r, registerFormTemplate, data)
 		return
 	}

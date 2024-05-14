@@ -12,6 +12,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
@@ -41,6 +42,10 @@ var (
 		Growth               string
 		Stats                string
 		DeleteEndpoint       string
+		MembersEndpoint      string
+		OrgLevelInvited      string
+		OrgLevelMember       string
+		OrgLevelOwner        string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -65,6 +70,10 @@ var (
 		IntegrationsEndpoint: common.IntegrationsEndpoint,
 		EditEndpoint:         common.EditEndpoint,
 		DeleteEndpoint:       common.DeleteEndpoint,
+		MembersEndpoint:      common.MembersEndpoint,
+		OrgLevelInvited:      string(dbgen.AccessLevelInvited),
+		OrgLevelMember:       string(dbgen.AccessLevelMember),
+		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
 	}
 )
 
@@ -124,6 +133,10 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 		return common.IntArg(next, "property", common.PropertyIDContextKey, badRequestURL)
 	}
 
+	user := func(next http.HandlerFunc) http.HandlerFunc {
+		return common.IntArg(next, "user", common.UserIDContextKey, badRequestURL)
+	}
+
 	period := func(next http.HandlerFunc) http.HandlerFunc {
 		return common.StrArg(next, "period", common.PeriodContextKey, badRequestURL)
 	}
@@ -142,7 +155,12 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(s.postNewOrg)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(org(s.getPortal)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.DashboardEndpoint, s.private(org(s.getOrgDashboard)))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.MembersEndpoint, s.private(org(s.getOrgMembers)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(s.getOrgSettings)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.postOrgMembers)))
+	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint+"/{user}", s.private(org(user(s.deleteOrgMembers))))
+	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.joinOrg)))
+	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.leaveOrg)))
 	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.EditEndpoint, s.private(org(s.putOrg)))
 	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.DeleteEndpoint, s.private(org(s.deleteOrg)))
 	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(org(s.getNewOrgProperty)))

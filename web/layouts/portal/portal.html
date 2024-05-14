@@ -74,6 +74,20 @@
                             x-transition:leave-end="opacity-0"
                             class="absolute right-0 z-10 mt-2 w-72 origin-top-right divide-y divide-gray-200 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none" tabindex="-1" role="listbox" aria-labelledby="listbox-label" aria-activedescendant="listbox-option-0">
                             {{ range $org := .Params.Orgs }}
+                            {{ if eq $org.Level $.Const.OrgLevelInvited }}
+                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100" role="option">
+                                <a href="{{ partsURL $.Const.OrgEndpoint $org.ID }}" class="inline-block cursor-default flex justify-between">
+                                    <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
+                                    <span
+                                        x-show="orgID == '{{ $org.ID }}'"
+                                        class="text-gray-900">
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </a>
+                            </li>
+                            {{ else }}
                             <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100"
                                 @click="open = false; orgID = '{{ $org.ID }}'; orgName = '{{ $org.Name }}'"
                                 hx-target="#org-tabs"
@@ -94,10 +108,11 @@
                                 </div>
                             </li>
                             {{ end }}
-                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100 hover:text-white" role="option">
+                            {{ end }}
+                            <li class="group text-gray-900 cursor-default select-none text-sm hover:bg-gray-100" role="option">
                                 <a
                                     href="{{ partsURL $.Const.OrgEndpoint .Const.NewEndpoint }}"
-                                    class="inline-flex items-center justify-center leading-4 text-gray-900"
+                                    class="inline-flex items-center justify-center leading-4 text-gray-900 w-full h-full p-4 cursor-default"
                                     >
                                     <svg class="w-4 h-4 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -120,7 +135,23 @@
         <div class="rounded-lg bg-white shadow flex flex-1">
             <div class="flex-1 flex px-12 pt-8 pb-12">
                 <div id="org-tabs" class="flex-1 flex flex-col">
-                    {{template "org-dashboard.html" .}}
+                    {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelInvited }}
+                    <div class="bg-gray-50 sm:rounded-lg mt-4">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900">Join {{ .Params.CurrentOrg.Name }}?</h3>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <p>You were invited to join organization <strong>{{ .Params.CurrentOrg.Name }}</strong>. Accepting the invite will grant you access to properties and settings.</p>
+                            </div>
+                            <div class="mt-5">
+                                <button type="button"
+                                    hx-put="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}"
+                                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Accept invite</button>
+                            </div>
+                        </div>
+                        {{ else }}
+                        {{template "org-dashboard.html" .}}
+                    </div>
+                    {{ end }}
                 </div>
             </div>
         </div>
