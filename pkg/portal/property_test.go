@@ -50,7 +50,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 
 	// Send PUT request as the second user to update the property
 	form := url.Values{}
-	form.Set(common.ParamCsrfToken, server.XSRF.Token(email2, actionProperty))
+	form.Set(common.ParamCsrfToken, server.XSRF.Token(email2, actionPropertySettings))
 	form.Set(common.ParamName, "Updated Property Name")
 	form.Set(common.ParamDifficulty, "0")
 	form.Set(common.ParamGrowth, "2")

@@ -3,16 +3,19 @@ package portal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/badoux/checkmail"
 )
 
 var (
@@ -24,6 +27,8 @@ var (
 const (
 	orgPropertiesTemplate = "portal/org-dashboard.html"
 	orgSettingsTemplate   = "portal/org-settings.html"
+	orgMembersTemplate    = "portal/org-members.html"
+	maxOrgFormSizeBytes   = 256 * 1024
 )
 
 type orgSettingsRenderContext struct {
@@ -32,6 +37,22 @@ type orgSettingsRenderContext struct {
 	NameError     string
 	UpdateMessage string
 	UpdateError   string
+	CanEdit       bool
+}
+
+type orgUser struct {
+	Name      string
+	ID        string
+	Level     string
+	CreatedAt string
+}
+
+type orgMemberRenderContext struct {
+	CurrentOrg    *userOrg
+	Token         string
+	InviteError   string
+	InviteMessage string
+	Members       []*orgUser
 	CanEdit       bool
 }
 
@@ -53,11 +74,36 @@ type orgWizardRenderContext struct {
 	NameError string
 }
 
-func orgToUserOrg(org *dbgen.Organization) *userOrg {
-	return &userOrg{
+func userToOrgUser(user *dbgen.User, level string) *orgUser {
+	return &orgUser{
+		Name:      user.Name,
+		ID:        strconv.Itoa(int(user.ID)),
+		CreatedAt: user.CreatedAt.Time.Format("02 Jan 2006"),
+		Level:     level,
+	}
+}
+
+func usersToOrgUsers(users []*dbgen.GetOrganizationUsersRow) []*orgUser {
+	result := make([]*orgUser, 0, len(users))
+
+	for _, user := range users {
+		result = append(result, userToOrgUser(&user.User, string(user.Level)))
+	}
+
+	return result
+}
+
+func orgToUserOrg(org *dbgen.Organization, userID int32) *userOrg {
+	uo := &userOrg{
 		Name: org.Name,
 		ID:   strconv.Itoa(int(org.ID)),
 	}
+
+	if org.UserID.Int32 == userID {
+		uo.Level = string(dbgen.AccessLevelOwner)
+	}
+
+	return uo
 }
 
 func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
@@ -120,7 +166,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
@@ -255,7 +301,21 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
 	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
 
 	properties, err := s.Store.RetrieveOrgProperties(ctx, int32(orgID))
 	if err != nil {
@@ -263,13 +323,267 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	renderCtx := &orgPropertiesRenderContext{
-		Properties: propertiesToUserProperties(ctx, properties),
-		CurrentOrg: &userOrg{
-			ID: strconv.Itoa(orgID),
-		},
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
 	}
+
+	renderCtx := &orgPropertiesRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID),
+		Properties: propertiesToUserProperties(ctx, properties),
+	}
+
 	s.render(w, r, orgPropertiesTemplate, renderCtx)
+}
+
+func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	renderCtx := &orgMemberRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID),
+		CanEdit:    org.UserID.Int32 == user.ID,
+	}
+
+	if user.ID != org.UserID.Int32 {
+		slog.WarnContext(ctx, "Fetching org members as not an owner", "userID", user.ID)
+		s.render(w, r, orgMembersTemplate, renderCtx)
+		return
+	}
+
+	members, err := s.Store.RetrieveOrganizationUsers(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	renderCtx.Token = s.XSRF.Token(email, actionOrgMembers)
+	renderCtx.Members = usersToOrgUsers(members)
+
+	s.render(w, r, orgMembersTemplate, renderCtx)
+}
+
+func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	token := r.FormValue(common.ParamCsrfToken)
+	if !s.XSRF.VerifyToken(token, email, actionOrgMembers) {
+		slog.WarnContext(ctx, "Failed to verify CSRF token")
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
+		return
+	}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	members, err := s.Store.RetrieveOrganizationUsers(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	renderCtx := &orgMemberRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID),
+		Token:      s.XSRF.Token(email, actionOrgMembers),
+		Members:    usersToOrgUsers(members),
+		CanEdit:    org.UserID.Int32 == user.ID,
+	}
+
+	if !renderCtx.CanEdit {
+		renderCtx.InviteError = "Only organization owner can invite other members."
+		s.render(w, r, orgMembersTemplate, renderCtx)
+		return
+	}
+
+	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
+	if err := checkmail.ValidateFormat(email); err != nil {
+		slog.Warn("Failed to validate email format", common.ErrAttr(err))
+		renderCtx.InviteError = "Email address is not valid."
+		s.render(w, r, orgMembersTemplate, renderCtx)
+		return
+	}
+
+	inviteUser, err := s.Store.FindUser(ctx, inviteEmail)
+	if err != nil {
+		renderCtx.InviteError = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
+		s.render(w, r, orgMembersTemplate, renderCtx)
+		return
+	}
+
+	if err = s.Store.InviteUserToOrg(ctx, org.UserID.Int32, inviteUser.ID); err != nil {
+		renderCtx.InviteError = "Failed to invite user. Please try again."
+	} else {
+		ou := userToOrgUser(inviteUser, string(dbgen.AccessLevelInvited))
+		renderCtx.Members = append(renderCtx.Members, ou)
+		renderCtx.InviteMessage = "Invite is sent."
+	}
+
+	s.render(w, r, orgMembersTemplate, renderCtx)
+}
+
+func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	//token := r.FormValue(common.ParamCsrfToken)
+	//if !s.XSRF.VerifyToken(token, email, actionOrgMembers) {
+	//	slog.WarnContext(ctx, "Failed to verify CSRF token")
+	//	common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
+	//	return
+	//}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	if org.UserID.Int32 != user.ID {
+		slog.ErrorContext(ctx, "Remove member request from not the org owner", "orgUserID", org.UserID.Int32, "userID", user.ID)
+		http.Error(w, "", http.StatusUnauthorized)
+		return
+	}
+
+	userID := ctx.Value(common.UserIDContextKey).(int)
+	if err := s.Store.RemoveUserFromOrg(ctx, int32(orgID), int32(userID)); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+
+	if err := s.Store.JoinOrg(ctx, int32(orgID), user.ID); err == nil {
+		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
+		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	} else {
+		s.redirectError(http.StatusInternalServerError, w, r)
+	}
+}
+
+func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+
+	if err := s.Store.LeaveOrg(ctx, int32(orgID), user.ID); err == nil {
+		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
+		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	} else {
+		s.redirectError(http.StatusInternalServerError, w, r)
+	}
 }
 
 func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
@@ -297,12 +611,13 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := &orgSettingsRenderContext{
-		CurrentOrg: orgToUserOrg(org),
-		Token:      s.XSRF.Token(email, actionOrg),
+	renderCtx := &orgSettingsRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID),
+		Token:      s.XSRF.Token(email, actionOrgSettings),
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
-	s.render(w, r, orgSettingsTemplate, data)
+
+	s.render(w, r, orgSettingsTemplate, renderCtx)
 }
 
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
@@ -316,7 +631,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
+	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
@@ -325,7 +640,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionOrg) {
+	if !s.XSRF.VerifyToken(token, email, actionOrgSettings) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -347,8 +662,8 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &orgSettingsRenderContext{
-		CurrentOrg: orgToUserOrg(org),
-		Token:      s.XSRF.Token(email, actionOrg),
+		CurrentOrg: orgToUserOrg(org, user.ID),
+		Token:      s.XSRF.Token(email, actionOrgSettings),
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
@@ -370,7 +685,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 			renderCtx.UpdateError = "Failed to update settings. Please try again."
 		} else {
 			renderCtx.UpdateMessage = "Settings were updated"
-			renderCtx.CurrentOrg = orgToUserOrg(updatedOrg)
+			renderCtx.CurrentOrg = orgToUserOrg(updatedOrg, user.ID)
 		}
 	}
 

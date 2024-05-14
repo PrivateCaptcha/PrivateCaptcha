@@ -1,9 +1,11 @@
-CREATE TYPE access_level AS ENUM ('read', 'write', 'owner');
+-- NOTE: owner is not actually stored here
+CREATE TYPE access_level AS ENUM ('member', 'invited', 'owner');
 
 CREATE TABLE IF NOT EXISTS organization_users(
     org_id INT REFERENCES organizations(id),
     user_id INT REFERENCES users(id),
-    level access_level NOT NULL DEFAULT 'read',
+    level access_level NOT NULL,
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ DEFAULT current_timestamp,
     PRIMARY KEY (org_id, user_id)
 );

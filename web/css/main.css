@@ -289,3 +289,8 @@ input[type=submit]:disabled {
 .tooltip:hover:before {
   display:block;
 }
+
+ul.htmx-swapping li {
+  opacity: 0;
+  transition: opacity 1s ease-out;
+}

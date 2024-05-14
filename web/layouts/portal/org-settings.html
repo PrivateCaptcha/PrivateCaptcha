@@ -8,6 +8,9 @@
             hx-on::config-request="event.detail.path += '/'+this.value"
             hx-swap="innerHTML">
             <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.MembersEndpoint }}">Members</option>
+            {{ end }}
             <option value="{{ $.Const.SettingsEndpoint }}" selected>Settings</option>
         </select>
     </div>
@@ -19,6 +22,13 @@
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
+                {{ end }}
                 <a href="#" class="border-indigo-500 text-indigo-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Settings</a>
             </nav>
         </div>
@@ -95,6 +105,7 @@
             {{template "settings-basic-form.html" .}}
         </form>
     </div>
+    {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
     <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
         <div>
             <h2 class="text-base font-semibold leading-7 text-gray-900">Delete organization</h2>
@@ -105,4 +116,20 @@
             <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
         </div>
     </div>
+    {{ else }}
+    <div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
+        <div>
+            <h2 class="text-base font-semibold leading-7 text-gray-900">Leave organization</h2>
+            <p class="mt-1 text-sm leading-6 text-gray-600">Lose access to all properties. You can still rejoin later.</p>
+        </div>
+
+        <div class="flex items-start md:col-span-2">
+            <button type="submit" class="pc-internal-form-button pc-internal-form-button-danger"
+                hx-confirm="Are you sure?"
+                hx-delete="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}">
+                Leave
+            </button>
+        </div>
+    </div>
+    {{ end }}
 </div>
