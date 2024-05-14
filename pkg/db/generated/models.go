@@ -14,9 +14,9 @@ import (
 type AccessLevel string
 
 const (
-	AccessLevelRead  AccessLevel = "read"
-	AccessLevelWrite AccessLevel = "write"
-	AccessLevelOwner AccessLevel = "owner"
+	AccessLevelMember  AccessLevel = "member"
+	AccessLevelInvited AccessLevel = "invited"
+	AccessLevelOwner   AccessLevel = "owner"
 )
 
 func (e *AccessLevel) Scan(src interface{}) error {
@@ -171,6 +171,7 @@ type OrganizationUser struct {
 	UserID    int32              `db:"user_id" json:"user_id"`
 	Level     AccessLevel        `db:"level" json:"level"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type Property struct {

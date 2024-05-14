@@ -40,6 +40,7 @@ const (
 	orgPropertiesCachePrefix = "orgprops/"
 	propertyCachePrefix      = "prop/"
 	userOrgsCachePrefix      = "userorgs/"
+	orgUsersCachePrefix      = "orgusers/"
 )
 
 type BusinessStore struct {
@@ -543,6 +544,112 @@ func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32,
 	_ = s.cache.SetMissing(ctx, orgCachePrefix+strconv.Itoa(int(orgID)), negativeCacheDuration)
 	// invalidate user orgs in cache as we just deleted one
 	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+
+	return nil
+}
+
+// NOTE: by definition this does not include the owner as this relationship is set directly in the 'organizations' table
+func (s *BusinessStore) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
+	cacheKey := orgUsersCachePrefix + strconv.Itoa(int(orgID))
+
+	if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+		return users, nil
+	}
+
+	users, err := s.db.GetOrganizationUsers(ctx, orgID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to fetch organization users", "orgID", orgID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched organization users", "orgID", orgID, "count", len(users))
+
+	if len(users) > 0 {
+		_ = s.cache.SetItem(ctx, cacheKey, users, userCacheDuration)
+	}
+
+	return users, nil
+}
+
+func (s *BusinessStore) InviteUserToOrg(ctx context.Context, orgID int32, userID int32) error {
+	_, err := s.db.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
+		OrgID:  orgID,
+		UserID: userID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to add user to org", "orgID", orgID, "userID", userID, common.ErrAttr(err))
+	}
+
+	// invalidate relevant caches
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+	_ = s.cache.Delete(ctx, orgUsersCachePrefix+strconv.Itoa(int(orgID)))
+
+	slog.DebugContext(ctx, "Added org membership invite", "orgID", orgID, "userID", userID)
+
+	return nil
+}
+
+func (s *BusinessStore) JoinOrg(ctx context.Context, orgID int32, userID int32) error {
+	err := s.db.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+		OrgID:   orgID,
+		UserID:  userID,
+		Level:   dbgen.AccessLevelMember,
+		Level_2: dbgen.AccessLevelInvited,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to accept org invite", "orgID", orgID, "userID", userID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Accepted org invite", "orgID", orgID, "userID", userID)
+
+	// invalidate relevant caches
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+	_ = s.cache.Delete(ctx, orgUsersCachePrefix+strconv.Itoa(int(orgID)))
+
+	return nil
+}
+
+func (s *BusinessStore) LeaveOrg(ctx context.Context, orgID int32, userID int32) error {
+	err := s.db.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+		OrgID:   orgID,
+		UserID:  userID,
+		Level:   dbgen.AccessLevelInvited,
+		Level_2: dbgen.AccessLevelMember,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to leave org", "orgID", orgID, "userID", userID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Left organization", "orgID", orgID, "userID", userID)
+
+	// invalidate relevant caches
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+	_ = s.cache.Delete(ctx, orgUsersCachePrefix+strconv.Itoa(int(orgID)))
+
+	return nil
+}
+
+func (s *BusinessStore) RemoveUserFromOrg(ctx context.Context, orgID int32, userID int32) error {
+	err := s.db.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
+		OrgID:  orgID,
+		UserID: userID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to remove user from org", "orgID", orgID, "userID", userID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Removed user from org", "orgID", orgID, "userID", userID)
+
+	// invalidate relevant caches
+	_ = s.cache.Delete(ctx, userOrgsCachePrefix+strconv.Itoa(int(userID)))
+	_ = s.cache.Delete(ctx, orgUsersCachePrefix+strconv.Itoa(int(orgID)))
 
 	return nil
 }

@@ -8,6 +8,9 @@
             hx-on::config-request="event.detail.path += '/'+this.value"
             hx-swap="innerHTML">
             <option value="{{ $.Const.DashboardEndpoint }}" selected>Properties</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.MembersEndpoint }}">Members</option>
+            {{ end }}
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
         </select>
     </div>
@@ -15,6 +18,13 @@
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
                 <a href="#" class="border-indigo-500 text-indigo-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Properties</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
+                {{ end }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"

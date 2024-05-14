@@ -21,4 +21,5 @@ const (
 	IntegrationsEndpoint = "integrations"
 	EditEndpoint         = "edit"
 	DeleteEndpoint       = "delete"
+	MembersEndpoint      = "members"
 )
