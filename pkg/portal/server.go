@@ -47,6 +47,7 @@ var (
 		OrgLevelMember       string
 		OrgLevelOwner        string
 		GeneralEndpoint      string
+		EmailEndpoint        string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -76,6 +77,7 @@ var (
 		OrgLevelMember:       string(dbgen.AccessLevelMember),
 		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
 		GeneralEndpoint:      common.GeneralEndpoint,
+		EmailEndpoint:        common.EmailEndpoint,
 	}
 )
 
@@ -196,6 +198,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.StatsEndpoint, "{period}"), s.private(org(property(period(s.getPropertyStats)))))
 	router.HandleFunc(get(common.SettingsEndpoint), s.private(s.getGeneralSettings(settingsTemplate)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.getGeneralSettings(settingsGeneralTemplate)))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), s.private(s.editEmail))
 	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.putGeneralSettings))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
