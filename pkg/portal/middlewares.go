@@ -15,6 +15,7 @@ const (
 	actionPropertySettings = "property-settings"
 	actionOrgSettings      = "org-settings"
 	actionOrgMembers       = "org-members"
+	actionUserSettings     = "user-settings"
 )
 
 type XSRFMiddleware struct {
