@@ -499,6 +499,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	if name != property.Name {
 		if nameError := s.validatePropertyName(ctx, name, org.ID); len(nameError) > 0 {
 			renderCtx.NameError = nameError
+			renderCtx.Property.Name = name
 			s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
 			return
 		}
