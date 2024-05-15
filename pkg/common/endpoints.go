@@ -23,4 +23,5 @@ const (
 	DeleteEndpoint       = "delete"
 	MembersEndpoint      = "members"
 	GeneralEndpoint      = "general"
+	EmailEndpoint        = "email"
 )

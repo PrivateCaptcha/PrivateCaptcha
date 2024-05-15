@@ -41,6 +41,7 @@
             </div>
 
             <form
+                id="general-form"
                 hx-put='{{ partsURL .Const.SettingsEndpoint .Const.TabEndpoint .Const.GeneralEndpoint }}'
                 hx-target="this"
                 hx-swap="innerHTML"
@@ -48,9 +49,7 @@
                 hx-disabled-elt="input, button"
                 class="md:col-span-2"
                 >
-                <div class="grid sm:max-w-lg grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
                     {{template "general-form.html" .}}
-                </div>
             </form>
         </div>
 
