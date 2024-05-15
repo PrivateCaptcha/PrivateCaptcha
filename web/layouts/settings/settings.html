@@ -1,0 +1,29 @@
+{{template "base.html" .}}
+
+{{define "title"}}Settings{{end}}
+
+{{define "html_class"}}h-full{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
+{{define "footer"}}{{block "footer-signed-in" .}}{{end}}{{end}}
+
+{{define "header"}}
+<div>
+    {{block "header-signed-in" .}}{{end}}
+
+    <div class="bg-white shadow-sm">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <h1 class="text-lg font-semibold leading-6 text-gray-900">Settings</h1>
+        </div>
+    </div>
+</div>
+{{end}}
+
+
+{{define "main"}}
+<div class="flex-1">
+    <div class="mx-auto max-w-7xl lg:flex lg:gap-x-16 lg:px-8">
+        {{template "general.html" .}}
+    </div>
+</div>
+{{end}}

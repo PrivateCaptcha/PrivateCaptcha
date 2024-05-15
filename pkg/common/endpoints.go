@@ -22,4 +22,5 @@ const (
 	EditEndpoint         = "edit"
 	DeleteEndpoint       = "delete"
 	MembersEndpoint      = "members"
+	GeneralEndpoint      = "general"
 )
