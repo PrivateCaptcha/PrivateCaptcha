@@ -55,7 +55,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.FormValue(common.ParamEmail)
+	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err := checkmail.ValidateFormat(email); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
