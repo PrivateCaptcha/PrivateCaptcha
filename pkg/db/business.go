@@ -653,3 +653,27 @@ func (s *BusinessStore) RemoveUserFromOrg(ctx context.Context, orgID int32, user
 
 	return nil
 }
+
+func (s *BusinessStore) UpdateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {
+	user, err := s.db.UpdateUser(ctx, &dbgen.UpdateUserParams{
+		Name:  name,
+		Email: newEmail,
+		ID:    userID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update user", "userID", userID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated user", "userID", userID)
+
+	// delete old email from cache
+	_ = s.cache.Delete(ctx, emailCachePrefix+oldEmail)
+
+	if user != nil {
+		_ = s.cache.SetItem(ctx, emailCachePrefix+newEmail, user, userCacheDuration)
+	}
+
+	return nil
+}

@@ -46,6 +46,7 @@ var (
 		OrgLevelInvited      string
 		OrgLevelMember       string
 		OrgLevelOwner        string
+		GeneralEndpoint      string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -74,6 +75,7 @@ var (
 		OrgLevelInvited:      string(dbgen.AccessLevelInvited),
 		OrgLevelMember:       string(dbgen.AccessLevelMember),
 		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
+		GeneralEndpoint:      common.GeneralEndpoint,
 	}
 )
 
@@ -141,37 +143,60 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 		return common.StrArg(next, "period", common.PeriodContextKey, badRequestURL)
 	}
 
-	router.HandleFunc(http.MethodGet+" "+prefix+common.LoginEndpoint, s.getLogin)
-	router.HandleFunc(http.MethodPost+" "+prefix+common.LoginEndpoint, common.Logged(s.postLogin))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.RegisterEndpoint, s.getRegister)
-	router.HandleFunc(http.MethodPost+" "+prefix+common.RegisterEndpoint, common.Logged(s.postRegister))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.TwoFactorEndpoint, s.getTwoFactor)
-	router.HandleFunc(http.MethodPost+" "+prefix+common.TwoFactorEndpoint, common.Logged(s.postTwoFactor))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.ResendEndpoint, common.Logged(s.resend2fa))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/{code}", s.error)
-	router.HandleFunc(http.MethodGet+" "+prefix+common.ExpiredEndpoint, s.expired)
-	router.HandleFunc(http.MethodGet+" "+prefix+common.LogoutEndpoint, s.logout)
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/"+common.NewEndpoint, s.private(s.getNewOrg))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(s.postNewOrg)))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}", s.private(org(s.getPortal)))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.DashboardEndpoint, s.private(org(s.getOrgDashboard)))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.MembersEndpoint, s.private(org(s.getOrgMembers)))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(s.getOrgSettings)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.postOrgMembers)))
-	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint+"/{user}", s.private(org(user(s.deleteOrgMembers))))
-	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.joinOrg)))
-	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.MembersEndpoint, s.private(org(s.leaveOrg)))
-	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.EditEndpoint, s.private(org(s.putOrg)))
-	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.DeleteEndpoint, s.private(org(s.deleteOrg)))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, s.private(org(s.getNewOrgProperty)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/"+common.NewEndpoint, common.Logged(s.private(org(s.postNewOrgProperty))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}", s.private(org(property(s.getPropertyDashboard(propertyDashboardTemplate)))))
-	router.HandleFunc(http.MethodPut+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.EditEndpoint, s.private(org(property(s.putProperty))))
-	router.HandleFunc(http.MethodDelete+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.DeleteEndpoint, s.private(org(property(s.deleteProperty))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.ReportsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardReportsTemplate)))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.SettingsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardSettingsTemplate)))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.TabEndpoint+"/"+common.IntegrationsEndpoint, s.private(org(property(s.getPropertyDashboard(propertyDashboardIntegrationsTemplate)))))
-	router.HandleFunc(http.MethodGet+" "+prefix+common.OrgEndpoint+"/{org}/"+common.PropertyEndpoint+"/{property}/"+common.StatsEndpoint+"/{period}", s.private(org(property(period(s.getPropertyStats)))))
+	route := func(method string, parts ...string) string {
+		return method + " " + prefix + strings.Join(parts, "/")
+	}
+
+	get := func(parts ...string) string {
+		return route(http.MethodGet, parts...)
+	}
+
+	post := func(parts ...string) string {
+		return route(http.MethodPost, parts...)
+	}
+
+	put := func(parts ...string) string {
+		return route(http.MethodPut, parts...)
+	}
+
+	delete := func(parts ...string) string {
+		return route(http.MethodDelete, parts...)
+	}
+
+	router.HandleFunc(get(common.LoginEndpoint), s.getLogin)
+	router.HandleFunc(post(common.LoginEndpoint), common.Logged(s.postLogin))
+	router.HandleFunc(get(common.RegisterEndpoint), s.getRegister)
+	router.HandleFunc(post(common.RegisterEndpoint), common.Logged(s.postRegister))
+	router.HandleFunc(get(common.TwoFactorEndpoint), s.getTwoFactor)
+	router.HandleFunc(post(common.TwoFactorEndpoint), common.Logged(s.postTwoFactor))
+	router.HandleFunc(post(common.ResendEndpoint), common.Logged(s.resend2fa))
+	router.HandleFunc(get(common.ErrorEndpoint, "{code}"), s.error)
+	router.HandleFunc(get(common.ExpiredEndpoint), s.expired)
+	router.HandleFunc(get(common.LogoutEndpoint), s.logout)
+	router.HandleFunc(get(common.OrgEndpoint, common.NewEndpoint), s.private(s.getNewOrg))
+	router.HandleFunc(post(common.OrgEndpoint, common.NewEndpoint), common.Logged(s.private(s.postNewOrg)))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}"), s.private(org(s.getPortal)))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.DashboardEndpoint), s.private(org(s.getOrgDashboard)))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.MembersEndpoint), s.private(org(s.getOrgMembers)))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.SettingsEndpoint), s.private(org(s.getOrgSettings)))
+	router.HandleFunc(post(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.postOrgMembers)))
+	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.MembersEndpoint, "{user}"), s.private(org(user(s.deleteOrgMembers))))
+	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.joinOrg)))
+	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.leaveOrg)))
+	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.EditEndpoint), s.private(org(s.putOrg)))
+	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.DeleteEndpoint), s.private(org(s.deleteOrg)))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, common.NewEndpoint), s.private(org(s.getNewOrgProperty)))
+	router.HandleFunc(post(common.OrgEndpoint, "{org}", common.PropertyEndpoint, common.NewEndpoint), common.Logged(s.private(org(s.postNewOrgProperty))))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}"), s.private(org(property(s.getPropertyDashboard(propertyDashboardTemplate)))))
+	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.EditEndpoint), s.private(org(property(s.putProperty))))
+	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.DeleteEndpoint), s.private(org(property(s.deleteProperty))))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.ReportsEndpoint), s.private(org(property(s.getPropertyDashboard(propertyDashboardReportsTemplate)))))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.SettingsEndpoint), s.private(org(property(s.getPropertyDashboard(propertyDashboardSettingsTemplate)))))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.IntegrationsEndpoint), s.private(org(property(s.getPropertyDashboard(propertyDashboardIntegrationsTemplate)))))
+	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.StatsEndpoint, "{period}"), s.private(org(property(period(s.getPropertyStats)))))
+	router.HandleFunc(get(common.SettingsEndpoint), s.private(s.getGeneralSettings(settingsTemplate)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.getGeneralSettings(settingsGeneralTemplate)))
+	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.putGeneralSettings))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }

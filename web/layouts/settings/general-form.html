@@ -1,0 +1,42 @@
+
+            <div class="sm:col-span-full">
+                <label for="{{ .Const.Name }}" class="block text-sm font-medium leading-6 text-gray-900">Name</label>
+                <div class="mt-2 relative">
+                    {{- if .Params.NameError -}}
+                    {{template "info-icon-red.html" .}}
+                    {{- end -}}
+                    <input type="text" name="{{ .Const.Name }}" maxlength="255" value="{{ .Params.Name }}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+                </div>
+                {{- if .Params.NameError -}}
+                <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+                {{- end -}}
+            </div>
+
+            <div class="sm:col-span-full">
+                <label for="{{ .Const.Email}}" class="block text-sm font-medium leading-6 text-gray-900">Email</label>
+                <div class="mt-2 relative">
+                    {{- if .Params.EmailError -}}
+                    {{template "info-icon-red.html" .}}
+                    {{- end -}}
+                    <input type="email" name="{{ .Const.Email }}" maxlength="255" value="{{ .Params.Email }}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+                </div>
+                {{- if .Params.EmailError -}}
+                <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
+                {{- end -}}
+            </div>
+
+            <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
+
+            <div class="flex items-start md:col-span-2">
+                <button
+                    type="submit"
+                    class="pc-internal-form-button pc-internal-form-button-primary"
+                    >
+                    <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Save
+                </button>
+            </div>
+
