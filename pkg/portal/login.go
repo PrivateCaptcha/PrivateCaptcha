@@ -3,6 +3,7 @@ package portal
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -52,7 +53,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := r.FormValue(common.ParamEmail)
+	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err = checkmail.ValidateFormat(email); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		data.Error = "Email address is not valid."
