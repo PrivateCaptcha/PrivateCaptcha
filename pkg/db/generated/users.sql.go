@@ -33,7 +33,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, created_at, updated_at, deleted_at FROM users WHERE email = $1
+SELECT id, name, email, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -48,6 +48,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 		&i.DeletedAt,
 	)
 	return &i, err
+}
+
+const softDeleteUser = `-- name: SoftDeleteUser :exec
+UPDATE users SET deleted_at = NOW() WHERE id = $1
+`
+
+func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, softDeleteUser, id)
+	return err
 }
 
 const updateUser = `-- name: UpdateUser :one

@@ -24,4 +24,5 @@ const (
 	MembersEndpoint      = "members"
 	GeneralEndpoint      = "general"
 	EmailEndpoint        = "email"
+	UserEndpoint         = "user"
 )

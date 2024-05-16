@@ -4,7 +4,7 @@ INSERT INTO organizations (name, user_id) VALUES ($1, $2) RETURNING *;
 -- name: GetOrganizationByID :one
 SELECT * from organizations WHERE id = $1;
 
--- name: GetUserOrgByName :one
+-- name: FindUserOrgByName :one
 SELECT * from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL;
 
 -- name: UpdateOrganization :one
@@ -22,3 +22,6 @@ WHERE ou.user_id = $1 AND o.deleted_at IS NULL;
 
 -- name: SoftDeleteOrganization :exec
 UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1;
+
+-- name: SoftDeleteUserOrganizations :exec
+UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1;
