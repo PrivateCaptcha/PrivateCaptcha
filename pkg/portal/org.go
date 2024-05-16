@@ -221,7 +221,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	user, err := s.Store.FindUser(ctx, email)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		return nil, err
+		return nil, errInvalidSession
 	}
 
 	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
@@ -290,6 +290,10 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if (org == -1) && (err == errNoOrgs) {
 			common.Redirect(s.partsURL(common.OrgEndpoint, common.NewEndpoint), w, r)
+		} else if err == errInvalidSession {
+			slog.WarnContext(ctx, "Inconsistent user session found")
+			s.Session.SessionDestroy(w, r)
+			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		} else {
 			s.redirectError(http.StatusInternalServerError, w, r)
 		}
