@@ -51,7 +51,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 }
 
 const updateUser = `-- name: UpdateUser :one
-UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING id, name, email, created_at, updated_at, deleted_at
+UPDATE users SET name = $1, email = $2, updated_at = NOW() WHERE id = $3 RETURNING id, name, email, created_at, updated_at, deleted_at
 `
 
 type UpdateUserParams struct {
