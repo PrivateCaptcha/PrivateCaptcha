@@ -192,3 +192,29 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 
 	s.render(w, r, settingsGeneralFormTemplate, renderCtx)
 }
+
+func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session.SessionStart(w, r)
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	if err := s.Store.SoftDeleteUser(ctx, user.ID, user.Email); err == nil {
+		// TODO: Cancel subscription if any
+		s.logout(w, r)
+	} else {
+		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+	}
+}

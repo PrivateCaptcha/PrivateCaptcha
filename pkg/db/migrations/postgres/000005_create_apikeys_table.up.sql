@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS apikeys(
     enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
     expires_at TIMESTAMPTZ DEFAULT current_timestamp + INTERVAL '2 year',
+    deleted_at TIMESTAMPTZ NULL DEFAULT NULL,
     notes TEXT DEFAULT ''
 );
 

@@ -34,12 +34,17 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 	return &i, err
 }
 
-const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
+const findUserOrgByName = `-- name: FindUserOrgByName :one
+SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
-func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
-	row := q.db.QueryRow(ctx, getOrganizationByID, id)
+type FindUserOrgByNameParams struct {
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+	Name   string      `db:"name" json:"name"`
+}
+
+func (q *Queries) FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameParams) (*Organization, error) {
+	row := q.db.QueryRow(ctx, findUserOrgByName, arg.UserID, arg.Name)
 	var i Organization
 	err := row.Scan(
 		&i.ID,
@@ -52,17 +57,12 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 	return &i, err
 }
 
-const getUserOrgByName = `-- name: GetUserOrgByName :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
+const getOrganizationByID = `-- name: GetOrganizationByID :one
+SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
 `
 
-type GetUserOrgByNameParams struct {
-	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
-	Name   string      `db:"name" json:"name"`
-}
-
-func (q *Queries) GetUserOrgByName(ctx context.Context, arg *GetUserOrgByNameParams) (*Organization, error) {
-	row := q.db.QueryRow(ctx, getUserOrgByName, arg.UserID, arg.Name)
+func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
+	row := q.db.QueryRow(ctx, getOrganizationByID, id)
 	var i Organization
 	err := row.Scan(
 		&i.ID,
@@ -123,6 +123,15 @@ UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
 	_, err := q.db.Exec(ctx, softDeleteOrganization, id)
+	return err
+}
+
+const softDeleteUserOrganizations = `-- name: SoftDeleteUserOrganizations :exec
+UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1
+`
+
+func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error {
+	_, err := q.db.Exec(ctx, softDeleteUserOrganizations, userID)
 	return err
 }
 

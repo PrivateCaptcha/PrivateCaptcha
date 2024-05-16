@@ -13,7 +13,7 @@ const getOrganizationUsers = `-- name: GetOrganizationUsers :many
 SELECT u.id, u.name, u.email, u.created_at, u.updated_at, u.deleted_at, ou.level
 FROM organization_users ou
 JOIN users u ON ou.user_id = u.id
-WHERE ou.org_id = $1
+WHERE ou.org_id = $1 AND u.deleted_at IS NULL
 `
 
 type GetOrganizationUsersRow struct {

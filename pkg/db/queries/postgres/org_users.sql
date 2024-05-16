@@ -2,7 +2,7 @@
 SELECT sqlc.embed(u), ou.level
 FROM organization_users ou
 JOIN users u ON ou.user_id = u.id
-WHERE ou.org_id = $1;
+WHERE ou.org_id = $1 AND u.deleted_at IS NULL;
 
 -- name: InviteUserToOrg :one
 INSERT INTO organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING *;

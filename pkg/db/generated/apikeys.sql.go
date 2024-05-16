@@ -17,7 +17,7 @@ INSERT INTO apikeys (
 ) VALUES (
   $1
 )
-RETURNING id, external_id, user_id, enabled, created_at, expires_at, notes
+RETURNING id, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes
 `
 
 func (q *Queries) CreateAPIKey(ctx context.Context, userID pgtype.Int4) (*APIKey, error) {
@@ -30,13 +30,14 @@ func (q *Queries) CreateAPIKey(ctx context.Context, userID pgtype.Int4) (*APIKey
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.DeletedAt,
 		&i.Notes,
 	)
 	return &i, err
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one
-SELECT id, external_id, user_id, enabled, created_at, expires_at, notes FROM apikeys WHERE external_id = $1
+SELECT id, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes FROM apikeys WHERE external_id = $1
 `
 
 func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error) {
@@ -49,14 +50,23 @@ func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.U
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.DeletedAt,
 		&i.Notes,
 	)
 	return &i, err
 }
 
+const softDeleteUserAPIKeys = `-- name: SoftDeleteUserAPIKeys :exec
+UPDATE apikeys SET deleted_at = NOW() WHERE user_id = $1
+`
+
+func (q *Queries) SoftDeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) error {
+	_, err := q.db.Exec(ctx, softDeleteUserAPIKeys, userID)
+	return err
+}
+
 const updateAPIKey = `-- name: UpdateAPIKey :exec
-UPDATE apikeys SET expires_at = $1, enabled = $2
-WHERE external_id = $3
+UPDATE apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3
 `
 
 type UpdateAPIKeyParams struct {

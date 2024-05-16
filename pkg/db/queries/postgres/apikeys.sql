@@ -10,5 +10,7 @@ INSERT INTO apikeys (
 RETURNING *;
 
 -- name: UpdateAPIKey :exec
-UPDATE apikeys SET expires_at = $1, enabled = $2
-WHERE external_id = $3;
+UPDATE apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3;
+
+-- name: SoftDeleteUserAPIKeys :exec
+UPDATE apikeys SET deleted_at = NOW() WHERE user_id = $1;

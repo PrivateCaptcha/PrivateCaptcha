@@ -182,6 +182,10 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 
 	if apiKey != nil {
 		_ = s.cache.SetItem(ctx, cacheKey, apiKey, apiKeyCacheDuration)
+
+		if apiKey.DeletedAt.Valid {
+			return apiKey, ErrSoftDeleted
+		}
 	}
 
 	return apiKey, nil
@@ -405,7 +409,7 @@ func (s *BusinessStore) FindOrg(ctx context.Context, name string, userID int32) 
 		return nil, ErrInvalidInput
 	}
 
-	org, err := s.db.GetUserOrgByName(ctx, &dbgen.GetUserOrgByNameParams{
+	org, err := s.db.FindUserOrgByName(ctx, &dbgen.FindUserOrgByNameParams{
 		UserID: Int(userID),
 		Name:   name,
 	})
@@ -674,6 +678,45 @@ func (s *BusinessStore) UpdateUser(ctx context.Context, userID int32, name strin
 	if user != nil {
 		_ = s.cache.SetItem(ctx, emailCachePrefix+newEmail, user, userCacheDuration)
 	}
+
+	return nil
+}
+
+func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email string) error {
+	if err := s.db.SoftDeleteUser(ctx, userID); err != nil {
+		slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", userID, common.ErrAttr(err))
+		return err
+	} else {
+		slog.DebugContext(ctx, "Soft-deleted user", "userID", userID)
+	}
+
+	if err := s.db.SoftDeleteUserOrganizations(ctx, Int(userID)); err != nil {
+		slog.ErrorContext(ctx, "Failed to soft-delete user organizations", "userID", userID, common.ErrAttr(err))
+		// intentionally do not return here
+	} else {
+		slog.DebugContext(ctx, "Soft-deleted user organizations", "userID", userID)
+	}
+
+	if err := s.db.SoftDeleteUserAPIKeys(ctx, Int(userID)); err != nil {
+		slog.ErrorContext(ctx, "Failed to soft-delete user API keys", "userID", userID, common.ErrAttr(err))
+		// intentionally do not return here
+	} else {
+		slog.DebugContext(ctx, "Disabled user API keys", "userID", userID)
+	}
+
+	// TODO: Delete user API keys from cache
+
+	// invalidate user caches
+	userOrgsCacheKey := userOrgsCachePrefix + strconv.Itoa(int(userID))
+	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, userOrgsCacheKey, userCacheDuration); err == nil {
+		for _, org := range orgs {
+			_ = s.cache.Delete(ctx, orgCachePrefix+strconv.Itoa(int(org.Organization.ID)))
+			_ = s.cache.Delete(ctx, orgPropertiesCachePrefix+strconv.Itoa(int(org.Organization.ID)))
+		}
+		_ = s.cache.Delete(ctx, userOrgsCacheKey)
+	}
+
+	_ = s.cache.Delete(ctx, emailCachePrefix+email)
 
 	return nil
 }
