@@ -28,6 +28,7 @@ type settingsGeneralRenderContext struct {
 	TwoFactorError string
 	TwoFactorEmail string
 	UpdateMessage  string
+	UpdateError    string
 	EditEmail      bool
 }
 
@@ -98,7 +99,6 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
-
 	ctx := r.Context()
 	sess := s.Session.SessionStart(w, r)
 	email, ok := sess.Get(session.KeyUserEmail).(string)
@@ -130,25 +130,22 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	formName := r.FormValue(common.ParamName)
+	formName := strings.TrimSpace(r.FormValue(common.ParamName))
 	formEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 
 	renderCtx := &settingsGeneralRenderContext{
-		Token:          s.XSRF.Token(email, actionUserSettings),
-		Name:           formName,
-		Email:          formEmail,
-		TwoFactorEmail: common.MaskEmail(email, '*'),
+		Token:     s.XSRF.Token(email, actionUserSettings),
+		Name:      user.Name,
+		Email:     user.Email,
+		EditEmail: (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
 	}
 
-	if len(formName) < 3 {
-		renderCtx.NameError = "Please use a longer name."
-		s.render(w, r, settingsGeneralFormTemplate, renderCtx)
-		return
-	}
+	anyChange := false
 
-	// anyChange := formName != user.Name
+	if renderCtx.EditEmail {
+		renderCtx.Email = formEmail
+		renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
-	if formEmail != user.Email {
 		if err := checkmail.ValidateFormat(formEmail); err != nil {
 			slog.Warn("Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
@@ -156,20 +153,40 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		sentCode, hasSent2FA := sess.Get(session.KeyTwoFactorCode).(int)
+		sentCode, hasSentCode := sess.Get(session.KeyTwoFactorCode).(int)
 		formCode := r.FormValue(common.ParamVerificationCode)
 
-		if (len(formCode) == 0) || !hasSent2FA {
+		// we "used" the code now
+		sess.Delete(session.KeyTwoFactorCode)
 
-			//renderCtx.Waiting2FA = true
-			renderCtx.Name = formName
-		} else if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) {
+		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, common.ErrAttr(err))
 			renderCtx.TwoFactorError = "Code is not valid."
 			s.render(w, r, settingsGeneralFormTemplate, renderCtx)
 			return
+		}
+
+		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
+	} else /*edit name only*/ {
+		renderCtx.Name = formName
+
+		if (formName != user.Name) && (len(formName) > 0) && (len(formName) < 3) {
+			renderCtx.NameError = "Please use a longer name."
+			s.render(w, r, settingsGeneralFormTemplate, renderCtx)
+			return
+		}
+
+		anyChange = (len(formName) > 0) && (formName != user.Name)
+	}
+
+	if anyChange {
+		if err := s.Store.UpdateUser(ctx, user.ID, renderCtx.Name, renderCtx.Email /*new email*/, user.Email /*old email*/); err == nil {
+			renderCtx.UpdateMessage = "Settings were updated."
+			renderCtx.EditEmail = false
+			sess.Set(session.KeyUserEmail, renderCtx.Email)
+			sess.Set(session.KeyUserName, renderCtx.Name)
 		} else {
-			//anyChange = true
+			renderCtx.UpdateError = "Failed to update settings. Please try again."
 		}
 	}
 
