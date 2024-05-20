@@ -12,19 +12,21 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO apikeys (
-  user_id
-) VALUES (
-  $1
-)
-RETURNING id, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes
+INSERT INTO apikeys (name, user_id, expires_at) VALUES ($1, $2, $3) RETURNING id, name, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes
 `
 
-func (q *Queries) CreateAPIKey(ctx context.Context, userID pgtype.Int4) (*APIKey, error) {
-	row := q.db.QueryRow(ctx, createAPIKey, userID)
+type CreateAPIKeyParams struct {
+	Name      string             `db:"name" json:"name"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
+	ExpiresAt pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+}
+
+func (q *Queries) CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*APIKey, error) {
+	row := q.db.QueryRow(ctx, createAPIKey, arg.Name, arg.UserID, arg.ExpiresAt)
 	var i APIKey
 	err := row.Scan(
 		&i.ID,
+		&i.Name,
 		&i.ExternalID,
 		&i.UserID,
 		&i.Enabled,
@@ -37,7 +39,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, userID pgtype.Int4) (*APIKey
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one
-SELECT id, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes FROM apikeys WHERE external_id = $1
+SELECT id, name, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes FROM apikeys WHERE external_id = $1
 `
 
 func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error) {
@@ -45,6 +47,67 @@ func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.U
 	var i APIKey
 	err := row.Scan(
 		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.UserID,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DeletedAt,
+		&i.Notes,
+	)
+	return &i, err
+}
+
+const getUserAPIKeys = `-- name: GetUserAPIKeys :many
+SELECT id, name, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes FROM apikeys WHERE user_id = $1 AND deleted_at IS NULL AND expires_at > NOW()
+`
+
+func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error) {
+	rows, err := q.db.Query(ctx, getUserAPIKeys, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*APIKey
+	for rows.Next() {
+		var i APIKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.UserID,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.DeletedAt,
+			&i.Notes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const softDeleteAPIKey = `-- name: SoftDeleteAPIKey :one
+UPDATE apikeys SET deleted_at = NOW() WHERE id=$1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes
+`
+
+type SoftDeleteAPIKeyParams struct {
+	ID     int32       `db:"id" json:"id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) SoftDeleteAPIKey(ctx context.Context, arg *SoftDeleteAPIKeyParams) (*APIKey, error) {
+	row := q.db.QueryRow(ctx, softDeleteAPIKey, arg.ID, arg.UserID)
+	var i APIKey
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
 		&i.ExternalID,
 		&i.UserID,
 		&i.Enabled,

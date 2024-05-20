@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS apikeys(
     id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
     external_id UUID DEFAULT gen_random_uuid(),
     user_id INTEGER REFERENCES users(id),
     enabled BOOLEAN DEFAULT TRUE,

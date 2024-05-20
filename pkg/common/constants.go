@@ -18,4 +18,6 @@ const (
 	ParamDifficulty       = "difficulty"
 	ParamGrowth           = "growth"
 	ParamTab              = "tab"
+	ParamNew              = "new"
+	ParamMonths           = "months"
 )
