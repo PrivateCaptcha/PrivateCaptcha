@@ -157,17 +157,13 @@ func (s *Server) validateOrgName(ctx context.Context, name string, userID int32)
 
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -175,21 +171,14 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionNewOrg) {
+	if !s.XSRF.VerifyToken(token, user.Email, actionNewOrg) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
 	}
 
 	renderCtx := &orgWizardRenderContext{
-		Token: s.XSRF.Token(email, actionNewOrg),
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		Token: s.XSRF.Token(user.Email, actionNewOrg),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -305,11 +294,8 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
@@ -327,13 +313,6 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	renderCtx := &orgPropertiesRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID),
 		Properties: propertiesToUserProperties(ctx, properties),
@@ -344,11 +323,8 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
@@ -356,13 +332,6 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
@@ -385,7 +354,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	renderCtx.Token = s.XSRF.Token(email, actionOrgMembers)
+	renderCtx.Token = s.XSRF.Token(user.Email, actionOrgMembers)
 	renderCtx.Members = usersToOrgUsers(members)
 
 	s.render(w, r, orgMembersTemplate, renderCtx)
@@ -393,17 +362,13 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -411,7 +376,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionOrgMembers) {
+	if !s.XSRF.VerifyToken(token, user.Email, actionOrgMembers) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -425,13 +390,6 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	members, err := s.Store.RetrieveOrganizationUsers(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
@@ -441,7 +399,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 	renderCtx := &orgMemberRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID),
-		Token:      s.XSRF.Token(email, actionOrgMembers),
+		Token:      s.XSRF.Token(user.Email, actionOrgMembers),
 		Members:    usersToOrgUsers(members),
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
@@ -453,7 +411,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
-	if err := checkmail.ValidateFormat(email); err != nil {
+	if err := checkmail.ValidateFormat(inviteEmail); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		renderCtx.InviteError = "Email address is not valid."
 		s.render(w, r, orgMembersTemplate, renderCtx)
@@ -480,17 +438,13 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -512,13 +466,6 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	if org.UserID.Int32 != user.ID {
 		slog.ErrorContext(ctx, "Remove member request from not the org owner", "orgUserID", org.UserID.Int32, "userID", user.ID)
 		http.Error(w, "", http.StatusUnauthorized)
@@ -536,19 +483,8 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.sessionUser(w, r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -564,19 +500,8 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.sessionUser(w, r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -592,11 +517,8 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
@@ -608,16 +530,9 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	renderCtx := &orgSettingsRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID),
-		Token:      s.XSRF.Token(email, actionOrgSettings),
+		Token:      s.XSRF.Token(user.Email, actionOrgSettings),
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
@@ -626,17 +541,13 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxOrgFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -644,7 +555,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionOrgSettings) {
+	if !s.XSRF.VerifyToken(token, user.Email, actionOrgSettings) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -658,16 +569,9 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	renderCtx := &orgSettingsRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID),
-		Token:      s.XSRF.Token(email, actionOrgSettings),
+		Token:      s.XSRF.Token(user.Email, actionOrgSettings),
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
@@ -698,12 +602,8 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
@@ -711,13 +611,6 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}

@@ -104,7 +104,7 @@ func setupVerifySuite(username string) (string, string, error) {
 		return "", "", err
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
+	apikey, err := queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{UserID: db.Int(user.ID)})
 	if err != nil {
 		return "", "", err
 	}
@@ -275,7 +275,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, db.Int(user.ID))
+	apikey, err := queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{UserID: db.Int(user.ID)})
 	if err != nil {
 		t.Fatal(err)
 	}

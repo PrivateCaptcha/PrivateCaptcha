@@ -235,17 +235,13 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	user, err := s.sessionUser(w, r)
+	if err != nil {
 		return
 	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -253,7 +249,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionNewProperty) {
+	if !s.XSRF.VerifyToken(token, user.Email, actionNewProperty) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -267,15 +263,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
 	renderCtx := &propertyWizardRenderContext{
-		Token:      s.XSRF.Token(email, actionNewProperty),
+		Token:      s.XSRF.Token(user.Email, actionNewProperty),
 		CurrentOrg: orgToUserOrg(org, user.ID),
 	}
 
@@ -388,11 +377,8 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 			return
 		}
 
-		sess := s.Session.SessionStart(w, r)
-		email, ok := sess.Get(session.KeyUserEmail).(string)
-		if !ok {
-			slog.ErrorContext(ctx, "Failed to get email from session")
-			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		user, err := s.sessionUser(w, r)
+		if err != nil {
 			return
 		}
 
@@ -412,17 +398,10 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 			tab = 0
 		}
 
-		user, err := s.Store.FindUser(ctx, email)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-			s.redirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-
 		renderCtx := &propertyDashboardRenderContext{
 			Property: propertyToUserProperty(property),
 			Org:      orgToUserOrg(org, user.ID),
-			Token:    s.XSRF.Token(email, actionPropertySettings),
+			Token:    s.XSRF.Token(user.Email, actionPropertySettings),
 			Tab:      tab,
 			CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 		}
@@ -432,17 +411,10 @@ func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
-	}
+	user, err := s.sessionUser(w, r)
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
-	err := r.ParseForm()
+	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
@@ -450,7 +422,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionPropertySettings) {
+	if !s.XSRF.VerifyToken(token, user.Email, actionPropertySettings) {
 		slog.WarnContext(ctx, "Failed to verify CSRF token")
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
@@ -460,13 +432,6 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
@@ -482,7 +447,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	renderCtx := &propertyDashboardRenderContext{
 		Property: propertyToUserProperty(property),
 		Org:      orgToUserOrg(org, user.ID),
-		Token:    s.XSRF.Token(email, actionPropertySettings),
+		Token:    s.XSRF.Token(user.Email, actionPropertySettings),
 		Tab:      2, // settings
 		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
@@ -546,19 +511,8 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Session.SessionStart(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
-	}
-
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.sessionUser(w, r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 

@@ -142,6 +142,7 @@ func (ns NullDifficultyLevel) Value() (driver.Value, error) {
 
 type APIKey struct {
 	ID         int32              `db:"id" json:"id"`
+	Name       string             `db:"name" json:"name"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
 	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
 	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`

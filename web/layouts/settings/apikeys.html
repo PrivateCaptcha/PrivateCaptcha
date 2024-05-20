@@ -1,0 +1,132 @@
+<h2 class="sr-only">API Keys</h2>
+
+<aside class="flex overflow-x-auto border-b border-gray-900/5 py-4 lg:block lg:w-64 lg:flex-none lg:border-0 lg:py-20">
+    <nav class="flex-none px-4 sm:px-6 lg:px-0">
+        <ul role="list" class="flex gap-x-3 gap-y-1 whitespace-nowrap lg:flex-col">
+            <li>
+                <!-- Current: "bg-gray-50 text-indigo-600", Default: "text-gray-700 hover:text-indigo-600 hover:bg-gray-50" -->
+                <a href="#"
+                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.GeneralEndpoint }}"
+                    hx-target="#settings"
+                    hx-swap="innerHTML"
+                    class="text-gray-700 hover:text-indigo-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
+                    <svg class="h-6 w-6 shrink-0 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    General
+                </a>
+            </li>
+            <li>
+                <a href="#" class="bg-gray-50 text-indigo-600 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
+                    <svg class="h-6 w-6 shrink-0 text-gray-400 group-hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33" />
+                    </svg>
+                    API Keys
+                </a>
+            </li>
+            <li>
+                <a href="#" class="text-gray-700 hover:text-indigo-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
+                    <svg class="h-6 w-6 shrink-0 text-gray-400 group-hover:text-indigo-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
+                    </svg>
+                    Billing
+                </a>
+            </li>
+        </ul>
+    </nav>
+</aside>
+
+<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20" x-data="{createOpen: {{ .Params.CreateOpen }}}">
+    <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        x-show="createOpen"
+        x-transition:enter="ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        >
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0"
+                x-show="createOpen"
+                x-transition:enter="ease-out duration-300"
+                x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave="ease-in duration-200"
+                x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:w-full sm:max-w-lg sm:flex">
+                    <form class="sm:flex-1 sm:flex sm:flex-col"
+                        hx-target="#settings"
+                        hx-swap="innerHTML"
+                        hx-post="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.APIKeysEndpoint $.Const.NewEndpoint }}">
+                        {{ template "apikeys-form.html" . }}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mx-auto max-w-4xl">
+        <div class="border-b border-gray-200 pb-5 sm:flex sm:items-center sm:justify-between">
+            <h3 class="text-base font-semibold leading-6 text-gray-900">Your API Keys</h3>
+            <div class="mt-3 sm:ml-4 sm:mt-0">
+                <button type="button"
+                    @click="createOpen = true"
+                    class="inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300">
+                    <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Create new key
+                </button>
+            </div>
+        </div>
+
+        <ul role="list" class="divide-y divide-gray-100"
+            hx-confirm="Are you sure?" hx-target="closest li" hx-swap="outerHTML swap:1s">
+            {{ range $key := .Params.Keys }}
+            <li class="flex items-center justify-between gap-x-6 py-5">
+                <div class="min-w-0">
+                    <div class="flex items-start gap-x-3">
+                        <p class="text-sm font-semibold leading-6 text-gray-900">{{ $key.Name }}</p>
+                        {{ if $key.Secret }}
+                        <p class="inline-flex items-center">
+                            <span class="whitespace-nowrap rounded-md px-2 py-1 text-xs font-medium font-mono text-gray-900 bg-gray-100 ">{{ $key.Secret }}</span>
+                            <a href="#"
+                                title="Copy to clipboard"
+                                class="text-gray-400 hover:text-gray-600 focus:text-gray-400 pl-2"
+                                onclick="navigator.clipboard.writeText('{{$key.Secret}}');">
+                                <svg class="h-5 w-5"  fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+                                </svg>
+                            </a>
+                        </p>
+                        {{ else }}
+                        {{ if $key.ExpiresSoon }}
+                        <p class="rounded-md whitespace-nowrap mt-0.5 px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset text-yellow-800 bg-yellow-50 ring-yellow-600/20">Expires soon</p>
+                        {{ else }}
+                        <p class="rounded-md whitespace-nowrap mt-0.5 px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset text-green-700 bg-green-50 ring-green-600/20">Active</p>
+                        {{ end }}
+                        {{ end }}
+                    </div>
+                    <div class="mt-1 flex items-center gap-x-2 text-xs leading-5 text-gray-500">
+                        {{ if $key.Secret }}
+                        <p>Make sure you save it - you won't be able to access it again.</p>
+                        {{ else }}
+                        <p class="whitespace-nowrap">Expires on <time>{{ $key.ExpiresAt}}</time></p>
+                        {{ end }}
+                    </div>
+                </div>
+                <div class="flex flex-none items-center gap-x-4">
+                    <a href="#"
+                        hx-delete='{{ partsURL $.Const.APIKeysEndpoint $key.ID }}'
+                        hx-disabled-elt="this"
+                        class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Delete<span class="sr-only">, API key</span></a>
+                </div>
+            </li>
+            {{ end }}
+        </ul>
+    </div>
+</main>
