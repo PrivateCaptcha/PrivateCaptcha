@@ -48,7 +48,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		Token: s.XSRF.Token("", actionRegister),
 	}
 
-	name := r.FormValue(common.ParamName)
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if len(name) < 3 {
 		data.NameError = "Please use a longer name."
 		s.render(w, r, registerFormTemplate, data)

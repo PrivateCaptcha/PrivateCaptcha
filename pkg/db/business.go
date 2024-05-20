@@ -41,6 +41,7 @@ const (
 	propertyCachePrefix      = "prop/"
 	userOrgsCachePrefix      = "userorgs/"
 	orgUsersCachePrefix      = "orgusers/"
+	userAPIKeysCachePrefix   = "userapikeys/"
 )
 
 type BusinessStore struct {
@@ -717,6 +718,81 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email 
 	}
 
 	_ = s.cache.Delete(ctx, emailCachePrefix+email)
+
+	return nil
+}
+
+func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
+	cacheKey := userAPIKeysCachePrefix + strconv.Itoa(int(userID))
+
+	if keys, err := fetchCachedMany[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
+		return keys, nil
+	}
+
+	keys, err := s.db.GetUserAPIKeys(ctx, Int(userID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user API keys", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Retrieved API keys", "count", len(keys))
+
+	if len(keys) > 0 {
+		_ = s.cache.SetItem(ctx, cacheKey, keys, apiKeyCacheDuration)
+	}
+
+	return keys, err
+}
+
+func (s *BusinessStore) CreateAPIKey(ctx context.Context, userID int32, name string, expiration time.Time) (*dbgen.APIKey, error) {
+	key, err := s.db.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
+		Name:      name,
+		UserID:    Int(userID),
+		ExpiresAt: Timestampz(expiration),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create API key", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	if key != nil {
+		secret := UUIDToSecret(key.ExternalID)
+		cacheKey := APIKeyCachePrefix + secret
+		_ = s.cache.SetItem(ctx, cacheKey, key, apiKeyCacheDuration)
+
+		// invalidate keys cache
+		_ = s.cache.Delete(ctx, userAPIKeysCachePrefix+strconv.Itoa(int(userID)))
+	}
+
+	return key, nil
+}
+
+func (s *BusinessStore) SoftDeleteAPIKey(ctx context.Context, userID, keyID int32) error {
+	key, err := s.db.SoftDeleteAPIKey(ctx, &dbgen.SoftDeleteAPIKeyParams{
+		ID:     keyID,
+		UserID: Int(userID),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			slog.ErrorContext(ctx, "Failed to find API Key", "keyID", keyID, "userID", userID)
+			return ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to mark API Key as deleted in DB", "keyID", keyID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Soft-deleted API Key", "keyID", keyID)
+
+	// invalidate keys cache
+	if key != nil {
+		secret := UUIDToSecret(key.ExternalID)
+		cacheKey := APIKeyCachePrefix + secret
+		_ = s.cache.Delete(ctx, cacheKey)
+
+		_ = s.cache.Delete(ctx, userAPIKeysCachePrefix+strconv.Itoa(int(userID)))
+	}
 
 	return nil
 }

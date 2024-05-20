@@ -12,5 +12,8 @@ const (
 	OrgIDContextKey          ContextKey = iota
 	PropertyIDContextKey     ContextKey = iota
 	PeriodContextKey         ContextKey = iota
+	KeyIDContextKey          ContextKey = iota
 	UserIDContextKey         ContextKey = iota
+	UserContextKey           ContextKey = iota
+	SessionContextKey        ContextKey = iota
 )

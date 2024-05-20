@@ -49,6 +49,8 @@ var (
 		GeneralEndpoint      string
 		EmailEndpoint        string
 		UserEndpoint         string
+		APIKeysEndpoint      string
+		Months               string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -80,6 +82,8 @@ var (
 		GeneralEndpoint:      common.GeneralEndpoint,
 		EmailEndpoint:        common.EmailEndpoint,
 		UserEndpoint:         common.UserEndpoint,
+		APIKeysEndpoint:      common.APIKeysEndpoint,
+		Months:               common.ParamMonths,
 	}
 )
 
@@ -147,6 +151,10 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 		return common.StrArg(next, "period", common.PeriodContextKey, badRequestURL)
 	}
 
+	key := func(next http.HandlerFunc) http.HandlerFunc {
+		return common.IntArg(next, "key", common.KeyIDContextKey, badRequestURL)
+	}
+
 	route := func(method string, parts ...string) string {
 		return method + " " + prefix + strings.Join(parts, "/")
 	}
@@ -202,9 +210,43 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.getGeneralSettings(settingsGeneralTemplate)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), s.private(s.editEmail))
 	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.putGeneralSettings))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), s.private(s.getAPIKeysSettings))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), s.private(s.postAPIKeySettings))
+	router.HandleFunc(delete(common.APIKeysEndpoint, "{key}"), s.private(key(s.deleteAPIKey)))
 	router.HandleFunc(delete(common.UserEndpoint), s.private(s.deleteAccount))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
+}
+
+func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session {
+	ctx := r.Context()
+	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get session from context")
+		sess = s.Session.SessionStart(w, r)
+	}
+	return sess
+}
+
+func (s *Server) sessionUser(w http.ResponseWriter, r *http.Request) (*dbgen.User, error) {
+	ctx := r.Context()
+	sess := s.session(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		return nil, errInvalidSession
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
+		s.redirectError(http.StatusInternalServerError, w, r)
+		return nil, err
+	}
+
+	return user, nil
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
@@ -271,6 +313,8 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 			if step == loginStepCompleted {
 				ctx := context.WithValue(r.Context(), common.LoggedInContextKey, true)
+				ctx = context.WithValue(ctx, common.SessionContextKey, sess)
+
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			} else {

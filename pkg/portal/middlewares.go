@@ -16,6 +16,7 @@ const (
 	actionOrgSettings      = "org-settings"
 	actionOrgMembers       = "org-members"
 	actionUserSettings     = "user-settings"
+	actionAPIKeysSettings  = "apikeys-settings"
 )
 
 type XSRFMiddleware struct {
