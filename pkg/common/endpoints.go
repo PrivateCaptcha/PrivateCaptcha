@@ -26,4 +26,5 @@ const (
 	EmailEndpoint        = "email"
 	UserEndpoint         = "user"
 	APIKeysEndpoint      = "apikeys"
+	SupportEndpoint      = "support"
 )

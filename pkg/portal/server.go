@@ -51,6 +51,9 @@ var (
 		UserEndpoint         string
 		APIKeysEndpoint      string
 		Months               string
+		SupportEndpoint      string
+		Message              string
+		Category             string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -84,6 +87,9 @@ var (
 		UserEndpoint:         common.UserEndpoint,
 		APIKeysEndpoint:      common.APIKeysEndpoint,
 		Months:               common.ParamMonths,
+		SupportEndpoint:      common.SupportEndpoint,
+		Message:              common.ParamMessage,
+		Category:             common.ParamCategory,
 	}
 )
 
@@ -214,6 +220,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), s.private(s.postAPIKeySettings))
 	router.HandleFunc(delete(common.APIKeysEndpoint, "{key}"), s.private(key(s.deleteAPIKey)))
 	router.HandleFunc(delete(common.UserEndpoint), s.private(s.deleteAccount))
+	router.HandleFunc(get(common.SupportEndpoint), s.private(s.getSupport))
+	router.HandleFunc(post(common.SupportEndpoint), s.private(s.postSupport))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
 }

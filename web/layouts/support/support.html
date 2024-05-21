@@ -1,0 +1,36 @@
+{{template "base.html" .}}
+
+{{define "title"}}Support{{end}}
+
+{{define "html_class"}}h-full{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
+{{define "footer"}}{{block "footer-signed-in" .}}{{end}}{{end}}
+
+{{define "header"}}
+<div>
+    {{block "header-signed-in" .}}{{end}}
+
+    <div class="bg-white shadow-sm">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <h1 class="text-lg font-semibold leading-6 text-gray-900">Support</h1>
+        </div>
+    </div>
+</div>
+{{end}}
+
+
+{{define "main"}}
+<div class="flex-1">
+    <div id="settings" class="mx-auto max-w-2xl lg:flex lg:gap-x-16 lg:px-8">
+        <form class="flex-1 mt-12"
+            hx-post='{{ relURL .Const.SupportEndpoint }}'
+            hx-target="this"
+            hx-swap="innerHTML"
+            hx-disabled-elt="input, button"
+            >
+            {{template "form.html" .}}
+        </form>
+    </div>
+</div>
+{{end}}
