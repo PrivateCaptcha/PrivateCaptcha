@@ -32,12 +32,11 @@ const (
 )
 
 type orgSettingsRenderContext struct {
-	CurrentOrg    *userOrg
-	Token         string
-	NameError     string
-	UpdateMessage string
-	UpdateError   string
-	CanEdit       bool
+	alertRenderContext
+	CurrentOrg *userOrg
+	Token      string
+	NameError  string
+	CanEdit    bool
 }
 
 type orgUser struct {
@@ -48,12 +47,11 @@ type orgUser struct {
 }
 
 type orgMemberRenderContext struct {
-	CurrentOrg    *userOrg
-	Token         string
-	InviteError   string
-	InviteMessage string
-	Members       []*orgUser
-	CanEdit       bool
+	alertRenderContext
+	CurrentOrg *userOrg
+	Token      string
+	Members    []*orgUser
+	CanEdit    bool
 }
 
 type userOrg struct {
@@ -405,32 +403,38 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !renderCtx.CanEdit {
-		renderCtx.InviteError = "Only organization owner can invite other members."
+		renderCtx.ErrorMessage = "Only organization owner can invite other members."
 		s.render(w, r, orgMembersTemplate, renderCtx)
 		return
 	}
 
 	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
+	if inviteEmail == user.Email {
+		renderCtx.ErrorMessage = "You are already a member of this organization."
+		s.render(w, r, orgMembersTemplate, renderCtx)
+		return
+	}
+
 	if err := checkmail.ValidateFormat(inviteEmail); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
-		renderCtx.InviteError = "Email address is not valid."
+		renderCtx.ErrorMessage = "Email address is not valid."
 		s.render(w, r, orgMembersTemplate, renderCtx)
 		return
 	}
 
 	inviteUser, err := s.Store.FindUser(ctx, inviteEmail)
 	if err != nil {
-		renderCtx.InviteError = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
+		renderCtx.ErrorMessage = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
 		s.render(w, r, orgMembersTemplate, renderCtx)
 		return
 	}
 
 	if err = s.Store.InviteUserToOrg(ctx, org.UserID.Int32, inviteUser.ID); err != nil {
-		renderCtx.InviteError = "Failed to invite user. Please try again."
+		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
 	} else {
 		ou := userToOrgUser(inviteUser, string(dbgen.AccessLevelInvited))
 		renderCtx.Members = append(renderCtx.Members, ou)
-		renderCtx.InviteMessage = "Invite is sent."
+		renderCtx.SuccessMessage = "Invite is sent."
 	}
 
 	s.render(w, r, orgMembersTemplate, renderCtx)
@@ -576,7 +580,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !renderCtx.CanEdit {
-		renderCtx.UpdateError = "Insufficient permissions to update settings."
+		renderCtx.ErrorMessage = "Insufficient permissions to update settings."
 		s.render(w, r, orgSettingsTemplate, renderCtx)
 		return
 	}
@@ -590,9 +594,9 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if updatedOrg, err := s.Store.UpdateOrganization(ctx, org.ID, name); err != nil {
-			renderCtx.UpdateError = "Failed to update settings. Please try again."
+			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
-			renderCtx.UpdateMessage = "Settings were updated"
+			renderCtx.SuccessMessage = "Settings were updated"
 			renderCtx.CurrentOrg = orgToUserOrg(updatedOrg, user.ID)
 		}
 	}

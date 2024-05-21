@@ -108,6 +108,11 @@ func funcMap(prefix string) template.FuncMap {
 	}
 }
 
+type alertRenderContext struct {
+	ErrorMessage   string
+	SuccessMessage string
+}
+
 type Server struct {
 	Store      *db.BusinessStore
 	TimeSeries *db.TimeSeriesStore
