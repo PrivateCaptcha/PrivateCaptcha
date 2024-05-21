@@ -20,4 +20,6 @@ const (
 	ParamTab              = "tab"
 	ParamNew              = "new"
 	ParamMonths           = "months"
+	ParamCategory         = "category"
+	ParamMessage          = "message"
 )
