@@ -24,6 +24,7 @@ const (
 )
 
 type settingsGeneralRenderContext struct {
+	alertRenderContext
 	Token          string
 	Name           string
 	NameError      string
@@ -31,8 +32,6 @@ type settingsGeneralRenderContext struct {
 	EmailError     string
 	TwoFactorError string
 	TwoFactorEmail string
-	UpdateMessage  string
-	UpdateError    string
 	EditEmail      bool
 }
 
@@ -196,12 +195,12 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 
 	if anyChange {
 		if err := s.Store.UpdateUser(ctx, user.ID, renderCtx.Name, renderCtx.Email /*new email*/, user.Email /*old email*/); err == nil {
-			renderCtx.UpdateMessage = "Settings were updated."
+			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
 			sess.Set(session.KeyUserEmail, renderCtx.Email)
 			sess.Set(session.KeyUserName, renderCtx.Name)
 		} else {
-			renderCtx.UpdateError = "Failed to update settings. Please try again."
+			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		}
 	}
 

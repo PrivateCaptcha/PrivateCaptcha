@@ -16,11 +16,10 @@ const (
 )
 
 type supportRenderContext struct {
-	Token         string
-	Message       string
-	Category      string
-	UpdateMessage string
-	UpdateError   string
+	alertRenderContext
+	Token    string
+	Message  string
+	Category string
 }
 
 func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) {
@@ -89,16 +88,16 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(message) < 10 {
-		renderCtx.UpdateError = "Please enter more details."
+		renderCtx.ErrorMessage = "Please enter more details."
 		s.render(w, r, supportFormTemplate, renderCtx)
 		return
 	}
 
 	if err := s.Mailer.SendSupportRequest(ctx, user.Email, category, message); err == nil {
-		renderCtx.UpdateMessage = "Your message has been sent."
+		renderCtx.SuccessMessage = "Your message has been sent."
 		renderCtx.Message = ""
 	} else {
-		renderCtx.UpdateError = "Failed to send the message. Please try again."
+		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}
 
 	s.render(w, r, supportFormTemplate, renderCtx)
