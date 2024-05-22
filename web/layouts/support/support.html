@@ -27,6 +27,7 @@
             hx-post='{{ relURL .Const.SupportEndpoint }}'
             hx-target="this"
             hx-swap="innerHTML"
+            hx-indicator="#spinner"
             hx-disabled-elt="input, button"
             >
             {{template "form.html" .}}

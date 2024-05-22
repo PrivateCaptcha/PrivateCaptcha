@@ -140,6 +140,50 @@ func (ns NullDifficultyLevel) Value() (driver.Value, error) {
 	return string(ns.DifficultyLevel), nil
 }
 
+type SupportCategory string
+
+const (
+	SupportCategoryQuestion   SupportCategory = "question"
+	SupportCategorySuggestion SupportCategory = "suggestion"
+	SupportCategoryProblem    SupportCategory = "problem"
+	SupportCategoryUnknown    SupportCategory = "unknown"
+)
+
+func (e *SupportCategory) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SupportCategory(s)
+	case string:
+		*e = SupportCategory(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SupportCategory: %T", src)
+	}
+	return nil
+}
+
+type NullSupportCategory struct {
+	SupportCategory SupportCategory `json:"support_category"`
+	Valid           bool            `json:"valid"` // Valid is true if SupportCategory is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSupportCategory) Scan(value interface{}) error {
+	if value == nil {
+		ns.SupportCategory, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SupportCategory.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSupportCategory) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SupportCategory), nil
+}
+
 type APIKey struct {
 	ID         int32              `db:"id" json:"id"`
 	Name       string             `db:"name" json:"name"`
@@ -188,6 +232,14 @@ type Property struct {
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt  pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+}
+
+type Support struct {
+	ID        int32              `db:"id" json:"id"`
+	Category  SupportCategory    `db:"category" json:"category"`
+	Message   pgtype.Text        `db:"message" json:"message"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type User struct {
