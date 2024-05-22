@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 const (
@@ -35,23 +36,23 @@ func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "support/support.html", renderCtx)
 }
 
-func categoryFromIndex(ctx context.Context, index string) string {
+func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory {
 	i, err := strconv.Atoi(index)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to convert support category", "value", index, common.ErrAttr(err))
-		return "unknown"
+		return dbgen.SupportCategoryUnknown
 	}
 
 	switch i {
 	case 0:
-		return "question"
+		return dbgen.SupportCategoryQuestion
 	case 1:
-		return "suggestion"
+		return dbgen.SupportCategorySuggestion
 	case 2:
-		return "problem"
+		return dbgen.SupportCategoryProblem
 	default:
 		slog.WarnContext(ctx, "Invalid support category index", "index", i)
-		return "unknown"
+		return dbgen.SupportCategoryUnknown
 	}
 }
 
@@ -88,14 +89,17 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(message) < 10 {
+		slog.WarnContext(ctx, "Message is too short", "length", len(message))
 		renderCtx.ErrorMessage = "Please enter more details."
 		s.render(w, r, supportFormTemplate, renderCtx)
 		return
 	}
 
-	if err := s.Mailer.SendSupportRequest(ctx, user.Email, category, message); err == nil {
-		renderCtx.SuccessMessage = "Your message has been sent."
+	if err := s.Mailer.SendSupportRequest(ctx, user.Email, string(category), message); err == nil {
+		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you soon."
 		renderCtx.Message = ""
+
+		_ = s.Store.CreateSupportTicket(ctx, category, message, user.ID)
 	} else {
 		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}

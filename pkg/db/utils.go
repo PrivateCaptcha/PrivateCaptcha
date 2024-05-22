@@ -18,6 +18,13 @@ var (
 	invalidUUID = pgtype.UUID{Valid: false}
 )
 
+func Text(text string) pgtype.Text {
+	return pgtype.Text{
+		String: text,
+		Valid:  true,
+	}
+}
+
 func Int(i int32) pgtype.Int4 {
 	return pgtype.Int4{Int32: i, Valid: true}
 }

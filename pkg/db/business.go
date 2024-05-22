@@ -796,3 +796,20 @@ func (s *BusinessStore) SoftDeleteAPIKey(ctx context.Context, userID, keyID int3
 
 	return nil
 }
+
+func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
+	ticket, err := s.db.CreateSupportTicket(ctx, &dbgen.CreateSupportTicketParams{
+		Category: category,
+		Message:  Text(message),
+		UserID:   Int(userID),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create support ticket", "userID", userID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Created support ticket in DB", "ticketID", ticket.ID)
+
+	return nil
+}
