@@ -235,11 +235,12 @@ type Property struct {
 }
 
 type Support struct {
-	ID        int32              `db:"id" json:"id"`
-	Category  SupportCategory    `db:"category" json:"category"`
-	Message   pgtype.Text        `db:"message" json:"message"`
-	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
-	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ID         int32              `db:"id" json:"id"`
+	Category   SupportCategory    `db:"category" json:"category"`
+	Message    pgtype.Text        `db:"message" json:"message"`
+	Resolution pgtype.Text        `db:"resolution" json:"resolution"`
+	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type User struct {
