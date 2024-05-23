@@ -12,7 +12,7 @@ import (
 )
 
 const createSupportTicket = `-- name: CreateSupportTicket :one
-INSERT INTO support (category, message, user_id) VALUES ($1, $2, $3) RETURNING id, category, message, resolution, user_id, created_at
+INSERT INTO support (category, message, user_id) VALUES ($1, $2, $3) RETURNING id, category, external_id, message, resolution, user_id, created_at
 `
 
 type CreateSupportTicketParams struct {
@@ -27,6 +27,7 @@ func (q *Queries) CreateSupportTicket(ctx context.Context, arg *CreateSupportTic
 	err := row.Scan(
 		&i.ID,
 		&i.Category,
+		&i.ExternalID,
 		&i.Message,
 		&i.Resolution,
 		&i.UserID,
