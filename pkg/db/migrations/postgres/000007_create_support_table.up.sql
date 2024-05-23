@@ -3,6 +3,7 @@ CREATE TYPE support_category AS ENUM ('question', 'suggestion', 'problem', 'unkn
 CREATE TABLE IF NOT EXISTS support(
     id SERIAL PRIMARY KEY,
     category support_category NOT NULL,
+    external_id UUID DEFAULT gen_random_uuid(),
     message TEXT DEFAULT '',
     resolution TEXT DEFAULT '',
     user_id INTEGER REFERENCES users(id),
