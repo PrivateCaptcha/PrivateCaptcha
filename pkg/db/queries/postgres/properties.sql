@@ -1,11 +1,9 @@
--- name: PropertyAndOrgByExternalID :one
-SELECT sqlc.embed(p), sqlc.embed(o) FROM properties p
-INNER JOIN organizations o ON p.org_id = o.id
-WHERE p.external_id = $1;
+-- name: GetPropertiesByExternalID :many
+SELECT * from properties WHERE external_id = ANY($1::UUID[]);
 
 -- name: CreateProperty :one
-INSERT INTO properties (name, org_id, creator_id, domain, level, growth)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateProperty :one

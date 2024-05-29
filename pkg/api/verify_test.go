@@ -89,11 +89,12 @@ func setupVerifySuite(username string) (string, string, error) {
 	}
 
 	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      fmt.Sprintf("%v property", username),
-		OrgID:     db.Int(org.ID),
-		CreatorID: db.Int(user.ID),
-		Level:     dbgen.DifficultyLevelMedium,
-		Growth:    dbgen.DifficultyGrowthMedium,
+		Name:       fmt.Sprintf("%v property", username),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
 		return "", "", err
@@ -217,11 +218,12 @@ func TestVerifyCachePriority(t *testing.T) {
 	}
 
 	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		OrgID:     db.Int(org.ID),
-		CreatorID: db.Int(user.ID),
-		Level:     dbgen.DifficultyLevelMedium,
-		Growth:    dbgen.DifficultyGrowthMedium,
+		Name:       t.Name(),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -235,7 +237,7 @@ func TestVerifyCachePriority(t *testing.T) {
 	apiKeyID := randomUUID()
 	secret := db.UUIDToSecret(*apiKeyID)
 
-	cache.SetMissing(ctx, db.APIKeyCachePrefix+secret, 1*time.Minute)
+	cache.SetMissing(ctx, db.APIKeyCacheKey(secret), 1*time.Minute)
 
 	resp, err := verifySuite(fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), secret)
 	if err != nil {

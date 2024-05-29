@@ -124,15 +124,12 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) (uint8, Stats) {
-	l.recordAccess(fingerprint, p, userID, tnow)
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
+	l.recordAccess(fingerprint, p, tnow)
 
 	stats := l.counts.FetchStats(p.ID, fingerprint, tnow)
 	if !stats.HasProperty {
-		l.backfillProperty(p, userID)
-	}
-	if !stats.HasFingerprint {
-		l.backfillFingerprint(fingerprint, p, userID)
+		l.backfillProperty(p)
 	}
 
 	decayRate := decayRateForLevel(p.Growth)
@@ -142,43 +139,34 @@ func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property
 	return requestsToDifficulty(sum, minDifficulty, p.Growth), stats
 }
 
-func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, userID int32) uint8 {
+func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property) uint8 {
 	tnow := time.Now().UTC()
-	d, _ := l.DifficultyEx(fingerprint, p, userID, tnow)
+	d, _ := l.DifficultyEx(fingerprint, p, tnow)
 	return d
 }
 
-func (l *Levels) backfillProperty(p *dbgen.Property, userID int32) {
+func (l *Levels) backfillProperty(p *dbgen.Property) {
 	br := &common.BackfillRequest{
-		OrgID:       p.OrgID.Int32,
-		UserID:      userID,
-		PropertyID:  p.ID,
-		Fingerprint: 0,
+		OrgID:      p.OrgID.Int32,
+		UserID:     p.OrgOwnerID.Int32,
+		PropertyID: p.ID,
 	}
 	l.backfillChan <- br
 }
 
-func (l *Levels) backfillFingerprint(fingerprint common.TFingerprint, p *dbgen.Property, userID int32) {
-	br := &common.BackfillRequest{
-		OrgID:       p.OrgID.Int32,
-		UserID:      userID,
-		PropertyID:  p.ID,
-		Fingerprint: fingerprint,
-	}
-	l.backfillChan <- br
-}
-
-func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property, userID int32, tnow time.Time) {
+func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) {
 	if (p == nil) || !p.ExternalID.Valid {
 		return
 	}
 
 	ar := &common.AccessRecord{
 		Fingerprint: fingerprint,
-		UserID:      userID,
-		OrgID:       p.OrgID.Int32,
-		PropertyID:  p.ID,
-		Timestamp:   tnow,
+		// we record events for the user that owns the org where the property belongs
+		// (effectively, who is billed for the org), rather than who created it
+		UserID:     p.OrgOwnerID.Int32,
+		OrgID:      p.OrgID.Int32,
+		PropertyID: p.ID,
+		Timestamp:  tnow,
 	}
 
 	l.accessChan <- ar
@@ -241,7 +229,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 	lastCleanupTime := time.Now()
 
 	for r := range l.backfillChan {
-		blog := slog.With("pid", r.PropertyID, "fingerprint", r.Fingerprint)
+		blog := slog.With("pid", r.PropertyID)
 		cacheKey := r.Key()
 		tnow := time.Now()
 		if t, ok := cache[cacheKey]; ok && tnow.Sub(t) <= cacheDuration {
@@ -249,14 +237,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			continue
 		}
 
-		var counts []*common.TimeCount
-		var err error
-		queryProperty := r.Fingerprint == 0
-		if queryProperty {
-			counts, err = l.timeSeries.ReadPropertyStats(ctx, r, l.counts.bucketSize)
-		} else {
-			counts, err = l.timeSeries.ReadFingerprintStats(ctx, r, l.counts.bucketSize)
-		}
+		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.counts.bucketSize)
 
 		if err != nil {
 			blog.ErrorContext(ctx, "Failed to backfill stats", common.ErrAttr(err))
@@ -267,11 +248,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 
 		if len(counts) > 0 {
 			blog.DebugContext(ctx, "Backfilling requests counts", "counts", len(counts))
-			if queryProperty {
-				l.counts.BackfillProperty(r.PropertyID, counts)
-			} else {
-				l.counts.BackfillUser(r.PropertyID, r.Fingerprint, counts)
-			}
+			l.counts.BackfillProperty(r.PropertyID, counts)
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {

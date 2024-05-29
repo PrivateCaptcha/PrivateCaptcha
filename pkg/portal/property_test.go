@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -29,7 +30,15 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	// Create a new property
-	property, err := server.Store.CreateNewProperty(ctx, "propertyName", org1.ID, org1.UserID.Int32, "example.com", dbgen.DifficultyLevelMedium, dbgen.DifficultyGrowthMedium)
+	property, err := server.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:       "propertyName",
+		OrgID:      db.Int(org1.ID),
+		CreatorID:  org1.UserID,
+		OrgOwnerID: org1.UserID,
+		Domain:     "example.com",
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
+	})
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}

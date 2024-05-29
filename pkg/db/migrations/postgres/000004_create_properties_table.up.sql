@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS properties(
     external_id UUID DEFAULT gen_random_uuid(),
     org_id INT REFERENCES organizations(id),
     creator_id INT REFERENCES users(id),
+    org_owner_id INT REFERENCES users(id),
     domain VARCHAR(255) NOT NULL,
     level difficulty_level NOT NULL DEFAULT 'medium',
     growth difficulty_growth NOT NULL DEFAULT 'medium',
