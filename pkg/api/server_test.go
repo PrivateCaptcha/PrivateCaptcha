@@ -21,7 +21,8 @@ var (
 	queries    *dbgen.Queries
 	cache      common.Cache
 	timeSeries *db.TimeSeriesStore
-	auth       *AuthMiddleware
+	auth       *authMiddleware
+	store      *db.BusinessStore
 )
 
 func TestMain(m *testing.M) {
@@ -48,10 +49,11 @@ func TestMain(m *testing.M) {
 	queries = dbgen.New(pool)
 	cache = db.NewMemoryCache(1 * time.Minute)
 
-	store := db.NewBusiness(queries, cache, 5*time.Second)
+	store = db.NewBusiness(queries, cache, 5*time.Second)
 	defer store.Shutdown()
 
-	auth = &AuthMiddleware{Store: store}
+	auth = NewAuthMiddleware(store, 100*time.Millisecond)
+	defer auth.Shutdown()
 
 	s = NewServer(store, timeSeries, levels, 2*time.Second, os.Getenv)
 	defer s.Shutdown()

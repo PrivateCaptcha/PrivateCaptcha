@@ -57,7 +57,22 @@ func TestGetPuzzleUnauthorized(t *testing.T) {
 
 	t.Parallel()
 
-	resp, err := puzzleSuite(db.UUIDToSiteKey(*randomUUID()))
+	sitekey := db.UUIDToSiteKey(*randomUUID())
+
+	resp, err := puzzleSuite(sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// first request is successful, until we backfill
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	// x3 backfill delay
+	time.Sleep(300 * time.Millisecond)
+
+	resp, err = puzzleSuite(sitekey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,11 +121,12 @@ func TestGetPuzzle(t *testing.T) {
 	}
 
 	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		OrgID:     db.Int(org.ID),
-		CreatorID: db.Int(user.ID),
-		Level:     dbgen.DifficultyLevelMedium,
-		Growth:    dbgen.DifficultyGrowthMedium,
+		Name:       t.Name(),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -154,11 +170,12 @@ func TestPuzzleCachePriority(t *testing.T) {
 	}
 
 	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		OrgID:     db.Int(org.ID),
-		CreatorID: db.Int(user.ID),
-		Level:     dbgen.DifficultyLevelMedium,
-		Growth:    dbgen.DifficultyGrowthMedium,
+		Name:       t.Name(),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -166,7 +183,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	err = cache.SetMissing(ctx, db.PropertyOrgCachePrefix+sitekey, 1*time.Minute)
+	err = cache.SetMissing(ctx, db.PropertyBySitekeyCacheKey(sitekey), 1*time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}

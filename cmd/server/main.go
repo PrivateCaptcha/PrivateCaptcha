@@ -75,7 +75,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	router := http.NewServeMux()
 
-	apiAuth := &api.AuthMiddleware{Store: businessDB}
+	apiAuth := api.NewAuthMiddleware(businessDB, 1*time.Second)
 
 	apiServer.Setup(router, "api", apiAuth)
 	portalServer.Init()
@@ -118,6 +118,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
 		businessDB.Shutdown()
+		apiAuth.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
