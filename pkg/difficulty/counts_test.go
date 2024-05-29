@@ -12,96 +12,6 @@ const (
 	testBucketSize = 5 * time.Minute
 )
 
-func TestUserStatsInc(t *testing.T) {
-	t.Parallel()
-
-	stats := newUserStats()
-
-	tnow := time.Now()
-	key := common.RandomFingerprint()
-
-	if st, ok := stats.Count(key, tnow, testBucketSize); ok || st != 0 {
-		t.Errorf("Unexpected empty stats: %v", st)
-	}
-
-	for i := 0; i < 10; i++ {
-		if st := stats.Inc(key, tnow, testBucketSize); int(st) != (i + 1) {
-			t.Errorf("Unexpected stats: %v (iteration %v)", st, i)
-		}
-	}
-
-	// increment "old" bucket should not have any effect
-	if st := stats.Inc(key, tnow.Add(-testBucketSize).Add(-1*time.Second), testBucketSize); st != 10 {
-		t.Errorf("Unexpected stats after old increment: %v", st)
-	}
-
-	if st, ok := stats.Count(key, tnow, testBucketSize); !ok || st != 10 {
-		t.Errorf("Stats() result does not equal to Inc() result")
-	}
-
-	if st := stats.Inc(key, tnow.Add(testBucketSize).Add(1*time.Second), testBucketSize); st != 1 {
-		t.Errorf("Unexpected stats for next time bucket: %v", st)
-	}
-}
-
-func TestUserStatsBackfill(t *testing.T) {
-	t.Parallel()
-
-	stats := newUserStats()
-
-	tnow := time.Now()
-	key := common.RandomFingerprint()
-
-	for i := 0; i < 10; i++ {
-		_ = stats.Inc(key, tnow, testBucketSize)
-	}
-
-	if st, _ := stats.Count(key, tnow, testBucketSize); st != 10 {
-		t.Errorf("Count() result is not 10")
-	}
-
-	stats.Backfill(key, []*common.TimeCount{{Timestamp: tnow, Count: 9}}, testBucketSize)
-
-	if st, _ := stats.Count(key, tnow, testBucketSize); st != 10 {
-		t.Errorf("Backfill overwrote with lower value")
-	}
-
-	stats.Backfill(key, []*common.TimeCount{{Timestamp: tnow, Count: 11}}, testBucketSize)
-
-	if st, _ := stats.Count(key, tnow, testBucketSize); st != 11 {
-		t.Errorf("Backfill did not overwrite with higher value")
-	}
-}
-
-func TestUserStatsCleanup(t *testing.T) {
-	t.Parallel()
-
-	stats := newUserStats()
-
-	tnow := time.Now()
-	key := common.RandomFingerprint()
-
-	for i := 0; i < 10; i++ {
-		_ = stats.Inc(key, tnow, testBucketSize)
-	}
-
-	if st, _ := stats.Count(key, tnow, testBucketSize); st != 10 {
-		t.Errorf("Stats() result is not 10")
-	}
-
-	if deleted := stats.Cleanup(tnow, testBucketSize, 10); deleted != 0 {
-		t.Errorf("Unexpected deleted count: %v", deleted)
-	}
-
-	if deleted := stats.Cleanup(tnow.Add(testBucketSize).Add(1*time.Second), testBucketSize, 10); deleted != 1 {
-		t.Errorf("Unexpected deleted count: %v", deleted)
-	}
-
-	if st, _ := stats.Count(key, tnow, testBucketSize); st != 0 {
-		t.Errorf("Stats() result is not 0 after delete")
-	}
-}
-
 func TestPropertyStatsInc(t *testing.T) {
 	t.Parallel()
 
@@ -130,10 +40,6 @@ func TestPropertyStatsInc(t *testing.T) {
 	stats := counts.FetchStats(pid, fingerprint, tnow)
 	if !stats.HasProperty || !slices.Equal(stats.Property, []uint32{1, 1, 1, 1, 10}) {
 		t.Errorf("Unexpected property counts after increment: %v", stats.Property)
-	}
-
-	if !stats.HasFingerprint || (stats.Fingerprint != 10) {
-		t.Errorf("Unexpected user counts after increment: %v", stats.Fingerprint)
 	}
 }
 

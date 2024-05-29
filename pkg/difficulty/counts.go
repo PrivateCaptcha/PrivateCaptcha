@@ -2,7 +2,6 @@ package difficulty
 
 import (
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -109,27 +108,22 @@ func (s *timeStats) cleanup(before int64) bool {
 	return (size == deleted)
 }
 
-type propertyStats struct {
-	perTime *timeStats
-	perUser *userStats
-}
-
 type Counts struct {
 	// property stats map from internal ID (int32) to stats
-	stats      map[int32]propertyStats
+	stats      map[int32]*timeStats
 	lock       sync.RWMutex
 	bucketSize time.Duration
 }
 
 func newCounts(bucketSize time.Duration) *Counts {
 	return &Counts{
-		stats:      make(map[int32]propertyStats),
+		stats:      make(map[int32]*timeStats),
 		bucketSize: bucketSize,
 	}
 }
 
-func (c *Counts) fetchStats(key int32) propertyStats {
-	var st propertyStats
+func (c *Counts) fetchStats(key int32) *timeStats {
+	var st *timeStats
 	var ok bool
 
 	{
@@ -142,10 +136,7 @@ func (c *Counts) fetchStats(key int32) propertyStats {
 		c.lock.Lock()
 		{
 			if prev, ok := c.stats[key]; !ok {
-				st = propertyStats{
-					perTime: newTimeStats(),
-					perUser: newUserStats(),
-				}
+				st = newTimeStats()
 				c.stats[key] = st
 			} else {
 				st = prev
@@ -159,33 +150,25 @@ func (c *Counts) fetchStats(key int32) propertyStats {
 
 func (c *Counts) Inc(pid int32, fingerprint common.TFingerprint, t time.Time) uint32 {
 	st := c.fetchStats(pid)
-	st.perUser.Inc(fingerprint, t, c.bucketSize)
 	timeKey := t.Truncate(c.bucketSize).Unix()
-	return st.perTime.inc(timeKey, 1)
+	return st.inc(timeKey, 1)
 }
 
 func (c *Counts) BackfillProperty(pid int32, counts []*common.TimeCount) {
 	st := c.fetchStats(pid)
-	st.perTime.backfill(c.bucketSize, counts)
-}
-
-func (c *Counts) BackfillUser(pid int32, fingerprint common.TFingerprint, counts []*common.TimeCount) {
-	st := c.fetchStats(pid)
-	st.perUser.Backfill(fingerprint, counts, c.bucketSize)
+	st.backfill(c.bucketSize, counts)
 }
 
 func (c *Counts) Clear() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.stats = make(map[int32]propertyStats)
+	c.stats = make(map[int32]*timeStats)
 }
 
 type Stats struct {
 	// last 5 buckets of stats before time {t} (first element is the furthest in time)
-	Property       []uint32
-	Fingerprint    uint32
-	HasProperty    bool
-	HasFingerprint bool
+	Property    []uint32
+	HasProperty bool
 }
 
 func (st *Stats) Sum(decayRate float64) float64 {
@@ -195,20 +178,11 @@ func (st *Stats) Sum(decayRate float64) float64 {
 		sum = sum*(1.0-decayRate) + float64(c)
 	}
 
-	if (len(st.Property) > 0) && (st.Property[len(st.Property)-1] > st.Fingerprint) && (st.Fingerprint > 0) {
-		// don't count userCounts twice since it's already included in the last time bucket of this property
-		sum -= float64(st.Fingerprint)
-	}
-
-	if st.Fingerprint > 0 {
-		sum = sum*(1.0-decayRate) + float64(st.Fingerprint)
-	}
-
 	return sum
 }
 
 func (c *Counts) FetchStats(pid int32, fingerprint common.TFingerprint, t time.Time) Stats {
-	var ps propertyStats
+	var ps *timeStats
 	var ok bool
 	{
 		c.lock.RLock()
@@ -225,14 +199,12 @@ func (c *Counts) FetchStats(pid int32, fingerprint common.TFingerprint, t time.T
 	tunix := t.Truncate(c.bucketSize).Unix()
 	bucketSize := int64(c.bucketSize.Seconds())
 
-	stats.Property, stats.HasProperty = ps.perTime.stats(
+	stats.Property, stats.HasProperty = ps.stats(
 		tunix-4*bucketSize,
 		tunix-3*bucketSize,
 		tunix-2*bucketSize,
 		tunix-1*bucketSize,
 		tunix)
-
-	stats.Fingerprint, stats.HasFingerprint = ps.perUser.Count(fingerprint, t, c.bucketSize)
 
 	return stats
 }
@@ -245,19 +217,16 @@ func (c *Counts) Cleanup(t time.Time, buckets int, maxToDelete int) int {
 	}
 
 	before := t.Add(-time.Duration(buckets) * c.bucketSize).Unix()
-	usersDeleted := 0
 
 	toDelete := make([]int32, 0)
 	{
 		c.lock.RLock()
 		for key, value := range c.stats {
-			if empty := value.perTime.cleanup(before); empty {
+			if empty := value.cleanup(before); empty {
 				toDelete = append(toDelete, key)
 				if len(toDelete) >= maxToDelete {
 					break
 				}
-			} else if cleanedUp := value.perUser.Cleanup(t, c.bucketSize, maxToDelete); cleanedUp == maxToDelete {
-				usersDeleted++
 			}
 		}
 		c.lock.RUnlock()
@@ -274,173 +243,6 @@ func (c *Counts) Cleanup(t time.Time, buckets int, maxToDelete int) int {
 			deleted++
 		}
 		c.lock.Unlock()
-	}
-
-	return deleted + usersDeleted
-}
-
-type singleStats struct {
-	time  atomic.Int64
-	count atomic.Uint32
-}
-
-func (ss *singleStats) backfill(t int64, count uint32) uint32 {
-	oldTime := ss.time.Load()
-	if oldTime > t {
-		return ss.count.Load()
-	}
-
-	swapped := false
-
-	for oldTime < t && !swapped {
-		swapped = ss.time.CompareAndSwap(oldTime, t)
-		if swapped {
-			ss.count.Store(0)
-		} else {
-			oldTime = ss.time.Load()
-		}
-	}
-
-	oldCount := ss.count.Load()
-	for oldCount < count && !ss.count.CompareAndSwap(oldCount, count) {
-		oldCount = ss.count.Load()
-	}
-
-	return ss.count.Load()
-}
-
-func (ss *singleStats) inc(t int64, count uint32) uint32 {
-	// the goal is to make the following code "safer":
-	// if (time == t) { count++ } else { time = t; count = 1 }
-
-	oldTime := ss.time.Load()
-	if oldTime > t {
-		return ss.count.Load()
-	}
-
-	swapped := false
-
-	for oldTime < t && !swapped {
-		swapped = ss.time.CompareAndSwap(oldTime, t)
-		if swapped {
-			ss.count.Store(0)
-		} else {
-			oldTime = ss.time.Load()
-		}
-	}
-
-	return ss.count.Add(count)
-}
-
-type userStats struct {
-	// user stats map from fingerprint to stats
-	counts map[common.TFingerprint]*singleStats
-	lock   sync.RWMutex
-}
-
-func newUserStats() *userStats {
-	return &userStats{
-		counts: make(map[common.TFingerprint]*singleStats),
-	}
-}
-
-func (us *userStats) fetchStats(key common.TFingerprint) *singleStats {
-	var st *singleStats
-	var ok bool
-
-	{
-		us.lock.RLock()
-		st, ok = us.counts[key]
-		us.lock.RUnlock()
-	}
-
-	if !ok {
-		us.lock.Lock()
-		{
-			if prev, ok := us.counts[key]; !ok {
-				st = &singleStats{}
-				us.counts[key] = st
-			} else {
-				st = prev
-			}
-		}
-		us.lock.Unlock()
-	}
-
-	return st
-}
-
-func (us *userStats) Inc(key common.TFingerprint, t time.Time, bucketSize time.Duration) uint32 {
-	timeKey := t.Truncate(bucketSize).Unix()
-	st := us.fetchStats(key)
-	return st.inc(timeKey, 1)
-}
-
-func (us *userStats) Backfill(key common.TFingerprint, counts []*common.TimeCount, bucketSize time.Duration) {
-	st := us.fetchStats(key)
-	for _, c := range counts {
-		timeKey := c.Timestamp.Truncate(bucketSize).Unix()
-		st.backfill(timeKey, c.Count)
-	}
-}
-
-func (us *userStats) Clear() {
-	us.lock.Lock()
-	defer us.lock.Unlock()
-	us.counts = make(map[common.TFingerprint]*singleStats)
-}
-
-func (us *userStats) Count(key common.TFingerprint, t time.Time, bucketSize time.Duration) (uint32, bool) {
-	if key == 0 {
-		return 0, false
-	}
-
-	timeKey := t.Truncate(bucketSize).Unix()
-
-	us.lock.RLock()
-	defer us.lock.RUnlock()
-
-	st, ok := us.counts[key]
-	if ok && st.time.Load() == timeKey {
-		return st.count.Load(), true
-	}
-
-	return 0, ok
-}
-
-// Cleanup() removes {maxToDelete} entries before time {t}
-func (us *userStats) Cleanup(t time.Time, bucketSize time.Duration, maxToDelete int) int {
-	if maxToDelete == 0 {
-		return 0
-	}
-
-	before := t.Add(-bucketSize).Unix()
-
-	toDelete := make([]common.TFingerprint, 0)
-	{
-		us.lock.RLock()
-		for key, value := range us.counts {
-			if value.time.Load() < before {
-				toDelete = append(toDelete, key)
-				if len(toDelete) >= maxToDelete {
-					break
-				}
-			}
-		}
-		us.lock.RUnlock()
-	}
-
-	deleted := 0
-
-	if len(toDelete) > 0 {
-		// NOTE: it's possible that in the interval between these 2 loops some items will get incremented (again)
-		// however, values should be so small that it is considered fine to lose them
-		us.lock.Lock()
-		for _, key := range toDelete {
-			delete(us.counts, key)
-			deleted++
-		}
-		us.lock.Unlock()
 	}
 
 	return deleted

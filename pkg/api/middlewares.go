@@ -11,11 +11,37 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-type AuthMiddleware struct {
-	Store *db.BusinessStore
+type authMiddleware struct {
+	Store          *db.BusinessStore
+	sitekeyChan    chan string
+	batchSize      int
+	backfillCancel context.CancelFunc
 }
 
-func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {
+func NewAuthMiddleware(store *db.BusinessStore, backfillDelay time.Duration) *authMiddleware {
+	const batchSize = 10
+
+	am := &authMiddleware{
+		Store:       store,
+		sitekeyChan: make(chan string, batchSize),
+		batchSize:   batchSize,
+	}
+
+	var backfillCtx context.Context
+	backfillCtx, am.backfillCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "auth_backfill"))
+	go am.backfillProperties(backfillCtx, backfillDelay)
+
+	return am
+}
+
+func (am *authMiddleware) Shutdown() {
+	slog.Debug("Shutting down auth middleware")
+	close(am.sitekeyChan)
+	am.backfillCancel()
+}
+
+func (am *authMiddleware) retrieveSiteKey(r *http.Request) string {
 	if r.Method == http.MethodGet {
 		return r.URL.Query().Get(common.ParamSiteKey)
 	} else if r.Method == http.MethodPost {
@@ -25,7 +51,7 @@ func (am *AuthMiddleware) retrieveSiteKey(r *http.Request) string {
 	return ""
 }
 
-func (am *AuthMiddleware) retrieveSecret(r *http.Request) string {
+func (am *authMiddleware) retrieveSecret(r *http.Request) string {
 	if r.Method == http.MethodPost {
 		return r.FormValue(common.ParamSecret)
 	}
@@ -47,7 +73,46 @@ func isSiteKeyValid(sitekey string) bool {
 	return true
 }
 
-func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
+// the only purpose of this routine is to cache properties
+func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Duration) {
+	var batch []string
+	slog.DebugContext(ctx, "Backfilling properties", "interval", delay)
+
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+
+		case sitekey, ok := <-am.sitekeyChan:
+			if !ok {
+				running = false
+				break
+			}
+
+			batch = append(batch, sitekey)
+
+			if len(batch) >= am.batchSize {
+				if _, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
+				} else {
+					batch = []string{}
+				}
+			}
+		case <-time.After(delay):
+			if len(batch) > 0 {
+				if _, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
+				} else {
+					batch = []string{}
+				}
+			}
+		}
+	}
+
+	slog.DebugContext(ctx, "Finished backfilling properties")
+}
+
+func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			// TODO: Return correct CORS headers
@@ -62,28 +127,39 @@ func (am *AuthMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		propertyAndOrg, err := am.Store.RetrievePropertyAndOrg(ctx, sitekey)
+		property, err := am.Store.GetCachedPropertyBySitekey(ctx, sitekey)
 
 		if err != nil {
 			switch err {
 			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				return
 			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			case db.ErrCacheMiss:
+				// backfill in the background
+				am.sitekeyChan <- sitekey
 			default:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
 			}
-			return
 		}
 
 		// TODO: Verify if user is an active subscriber
 		// also not blacklisted etc.
-		ctx = context.WithValue(ctx, common.PropertyAndOrgContextKey, propertyAndOrg)
+
+		if property != nil {
+			ctx = context.WithValue(ctx, common.PropertyContextKey, property)
+		} else {
+			ctx = context.WithValue(ctx, common.SitekeyContextKey, sitekey)
+		}
+
 		next.ServeHTTP(w, r.WithContext(ctx))
 	}
 }
 
-func (am *AuthMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
+func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
 	if key == nil {
 		return false
 	}
@@ -101,7 +177,7 @@ func (am *AuthMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, 
 	return true
 }
 
-func (am *AuthMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
+func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)

@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -63,11 +64,16 @@ func TestSoftDeleteProperty(t *testing.T) {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
-	propName := "Test Property"
-	domain := "example.com"
-	level := dbgen.DifficultyLevelMedium
-	growth := dbgen.DifficultyGrowthMedium
-	prop, err := store.CreateNewProperty(ctx, propName, org.ID, org.UserID.Int32, domain, level, growth)
+	prop, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:       "Test Property",
+		OrgID:      db.Int(org.ID),
+		CreatorID:  org.UserID,
+		OrgOwnerID: org.UserID,
+		Domain:     "example.com",
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
+	})
+	//propName, org.ID, org.UserID.Int32, domain, level, growth)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
 	}

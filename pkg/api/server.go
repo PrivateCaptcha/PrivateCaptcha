@@ -122,7 +122,7 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *server) Setup(router *http.ServeMux, prefix string, auth *AuthMiddleware) {
+func (s *server) Setup(router *http.ServeMux, prefix string, auth *authMiddleware) {
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
@@ -140,7 +140,7 @@ func (s *server) Shutdown() {
 	s.verifyLogCancel()
 }
 
-func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *AuthMiddleware) {
+func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
 	// TODO: Rate-limit Puzzle endpoint with reasonably high limit
 	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, auth.Sitekey(s.puzzle))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(auth.APIKey(s.verify), maxSolutionsBodySize)))
@@ -153,8 +153,18 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	}
 
 	ctx := r.Context()
-	propertyAndOrg := ctx.Value(common.PropertyAndOrgContextKey).(*dbgen.PropertyAndOrgByExternalIDRow)
-	property, org := propertyAndOrg.Property, propertyAndOrg.Organization
+	property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
+	// property will not be cached for auth.backfillDelay and we return an "average" puzzle instead
+	// this is done in order to not check the DB on the hot path (decrease attach surface)
+	if !ok {
+		sitekey := ctx.Value(common.SitekeyContextKey).(string)
+		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey)
+		uuid := db.UUIDFromSiteKey(sitekey)
+		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
+		puzzle.PropertyID = uuid.Bytes
+		puzzle.Difficulty = difficulty.LevelMedium
+		return puzzle, nil
+	}
 
 	puzzle.PropertyID = property.ExternalID.Bytes
 
@@ -169,18 +179,15 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		if ip, err := parseRequestIP(r); err == nil {
 			hash.Write([]byte(ip))
 		}
-		// TODO: Add property domain here when it will be available
-		// hash.Write(property.Domain)
+		hash.Write([]byte(property.Domain))
 		hmac := hash.Sum(nil)
 		truncatedHmac := hmac[:8]
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
-	// perhaps quite important place: we record events for the user that owns the org where the property belongs
-	// effectively, who is billed for the org (NOTE: property also has a reference to the user who created it)
-	puzzle.Difficulty = s.levels.Difficulty(fingerprint, &property, org.UserID.Int32)
+	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property)
 
-	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID)
+	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
 
 	return puzzle, nil
 }
@@ -306,11 +313,9 @@ func (s *server) verify(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
 
-func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, propertyAndOrg *dbgen.PropertyAndOrgByExternalIDRow) {
-	property, org := &propertyAndOrg.Property, &propertyAndOrg.Organization
-
+func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property) {
 	vr := &common.VerifyRecord{
-		UserID:     org.UserID.Int32,
+		UserID:     property.OrgOwnerID.Int32,
 		OrgID:      property.OrgID.Int32,
 		PropertyID: property.ID,
 		PuzzleID:   p.PuzzleID,
@@ -320,7 +325,7 @@ func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 	s.verifyLogChan <- vr
 }
 
-func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, *dbgen.PropertyAndOrgByExternalIDRow, verifyError) {
+func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, verifyError) {
 	p := new(puzzle.Puzzle)
 
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
@@ -338,8 +343,8 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	propertyAndOrg, err := s.businessDB.RetrievePropertyAndOrg(ctx, sitekey)
-	if err != nil {
+	properties, err := s.businessDB.RetrievePropertiesBySitekey(ctx, []string{sitekey})
+	if (err != nil) || (len(properties) != 1) {
 		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) || (err == db.ErrSoftDeleted) {
 			return p, nil, invalidPropertyError
 		}
@@ -348,16 +353,16 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow
 		return p, nil, verifyErrorOther
 	}
 
-	org := &propertyAndOrg.Organization
+	property := properties[0]
 	apiKey := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey)
 
-	if org.UserID != apiKey.UserID {
+	if property.OrgOwnerID != apiKey.UserID {
 		slog.WarnContext(ctx, "Org owner does not match API key owner", "api_key_user", apiKey.UserID.Int32,
-			"org_user", org.UserID.Int32)
-		return p, propertyAndOrg, wrongOwnerError
+			"org_user", property.OrgOwnerID.Int32)
+		return p, property, wrongOwnerError
 	}
 
-	return p, propertyAndOrg, verifyNoError
+	return p, property, verifyNoError
 }
 
 func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
