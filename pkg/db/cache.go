@@ -1,60 +1,70 @@
 package db
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/patrickmn/go-cache"
+	"github.com/maypok86/otter"
+)
+
+const (
+	maxCacheSize = 1_000_000
+	missingData  = 0xC0010FF // cool off
 )
 
 var (
-	missingData         = []byte{0xC0, 0x00, 0x10, 0xFF} // cool off
 	ErrNegativeCacheHit = errors.New("negative hit")
 	ErrCacheMiss        = errors.New("cache miss")
 )
 
 type memcache struct {
-	store *cache.Cache
+	store otter.Cache[string, any]
 }
 
-func NewMemoryCache(cleanupDuration time.Duration) *memcache {
-	return &memcache{store: cache.New(5*time.Minute /*default expiration*/, cleanupDuration)}
+func NewMemoryCache(expiration time.Duration) (*memcache, error) {
+	store, err := otter.MustBuilder[string, any](maxCacheSize).
+		WithTTL(expiration).
+		Build()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &memcache{
+		store: store,
+	}, nil
 }
 
 var _ common.Cache = (*memcache)(nil)
 
-func (c *memcache) GetAndExpireItem(ctx context.Context, key string, expiration time.Duration) (any, error) {
+func (c *memcache) Get(ctx context.Context, key string) (any, error) {
 	data, found := c.store.Get(key)
 	if !found {
 		return nil, ErrCacheMiss
 	}
 
-	if dataBytes, ok := data.([]byte); ok && bytes.Equal(dataBytes, missingData) {
+	if mark, ok := data.(uint32); ok && mark == missingData {
 		return nil, ErrNegativeCacheHit
 	}
 
 	slog.Log(ctx, common.LevelTrace, "Found item in memory cache", "key", key)
 
-	// TODO: update expiration in cache
-
 	return data, nil
 }
 
-func (c *memcache) SetMissing(ctx context.Context, key string, expiration time.Duration) error {
-	// TODO: Cache this based on the current cache size to prevent flood attacks
-	c.store.Set(key, missingData, expiration)
+func (c *memcache) SetMissing(ctx context.Context, key string) error {
+	c.store.Set(key, uint32(missingData))
 
 	slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "key", key)
 
 	return nil
 }
 
-func (c *memcache) SetItem(ctx context.Context, key string, t any, expiration time.Duration) error {
-	c.store.Set(key, t, expiration)
+func (c *memcache) Set(ctx context.Context, key string, t any) error {
+	c.store.Set(key, t)
 
 	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "key", key)
 
