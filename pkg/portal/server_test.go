@@ -47,7 +47,11 @@ func TestMain(m *testing.M) {
 	defer levels.Shutdown()
 
 	queries = dbgen.New(pool)
-	cache = db.NewMemoryCache(1 * time.Minute)
+	var err error
+	cache, err = db.NewMemoryCache(1 * time.Minute)
+	if err != nil {
+		panic(err)
+	}
 
 	store = db.NewBusiness(queries, cache, 5*time.Second)
 	defer store.Shutdown()

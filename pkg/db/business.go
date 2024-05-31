@@ -24,16 +24,6 @@ var (
 	markerData          = []byte{'{', '}'}
 )
 
-const (
-	// TODO: Adjust caching durations mindfully
-	negativeCacheDuration = 1 * time.Minute
-	propertyCacheDuration = 1 * time.Minute
-	apiKeyCacheDuration   = 1 * time.Minute
-	userCacheDuration     = 1 * time.Minute
-	orgCacheDuration      = 1 * time.Minute
-	puzzleCacheDuration   = 1 * time.Minute
-)
-
 type BusinessStore struct {
 	db         *dbgen.Queries
 	cache      common.Cache
@@ -91,8 +81,8 @@ func (s *BusinessStore) cleanupCache(ctx context.Context, interval time.Duration
 	slog.Debug("Store cache cleanup finished")
 }
 
-func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) (*T, error) {
-	data, err := cache.GetAndExpireItem(ctx, key, expiration)
+func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string) (*T, error) {
+	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +94,8 @@ func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string, 
 	return nil, errInvalidCacheType
 }
 
-func fetchCachedMany[T any](ctx context.Context, cache common.Cache, key string, expiration time.Duration) ([]*T, error) {
-	data, err := cache.GetAndExpireItem(ctx, key, expiration)
+func fetchCachedMany[T any](ctx context.Context, cache common.Cache, key string) ([]*T, error) {
+	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +115,7 @@ func (s *BusinessStore) GetCachedPropertyBySitekey(ctx context.Context, sitekey 
 
 	cacheKey := PropertyBySitekeyCacheKey(sitekey)
 
-	if property, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+	if property, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey); err == nil {
 		return property, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -146,7 +136,7 @@ func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekey
 		}
 
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
-		if property, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+		if property, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey); err == nil {
 			result = append(result, property)
 			continue
 		}
@@ -180,12 +170,12 @@ func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekey
 	for _, p := range properties {
 		sitekey := UUIDToSiteKey(p.ExternalID)
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
-		_ = s.cache.SetItem(ctx, cacheKey, p, propertyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, p)
 		delete(keysMap, sitekey)
 	}
 
 	for missingKey := range keysMap {
-		_ = s.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(missingKey), propertyCacheDuration)
+		_ = s.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(missingKey))
 	}
 
 	result = append(result, properties...)
@@ -202,7 +192,7 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 
 	cacheKey := APIKeyCacheKey(secret)
 
-	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
+	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, s.cache, cacheKey); err == nil {
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -211,7 +201,7 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 	apiKey, err := s.db.GetAPIKeyByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey)
 			return nil, ErrRecordNotFound
 		}
 
@@ -221,7 +211,7 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 	}
 
 	if apiKey != nil {
-		_ = s.cache.SetItem(ctx, cacheKey, apiKey, apiKeyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, apiKey)
 
 		if apiKey.DeletedAt.Valid {
 			return apiKey, ErrSoftDeleted
@@ -268,7 +258,7 @@ func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User
 	}
 
 	cacheKey := emailCacheKey(email)
-	if user, err := fetchCachedOne[dbgen.User](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+	if user, err := fetchCachedOne[dbgen.User](ctx, s.cache, cacheKey); err == nil {
 		return user, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -277,7 +267,7 @@ func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User
 	user, err := s.db.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey)
 			return nil, ErrRecordNotFound
 		}
 
@@ -287,7 +277,7 @@ func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User
 	}
 
 	if user != nil {
-		_ = s.cache.SetItem(ctx, cacheKey, user, userCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, user)
 	}
 
 	return user, nil
@@ -296,7 +286,7 @@ func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User
 func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
 	cacheKey := userOrgsCacheKey(userID)
 
-	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, cacheKey); err == nil {
 		return orgs, nil
 	}
 
@@ -317,7 +307,7 @@ func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID in
 	})
 
 	if len(orgs) > 0 {
-		_ = s.cache.SetItem(ctx, cacheKey, orgs, userCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, orgs)
 	}
 
 	slog.DebugContext(ctx, "Retrieved user organizations", "count", len(orgs))
@@ -329,14 +319,14 @@ func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID in
 func (s *BusinessStore) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.Organization, error) {
 	cacheKey := orgCacheKey(orgID)
 
-	if org, err := fetchCachedOne[dbgen.Organization](ctx, s.cache, cacheKey, orgCacheDuration); err == nil {
+	if org, err := fetchCachedOne[dbgen.Organization](ctx, s.cache, cacheKey); err == nil {
 		return org, nil
 	}
 
 	org, err := s.db.GetOrganizationByID(ctx, orgID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey)
 			return nil, ErrRecordNotFound
 		}
 
@@ -346,7 +336,7 @@ func (s *BusinessStore) RetrieveOrganization(ctx context.Context, orgID int32) (
 	}
 
 	if org != nil {
-		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, org)
 	}
 
 	return org, nil
@@ -355,14 +345,14 @@ func (s *BusinessStore) RetrieveOrganization(ctx context.Context, orgID int32) (
 func (s *BusinessStore) RetrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
 	cacheKey := propertyByIDCacheKey(propID)
 
-	if prop, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+	if prop, err := fetchCachedOne[dbgen.Property](ctx, s.cache, cacheKey); err == nil {
 		return prop, nil
 	}
 
 	property, err := s.db.GetPropertyByID(ctx, propID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			s.cache.SetMissing(ctx, cacheKey, negativeCacheDuration)
+			s.cache.SetMissing(ctx, cacheKey)
 			return nil, ErrRecordNotFound
 		}
 
@@ -372,9 +362,9 @@ func (s *BusinessStore) RetrieveProperty(ctx context.Context, propID int32) (*db
 	}
 
 	if property != nil {
-		_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, property)
 		sitekey := UUIDToSiteKey(property.ExternalID)
-		_ = s.cache.SetItem(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyCacheDuration)
+		_ = s.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property)
 	}
 
 	return property, nil
@@ -394,7 +384,7 @@ func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, 
 
 	if org != nil {
 		cacheKey := orgCacheKey(org.ID)
-		_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, org)
 
 		// invalidate user orgs in cache as we just created another one
 		_ = s.cache.Delete(ctx, userOrgsCacheKey(org.UserID.Int32))
@@ -416,7 +406,7 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, email, name, orgNa
 	if user != nil {
 		// we need to update cache as we just set user as missing when checking for it's existence
 		cacheKey := emailCacheKey(email)
-		_ = s.cache.SetItem(ctx, cacheKey, user, userCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, user)
 	}
 
 	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
@@ -478,9 +468,9 @@ func (s *BusinessStore) CreateNewProperty(ctx context.Context, params *dbgen.Cre
 	slog.DebugContext(ctx, "Created new property", "id", property.ID, "name", params.Name, "org", params.OrgID)
 
 	cacheKey := propertyByIDCacheKey(property.ID)
-	_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+	_ = s.cache.Set(ctx, cacheKey, property)
 	sitekey := UUIDToSiteKey(property.ExternalID)
-	_ = s.cache.SetItem(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyCacheDuration)
+	_ = s.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property)
 	// invalidate org properties in cache as we just created a new property
 	_ = s.cache.Delete(ctx, orgPropertiesCacheKey(params.OrgID.Int32))
 
@@ -503,7 +493,7 @@ func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name s
 	slog.DebugContext(ctx, "Updated property", "name", name, "propID", propID)
 
 	cacheKey := propertyByIDCacheKey(property.ID)
-	_ = s.cache.SetItem(ctx, cacheKey, property, propertyCacheDuration)
+	_ = s.cache.Set(ctx, cacheKey, property)
 	// invalidate org properties in cache as we just created a new property
 	_ = s.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32))
 
@@ -519,7 +509,7 @@ func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32, or
 	slog.DebugContext(ctx, "Soft-deleted property", "propID", propID)
 
 	// update caches
-	_ = s.cache.SetMissing(ctx, propertyByIDCacheKey(propID), negativeCacheDuration)
+	_ = s.cache.SetMissing(ctx, propertyByIDCacheKey(propID))
 	// invalidate org properties in cache as we just deleted a property
 	_ = s.cache.Delete(ctx, orgPropertiesCacheKey(orgID))
 
@@ -529,7 +519,7 @@ func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32, or
 func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	cacheKey := orgPropertiesCacheKey(orgID)
 
-	if properties, err := fetchCachedMany[dbgen.Property](ctx, s.cache, cacheKey, propertyCacheDuration); err == nil {
+	if properties, err := fetchCachedMany[dbgen.Property](ctx, s.cache, cacheKey); err == nil {
 		return properties, nil
 	}
 
@@ -545,7 +535,7 @@ func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) 
 
 	slog.Log(ctx, common.LevelTrace, "Retrieved properties", "count", len(properties))
 	if len(properties) > 0 {
-		_ = s.cache.SetItem(ctx, cacheKey, properties, propertyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, properties)
 	}
 
 	return properties, err
@@ -565,7 +555,7 @@ func (s *BusinessStore) UpdateOrganization(ctx context.Context, orgID int32, nam
 	slog.DebugContext(ctx, "Updated organization", "name", name, "orgID", orgID)
 
 	cacheKey := orgCacheKey(org.ID)
-	_ = s.cache.SetItem(ctx, cacheKey, org, orgCacheDuration)
+	_ = s.cache.Set(ctx, cacheKey, org)
 	// invalidate user orgs in cache as we just updated name
 	_ = s.cache.Delete(ctx, userOrgsCacheKey(org.UserID.Int32))
 
@@ -581,7 +571,7 @@ func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32,
 	slog.DebugContext(ctx, "Soft-deleted organization", "orgID", orgID)
 
 	// update caches
-	_ = s.cache.SetMissing(ctx, orgCacheKey(orgID), negativeCacheDuration)
+	_ = s.cache.SetMissing(ctx, orgCacheKey(orgID))
 	// invalidate user orgs in cache as we just deleted one
 	_ = s.cache.Delete(ctx, userOrgsCacheKey(userID))
 
@@ -592,7 +582,7 @@ func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32,
 func (s *BusinessStore) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
 	cacheKey := orgUsersCacheKey(orgID)
 
-	if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, s.cache, cacheKey, userCacheDuration); err == nil {
+	if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, s.cache, cacheKey); err == nil {
 		return users, nil
 	}
 
@@ -605,7 +595,7 @@ func (s *BusinessStore) RetrieveOrganizationUsers(ctx context.Context, orgID int
 	slog.DebugContext(ctx, "Fetched organization users", "orgID", orgID, "count", len(users))
 
 	if len(users) > 0 {
-		_ = s.cache.SetItem(ctx, cacheKey, users, userCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, users)
 	}
 
 	return users, nil
@@ -712,7 +702,7 @@ func (s *BusinessStore) UpdateUser(ctx context.Context, userID int32, name strin
 	_ = s.cache.Delete(ctx, emailCacheKey(oldEmail))
 
 	if user != nil {
-		_ = s.cache.SetItem(ctx, emailCacheKey(newEmail), user, userCacheDuration)
+		_ = s.cache.Set(ctx, emailCacheKey(newEmail), user)
 	}
 
 	return nil
@@ -744,7 +734,7 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email 
 
 	// invalidate user caches
 	userOrgsCacheKey := userOrgsCacheKey(userID)
-	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, userOrgsCacheKey, userCacheDuration); err == nil {
+	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, s.cache, userOrgsCacheKey); err == nil {
 		for _, org := range orgs {
 			_ = s.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
 			_ = s.cache.Delete(ctx, orgPropertiesCacheKey(org.Organization.ID))
@@ -760,7 +750,7 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email 
 func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
 	cacheKey := userAPIKeysCacheKey(userID)
 
-	if keys, err := fetchCachedMany[dbgen.APIKey](ctx, s.cache, cacheKey, apiKeyCacheDuration); err == nil {
+	if keys, err := fetchCachedMany[dbgen.APIKey](ctx, s.cache, cacheKey); err == nil {
 		return keys, nil
 	}
 
@@ -773,7 +763,7 @@ func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) (
 	slog.DebugContext(ctx, "Retrieved API keys", "count", len(keys))
 
 	if len(keys) > 0 {
-		_ = s.cache.SetItem(ctx, cacheKey, keys, apiKeyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, keys)
 	}
 
 	return keys, err
@@ -794,7 +784,7 @@ func (s *BusinessStore) CreateAPIKey(ctx context.Context, userID int32, name str
 	if key != nil {
 		secret := UUIDToSecret(key.ExternalID)
 		cacheKey := APIKeyCacheKey(secret)
-		_ = s.cache.SetItem(ctx, cacheKey, key, apiKeyCacheDuration)
+		_ = s.cache.Set(ctx, cacheKey, key)
 
 		// invalidate keys cache
 		_ = s.cache.Delete(ctx, userAPIKeysCacheKey(userID))

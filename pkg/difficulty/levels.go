@@ -13,9 +13,11 @@ import (
 )
 
 const (
-	LevelSmall  = 125
-	LevelMedium = 150
-	LevelHigh   = 160
+	LevelSmall   = 125
+	LevelMedium  = 150
+	LevelHigh    = 160
+	maxCacheSize = 1_000_000
+	bucketsCount = 5
 )
 
 type Levels struct {
@@ -31,7 +33,7 @@ type Levels struct {
 func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
 	levels := &Levels{
 		timeSeries:   timeSeries,
-		counts:       newCounts(bucketSize),
+		counts:       newCounts(bucketSize, bucketsCount, maxCacheSize),
 		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
@@ -201,7 +203,8 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 			b.Reset()
 
 			if deleted == deleteChunk {
-				deleteChunk *= 2
+				// 1.5 scaling factor
+				deleteChunk += deleteChunk / 2
 			}
 		}
 	}
@@ -211,9 +214,9 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 
 func (l *Levels) cleanupStats(ctx context.Context) {
 	// bucket window is currently 5 minutes so it may change at a minute step
-	// here we have 30 seconds since 1 minute sounds way too long
+	// here we have 30 seconds since 1 minute sounds like way too long
 	cleanupStatsImpl(ctx, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.counts.Cleanup(t, 5 /*buckets*/, size)
+		return l.counts.Cleanup(t, size)
 	})
 }
 
@@ -248,7 +251,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 
 		if len(counts) > 0 {
 			blog.DebugContext(ctx, "Backfilling requests counts", "counts", len(counts))
-			l.counts.BackfillProperty(r.PropertyID, counts)
+			l.counts.BackfillProperty(r.PropertyID, counts, tnow)
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {
