@@ -8,7 +8,7 @@ require (
 	github.com/golang-migrate/migrate/v4 v4.17.0
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/jpillora/backoff v1.0.0
-	github.com/patrickmn/go-cache v2.1.0+incompatible
+	github.com/maypok86/otter v1.2.1
 	github.com/rs/xid v1.5.0
 	golang.org/x/crypto v0.22.0
 	golang.org/x/net v0.24.0
@@ -18,6 +18,8 @@ require (
 require (
 	github.com/ClickHouse/ch-go v0.58.2 // indirect
 	github.com/andybalholm/brotli v1.0.6 // indirect
+	github.com/dolthub/maphash v0.1.0 // indirect
+	github.com/gammazero/deque v0.2.1 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/google/uuid v1.5.0 // indirect

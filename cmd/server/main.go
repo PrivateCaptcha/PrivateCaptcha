@@ -37,6 +37,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
+	cache, cerr := db.NewMemoryCache(5 * time.Minute)
+	if cerr != nil {
+		panic(cerr)
+	}
+
 	pool, clickhouse, dberr := db.Migrate(getenv)
 	if dberr != nil {
 		return dberr
@@ -46,7 +51,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	defer clickhouse.Close()
 
 	queries := dbgen.New(pool)
-	businessDB := db.NewBusiness(queries, db.NewMemoryCache(1*time.Minute), 5*time.Minute)
+	businessDB := db.NewBusiness(queries, cache, 5*time.Minute)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
 	levels := difficulty.NewLevels(timeSeriesDB, levelsBatchSize, propertyBucketSize)

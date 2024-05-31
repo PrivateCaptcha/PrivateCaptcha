@@ -6,9 +6,9 @@ import (
 )
 
 type Cache interface {
-	GetAndExpireItem(ctx context.Context, key string, expiration time.Duration) (any, error)
-	SetMissing(ctx context.Context, key string, expiration time.Duration) error
-	SetItem(ctx context.Context, key string, t any, expiration time.Duration) error
+	Get(ctx context.Context, key string) (any, error)
+	SetMissing(ctx context.Context, key string) error
+	Set(ctx context.Context, key string, t any) error
 	Delete(ctx context.Context, key string) error
 }
 
