@@ -13,7 +13,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 const (
@@ -154,15 +153,11 @@ func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.Difficult
 	}
 }
 
-func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-
-	sess := s.Session.SessionStart(w, r)
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok || (len(email) == 0) {
-		slog.ErrorContext(ctx, "Failed to get user email from context")
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
 	}
 
 	orgID := ctx.Value(common.OrgIDContextKey).(int)
@@ -170,12 +165,11 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	data := &propertyWizardRenderContext{
-		Token: s.XSRF.Token(email, actionNewProperty),
+		Token: s.XSRF.Token(user.Email, actionNewProperty),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -183,7 +177,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	s.render(w, r, "property-wizard/wizard.html", data)
+	return data, "property-wizard/wizard.html", nil
 }
 
 func (s *Server) validatePropertyName(ctx context.Context, name string, orgID int32) string {
@@ -236,6 +230,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		return
+	}
+
+	// TODO: Check if subscription is valid and limits are enforced
+	if !user.SubscriptionID.Valid {
+		slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
+		url := s.relURL(fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint))
+		common.Redirect(url, w, r)
 		return
 	}
 
@@ -364,56 +366,88 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
-func (s *Server) getPropertyDashboard(tpl string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-		orgID := ctx.Value(common.OrgIDContextKey).(int)
-		propertyID := ctx.Value(common.PropertyIDContextKey).(int)
+func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, error) {
+	ctx := r.Context()
+	orgID := ctx.Value(common.OrgIDContextKey).(int)
+	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
-		property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
-		if (err != nil) || (int(property.OrgID.Int32) != orgID) {
-			slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
-			s.redirectError(http.StatusNotFound, w, r)
-			return
-		}
-
-		org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
-			s.redirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-
-		user, err := s.sessionUser(w, r)
-		if err != nil {
-			return
-		}
-
-		tabParam := r.URL.Query().Get(common.ParamTab)
-		var tab int
-		switch tabParam {
-		case "reports":
-			tab = 0
-		case "integrations":
-			tab = 1
-		case "settings":
-			tab = 2
-		default:
-			if len(tabParam) > 0 {
-				slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
-			}
-			tab = 0
-		}
-
-		renderCtx := &propertyDashboardRenderContext{
-			Property: propertyToUserProperty(property),
-			Org:      orgToUserOrg(org, user.ID),
-			Token:    s.XSRF.Token(user.Email, actionPropertySettings),
-			Tab:      tab,
-			CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
-		}
-		s.render(w, r, tpl, renderCtx)
+	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
+		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
+		// TODO: Set error correctly if it's nil
+		return nil, err
 	}
+
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := &propertyDashboardRenderContext{
+		Property: propertyToUserProperty(property),
+		Org:      orgToUserOrg(org, user.ID),
+		Token:    s.XSRF.Token(user.Email, actionPropertySettings),
+		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+	}
+	return renderCtx, nil
+}
+
+func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+	tabParam := r.URL.Query().Get(common.ParamTab)
+	var tab int
+	switch tabParam {
+	case "integrations":
+		tab = 1
+	case "settings":
+		tab = 2
+	default:
+		if tabParam != "reports" {
+			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
+		}
+		tab = 0
+	}
+
+	renderCtx, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+	renderCtx.Tab = tab
+
+	return renderCtx, propertyDashboardTemplate, nil
+}
+
+func (s *Server) getPropertyReports(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	renderCtx, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return renderCtx, propertyDashboardReportsTemplate, nil
+}
+
+func (s *Server) getPropertySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	renderCtx, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return renderCtx, propertyDashboardSettingsTemplate, nil
+}
+
+func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	renderCtx, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return renderCtx, propertyDashboardIntegrationsTemplate, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {

@@ -37,13 +37,9 @@ func (h *contextHandler) WithGroup(name string) slog.Handler {
 	return &contextHandler{h.Handler.WithGroup(name)}
 }
 
-func TraceContext(ctx context.Context, traceID string) context.Context {
-	if len(traceID) == 0 {
-		return ctx
-	}
-
+func TraceContext(ctx context.Context, traceID func() string) context.Context {
 	if tid, ok := ctx.Value(TraceIDContextKey).(string); !ok || (len(tid) == 0) {
-		ctx = context.WithValue(ctx, TraceIDContextKey, traceID)
+		ctx = context.WithValue(ctx, TraceIDContextKey, traceID())
 	}
 
 	return ctx

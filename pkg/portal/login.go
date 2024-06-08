@@ -23,11 +23,10 @@ type loginRenderContext struct {
 	Error string
 }
 
-func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
-	data := &loginRenderContext{
+func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	return &loginRenderContext{
 		Token: s.XSRF.Token("", actionLogin),
-	}
-	s.render(w, r, "login/login.html", data)
+	}, "login/login.html", nil
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {

@@ -16,13 +16,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
-
-func testEmail(username string) string {
-	login := strings.ReplaceAll(username, " ", "_")
-	return login + "@privatecaptcha.com"
-}
 
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
@@ -78,17 +74,12 @@ func solutionsSuite(ctx context.Context, sitekey string) (string, string, error)
 func setupVerifySuite(username string) (string, string, error) {
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: username, Email: testEmail(username)})
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username)
 	if err != nil {
 		return "", "", err
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: username})
-	if err != nil {
-		return "", "", err
-	}
-
-	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       fmt.Sprintf("%v property", username),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -105,10 +96,7 @@ func setupVerifySuite(username string) (string, string, error) {
 		return "", "", err
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
-		UserID:    db.Int(user.ID),
-		ExpiresAt: db.Timestampz(time.Now().Add(1 * time.Hour)),
-	})
+	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour))
 	if err != nil {
 		return "", "", err
 	}
@@ -207,17 +195,12 @@ func TestVerifyCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -275,24 +258,17 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	apikey, err := queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
-		UserID:    db.Int(user.ID),
-		ExpiresAt: db.Timestampz(time.Now().Add(1 * time.Hour)),
-	})
+	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = queries.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
-		ExpiresAt:  db.Timestampz(time.Now().AddDate(0, 0, -1)),
-		ExternalID: apikey.ExternalID,
-		Enabled:    db.Bool(true),
-	})
+	err = store.UpdateAPIKey(ctx, apikey.ExternalID, time.Now().AddDate(0, 0, -1), true)
 	if err != nil {
 		t.Fatal(err)
 	}

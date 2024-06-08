@@ -18,6 +18,18 @@ func RelURL(prefix, url string) string {
 	return "/" + p + "/" + url
 }
 
+func OrgNameFromName(name string) string {
+	parts := strings.FieldsFunc(name, func(c rune) bool {
+		return c == ' '
+	})
+	for i, p := range parts {
+		parts[i] = strings.ToLower(p)
+	}
+
+	orgName := strings.Join(parts, "-")
+	return orgName
+}
+
 func MaskEmail(email string, mask rune) string {
 	parts := strings.Split(email, "@")
 	if len(parts) != 2 {

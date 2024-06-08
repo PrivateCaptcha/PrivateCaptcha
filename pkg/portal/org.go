@@ -116,22 +116,19 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 	return result
 }
 
-func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
 	sess := s.Session.SessionStart(w, r)
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok || (len(email) == 0) {
 		slog.ErrorContext(ctx, "Failed to get user email from context")
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", errInvalidSession
 	}
 
-	data := &orgWizardRenderContext{
+	return &orgWizardRenderContext{
 		Token: s.XSRF.Token(email, actionNewOrg),
-	}
-
-	s.render(w, r, "org-wizard/wizard.html", data)
+	}, "org-wizard/wizard.html", nil
 }
 
 func (s *Server) validateOrgName(ctx context.Context, name string, userID int32) string {
@@ -290,25 +287,23 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "portal/portal.html", renderCtx)
 }
 
-func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 
 	orgID := ctx.Value(common.OrgIDContextKey).(int)
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	properties, err := s.Store.RetrieveOrgProperties(ctx, int32(orgID))
 	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &orgPropertiesRenderContext{
@@ -316,22 +311,21 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) {
 		Properties: propertiesToUserProperties(ctx, properties),
 	}
 
-	s.render(w, r, orgPropertiesTemplate, renderCtx)
+	return renderCtx, orgPropertiesTemplate, nil
 }
 
-func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 
 	orgID := ctx.Value(common.OrgIDContextKey).(int)
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &orgMemberRenderContext{
@@ -341,21 +335,19 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 	if user.ID != org.UserID.Int32 {
 		slog.WarnContext(ctx, "Fetching org members as not an owner", "userID", user.ID)
-		s.render(w, r, orgMembersTemplate, renderCtx)
-		return
+		return renderCtx, orgMembersTemplate, nil
 	}
 
 	members, err := s.Store.RetrieveOrganizationUsers(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx.Token = s.XSRF.Token(user.Email, actionOrgMembers)
 	renderCtx.Members = usersToOrgUsers(members)
 
-	s.render(w, r, orgMembersTemplate, renderCtx)
+	return renderCtx, orgMembersTemplate, nil
 }
 
 func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
@@ -519,19 +511,18 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 
 	orgID := ctx.Value(common.OrgIDContextKey).(int)
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &orgSettingsRenderContext{
@@ -540,7 +531,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) {
 		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
-	s.render(w, r, orgSettingsTemplate, renderCtx)
+	return renderCtx, orgSettingsTemplate, nil
 }
 
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {

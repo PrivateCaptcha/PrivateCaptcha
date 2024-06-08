@@ -9,16 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
 	s          *server
-	queries    *dbgen.Queries
 	cache      common.Cache
 	timeSeries *db.TimeSeriesStore
 	auth       *authMiddleware
@@ -46,20 +45,19 @@ func TestMain(m *testing.M) {
 	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
 	defer levels.Shutdown()
 
-	queries = dbgen.New(pool)
 	var err error
 	cache, err = db.NewMemoryCache(1 * time.Minute)
 	if err != nil {
 		panic(err)
 	}
 
-	store = db.NewBusiness(queries, cache, 5*time.Second)
+	store = db.NewBusiness(pool, cache, 5*time.Second)
 	defer store.Shutdown()
 
-	auth = NewAuthMiddleware(store, 100*time.Millisecond)
+	auth = NewAuthMiddleware(os.Getenv, store, 100*time.Millisecond)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, levels, 2*time.Second, os.Getenv)
+	s = NewServer(store, timeSeries, levels, 2*time.Second, &billing.StubPaddleClient{}, os.Getenv)
 	defer s.Shutdown()
 
 	// TODO: seed data

@@ -1,6 +1,9 @@
 package common
 
 const (
+	StageProd             = "prod"
+	StageDev              = "dev"
+	StageTest             = "test"
 	HeaderContentType     = "Content-Type"
 	HeaderContentLength   = "Content-Length"
 	HeaderAuthorization   = "Authorization"

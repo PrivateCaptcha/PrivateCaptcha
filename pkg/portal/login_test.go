@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
 func parseCsrfToken(body string) (string, error) {
@@ -66,7 +67,7 @@ func TestGetLogin(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 
-	server.getLogin(rr, req)
+	server.handler(server.getLogin)(rr, req)
 
 	// check if the status code is 200
 	if rr.Code != http.StatusOK {
@@ -90,16 +91,15 @@ func TestPostLogin(t *testing.T) {
 
 	ctx := context.TODO()
 
-	orgName := "org"
-	email := t.Name() + "@example.com"
-	if _, err := server.Store.CreateNewAccount(ctx, email, "username", orgName); err != nil {
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
 	// Get the CSRF token
 	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
 	rr := httptest.NewRecorder()
-	server.getLogin(rr, req)
+	server.handler(server.getLogin)(rr, req)
 	csrfToken, err := parseCsrfToken(rr.Body.String())
 	if err != nil {
 		t.Fatalf("failed to parse CSRF token: %v", err)
@@ -108,7 +108,7 @@ func TestPostLogin(t *testing.T) {
 	// Prepare the form data
 	form := url.Values{}
 	form.Add(common.ParamCsrfToken, csrfToken)
-	form.Add(common.ParamEmail, email)
+	form.Add(common.ParamEmail, user.Email)
 
 	// Send the POST request
 	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))

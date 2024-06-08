@@ -7,6 +7,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -17,17 +18,13 @@ func TestSoftDeleteOrganization(t *testing.T) {
 	ctx := context.TODO()
 
 	// Create a new user and organization
-	email := t.Name() + "@example.com"
-	name := "Test User"
-	orgName := "Test Organization"
-	org, err := store.CreateNewAccount(ctx, email, name, orgName)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
 	// Verify that the organization is returned by FindUserOrganizations
-	userID := org.UserID.Int32
-	orgs, err := store.RetrieveUserOrganizations(ctx, userID)
+	orgs, err := store.RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to find user organizations: %v", err)
 	}
@@ -35,12 +32,12 @@ func TestSoftDeleteOrganization(t *testing.T) {
 		t.Errorf("Expected to find the created organization, but got: %v", orgs)
 	}
 
-	err = store.SoftDeleteOrganization(ctx, org.ID, userID)
+	err = store.SoftDeleteOrganization(ctx, org.ID, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to soft delete organization: %v", err)
 	}
 
-	orgs, err = store.RetrieveUserOrganizations(ctx, userID)
+	orgs, err = store.RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to find user organizations: %v", err)
 	}
@@ -56,10 +53,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 
 	ctx := context.TODO()
 
-	email := t.Name() + "@example.com"
-	name := "Test User"
-	orgName := "Test Organization"
-	org, err := store.CreateNewAccount(ctx, email, name, orgName)
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}

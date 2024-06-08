@@ -7,24 +7,28 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email, created_at, updated_at, deleted_at
+INSERT INTO users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
-	Name  string `db:"name" json:"name"`
-	Email string `db:"email" json:"email"`
+	Name           string      `db:"name" json:"name"`
+	Email          string      `db:"email" json:"email"`
+	SubscriptionID pgtype.Int4 `db:"subscription_id" json:"subscription_id"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error) {
-	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email)
+	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.Email, arg.SubscriptionID)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
+		&i.SubscriptionID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -33,7 +37,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -43,6 +47,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 		&i.ID,
 		&i.Name,
 		&i.Email,
+		&i.SubscriptionID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -59,26 +64,41 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) error {
 	return err
 }
 
-const updateUser = `-- name: UpdateUser :one
-UPDATE users SET name = $1, email = $2, updated_at = NOW() WHERE id = $3 RETURNING id, name, email, created_at, updated_at, deleted_at
+const updateUserData = `-- name: UpdateUserData :one
+UPDATE users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
-type UpdateUserParams struct {
+type UpdateUserDataParams struct {
+	ID    int32  `db:"id" json:"id"`
 	Name  string `db:"name" json:"name"`
 	Email string `db:"email" json:"email"`
-	ID    int32  `db:"id" json:"id"`
 }
 
-func (q *Queries) UpdateUser(ctx context.Context, arg *UpdateUserParams) (*User, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.Name, arg.Email, arg.ID)
+func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error) {
+	row := q.db.QueryRow(ctx, updateUserData, arg.ID, arg.Name, arg.Email)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.Email,
+		&i.SubscriptionID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
 	)
 	return &i, err
+}
+
+const updateUserSubscription = `-- name: UpdateUserSubscription :exec
+UPDATE users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+`
+
+type UpdateUserSubscriptionParams struct {
+	ID             int32       `db:"id" json:"id"`
+	SubscriptionID pgtype.Int4 `db:"subscription_id" json:"subscription_id"`
+}
+
+func (q *Queries) UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) error {
+	_, err := q.db.Exec(ctx, updateUserSubscription, arg.ID, arg.SubscriptionID)
+	return err
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
 func TestPutPropertyInsufficientPermissions(t *testing.T) {
@@ -21,10 +22,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	orgName := "Org Name"
-	// Create a new user account and organization
-	email1 := t.Name() + "_owner@example.com"
-	org1, err := server.Store.CreateNewAccount(ctx, email1, "User Name", orgName)
+	_, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1")
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
@@ -44,22 +42,22 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	// Create another user account
-	email2 := t.Name() + "_intruder@example.com"
-	if _, err = server.Store.CreateNewAccount(ctx, email2, "User Name", orgName); err != nil {
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2")
+	if err != nil {
 		t.Fatalf("Failed to create intruder account: %v", err)
 	}
 
 	srv := http.NewServeMux()
 	server.Setup(srv)
 
-	cookie, err := authenticateSuite(ctx, email2, srv)
+	cookie, err := authenticateSuite(ctx, user2.Email, srv)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Send PUT request as the second user to update the property
 	form := url.Values{}
-	form.Set(common.ParamCsrfToken, server.XSRF.Token(email2, actionPropertySettings))
+	form.Set(common.ParamCsrfToken, server.XSRF.Token(user2.Email, actionPropertySettings))
 	form.Set(common.ParamName, "Updated Property Name")
 	form.Set(common.ParamDifficulty, "0")
 	form.Set(common.ParamGrowth, "2")

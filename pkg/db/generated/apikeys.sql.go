@@ -128,8 +128,8 @@ func (q *Queries) SoftDeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4)
 	return err
 }
 
-const updateAPIKey = `-- name: UpdateAPIKey :exec
-UPDATE apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3
+const updateAPIKey = `-- name: UpdateAPIKey :one
+UPDATE apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3 RETURNING id, name, external_id, user_id, enabled, created_at, expires_at, deleted_at, notes
 `
 
 type UpdateAPIKeyParams struct {
@@ -138,7 +138,19 @@ type UpdateAPIKeyParams struct {
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
 }
 
-func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) error {
-	_, err := q.db.Exec(ctx, updateAPIKey, arg.ExpiresAt, arg.Enabled, arg.ExternalID)
-	return err
+func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error) {
+	row := q.db.QueryRow(ctx, updateAPIKey, arg.ExpiresAt, arg.Enabled, arg.ExternalID)
+	var i APIKey
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.UserID,
+		&i.Enabled,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.DeletedAt,
+		&i.Notes,
+	)
+	return &i, err
 }
