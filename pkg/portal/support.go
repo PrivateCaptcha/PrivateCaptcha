@@ -23,17 +23,17 @@ type supportRenderContext struct {
 	Category string
 }
 
-func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &supportRenderContext{
 		Token: s.XSRF.Token(user.Email, actionSupport),
 	}
 
-	s.render(w, r, "support/support.html", renderCtx)
+	return renderCtx, "support/support.html", nil
 }
 
 func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory {

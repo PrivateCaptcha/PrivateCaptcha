@@ -8,8 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	paddle "github.com/PaddleHQ/paddle-go-sdk"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -28,10 +32,16 @@ import (
 
 const (
 	maxSolutionsBodySize = 256 * 1024
+	maxPaddleBodySize    = 10 * 1024
 	verifyBatchSize      = 100
 )
 
+var (
+	errProductNotFound = errors.New("product not found")
+)
+
 type server struct {
+	stage           string
 	businessDB      *db.BusinessStore
 	timeSeries      *db.TimeSeriesStore
 	levels          *difficulty.Levels
@@ -39,19 +49,23 @@ type server struct {
 	salt            []byte
 	verifyLogChan   chan *common.VerifyRecord
 	verifyLogCancel context.CancelFunc
+	paddleAPI       billing.PaddleAPI
 }
 
 func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
 	levels *difficulty.Levels,
 	verifyFlushInterval time.Duration,
+	paddleAPI billing.PaddleAPI,
 	getenv func(string) string) *server {
 	srv := &server{
+		stage:         getenv("STAGE"),
 		businessDB:    store,
 		timeSeries:    timeSeries,
 		levels:        levels,
 		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
 		salt:          []byte(getenv("API_SALT")),
+		paddleAPI:     paddleAPI,
 	}
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
@@ -144,6 +158,8 @@ func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *aut
 	// TODO: Rate-limit Puzzle endpoint with reasonably high limit
 	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, auth.Sitekey(s.puzzle))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(auth.APIKey(s.verify), maxSolutionsBodySize)))
+	// TODO: Add Paddle events handler here
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Logged(common.SafeFormPost(auth.Private(s.subscriptionCreated), maxPaddleBodySize)))
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
@@ -446,4 +462,103 @@ func catchAll(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+}
+
+func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.SubscriptionCreatedEvent) (*dbgen.CreateSubscriptionParams, error) {
+	var productID string
+	var trialEndsAt time.Time
+	var nextBilledAt time.Time
+	j := -1
+
+	for i, subscr := range evt.Data.Items {
+		if _, err := billing.FindPlanByProductID(subscr.Price.ProductID, s.stage); err == nil {
+			j = i
+			break
+		}
+	}
+
+	if j == -1 {
+		slog.ErrorContext(ctx, "Failed to find a known plan from subscription")
+		if len(evt.Data.Items) == 1 {
+			j = 0
+		} else {
+			slog.ErrorContext(ctx, "Unexpected number of subscription items", "count", len(evt.Data.Items))
+			return nil, errProductNotFound
+		}
+	}
+
+	subscr := evt.Data.Items[j]
+	productID = subscr.Price.ProductID
+
+	if subscr.TrialDates != nil {
+		if trialEndTime, err := time.Parse(time.RFC3339, subscr.TrialDates.EndsAt); err == nil {
+			trialEndsAt = trialEndTime
+		} else {
+			slog.ErrorContext(ctx, "Failed to parse trial end time", "time", subscr.TrialDates.EndsAt, common.ErrAttr(err))
+			trialEndsAt = time.Now().UTC().AddDate(0, 1, 0)
+		}
+	}
+
+	if subscr.NextBilledAt != nil {
+		if nextBillTime, err := time.Parse(time.RFC3339, *subscr.NextBilledAt); err == nil {
+			nextBilledAt = nextBillTime
+		} else {
+			slog.ErrorContext(ctx, "Failed to parse next bill time", "time", *subscr.NextBilledAt, common.ErrAttr(err))
+		}
+	}
+
+	return &dbgen.CreateSubscriptionParams{
+		PaddleProductID:      productID,
+		PaddleSubscriptionID: evt.Data.ID,
+		PaddleCustomerID:     evt.Data.CustomerID,
+		Status:               evt.Data.Status,
+		TrialEndsAt:          db.Timestampz(trialEndsAt),
+		NextBilledAt:         db.Timestampz(nextBilledAt),
+	}, nil
+}
+
+func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	evt := &paddle.SubscriptionCreatedEvent{}
+	if err := json.Unmarshal(body, evt); err != nil {
+		slog.ErrorContext(ctx, "Failed to parse request", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	elog := slog.With("eventID", evt.EventID, "subscriptionID", evt.Data.ID)
+	elog.DebugContext(ctx, "Handling subscription created event")
+
+	customer, err := s.paddleAPI.GetCustomerInfo(ctx, evt.Data.CustomerID)
+	if err != nil {
+		elog.ErrorContext(ctx, "Failed to fetch customer data from Paddle", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	subscrParams, err := s.newCreateSubscriptionParams(ctx, evt)
+	if err != nil {
+		elog.ErrorContext(ctx, "Failed to process paddle event", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	orgName := common.OrgNameFromName(customer.Name)
+
+	if _, _, err = s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName); (err != nil) && (err != db.ErrDuplicateAccount) {
+		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

@@ -17,9 +17,13 @@ var (
 	headerHtmxRequest = http.CanonicalHeaderKey("HX-Request")
 )
 
+func traceID() string {
+	return xid.New().String()
+}
+
 func Logged(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := TraceContext(r.Context(), xid.New().String())
+		ctx := TraceContext(r.Context(), traceID)
 		slog.DebugContext(ctx, "Processing request", "path", r.URL.Path, "method", r.Method)
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})

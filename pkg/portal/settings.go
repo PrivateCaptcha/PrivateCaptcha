@@ -21,10 +21,16 @@ const (
 	settingsTemplate            = "settings/settings.html"
 	settingsGeneralFormTemplate = "settings/general-form.html"
 	settingsAPIKeysTemplate     = "settings/apikeys.html"
+	settingsBillingTemplate     = "settings/billing.html"
 )
+
+type settingsCommonRenderContext struct {
+	Tab int
+}
 
 type settingsGeneralRenderContext struct {
 	alertRenderContext
+	settingsCommonRenderContext
 	Token          string
 	Name           string
 	NameError      string
@@ -44,11 +50,16 @@ type userAPIKey struct {
 }
 
 type settingsAPIKeysRenderContext struct {
+	settingsCommonRenderContext
 	Name       string
 	NameError  string
 	Keys       []*userAPIKey
 	Token      string
 	CreateOpen bool
+}
+
+type settingsBillingRenderContext struct {
+	settingsCommonRenderContext
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -70,21 +81,49 @@ func apiKeysToUserAPIKeys(keys []*dbgen.APIKey, tnow time.Time) []*userAPIKey {
 	return result
 }
 
-func (s *Server) getGeneralSettings(tpl string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		user, err := s.sessionUser(w, r)
-		if err != nil {
-			return
-		}
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
 
-		renderCtx := &settingsGeneralRenderContext{
-			Token: s.XSRF.Token(user.Email, actionUserSettings),
-			Name:  user.Name,
-			Email: user.Email,
-		}
+	var renderCtx any
+	var err error
 
-		s.render(w, r, tpl, renderCtx)
+	tabParam := r.URL.Query().Get(common.ParamTab)
+	switch tabParam {
+	case common.APIKeysEndpoint:
+		renderCtx, _, err = s.getAPIKeysSettings(w, r)
+	case common.BillingEndpoint:
+		renderCtx, _, err = s.getBillingSettings(w, r)
+	default:
+		if tabParam != common.GeneralEndpoint {
+			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
+		}
+		renderCtx, _, err = s.getGeneralSettings(w, r)
 	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create settings render context")
+		return nil, "", err
+	}
+
+	return renderCtx, settingsTemplate, nil
+}
+
+func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	renderCtx := &settingsGeneralRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab: 0,
+		},
+		Token: s.XSRF.Token(user.Email, actionUserSettings),
+		Name:  user.Name,
+		Email: user.Email,
+	}
+
+	return renderCtx, settingsGeneralTemplate, nil
 }
 
 func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
@@ -223,26 +262,28 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 
 	keys, err := s.Store.RetrieveUserAPIKeys(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user API keys", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &settingsAPIKeysRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab: 1,
+		},
 		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
 	}
 
-	s.render(w, r, settingsAPIKeysTemplate, renderCtx)
+	return renderCtx, settingsAPIKeysTemplate, nil
 }
 
 func monthsFromParam(ctx context.Context, param string) int {
@@ -290,6 +331,9 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &settingsAPIKeysRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab: 1,
+		},
 		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
 	}
@@ -334,4 +378,13 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	renderCtx := &settingsBillingRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab: 2,
+		},
+	}
+	return renderCtx, settingsBillingTemplate, nil
 }

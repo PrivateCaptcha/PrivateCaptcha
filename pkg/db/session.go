@@ -8,6 +8,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -25,9 +26,9 @@ type SessionStore struct {
 	persistKey    common.SessionKey
 }
 
-func NewSessionStore(db *dbgen.Queries, fallback common.SessionStore, interval time.Duration, persistKey common.SessionKey) *SessionStore {
+func NewSessionStore(pool *pgxpool.Pool, fallback common.SessionStore, interval time.Duration, persistKey common.SessionKey) *SessionStore {
 	store := &SessionStore{
-		db:          db,
+		db:          dbgen.New(pool),
 		fallback:    fallback,
 		persistChan: make(chan string, sessionBatchSize),
 		batchSize:   sessionBatchSize,

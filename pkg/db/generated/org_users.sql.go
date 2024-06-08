@@ -10,7 +10,7 @@ import (
 )
 
 const getOrganizationUsers = `-- name: GetOrganizationUsers :many
-SELECT u.id, u.name, u.email, u.created_at, u.updated_at, u.deleted_at, ou.level
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, ou.level
 FROM organization_users ou
 JOIN users u ON ou.user_id = u.id
 WHERE ou.org_id = $1 AND u.deleted_at IS NULL
@@ -34,6 +34,7 @@ func (q *Queries) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*Get
 			&i.User.ID,
 			&i.User.Name,
 			&i.User.Email,
+			&i.User.SubscriptionID,
 			&i.User.CreatedAt,
 			&i.User.UpdatedAt,
 			&i.User.DeletedAt,
