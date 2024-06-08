@@ -26,11 +26,10 @@ type registerRenderContext struct {
 	EmailError string
 }
 
-func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) {
-	data := &registerRenderContext{
+func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	return &registerRenderContext{
 		Token: s.XSRF.Token("", actionRegister),
-	}
-	s.render(w, r, "register/register.html", data)
+	}, "register/register.html", nil
 }
 
 func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
@@ -107,16 +106,9 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
 		return errIncompleteSession
 	}
 
-	parts := strings.FieldsFunc(name, func(c rune) bool {
-		return c == ' '
-	})
-	for i, p := range parts {
-		parts[i] = strings.ToLower(p)
-	}
+	orgName := common.OrgNameFromName(name)
 
-	orgName := strings.Join(parts, "-")
-
-	_, err := s.Store.CreateNewAccount(ctx, email, name, orgName)
+	_, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return err

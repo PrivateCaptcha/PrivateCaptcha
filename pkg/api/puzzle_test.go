@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -110,17 +111,12 @@ func TestGetPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -159,17 +155,12 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, err := queries.CreateUser(ctx, &dbgen.CreateUserParams{Name: t.Name(), Email: testEmail(t.Name())})
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	org, err := queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{UserID: db.Int(user.ID), Name: t.Name()})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	property, err := queries.CreateProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),

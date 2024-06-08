@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -42,6 +42,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		panic(cerr)
 	}
 
+	paddleAPI, err := billing.NewPaddleAPI(getenv)
+	if err != nil {
+		panic(err)
+	}
+
 	pool, clickhouse, dberr := db.Migrate(getenv)
 	if dberr != nil {
 		return dberr
@@ -50,8 +55,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	queries := dbgen.New(pool)
-	businessDB := db.NewBusiness(queries, cache, 5*time.Minute)
+	businessDB := db.NewBusiness(pool, cache, 5*time.Minute)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
 	levels := difficulty.NewLevels(timeSeriesDB, levelsBatchSize, propertyBucketSize)
@@ -59,9 +63,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, levels, 30*time.Second, os.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, levels, 30*time.Second, paddleAPI, os.Getenv)
 
-	sessionStore := db.NewSessionStore(queries, memory.New(), 1*time.Minute, session.KeyPersistent)
+	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	portalServer := &portal.Server{
 		Store:      businessDB,
@@ -80,7 +84,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	router := http.NewServeMux()
 
-	apiAuth := api.NewAuthMiddleware(businessDB, 1*time.Second)
+	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, 1*time.Second)
 
 	apiServer.Setup(router, "api", apiAuth)
 	portalServer.Init()

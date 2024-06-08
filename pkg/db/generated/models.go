@@ -235,6 +235,18 @@ type Property struct {
 	DeletedAt  pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }
 
+type Subscription struct {
+	ID                   int32              `db:"id" json:"id"`
+	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
+	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
+	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
+	Status               string             `db:"status" json:"status"`
+	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
+	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
+	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type Support struct {
 	ID         int32              `db:"id" json:"id"`
 	Category   SupportCategory    `db:"category" json:"category"`
@@ -246,10 +258,11 @@ type Support struct {
 }
 
 type User struct {
-	ID        int32              `db:"id" json:"id"`
-	Name      string             `db:"name" json:"name"`
-	Email     string             `db:"email" json:"email"`
-	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	ID             int32              `db:"id" json:"id"`
+	Name           string             `db:"name" json:"name"`
+	Email          string             `db:"email" json:"email"`
+	SubscriptionID pgtype.Int4        `db:"subscription_id" json:"subscription_id"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt      pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 }

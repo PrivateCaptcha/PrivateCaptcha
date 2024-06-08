@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
 func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*http.Cookie, error) {
@@ -69,12 +70,12 @@ func TestPostTwoFactor(t *testing.T) {
 
 	ctx := context.TODO()
 
-	email := t.Name() + "@example.com"
-	if _, err := server.Store.CreateNewAccount(ctx, email, "User Name", "org"); err != nil {
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	cookie, err := authenticateSuite(ctx, email, srv)
+	cookie, err := authenticateSuite(ctx, user.Email, srv)
 	if err != nil {
 		t.Fatal(err)
 	}

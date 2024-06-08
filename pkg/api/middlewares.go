@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -16,15 +17,17 @@ type authMiddleware struct {
 	sitekeyChan    chan string
 	batchSize      int
 	backfillCancel context.CancelFunc
+	privateAPIKey  string
 }
 
-func NewAuthMiddleware(store *db.BusinessStore, backfillDelay time.Duration) *authMiddleware {
+func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, backfillDelay time.Duration) *authMiddleware {
 	const batchSize = 10
 
 	am := &authMiddleware{
-		Store:       store,
-		sitekeyChan: make(chan string, batchSize),
-		batchSize:   batchSize,
+		Store:         store,
+		sitekeyChan:   make(chan string, batchSize),
+		batchSize:     batchSize,
+		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
 	}
 
 	var backfillCtx context.Context
@@ -110,6 +113,34 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 	}
 
 	slog.DebugContext(ctx, "Finished backfilling properties")
+}
+
+func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		authHeader := r.Header.Get(common.HeaderAuthorization)
+		if authHeader == "" {
+			slog.WarnContext(ctx, "Authorization header missing")
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			slog.WarnContext(ctx, "Invalid authorization header format", "header", authHeader)
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+
+		if token != am.privateAPIKey {
+			slog.WarnContext(ctx, "Invalid authorization token", "token", token)
+			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }
 
 func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {

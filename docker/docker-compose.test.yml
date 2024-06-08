@@ -8,6 +8,8 @@ services:
     ports:
       - 8080:8080
     environment:
+      STAGE: test
+      PC_PRIVATE_API_KEY: c669dfd7daa53b63c5565ed29484f1169
       PC_PORT: 8080
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
       PC_CLICKHOUSE_HOST: clickhouse
