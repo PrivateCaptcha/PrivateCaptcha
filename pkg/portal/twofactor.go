@@ -11,6 +11,7 @@ import (
 
 const (
 	twofactorFormTemplate = ""
+	twofactorTemplate     = "twofactor/twofactor.html"
 )
 
 type twoFactorRenderContext struct {
@@ -41,7 +42,7 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 		Email: common.MaskEmail(email, '*'),
 	}
 
-	s.render(w, r, "twofactor/twofactor.html", data)
+	s.render(w, r, twofactorTemplate, data)
 }
 
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {

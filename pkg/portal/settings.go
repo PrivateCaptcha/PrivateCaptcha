@@ -130,6 +130,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -164,6 +165,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -250,6 +252,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -305,6 +308,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -366,6 +370,7 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 

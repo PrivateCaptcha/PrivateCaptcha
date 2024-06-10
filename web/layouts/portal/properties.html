@@ -10,7 +10,7 @@
         <div class="min-w-0 flex-1">
             <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.PropertyEndpoint $property.ID }}" class="focus:outline-none">
                 <span class="absolute inset-0" aria-hidden="true"></span>
-                <p class="text-sm font-medium text-gray-900">{{ $property.Name }}</p>
+                <p class="property-name text-sm font-medium text-gray-900">{{ $property.Name }}</p>
                 <p class="truncate text-sm text-gray-500">{{ $property.Domain }}</p>
             </a>
         </div>

@@ -26,6 +26,17 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	if testing.Short() {
+		server = &Server{
+			Prefix: "",
+			XSRF:   XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+			Session: session.Manager{
+				CookieName:  "pcsid",
+				MaxLifetime: 1 * time.Minute,
+			},
+		}
+
+		server.Init()
+
 		os.Exit(m.Run())
 	}
 

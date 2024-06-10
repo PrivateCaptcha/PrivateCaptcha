@@ -28,6 +28,8 @@ const (
 	orgPropertiesTemplate = "portal/org-dashboard.html"
 	orgSettingsTemplate   = "portal/org-settings.html"
 	orgMembersTemplate    = "portal/org-members.html"
+	orgWizardTemplate     = "org-wizard/wizard.html"
+	portalTemplate        = "portal/portal.html"
 	maxOrgFormSizeBytes   = 256 * 1024
 )
 
@@ -128,7 +130,7 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, strin
 
 	return &orgWizardRenderContext{
 		Token: s.XSRF.Token(email, actionNewOrg),
-	}, "org-wizard/wizard.html", nil
+	}, orgWizardTemplate, nil
 }
 
 func (s *Server) validateOrgName(ctx context.Context, name string, userID int32) string {
@@ -154,6 +156,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -284,7 +287,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "portal/portal.html", renderCtx)
+	s.render(w, r, portalTemplate, renderCtx)
 }
 
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -354,6 +357,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -436,6 +440,7 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -481,6 +486,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -498,6 +504,7 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -538,6 +545,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -599,6 +607,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 

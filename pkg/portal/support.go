@@ -61,6 +61,7 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
