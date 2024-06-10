@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"html/template"
@@ -113,6 +114,13 @@ func funcMap(prefix string) template.FuncMap {
 
 type Model = any
 type ModelFunc func(http.ResponseWriter, *http.Request) (Model, string, error)
+
+type requestContext struct {
+	Path        string
+	LoggedIn    bool
+	CurrentYear int
+	UserName    string
+}
 
 type alertRenderContext struct {
 	ErrorMessage   string
@@ -310,26 +318,7 @@ func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
-	ctx := r.Context()
-	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
-
-	reqCtx := struct {
-		Path        string
-		LoggedIn    bool
-		CurrentYear int
-		UserName    string
-	}{
-		Path:        r.URL.Path,
-		LoggedIn:    ok && loggedIn,
-		CurrentYear: time.Now().Year(),
-	}
-
-	sess := s.Session.SessionStart(w, r)
-	if username, ok := sess.Get(session.KeyUserName).(string); ok {
-		reqCtx.UserName = username
-	}
-
+func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *requestContext) (bytes.Buffer, error) {
 	actualData := struct {
 		Params interface{}
 		Const  interface{}
@@ -340,10 +329,37 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		Ctx:    reqCtx,
 	}
 
-	w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
-
-	if err := s.template.Render(ctx, w, name, actualData); err != nil {
+	var out bytes.Buffer
+	err := s.template.Render(ctx, &out, name, actualData)
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", common.ErrAttr(err))
+	}
+
+	return out, err
+}
+
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+	ctx := r.Context()
+
+	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
+
+	reqCtx := &requestContext{
+		Path:        r.URL.Path,
+		LoggedIn:    ok && loggedIn,
+		CurrentYear: time.Now().Year(),
+	}
+
+	sess := s.Session.SessionStart(w, r)
+	if username, ok := sess.Get(session.KeyUserName).(string); ok {
+		reqCtx.UserName = username
+	}
+
+	out, err := s.renderResponse(ctx, name, data, reqCtx)
+	if err == nil {
+		w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		out.WriteTo(w)
+	} else {
 		s.renderError(ctx, w, http.StatusInternalServerError)
 	}
 }

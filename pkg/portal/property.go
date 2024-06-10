@@ -23,6 +23,7 @@ const (
 	propertyDashboardReportsTemplate      = "property/reports.html"
 	propertyDashboardSettingsTemplate     = "property/settings.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
+	propertyWizardTemplate                = "property-wizard/wizard.html"
 	maxPropertyNameLength                 = 255
 )
 
@@ -177,7 +178,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 		},
 	}
 
-	return data, "property-wizard/wizard.html", nil
+	return data, propertyWizardTemplate, nil
 }
 
 func (s *Server) validatePropertyName(ctx context.Context, name string, orgID int32) string {
@@ -230,6 +231,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -453,6 +455,10 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
+	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
 	err = r.ParseForm()
@@ -554,6 +560,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 
 	user, err := s.sessionUser(w, r)
 	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
