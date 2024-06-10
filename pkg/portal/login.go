@@ -16,6 +16,7 @@ const (
 	loginStepSignUpVerify = 2
 	loginStepCompleted    = 3
 	loginFormTemplate     = "login/form.html"
+	loginTemplate         = "login/login.html"
 )
 
 type loginRenderContext struct {
@@ -26,7 +27,7 @@ type loginRenderContext struct {
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	return &loginRenderContext{
 		Token: s.XSRF.Token("", actionLogin),
-	}, "login/login.html", nil
+	}, loginTemplate, nil
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
