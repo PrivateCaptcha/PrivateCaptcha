@@ -23,16 +23,21 @@ type paddleClient struct {
 var _ PaddleAPI = (*paddleClient)(nil)
 
 func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
-	stage := getenv("STAGE")
+	paddleURL := getenv("PADDLE_BASE_URL")
+	if len(paddleURL) == 0 {
+		stage := getenv("STAGE")
 
-	paddleURL := paddle.SandboxBaseURL
-	if stage == common.StageProd {
-		paddleURL = paddle.ProductionBaseURL
+		paddleURL = paddle.SandboxBaseURL
+		if stage == common.StageProd {
+			paddleURL = paddle.ProductionBaseURL
+		}
 	}
+
 	pc, err := paddle.New(getenv("PADDLE_API_KEY"), paddle.WithBaseURL(paddleURL))
 	if err != nil {
 		return nil, err
 	}
+
 	return &paddleClient{sdk: pc}, nil
 }
 
