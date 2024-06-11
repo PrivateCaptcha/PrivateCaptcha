@@ -238,6 +238,7 @@ type Property struct {
 type Subscription struct {
 	ID                   int32              `db:"id" json:"id"`
 	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
+	PaddlePriceID        string             `db:"paddle_price_id" json:"paddle_price_id"`
 	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
 	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
 	Status               string             `db:"status" json:"status"`

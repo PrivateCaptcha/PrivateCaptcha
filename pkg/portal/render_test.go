@@ -100,6 +100,16 @@ func stubAPIKey(name string) *userAPIKey {
 	}
 }
 
+func stubBillingPlan(id string) *userBillingPlan {
+	return &userBillingPlan{
+		ID:           id,
+		Name:         "Stub plan " + id,
+		PriceMonthly: 9,
+		PriceYearly:  90,
+		Limit:        1000,
+	}
+}
+
 func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string
@@ -226,7 +236,13 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint},
 			template: settingsBillingTemplate,
-			model:    &settingsBillingRenderContext{},
+			model: &settingsBillingRenderContext{
+				Plans:         []*userBillingPlan{stubBillingPlan("123"), stubBillingPlan("456")},
+				CurrentPlan:   stubBillingPlan("123"),
+				YearlyBilling: false,
+			},
+			selector: "span.billing-plan-name",
+			matches:  []string{"Stub plan 123", "Stub plan 456"},
 		},
 	}
 

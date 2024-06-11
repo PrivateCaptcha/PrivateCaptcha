@@ -22,7 +22,7 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	}
 	j := -1
 	for i, subscr := range items {
-		if _, err := billing.FindPlanByProductID(subscr.Price.ProductID, stage); err == nil {
+		if _, err := billing.FindPlanByPaddlePrice(subscr.Price.ProductID, subscr.Price.ID, stage); err == nil {
 			j = i
 			break
 		}
@@ -50,6 +50,7 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 	subscr := evt.Data.Items[j]
 
 	params := &dbgen.CreateSubscriptionParams{
+		PaddlePriceID:        subscr.Price.ID,
 		PaddleProductID:      subscr.Price.ProductID,
 		PaddleSubscriptionID: evt.Data.ID,
 		PaddleCustomerID:     evt.Data.CustomerID,
