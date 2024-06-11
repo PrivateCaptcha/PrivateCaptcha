@@ -44,13 +44,13 @@ run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
 
 run-docker:
-	@docker compose -f docker/docker-compose.yml up --build
+	@docker compose -f docker/docker-compose.local.yml up --build
 
 watch-docker:
-	@docker compose -f docker/docker-compose.yml watch
+	@docker compose -f docker/docker-compose.local.yml watch
 
 clean-docker:
-	@docker compose -f docker/docker-compose.yml down -v
+	@docker compose -f docker/docker-compose.local.yml down -v --remove-orphans
 
 sqlc:
 	cd pkg/db && sqlc generate
