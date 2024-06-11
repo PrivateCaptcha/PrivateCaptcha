@@ -70,17 +70,23 @@ func (q *Queries) GetSubscriptionByID(ctx context.Context, id int32) (*Subscript
 }
 
 const updateSubscription = `-- name: UpdateSubscription :one
-UPDATE subscriptions SET status = $2, next_billed_at = $3, updated_at = NOW() WHERE id = $1 RETURNING id, paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
+UPDATE subscriptions SET paddle_product_id = $2, status = $3, next_billed_at = $4, updated_at = NOW() WHERE paddle_subscription_id = $1 RETURNING id, paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
 `
 
 type UpdateSubscriptionParams struct {
-	ID           int32              `db:"id" json:"id"`
-	Status       string             `db:"status" json:"status"`
-	NextBilledAt pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
+	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
+	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
+	Status               string             `db:"status" json:"status"`
+	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
 }
 
 func (q *Queries) UpdateSubscription(ctx context.Context, arg *UpdateSubscriptionParams) (*Subscription, error) {
-	row := q.db.QueryRow(ctx, updateSubscription, arg.ID, arg.Status, arg.NextBilledAt)
+	row := q.db.QueryRow(ctx, updateSubscription,
+		arg.PaddleSubscriptionID,
+		arg.PaddleProductID,
+		arg.Status,
+		arg.NextBilledAt,
+	)
 	var i Subscription
 	err := row.Scan(
 		&i.ID,

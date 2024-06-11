@@ -231,7 +231,7 @@ func TestRenderHTML(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("render_%s", tc.path), func(t *testing.T) {
+		t.Run(fmt.Sprintf("render_%s", strings.Join(tc.path, "_")), func(t *testing.T) {
 			ctx := context.TODO()
 			path := server.relURL(strings.Join(tc.path, "/"))
 			buf, err := server.renderResponse(ctx, tc.template, tc.model, &requestContext{Path: server.relURL(path)})
