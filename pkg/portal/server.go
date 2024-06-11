@@ -291,6 +291,8 @@ func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
 			common.Redirect(url, w, r)
 			return
 		}
+
+		next.ServeHTTP(w, r)
 	}
 }
 
