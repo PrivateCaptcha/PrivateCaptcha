@@ -57,6 +57,7 @@ var (
 		Message              string
 		Category             string
 		BillingEndpoint      string
+		Product              string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -94,6 +95,7 @@ var (
 		Message:              common.ParamMessage,
 		Category:             common.ParamCategory,
 		BillingEndpoint:      common.BillingEndpoint,
+		Product:              common.ParamProduct,
 	}
 )
 
@@ -108,6 +110,9 @@ func funcMap(prefix string) template.FuncMap {
 		},
 		"partsURL": func(a ...string) any {
 			return common.RelURL(prefix, strings.Join(a, "/"))
+		},
+		"plus1": func(x int) int {
+			return x + 1
 		},
 	}
 }
@@ -135,6 +140,7 @@ type Server struct {
 	XSRF       XSRFMiddleware
 	Session    session.Manager
 	Mailer     Mailer
+	Stage      string
 }
 
 func (s *Server) Init() {

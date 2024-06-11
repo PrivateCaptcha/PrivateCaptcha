@@ -68,6 +68,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	portalServer := &portal.Server{
+		Stage:      stage,
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
 		Prefix:     "portal",

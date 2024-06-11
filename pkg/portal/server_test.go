@@ -27,6 +27,7 @@ func TestMain(m *testing.M) {
 
 	if testing.Short() {
 		server = &Server{
+			Stage:  common.StageTest,
 			Prefix: "",
 			XSRF:   XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 			Session: session.Manager{
@@ -67,6 +68,7 @@ func TestMain(m *testing.M) {
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
 	server = &Server{
+		Stage:      common.StageTest,
 		Store:      store,
 		TimeSeries: timeSeries,
 		Prefix:     "",

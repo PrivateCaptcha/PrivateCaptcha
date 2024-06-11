@@ -1,8 +1,9 @@
 CREATE TABLE IF NOT EXISTS subscriptions(
     id SERIAL PRIMARY KEY,
-    paddle_product_id VARCHAR(255) NOT NULL,
-    paddle_subscription_id VARCHAR(255) NOT NULL,
-    paddle_customer_id VARCHAR(255) NOT NULL,
+    paddle_product_id TEXT NOT NULL,
+    paddle_price_id TEXT NOT NULL,
+    paddle_subscription_id TEXT NOT NULL,
+    paddle_customer_id TEXT NOT NULL,
     status VARCHAR(255) NOT NULL,
     trial_ends_at TIMESTAMPTZ,
     next_billed_at TIMESTAMPTZ,
