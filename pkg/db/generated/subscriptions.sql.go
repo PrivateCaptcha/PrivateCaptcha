@@ -12,11 +12,12 @@ import (
 )
 
 const createSubscription = `-- name: CreateSubscription :one
-INSERT INTO subscriptions (paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
+INSERT INTO subscriptions (paddle_product_id, paddle_price_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, paddle_product_id, paddle_price_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
 `
 
 type CreateSubscriptionParams struct {
 	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
+	PaddlePriceID        string             `db:"paddle_price_id" json:"paddle_price_id"`
 	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
 	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
 	Status               string             `db:"status" json:"status"`
@@ -27,6 +28,7 @@ type CreateSubscriptionParams struct {
 func (q *Queries) CreateSubscription(ctx context.Context, arg *CreateSubscriptionParams) (*Subscription, error) {
 	row := q.db.QueryRow(ctx, createSubscription,
 		arg.PaddleProductID,
+		arg.PaddlePriceID,
 		arg.PaddleSubscriptionID,
 		arg.PaddleCustomerID,
 		arg.Status,
@@ -37,6 +39,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg *CreateSubscriptio
 	err := row.Scan(
 		&i.ID,
 		&i.PaddleProductID,
+		&i.PaddlePriceID,
 		&i.PaddleSubscriptionID,
 		&i.PaddleCustomerID,
 		&i.Status,
@@ -49,7 +52,7 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg *CreateSubscriptio
 }
 
 const getSubscriptionByID = `-- name: GetSubscriptionByID :one
-SELECT id, paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at FROM subscriptions WHERE id = $1
+SELECT id, paddle_product_id, paddle_price_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at FROM subscriptions WHERE id = $1
 `
 
 func (q *Queries) GetSubscriptionByID(ctx context.Context, id int32) (*Subscription, error) {
@@ -58,6 +61,7 @@ func (q *Queries) GetSubscriptionByID(ctx context.Context, id int32) (*Subscript
 	err := row.Scan(
 		&i.ID,
 		&i.PaddleProductID,
+		&i.PaddlePriceID,
 		&i.PaddleSubscriptionID,
 		&i.PaddleCustomerID,
 		&i.Status,
@@ -70,7 +74,7 @@ func (q *Queries) GetSubscriptionByID(ctx context.Context, id int32) (*Subscript
 }
 
 const updateSubscription = `-- name: UpdateSubscription :one
-UPDATE subscriptions SET paddle_product_id = $2, status = $3, next_billed_at = $4, updated_at = NOW() WHERE paddle_subscription_id = $1 RETURNING id, paddle_product_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
+UPDATE subscriptions SET paddle_product_id = $2, status = $3, next_billed_at = $4, updated_at = NOW() WHERE paddle_subscription_id = $1 RETURNING id, paddle_product_id, paddle_price_id, paddle_subscription_id, paddle_customer_id, status, trial_ends_at, next_billed_at, created_at, updated_at
 `
 
 type UpdateSubscriptionParams struct {
@@ -91,6 +95,7 @@ func (q *Queries) UpdateSubscription(ctx context.Context, arg *UpdateSubscriptio
 	err := row.Scan(
 		&i.ID,
 		&i.PaddleProductID,
+		&i.PaddlePriceID,
 		&i.PaddleSubscriptionID,
 		&i.PaddleCustomerID,
 		&i.Status,

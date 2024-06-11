@@ -34,7 +34,8 @@ func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testN
 	orgName := strings.ToLower(strings.Join(parts, "-"))
 
 	return store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
-		PaddleProductID:      testPlan.PaddleProductIDMonthly,
+		PaddleProductID:      testPlan.PaddleProductID,
+		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
 		Status:               paddle.SubscriptionStatusTrialing,

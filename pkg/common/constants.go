@@ -25,4 +25,5 @@ const (
 	ParamMonths           = "months"
 	ParamCategory         = "category"
 	ParamMessage          = "message"
+	ParamProduct          = "product"
 )

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -58,8 +59,39 @@ type settingsAPIKeysRenderContext struct {
 	CreateOpen bool
 }
 
+type userBillingPlan struct {
+	ID           string
+	Name         string
+	PriceMonthly int
+	PriceYearly  int
+	Limit        int
+}
+
+func billingPlanToUserBillingPlan(plan *billing.Plan) *userBillingPlan {
+	return &userBillingPlan{
+		ID:           plan.PaddleProductID,
+		Name:         plan.Name,
+		PriceMonthly: plan.DefaultMonthlyPrice,
+		PriceYearly:  plan.DefaultYearlyPrice,
+		Limit:        int(plan.RequestsLimit),
+	}
+}
+
+func billingPlansToUserBillingPlans(plans []*billing.Plan) []*userBillingPlan {
+	result := make([]*userBillingPlan, 0, len(plans))
+
+	for _, plan := range plans {
+		result = append(result, billingPlanToUserBillingPlan(plan))
+	}
+
+	return result
+}
+
 type settingsBillingRenderContext struct {
 	settingsCommonRenderContext
+	Plans         []*userBillingPlan
+	CurrentPlan   *userBillingPlan
+	YearlyBilling bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -386,10 +418,40 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var currentPlan *userBillingPlan
+	yearly := false
+
+	if user.SubscriptionID.Valid {
+		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			return nil, "", err
+		}
+
+		if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+			currentPlan = billingPlanToUserBillingPlan(plan)
+			yearly = plan.IsYearly(subscription.PaddlePriceID)
+		}
+	}
+	// TODO: Show warning to subscribe to a billing plan
+	// (or alternatively that user cannot create properties without a subscription)
+
 	renderCtx := &settingsBillingRenderContext{
 		settingsCommonRenderContext: settingsCommonRenderContext{
 			Tab: 2,
 		},
+		CurrentPlan:   currentPlan,
+		YearlyBilling: yearly,
 	}
+
+	if plans, ok := billing.GetPlansForStage(s.Stage); ok {
+		renderCtx.Plans = billingPlansToUserBillingPlans(plans)
+	}
+
 	return renderCtx, settingsBillingTemplate, nil
 }
