@@ -134,6 +134,10 @@ func (s *BusinessStore) RetrieveSubscription(ctx context.Context, sID int32) (*d
 	return s.defaultImpl.retrieveSubscription(ctx, sID)
 }
 
+func (s *BusinessStore) UpdateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) error {
+	return s.defaultImpl.updateSubscription(ctx, params)
+}
+
 func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string) (*dbgen.User, *dbgen.Organization, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/rs/xid"
 )
 
@@ -61,33 +62,23 @@ func TestSubscriptionCreated(t *testing.T) {
 					EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
 				},
 				Price: paddlenotification.Price{
-					ID:                 "",
-					ProductID:          "123456",
-					Description:        "",
-					Type:               "",
-					Name:               new(string),
-					BillingCycle:       &paddlenotification.Duration{},
-					TrialPeriod:        &paddlenotification.Duration{},
-					TaxMode:            "",
-					UnitPrice:          paddlenotification.Money{},
-					UnitPriceOverrides: []paddlenotification.UnitPriceOverride{},
-					Quantity:           paddlenotification.PriceQuantity{},
-					Status:             "",
-					CustomData:         map[string]any{},
-					ImportMeta:         &paddlenotification.ImportMeta{},
-					CreatedAt:          "",
-					UpdatedAt:          "",
+					ID:           xid.New().String(),
+					ProductID:    "123456",
+					Name:         new(string),
+					BillingCycle: &paddlenotification.Duration{},
+					TrialPeriod:  &paddlenotification.Duration{},
+					TaxMode:      "",
+					Quantity:     paddlenotification.PriceQuantity{},
+					Status:       paddle.SubscriptionStatusActive,
 				},
 			}},
-			CustomData: map[string]any{},
-			ImportMeta: &paddlenotification.ImportMeta{},
 		},
 	}
 
 	ci := &billing.CustomerInfo{Email: t.Name() + "@example.com", Name: t.Name()}
 	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
 
-	resp, err := subscriptionCreatedSuite(evt, auth.privateAPIKey)
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,12 +92,12 @@ func TestSubscriptionCreated(t *testing.T) {
 	}
 }
 
-func subscriptionCreatedSuite(evt *paddle.SubscriptionCreatedEvent, token string) (*http.Response, error) {
+func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "", auth)
 
 	data, _ := json.Marshal(evt)
-	req, err := http.NewRequest(http.MethodPost, "/"+common.PaddleSubscriptionCreated, bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, "/"+endpoint, bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
@@ -120,4 +111,80 @@ func subscriptionCreatedSuite(evt *paddle.SubscriptionCreatedEvent, token string
 
 	resp := w.Result()
 	return resp, nil
+}
+
+func TestSubscriptionUpdated(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	subscription, err := store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		t.Fatalf("Failed to retrieve user subscription: %v", err)
+	}
+
+	pausedAt := common.JSONTimeNow().String()
+
+	evt := &paddle.SubscriptionUpdatedEvent{
+		GenericEvent: paddle.GenericEvent{},
+		Data: paddlenotification.SubscriptionNotification{
+			ID:             subscription.PaddleSubscriptionID,
+			Status:         paddle.SubscriptionStatusPaused,
+			UpdatedAt:      common.JSONTimeNow().String(),
+			PausedAt:       &pausedAt,
+			CanceledAt:     new(string),
+			CollectionMode: "automatic",
+			CurrentBillingPeriod: &paddlenotification.TimePeriod{
+				StartsAt: common.JSONTimeNow().String(),
+				EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
+			},
+			Items: []paddlenotification.SubscriptionItem{{
+				Status:             paddle.SubscriptionStatusPaused,
+				Quantity:           1,
+				Recurring:          true,
+				CreatedAt:          common.JSONTimeNow().String(),
+				UpdatedAt:          common.JSONTimeNow().String(),
+				PreviouslyBilledAt: new(string),
+				NextBilledAt:       new(string),
+				TrialDates: &paddlenotification.TimePeriod{
+					StartsAt: common.JSONTimeNow().String(),
+					EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
+				},
+				Price: paddlenotification.Price{
+					ID:           xid.New().String(),
+					ProductID:    "123456",
+					Name:         new(string),
+					BillingCycle: &paddlenotification.Duration{},
+					TrialPeriod:  &paddlenotification.Duration{},
+					TaxMode:      "",
+					Quantity:     paddlenotification.PriceQuantity{},
+					Status:       paddle.SubscriptionStatusActive,
+				},
+			}},
+		},
+	}
+
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionUpdated, auth.privateAPIKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected response code: %v", resp.StatusCode)
+	}
+
+	subscription, err = store.RetrieveSubscription(context.TODO(), user.SubscriptionID.Int32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if subscription.Status != paddle.SubscriptionStatusPaused {
+		t.Errorf("Unexpected subscription status: %v", subscription.Status)
+	}
 }

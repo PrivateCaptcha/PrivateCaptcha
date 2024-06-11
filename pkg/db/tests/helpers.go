@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -36,7 +37,7 @@ func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testN
 		PaddleProductID:      testPlan.PaddleProductIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
-		Status:               "trialing",
+		Status:               paddle.SubscriptionStatusTrialing,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}, email, name, orgName)

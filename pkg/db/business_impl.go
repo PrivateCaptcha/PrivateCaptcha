@@ -428,6 +428,23 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 	return subscription, nil
 }
 
+func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) error {
+	subscription, err := impl.queries.UpdateSubscription(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update subscription in DB", "paddleSubscriptionID", params.PaddleSubscriptionID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated subscription in DB", "id", subscription.ID, "status", subscription.Status)
+
+	if subscription != nil {
+		cacheKey := subscriptionCacheKey(subscription.ID)
+		_ = impl.cache.Set(ctx, cacheKey, subscription)
+	}
+
+	return nil
+}
+
 func (impl *businessStoreImpl) findOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
 	if len(name) == 0 {
 		return nil, ErrInvalidInput
