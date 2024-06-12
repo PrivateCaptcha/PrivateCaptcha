@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -23,6 +24,10 @@ const (
 	settingsGeneralFormTemplate = "settings/general-form.html"
 	settingsAPIKeysTemplate     = "settings/apikeys.html"
 	settingsBillingTemplate     = "settings/billing.html"
+)
+
+var (
+	errMissingSubsciption = errors.New("user does not have a subscription")
 )
 
 type settingsCommonRenderContext struct {
@@ -92,6 +97,7 @@ type settingsBillingRenderContext struct {
 	Plans         []*userBillingPlan
 	CurrentPlan   *userBillingPlan
 	YearlyBilling bool
+	IsSubscribed  bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -126,7 +132,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 	case common.BillingEndpoint:
 		renderCtx, _, err = s.getBillingSettings(w, r)
 	default:
-		if tabParam != common.GeneralEndpoint {
+		if (tabParam != common.GeneralEndpoint) && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
 		renderCtx, _, err = s.getGeneralSettings(w, r)
@@ -436,6 +442,8 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
 			currentPlan = billingPlanToUserBillingPlan(plan)
 			yearly = plan.IsYearly(subscription.PaddlePriceID)
+		} else {
+			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
 		}
 	}
 	// TODO: Show warning to subscribe to a billing plan
@@ -447,6 +455,7 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 		},
 		CurrentPlan:   currentPlan,
 		YearlyBilling: yearly,
+		IsSubscribed:  user.SubscriptionID.Valid,
 	}
 
 	if plans, ok := billing.GetPlansForStage(s.Stage); ok {
@@ -454,4 +463,61 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	return renderCtx, settingsBillingTemplate, nil
+}
+
+func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Request) (*billing.ManagementURLs, error) {
+	ctx := r.Context()
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
+		return nil, err
+	}
+
+	if !user.SubscriptionID.Valid {
+		slog.ErrorContext(ctx, "Cannot get Paddle URLs without subscription", "userID", user.ID)
+		http.Error(w, "", http.StatusInternalServerError)
+		return nil, errMissingSubsciption
+	}
+
+	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	urls, err := s.PaddleAPI.GetManagementURLs(ctx, subscription.PaddleSubscriptionID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to fetch Paddle URLs", common.ErrAttr(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		return nil, err
+	}
+
+	return urls, nil
+}
+
+func (s *Server) getCancelSubscription(w http.ResponseWriter, r *http.Request) {
+	urls, err := s.retrieveUserManagementURLs(w, r)
+	if err != nil {
+		return
+	}
+
+	if len(urls.CancelURL) > 0 {
+		common.Redirect(urls.CancelURL, w, r)
+	} else {
+		http.Error(w, "URL is empty", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) getUpdateSubscription(w http.ResponseWriter, r *http.Request) {
+	urls, err := s.retrieveUserManagementURLs(w, r)
+	if err != nil {
+		return
+	}
+
+	if len(urls.UpdateURL) > 0 {
+		common.Redirect(urls.UpdateURL, w, r)
+	} else {
+		http.Error(w, "URL is empty", http.StatusInternalServerError)
+	}
 }

@@ -31,4 +31,6 @@ const (
 	PaddleSubscriptionUpdated   = "subscr_updated"
 	PaddleSubscriptionCancelled = "subscr_cancelled"
 	BillingEndpoint             = "billing"
+	CancelEndpoint              = "cancel"
+	UpdateEndpoint              = "update"
 )
