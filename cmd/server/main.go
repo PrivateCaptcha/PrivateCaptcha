@@ -82,16 +82,16 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		PaddleAPI: paddleAPI,
 	}
 
-	go portalServer.Session.GC()
-
 	router := http.NewServeMux()
 
 	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, 1*time.Second)
 
 	apiServer.Setup(router, "api", apiAuth)
+
 	portalServer.Init()
 	portalServer.Setup(router)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
+	portalServer.StartMaintenanceJobs()
 
 	host := getenv("PC_HOST")
 	if host == "" {
@@ -128,6 +128,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		levels.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
+		portalServer.Shutdown()
 		businessDB.Shutdown()
 		apiAuth.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

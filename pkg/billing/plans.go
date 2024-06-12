@@ -129,6 +129,21 @@ func (plan *Plan) IsYearly(priceID string) bool {
 	return plan.PaddlePriceIDYearly == priceID
 }
 
+func GetProductsForStage(stage string) []string {
+	plans, ok := stagePlans[stage]
+	if !ok {
+		return []string{}
+	}
+
+	products := make([]string, 0, len(plans))
+
+	for _, plan := range plans {
+		products = append(products, plan.PaddleProductID)
+	}
+
+	return products
+}
+
 func GetPlansForStage(stage string) ([]*Plan, bool) {
 	plans, ok := stagePlans[stage]
 	return plans, ok

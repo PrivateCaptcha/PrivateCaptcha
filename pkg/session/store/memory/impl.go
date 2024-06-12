@@ -61,8 +61,8 @@ func (p *Store) Destroy(ctx context.Context, sid string) error {
 	return nil
 }
 
-func (p *Store) GC(maxLifetime time.Duration) {
-	slog.Debug("About to GC session memory store")
+func (p *Store) GC(ctx context.Context, maxLifetime time.Duration) {
+	slog.DebugContext(ctx, "About to GC session memory store")
 
 	deleted := 0
 

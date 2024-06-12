@@ -284,3 +284,11 @@ func (s *BusinessStore) SoftDeleteAPIKey(ctx context.Context, userID, keyID int3
 func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
 	return s.defaultImpl.createSupportTicket(ctx, category, message, userID)
 }
+
+func (s *BusinessStore) CachePaddlePrices(ctx context.Context, prices map[string]int) error {
+	return s.defaultImpl.cachePaddlePrices(ctx, prices)
+}
+
+func (s *BusinessStore) RetrievePaddlePrices(ctx context.Context) (map[string]int, error) {
+	return s.defaultImpl.retrievePaddlePrices(ctx)
+}

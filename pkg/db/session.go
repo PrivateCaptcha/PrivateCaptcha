@@ -101,8 +101,8 @@ func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 	return ss.db.DeleteCachedByKey(ctx, sessionPrefix+sid)
 }
 
-func (ss *SessionStore) GC(d time.Duration) {
-	ss.fallback.GC(d)
+func (ss *SessionStore) GC(ctx context.Context, d time.Duration) {
+	ss.fallback.GC(ctx, d)
 }
 
 func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Duration) {
