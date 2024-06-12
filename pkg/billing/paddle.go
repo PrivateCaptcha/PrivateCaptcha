@@ -3,6 +3,8 @@ package billing
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strconv"
 
 	paddle "github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -22,9 +24,12 @@ type ManagementURLs struct {
 	UpdateURL string
 }
 
+type Prices map[string]int
+
 type PaddleAPI interface {
 	GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error)
 	GetManagementURLs(ctx context.Context, subscriptionID string) (*ManagementURLs, error)
+	GetPrices(ctx context.Context, productIDs []string) (Prices, error)
 }
 
 type paddleClient struct {
@@ -87,4 +92,33 @@ func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID st
 	} else {
 		return nil, err
 	}
+}
+
+func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Prices, error) {
+	prices, err := pc.sdk.ListPrices(ctx, &paddle.ListPricesRequest{
+		ProductID: productIDs,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to list Paddle prices", common.ErrAttr(err))
+		return map[string]int{}, err
+	}
+
+	result := make(map[string]int)
+
+	err = prices.Iter(ctx, func(v *paddle.PriceIncludes) (bool, error) {
+		amountStr := v.UnitPrice.Amount
+		if cents, cerr := strconv.Atoi(amountStr); cerr == nil {
+			result[v.ID] = cents / 100
+		}
+		return true, nil
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to iterate the prices", common.ErrAttr(err))
+		return result, err
+	}
+
+	slog.DebugContext(ctx, "Fetched Paddle prices", "prices", len(result), "products", len(productIDs))
+
+	return result, nil
 }

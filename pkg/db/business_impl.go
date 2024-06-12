@@ -3,6 +3,7 @@ package db
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sort"
 	"time"
@@ -12,6 +13,10 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+)
+
+const (
+	paddlePricesKey = "paddle_prices"
 )
 
 func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string) (*T, error) {
@@ -278,6 +283,42 @@ func (impl *businessStoreImpl) checkPuzzleCached(ctx context.Context, puzzleID s
 	}
 
 	return bytes.Equal(data[:], markerData[:])
+}
+
+func (impl *businessStoreImpl) cachePaddlePrices(ctx context.Context, prices map[string]int) error {
+	if len(prices) == 0 {
+		return ErrInvalidInput
+	}
+
+	data, err := json.Marshal(prices)
+	if err != nil {
+		return err
+	}
+
+	return impl.queries.CreateCache(ctx, &dbgen.CreateCacheParams{
+		Key:     paddlePricesKey,
+		Value:   data,
+		Column3: 24 * time.Hour,
+	})
+}
+
+func (impl *businessStoreImpl) retrievePaddlePrices(ctx context.Context) (map[string]int, error) {
+	data, err := impl.queries.GetCachedByKey(ctx, paddlePricesKey)
+	if err == pgx.ErrNoRows {
+		return nil, ErrCacheMiss
+	} else if err != nil {
+		slog.ErrorContext(ctx, "Failed to read Paddle prices", common.ErrAttr(err))
+		return nil, err
+	}
+
+	var prices map[string]int
+	err = json.Unmarshal(data, &prices)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal Paddle prices", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return prices, nil
 }
 
 func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
