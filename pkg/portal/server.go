@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -58,6 +59,8 @@ var (
 		Category             string
 		BillingEndpoint      string
 		Product              string
+		CancelEndpoint       string
+		UpdateEndpoint       string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -96,6 +99,8 @@ var (
 		Category:             common.ParamCategory,
 		BillingEndpoint:      common.BillingEndpoint,
 		Product:              common.ParamProduct,
+		CancelEndpoint:       common.CancelEndpoint,
+		UpdateEndpoint:       common.UpdateEndpoint,
 	}
 )
 
@@ -141,6 +146,7 @@ type Server struct {
 	Session    session.Manager
 	Mailer     Mailer
 	Stage      string
+	PaddleAPI  billing.PaddleAPI
 }
 
 func (s *Server) Init() {
@@ -244,6 +250,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), s.private(s.handler(s.getAPIKeysSettings)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), s.private(s.postAPIKeySettings))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), s.private(s.handler(s.getBillingSettings)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), s.private(s.getCancelSubscription))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), s.private(s.getUpdateSubscription))
 	router.HandleFunc(delete(common.APIKeysEndpoint, "{key}"), s.private(key(s.deleteAPIKey)))
 	router.HandleFunc(delete(common.UserEndpoint), s.private(s.deleteAccount))
 	router.HandleFunc(get(common.SupportEndpoint), s.private(s.handler(s.getSupport)))

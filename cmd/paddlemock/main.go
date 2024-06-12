@@ -15,28 +15,24 @@ import (
 
 	"github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/rs/xid"
 )
 
 const (
 	// NOTE: these are real IDs, set in the Paddle Sandbox
-	defaultCustomerID = "ctm_01j03a06d75y3mzm1st230zq6d"
+	defaultCustomerID     = "ctm_01j03a06d75y3mzm1st230zq6d"
+	defaultSubscriptionID = "sub_01j05w0aaj6mrxwpfgnzhkhcq3"
+	defaultTransactionID  = "txn_01j05jdt8vpn3n6hwf7djgjdfj"
+	defaultPriceID        = "pri_01j03v3ne7q50zfndesjrp74k8"
+	defaultProductID      = "pro_01j03v1tmp3gm1mmvhg357cg8v"
 )
 
-var (
-	defaultPriceID   string
-	defaultProductID string
-)
+var ()
 
 func main() {
 	stage := os.Getenv("STAGE")
 	common.SetupLogs(stage, false /*verbose*/)
-
-	plans, _ := billing.GetPlansForStage(stage)
-	defaultPriceID = plans[0].PaddlePriceIDMonthly
-	defaultProductID = plans[0].PaddleProductID
 
 	host := os.Getenv("PADDLE_HOST")
 	if host == "" {
@@ -77,6 +73,11 @@ func main() {
 			productID = defaultProductID
 		}
 
+		subscriptionID := r.FormValue("subscription_id")
+		if subscriptionID == "" {
+			subscriptionID = defaultSubscriptionID
+		}
+
 		nextBilledAt := common.JSONTimeNowAdd(7 * 24 * time.Hour).String()
 
 		payload := &paddle.SubscriptionCreatedEvent{
@@ -86,11 +87,11 @@ func main() {
 				OccurredAt: common.JSONTimeNow().String(),
 			},
 			Data: paddlenotification.SubscriptionCreatedNotification{
-				ID:             xid.New().String(),
-				TransactionID:  xid.New().String(),
+				ID:             subscriptionID,
+				TransactionID:  defaultTransactionID,
 				Status:         paddle.SubscriptionStatusTrialing,
 				CustomerID:     customerID,
-				BusinessID:     new(string),
+				BusinessID:     nil,
 				CurrencyCode:   "EUR",
 				CreatedAt:      common.JSONTimeNow().String(),
 				UpdatedAt:      common.JSONTimeNow().String(),

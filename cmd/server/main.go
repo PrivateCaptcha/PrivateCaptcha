@@ -78,7 +78,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer: &portal.StubMailer{},
+		Mailer:    &portal.StubMailer{},
+		PaddleAPI: paddleAPI,
 	}
 
 	go portalServer.Session.GC()
