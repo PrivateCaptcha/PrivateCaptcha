@@ -1,6 +1,7 @@
 package session
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"io"
@@ -87,7 +88,6 @@ func (m *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *Manager) GC() {
-	m.Store.GC(m.MaxLifetime)
-	time.AfterFunc(m.MaxLifetime, func() { m.GC() })
+func (m *Manager) GC(ctx context.Context) {
+	m.Store.GC(ctx, m.MaxLifetime)
 }

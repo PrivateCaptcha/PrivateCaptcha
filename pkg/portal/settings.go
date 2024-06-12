@@ -82,16 +82,6 @@ func billingPlanToUserBillingPlan(plan *billing.Plan) *userBillingPlan {
 	}
 }
 
-func billingPlansToUserBillingPlans(plans []*billing.Plan) []*userBillingPlan {
-	result := make([]*userBillingPlan, 0, len(plans))
-
-	for _, plan := range plans {
-		result = append(result, billingPlanToUserBillingPlan(plan))
-	}
-
-	return result
-}
-
 type settingsBillingRenderContext struct {
 	settingsCommonRenderContext
 	Plans         []*userBillingPlan
@@ -459,7 +449,25 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	if plans, ok := billing.GetPlansForStage(s.Stage); ok {
-		renderCtx.Plans = billingPlansToUserBillingPlans(plans)
+		prices, err := s.Store.RetrievePaddlePrices(ctx)
+		if err != nil {
+			prices = map[string]int{}
+		}
+
+		result := make([]*userBillingPlan, 0, len(plans))
+
+		for _, plan := range plans {
+			ubp := billingPlanToUserBillingPlan(plan)
+			if priceMonthly, ok := prices[plan.PaddlePriceIDMonthly]; ok {
+				ubp.PriceMonthly = priceMonthly
+			}
+			if priceYearly, ok := prices[plan.PaddlePriceIDYearly]; ok {
+				ubp.PriceYearly = priceYearly
+			}
+			result = append(result, ubp)
+		}
+
+		renderCtx.Plans = result
 	}
 
 	return renderCtx, settingsBillingTemplate, nil

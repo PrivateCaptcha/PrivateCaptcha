@@ -138,15 +138,16 @@ type alertRenderContext struct {
 }
 
 type Server struct {
-	Store      *db.BusinessStore
-	TimeSeries *db.TimeSeriesStore
-	Prefix     string
-	template   *web.Template
-	XSRF       XSRFMiddleware
-	Session    session.Manager
-	Mailer     Mailer
-	Stage      string
-	PaddleAPI  billing.PaddleAPI
+	Store             *db.BusinessStore
+	TimeSeries        *db.TimeSeriesStore
+	Prefix            string
+	template          *web.Template
+	XSRF              XSRFMiddleware
+	Session           session.Manager
+	Mailer            Mailer
+	Stage             string
+	PaddleAPI         billing.PaddleAPI
+	maintenanceCancel context.CancelFunc
 }
 
 func (s *Server) Init() {
@@ -412,4 +413,17 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 	}
+}
+
+func (s *Server) StartMaintenanceJobs() {
+	var maintenanceCtx context.Context
+	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "maintenance"))
+
+	go s.updatePaddlePrices(maintenanceCtx, 6*time.Hour, 1*time.Minute)
+	go s.gcSessions(maintenanceCtx, s.Session.MaxLifetime)
+}
+
+func (s *Server) Shutdown() {
+	s.maintenanceCancel()
 }

@@ -17,5 +17,5 @@ type SessionStore interface {
 	Read(ctx context.Context, sid string) (*Session, error)
 	Update(session *Session) error
 	Destroy(ctx context.Context, sid string) error
-	GC(d time.Duration)
+	GC(ctx context.Context, d time.Duration)
 }
