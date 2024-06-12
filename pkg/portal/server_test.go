@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
@@ -25,6 +26,8 @@ var (
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	paddleAPI := &billing.StubPaddleClient{}
+
 	if testing.Short() {
 		server = &Server{
 			Stage:  common.StageTest,
@@ -34,6 +37,7 @@ func TestMain(m *testing.M) {
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
+			PaddleAPI: paddleAPI,
 		}
 
 		server.Init()
@@ -78,7 +82,8 @@ func TestMain(m *testing.M) {
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer: &StubMailer{},
+		Mailer:    &StubMailer{},
+		PaddleAPI: paddleAPI,
 	}
 
 	server.Init()
