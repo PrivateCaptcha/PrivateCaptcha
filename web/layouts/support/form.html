@@ -1,5 +1,9 @@
 <div class="space-y-6">
-    {{ template "error-success-message.html" . }}
+    {{- if .Params.ErrorMessage -}}
+    {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- else if .Params.SuccessMessage -}}
+    {{ template "success-message.html" .Params.SuccessMessage }}
+    {{- end -}}
 
     <div class="border-b border-gray-900/10 pb-12">
         <h2 class="text-base font-semibold leading-7 text-gray-900">Contact Support</h2>

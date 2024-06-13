@@ -1,7 +1,6 @@
 package common
 
 import (
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -58,7 +57,7 @@ func (t *JSONTime) MarshalJSON() ([]byte, error) {
 // String returns the time in the custom format
 func (t JSONTime) String() string {
 	ct := time.Time(t)
-	return fmt.Sprintf("%q", ct.Format(jsonTimeLayout))
+	return ct.Format(jsonTimeLayout)
 }
 
 func (t JSONTime) LogValue() slog.Value {

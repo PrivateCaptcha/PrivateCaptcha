@@ -61,6 +61,9 @@ var (
 		Product              string
 		CancelEndpoint       string
 		UpdateEndpoint       string
+		PreviewEndpoint      string
+		Yearly               string
+		Price                string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -101,6 +104,9 @@ var (
 		Product:              common.ParamProduct,
 		CancelEndpoint:       common.CancelEndpoint,
 		UpdateEndpoint:       common.UpdateEndpoint,
+		PreviewEndpoint:      common.PreviewEndpoint,
+		Yearly:               common.ParamYearly,
+		Price:                common.ParamPrice,
 	}
 )
 
@@ -130,11 +136,21 @@ type requestContext struct {
 	LoggedIn    bool
 	CurrentYear int
 	UserName    string
+	UserEmail   string
 }
 
 type alertRenderContext struct {
 	ErrorMessage   string
 	SuccessMessage string
+	WarningMessage string
+	InfoMessage    string
+}
+
+func (ac *alertRenderContext) ClearAlerts() {
+	ac.ErrorMessage = ""
+	ac.SuccessMessage = ""
+	ac.WarningMessage = ""
+	ac.InfoMessage = ""
 }
 
 type Server struct {
@@ -251,6 +267,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), s.private(s.handler(s.getAPIKeysSettings)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), s.private(s.postAPIKeySettings))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), s.private(s.handler(s.getBillingSettings)))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), s.private(s.handler(s.postBillingPreview)))
+	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), s.private(s.handler(s.putBilling)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), s.private(s.getCancelSubscription))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), s.private(s.getUpdateSubscription))
 	router.HandleFunc(delete(common.APIKeysEndpoint, "{key}"), s.private(key(s.deleteAPIKey)))

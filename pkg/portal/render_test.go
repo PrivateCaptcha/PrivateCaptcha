@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PuerkitoBio/goquery"
@@ -100,13 +101,18 @@ func stubAPIKey(name string) *userAPIKey {
 	}
 }
 
-func stubBillingPlan(id string) *userBillingPlan {
-	return &userBillingPlan{
-		ID:           id,
-		Name:         "Stub plan " + id,
-		PriceMonthly: 9,
-		PriceYearly:  90,
-		Limit:        1000,
+func stubBillingPlan(id string) *billing.Plan {
+	return &billing.Plan{
+		Name:                 "Stub plan " + id,
+		PaddleProductID:      id,
+		PaddlePriceIDMonthly: "price" + id,
+		PaddlePriceIDYearly:  "price" + id,
+		PriceMonthly:         9,
+		PriceYearly:          90,
+		Version:              1,
+		RequestsLimit:        100,
+		PropertiesLimit:      10,
+		OrgsLimit:            1,
 	}
 }
 
@@ -160,6 +166,9 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
 			template: orgMembersTemplate,
 			model: &orgMemberRenderContext{
+				alertRenderContext: alertRenderContext{
+					SuccessMessage: "Test",
+				},
 				CurrentOrg: stubOrg("123"),
 				Token:      "123",
 				Members:    []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
@@ -192,7 +201,7 @@ func TestRenderHTML(t *testing.T) {
 				CanEdit:  true,
 			},
 		},
-		// same as above, but property integrations template
+		// same as above, but property integrations _template_
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardIntegrationsTemplate,
@@ -203,11 +212,14 @@ func TestRenderHTML(t *testing.T) {
 				CanEdit:  true,
 			},
 		},
-		// same as above, but property settings template
+		// same as above, but property settings _template_
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardSettingsTemplate,
 			model: &propertyDashboardRenderContext{
+				alertRenderContext: alertRenderContext{
+					SuccessMessage: "Test",
+				},
 				Property: stubProperty("Foo", "123"),
 				Org:      stubOrg("123"),
 				Token:    "qwerty",
@@ -218,9 +230,14 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint},
 			template: settingsGeneralTemplate,
 			model: &settingsGeneralRenderContext{
+				alertRenderContext: alertRenderContext{
+					SuccessMessage: "Test",
+				},
+				settingsCommonRenderContext: settingsCommonRenderContext{
+					Email: "foo@bar.com",
+				},
 				Token: "qwerty",
 				Name:  "User",
-				Email: "foo@bar.com",
 			},
 		},
 		{
@@ -237,14 +254,32 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint},
 			template: settingsBillingTemplate,
 			model: &settingsBillingRenderContext{
-				Plans:          []*userBillingPlan{stubBillingPlan("123"), stubBillingPlan("456")},
-				CurrentPlan:    stubBillingPlan("123"),
-				YearlyBilling:  false,
-				IsSubscribed:   true,
-				BillingWarning: "Test warning!",
+				alertRenderContext: alertRenderContext{
+					WarningMessage: "Test warning!",
+				},
+				Plans:         []*billing.Plan{stubBillingPlan("123"), stubBillingPlan("456")},
+				CurrentPlan:   stubBillingPlan("123"),
+				YearlyBilling: false,
+				IsSubscribed:  true,
+				PreviewOpen:   true,
+				PreviewCharge: 123,
+				PreviewPlan:   "Plan",
+				PreviewPeriod: "monthly",
 			},
 			selector: "span.billing-plan-name",
 			matches:  []string{"Stub plan 123", "Stub plan 456"},
+		},
+		{
+			path:     []string{common.SupportEndpoint},
+			template: supportTemplate,
+			model: &supportRenderContext{
+				alertRenderContext: alertRenderContext{
+					SuccessMessage: "Message sent",
+				},
+				Token:    "123",
+				Message:  "test",
+				Category: "problem",
+			},
 		},
 	}
 

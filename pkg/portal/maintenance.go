@@ -12,6 +12,12 @@ import (
 func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration, initialPause time.Duration) {
 	time.Sleep(initialPause)
 
+	if prices, err := s.Store.RetrievePaddlePrices(ctx); err == nil {
+		billing.UpdatePlansPrices(prices, s.Stage)
+	} else {
+		slog.WarnContext(ctx, "Paddle prices are not cached properly", common.ErrAttr(err))
+	}
+
 	slog.DebugContext(ctx, "Updating Paddle prices", "interval", interval)
 
 	ticker := time.NewTicker(interval)
@@ -26,6 +32,8 @@ func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration,
 				if err = s.Store.CachePaddlePrices(ctx, prices); err != nil {
 					slog.ErrorContext(ctx, "Failed to cache paddle prices", common.ErrAttr(err))
 				}
+
+				billing.UpdatePlansPrices(prices, s.Stage)
 			}
 		}
 	}

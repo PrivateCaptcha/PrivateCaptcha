@@ -1,0 +1,57 @@
+{{define "scripts"}}
+{{template "default-scripts.html" .}}
+<script type="text/javascript">
+function loadScript(url, callback) {
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = url;
+    // several events for cross browser compatibility.
+    script.onreadystatechange = callback;
+    script.onload = callback;
+    // Fire the loading
+    document.head.appendChild(script);
+};
+
+function openCheckout(priceIDs, annual) {
+    if (!priceIDs) { return; }
+    if (!Array.isArray(priceIDs)) { return; }
+    if (priceIDs.length != 2) { return; }
+    Paddle.Checkout.open({
+                         items: [{
+                             priceId: priceIDs[annual ? 1 : 0],
+                             quantity: 1
+                         }],
+                         customer: {
+                             email: "{{ .Params.Email }}"
+                         },
+                         customData: {
+                             privateCaptchaUserID: "{{ .Params.UserID }}"
+                         }
+    });
+}
+
+function handlePaddleEventCallback(data) {
+    switch(data.name) {
+        case "checkout.completed":
+            location.reload();
+            break;
+        default:
+            // console.log(data);
+            break;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function (evt) {
+    document.body.addEventListener("load-paddle", function(evt) {
+        loadScript("https://cdn.paddle.com/paddle/v2/paddle.js",
+                   function() {
+                       Paddle.Environment.set("sandbox");
+                       Paddle.Initialize({
+                                         token: "test_ce810f8d4653bd9a769b7bfb74a",
+                                         eventCallback: handlePaddleEventCallback
+                       });
+                   });
+    });
+});
+</script>
+{{end}}
