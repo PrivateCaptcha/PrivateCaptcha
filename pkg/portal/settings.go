@@ -84,10 +84,11 @@ func billingPlanToUserBillingPlan(plan *billing.Plan) *userBillingPlan {
 
 type settingsBillingRenderContext struct {
 	settingsCommonRenderContext
-	Plans         []*userBillingPlan
-	CurrentPlan   *userBillingPlan
-	YearlyBilling bool
-	IsSubscribed  bool
+	BillingWarning string
+	Plans          []*userBillingPlan
+	CurrentPlan    *userBillingPlan
+	YearlyBilling  bool
+	IsSubscribed   bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -420,8 +421,9 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 		return nil, "", err
 	}
 
-	var currentPlan *userBillingPlan
-	yearly := false
+	renderCtx := &settingsBillingRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{Tab: 2},
+	}
 
 	if user.SubscriptionID.Valid {
 		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
@@ -429,23 +431,20 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 			return nil, "", err
 		}
 
-		if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
-			currentPlan = billingPlanToUserBillingPlan(plan)
-			yearly = plan.IsYearly(subscription.PaddlePriceID)
-		} else {
-			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
+		if renderCtx.IsSubscribed {
+			if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+				renderCtx.CurrentPlan = billingPlanToUserBillingPlan(plan)
+				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
+			} else {
+				slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+			}
 		}
 	}
-	// TODO: Show warning to subscribe to a billing plan
-	// (or alternatively that user cannot create properties without a subscription)
 
-	renderCtx := &settingsBillingRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab: 2,
-		},
-		CurrentPlan:   currentPlan,
-		YearlyBilling: yearly,
-		IsSubscribed:  user.SubscriptionID.Valid,
+	if !renderCtx.IsSubscribed {
+		renderCtx.BillingWarning = "You don't have an active subscription."
+		renderCtx.CurrentPlan = &userBillingPlan{}
 	}
 
 	if plans, ok := billing.GetPlansForStage(s.Stage); ok {

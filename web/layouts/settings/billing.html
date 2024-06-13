@@ -40,92 +40,110 @@
     </nav>
 </aside>
 
-<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20 divide-y divide-gray-200">
-    <!-- Plan -->
-    <section aria-labelledby="plan-heading" class="pb-12" x-data="{planID: '', annual: false}" x-init="planID = '{{ .Params.CurrentPlan.ID }}'; annual = {{ .Params.YearlyBilling }}">
-        <form action="#" method="POST">
-            <div class="space-y-6">
-                <div>
-                    <h2 id="plan-heading" class="text-base font-semibold leading-6 text-gray-900">Plan</h2>
-                </div>
-
-                <fieldset aria-label="Pricing plans">
-                    <div class="relative -space-y-px rounded-md bg-white">
-                        {{$plansN := len .Params.Plans}}
-                        {{ range $i, $plan := .Params.Plans }}
-                        <!-- Checked: "z-10 border-indigo-200 bg-indigo-50", Not Checked: "border-gray-200" -->
-                        <label aria-label="{{$plan.Name}}" aria-description="€{{$plan.PriceMonthly}} per month, €{{$plan.PriceYearly}} per year, {{$plan.Limit}} requests included"
-                            :class="planID == '{{ $plan.ID }}' ? 'z-10 border-indigo-200 bg-indigo-50' : 'border-gray-200'"
-                            class="relative flex cursor-pointer flex-col {{if eq $i 0}}rounded-tl-md rounded-tr-md{{else if eq (plus1 $i) $plansN}}rounded-bl-md rounded-br-md{{end}} border p-4 focus:outline-none md:grid md:grid-cols-3 md:pl-4 md:pr-6"
-                            @click="planID = '{{$plan.ID}}'"
-                            >
-                            <span class="flex items-center text-sm">
-                                <input type="radio" name="{{$.Const.Product}}" value="{{$plan.ID}}" class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 active:ring-2 active:ring-indigo-600 active:ring-offset-2" {{if eq $plan.ID $.Params.CurrentPlan.ID}}checked{{end}}>
-                                <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
-                            <span class="billing-plan-name ml-3 font-medium"
-                                :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">
-                                {{$plan.Name}}
-                            </span>
-                            </span>
-                            <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-center">
-                                <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
-                                <span class="font-medium" :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">€{{$plan.PriceMonthly}} / mo</span>
-                                <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
-                                <span :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">(€{{$plan.PriceYearly}} / yr)</span>
-                            </span>
-                            <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
-                            <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-right"
-                                :class="planID == '{{ $plan.ID }}' ? 'text-indigo-700' : 'text-gray-500'">
-                                {{$plan.Limit}} requests included
-                            </span>
-                        </label>
-                        {{ end }}
-                    </div>
-                </fieldset>
+<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20">
+    {{ if .Params.BillingWarning }}
+    <div class="border-l-4 border-yellow-400 bg-yellow-50 p-4 mb-8">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
             </div>
-            <div class="pt-6 text-right flex justify-between">
-                <div class="flex items-center">
-                    <!-- Enabled: "bg-indigo-600", Not Enabled: "bg-gray-200" -->
-                    <button type="button" :class="annual ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2" role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual">
-                        <!-- Enabled: "translate-x-5", Not Enabled: "translate-x-0" -->
-                        <span aria-hidden="true" :class="annual ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
-                    </button>
-                    <span class="ml-3 text-sm" id="annual-billing-label">
-                        <span class="font-medium text-gray-900">Annual billing</span>
-                        <span class="text-gray-500">(1 month free)</span>
-                    </span>
-                </div>
-                <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
-            </div>
-        </form>
-    </section>
-    <section aria-labelledby="manage-subscription" class="pt-12">
-        <div id="manage-subscription" class="sm:flex sm:items-center sm:justify-between">
-            <h3 class="text-base font-semibold leading-6 text-gray-900">Manage subscription</h3>
-            <div class="mt-3 flex sm:ml-4 sm:mt-0">
-                <button type="button" class="pc-internal-form-button pc-internal-form-button-danger"
-                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint $.Const.CancelEndpoint }}"
-                    hx-indicator="#cancel-spinner"
-                    hx-target="this"
-                    hx-swap="none">
-                    <svg id="cancel-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Cancel
-                </button>
-                <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary ml-6"
-                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint $.Const.UpdateEndpoint }}"
-                    hx-indicator="#update-spinner"
-                    hx-target="this"
-                    hx-swap="none">
-                    <svg id="update-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Update payment method
-                </button>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">{{ .Params.BillingWarning }}</p>
             </div>
         </div>
-    </section>
+    </div>
+    {{ end }}
+    <div class="divide-y divide-gray-200">
+        <!-- Plan -->
+        <section aria-labelledby="plan-heading" class="pb-12" x-data="{planID: '', annual: false}" x-init="planID = '{{ .Params.CurrentPlan.ID }}'; annual = {{ .Params.YearlyBilling }}">
+            <form action="#" method="POST">
+                <div class="space-y-6">
+                    <div>
+                        <h2 id="plan-heading" class="text-base font-semibold leading-6 text-gray-900">Plan</h2>
+                    </div>
+
+                    <fieldset aria-label="Pricing plans">
+                        <div class="relative -space-y-px rounded-md bg-white">
+                            {{$plansN := len .Params.Plans}}
+                            {{ range $i, $plan := .Params.Plans }}
+                            <!-- Checked: "z-10 border-indigo-200 bg-indigo-50", Not Checked: "border-gray-200" -->
+                            <label aria-label="{{$plan.Name}}" aria-description="€{{$plan.PriceMonthly}} per month, €{{$plan.PriceYearly}} per year, {{$plan.Limit}} requests included"
+                                :class="planID == '{{ $plan.ID }}' ? 'z-10 border-indigo-200 bg-indigo-50' : 'border-gray-200'"
+                                class="relative flex cursor-pointer flex-col {{if eq $i 0}}rounded-tl-md rounded-tr-md{{else if eq (plus1 $i) $plansN}}rounded-bl-md rounded-br-md{{end}} border p-4 focus:outline-none md:grid md:grid-cols-3 md:pl-4 md:pr-6"
+                                @click="planID = '{{$plan.ID}}'"
+                                >
+                                <span class="flex items-center text-sm">
+                                    <input type="radio" name="{{$.Const.Product}}" value="{{$plan.ID}}" class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 active:ring-2 active:ring-indigo-600 active:ring-offset-2" {{if eq $plan.ID $.Params.CurrentPlan.ID}}checked{{end}}>
+                                    <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
+                                <span class="billing-plan-name ml-3 font-medium"
+                                    :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">
+                                    {{$plan.Name}}
+                                </span>
+                                </span>
+                                <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-center">
+                                    <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
+                                    <span class="font-medium" :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">€{{$plan.PriceMonthly}} / mo</span>
+                                    <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
+                                    <span :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">(€{{$plan.PriceYearly}} / yr)</span>
+                                </span>
+                                <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
+                                <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-right"
+                                    :class="planID == '{{ $plan.ID }}' ? 'text-indigo-700' : 'text-gray-500'">
+                                    {{$plan.Limit}} requests included
+                                </span>
+                            </label>
+                            {{ end }}
+                        </div>
+                    </fieldset>
+                </div>
+                <div class="pt-6 text-right flex justify-between">
+                    <div class="flex items-center">
+                        <!-- Enabled: "bg-indigo-600", Not Enabled: "bg-gray-200" -->
+                        <button type="button" :class="annual ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2" role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual">
+                            <!-- Enabled: "translate-x-5", Not Enabled: "translate-x-0" -->
+                            <span aria-hidden="true" :class="annual ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+                        </button>
+                        <span class="ml-3 text-sm" id="annual-billing-label">
+                            <span class="font-medium text-gray-900">Annual billing</span>
+                            <span class="text-gray-500">(1 month free)</span>
+                        </span>
+                    </div>
+                    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
+                </div>
+            </form>
+        </section>
+        <section aria-labelledby="manage-subscription" class="pt-12">
+            <div id="manage-subscription" class="sm:flex sm:items-center sm:justify-between">
+                <h3 class="text-base font-semibold leading-6 text-gray-900">Manage subscription</h3>
+                <div class="mt-3 flex sm:ml-4 sm:mt-0">
+                    <button type="button" class="pc-internal-form-button {{ if $.Params.IsSubscribed }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}"
+                        {{ if not $.Params.IsSubscribed }}disabled{{ end }}
+                        hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint $.Const.CancelEndpoint }}"
+                        hx-indicator="#cancel-spinner"
+                        hx-target="this"
+                        hx-swap="none">
+                        <svg id="cancel-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Cancel
+                    </button>
+                    <button type="button" class="pc-internal-form-button {{ if $.Params.IsSubscribed }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }} ml-6"
+                        {{ if not $.Params.IsSubscribed }} disabled {{ end }}
+                        hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint $.Const.UpdateEndpoint }}"
+                        hx-indicator="#update-spinner"
+                        hx-target="this"
+                        hx-swap="none">
+                        <svg id="update-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Update payment method
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
 </main>

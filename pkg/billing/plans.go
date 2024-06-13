@@ -3,6 +3,7 @@ package billing
 import (
 	"errors"
 
+	"github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
@@ -158,4 +159,15 @@ func FindPlanByPaddlePrice(paddleProductID string, paddlePriceID string, stage s
 	}
 
 	return nil, ErrUnknownProductID
+}
+
+func IsSubscriptionActive(status string) bool {
+	switch status {
+	case paddle.SubscriptionStatusActive:
+		return true
+	case paddle.SubscriptionStatusTrialing:
+		return true
+	default:
+		return false
+	}
 }
