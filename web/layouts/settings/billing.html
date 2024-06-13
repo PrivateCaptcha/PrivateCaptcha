@@ -40,78 +40,104 @@
     </nav>
 </aside>
 
-<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20">
-    {{ if .Params.BillingWarning }}
-    <div class="border-l-4 border-yellow-400 bg-yellow-50 p-4 mb-8">
-        <div class="flex">
-            <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
-                </svg>
-            </div>
-            <div class="ml-3">
-                <p class="text-sm text-yellow-700">{{ .Params.BillingWarning }}</p>
+<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20" {{if .Params.PreviewOpen }}x-data="{previewOpen: true}"{{end}}>
+    {{ if .Params.PreviewOpen }}
+    <div class="relative z-20" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+        x-show="previewOpen"
+        x-transition:enter="ease-out duration-300"
+        x-transition:enter-start="opacity-0"
+        x-transition:enter-end="opacity-100"
+        x-transition:leave="ease-in duration-200"
+        x-transition:leave-start="opacity-100"
+        x-transition:leave-end="opacity-0"
+        >
+        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+        <div class="fixed inset-0 z-20 w-screen overflow-y-auto">
+            <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-md"
+                    x-show="previewOpen"
+                    x-transition:enter="ease-out duration-300"
+                    x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                    x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                    x-transition:leave="ease-in duration-200"
+                    x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                    x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
+                    <form hx-put='{{ partsURL .Const.SettingsEndpoint .Const.TabEndpoint .Const.BillingEndpoint }}'
+                        hx-indicator="#confirm-spinner"
+                        hx-target="#settings"
+                        hx-swap="innerHTML"
+                        >
+                        <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
+                            <div class="sm:flex sm:items-start">
+                                <div class="mx-auto flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-blue-50 sm:mx-0 sm:h-10 sm:w-10">
+                                    <svg class="h-6 w-6 text-blue-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a.75.75 0 000 1.5h.253a.25.25 0 01.244.304l-.459 2.066A1.75 1.75 0 0010.747 15H11a.75.75 0 000-1.5h-.253a.25.25 0 01-.244-.304l.459-2.066A1.75 1.75 0 009.253 9H9z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                                    <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">Preview subscription changes</h3>
+                                    <div class="mt-2">
+                                        <dl class="divide-y divide-gray-100">
+                                            <div class="px-4 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                                <dt class="text-sm font-medium leading-6 text-gray-900">Plan</dt>
+                                                <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{.Params.PreviewPlan}}</dd>
+                                            </div>
+                                            <div class="px-4 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                                <dt class="text-sm font-medium leading-6 text-gray-900">Period</dt>
+                                                <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{.Params.PreviewPeriod}}</dd>
+                                            </div>
+                                            <div class="px-4 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-0">
+                                                <dt class="text-sm font-medium leading-6 text-gray-900">Billed now</dt>
+                                                <dd class="mt-1 text-sm leading-6 text-gray-700 sm:col-span-2 sm:mt-0">{{.Params.PreviewCharge}} {{.Params.PreviewCurrency}}</dd>
+                                            </div>
+                                        </dl>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" name="{{ .Const.Price }}" value="{{ .Params.PreviewPriceID }}" />
+                        <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
+                        <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                            <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-3 sm:w-auto">
+                                <svg id="confirm-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Confirm
+                            </button>
+                            <button type="button" class="mt-3 pc-internal-form-button pc-internal-form-button-secondary sm:mt-0 sm:w-auto" @click="previewOpen = false">Cancel</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
     {{ end }}
     <div class="divide-y divide-gray-200">
         <!-- Plan -->
-        <section aria-labelledby="plan-heading" class="pb-12" x-data="{planID: '', annual: false}" x-init="planID = '{{ .Params.CurrentPlan.ID }}'; annual = {{ .Params.YearlyBilling }}">
-            <form action="#" method="POST">
-                <div class="space-y-6">
-                    <div>
-                        <h2 id="plan-heading" class="text-base font-semibold leading-6 text-gray-900">Plan</h2>
-                    </div>
-
-                    <fieldset aria-label="Pricing plans">
-                        <div class="relative -space-y-px rounded-md bg-white">
-                            {{$plansN := len .Params.Plans}}
-                            {{ range $i, $plan := .Params.Plans }}
-                            <!-- Checked: "z-10 border-indigo-200 bg-indigo-50", Not Checked: "border-gray-200" -->
-                            <label aria-label="{{$plan.Name}}" aria-description="€{{$plan.PriceMonthly}} per month, €{{$plan.PriceYearly}} per year, {{$plan.Limit}} requests included"
-                                :class="planID == '{{ $plan.ID }}' ? 'z-10 border-indigo-200 bg-indigo-50' : 'border-gray-200'"
-                                class="relative flex cursor-pointer flex-col {{if eq $i 0}}rounded-tl-md rounded-tr-md{{else if eq (plus1 $i) $plansN}}rounded-bl-md rounded-br-md{{end}} border p-4 focus:outline-none md:grid md:grid-cols-3 md:pl-4 md:pr-6"
-                                @click="planID = '{{$plan.ID}}'"
-                                >
-                                <span class="flex items-center text-sm">
-                                    <input type="radio" name="{{$.Const.Product}}" value="{{$plan.ID}}" class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 active:ring-2 active:ring-indigo-600 active:ring-offset-2" {{if eq $plan.ID $.Params.CurrentPlan.ID}}checked{{end}}>
-                                    <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
-                                <span class="billing-plan-name ml-3 font-medium"
-                                    :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">
-                                    {{$plan.Name}}
-                                </span>
-                                </span>
-                                <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-center">
-                                    <!-- Checked: "text-indigo-900", Not Checked: "text-gray-900" -->
-                                    <span class="font-medium" :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">€{{$plan.PriceMonthly}} / mo</span>
-                                    <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
-                                    <span :class="planID == '{{ $plan.ID }}' ? 'text-indigo-900' : 'text-gray-900'">(€{{$plan.PriceYearly}} / yr)</span>
-                                </span>
-                                <!-- Checked: "text-indigo-700", Not Checked: "text-gray-500" -->
-                                <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-right"
-                                    :class="planID == '{{ $plan.ID }}' ? 'text-indigo-700' : 'text-gray-500'">
-                                    {{$plan.Limit}} requests included
-                                </span>
-                            </label>
-                            {{ end }}
-                        </div>
-                    </fieldset>
-                </div>
-                <div class="pt-6 text-right flex justify-between">
-                    <div class="flex items-center">
-                        <!-- Enabled: "bg-indigo-600", Not Enabled: "bg-gray-200" -->
-                        <button type="button" :class="annual ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2" role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual">
-                            <!-- Enabled: "translate-x-5", Not Enabled: "translate-x-0" -->
-                            <span aria-hidden="true" :class="annual ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
-                        </button>
-                        <span class="ml-3 text-sm" id="annual-billing-label">
-                            <span class="font-medium text-gray-900">Annual billing</span>
-                            <span class="text-gray-500">(1 month free)</span>
-                        </span>
-                    </div>
-                    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary">Save</button>
-                </div>
+        <section aria-labelledby="plan-heading" class="pb-12 space-y-6" x-data="{productID: '', priceIDs: [], annual: false}" x-init="productID = '{{ .Params.CurrentPlan.PaddleProductID }}'; priceIDs = ['{{.Params.CurrentPlan.PaddlePriceIDMonthly}}', '{{.Params.CurrentPlan.PaddlePriceIDYearly}}']; annual = {{ .Params.YearlyBilling }}">
+            {{- if .Params.ErrorMessage -}}
+            {{ template "error-message.html" .Params.ErrorMessage }}
+            {{- else if .Params.WarningMessage -}}
+            {{ template "warning-message.html" .Params.WarningMessage }}
+            {{- else if .Params.SuccessMessage -}}
+            {{ template "success-message.html" .Params.SuccessMessage }}
+            {{- else if .Params.InfoMessage -}}
+            {{ template "info-message.html" .Params.InfoMessage }}
+            {{- end -}}
+            <form
+                {{ if .Params.IsSubscribed }}
+                hx-post='{{ partsURL .Const.SettingsEndpoint .Const.TabEndpoint .Const.BillingEndpoint .Const.PreviewEndpoint }}'
+                hx-target="#settings"
+                hx-swap="innerHTML"
+                hx-indicator="#save-spinner"
+                hx-disabled-elt="input, button"
+                {{ else }}
+                @submit.prevent="openCheckout(priceIDs, annual)"
+                {{ end }}
+                >
+                {{ template "billing-plan-form.html" . }}
             </form>
         </section>
         <section aria-labelledby="manage-subscription" class="pt-12">

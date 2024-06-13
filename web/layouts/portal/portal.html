@@ -5,11 +5,11 @@
 {{define "html_class"}}h-full bg-gray-100{{end}}
 {{define "body_class"}}h-full min-h-full flex flex-col{{end}}
 
-{{define "footer"}}{{block "footer-signed-in" .}}{{end}}{{end}}
+{{define "footer"}}{{template "footer-signed-in" .}}{{end}}
 
 {{define "header"}}
 <div class="bg-gray-800 pb-32">
-    {{block "header-signed-in" .}}{{end}}
+    {{template "header-signed-in" .}}
     <div class="py-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
         x-data="{open: false, orgID: '', orgName: '', toggle() { this.open = ! this.open } }"
         x-init="orgID = '{{ .Params.CurrentOrg.ID }}'; orgName = '{{ .Params.CurrentOrg.Name }}'">

@@ -9,11 +9,7 @@
     <link rel="stylesheet" href="/assets/css/style.css">
     <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
     {{end}}
-    {{block "scripts" .}}
-    <script defer src="/assets/js/htmx.min.js"></script>
-    <script defer src="/assets/js/alpine.min.js"></script>
-    <script src="/assets/js/bundle.js"></script>
-    {{end}}
+    {{block "scripts" .}}{{template "default-scripts.html" .}}{{end}}
 </head>
 <body class='{{block "body_class" .}}h-full{{end}}'>
     {{block "header" .}}{{end}}

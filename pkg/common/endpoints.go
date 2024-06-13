@@ -33,4 +33,5 @@ const (
 	BillingEndpoint             = "billing"
 	CancelEndpoint              = "cancel"
 	UpdateEndpoint              = "update"
+	PreviewEndpoint             = "preview"
 )

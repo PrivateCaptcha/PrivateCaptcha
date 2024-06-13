@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 
 const (
 	maxUserFormSizeBytes        = 256 * 1024
+	maxBillingFormSizeBytes     = 16 * 1024
 	settingsGeneralTemplate     = "settings/general.html"
 	settingsTemplate            = "settings/settings.html"
 	settingsGeneralFormTemplate = "settings/general-form.html"
@@ -31,7 +33,9 @@ var (
 )
 
 type settingsCommonRenderContext struct {
-	Tab int
+	Tab    int
+	Email  string
+	UserID int32
 }
 
 type settingsGeneralRenderContext struct {
@@ -40,7 +44,6 @@ type settingsGeneralRenderContext struct {
 	Token          string
 	Name           string
 	NameError      string
-	Email          string
 	EmailError     string
 	TwoFactorError string
 	TwoFactorEmail string
@@ -64,31 +67,20 @@ type settingsAPIKeysRenderContext struct {
 	CreateOpen bool
 }
 
-type userBillingPlan struct {
-	ID           string
-	Name         string
-	PriceMonthly int
-	PriceYearly  int
-	Limit        int
-}
-
-func billingPlanToUserBillingPlan(plan *billing.Plan) *userBillingPlan {
-	return &userBillingPlan{
-		ID:           plan.PaddleProductID,
-		Name:         plan.Name,
-		PriceMonthly: plan.DefaultMonthlyPrice,
-		PriceYearly:  plan.DefaultYearlyPrice,
-		Limit:        int(plan.RequestsLimit),
-	}
-}
-
 type settingsBillingRenderContext struct {
+	alertRenderContext
 	settingsCommonRenderContext
-	BillingWarning string
-	Plans          []*userBillingPlan
-	CurrentPlan    *userBillingPlan
-	YearlyBilling  bool
-	IsSubscribed   bool
+	Token           string
+	Plans           []*billing.Plan
+	CurrentPlan     *billing.Plan
+	PreviewPlan     string
+	PreviewPeriod   string
+	PreviewCharge   int
+	PreviewCurrency string
+	PreviewPriceID  string
+	YearlyBilling   bool
+	IsSubscribed    bool
+	PreviewOpen     bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -145,11 +137,12 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 	renderCtx := &settingsGeneralRenderContext{
 		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab: 0,
+			Tab:    0,
+			Email:  user.Email,
+			UserID: user.ID,
 		},
 		Token: s.XSRF.Token(user.Email, actionUserSettings),
 		Name:  user.Name,
-		Email: user.Email,
 	}
 
 	return renderCtx, settingsGeneralTemplate, nil
@@ -179,9 +172,13 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyTwoFactorCode, code)
 
 	renderCtx := &settingsGeneralRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab:    0,
+			Email:  user.Email,
+			UserID: user.ID,
+		},
 		Token:          s.XSRF.Token(user.Email, actionUserSettings),
 		Name:           user.Name,
-		Email:          user.Email,
 		TwoFactorEmail: common.MaskEmail(user.Email, '*'),
 		EditEmail:      true,
 	}
@@ -217,9 +214,13 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 	formEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 
 	renderCtx := &settingsGeneralRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab:    0,
+			Email:  user.Email,
+			UserID: user.ID,
+		},
 		Token:     s.XSRF.Token(user.Email, actionUserSettings),
 		Name:      user.Name,
-		Email:     user.Email,
 		EditEmail: (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
 	}
 
@@ -309,7 +310,9 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 	renderCtx := &settingsAPIKeysRenderContext{
 		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab: 1,
+			Tab:    1,
+			Email:  user.Email,
+			UserID: user.ID,
 		},
 		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
@@ -365,7 +368,9 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
 
 	renderCtx := &settingsAPIKeysRenderContext{
 		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab: 1,
+			Tab:    1,
+			Email:  user.Email,
+			UserID: user.ID,
 		},
 		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
@@ -414,27 +419,30 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
-	if err != nil {
-		return nil, "", err
-	}
-
+func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.User) (*settingsBillingRenderContext, error) {
 	renderCtx := &settingsBillingRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{Tab: 2},
+		Token: s.XSRF.Token(user.Email, actionBillingSettings),
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab:    2,
+			Email:  user.Email,
+			UserID: user.ID,
+		},
 	}
 
 	if user.SubscriptionID.Valid {
 		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 
 		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
 		if renderCtx.IsSubscribed {
+			if subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
+				renderCtx.InfoMessage = fmt.Sprintf("Your trial ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
+			}
+
 			if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
-				renderCtx.CurrentPlan = billingPlanToUserBillingPlan(plan)
+				renderCtx.CurrentPlan = plan
 				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
 			} else {
 				slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
@@ -443,30 +451,31 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	if !renderCtx.IsSubscribed {
-		renderCtx.BillingWarning = "You don't have an active subscription."
-		renderCtx.CurrentPlan = &userBillingPlan{}
+		renderCtx.WarningMessage = "You don't have an active subscription."
+		renderCtx.CurrentPlan = &billing.Plan{}
 	}
 
 	if plans, ok := billing.GetPlansForStage(s.Stage); ok {
-		prices, err := s.Store.RetrievePaddlePrices(ctx)
-		if err != nil {
-			prices = map[string]int{}
-		}
+		renderCtx.Plans = plans
+	}
 
-		result := make([]*userBillingPlan, 0, len(plans))
+	return renderCtx, nil
+}
 
-		for _, plan := range plans {
-			ubp := billingPlanToUserBillingPlan(plan)
-			if priceMonthly, ok := prices[plan.PaddlePriceIDMonthly]; ok {
-				ubp.PriceMonthly = priceMonthly
-			}
-			if priceYearly, ok := prices[plan.PaddlePriceIDYearly]; ok {
-				ubp.PriceYearly = priceYearly
-			}
-			result = append(result, ubp)
-		}
+func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
 
-		renderCtx.Plans = result
+	renderCtx, err := s.createBillingRenderContext(ctx, user)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if !renderCtx.IsSubscribed {
+		w.Header().Set("HX-Trigger-After-Swap", "load-paddle")
 	}
 
 	return renderCtx, settingsBillingTemplate, nil
@@ -527,4 +536,137 @@ func (s *Server) getUpdateSubscription(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.Error(w, "URL is empty", http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBillingFormSizeBytes)
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	token := r.FormValue(common.ParamCsrfToken)
+	if !s.XSRF.VerifyToken(token, user.Email, actionBillingSettings) {
+		slog.WarnContext(ctx, "Failed to verify CSRF token")
+		return nil, "", errInvalidSession
+	}
+
+	product := r.FormValue(common.ParamProduct)
+	plan, err := billing.FindPlanByProductID(product, s.Stage)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find plan by product ID", "productID", product, common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	yearly := common.ParseBoolean(r.FormValue(common.ParamYearly))
+	previewPeriod := "monthly"
+	priceID := plan.PaddlePriceIDMonthly
+	if yearly {
+		priceID = plan.PaddlePriceIDYearly
+		previewPeriod = "annual"
+	}
+
+	renderCtx, err := s.createBillingRenderContext(ctx, user)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if !renderCtx.IsSubscribed {
+		slog.ErrorContext(ctx, "Attemp to preview subscription change while not subscribed", "userID", user.ID)
+		return nil, "", errMissingSubsciption
+	}
+
+	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	if (priceID == subscription.PaddlePriceID) && (product == subscription.PaddleProductID) {
+		slog.WarnContext(ctx, "No subscription changes required")
+		return renderCtx, settingsBillingTemplate, nil
+	}
+
+	//changePreview, err := s.PaddleAPI.PreviewChange(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/)
+	//if err != nil {
+	//	slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
+	//	renderCtx.ErrorMessage = "Failed to change your subscription. Please contact support for assistance."
+	//	return renderCtx, settingsBillingTemplate, nil
+	//}
+
+	// TODO: Remove this stub when Paddle SDK will be fixed
+	// https://github.com/PaddleHQ/paddle-go-sdk/issues/8
+	changePreview := &billing.ChangePreview{
+		ChargeAmount:   123,
+		ChargeCurrency: "EUR",
+	}
+
+	renderCtx.PreviewOpen = true
+	renderCtx.PreviewPlan = plan.Name
+	renderCtx.PreviewPeriod = previewPeriod
+	renderCtx.PreviewCharge = changePreview.ChargeAmount
+	renderCtx.PreviewCurrency = changePreview.ChargeCurrency
+	renderCtx.PreviewPriceID = priceID
+
+	return renderCtx, settingsBillingTemplate, nil
+}
+
+func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxBillingFormSizeBytes)
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	token := r.FormValue(common.ParamCsrfToken)
+	if !s.XSRF.VerifyToken(token, user.Email, actionBillingSettings) {
+		slog.WarnContext(ctx, "Failed to verify CSRF token")
+		return nil, "", errInvalidSession
+	}
+
+	priceID := r.FormValue(common.ParamPrice)
+
+	renderCtx, err := s.createBillingRenderContext(ctx, user)
+	if err != nil {
+		return nil, "", err
+	}
+	renderCtx.ClearAlerts()
+
+	if !renderCtx.IsSubscribed {
+		slog.ErrorContext(ctx, "Attemp to update subscription while not subscribed", "userID", user.ID)
+		return nil, "", errMissingSubsciption
+	}
+
+	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	if priceID == subscription.PaddlePriceID {
+		slog.WarnContext(ctx, "No subscription changes required")
+		return renderCtx, settingsBillingTemplate, nil
+	}
+
+	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/); err == nil {
+		renderCtx.SuccessMessage = "Subscription was updated successfully."
+	} else {
+		renderCtx.ErrorMessage = "Failed to update subscription. Please contact support for assistance."
+	}
+
+	return renderCtx, settingsBillingTemplate, nil
 }

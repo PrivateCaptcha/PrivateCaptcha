@@ -107,8 +107,11 @@ func main() {
 					Recurring:    true,
 					CreatedAt:    common.JSONTimeNow().String(),
 					NextBilledAt: &nextBilledAt,
-					TrialDates:   &paddlenotification.TimePeriod{},
-					Price:        paddlenotification.Price{ID: priceID, ProductID: productID},
+					TrialDates: &paddlenotification.TimePeriod{
+						StartsAt: common.JSONTimeNow().String(),
+						EndsAt:   common.JSONTimeNowAdd(7 * 24 * time.Hour).String(),
+					},
+					Price: paddlenotification.Price{ID: priceID, ProductID: productID},
 				}},
 				CustomData: map[string]any{},
 			},

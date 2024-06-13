@@ -18,6 +18,7 @@ const (
 	actionUserSettings     = "user-settings"
 	actionAPIKeysSettings  = "apikeys-settings"
 	actionSupport          = "support"
+	actionBillingSettings  = "billing-settings"
 )
 
 type XSRFMiddleware struct {
