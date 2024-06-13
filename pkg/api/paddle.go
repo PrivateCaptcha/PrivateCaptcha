@@ -113,6 +113,8 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 
 	orgName := common.OrgNameFromName(customer.Name)
 
+	// TODO: Handle case when user has account without subscription
+	// we're already passing "privateCaptchaUserID" in CustomData to Paddle (in settings.html)
 	if _, _, err = s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName); (err != nil) && (err != db.ErrDuplicateAccount) {
 		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

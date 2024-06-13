@@ -19,7 +19,7 @@ FROM golang:1.22.1 AS backend-builder
 # Copy the backend source code
 COPY ./go.mod ./go.sum /app/
 COPY ./vendor /app/vendor
-COPY ./cmd /app/cmd
+COPY ./cmd/server /app/cmd/server
 COPY ./pkg /app/pkg
 COPY ./web /app/web
 

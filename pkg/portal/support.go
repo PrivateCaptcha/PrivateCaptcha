@@ -14,6 +14,7 @@ import (
 const (
 	maxSupportFormSizeBytes = 256 * 1024
 	supportFormTemplate     = "support/form.html"
+	supportTemplate         = "support/support.html"
 )
 
 type supportRenderContext struct {
@@ -33,7 +34,7 @@ func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) (Model, stri
 		Token: s.XSRF.Token(user.Email, actionSupport),
 	}
 
-	return renderCtx, "support/support.html", nil
+	return renderCtx, supportTemplate, nil
 }
 
 func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory {

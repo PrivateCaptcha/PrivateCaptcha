@@ -53,9 +53,15 @@
             <button type="submit" class="ml-4 flex-shrink-0 self-center pc-internal-form-button pc-internal-form-button-primary">Send invite</button>
         </form>
     </div>
+    {{- if .Params.ErrorMessage -}}
     <div class="mt-4">
-        {{ template "error-success-message.html" . }}
+        {{ template "error-message.html" .Params.ErrorMessage }}
     </div>
+    {{- else if .Params.SuccessMessage -}}
+    <div class="mt-4">
+        {{ template "success-message.html" .Params.SuccessMessage }}
+    </div>
+    {{- end -}}
     <div class="mt-10">
         <h3 class="text-sm font-medium text-gray-500">Team members of this organization</h3>
         <ul role="list" class="mt-4 divide-y divide-gray-200 border-b border-t border-gray-200"

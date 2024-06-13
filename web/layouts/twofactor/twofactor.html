@@ -2,8 +2,8 @@
 
 {{define "title"}}Verify{{end}}
 
-{{define "header"}}{{block "header-signed-out" .}}{{end}}{{end}}
-{{define "footer"}}{{block "footer-signed-out" .}}{{end}}{{end}}
+{{define "header"}}{{template "header-signed-out" .}}{{end}}
+{{define "footer"}}{{template "footer-signed-out" .}}{{end}}
 
 {{define "body_class"}}pc-vertical-stretch{{end}}
 

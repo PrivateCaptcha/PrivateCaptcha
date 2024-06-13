@@ -91,3 +91,12 @@ func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface
 		slog.DebugContext(ctx, "Sent response", "serialized", len(response), "sent", n)
 	}
 }
+
+func ParseBoolean(value string) bool {
+	switch value {
+	case "1", "Y", "y", "yes", "Yes", "true":
+		return true
+	default:
+		return false
+	}
+}
