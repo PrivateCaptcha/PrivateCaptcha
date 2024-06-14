@@ -30,6 +30,7 @@ const (
 var (
 	lock                sync.RWMutex
 	ErrUnknownProductID = errors.New("unknown product ID")
+	ErrUnknownPriceID   = errors.New("unknown price ID")
 
 	devPlans = []*Plan{
 		{
@@ -175,7 +176,24 @@ func FindPlanByProductID(paddleProductID string, stage string) (*Plan, error) {
 	return nil, ErrUnknownProductID
 }
 
-func FindPlanByPaddlePrice(paddleProductID string, paddlePriceID string, stage string) (*Plan, error) {
+func FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error) {
+	if (stage == "") || (paddlePriceID == "") {
+		return nil, errInvalidArgument
+	}
+
+	lock.RLock()
+	defer lock.RUnlock()
+
+	for _, p := range stagePlans[stage] {
+		if (p.PaddlePriceIDMonthly == paddlePriceID) || (p.PaddlePriceIDYearly == paddlePriceID) {
+			return p, nil
+		}
+	}
+
+	return nil, ErrUnknownPriceID
+}
+
+func FindPlanByPriceAndProduct(paddleProductID string, paddlePriceID string, stage string) (*Plan, error) {
 	if (stage == "") || (paddleProductID == "") || (paddlePriceID == "") {
 		return nil, errInvalidArgument
 	}

@@ -41,5 +41,5 @@ func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testN
 		Status:               paddle.SubscriptionStatusTrialing,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
-	}, email, name, orgName)
+	}, email, name, orgName, -1 /*existingUserID*/)
 }

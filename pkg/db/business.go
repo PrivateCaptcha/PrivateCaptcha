@@ -138,7 +138,7 @@ func (s *BusinessStore) UpdateSubscription(ctx context.Context, params *dbgen.Up
 	return s.defaultImpl.updateSubscription(ctx, params)
 }
 
-func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string) (*dbgen.User, *dbgen.Organization, error) {
+func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string, existingUserID int32) (*dbgen.User, *dbgen.Organization, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -162,12 +162,12 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 
 		if existingUser, err := impl.findUser(ctx, email); err == nil {
 			slog.ErrorContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
-			// TODO: We also need to send and verify passthrough from Paddle here
-			// to make sure it's the same account
-			if !existingUser.SubscriptionID.Valid {
+			if ((existingUser.ID == existingUserID) || (existingUserID == -1)) && !existingUser.SubscriptionID.Valid {
 				if err := impl.updateUserSubscription(ctx, existingUser.ID, subscription.ID); err != nil {
 					return nil, nil, err
 				}
+			} else {
+				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID, "passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid)
 			}
 
 			// we explicitly do nothing in such edge case, as this has to be resolved via support
