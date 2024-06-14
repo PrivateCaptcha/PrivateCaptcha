@@ -441,7 +441,7 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 				renderCtx.InfoMessage = fmt.Sprintf("Your trial ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
 			}
 
-			if plan, err := billing.FindPlanByPaddlePrice(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+			if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
 				renderCtx.CurrentPlan = plan
 				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
 			} else {
@@ -639,6 +639,10 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 	}
 
 	priceID := r.FormValue(common.ParamPrice)
+	if _, err := billing.FindPlanByPriceID(priceID, s.Stage); err != nil {
+		slog.ErrorContext(ctx, "PriceID argument is not valid", common.ErrAttr(err))
+		return nil, "", err
+	}
 
 	renderCtx, err := s.createBillingRenderContext(ctx, user)
 	if err != nil {
