@@ -29,3 +29,7 @@ func (pc *StubPaddleClient) PreviewChangeSubscription(ctx context.Context, subsc
 func (pc *StubPaddleClient) ChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error {
 	return nil
 }
+
+func (pc *StubPaddleClient) CancelSubscription(ctx context.Context, subscriptionID string) error {
+	return nil
+}

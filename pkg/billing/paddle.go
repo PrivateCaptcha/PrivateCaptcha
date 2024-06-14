@@ -39,6 +39,7 @@ type PaddleAPI interface {
 	GetPrices(ctx context.Context, productIDs []string) (Prices, error)
 	PreviewChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) (*ChangePreview, error)
 	ChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error
+	CancelSubscription(ctx context.Context, subscriptionID string) error
 }
 
 type paddleClient struct {
@@ -184,6 +185,27 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 			common.ErrAttr(err))
 		return err
 	}
+
+	slog.DebugContext(ctx, "Changed Paddle subscription", "subscriptionID", subscriptionID, "priceID", priceID)
+
+	return nil
+}
+
+func (pc *paddleClient) CancelSubscription(ctx context.Context, subscriptionID string) error {
+	if len(subscriptionID) == 0 {
+		return errInvalidArgument
+	}
+
+	_, err := pc.sdk.CancelSubscription(ctx, &paddle.CancelSubscriptionRequest{
+		SubscriptionID: subscriptionID,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "subscriptionID", subscriptionID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Cancelled Paddle subscription", "subscriptionID", subscriptionID)
 
 	return nil
 }
