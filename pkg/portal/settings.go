@@ -286,12 +286,29 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if user.SubscriptionID.Valid {
+		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
+			s.redirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+
+		if billing.IsSubscriptionActive(subscription.Status) {
+			if err := s.PaddleAPI.CancelSubscription(ctx, subscription.PaddleSubscriptionID); err != nil {
+				slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "userID", user.ID, common.ErrAttr(err))
+				s.redirectError(http.StatusInternalServerError, w, r)
+				return
+			}
+		}
+	}
+
 	if err := s.Store.SoftDeleteUser(ctx, user.ID, user.Email); err == nil {
-		// TODO: Cancel subscription if any
 		s.logout(w, r)
 	} else {
 		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
+		return
 	}
 }
 
