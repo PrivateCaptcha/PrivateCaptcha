@@ -757,10 +757,23 @@ func (impl *businessStoreImpl) removeUserFromOrg(ctx context.Context, orgID int3
 }
 
 func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userID, subscriptionID int32) error {
-	return impl.queries.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
+	user, err := impl.queries.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
 		ID:             userID,
 		SubscriptionID: Int(subscriptionID),
 	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update user subscription", "userID", userID, "subscriptionID", subscriptionID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated user subscription", "userID", userID, "subscriptionID", subscriptionID)
+
+	if user != nil {
+		_ = impl.cache.Set(ctx, emailCacheKey(user.Email), user)
+	}
+
+	return nil
 }
 
 func (impl *businessStoreImpl) updateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {

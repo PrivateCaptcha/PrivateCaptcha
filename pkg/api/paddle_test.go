@@ -18,12 +18,8 @@ import (
 	"github.com/rs/xid"
 )
 
-func TestSubscriptionCreated(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	evt := &paddle.SubscriptionCreatedEvent{
+func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
+	return &paddle.SubscriptionCreatedEvent{
 		GenericEvent: paddle.GenericEvent{},
 		Data: paddlenotification.SubscriptionCreatedNotification{
 			ID:             xid.New().String(),
@@ -72,12 +68,12 @@ func TestSubscriptionCreated(t *testing.T) {
 					Status:       paddle.SubscriptionStatusActive,
 				},
 			}},
+			CustomData: paddlenotification.CustomData{},
 		},
 	}
+}
 
-	ci := &billing.CustomerInfo{Email: t.Name() + "@example.com", Name: t.Name()}
-	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
-
+func subscriptionCreatedSuite(ctx context.Context, evt *paddle.SubscriptionCreatedEvent, email string, t *testing.T) {
 	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey)
 	if err != nil {
 		t.Fatal(err)
@@ -87,9 +83,57 @@ func TestSubscriptionCreated(t *testing.T) {
 		t.Errorf("Unexpected response code: %v", resp.StatusCode)
 	}
 
-	if user, err := store.FindUser(context.TODO(), ci.Email); err != nil || (user.Email != ci.Email) {
-		t.Errorf("User was not created in the DB")
+	user, err := store.FindUser(ctx, email)
+	if err != nil {
+		t.Fatal(err)
 	}
+
+	if !user.SubscriptionID.Valid {
+		t.Fatal("User subscription is still not valid")
+	}
+
+	subscription, err := store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		t.Errorf("Subscription was not found in the DB: %v", err)
+	}
+
+	if subscription.PaddleSubscriptionID != evt.Data.ID {
+		t.Errorf("Unexpected Paddle subscription ID in the DB: %v (expected %v", subscription.PaddleSubscriptionID, evt.Data.ID)
+	}
+}
+
+func TestSubscriptionCreated(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	evt := stubSubscriptionCreatedEvent()
+
+	ci := &billing.CustomerInfo{Email: t.Name() + "@example.com", Name: t.Name()}
+	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
+
+	subscriptionCreatedSuite(context.TODO(), evt, ci.Email, t)
+}
+
+func TestSubscriptionCreatedWithExisting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	user, _, err := db_tests.CreateNewBareAccount(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	evt := stubSubscriptionCreatedEvent()
+	evt.Data.CustomData[pcUserPaddlePassthroughKey] = strconv.Itoa(int(user.ID))
+
+	ci := &billing.CustomerInfo{Email: user.Email, Name: t.Name()}
+	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
+
+	subscriptionCreatedSuite(ctx, evt, ci.Email, t)
 }
 
 func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {

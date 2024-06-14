@@ -244,6 +244,7 @@ type Subscription struct {
 	Status               string             `db:"status" json:"status"`
 	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
 	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
+	CancelFrom           pgtype.Timestamptz `db:"cancel_from" json:"cancel_from"`
 	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }

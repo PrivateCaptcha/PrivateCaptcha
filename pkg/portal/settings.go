@@ -454,7 +454,9 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 
 		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
 		if renderCtx.IsSubscribed {
-			if subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
+			if subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now()) {
+				renderCtx.InfoMessage = fmt.Sprintf("Your subscription ends on %s.", subscription.CancelFrom.Time.Format("02 Jan 2006"))
+			} else if subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
 				renderCtx.InfoMessage = fmt.Sprintf("Your trial ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
 			}
 

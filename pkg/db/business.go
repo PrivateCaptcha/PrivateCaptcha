@@ -161,21 +161,18 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 		subscriptionID = &subscription.ID
 
 		if existingUser, err := impl.findUser(ctx, email); err == nil {
-			slog.ErrorContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
+			slog.InfoContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
 			if ((existingUser.ID == existingUserID) || (existingUserID == -1)) && !existingUser.SubscriptionID.Valid {
 				if err := impl.updateUserSubscription(ctx, existingUser.ID, subscription.ID); err != nil {
 					return nil, nil, err
 				}
+
+				return existingUser, nil, tx.Commit(ctx)
 			} else {
-				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID, "passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid)
+				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID,
+					"passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid, "email", email)
+				return nil, nil, ErrDuplicateAccount
 			}
-
-			// we explicitly do nothing in such edge case, as this has to be resolved via support
-			if txerr := tx.Commit(ctx); txerr != nil {
-				return nil, nil, txerr
-			}
-
-			return nil, nil, ErrDuplicateAccount
 		}
 	}
 

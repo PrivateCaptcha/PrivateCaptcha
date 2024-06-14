@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS subscriptions(
     status VARCHAR(255) NOT NULL,
     trial_ends_at TIMESTAMPTZ,
     next_billed_at TIMESTAMPTZ,
+    cancel_from TIMESTAMPTZ,
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ DEFAULT current_timestamp
 );

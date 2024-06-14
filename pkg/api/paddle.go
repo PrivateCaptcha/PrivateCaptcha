@@ -17,6 +17,9 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
+// this field is set in the javascript of the billing page (currently in settings/scripts.html)
+const pcUserPaddlePassthroughKey = "privateCaptchaUserID"
+
 func findProductID(ctx context.Context, items []paddlenotification.SubscriptionItem, stage string) int {
 	if len(items) == 0 {
 		return -1
@@ -74,11 +77,9 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 		}
 	}
 
-	// this field is set in the javascript of the billing page (currently in settings/scripts.html)
-	const pcUserIDKey = "privateCaptchaUserID"
 	userID := -1
 
-	if data, ok := evt.Data.CustomData[pcUserIDKey]; ok {
+	if data, ok := evt.Data.CustomData[pcUserPaddlePassthroughKey]; ok {
 		if userIDStr, ok := data.(string); ok {
 			if value, err := strconv.Atoi(userIDStr); err == nil {
 				userID = value
@@ -158,6 +159,16 @@ func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddleno
 			params.NextBilledAt = db.Timestampz(nextBillTime)
 		} else {
 			slog.ErrorContext(ctx, "Failed to parse next bill time", "time", *subscr.NextBilledAt, common.ErrAttr(err))
+		}
+	}
+
+	if data.ScheduledChange != nil {
+		if data.ScheduledChange.Action == paddle.ScheduledChangeActionCancel {
+			if cancelTime, err := time.Parse(time.RFC3339, data.ScheduledChange.EffectiveAt); err == nil {
+				params.CancelFrom = db.Timestampz(cancelTime)
+			} else {
+				slog.ErrorContext(ctx, "Failed to parse cancel time", "time", data.ScheduledChange.EffectiveAt, common.ErrAttr(err))
+			}
 		}
 	}
 
