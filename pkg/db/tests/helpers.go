@@ -13,9 +13,7 @@ import (
 	"github.com/rs/xid"
 )
 
-func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
-	email := testName + "@privatecaptcha.com"
-
+func createUserAndOrgName(testName string) (string, string) {
 	var parts []string
 	start := 0
 
@@ -27,11 +25,19 @@ func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testN
 	}
 	parts = append(parts, testName[start:])
 
+	name := strings.Join(parts, " ")
+	orgName := strings.ToLower(strings.Join(parts, "-"))
+
+	return name, orgName
+}
+
+func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
+	email := testName + "@privatecaptcha.com"
+
 	testPlan := billing.TestPlans[0]
 	tnow := time.Now()
 
-	name := strings.Join(parts, " ")
-	orgName := strings.ToLower(strings.Join(parts, "-"))
+	name, orgName := createUserAndOrgName(testName)
 
 	return store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
 		PaddleProductID:      testPlan.PaddleProductID,
@@ -42,4 +48,11 @@ func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testN
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}, email, name, orgName, -1 /*existingUserID*/)
+}
+
+func CreateNewBareAccount(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
+	email := testName + "@privatecaptcha.com"
+	name, orgName := createUserAndOrgName(testName)
+
+	return store.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
 }

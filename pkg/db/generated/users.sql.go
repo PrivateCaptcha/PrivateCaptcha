@@ -89,7 +89,7 @@ func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams)
 	return &i, err
 }
 
-const updateUserSubscription = `-- name: UpdateUserSubscription :exec
+const updateUserSubscription = `-- name: UpdateUserSubscription :one
 UPDATE users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
@@ -98,7 +98,17 @@ type UpdateUserSubscriptionParams struct {
 	SubscriptionID pgtype.Int4 `db:"subscription_id" json:"subscription_id"`
 }
 
-func (q *Queries) UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) error {
-	_, err := q.db.Exec(ctx, updateUserSubscription, arg.ID, arg.SubscriptionID)
-	return err
+func (q *Queries) UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error) {
+	row := q.db.QueryRow(ctx, updateUserSubscription, arg.ID, arg.SubscriptionID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.SubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
 }
