@@ -108,7 +108,7 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
 
 	orgName := common.OrgNameFromName(name)
 
-	_, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName)
+	_, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName, -1 /*existing user ID*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return err

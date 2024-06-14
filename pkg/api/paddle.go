@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	paddle "github.com/PaddleHQ/paddle-go-sdk"
@@ -22,7 +23,7 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	}
 	j := -1
 	for i, subscr := range items {
-		if _, err := billing.FindPlanByPaddlePrice(subscr.Price.ProductID, subscr.Price.ID, stage); err == nil {
+		if _, err := billing.FindPlanByPriceAndProduct(subscr.Price.ProductID, subscr.Price.ID, stage); err == nil {
 			j = i
 			break
 		}
@@ -41,10 +42,10 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	return j
 }
 
-func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.SubscriptionCreatedEvent) (*dbgen.CreateSubscriptionParams, error) {
+func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.SubscriptionCreatedEvent) (*dbgen.CreateSubscriptionParams, int32, error) {
 	j := findProductID(ctx, evt.Data.Items, s.stage)
 	if j == -1 {
-		return nil, errProductNotFound
+		return nil, -1, errProductNotFound
 	}
 
 	subscr := evt.Data.Items[j]
@@ -73,7 +74,23 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 		}
 	}
 
-	return params, nil
+	// this field is set in the javascript of the billing page (currently in settings/scripts.html)
+	const pcUserIDKey = "privateCaptchaUserID"
+	userID := -1
+
+	if data, ok := evt.Data.CustomData[pcUserIDKey]; ok {
+		if userIDStr, ok := data.(string); ok {
+			if value, err := strconv.Atoi(userIDStr); err == nil {
+				userID = value
+			} else {
+				slog.ErrorContext(ctx, "userID custom data present, but not valid", "userID", userIDStr, common.ErrAttr(err))
+			}
+		} else {
+			slog.ErrorContext(ctx, "userID custom data present, but not string", "userID", userIDStr)
+		}
+	}
+
+	return params, int32(userID), nil
 }
 
 func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +121,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subscrParams, err := s.newCreateSubscriptionParams(ctx, evt)
+	subscrParams, existingUserID, err := s.newCreateSubscriptionParams(ctx, evt)
 	if err != nil {
 		elog.ErrorContext(ctx, "Failed to process paddle event", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -113,9 +130,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 
 	orgName := common.OrgNameFromName(customer.Name)
 
-	// TODO: Handle case when user has account without subscription
-	// we're already passing "privateCaptchaUserID" in CustomData to Paddle (in settings.html)
-	if _, _, err = s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName); (err != nil) && (err != db.ErrDuplicateAccount) {
+	if _, _, err = s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName, existingUserID); (err != nil) && (err != db.ErrDuplicateAccount) {
 		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
