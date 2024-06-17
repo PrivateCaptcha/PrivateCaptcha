@@ -169,7 +169,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	ctx := r.Context()
 	property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	// property will not be cached for auth.backfillDelay and we return an "average" puzzle instead
-	// this is done in order to not check the DB on the hot path (decrease attach surface)
+	// this is done in order to not check the DB on the hot path (decrease attack surface)
 	if !ok {
 		sitekey := ctx.Value(common.SitekeyContextKey).(string)
 		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey)
