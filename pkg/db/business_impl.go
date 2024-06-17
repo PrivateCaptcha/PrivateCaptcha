@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sort"
 	"time"
@@ -17,6 +18,10 @@ import (
 
 const (
 	paddlePricesKey = "paddle_prices"
+)
+
+var (
+	errUnsupported = errors.New("not supported")
 )
 
 func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string) (*T, error) {
@@ -43,6 +48,48 @@ func fetchCachedMany[T any](ctx context.Context, cache common.Cache, key string)
 	}
 
 	return nil, errInvalidCacheType
+}
+
+type txCache struct {
+	set     map[string]any
+	del     map[string]bool
+	missing map[string]bool
+}
+
+func NewTxCache() *txCache {
+	return &txCache{
+		set:     make(map[string]any),
+		del:     make(map[string]bool),
+		missing: make(map[string]bool),
+	}
+}
+
+func (c *txCache) Get(ctx context.Context, key string) (any, error) { return nil, errUnsupported }
+func (c *txCache) SetMissing(ctx context.Context, key string) error {
+	c.missing[key] = true
+	return nil
+}
+func (c *txCache) Set(ctx context.Context, key string, t any) error {
+	c.set[key] = t
+	return nil
+}
+func (c *txCache) Delete(ctx context.Context, key string) error {
+	c.del[key] = true
+	return nil
+}
+
+func (c *txCache) Commit(ctx context.Context, cache common.Cache) {
+	for key := range c.del {
+		cache.Delete(ctx, key)
+	}
+
+	for key := range c.missing {
+		cache.SetMissing(ctx, key)
+	}
+
+	for key, value := range c.set {
+		cache.Set(ctx, key, value)
+	}
 }
 
 type businessStoreImpl struct {
