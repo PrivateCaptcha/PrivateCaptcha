@@ -146,9 +146,8 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 	defer tx.Rollback(ctx)
 
 	db := dbgen.New(s.pool)
-	// TODO: Add cache implementation that will be flushed on success
-	// because currently if transaction is cancelled, cache will still be used "as is"
-	impl := &businessStoreImpl{cache: s.cache, queries: db.WithTx(tx)}
+	tmpCache := NewTxCache()
+	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx)}
 
 	var subscriptionID *int32
 
@@ -167,7 +166,14 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 					return nil, nil, err
 				}
 
-				return existingUser, nil, tx.Commit(ctx)
+				err = tx.Commit(ctx)
+				if err != nil {
+					return nil, nil, err
+				}
+
+				tmpCache.Commit(ctx, s.cache)
+
+				return existingUser, nil, nil
 			} else {
 				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID,
 					"passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid, "email", email)
@@ -186,7 +192,14 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 		return nil, nil, err
 	}
 
-	return user, org, tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tmpCache.Commit(ctx, s.cache)
+
+	return user, org, nil
 }
 
 func (s *BusinessStore) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
@@ -253,13 +266,21 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email 
 	defer tx.Rollback(ctx)
 
 	db := dbgen.New(s.pool)
-	impl := &businessStoreImpl{cache: s.cache, queries: db.WithTx(tx)}
+	tmpCache := NewTxCache()
+	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx)}
 	err = impl.softDeleteUser(ctx, userID, email)
 	if err != nil {
 		return err
 	}
 
-	return tx.Commit(ctx)
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+
+	tmpCache.Commit(ctx, s.cache)
+
+	return nil
 }
 
 func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
