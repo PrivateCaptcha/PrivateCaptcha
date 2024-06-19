@@ -173,6 +173,9 @@ go.uber.org/atomic
 ## explicit; go 1.18
 golang.org/x/crypto/blake2b
 golang.org/x/crypto/pbkdf2
+# golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea
+## explicit; go 1.20
+golang.org/x/exp/constraints
 # golang.org/x/net v0.26.0
 ## explicit; go 1.18
 golang.org/x/net/html

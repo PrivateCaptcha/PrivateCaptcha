@@ -31,8 +31,8 @@ func TestBackfillLevels(t *testing.T) {
 	tnow := time.Now()
 	userID := int32(123)
 
-	fingerprints := []common.TFingerprint{common.RandomFingerprint(), common.RandomFingerprint()}
-	prop1 := &dbgen.Property{
+	fingerprints := []common.TFingerprint{common.RandomFingerprint(), common.RandomFingerprint(), common.RandomFingerprint()}
+	prop := &dbgen.Property{
 		ID:         123,
 		ExternalID: *randomUUID(),
 		OrgOwnerID: db.Int(userID),
@@ -44,14 +44,21 @@ func TestBackfillLevels(t *testing.T) {
 	}
 
 	var diff uint8
-	var stats difficulty.Stats
-	buckets := []int{0, 0, 0, 0, 1, 1, 2, 3, 4}
+	var level int64
+	buckets := []int{5, 4, 3, 2, 2, 1, 1, 1, 1}
+	nanoseconds := testBucketSize.Nanoseconds()
+	const iterations = 1000
+	diffInterval := int64(nanoseconds / iterations)
 
-	for i := 0; i < 10000; i++ {
-		bucket := buckets[rand.Intn(len(buckets))]
-		diff, stats = levels.DifficultyEx(fingerprints[i%2], prop1, time.Now().Add(-time.Duration(bucket)*testBucketSize).UTC())
-		if (i+1)%2000 == 0 {
-			slog.Debug("Simulating requests", "difficulty", diff, "property", stats.Property)
+	for bucket := range buckets {
+		btime := tnow.Add(-time.Duration(bucket) * testBucketSize)
+
+		for i := 0; i < iterations; i++ {
+			fingerprint := fingerprints[rand.Intn(len(fingerprints))]
+			diff, level = levels.DifficultyEx(fingerprint, prop, btime.Add(time.Duration(int64(i)*diffInterval)*time.Nanosecond))
+			if (i+1)%500 == 0 {
+				slog.Debug("Simulating requests", "difficulty", diff, "level", level)
+			}
 		}
 	}
 
@@ -66,23 +73,24 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d := levels.Difficulty(fingerprints[0], prop1); d != difficulty.LevelSmall {
+	if d := levels.Difficulty(fingerprints[0], prop, time.Now()); d != difficulty.LevelSmall {
 		t.Errorf("Unexpected difficulty after stats reset: %v", d)
 	}
 
 	backfilled := false
 	var actualDifficulty uint8
+	var actualLevel int64
 
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
-		actualDifficulty, stats = levels.DifficultyEx(fingerprints[0], prop1, time.Now().UTC())
+		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprints[0], prop, time.Now())
 		if actualDifficulty >= diff {
 			backfilled = true
 			break
 		}
 
-		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "property", stats.Property)
+		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "level", actualLevel)
 	}
 
 	if !backfilled {

@@ -199,7 +199,8 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
-	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property)
+	tnow := time.Now()
+	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, tnow)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
 
