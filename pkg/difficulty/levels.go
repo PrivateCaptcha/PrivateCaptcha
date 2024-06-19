@@ -9,34 +9,39 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/jpillora/backoff"
 )
 
 const (
-	LevelSmall   = 125
-	LevelMedium  = 150
-	LevelHigh    = 160
-	maxCacheSize = 1_000_000
-	bucketsCount = 5
+	LevelSmall     = 125
+	LevelMedium    = 150
+	LevelHigh      = 160
+	bucketsCount   = 5
+	leakyBucketCap = 1 << 32
+	// this one is arbitrary as we can support "many"
+	maxBucketsToKeep = 1_000_000
 )
 
 type Levels struct {
 	timeSeries      *db.TimeSeriesStore
-	counts          *Counts
+	buckets         *leakybucket.Manager[int32]
 	accessChan      chan *common.AccessRecord
 	backfillChan    chan *common.BackfillRequest
 	batchSize       int
 	accessLogCancel context.CancelFunc
 	cleanupCancel   context.CancelFunc
+	bucketSize      time.Duration
 }
 
 func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
 	levels := &Levels{
 		timeSeries:   timeSeries,
-		counts:       newCounts(bucketSize, bucketsCount, maxCacheSize),
+		buckets:      leakybucket.NewManager[int32](leakyBucketCap, maxBucketsToKeep),
 		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
+		bucketSize:   bucketSize,
 	}
 
 	var accessCtx context.Context
@@ -57,19 +62,6 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 
 func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
 	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize)
-}
-
-func decayRateForLevel(level dbgen.DifficultyGrowth) float64 {
-	switch level {
-	case dbgen.DifficultyGrowthSlow:
-		return 0.39
-	case dbgen.DifficultyGrowthMedium:
-		return 0.53
-	case dbgen.DifficultyGrowthFast:
-		return 0.65
-	default:
-		return 0.5
-	}
 }
 
 func minDifficultyForLevel(level dbgen.DifficultyLevel) uint8 {
@@ -93,18 +85,17 @@ func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.Dif
 	// default equation
 	// y = a*x^b
 	// b = log2(256/a) / 32 (to fit into max difficulty 256 and 2^32 requests)
-	// for details of these parameters, use gnuplot
-	// we assume we will not receive more than 2^20 == 1'048'576 requests during measuring window
-	// so we replace 32 -> 20 and also 256 is reduced by min difficulty to fit only the difference
+	// for details of these parameters, see research Jupyter notebook and models
+	// NOTE: 256 is reduced by min difficulty to fit only the difference
 	a := 1.0
 	slope := 20.0
 	switch level {
 	case dbgen.DifficultyGrowthSlow:
-		a = 1.0
+		a = 2.0
 	case dbgen.DifficultyGrowthMedium:
-		a = 1.8
-	case dbgen.DifficultyGrowthFast:
 		a = 3.0
+	case dbgen.DifficultyGrowthFast:
+		a = 4.0
 	}
 
 	b := math.Log2((256.0-float64(minDifficulty))/a) / slope
@@ -126,25 +117,25 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, Stats) {
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, int64) {
 	l.recordAccess(fingerprint, p, tnow)
 
-	stats := l.counts.FetchStats(p.ID, fingerprint, tnow)
-	if !stats.HasProperty {
-		l.backfillProperty(p)
-	}
-
-	decayRate := decayRateForLevel(p.Growth)
-	sum := stats.Sum(decayRate)
 	minDifficulty := minDifficultyForLevel(p.Level)
 
-	return requestsToDifficulty(sum, minDifficulty, p.Growth), stats
+	level, ok := l.buckets.Level(p.ID, tnow)
+	if !ok {
+		l.backfillProperty(p)
+		return minDifficulty, 0
+	}
+
+	// just as bucket's level is the measure of deviation of requests
+	// difficulty is the scaled deviation from minDifficulty
+	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), level
 }
 
-func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property) uint8 {
-	tnow := time.Now().UTC()
-	d, _ := l.DifficultyEx(fingerprint, p, tnow)
-	return d
+func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
+	diff, _ := l.DifficultyEx(fingerprint, p, tnow)
+	return diff
 }
 
 func (l *Levels) backfillProperty(p *dbgen.Property) {
@@ -191,7 +182,7 @@ func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChu
 		case <-ctx.Done():
 			running = false
 		case <-time.After(b.Duration()):
-			deleted := deleter(time.Now().UTC(), deleteChunk)
+			deleted := deleter(time.Now(), deleteChunk)
 			if deleted == 0 {
 				deleteChunk = defaultChunkSize
 				continue
@@ -216,12 +207,12 @@ func (l *Levels) cleanupStats(ctx context.Context) {
 	// bucket window is currently 5 minutes so it may change at a minute step
 	// here we have 30 seconds since 1 minute sounds like way too long
 	cleanupStatsImpl(ctx, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.counts.Cleanup(t, size)
+		return l.buckets.Cleanup(t, size)
 	})
 }
 
 func (l *Levels) Reset() {
-	l.counts.Clear()
+	l.buckets.Clear()
 }
 
 func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Duration) {
@@ -240,7 +231,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			continue
 		}
 
-		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.counts.bucketSize)
+		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.bucketSize)
 
 		if err != nil {
 			blog.ErrorContext(ctx, "Failed to backfill stats", common.ErrAttr(err))
@@ -250,8 +241,14 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		cache[cacheKey] = tnow
 
 		if len(counts) > 0 {
-			blog.DebugContext(ctx, "Backfilling requests counts", "counts", len(counts))
-			l.counts.BackfillProperty(r.PropertyID, counts, tnow)
+			bucket := leakybucket.NewBucket[int32](r.PropertyID, leakyBucketCap, counts[0].Timestamp)
+			for _, count := range counts {
+				bucket.Backfill(count.Timestamp, int64(count.Count))
+			}
+			bucket.Sync()
+			level := bucket.Level(counts[len(counts)-1].Timestamp)
+			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", level)
+			l.buckets.Backfill(bucket)
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {
@@ -284,7 +281,7 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 				break
 			}
 
-			l.counts.Inc(ar.PropertyID, ar.Fingerprint, ar.Timestamp)
+			l.buckets.Add(ar.PropertyID, 1, ar.Timestamp)
 
 			batch = append(batch, ar)
 
