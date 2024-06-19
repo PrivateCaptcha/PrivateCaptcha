@@ -8,7 +8,7 @@ import (
 
 func TestLeakyBucketAdd(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, tnow)
+	bucket := NewBucket[int32](0, 1234, 0, tnow)
 
 	for i := 0; i < 10; i++ {
 		_, _ = bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
@@ -56,7 +56,7 @@ func TestLeakyBucketAdd(t *testing.T) {
 
 func TestLeakyBucketAddWithGap(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, tnow)
+	bucket := NewBucket[int32](0, 1234, 0, tnow)
 
 	for i := 0; i < 10; i++ {
 		_, _ = bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
@@ -91,7 +91,7 @@ func TestLeakyBucketAddWithGap(t *testing.T) {
 
 func TestLeakyBucketAddRetroactively(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, tnow)
+	bucket := NewBucket[int32](0, 1234, 0, tnow)
 
 	for i := 0; i < 10; i++ {
 		_, err := bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
@@ -108,8 +108,8 @@ func TestLeakyBucketAddRetroactively(t *testing.T) {
 
 func TestLeakyBucketAddBulkAndSeparately(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucketBulk := NewBucket[int32](0, 1234, tnow)
-	bucketSeparately := NewBucket[int32](0, 1234, tnow)
+	bucketBulk := NewBucket[int32](0, 1234, 0, tnow)
+	bucketSeparately := NewBucket[int32](0, 1234, 0, tnow)
 
 	count := 10
 
@@ -129,7 +129,7 @@ func TestLeakyBucketAddBulkAndSeparately(t *testing.T) {
 
 func TestLeakyBucketBackfill(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, tnow)
+	bucket := NewBucket[int32](0, 1234, 0, tnow)
 
 	count := 10
 	const requestsPerInterval = 300
