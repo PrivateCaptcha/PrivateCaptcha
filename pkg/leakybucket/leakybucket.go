@@ -72,8 +72,8 @@ func (lb *LeakyBucket[TKey]) Backfill(tnow time.Time, n int64) (int64, error) {
 }
 
 // Sets leak rate to the current mean. To be called only after backfilling is finished
-func (lb *LeakyBucket[TKey]) Sync() {
-	lb.leakRatePerSecond = lb.mean
+func (lb *LeakyBucket[TKey]) BackfillLeakRate(value float64) {
+	lb.leakRatePerSecond = value
 }
 
 func (lb *LeakyBucket[TKey]) Add(tnow time.Time, n int64) (int64, error) {
