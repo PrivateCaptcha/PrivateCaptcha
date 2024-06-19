@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	// although it seems to be quite generic, current implementation is somewhat locked on value "1" because of how
-	// we're calculating the leaked amount in Add(). Fix is trivial (divide by unit), but "1" is good enough anyways
+	// although it seems to be quite generic, current implementation is somewhat locked on value "1" because
+	// of how we're calculating the leaked amount in Add(). Fix is trivial (keep separate time for
+	// updating the mean), but "1" is good enough anyways
 	leakyBucketTimeUnitSeconds = 1
 )
 
