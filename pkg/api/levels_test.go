@@ -73,7 +73,7 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d := levels.Difficulty(fingerprints[0], prop, time.Now()); d != difficulty.LevelSmall {
+	if d := levels.Difficulty(fingerprints[0], prop, tnow); d != difficulty.LevelSmall {
 		t.Errorf("Unexpected difficulty after stats reset: %v", d)
 	}
 
@@ -84,14 +84,16 @@ func TestBackfillLevels(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
-		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprints[0], prop, time.Now())
-		if actualDifficulty >= diff {
+		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprints[0], prop, tnow)
+		if (actualDifficulty >= diff) && (actualDifficulty-diff < 5) {
 			backfilled = true
 			break
 		}
 
 		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "level", actualLevel)
 	}
+
+	slog.Debug("Backfill waiting finished", "difficulty", actualDifficulty, "level", actualLevel)
 
 	if !backfilled {
 		t.Errorf("Difficulty was not backfilled. actual=%v expected=%v", actualDifficulty, diff)
