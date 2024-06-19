@@ -40,7 +40,7 @@ type LeakyBucket[TKey constraints.Ordered] struct {
 	index int
 }
 
-func NewBucket[TKey constraints.Ordered](key TKey, capacity int64, t time.Time) *LeakyBucket[TKey] {
+func NewBucket[TKey constraints.Ordered](key TKey, capacity int64, leakRatePerSecond float64, t time.Time) *LeakyBucket[TKey] {
 	return &LeakyBucket[TKey]{
 		key:               key,
 		lastAccessTime:    t.Truncate(leakyBucketTimeUnitSeconds * time.Second),
@@ -50,7 +50,7 @@ func NewBucket[TKey constraints.Ordered](key TKey, capacity int64, t time.Time) 
 		pendingSum:        0,
 		count:             0,
 		index:             -1,
-		leakRatePerSecond: 0,
+		leakRatePerSecond: leakRatePerSecond,
 	}
 }
 
@@ -63,17 +63,12 @@ func (lb *LeakyBucket[TKey]) Level(tnow time.Time) int64 {
 	return level
 }
 
-// Backfill should not leak until we calculate actual mean
+// Backfill preserves the leak rate as we don't know the "final" leak rate yet
 func (lb *LeakyBucket[TKey]) Backfill(tnow time.Time, n int64) (int64, error) {
 	leakRate := lb.leakRatePerSecond
 	result, err := lb.Add(tnow, n)
 	lb.leakRatePerSecond = leakRate
 	return result, err
-}
-
-// Sets leak rate to the current mean. To be called only after backfilling is finished
-func (lb *LeakyBucket[TKey]) BackfillLeakRate(value float64) {
-	lb.leakRatePerSecond = value
 }
 
 func (lb *LeakyBucket[TKey]) Add(tnow time.Time, n int64) (int64, error) {

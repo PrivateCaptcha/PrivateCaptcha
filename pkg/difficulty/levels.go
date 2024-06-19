@@ -246,8 +246,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 				mean = mean + (float64(count.Count)-mean)/float64(i+1)
 			}
 			mean /= float64(len(counts)) * l.bucketSize.Seconds()
-			bucket := leakybucket.NewBucket[int32](r.PropertyID, leakyBucketCap, counts[0].Timestamp)
-			bucket.BackfillLeakRate(mean)
+			bucket := leakybucket.NewBucket[int32](r.PropertyID, leakyBucketCap, mean, counts[0].Timestamp)
 			for _, count := range counts {
 				bucket.Backfill(count.Timestamp, int64(count.Count))
 			}

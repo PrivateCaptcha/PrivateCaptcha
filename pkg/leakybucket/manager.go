@@ -80,7 +80,7 @@ func (m *Manager[TKey]) Add(key TKey, n int64, tnow time.Time) (int64, error) {
 	if existing, ok := m.buckets[key]; ok {
 		bucket = existing
 	} else {
-		bucket = NewBucket[TKey](key, m.capacity, tnow)
+		bucket = NewBucket[TKey](key, m.capacity, 0.0, tnow)
 		m.buckets[key] = bucket
 		heap.Push(&m.heap, bucket)
 		m.ensureUpperBoundUnsafe()
