@@ -64,19 +64,23 @@ func (lb *LeakyBucket[TKey]) Level(tnow time.Time) int64 {
 }
 
 // Backfill preserves the leak rate as we don't know the "final" leak rate yet
-func (lb *LeakyBucket[TKey]) Backfill(tnow time.Time, n int64) (int64, error) {
+func (lb *LeakyBucket[TKey]) Backfill(tnow time.Time, n int64) int64 {
 	leakRate := lb.leakRatePerSecond
-	result, err := lb.Add(tnow, n)
+	result := lb.doAdd(tnow, n)
 	lb.leakRatePerSecond = leakRate
-	return result, err
+	return result
 }
 
 func (lb *LeakyBucket[TKey]) Add(tnow time.Time, n int64) (int64, error) {
-	tnow = tnow.Truncate(leakyBucketTimeUnitSeconds * time.Second)
-
 	if tnow.Before(lb.lastAccessTime) {
 		return 0, errPastEvent
 	}
+
+	return lb.doAdd(tnow, n), nil
+}
+
+func (lb *LeakyBucket[TKey]) doAdd(tnow time.Time, n int64) int64 {
+	tnow = tnow.Truncate(leakyBucketTimeUnitSeconds * time.Second)
 
 	diff := tnow.Sub(lb.lastAccessTime)
 	seconds := diff.Seconds()
@@ -110,5 +114,5 @@ func (lb *LeakyBucket[TKey]) Add(tnow time.Time, n int64) (int64, error) {
 		lb.lastAccessTime = tnow
 	}
 
-	return nextLevel - currLevel, nil
+	return nextLevel - currLevel
 }
