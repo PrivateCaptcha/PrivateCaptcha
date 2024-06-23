@@ -18,14 +18,14 @@ const (
 	LevelMedium    = 150
 	LevelHigh      = 160
 	bucketsCount   = 5
-	leakyBucketCap = 1 << 32
+	leakyBucketCap = math.MaxUint32
 	// this one is arbitrary as we can support "many"
 	maxBucketsToKeep = 1_000_000
 )
 
 type Levels struct {
 	timeSeries      *db.TimeSeriesStore
-	buckets         *leakybucket.Manager[int32]
+	buckets         *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
 	accessChan      chan *common.AccessRecord
 	backfillChan    chan *common.BackfillRequest
 	batchSize       int
@@ -37,7 +37,7 @@ type Levels struct {
 func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
 	levels := &Levels{
 		timeSeries:   timeSeries,
-		buckets:      leakybucket.NewManager[int32](leakyBucketCap, maxBucketsToKeep),
+		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, 0.0 /*leakRatePerSecond*/),
 		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
@@ -82,24 +82,30 @@ func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.Dif
 		return minDifficulty
 	}
 
-	// default equation
-	// y = a*x^b
-	// b = log2(256/a) / 32 (to fit into max difficulty 256 and 2^32 requests)
-	// for details of these parameters, see research Jupyter notebook and models
-	// NOTE: 256 is reduced by min difficulty to fit only the difference
+	// full formula is
+	// y = log2(log2(x**a)) * x**b
+	// parameter "a" affects sensitivity to growth
+
 	a := 1.0
-	slope := 20.0
 	switch level {
 	case dbgen.DifficultyGrowthSlow:
-		a = 2.0
+		a = 0.9
 	case dbgen.DifficultyGrowthMedium:
-		a = 3.0
+		a = 1.0
 	case dbgen.DifficultyGrowthFast:
-		a = 4.0
+		a = 1.1
 	}
 
-	b := math.Log2((256.0-float64(minDifficulty))/a) / slope
-	fx := a * math.Pow(requests, b)
+	log2A := math.Log2(a)
+
+	m := log2A
+	if requests > 2.0 {
+		m += math.Log2(math.Log2(requests))
+	}
+	m = math.Max(m, 0.0)
+
+	b := math.Log2((256.0-float64(minDifficulty))/(5.0+log2A)) / 32.0
+	fx := m * math.Pow(requests, b)
 	difficulty := float64(minDifficulty) + math.Round(fx)
 
 	if difficulty >= 255.0 {
@@ -117,20 +123,19 @@ func (l *Levels) Shutdown() {
 	l.cleanupCancel()
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, int64) {
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, leakybucket.TLevel) {
 	l.recordAccess(fingerprint, p, tnow)
 
 	minDifficulty := minDifficultyForLevel(p.Level)
 
-	level, ok := l.buckets.Level(p.ID, tnow)
+	level, added, ok := l.buckets.Add(p.ID, 1, tnow)
 	if !ok {
 		l.backfillProperty(p)
-		return minDifficulty, 0
 	}
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), level
+	return requestsToDifficulty(float64(level+added), minDifficulty, p.Growth), (level + added)
 }
 
 func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
@@ -241,18 +246,11 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		cache[cacheKey] = tnow
 
 		if len(counts) > 0 {
-			mean := 0.0
-			for i, count := range counts {
-				mean = mean + (float64(count.Count)-mean)/float64(i+1)
-			}
-			mean /= float64(len(counts)) * l.bucketSize.Seconds()
-			bucket := leakybucket.NewBucket[int32](r.PropertyID, leakyBucketCap, mean, counts[0].Timestamp)
+			var level leakybucket.TLevel
 			for _, count := range counts {
-				bucket.Backfill(count.Timestamp, int64(count.Count))
+				level, _, _ = l.buckets.Add(r.PropertyID, count.Count, count.Timestamp)
 			}
-			level := bucket.Level(counts[len(counts)-1].Timestamp)
-			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", level, "mean", mean)
-			l.buckets.Backfill(bucket)
+			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", level)
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {
@@ -284,8 +282,6 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 				running = false
 				break
 			}
-
-			l.buckets.Add(ar.PropertyID, 1, ar.Timestamp)
 
 			batch = append(batch, ar)
 
