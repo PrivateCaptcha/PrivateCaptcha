@@ -10,7 +10,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
-	"github.com/jpillora/backoff"
 )
 
 const (
@@ -128,14 +127,14 @@ func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property
 
 	minDifficulty := minDifficultyForLevel(p.Level)
 
-	level, added, ok := l.buckets.Add(p.ID, 1, tnow)
-	if !ok {
+	addResult := l.buckets.Add(p.ID, 1, tnow)
+	if !addResult.Found {
 		l.backfillProperty(p)
 	}
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level+added), minDifficulty, p.Growth), (level + added)
+	return requestsToDifficulty(float64(addResult.CurrentLevel()), minDifficulty, p.Growth), addResult.CurrentLevel()
 }
 
 func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
@@ -170,48 +169,10 @@ func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property
 	l.accessChan <- ar
 }
 
-func cleanupStatsImpl(ctx context.Context, maxInterval time.Duration, defaultChunkSize int, deleter func(t time.Time, size int) int) {
-	b := &backoff.Backoff{
-		Min:    1 * time.Second,
-		Max:    maxInterval,
-		Factor: 2,
-		Jitter: true,
-	}
-
-	slog.DebugContext(ctx, "Starting cleaning up stats", "maxInterval", maxInterval)
-
-	deleteChunk := defaultChunkSize
-
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-		case <-time.After(b.Duration()):
-			deleted := deleter(time.Now(), deleteChunk)
-			if deleted == 0 {
-				deleteChunk = defaultChunkSize
-				continue
-			}
-
-			slog.Debug("Deleted expired property counts", "count", deleted)
-
-			// in case of any deletes, we want to go back to small interval first
-			b.Reset()
-
-			if deleted == deleteChunk {
-				// 1.5 scaling factor
-				deleteChunk += deleteChunk / 2
-			}
-		}
-	}
-
-	slog.DebugContext(ctx, "Finished cleaning up stats")
-}
-
 func (l *Levels) cleanupStats(ctx context.Context) {
 	// bucket window is currently 5 minutes so it may change at a minute step
 	// here we have 30 seconds since 1 minute sounds like way too long
-	cleanupStatsImpl(ctx, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
+	common.ChunkedCleanup(ctx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
 		return l.buckets.Cleanup(t, size)
 	})
 }
@@ -246,11 +207,11 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		cache[cacheKey] = tnow
 
 		if len(counts) > 0 {
-			var level leakybucket.TLevel
+			var addResult leakybucket.AddResult
 			for _, count := range counts {
-				level, _, _ = l.buckets.Add(r.PropertyID, count.Count, count.Timestamp)
+				addResult = l.buckets.Add(r.PropertyID, count.Count, count.Timestamp)
 			}
-			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", level)
+			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrentLevel())
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {
