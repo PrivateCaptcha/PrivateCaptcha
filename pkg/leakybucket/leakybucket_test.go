@@ -159,3 +159,33 @@ func TestConstLeakyBucketAddOverflow(t *testing.T) {
 		})
 	}
 }
+
+func TestConstLeakyBucketResetTime(t *testing.T) {
+	testCases := []struct {
+		add               uint32
+		leakRatePerSecond float64
+		seconds           int
+	}{
+		{0, 0, 0},
+		{0, 1, 0},
+		{1, 1, 1},
+		{2, 1, 2},
+		{math.MaxUint32, 1, math.MaxUint32},
+		{2, 2, 1},
+		{4, 2, 2},
+	}
+
+	tnow := time.Now()
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("reset_time_leaky_bucket_%v", i), func(t *testing.T) {
+			bucket := NewConstBucket[int32](0, math.MaxUint32, tc.leakRatePerSecond, tnow)
+			level, added := bucket.Add(tnow, tc.add)
+			resetTime := resetTime(level+added, bucket.LeakRatePerSecond())
+			if int(resetTime.Seconds()) != tc.seconds {
+				t.Errorf("Actual reset time (%v) is different from expected (%v). Prev level %v, added %v",
+					resetTime.Seconds(), tc.seconds, level, added)
+			}
+		})
+	}
+}

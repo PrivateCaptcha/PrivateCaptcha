@@ -7,6 +7,9 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/jpillora/backoff"
 )
 
 func RelURL(prefix, url string) string {
@@ -99,4 +102,42 @@ func ParseBoolean(value string) bool {
 	default:
 		return false
 	}
+}
+
+func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration, defaultChunkSize int, deleter func(t time.Time, size int) int) {
+	b := &backoff.Backoff{
+		Min:    minInterval,
+		Max:    maxInterval,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	slog.DebugContext(ctx, "Starting cleaning up", "maxInterval", maxInterval)
+
+	deleteChunk := defaultChunkSize
+
+	for running := true; running; {
+		select {
+		case <-ctx.Done():
+			running = false
+		case <-time.After(b.Duration()):
+			deleted := deleter(time.Now(), deleteChunk)
+			if deleted == 0 {
+				deleteChunk = defaultChunkSize
+				continue
+			}
+
+			slog.DebugContext(ctx, "Deleted records", "count", deleted)
+
+			// in case of any deletes, we want to go back to small interval first
+			b.Reset()
+
+			if deleted == deleteChunk {
+				// 1.5 scaling factor
+				deleteChunk += deleteChunk / 2
+			}
+		}
+	}
+
+	slog.DebugContext(ctx, "Finished cleaning up")
 }
