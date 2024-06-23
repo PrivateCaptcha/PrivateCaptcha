@@ -1,14 +1,15 @@
 package leakybucket
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
 )
 
-func TestLeakyBucketAdd(t *testing.T) {
+func TestVarLeakyBucketAdd(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, 0, tnow)
+	bucket := NewVarBucket[int32](0, 1234, 0, tnow)
 
 	for i := 0; i < 10; i++ {
 		_, _ = bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
@@ -21,9 +22,9 @@ func TestLeakyBucketAdd(t *testing.T) {
 
 	// this should cause flush of the pendingSum and recalculation of the leak rate
 	// also sets "last access time" to (t+1)
-	added, err := bucket.Add(tnow.Add(1*time.Second), 1)
-	if added != 1 || err != nil {
-		t.Errorf("Added unexpected amount: %v (err: %v)", added, err)
+	_, added := bucket.Add(tnow.Add(1*time.Second), 1)
+	if added != 1 {
+		t.Errorf("Added unexpected amount: %v", added)
 	}
 
 	// for (t+1) leak rate is recalculated, but last access time is already (t+1) so leak not accounted
@@ -43,9 +44,9 @@ func TestLeakyBucketAdd(t *testing.T) {
 		t.Errorf("Unexpected leak rate of the bucket: %v", bucket.leakRatePerSecond)
 	}
 
-	added, err = bucket.Add(tnow.Add(2*time.Second), 1)
-	if added != 1 || err != nil {
-		t.Errorf("Added unexpected amount: %v (err: %v)", added, err)
+	_, added = bucket.Add(tnow.Add(2*time.Second), 1)
+	if added != 1 {
+		t.Errorf("Added unexpected amount: %v", added)
 	}
 
 	level = bucket.Level(tnow.Add(2 * time.Second))
@@ -56,7 +57,7 @@ func TestLeakyBucketAdd(t *testing.T) {
 
 func TestLeakyBucketAddWithGap(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, 0, tnow)
+	bucket := NewVarBucket[int32](0, 1234, 0, tnow)
 
 	for i := 0; i < 10; i++ {
 		_, _ = bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
@@ -67,9 +68,9 @@ func TestLeakyBucketAddWithGap(t *testing.T) {
 		t.Errorf("Unexpected bucket level at time (t): %v", level)
 	}
 
-	added, err := bucket.Add(tnow.Add(3*time.Second), 2)
-	if added != 2 || err != nil {
-		t.Errorf("Added unexpected amount: %v (err: %v)", added, err)
+	_, added := bucket.Add(tnow.Add(3*time.Second), 2)
+	if added != 2 {
+		t.Errorf("Added unexpected amount: %v", added)
 	}
 
 	// now we're added an item at time (t+3), it means that items (t+1) and (t+2) were 0 (missing)
@@ -89,27 +90,10 @@ func TestLeakyBucketAddWithGap(t *testing.T) {
 	}
 }
 
-func TestLeakyBucketAddRetroactively(t *testing.T) {
-	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, 0, tnow)
-
-	for i := 0; i < 10; i++ {
-		_, err := bucket.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
-		if err != nil {
-			t.Errorf("Failed to add item to the bucket: %v", err)
-		}
-	}
-
-	_, err := bucket.Add(tnow.Add(-1*time.Second), 1)
-	if err == nil {
-		t.Errorf("Managed to add retroactively")
-	}
-}
-
 func TestLeakyBucketAddBulkAndSeparately(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucketBulk := NewBucket[int32](0, 1234, 0, tnow)
-	bucketSeparately := NewBucket[int32](0, 1234, 0, tnow)
+	bucketBulk := NewVarBucket[int32](0, 1234, 0, tnow)
+	bucketSeparately := NewVarBucket[int32](0, 1234, 0, tnow)
 
 	count := 10
 
@@ -117,7 +101,7 @@ func TestLeakyBucketAddBulkAndSeparately(t *testing.T) {
 		_, _ = bucketSeparately.Add(tnow.Add(time.Duration(i*100)*time.Millisecond), 1)
 	}
 
-	_, _ = bucketBulk.Add(tnow.Add(500*time.Millisecond), int64(count))
+	_, _ = bucketBulk.Add(tnow.Add(500*time.Millisecond), uint32(count))
 
 	ttime := tnow.Add(1 * time.Second)
 	bulkLevel := bucketBulk.Level(ttime)
@@ -129,7 +113,7 @@ func TestLeakyBucketAddBulkAndSeparately(t *testing.T) {
 
 func TestLeakyBucketBackfill(t *testing.T) {
 	tnow := time.Now().Truncate(1 * time.Second)
-	bucket := NewBucket[int32](0, 1234, 0, tnow)
+	bucket := NewVarBucket[int32](0, 1234, 0, tnow)
 
 	count := 10
 	const requestsPerInterval = 300
@@ -143,5 +127,35 @@ func TestLeakyBucketBackfill(t *testing.T) {
 
 	if math.Abs(expectedMean-bucket.mean) > 1e-6 {
 		t.Errorf("Unexpected mean after backfill: %v (expected %v)", bucket.mean, expectedMean)
+	}
+}
+
+func TestConstLeakyBucketAddOverflow(t *testing.T) {
+	testCases := []struct {
+		seconds  int
+		value    uint32
+		expected uint32
+	}{
+		{0, 0, 0},
+		{1, 0, 0},
+		{2, 0, 0},
+		{4, 1, 1},
+		{5, 0, 0},
+		{7, math.MaxUint32 - 1, math.MaxUint32 - 1},
+		{7, 1, 1},
+		{7, 1, 0},
+		{8, 1, 1},
+	}
+
+	tnow := time.Now()
+	bucket := NewConstBucket[int32](0, math.MaxUint32, 1, tnow)
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("add_const_leaky_bucket_%v", i), func(t *testing.T) {
+			_, actual := bucket.Add(tnow.Add(time.Duration(tc.seconds)*time.Second), tc.value)
+			if actual != tc.expected {
+				t.Errorf("Actual number added (%v) is different from expected (%v)", actual, tc.expected)
+			}
+		})
 	}
 }
