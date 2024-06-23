@@ -10,6 +10,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 )
 
 const (
@@ -44,13 +45,13 @@ func TestBackfillLevels(t *testing.T) {
 	}
 
 	var diff uint8
-	var level int64
+	var level leakybucket.TLevel
 	buckets := []int{5, 4, 3, 2, 2, 1, 1, 1, 1}
 	nanoseconds := testBucketSize.Nanoseconds()
 	const iterations = 1000
 	diffInterval := int64(nanoseconds / iterations)
 
-	for bucket := range buckets {
+	for _, bucket := range buckets {
 		btime := tnow.Add(-time.Duration(bucket) * testBucketSize)
 
 		for i := 0; i < iterations; i++ {
@@ -73,13 +74,13 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d := levels.Difficulty(fingerprints[0], prop, tnow); d != difficulty.LevelSmall {
-		t.Errorf("Unexpected difficulty after stats reset: %v", d)
+	if d, l := levels.DifficultyEx(fingerprints[0], prop, tnow); d != difficulty.LevelSmall {
+		t.Errorf("Unexpected difficulty after stats reset: %v (level %v)", d, l)
 	}
 
 	backfilled := false
 	var actualDifficulty uint8
-	var actualLevel int64
+	var actualLevel leakybucket.TLevel
 
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
