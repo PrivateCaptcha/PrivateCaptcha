@@ -2,6 +2,7 @@ package leakybucket
 
 import (
 	"container/heap"
+	"math"
 	"sync"
 	"time"
 )
@@ -17,9 +18,29 @@ type Manager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]] struct {
 	lock              sync.Mutex
 	capacity          TLevel
 	leakRatePerSecond float64
+	// fallback rate limiting bucket for "default" key (usually, "empty" key). Unused if nil.
+	// For example, it's utilized for http rate limiter when we don't have a reliable IP
+	defaultBucket TBucket
 	// if we overflow upperBound, we cleanup down to lowerBound
 	upperBound int
 	lowerBound int
+}
+
+type AddResult struct {
+	Level      TLevel
+	Added      TLevel
+	Capacity   TLevel
+	ResetAfter time.Duration
+	RetryAfter time.Duration
+	Found      bool
+}
+
+func (r *AddResult) CurrentLevel() TLevel {
+	return r.Level + r.Added
+}
+
+func (r *AddResult) Remaining() TLevel {
+	return r.Capacity - r.Level - r.Added
 }
 
 func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBuckets int, capacity TLevel, leakRatePerSecond float64) *Manager[TKey, T, TBucket] {
@@ -35,6 +56,12 @@ func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBu
 	heap.Init(&m.heap)
 
 	return m
+}
+
+func (m *Manager[TKey, T, TBucket]) SetDefaultBucket(bucket TBucket) {
+	m.lock.Lock()
+	m.defaultBucket = bucket
+	m.lock.Unlock()
 }
 
 func (m *Manager[TKey, T, TBucket]) Level(key TKey, tnow time.Time) (int64, bool) {
@@ -61,30 +88,59 @@ func (m *Manager[TKey, T, TBucket]) ensureUpperBoundUnsafe() {
 	}
 }
 
-func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) (TLevel, TLevel, bool) {
+func resetTime(level TLevel, leakRatePerSecond float64) time.Duration {
+	if math.Abs(leakRatePerSecond) < 1e-6 {
+		if level == 0 {
+			return 0
+		}
+
+		return 365 * 24 * time.Hour
+	}
+
+	seconds := float64(level) / leakRatePerSecond
+	return time.Duration(seconds) * time.Second
+}
+
+func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddResult {
+	result := AddResult{}
+
+	if n == 0 {
+		return result
+	}
+
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	var bucket TBucket
-	found := false
 
-	if existing, ok := m.buckets[key]; ok {
-		bucket = existing
-		found = true
+	if m.defaultBucket != nil && (m.defaultBucket.Key() == key) {
+		bucket = m.defaultBucket
 	} else {
-		bucket = new(T)
-		bucket.Init(key, m.capacity, m.leakRatePerSecond, tnow)
-		m.buckets[key] = bucket
-		heap.Push(&m.heap, bucket)
-		m.ensureUpperBoundUnsafe()
+		if existing, ok := m.buckets[key]; ok {
+			bucket = existing
+			result.Found = true
+		} else {
+			bucket = new(T)
+			bucket.Init(key, m.capacity, m.leakRatePerSecond, tnow)
+			m.buckets[key] = bucket
+			heap.Push(&m.heap, bucket)
+			m.ensureUpperBoundUnsafe()
+		}
 	}
 
-	level, added := bucket.Add(tnow, n)
-	if added > 0 {
+	result.Level, result.Added = bucket.Add(tnow, n)
+	leakRate := bucket.LeakRatePerSecond()
+
+	if result.Added > 0 {
 		heap.Fix(&m.heap, bucket.Index())
+		result.ResetAfter = resetTime(result.Level+result.Added, leakRate)
+	} else {
+		result.RetryAfter = resetTime(1 /*level*/, leakRate)
 	}
 
-	return level, added, found
+	result.Capacity = bucket.Capacity()
+
+	return result
 }
 
 func (m *Manager[TKey, T, TBucket]) compressUnsafe(cap int) int {
@@ -110,6 +166,7 @@ func (m *Manager[TKey, T, TBucket]) compressUnsafe(cap int) int {
 	return deleted
 }
 
+// Removes up to maxToDelete obsolete or expired records. Returns number of records actually deleted.
 func (m *Manager[TKey, T, TBucket]) Cleanup(tnow time.Time, maxToDelete int) int {
 	m.lock.Lock()
 	defer m.lock.Unlock()

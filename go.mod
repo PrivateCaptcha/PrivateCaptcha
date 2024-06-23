@@ -11,9 +11,9 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/jpillora/backoff v1.0.0
 	github.com/maypok86/otter v1.2.1
+	github.com/realclientip/realclientip-go v1.0.0
 	github.com/rs/xid v1.5.0
 	golang.org/x/crypto v0.24.0
-	golang.org/x/exp v0.0.0-20230510235704-dd950f8aeaea
 	golang.org/x/net v0.26.0
 	golang.org/x/sync v0.7.0
 )
