@@ -234,7 +234,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(get(common.LogoutEndpoint), ratelimiter(s.logout))
 
 	// configured with middlewares
-	openWrite := common.NewMiddleWareChain(ratelimiter, common.Logged, maxBytesHandler)
+	openWrite := common.NewMiddleWareChain(common.Recovered, ratelimiter, common.Logged, maxBytesHandler)
 	writeChain := openWrite.Add(s.csrf)
 	privateReadChain := common.NewMiddleWareChain(ratelimiter, s.private)
 	privateWriteChain := writeChain.Add(s.private)
@@ -265,7 +265,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateReadChain.Build(s.handler(s.getPropertyReports)))
 	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getPropertySettings)))
 	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateReadChain.Build(s.handler(s.getPropertyIntegrations)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateReadChain.Build(s.getPropertyStats))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateReadChain.Build(common.NoCache(s.getPropertyStats)))
 	router.HandleFunc(get(common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getSettings)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateReadChain.Build(s.handler(s.getGeneralSettings)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWriteChain.Build(s.handler(s.editEmail)))
