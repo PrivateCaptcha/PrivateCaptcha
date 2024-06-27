@@ -13,16 +13,18 @@ import (
 )
 
 var (
-	DefaultLimitedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	defaultRejectedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 	})
 )
 
+type KeyFunc func(*http.Request) string
+
 type HTTPRateLimiter struct {
-	LimitHandler  http.HandlerFunc
-	buckets       *leakybucket.Manager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]]
-	strategy      realclientip.Strategy
-	cleanupCancel context.CancelFunc
+	RejectedHandler http.HandlerFunc
+	buckets         *leakybucket.Manager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]]
+	strategy        realclientip.Strategy
+	cleanupCancel   context.CancelFunc
 }
 
 func NewHTTPRateLimiter(header string) (*HTTPRateLimiter, error) {
@@ -33,9 +35,9 @@ func NewHTTPRateLimiter(header string) (*HTTPRateLimiter, error) {
 
 	const (
 		maxBucketsToKeep = 1_000_000
-		// we are allowing 1 request per 2 seconds from a single client IP address with a 10 requests burst
+		// we are allowing 1 request per 2 seconds from a single client IP address with a 5 requests burst
 		// NOTE: this assumes correct configuration of the whole chain of reverse proxies
-		leakyBucketCap    = 10
+		leakyBucketCap    = 5
 		leakRatePerSecond = 0.5
 	)
 
@@ -46,9 +48,9 @@ func NewHTTPRateLimiter(header string) (*HTTPRateLimiter, error) {
 	buckets.SetDefaultBucket(leakybucket.NewConstBucket[string]("", 50 /*capacity*/, 1.0 /*leakRatePerSecond*/, time.Now()))
 
 	limiter := &HTTPRateLimiter{
-		LimitHandler: DefaultLimitedHandler,
-		strategy:     strategy,
-		buckets:      buckets,
+		RejectedHandler: defaultRejectedHandler,
+		strategy:        strategy,
+		buckets:         buckets,
 	}
 
 	var cancelCtx context.Context
@@ -72,7 +74,7 @@ func (l *HTTPRateLimiter) cleanup(ctx context.Context) {
 	})
 }
 
-func (l *HTTPRateLimiter) key(r *http.Request) string {
+func (l *HTTPRateLimiter) ClientIP(r *http.Request) string {
 	if l.strategy == nil {
 		return ""
 	}
@@ -86,24 +88,33 @@ func (l *HTTPRateLimiter) key(r *http.Request) string {
 }
 
 func (l *HTTPRateLimiter) RateLimit(next http.HandlerFunc) http.HandlerFunc {
+	return l.RateLimitKeyFunc(l.ClientIP, next)
+}
+
+func (l *HTTPRateLimiter) RateLimitKeyFunc(keyFunc KeyFunc, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		key := l.key(r)
+		key := keyFunc(r)
 
 		addResult := l.buckets.Add(key, 1, time.Now())
 
 		setRateLimitHeaders(w, addResult)
 
 		if addResult.Added > 0 {
-			next.ServeHTTP(w, r)
+			ctx := context.WithValue(r.Context(), common.RateLimitKeyContextKey, key)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
-			h := l.LimitHandler
+			h := l.RejectedHandler
 			if h == nil {
-				h = DefaultLimitedHandler
+				h = defaultRejectedHandler
 			}
 
 			h.ServeHTTP(w, r)
 		}
 	}
+}
+
+func (l *HTTPRateLimiter) UpdateLimits(key string, capacity leakybucket.TLevel, leakRatePerSecond float64) bool {
+	return l.buckets.Update(key, capacity, leakRatePerSecond)
 }
 
 func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {
@@ -115,12 +126,12 @@ func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult)
 		w.Header().Add("X-RateLimit-Remaining", strconv.Itoa(int(v)))
 	}
 
-	if v := addResult.ResetAfter; v >= 0 {
+	if v := addResult.ResetAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
 		w.Header().Add("X-RateLimit-Reset", strconv.Itoa(vi))
 	}
 
-	if v := addResult.RetryAfter; v >= 0 {
+	if v := addResult.RetryAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
 		w.Header().Add("Retry-After", strconv.Itoa(vi))
 	}

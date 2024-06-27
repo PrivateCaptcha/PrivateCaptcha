@@ -6,6 +6,7 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -82,6 +83,10 @@ func stubOrg(orgID string) *userOrg {
 	return stubOrgEx(orgID, dbgen.AccessLevelOwner)
 }
 
+func stubToken() csrfRenderContext {
+	return csrfRenderContext{Token: "token"}
+}
+
 func stubUser(name string, level dbgen.AccessLevel) *orgUser {
 	return &orgUser{
 		Name:      name,
@@ -125,19 +130,24 @@ func TestRenderHTML(t *testing.T) {
 		matches  []string
 	}{
 		{
+			path:     []string{common.ErrorEndpoint, "404"},
+			template: errorTemplate,
+			model:    &errorRenderContext{ErrorCode: 404, ErrorMessage: http.StatusText(404)},
+		},
+		{
 			path:     []string{common.LoginEndpoint},
 			template: loginTemplate,
-			model:    &loginRenderContext{Token: server.XSRF.Token("", actionLogin)},
+			model:    &loginRenderContext{csrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.TwoFactorEndpoint},
 			template: twofactorTemplate,
-			model:    &twoFactorRenderContext{Token: server.XSRF.Token("foo@bar.com", actionVerify), Email: "foo@bar.com"},
+			model:    &twoFactorRenderContext{csrfRenderContext: stubToken(), Email: "foo@bar.com"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, common.NewEndpoint},
 			template: orgWizardTemplate,
-			model:    &orgWizardRenderContext{Token: server.XSRF.Token("foo@bar.com", actionNewOrg)},
+			model:    &orgWizardRenderContext{csrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123"},
@@ -169,10 +179,10 @@ func TestRenderHTML(t *testing.T) {
 				alertRenderContext: alertRenderContext{
 					SuccessMessage: "Test",
 				},
-				CurrentOrg: stubOrg("123"),
-				Token:      "123",
-				Members:    []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
-				CanEdit:    true,
+				CurrentOrg:        stubOrg("123"),
+				csrfRenderContext: stubToken(),
+				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
+				CanEdit:           true,
 			},
 			selector: "p.member-name",
 			matches:  []string{"foo", "bar"},
@@ -181,24 +191,24 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{
-				CurrentOrg: stubOrg("123"),
-				Token:      "123",
-				CanEdit:    true,
+				CurrentOrg:        stubOrg("123"),
+				csrfRenderContext: stubToken(),
+				CanEdit:           true,
 			},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, common.NewEndpoint},
 			template: propertyWizardTemplate,
-			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), Token: "qwerty"},
+			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), csrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardTemplate,
 			model: &propertyDashboardRenderContext{
-				Property: stubProperty("Foo", "123"),
-				Org:      stubOrg("123"),
-				Token:    "qwerty",
-				CanEdit:  true,
+				csrfRenderContext: stubToken(),
+				Property:          stubProperty("Foo", "123"),
+				Org:               stubOrg("123"),
+				CanEdit:           true,
 			},
 		},
 		// same as above, but property integrations _template_
@@ -206,10 +216,10 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardIntegrationsTemplate,
 			model: &propertyDashboardRenderContext{
-				Property: stubProperty("Foo", "123"),
-				Org:      stubOrg("123"),
-				Token:    "qwerty",
-				CanEdit:  true,
+				csrfRenderContext: stubToken(),
+				Property:          stubProperty("Foo", "123"),
+				Org:               stubOrg("123"),
+				CanEdit:           true,
 			},
 		},
 		// same as above, but property settings _template_
@@ -220,10 +230,10 @@ func TestRenderHTML(t *testing.T) {
 				alertRenderContext: alertRenderContext{
 					SuccessMessage: "Test",
 				},
-				Property: stubProperty("Foo", "123"),
-				Org:      stubOrg("123"),
-				Token:    "qwerty",
-				CanEdit:  true,
+				csrfRenderContext: stubToken(),
+				Property:          stubProperty("Foo", "123"),
+				Org:               stubOrg("123"),
+				CanEdit:           true,
 			},
 		},
 		{
@@ -236,16 +246,16 @@ func TestRenderHTML(t *testing.T) {
 				settingsCommonRenderContext: settingsCommonRenderContext{
 					Email: "foo@bar.com",
 				},
-				Token: "qwerty",
-				Name:  "User",
+				csrfRenderContext: stubToken(),
+				Name:              "User",
 			},
 		},
 		{
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint},
 			template: settingsAPIKeysTemplate,
 			model: &settingsAPIKeysRenderContext{
-				Token: "qwerty",
-				Keys:  []*userAPIKey{stubAPIKey("foo"), stubAPIKey("bar")},
+				csrfRenderContext: stubToken(),
+				Keys:              []*userAPIKey{stubAPIKey("foo"), stubAPIKey("bar")},
 			},
 			selector: "p.apikey-name",
 			matches:  []string{"foo", "bar"},
@@ -276,9 +286,9 @@ func TestRenderHTML(t *testing.T) {
 				alertRenderContext: alertRenderContext{
 					SuccessMessage: "Message sent",
 				},
-				Token:    "123",
-				Message:  "test",
-				Category: "problem",
+				csrfRenderContext: stubToken(),
+				Message:           "test",
+				Category:          "problem",
 			},
 		},
 	}

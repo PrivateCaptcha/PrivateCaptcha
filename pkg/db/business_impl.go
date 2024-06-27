@@ -281,18 +281,36 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 	return result, nil
 }
 
-func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
-	eid := UUIDFromSecret(secret)
-	if !eid.Valid {
-		return nil, ErrInvalidInput
-	}
-
+func (impl *businessStoreImpl) getCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	cacheKey := APIKeyCacheKey(secret)
 
 	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
+		if apiKey.DeletedAt.Valid {
+			return apiKey, ErrSoftDeleted
+		}
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
+	} else {
+		return nil, err
+	}
+}
+
+func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
+	cacheKey := APIKeyCacheKey(secret)
+
+	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
+		if apiKey.DeletedAt.Valid {
+			return apiKey, ErrSoftDeleted
+		}
+		return apiKey, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
+	}
+
+	eid := UUIDFromSecret(secret)
+	if !eid.Valid {
+		return nil, ErrInvalidInput
 	}
 
 	apiKey, err := impl.queries.GetAPIKeyByExternalID(ctx, eid)

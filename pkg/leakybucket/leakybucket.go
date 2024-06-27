@@ -24,6 +24,7 @@ type LeakyBucket[TKey comparable] interface {
 	Level(tnow time.Time) int64
 	// Adds "usage" of n units. Returns how much was actually added to the bucket and previous bucket level
 	Add(tnow time.Time, n TLevel) (TLevel, TLevel)
+	Update(capacity TLevel, leakRatePerSecond float64)
 	Key() TKey
 	Index() int
 	SetIndex(i int)
@@ -73,6 +74,11 @@ func (lb *ConstLeakyBucket[TKey]) Capacity() TLevel {
 
 func (lb *ConstLeakyBucket[TKey]) Key() TKey {
 	return lb.key
+}
+
+func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakRatePerSecond float64) {
+	lb.capacity = capacity
+	lb.leakRatePerSecond = leakRatePerSecond
 }
 
 func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) int64 {

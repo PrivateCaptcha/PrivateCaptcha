@@ -101,6 +101,18 @@ func resetTime(level TLevel, leakRatePerSecond float64) time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
+func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakRatePerSecond float64) bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	existing, ok := m.buckets[key]
+	if ok {
+		existing.Update(capacity, leakRatePerSecond)
+	}
+
+	return ok
+}
+
 func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddResult {
 	result := AddResult{}
 

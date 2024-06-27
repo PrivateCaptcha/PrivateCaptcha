@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"bytes"
 	"context"
 	"log/slog"
 	"net/http"
@@ -8,7 +9,12 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
+const (
+	errorTemplate = "errors/error.html"
+)
+
 type errorRenderContext struct {
+	csrfRenderContext
 	ErrorCode    int
 	ErrorMessage string
 	Detail       string
@@ -49,17 +55,25 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		data.Detail = "Sorry, an unexpected error has occurred. Our team has been notified."
 	}
 
-	if err := s.template.Render(ctx, w, "errors/error.html", actualData); err != nil {
+	var out bytes.Buffer
+	err := s.template.Render(ctx, &out, errorTemplate, actualData)
+	if err == nil {
+		w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		out.WriteTo(w)
+	} else {
 		slog.ErrorContext(ctx, "Failed to render error template", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
 }
 
 func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
+	// TODO: Cache expired and error responses
 	data := &errorRenderContext{
 		ErrorCode:    http.StatusForbidden,
 		ErrorMessage: "Session expired",
 		Detail:       "Please begin again.",
 	}
 
-	s.render(w, r, "errors/error.html", data)
+	s.render(w, r, errorTemplate, data)
 }

@@ -19,7 +19,7 @@ const (
 
 type supportRenderContext struct {
 	alertRenderContext
-	Token    string
+	csrfRenderContext
 	Message  string
 	Category string
 }
@@ -31,7 +31,9 @@ func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) (Model, stri
 	}
 
 	renderCtx := &supportRenderContext{
-		Token: s.XSRF.Token(user.Email, actionSupport),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 	}
 
 	return renderCtx, supportTemplate, nil
@@ -57,44 +59,34 @@ func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory 
 	}
 }
 
-func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) {
+func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxSupportFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, "", errInvalidRequestArg
 	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionSupport) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-		return
-	}
-
 	category := categoryFromIndex(ctx, r.FormValue(common.ParamCategory))
 	message := strings.TrimSpace(r.FormValue(common.ParamMessage))
 
 	renderCtx := &supportRenderContext{
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		Message:  message,
-		Token:    s.XSRF.Token(user.Email, actionSupport),
 		Category: r.FormValue(common.ParamCategory),
 	}
 
 	if len(message) < 10 {
 		slog.WarnContext(ctx, "Message is too short", "length", len(message))
 		renderCtx.ErrorMessage = "Please enter more details."
-		s.render(w, r, supportFormTemplate, renderCtx)
-		return
+		return renderCtx, supportFormTemplate, nil
 	}
 
 	if err := s.Mailer.SendSupportRequest(ctx, user.Email, string(category), message); err == nil {
@@ -106,5 +98,5 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) {
 		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}
 
-	s.render(w, r, supportFormTemplate, renderCtx)
+	return renderCtx, supportFormTemplate, nil
 }

@@ -10,20 +10,29 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+)
+
+const (
+	maxTokenSize            = 300
+	apiKeyBurstRequests     = 50
+	apiKeyRequestsPerSecond = 10
 )
 
 type authMiddleware struct {
 	Store          *db.BusinessStore
+	ratelimiter    *ratelimit.HTTPRateLimiter
 	sitekeyChan    chan string
 	batchSize      int
 	backfillCancel context.CancelFunc
 	privateAPIKey  string
 }
 
-func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, backfillDelay time.Duration) *authMiddleware {
+func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, ratelimiter *ratelimit.HTTPRateLimiter, backfillDelay time.Duration) *authMiddleware {
 	const batchSize = 10
 
 	am := &authMiddleware{
+		ratelimiter:   ratelimiter,
 		Store:         store,
 		sitekeyChan:   make(chan string, batchSize),
 		batchSize:     batchSize,
@@ -116,7 +125,7 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 }
 
 func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		authHeader := r.Header.Get(common.HeaderAuthorization)
 		if authHeader == "" {
@@ -134,17 +143,17 @@ func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 
 		if token != am.privateAPIKey {
-			slog.WarnContext(ctx, "Invalid authorization token", "token", token)
+			slog.WarnContext(ctx, "Invalid authorization token", "token", token[:maxTokenSize])
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
 func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodOptions {
 			// TODO: Return correct CORS headers
 			next.ServeHTTP(w, r)
@@ -187,7 +196,7 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
-	}
+	})
 }
 
 func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
@@ -208,8 +217,25 @@ func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, 
 	return true
 }
 
+func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
+	ctx := r.Context()
+	secret := am.retrieveSecret(r)
+
+	if len(secret) == db.SecretLen {
+		if apiKey, err := am.Store.GetCachedAPIKey(ctx, secret); err == nil {
+			tnow := time.Now().UTC()
+			if am.isAPIKeyValid(ctx, apiKey, tnow) {
+				// if we know API key is valid, we ratelimit by API key which has different limits
+				return secret
+			}
+		}
+	}
+
+	return am.ratelimiter.ClientIP(r)
+}
+
 func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return am.ratelimiter.RateLimitKeyFunc(am.apiKeyKeyFunc, func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)
 		if len(secret) != db.SecretLen {
@@ -217,6 +243,7 @@ func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// by now we are ratelimited or cached, so kind of OK to attempt access DB here
 		apiKey, err := am.Store.RetrieveAPIKey(ctx, secret)
 		if err != nil {
 			switch err {
@@ -235,9 +262,17 @@ func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 			// am.Cache.SetMissing(ctx, secret, negativeCacheDuration)
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
+		} else {
+			// rate limiter key will be the {secret} itself _only_ when we are cached
+			// which means if it's not, then we have just fetched the record from DB
+			if rateLimiterKey, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (rateLimiterKey != secret) {
+				// TODO: Set these limits per subscription plan quota
+				// this can be propagated to the APIKey record itself
+				am.ratelimiter.UpdateLimits(secret, apiKeyBurstRequests, apiKeyRequestsPerSecond)
+			}
 		}
 
 		ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
-	}
+	})
 }

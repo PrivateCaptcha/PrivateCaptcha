@@ -22,7 +22,7 @@ func TestCancelURL(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv)
+	server.Setup(srv, fakeRateLimiter)
 
 	cancelURL := "http://localhost/my/test"
 

@@ -29,7 +29,7 @@ func parseCsrfToken(body string) (string, error) {
 			token := ""
 
 			for _, a := range n.Attr {
-				if a.Key == "name" && a.Val == common.ParamCsrfToken {
+				if a.Key == "name" && a.Val == common.ParamCSRFToken {
 					isCsrfElement = true
 				}
 
@@ -79,7 +79,7 @@ func TestGetLogin(t *testing.T) {
 		t.Errorf("failed to parse csrf token: %v", err)
 	}
 
-	if !server.XSRF.VerifyToken(token, "", actionLogin) {
+	if !server.XSRF.VerifyToken(token, "") {
 		t.Error("Failed to verify token in Login form")
 	}
 }
@@ -107,7 +107,7 @@ func TestPostLogin(t *testing.T) {
 
 	// Prepare the form data
 	form := url.Values{}
-	form.Add(common.ParamCsrfToken, csrfToken)
+	form.Add(common.ParamCSRFToken, csrfToken)
 	form.Add(common.ParamEmail, user.Email)
 
 	// Send the POST request

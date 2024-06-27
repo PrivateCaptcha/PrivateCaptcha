@@ -11,9 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -98,33 +96,6 @@ var (
 	errIPNotFound = errors.New("no valid IP address found")
 )
 
-func parseRequestIP(r *http.Request) (string, error) {
-	ip := r.Header.Get("X-REAL-IP")
-	netIP := net.ParseIP(ip)
-	if netIP != nil {
-		return ip, nil
-	}
-
-	ips := r.Header.Get("X-FORWARDED-FOR")
-	splitIps := strings.Split(ips, ",")
-	for _, ip := range splitIps {
-		netIP := net.ParseIP(ip)
-		if netIP != nil {
-			return ip, nil
-		}
-	}
-
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return "", err
-	}
-	netIP = net.ParseIP(ip)
-	if netIP != nil {
-		return ip, nil
-	}
-	return "", errIPNotFound
-}
-
 type verifyResponse struct {
 	Success    bool          `json:"success"`
 	ErrorCodes []verifyError `json:"error-codes,omitempty"`
@@ -152,12 +123,12 @@ func (s *server) Shutdown() {
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
-	// TODO: Rate-limit Puzzle endpoint with reasonably high limit
+	// NOTE: auth middleware provides rate limiting internally
 	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, auth.Sitekey(s.puzzle))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, common.Logged(common.SafeFormPost(auth.APIKey(s.verify), maxSolutionsBodySize)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Logged(common.SafeFormPost(auth.Private(s.subscriptionCreated), maxPaddleBodySize)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Logged(common.SafeFormPost(auth.Private(s.subscriptionUpdated), maxPaddleBodySize)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Logged(common.SafeFormPost(auth.Private(s.subscriptionCancelled), maxPaddleBodySize)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize))))
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
@@ -190,7 +161,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = common.RandomFingerprint()
 	} else {
 		hash.Write([]byte(r.UserAgent()))
-		if ip, err := parseRequestIP(r); err == nil {
+		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (len(ip) > 0) {
 			hash.Write([]byte(ip))
 		}
 		hash.Write([]byte(property.Domain))
@@ -226,21 +197,21 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create puzzle", "error", err)
+		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	puzzleBytes, err := puzzle.MarshalBinary()
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to serialize puzzle", "error", err)
+		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	hasher := hmac.New(sha1.New, s.salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
-		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", "error", werr)
+		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(werr))
 	}
 
 	hash := hasher.Sum(nil)
@@ -250,9 +221,8 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	w.Header().Set(common.HeaderContentLength, strconv.Itoa(len(response)))
 	if _, werr := w.Write(response); werr != nil {
-		slog.ErrorContext(ctx, "Failed to write puzzle response", "error", werr)
+		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
 	}
 }
 

@@ -3,6 +3,7 @@ package portal
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"log/slog"
@@ -21,6 +22,9 @@ import (
 )
 
 var (
+	errInvalidPathArg    = errors.New("path argument is not valid")
+	errInvalidRequestArg = errors.New("request argument is not valid")
+
 	renderConstants = struct {
 		LoginEndpoint        string
 		TwoFactorEndpoint    string
@@ -64,6 +68,7 @@ var (
 		PreviewEndpoint      string
 		Yearly               string
 		Price                string
+		HeaderCSRFToken      string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -75,7 +80,7 @@ var (
 		PropertyEndpoint:     common.PropertyEndpoint,
 		DashboardEndpoint:    common.DashboardEndpoint,
 		NewEndpoint:          common.NewEndpoint,
-		Token:                common.ParamCsrfToken,
+		Token:                common.ParamCSRFToken,
 		Email:                common.ParamEmail,
 		Name:                 common.ParamName,
 		VerificationCode:     common.ParamVerificationCode,
@@ -107,6 +112,7 @@ var (
 		PreviewEndpoint:      common.PreviewEndpoint,
 		Yearly:               common.ParamYearly,
 		Price:                common.ParamPrice,
+		HeaderCSRFToken:      common.HeaderCSRFToken,
 	}
 )
 
@@ -137,6 +143,10 @@ type requestContext struct {
 	CurrentYear int
 	UserName    string
 	UserEmail   string
+}
+
+type csrfRenderContext struct {
+	Token string
 }
 
 type alertRenderContext struct {
@@ -172,8 +182,8 @@ func (s *Server) Init() {
 	s.Session.Path = prefix
 }
 
-func (s *Server) Setup(router *http.ServeMux) {
-	s.setupWithPrefix(s.relURL("/"), router)
+func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
+	s.setupWithPrefix(s.relURL("/"), router, ratelimiter)
 }
 
 func (s *Server) relURL(url string) string {
@@ -184,30 +194,8 @@ func (s *Server) partsURL(a ...string) string {
 	return s.relURL(strings.Join(a, "/"))
 }
 
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
+func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter common.Middleware) {
 	slog.Debug("Setting up the routes", "prefix", prefix)
-
-	badRequestURL := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(http.StatusBadRequest))
-
-	org := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.IntArg(next, "org", common.OrgIDContextKey, badRequestURL)
-	}
-
-	property := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.IntArg(next, "property", common.PropertyIDContextKey, badRequestURL)
-	}
-
-	user := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.IntArg(next, "user", common.UserIDContextKey, badRequestURL)
-	}
-
-	period := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.StrArg(next, "period", common.PeriodContextKey, badRequestURL)
-	}
-
-	key := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.IntArg(next, "key", common.KeyIDContextKey, badRequestURL)
-	}
 
 	route := func(method string, parts ...string) string {
 		return method + " " + prefix + strings.Join(parts, "/")
@@ -229,109 +217,73 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux) {
 		return route(http.MethodDelete, parts...)
 	}
 
-	router.HandleFunc(get(common.LoginEndpoint), s.handler(s.getLogin))
-	router.HandleFunc(post(common.LoginEndpoint), common.Logged(s.postLogin))
-	router.HandleFunc(get(common.RegisterEndpoint), s.handler(s.getRegister))
-	router.HandleFunc(post(common.RegisterEndpoint), common.Logged(s.postRegister))
-	router.HandleFunc(get(common.TwoFactorEndpoint), s.getTwoFactor)
-	router.HandleFunc(post(common.TwoFactorEndpoint), common.Logged(s.postTwoFactor))
-	router.HandleFunc(post(common.ResendEndpoint), common.Logged(s.resend2fa))
-	router.HandleFunc(get(common.ErrorEndpoint, "{code}"), s.error)
-	router.HandleFunc(get(common.ExpiredEndpoint), s.expired)
-	router.HandleFunc(get(common.LogoutEndpoint), s.logout)
-	router.HandleFunc(get(common.OrgEndpoint, common.NewEndpoint), s.private(s.handler(s.getNewOrg)))
-	router.HandleFunc(post(common.OrgEndpoint, common.NewEndpoint), common.Logged(s.private(s.postNewOrg)))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}"), s.private(org(s.getPortal)))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.DashboardEndpoint), s.private(org(s.handler(s.getOrgDashboard))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.MembersEndpoint), s.private(org(s.handler(s.getOrgMembers))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.TabEndpoint, common.SettingsEndpoint), s.private(org(s.handler(s.getOrgSettings))))
-	router.HandleFunc(post(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.postOrgMembers)))
-	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.MembersEndpoint, "{user}"), s.private(org(user(s.deleteOrgMembers))))
-	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.joinOrg)))
-	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.MembersEndpoint), s.private(org(s.leaveOrg)))
-	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.EditEndpoint), s.private(org(s.putOrg)))
-	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.DeleteEndpoint), s.private(org(s.deleteOrg)))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, common.NewEndpoint), s.private(org(s.subscribed(s.handler(s.getNewOrgProperty)))))
-	router.HandleFunc(post(common.OrgEndpoint, "{org}", common.PropertyEndpoint, common.NewEndpoint), common.Logged(s.private(org(s.postNewOrgProperty))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}"), s.private(org(property(s.handler(s.getPropertyDashboard)))))
-	router.HandleFunc(put(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.EditEndpoint), s.private(org(property(s.putProperty))))
-	router.HandleFunc(delete(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.DeleteEndpoint), s.private(org(property(s.deleteProperty))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.ReportsEndpoint), s.private(org(property(s.handler(s.getPropertyReports)))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.SettingsEndpoint), s.private(org(property(s.handler(s.getPropertySettings)))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.TabEndpoint, common.IntegrationsEndpoint), s.private(org(property(s.handler(s.getPropertyIntegrations)))))
-	router.HandleFunc(get(common.OrgEndpoint, "{org}", common.PropertyEndpoint, "{property}", common.StatsEndpoint, "{period}"), s.private(org(property(period(s.getPropertyStats)))))
-	router.HandleFunc(get(common.SettingsEndpoint), s.private(s.handler(s.getSettings)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.handler(s.getGeneralSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), s.private(s.editEmail))
-	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), s.private(s.putGeneralSettings))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), s.private(s.handler(s.getAPIKeysSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), s.private(s.postAPIKeySettings))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), s.private(s.handler(s.getBillingSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), s.private(s.handler(s.postBillingPreview)))
-	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), s.private(s.handler(s.putBilling)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), s.private(s.getCancelSubscription))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), s.private(s.getUpdateSubscription))
-	router.HandleFunc(delete(common.APIKeysEndpoint, "{key}"), s.private(key(s.deleteAPIKey)))
-	router.HandleFunc(delete(common.UserEndpoint), s.private(s.deleteAccount))
-	router.HandleFunc(get(common.SupportEndpoint), s.private(s.handler(s.getSupport)))
-	router.HandleFunc(post(common.SupportEndpoint), s.private(s.postSupport))
-	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", s.private(s.getPortal))
-	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", common.Logged(s.notFound))
-}
-
-func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session {
-	ctx := r.Context()
-	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get session from context")
-		sess = s.Session.SessionStart(w, r)
-	}
-	return sess
-}
-
-func (s *Server) sessionUser(w http.ResponseWriter, r *http.Request) (*dbgen.User, error) {
-	ctx := r.Context()
-	sess := s.session(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
-		return nil, errInvalidSession
+	arg := func(s string) string {
+		return fmt.Sprintf("{%s}", s)
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
-		return nil, err
+	maxBytesHandler := func(next http.HandlerFunc) http.HandlerFunc {
+		return common.MaxBytesHandler(next, 256*1024)
 	}
 
-	return user, nil
-}
+	// separately configured "public" ones
+	router.HandleFunc(get(common.LoginEndpoint), ratelimiter(s.handler(s.getLogin)))
+	router.HandleFunc(get(common.RegisterEndpoint), ratelimiter(s.handler(s.getRegister)))
+	router.HandleFunc(get(common.TwoFactorEndpoint), ratelimiter(s.getTwoFactor))
+	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), ratelimiter(s.error))
+	router.HandleFunc(get(common.ExpiredEndpoint), ratelimiter(s.expired))
+	router.HandleFunc(get(common.LogoutEndpoint), ratelimiter(s.logout))
 
-func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+	// configured with middlewares
+	openWrite := common.NewMiddleWareChain(ratelimiter, common.Logged, maxBytesHandler)
+	writeChain := openWrite.Add(s.csrf)
+	privateReadChain := common.NewMiddleWareChain(ratelimiter, s.private)
+	privateWriteChain := writeChain.Add(s.private)
+	subscribedWrite := privateWriteChain.Add(s.subscribed)
+	subscribedRead := privateReadChain.Add(s.subscribed)
 
-		user, err := s.sessionUser(w, r)
-		if err != nil {
-			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-			return
-		}
-
-		if !user.SubscriptionID.Valid {
-			slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
-			url := s.relURL(fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint))
-			common.Redirect(url, w, r)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	}
-}
-
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	s.Session.SessionDestroy(w, r)
-	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	router.HandleFunc(post(common.LoginEndpoint), openWrite.Build(s.postLogin))
+	router.HandleFunc(post(common.RegisterEndpoint), openWrite.Build(s.postRegister))
+	router.HandleFunc(post(common.TwoFactorEndpoint), writeChain.Build(s.postTwoFactor))
+	router.HandleFunc(post(common.ResendEndpoint), writeChain.Build(s.resend2fa))
+	router.HandleFunc(get(common.OrgEndpoint, common.NewEndpoint), privateReadChain.Build(s.handler(s.getNewOrg)))
+	router.HandleFunc(post(common.OrgEndpoint, common.NewEndpoint), privateWriteChain.Build(s.postNewOrg))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadChain.Build(s.getPortal))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateReadChain.Build(s.handler(s.getOrgDashboard)))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateReadChain.Build(s.handler(s.getOrgMembers)))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getOrgSettings)))
+	router.HandleFunc(post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.handler(s.postOrgMembers)))
+	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWriteChain.Build(s.deleteOrgMembers))
+	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.joinOrg))
+	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.leaveOrg))
+	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWriteChain.Build(s.handler(s.putOrg)))
+	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWriteChain.Build(s.deleteOrg))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedRead.Build(s.handler(s.getNewOrgProperty)))
+	router.HandleFunc(post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedWrite.Build(s.postNewOrgProperty))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateReadChain.Build(s.handler(s.getPropertyDashboard)))
+	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWriteChain.Build(s.handler(s.putProperty)))
+	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWriteChain.Build(s.deleteProperty))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateReadChain.Build(s.handler(s.getPropertyReports)))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getPropertySettings)))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateReadChain.Build(s.handler(s.getPropertyIntegrations)))
+	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateReadChain.Build(s.getPropertyStats))
+	router.HandleFunc(get(common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getSettings)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateReadChain.Build(s.handler(s.getGeneralSettings)))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWriteChain.Build(s.handler(s.editEmail)))
+	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWriteChain.Build(s.handler(s.putGeneralSettings)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), privateReadChain.Build(s.handler(s.getAPIKeysSettings)))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWriteChain.Build(s.handler(s.postAPIKeySettings)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateReadChain.Build(s.handler(s.getBillingSettings)))
+	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), privateWriteChain.Build(s.handler(s.postBillingPreview)))
+	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateWriteChain.Build(s.handler(s.putBilling)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), subscribedRead.Build(s.getCancelSubscription))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), subscribedRead.Build(s.getUpdateSubscription))
+	router.HandleFunc(delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWriteChain.Build(s.deleteAPIKey))
+	router.HandleFunc(delete(common.UserEndpoint), privateWriteChain.Build(s.deleteAccount))
+	router.HandleFunc(get(common.SupportEndpoint), privateReadChain.Build(s.handler(s.getSupport)))
+	router.HandleFunc(post(common.SupportEndpoint), privateWriteChain.Build(s.handler(s.postSupport)))
+	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", privateReadChain.Build(s.getPortal))
+	// wildcard
+	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", ratelimiter(common.Logged(s.notFound)))
 }
 
 func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
@@ -340,9 +292,12 @@ func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
 		// such composition makes business logic and rendering testable separately
 		renderCtx, tpl, err := modelFunc(w, r)
 		if err != nil {
-			if err == errInvalidSession {
+			switch err {
+			case errInvalidSession:
 				common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-			} else {
+			case errInvalidPathArg, errInvalidRequestArg:
+				s.redirectError(http.StatusBadRequest, w, r)
+			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)
 			}
@@ -367,7 +322,7 @@ func (s *Server) renderResponse(ctx context.Context, name string, data interface
 	var out bytes.Buffer
 	err := s.template.Render(ctx, &out, name, actualData)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to render template", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to render template", "name", name, common.ErrAttr(err))
 	}
 
 	return out, err
@@ -400,7 +355,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 }
 
 func (s *Server) error(w http.ResponseWriter, r *http.Request) {
-	code, _ := strconv.Atoi(r.PathValue("code"))
+	code, _ := strconv.Atoi(r.PathValue(common.ParamCode))
+	if (code < 100) || (code > 600) {
+		slog.ErrorContext(r.Context(), "Invalid error code", "code", code)
+		code = http.StatusInternalServerError
+	}
+
 	s.renderError(r.Context(), w, code)
 }
 
@@ -430,6 +390,42 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	}
+}
+
+func (s *Server) csrf(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		token := r.Header.Get(common.HeaderCSRFToken)
+		if len(token) == 0 {
+			token = r.FormValue(common.ParamCSRFToken)
+		}
+
+		if len(token) > 0 {
+			sess := s.session(w, r)
+			email, ok := sess.Get(session.KeyUserEmail).(string)
+			if !ok {
+				slog.WarnContext(ctx, "Session does not contain a valid email")
+			}
+
+			if s.XSRF.VerifyToken(token, email) {
+				next.ServeHTTP(w, r)
+				return
+			} else {
+				slog.WarnContext(ctx, "Failed to verify CSRF token")
+			}
+		} else {
+			slog.WarnContext(ctx, "CSRF token is missing")
+		}
+
+		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 	}
 }
 
