@@ -3,6 +3,7 @@ package portal
 import (
 	"database/sql"
 	"flag"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -22,6 +23,10 @@ var (
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
 )
+
+func fakeRateLimiter(next http.HandlerFunc) http.HandlerFunc {
+	return next
+}
 
 func TestMain(m *testing.M) {
 	flag.Parse()

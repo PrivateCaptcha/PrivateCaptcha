@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	maxLoginFormSizeBytes = 10 * 1024
 	loginStepSignInVerify = 1
 	loginStepSignUpVerify = 2
 	loginStepCompleted    = 3
@@ -20,20 +19,21 @@ const (
 )
 
 type loginRenderContext struct {
-	Token string
+	csrfRenderContext
 	Error string
 }
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	return &loginRenderContext{
-		Token: s.XSRF.Token("", actionLogin),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
 	}, loginTemplate, nil
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxLoginFormSizeBytes)
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
@@ -42,15 +42,9 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &loginRenderContext{
-		Token: s.XSRF.Token("", actionLogin),
-	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, "", actionLogin) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		data.Error = "Please try again."
-		s.render(w, r, loginFormTemplate, data)
-		return
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
 	}
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))

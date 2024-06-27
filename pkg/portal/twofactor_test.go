@@ -19,7 +19,7 @@ import (
 
 func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*http.Cookie, error) {
 	form := url.Values{}
-	form.Add(common.ParamCsrfToken, server.XSRF.Token("", actionLogin))
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
 	form.Add(common.ParamEmail, email)
 
 	// Send the POST request
@@ -40,7 +40,7 @@ func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*
 	cookie := resp.Cookies()[idx]
 
 	form = url.Values{}
-	form.Add(common.ParamCsrfToken, server.XSRF.Token(email, actionVerify))
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(email))
 	form.Add(common.ParamEmail, email)
 	form.Add(common.ParamVerificationCode, strconv.Itoa(stubMailer.lastCode))
 
@@ -55,7 +55,7 @@ func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*
 		return nil, fmt.Errorf("Unexpected post twofactor code: %v", w.Code)
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Looks like we are authenticated")
+	slog.Log(ctx, common.LevelTrace, "Looks like we are authenticated", "code", w.Code)
 
 	return cookie, nil
 }
@@ -66,7 +66,7 @@ func TestPostTwoFactor(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv)
+	server.Setup(srv, fakeRateLimiter)
 
 	ctx := context.TODO()
 

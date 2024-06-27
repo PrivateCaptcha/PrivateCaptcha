@@ -48,7 +48,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv)
+	server.Setup(srv, fakeRateLimiter)
 
 	cookie, err := authenticateSuite(ctx, user2.Email, srv)
 	if err != nil {
@@ -57,7 +57,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 
 	// Send PUT request as the second user to update the property
 	form := url.Values{}
-	form.Set(common.ParamCsrfToken, server.XSRF.Token(user2.Email, actionPropertySettings))
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(user2.Email))
 	form.Set(common.ParamName, "Updated Property Name")
 	form.Set(common.ParamDifficulty, "0")
 	form.Set(common.ParamGrowth, "2")

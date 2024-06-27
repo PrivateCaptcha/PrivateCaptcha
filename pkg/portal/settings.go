@@ -19,8 +19,6 @@ import (
 )
 
 const (
-	maxUserFormSizeBytes        = 256 * 1024
-	maxBillingFormSizeBytes     = 16 * 1024
 	settingsGeneralTemplate     = "settings/general.html"
 	settingsTemplate            = "settings/settings.html"
 	settingsGeneralFormTemplate = "settings/general-form.html"
@@ -41,7 +39,7 @@ type settingsCommonRenderContext struct {
 type settingsGeneralRenderContext struct {
 	alertRenderContext
 	settingsCommonRenderContext
-	Token          string
+	csrfRenderContext
 	Name           string
 	NameError      string
 	EmailError     string
@@ -60,17 +58,17 @@ type userAPIKey struct {
 
 type settingsAPIKeysRenderContext struct {
 	settingsCommonRenderContext
+	csrfRenderContext
 	Name       string
 	NameError  string
 	Keys       []*userAPIKey
-	Token      string
 	CreateOpen bool
 }
 
 type settingsBillingRenderContext struct {
 	alertRenderContext
 	settingsCommonRenderContext
-	Token           string
+	csrfRenderContext
 	Plans           []*billing.Plan
 	CurrentPlan     *billing.Plan
 	PreviewPlan     string
@@ -141,33 +139,33 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		Token: s.XSRF.Token(user.Email, actionUserSettings),
-		Name:  user.Name,
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
+		Name: user.Name,
 	}
 
 	return renderCtx, settingsGeneralTemplate, nil
 }
 
-func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
+func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, "", err
 	}
 
 	code := twoFactorCode()
 
 	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
 	if !ok {
-		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		slog.ErrorContext(ctx, "Failed to obtain session")
+		return nil, "", errInvalidSession
 	}
 	sess.Set(session.KeyTwoFactorCode, code)
 
@@ -177,37 +175,29 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) {
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		Token:          s.XSRF.Token(user.Email, actionUserSettings),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		Name:           user.Name,
 		TwoFactorEmail: common.MaskEmail(user.Email, '*'),
 		EditEmail:      true,
 	}
 
-	s.render(w, r, settingsGeneralFormTemplate, renderCtx)
+	return renderCtx, settingsGeneralFormTemplate, nil
 }
 
-func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxUserFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionUserSettings) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-		return
+		return nil, "", errInvalidRequestArg
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -219,7 +209,9 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		Token:     s.XSRF.Token(user.Email, actionUserSettings),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		Name:      user.Name,
 		EditEmail: (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
 	}
@@ -234,8 +226,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		if err := checkmail.ValidateFormat(formEmail); err != nil {
 			slog.Warn("Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
-			s.render(w, r, settingsGeneralFormTemplate, renderCtx)
-			return
+			return renderCtx, settingsGeneralFormTemplate, nil
 		}
 
 		sentCode, hasSentCode := sess.Get(session.KeyTwoFactorCode).(int)
@@ -247,8 +238,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, common.ErrAttr(err))
 			renderCtx.TwoFactorError = "Code is not valid."
-			s.render(w, r, settingsGeneralFormTemplate, renderCtx)
-			return
+			return renderCtx, settingsGeneralFormTemplate, nil
 		}
 
 		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
@@ -257,8 +247,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 
 		if (formName != user.Name) && (len(formName) > 0) && (len(formName) < 3) {
 			renderCtx.NameError = "Please use a longer name."
-			s.render(w, r, settingsGeneralFormTemplate, renderCtx)
-			return
+			return renderCtx, settingsGeneralFormTemplate, nil
 		}
 
 		anyChange = (len(formName) > 0) && (formName != user.Name)
@@ -275,7 +264,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.render(w, r, settingsGeneralFormTemplate, renderCtx)
+	return renderCtx, settingsGeneralFormTemplate, nil
 }
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -331,8 +320,10 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
-		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
+		Keys: apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	return renderCtx, settingsAPIKeysTemplate, nil
@@ -353,34 +344,23 @@ func monthsFromParam(ctx context.Context, param string) int {
 	}
 }
 
-func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
+func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxUserFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionAPIKeysSettings) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-		return
+		return nil, "", errInvalidRequestArg
 	}
 
 	keys, err := s.Store.RetrieveUserAPIKeys(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user API keys", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
 	renderCtx := &settingsAPIKeysRenderContext{
@@ -389,16 +369,17 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		Keys:  apiKeysToUserAPIKeys(keys, time.Now().UTC()),
-		Token: s.XSRF.Token(user.Email, actionAPIKeysSettings),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
+		Keys: apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
 	if len(formName) < 3 {
 		renderCtx.NameError = "Name is too short."
 		renderCtx.CreateOpen = true
-		s.render(w, r, settingsAPIKeysTemplate, renderCtx)
-		return
+		return renderCtx, settingsAPIKeysTemplate, nil
 	}
 
 	months := monthsFromParam(ctx, r.FormValue(common.ParamMonths))
@@ -414,7 +395,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) {
 		// TODO: show error message
 	}
 
-	s.render(w, r, settingsAPIKeysTemplate, renderCtx)
+	return renderCtx, settingsAPIKeysTemplate, nil
 }
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -425,7 +406,12 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	keyID := ctx.Value(common.KeyIDContextKey).(int)
+	keyID, value, err := common.IntPathArg(r, common.ParamKey)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse key path parameter", "value", value)
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
 
 	if err := s.Store.SoftDeleteAPIKey(ctx, user.ID, int32(keyID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete the key", "keyID", keyID, common.ErrAttr(err))
@@ -438,7 +424,9 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.User) (*settingsBillingRenderContext, error) {
 	renderCtx := &settingsBillingRenderContext{
-		Token: s.XSRF.Token(user.Email, actionBillingSettings),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		settingsCommonRenderContext: settingsCommonRenderContext{
 			Tab:    2,
 			Email:  user.Email,
@@ -564,19 +552,11 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxBillingFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, "", err
 	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionBillingSettings) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		return nil, "", errInvalidSession
-	}
-
 	product := r.FormValue(common.ParamProduct)
 	plan, err := billing.FindPlanByProductID(product, s.Stage)
 	if err != nil {
@@ -644,19 +624,11 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxBillingFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, "", err
 	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionBillingSettings) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		return nil, "", errInvalidSession
-	}
-
 	priceID := r.FormValue(common.ParamPrice)
 	if _, err := billing.FindPlanByPriceID(priceID, s.Stage); err != nil {
 		slog.ErrorContext(ctx, "PriceID argument is not valid", common.ErrAttr(err))

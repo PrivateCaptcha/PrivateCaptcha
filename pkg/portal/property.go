@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	maxNewPropertyFormSizeBytes           = 256 * 1024
 	createPropertyFormTemplate            = "property-wizard/form.html"
 	createOrgFormTemplate                 = "org-wizard/form.html"
 	propertyDashboardTemplate             = "property/dashboard.html"
@@ -32,7 +31,7 @@ var (
 )
 
 type propertyWizardRenderContext struct {
-	Token       string
+	csrfRenderContext
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -48,15 +47,16 @@ type userProperty struct {
 }
 
 type orgPropertiesRenderContext struct {
+	csrfRenderContext
 	Properties []*userProperty
 	CurrentOrg *userOrg
 }
 
 type propertyDashboardRenderContext struct {
 	alertRenderContext
+	csrfRenderContext
 	Property  *userProperty
 	Org       *userOrg
-	Token     string
 	NameError string
 	Tab       int
 	CanEdit   bool
@@ -155,22 +155,20 @@ func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.Difficult
 }
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
 		return nil, "", err
 	}
 
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	org, err := s.org(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
 		return nil, "", err
 	}
 
 	data := &propertyWizardRenderContext{
-		Token: s.XSRF.Token(user.Email, actionNewProperty),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -227,6 +225,7 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 	return "Failed to resolve domain name."
 }
 
+// This one cannot be "MVC" function because it redirects in case of success
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
@@ -235,15 +234,6 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Check if subscription is valid and limits are enforced
-	if !user.SubscriptionID.Valid {
-		slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
-		url := s.relURL(fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint))
-		common.Redirect(url, w, r)
-		return
-	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
@@ -251,23 +241,16 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionNewProperty) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-		return
-	}
-
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	org, err := s.org(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		Token:      s.XSRF.Token(user.Email, actionNewProperty),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		CurrentOrg: orgToUserOrg(org, user.ID),
 	}
 
@@ -290,7 +273,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 
 	property, err := s.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       name,
-		OrgID:      db.Int(int32(orgID)),
+		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: org.UserID,
 		Domain:     domain,
@@ -303,17 +286,27 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dashboardURL := s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID), common.PropertyEndpoint, strconv.Itoa(int(property.ID)))
+	dashboardURL := s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID)), common.PropertyEndpoint, strconv.Itoa(int(property.ID)))
 	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
 	common.Redirect(dashboardURL, w, r)
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
-	periodStr := ctx.Value(common.PeriodContextKey).(string)
+	orgID, err := s.orgID(r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	propertyID, err := s.propertyID(r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	periodStr := r.PathValue(common.ParamPeriod)
 	var period common.TimePeriod
 	switch periodStr {
 	case "24h":
@@ -337,6 +330,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	requested := []*point{}
 	verified := []*point{}
 
+	// TODO: Verify org and property ID against cache before accessing ClickHouse
 	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, int32(orgID), int32(propertyID), period); err == nil {
 		anyNonZero := false
 		for _, st := range stats {
@@ -370,20 +364,21 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, error) {
 	ctx := r.Context()
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
-	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
-	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
-		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
-		// TODO: Set error correctly if it's nil
+	org, err := s.org(r)
+	if err != nil {
 		return nil, err
 	}
 
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	property, err := s.property(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org", "orgID", orgID, common.ErrAttr(err))
+		s.redirectError(http.StatusUnauthorized, w, r)
 		return nil, err
+	}
+
+	if property.OrgID.Int32 != org.ID {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
+		return nil, errInvalidPathArg
 	}
 
 	user, err := s.sessionUser(w, r)
@@ -392,9 +387,11 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		Property: propertyToUserProperty(property),
 		Org:      orgToUserOrg(org, user.ID),
-		Token:    s.XSRF.Token(user.Email, actionPropertySettings),
 		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
 	return renderCtx, nil
@@ -452,49 +449,40 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 	return renderCtx, propertyDashboardIntegrationsTemplate, nil
 }
 
-func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
+func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(w, r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, "", err
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxNewPropertyFormSizeBytes)
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, "", errInvalidRequestArg
 	}
 
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, user.Email, actionPropertySettings) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-		return
-	}
-
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	org, err := s.org(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, "", err
 	}
 
-	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
-	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
-	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
-		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
-		s.redirectError(http.StatusNotFound, w, r)
-		return
+	property, err := s.property(r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if property.OrgID.Int32 != org.ID {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
+		return nil, "", errInvalidRequestArg
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(user.Email),
+		},
 		Property: propertyToUserProperty(property),
 		Org:      orgToUserOrg(org, user.ID),
-		Token:    s.XSRF.Token(user.Email, actionPropertySettings),
 		Tab:      2, // settings
 		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
@@ -503,8 +491,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "Insufficient permissions to edit property", "userID", user.ID, "orgUserID", org.UserID.Int32,
 			"propUserID", property.CreatorID.Int32)
 		renderCtx.ErrorMessage = "Insufficient permissions to update settings."
-		s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
-		return
+		return renderCtx, propertyDashboardSettingsTemplate, nil
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -512,8 +499,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		if nameError := s.validatePropertyName(ctx, name, org.ID); len(nameError) > 0 {
 			renderCtx.NameError = nameError
 			renderCtx.Property.Name = name
-			s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
-			return
+			return renderCtx, propertyDashboardSettingsTemplate, nil
 		}
 	}
 
@@ -524,37 +510,33 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) {
 		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
-			slog.DebugContext(ctx, "Edited property", "propID", propertyID, "orgID", orgID)
+			slog.DebugContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)
 			renderCtx.SuccessMessage = "Settings were updated"
 			renderCtx.Property = propertyToUserProperty(updatedProperty)
 		}
 	}
 
-	s.render(w, r, propertyDashboardSettingsTemplate, renderCtx)
+	return renderCtx, propertyDashboardSettingsTemplate, nil
 }
 
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgID := ctx.Value(common.OrgIDContextKey).(int)
-	propertyID := ctx.Value(common.PropertyIDContextKey).(int)
 
-	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
-	if (err != nil) || (int(property.OrgID.Int32) != orgID) {
-		slog.ErrorContext(ctx, "Failed to find property", "orgID", orgID, "propID", propertyID, common.ErrAttr(err))
-		s.redirectError(http.StatusNotFound, w, r)
-		return
-	}
-
-	if property.OrgID.Int32 != int32(orgID) {
-		slog.ErrorContext(ctx, "Property org does not match", "orgID", property.OrgID.Int32, "pathOrgID", orgID)
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return
-	}
-
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	org, err := s.org(r)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
 		s.redirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	property, err := s.property(r)
+	if err != nil {
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if property.OrgID.Int32 != int32(org.ID) {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
+		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -572,8 +554,8 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.SoftDeleteProperty(ctx, int32(propertyID), int32(orgID)); err == nil {
-		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(orgID)), w, r)
+	if err := s.Store.SoftDeleteProperty(ctx, property.ID, org.ID); err == nil {
+		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), w, r)
 	} else {
 		s.redirectError(http.StatusInternalServerError, w, r)
 	}

@@ -91,6 +91,10 @@ func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekey
 	return s.defaultImpl.retrievePropertiesBySitekey(ctx, sitekeys)
 }
 
+func (s *BusinessStore) GetCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
+	return s.defaultImpl.getCachedAPIKey(ctx, secret)
+}
+
 // Fetches API keyfrom DB, backed by cache
 func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	return s.defaultImpl.retrieveAPIKey(ctx, secret)

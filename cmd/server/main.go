@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
@@ -43,6 +44,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	}
 
 	paddleAPI, err := billing.NewPaddleAPI(getenv)
+	if err != nil {
+		panic(err)
+	}
+
+	ratelimiter, err := ratelimit.NewHTTPRateLimiter(getenv(common.ConfigRateLimitHeader))
 	if err != nil {
 		panic(err)
 	}
@@ -84,12 +90,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	router := http.NewServeMux()
 
-	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, 1*time.Second)
+	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, 1*time.Second)
 
 	apiServer.Setup(router, "api", apiAuth)
 
 	portalServer.Init()
-	portalServer.Setup(router)
+	portalServer.Setup(router, ratelimiter.RateLimit)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 	portalServer.StartMaintenanceJobs()
 
@@ -131,6 +137,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		portalServer.Shutdown()
 		businessDB.Shutdown()
 		apiAuth.Shutdown()
+		ratelimiter.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {

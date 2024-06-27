@@ -15,7 +15,7 @@ const (
 )
 
 type twoFactorRenderContext struct {
-	Token string
+	csrfRenderContext
 	Email string
 	Error string
 }
@@ -38,7 +38,9 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &twoFactorRenderContext{
-		Token: s.XSRF.Token(email, actionVerify),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(email),
+		},
 		Email: common.MaskEmail(email, '*'),
 	}
 
@@ -64,23 +66,16 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &twoFactorRenderContext{
-		Token: s.XSRF.Token(email, actionVerify),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(email),
+		},
 		Email: common.MaskEmail(email, '*'),
 	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxLoginFormSizeBytes)
 
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, email, actionVerify) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 		return
 	}
 

@@ -1,10 +1,11 @@
 package common
 
 import (
-	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/rs/xid"
 )
@@ -15,6 +16,7 @@ const (
 
 var (
 	headerHtmxRequest = http.CanonicalHeaderKey("HX-Request")
+	errPathArgEmpty   = errors.New("path argument is empty")
 )
 
 func traceID() string {
@@ -23,37 +25,22 @@ func traceID() string {
 
 func Logged(h http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
 		ctx := TraceContext(r.Context(), traceID)
-		slog.DebugContext(ctx, "Processing request", "path", r.URL.Path, "method", r.Method)
+
+		slog.DebugContext(ctx, "Started request", "path", r.URL.Path, "method", r.Method)
+		defer slog.DebugContext(ctx, "Finished request", "path", r.URL.Path, "method", r.Method,
+			"duration", time.Since(t).Milliseconds())
+
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-func SafeFormPost(h http.HandlerFunc, maxSize int64) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
-
-		err := r.ParseForm()
-		if err != nil {
-			slog.ErrorContext(r.Context(), "Failed to read request body", ErrAttr(err))
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-
-		h.ServeHTTP(w, r)
-	})
-}
-
-func Method(m string, next http.HandlerFunc) http.HandlerFunc {
+func MaxBytesHandler(next http.HandlerFunc, maxSize int64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != m {
-			slog.ErrorContext(r.Context(), "Incorrect http method", "actual", r.Method, "expected", m)
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-
-		slog.DebugContext(r.Context(), "Processing request", "path", r.URL.Path, "method", r.Method)
-		next.ServeHTTP(w, r)
+		r2 := *r
+		r2.Body = http.MaxBytesReader(w, r.Body, maxSize)
+		next.ServeHTTP(w, &r2)
 	}
 }
 
@@ -69,33 +56,60 @@ func Redirect(url string, w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func IntArg(next http.HandlerFunc, name string, key ContextKey, failURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		value := r.PathValue(name)
+func IntPathArg(r *http.Request, name string) (int, string, error) {
+	value := r.PathValue(name)
+	if len(value) == 0 {
+		return 0, "", errPathArgEmpty
+	}
 
-		i, err := strconv.Atoi(value)
-		if err != nil {
-			slog.ErrorContext(r.Context(), "Failed to parse path parameter", "name", name, "value", value, ErrAttr(err))
-			Redirect(failURL, w, r)
-			return
-		}
+	i, err := strconv.Atoi(value)
+	return i, value, err
+}
 
-		ctx := context.WithValue(r.Context(), key, i)
-		next.ServeHTTP(w, r.WithContext(ctx))
+func StrPathArg(r *http.Request, name string) (string, error) {
+	value := r.PathValue(name)
+
+	if len(value) == 0 {
+		return "", errPathArgEmpty
+	}
+
+	return value, nil
+}
+
+type Middleware func(http.HandlerFunc) http.HandlerFunc
+
+// this exists because of https://github.com/justinas/alice/issues/25
+type MiddlewareChain struct {
+	handlers []Middleware
+}
+
+func NewMiddleWareChain(handlers ...Middleware) *MiddlewareChain {
+	return &MiddlewareChain{
+		handlers: handlers,
 	}
 }
 
-func StrArg(next http.HandlerFunc, name string, key ContextKey, failURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		value := r.PathValue(name)
+func (c *MiddlewareChain) Build(final http.HandlerFunc) http.HandlerFunc {
+	if len(c.handlers) == 0 {
+		return final
+	}
 
-		if len(value) == 0 {
-			slog.ErrorContext(r.Context(), "Path parameter is empty", "name", name)
-			Redirect(failURL, w, r)
-			return
-		}
+	chain := final
+	for i := len(c.handlers) - 1; i >= 0; i-- {
+		chain = c.handlers[i](chain)
+	}
 
-		ctx := context.WithValue(r.Context(), key, value)
-		next.ServeHTTP(w, r.WithContext(ctx))
+	return chain
+}
+
+func (c *MiddlewareChain) Add(m ...Middleware) *MiddlewareChain {
+	return &MiddlewareChain{
+		handlers: append(c.handlers, m...),
+	}
+}
+
+func (c *MiddlewareChain) AddMany(other *MiddlewareChain) *MiddlewareChain {
+	return &MiddlewareChain{
+		handlers: append(c.handlers, other.handlers...),
 	}
 }
