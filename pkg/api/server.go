@@ -123,12 +123,13 @@ func (s *server) Shutdown() {
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
+	chain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	// NOTE: auth middleware provides rate limiting internally
-	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, auth.Sitekey(s.puzzle))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, chain.Build(auth.Sitekey(s.puzzle)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, chain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize)))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize)))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize)))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize)))))
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {

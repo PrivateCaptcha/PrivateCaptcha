@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"time"
 
@@ -17,6 +18,14 @@ const (
 var (
 	headerHtmxRequest = http.CanonicalHeaderKey("HX-Request")
 	errPathArgEmpty   = errors.New("path argument is empty")
+	epoch             = time.Unix(0, 0).UTC().Format(http.TimeFormat)
+	// taken from chi, which took it fron nginx
+	noCacheHeaders = map[string]string{
+		"Expires":         epoch,
+		"Cache-Control":   "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
+		"Pragma":          "no-cache",
+		"X-Accel-Expires": "0",
+	}
 )
 
 func traceID() string {
@@ -24,7 +33,7 @@ func traceID() string {
 }
 
 func Logged(h http.HandlerFunc) http.HandlerFunc {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		ctx := TraceContext(r.Context(), traceID)
 
@@ -33,7 +42,37 @@ func Logged(h http.HandlerFunc) http.HandlerFunc {
 			"duration", time.Since(t).Milliseconds())
 
 		h.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}
+}
+
+func Recovered(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rvr := recover(); rvr != nil {
+				if rvr == http.ErrAbortHandler {
+					panic(rvr)
+				}
+
+				slog.ErrorContext(r.Context(), "Crash", "panic", rvr, "stack", string(debug.Stack()))
+
+				if r.Header.Get("Connection") != "Upgrade" {
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+func NoCache(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		for k, v := range noCacheHeaders {
+			w.Header().Set(k, v)
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }
 
 func MaxBytesHandler(next http.HandlerFunc, maxSize int64) http.HandlerFunc {
