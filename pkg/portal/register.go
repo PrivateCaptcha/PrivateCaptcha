@@ -21,21 +21,22 @@ const (
 )
 
 type registerRenderContext struct {
-	Token      string
+	csrfRenderContext
 	NameError  string
 	EmailError string
 }
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	return &registerRenderContext{
-		Token: s.XSRF.Token("", actionRegister),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
 	}, "register/register.html", nil
 }
 
 func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxLoginFormSizeBytes)
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
@@ -44,7 +45,9 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &registerRenderContext{
-		Token: s.XSRF.Token("", actionRegister),
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -59,13 +62,6 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
 		s.render(w, r, registerFormTemplate, data)
-		return
-	}
-
-	token := r.FormValue(common.ParamCsrfToken)
-	if !s.XSRF.VerifyToken(token, "", actionRegister) {
-		slog.WarnContext(ctx, "Failed to verify CSRF token")
-		common.Redirect(s.relURL(common.RegisterEndpoint), w, r)
 		return
 	}
 

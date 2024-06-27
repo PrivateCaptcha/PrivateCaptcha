@@ -1,10 +1,133 @@
 package portal
 
 import (
+	"fmt"
+	"log/slog"
 	"math/rand"
+	"net/http"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 // NOTE: this will eventually be replaced by proper OTP
 func twoFactorCode() int {
 	return rand.Intn(900000) + 100000
+}
+
+func (s *Server) org(r *http.Request) (*dbgen.Organization, error) {
+	ctx := r.Context()
+
+	orgID, value, err := common.IntPathArg(r, common.ParamOrg)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return org, nil
+}
+
+func (s *Server) orgID(r *http.Request) (int32, error) {
+	ctx := r.Context()
+
+	orgID, value, err := common.IntPathArg(r, common.ParamOrg)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
+		return -1, errInvalidPathArg
+	}
+
+	return int32(orgID), nil
+}
+
+func (s *Server) property(r *http.Request) (*dbgen.Property, error) {
+	ctx := r.Context()
+
+	propertyID, value, err := common.IntPathArg(r, common.ParamProperty)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse property path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find property by ID", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return property, nil
+}
+
+func (s *Server) propertyID(r *http.Request) (int32, error) {
+	ctx := r.Context()
+
+	propertyID, value, err := common.IntPathArg(r, common.ParamProperty)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse property path parameter", "value", value, common.ErrAttr(err))
+		return 0, errInvalidPathArg
+	}
+
+	return int32(propertyID), nil
+}
+
+func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session {
+	ctx := r.Context()
+	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get session from context")
+		sess = s.Session.SessionStart(w, r)
+	}
+	return sess
+}
+
+func (s *Server) sessionUser(w http.ResponseWriter, r *http.Request) (*dbgen.User, error) {
+	ctx := r.Context()
+	sess := s.session(w, r)
+
+	email, ok := sess.Get(session.KeyUserEmail).(string)
+	if !ok {
+		slog.ErrorContext(ctx, "Failed to get email from session")
+		return nil, errInvalidSession
+	}
+
+	user, err := s.Store.FindUser(ctx, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		user, err := s.sessionUser(w, r)
+		if err != nil {
+			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+			return
+		}
+
+		if !user.SubscriptionID.Valid {
+			slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
+			url := s.relURL(fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint))
+			common.Redirect(url, w, r)
+			return
+		}
+		// TODO: Verify that actual Paddle subscription is valid
+
+		next.ServeHTTP(w, r)
+	}
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	s.Session.SessionDestroy(w, r)
+	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 }

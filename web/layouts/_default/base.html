@@ -11,7 +11,7 @@
     {{end}}
     {{block "scripts" .}}{{template "default-scripts.html" .}}{{end}}
 </head>
-<body class='{{block "body_class" .}}h-full{{end}}'>
+<body class='{{block "body_class" .}}h-full{{end}}' {{ if .Params.Token }}hx-headers='{"{{ .Const.HeaderCSRFToken }}": "{{ .Params.Token }}"}'{{ end }}>
     {{block "header" .}}{{end}}
     {{block "main" .}}{{end}}
     {{block "footer" .}}{{end}}
