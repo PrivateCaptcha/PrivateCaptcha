@@ -294,13 +294,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	orgID, err := s.orgID(r)
+	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
+	org, err := s.org(r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	propertyID, err := s.propertyID(r)
+	property, err := s.property(r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -330,8 +331,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	requested := []*point{}
 	verified := []*point{}
 
-	// TODO: Verify org and property ID against cache before accessing ClickHouse
-	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, int32(orgID), int32(propertyID), period); err == nil {
+	if stats, err := s.TimeSeries.RetrievePropertyStats(ctx, org.ID, property.ID, period); err == nil {
 		anyNonZero := false
 		for _, st := range stats {
 			if (st.RequestsCount > 0) || (st.VerifiesCount > 0) {
