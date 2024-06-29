@@ -1,8 +1,6 @@
 {{define "scripts"}}
-<script defer src="/assets/js/htmx.min.js" type="text/javascript"></script>
 <script defer src="/assets/js/d3.v7.min.js" type="text/javascript" charset="utf-8"></script>
-<script defer src="/assets/js/alpine.min.js" type="text/javascript"></script>
-<script src="/assets/js/bundle.js" type="text/javascript"></script>
+{{template "default-scripts.html" .}}
 
 <script>
     function chartComponent() {
@@ -27,7 +25,7 @@
             if ((day == 1) && (month == 0)) {
                 return date.getFullYear();
             } else {
-                return monthDayFormat(date);
+                return monthlyFormat(date);
             }
         };
 
@@ -82,7 +80,7 @@
             '1y': monthlyTicks
         };
 
-        const drawNoData = (element, period, periodLengthDays) => {
+        const drawNoData = (element, xTickFunction, periodLengthDays) => {
             const margin = {top: 20, right: 30, bottom: 60, left: 30};
             const rect = element.getBoundingClientRect();
 
@@ -110,7 +108,7 @@
 
             let xAxis = d3.axisBottom(x)
                 .tickValues(xTickValues)
-                .tickFormat(tickFunction[period]);
+                .tickFormat(xTickFunction);
 
             // Create y scale
             let y = d3.scaleLinear().range([height, 0]);
@@ -296,7 +294,7 @@
                     ((data.verified.length > 0) || (data.requested.length > 0))) {
                     setChartData(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
                 } else {
-                    drawNoData(this.$refs.chart, this.period, periodLength[this.period]);
+                    drawNoData(this.$refs.chart, tickFunction[this.period], periodLength[this.period]);
                 }
             }
         }

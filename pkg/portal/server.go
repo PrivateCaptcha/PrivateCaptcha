@@ -69,6 +69,7 @@ var (
 		Yearly               string
 		Price                string
 		HeaderCSRFToken      string
+		UsageEndpoint        string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -113,6 +114,7 @@ var (
 		Yearly:               common.ParamYearly,
 		Price:                common.ParamPrice,
 		HeaderCSRFToken:      common.HeaderCSRFToken,
+		UsageEndpoint:        common.UsageEndpoint,
 	}
 )
 
@@ -271,12 +273,14 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWriteChain.Build(s.handler(s.editEmail)))
 	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWriteChain.Build(s.handler(s.putGeneralSettings)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), privateReadChain.Build(s.handler(s.getAPIKeysSettings)))
+	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint), privateReadChain.Build(s.handler(s.getUsageSettings)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWriteChain.Build(s.handler(s.postAPIKeySettings)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateReadChain.Build(s.handler(s.getBillingSettings)))
 	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), privateWriteChain.Build(s.handler(s.postBillingPreview)))
 	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateWriteChain.Build(s.handler(s.putBilling)))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), subscribedRead.Build(s.getCancelSubscription))
 	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), subscribedRead.Build(s.getUpdateSubscription))
+	router.HandleFunc(get(common.UserEndpoint, common.StatsEndpoint), privateReadChain.Build(common.NoCache(s.getAccountStats)))
 	router.HandleFunc(delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWriteChain.Build(s.deleteAPIKey))
 	router.HandleFunc(delete(common.UserEndpoint), privateWriteChain.Build(s.deleteAccount))
 	router.HandleFunc(get(common.SupportEndpoint), privateReadChain.Build(s.handler(s.getSupport)))

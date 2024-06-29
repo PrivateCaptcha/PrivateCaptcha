@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	verifyLogTableName   = "privatecaptcha.verify_logs"
-	accessLogTableName   = "privatecaptcha.request_logs"
-	accessLogTableName5m = "privatecaptcha.request_logs_5m"
+	verifyLogTableName    = "privatecaptcha.verify_logs"
+	accessLogTableName    = "privatecaptcha.request_logs"
+	accessLogTableName5m  = "privatecaptcha.request_logs_5m"
+	accessLogTableName1mo = "privatecaptcha.request_logs_1mo"
 )
 
 type TimeSeriesStore struct {
@@ -125,7 +126,7 @@ ORDER BY timestamp`
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to execute backfill stats query", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to execute property stats query", common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -136,7 +137,38 @@ ORDER BY timestamp`
 	for rows.Next() {
 		bc := &common.TimeCount{}
 		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
-			slog.ErrorContext(ctx, "Failed to read row from backfill property stats query", common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to read row from property stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, bc)
+	}
+
+	return results, nil
+}
+
+func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32) ([]*common.TimeCount, error) {
+	timeFrom := time.Now().UTC().AddDate(-1, 0 /*months*/, 0 /*days*/)
+	query := `SELECT timestamp, sum(count) as count
+FROM %s FINAL
+WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
+GROUP BY timestamp
+ORDER BY timestamp`
+	rows, err := ts.clickhouse.Query(fmt.Sprintf(query, accessLogTableName1mo),
+		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
+		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute account stats query", common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.TimeCount, 0)
+
+	for rows.Next() {
+		bc := &common.TimeCount{}
+		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from account stats query", common.ErrAttr(err))
 			return nil, err
 		}
 		results = append(results, bc)

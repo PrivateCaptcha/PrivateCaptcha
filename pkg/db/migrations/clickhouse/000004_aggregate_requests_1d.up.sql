@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS privatecaptcha.request_logs_1d
 )
 ENGINE = SummingMergeTree
 ORDER BY (user_id, org_id, property_id, timestamp)
-TTL timestamp + INTERVAL 3 MONTH;
+TTL timestamp + INTERVAL 1 YEAR;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS privatecaptcha.request_logs_1d_mv TO privatecaptcha.request_logs_1d AS
 SELECT

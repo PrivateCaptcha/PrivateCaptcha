@@ -24,6 +24,7 @@ const (
 	settingsGeneralFormTemplate = "settings/general-form.html"
 	settingsAPIKeysTemplate     = "settings/apikeys.html"
 	settingsBillingTemplate     = "settings/billing.html"
+	settingsUsageTemplate       = "settings/usage.html"
 )
 
 var (
@@ -34,6 +35,12 @@ type settingsCommonRenderContext struct {
 	Tab    int
 	Email  string
 	UserID int32
+}
+
+type settingsUsageRenderContext struct {
+	alertRenderContext
+	settingsCommonRenderContext
+	Limit int
 }
 
 type settingsGeneralRenderContext struct {
@@ -112,6 +119,8 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 		renderCtx, _, err = s.getAPIKeysSettings(w, r)
 	case common.BillingEndpoint:
 		renderCtx, _, err = s.getBillingSettings(w, r)
+	case common.UsageEndpoint:
+		renderCtx, _, err = s.getUsageSettings(w, r)
 	default:
 		if (tabParam != common.GeneralEndpoint) && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
@@ -664,4 +673,80 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 	}
 
 	return renderCtx, settingsBillingTemplate, nil
+}
+
+func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	type point struct {
+		Date  int64 `json:"x"`
+		Value int   `json:"y"`
+	}
+
+	data := []*point{}
+
+	if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID); err == nil {
+		anyNonZero := false
+		for _, st := range stats {
+			if st.Count > 0 {
+				anyNonZero = true
+			}
+			data = append(data, &point{Date: st.Timestamp.Unix(), Value: int(st.Count)})
+		}
+
+		// we want to show "No data available" on the client
+		if !anyNonZero {
+			data = []*point{}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve account stats", common.ErrAttr(err))
+	}
+
+	response := struct {
+		Data []*point `json:"data"`
+	}{
+		Data: data,
+	}
+
+	// TODO: add CORS headers for chart response
+	common.SendJSONResponse(ctx, w, response, map[string]string{})
+}
+
+func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx := r.Context()
+
+	user, err := s.sessionUser(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	renderCtx := &settingsUsageRenderContext{
+		settingsCommonRenderContext: settingsCommonRenderContext{
+			Tab:    3,
+			Email:  user.Email,
+			UserID: user.ID,
+		},
+	}
+
+	if user.SubscriptionID.Valid {
+		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
+			return renderCtx, settingsUsageTemplate, nil
+		}
+
+		if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+			renderCtx.Limit = int(plan.RequestsLimit)
+		} else {
+			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+		}
+	}
+
+	return renderCtx, settingsUsageTemplate, nil
 }
