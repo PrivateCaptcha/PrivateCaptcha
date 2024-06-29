@@ -34,4 +34,5 @@ const (
 	CancelEndpoint              = "cancel"
 	UpdateEndpoint              = "update"
 	PreviewEndpoint             = "preview"
+	UsageEndpoint               = "usage"
 )
