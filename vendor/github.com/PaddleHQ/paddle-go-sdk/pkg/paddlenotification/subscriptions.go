@@ -2,67 +2,138 @@
 
 package paddlenotification
 
-// SubscriptionActivated represents a subscription webhook notification entity.
+// SubscriptionActivated represents the subscription.activated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionActivated struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionCanceled represents a subscription webhook notification entity.
+// SubscriptionCanceled represents the subscription.canceled event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionCanceled struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionCreated represents a subscription webhook notification entity.
+// SubscriptionCreated represents the subscription.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionCreated struct {
 	GenericNotificationsEvent
 	Data SubscriptionCreatedNotification `json:"data"`
 }
 
-// SubscriptionPastDue represents a subscription webhook notification entity.
+// SubscriptionPastDue represents the subscription.past_due event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionPastDue struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionImported represents a subscription webhook notification entity.
+// SubscriptionImported represents the subscription.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionImported struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionPaused represents a subscription webhook notification entity.
+// SubscriptionPaused represents the subscription.paused event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionPaused struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionResumed represents a subscription webhook notification entity.
+// SubscriptionResumed represents the subscription.resumed event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionResumed struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionTrialing represents a subscription webhook notification entity.
+// SubscriptionTrialing represents the subscription.trialing event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionTrialing struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
 }
 
-// SubscriptionUpdated represents a subscription webhook notification entity.
+// SubscriptionUpdated represents the subscription.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type SubscriptionUpdated struct {
 	GenericNotificationsEvent
 	Data SubscriptionNotification `json:"data"`
+}
+
+// SubscriptionStatus: Status of this subscription. Set automatically by Paddle. Use the pause subscription or cancel subscription operations to change..
+type SubscriptionStatus string
+
+const (
+	SubscriptionStatusActive   = "active"
+	SubscriptionStatusCanceled = "canceled"
+	SubscriptionStatusPastDue  = "past_due"
+	SubscriptionStatusPaused   = "paused"
+	SubscriptionStatusTrialing = "trialing"
+)
+
+// SubscriptionDiscount: Details of the discount applied to this subscription.
+type SubscriptionDiscount struct {
+	// ID: Unique Paddle ID for this discount, prefixed with `dsc_`.
+	ID string `json:"id,omitempty"`
+	// StartsAt: RFC 3339 datetime string of when this discount was first applied.
+	StartsAt string `json:"starts_at,omitempty"`
+	// EndsAt: RFC 3339 datetime string of when this discount no longer applies. Where a discount has `maximum_recurring_intervals`, this is the date of the last billing period where this discount applies. `null` where a discount recurs forever.
+	EndsAt *string `json:"ends_at,omitempty"`
+}
+
+// ScheduledChangeAction: Kind of change that's scheduled to be applied to this subscription..
+type ScheduledChangeAction string
+
+const (
+	ScheduledChangeActionCancel = "cancel"
+	ScheduledChangeActionPause  = "pause"
+	ScheduledChangeActionResume = "resume"
+)
+
+// SubscriptionScheduledChange: Change that's scheduled to be applied to a subscription. Use the pause subscription, cancel subscription, and resume subscription operations to create scheduled changes. `null` if no scheduled changes.
+type SubscriptionScheduledChange struct {
+	// Action: Kind of change that's scheduled to be applied to this subscription.
+	Action string `json:"action,omitempty"`
+	// EffectiveAt: RFC 3339 datetime string of when this scheduled change takes effect.
+	EffectiveAt string `json:"effective_at,omitempty"`
+	// ResumeAt: RFC 3339 datetime string of when a paused subscription should resume. Only used for `pause` scheduled changes.
+	ResumeAt *string `json:"resume_at,omitempty"`
+}
+
+// SubscriptionItemStatus: Status of this subscription item. Set automatically by Paddle..
+type SubscriptionItemStatus string
+
+const (
+	SubscriptionItemStatusActive   = "active"
+	SubscriptionItemStatusInactive = "inactive"
+	SubscriptionItemStatusTrialing = "trialing"
+)
+
+// SubscriptionItem: Represents a subscription item.
+type SubscriptionItem struct {
+	// Status: Status of this subscription item. Set automatically by Paddle.
+	Status string `json:"status,omitempty"`
+	// Quantity: Quantity of this item on the subscription.
+	Quantity int `json:"quantity,omitempty"`
+	// Recurring: Whether this is a recurring item. `false` if one-time.
+	Recurring bool `json:"recurring,omitempty"`
+	// CreatedAt: RFC 3339 datetime string of when this item was added to this subscription.
+	CreatedAt string `json:"created_at,omitempty"`
+	// UpdatedAt: RFC 3339 datetime string of when this item was last updated on this subscription.
+	UpdatedAt string `json:"updated_at,omitempty"`
+	// PreviouslyBilledAt: RFC 3339 datetime string of when this item was last billed.
+	PreviouslyBilledAt *string `json:"previously_billed_at,omitempty"`
+	// NextBilledAt: RFC 3339 datetime string of when this item is next scheduled to be billed.
+	NextBilledAt *string `json:"next_billed_at,omitempty"`
+	// TrialDates: Trial dates for this item.
+	TrialDates *TimePeriod `json:"trial_dates,omitempty"`
+	// Price: Related price entity for this item. This reflects the price entity at the time it was added to the subscription.
+	Price Price `json:"price,omitempty"`
 }
 
 // SubscriptionNotification: New or changed entity.
@@ -99,7 +170,7 @@ type SubscriptionNotification struct {
 	CollectionMode string `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 	BillingDetails *BillingDetails `json:"billing_details,omitempty"`
-	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle.
+	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle. `null` for `paused` and `canceled` subscriptions.
 	CurrentBillingPeriod *TimePeriod `json:"current_billing_period,omitempty"`
 	// BillingCycle: How often this subscription renews. Set automatically by Paddle based on the prices on this subscription.
 	BillingCycle Duration `json:"billing_cycle,omitempty"`
@@ -149,7 +220,7 @@ type SubscriptionCreatedNotification struct {
 	CollectionMode string `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 	BillingDetails *BillingDetails `json:"billing_details,omitempty"`
-	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle.
+	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle. `null` for `paused` and `canceled` subscriptions.
 	CurrentBillingPeriod *TimePeriod `json:"current_billing_period,omitempty"`
 	// BillingCycle: How often this subscription renews. Set automatically by Paddle based on the prices on this subscription.
 	BillingCycle Duration `json:"billing_cycle,omitempty"`

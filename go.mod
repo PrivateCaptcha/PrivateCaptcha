@@ -4,7 +4,7 @@ go 1.22.1
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.17.1
-	github.com/PaddleHQ/paddle-go-sdk v0.3.0
+	github.com/PaddleHQ/paddle-go-sdk v0.4.0
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/badoux/checkmail v1.2.4
 	github.com/golang-migrate/migrate/v4 v4.17.0

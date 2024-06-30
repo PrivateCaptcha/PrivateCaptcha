@@ -115,7 +115,7 @@ func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Pri
 
 	result := make(map[string]int)
 
-	err = prices.Iter(ctx, func(v *paddle.PriceIncludes) (bool, error) {
+	err = prices.Iter(ctx, func(v *paddle.Price) (bool, error) {
 		amountStr := v.UnitPrice.Amount
 		if cents, cerr := strconv.Atoi(amountStr); cerr == nil {
 			result[v.ID] = cents / 100
@@ -142,11 +142,11 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 
 	response, err := pc.sdk.PreviewSubscription(ctx, &paddle.PreviewSubscriptionRequest{
 		SubscriptionID: subscriptionID,
-		Items: []paddle.SubscriptionsCatalogItem{{
+		Items: paddle.NewPatchField([]paddle.SubscriptionsCatalogItem{{
 			PriceID:  priceID,
 			Quantity: quantity,
-		}},
-		ProrationBillingMode: &prorationMode,
+		}}),
+		ProrationBillingMode: paddle.NewPatchField(prorationMode),
 	})
 
 	if err != nil {

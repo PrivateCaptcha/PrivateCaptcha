@@ -2,21 +2,21 @@
 
 package paddlenotification
 
-// ProductCreated represents a product webhook notification entity.
+// ProductCreated represents the product.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type ProductCreated struct {
 	GenericNotificationsEvent
 	Data ProductNotification `json:"data"`
 }
 
-// ProductImported represents a product webhook notification entity.
+// ProductImported represents the product.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type ProductImported struct {
 	GenericNotificationsEvent
 	Data ProductNotification `json:"data"`
 }
 
-// ProductUpdated represents a product webhook notification entity.
+// ProductUpdated represents the product.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type ProductUpdated struct {
 	GenericNotificationsEvent

@@ -5,6 +5,7 @@ package paddle
 import (
 	"context"
 	"encoding/json"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -34,6 +35,69 @@ var ErrReportExpired = &paddleerr.Error{
 var ErrReportFailed = &paddleerr.Error{
 	Code: "report_failed",
 	Type: paddleerr.ErrorTypeRequestError,
+}
+
+/*
+ReportStatus: Status of this report. Set automatically by Paddle.
+
+Reports are created as `pending` initially, then move to `ready` when they're available to download..
+*/
+type ReportStatus string
+
+const (
+	ReportStatusPending = "pending"
+	ReportStatusReady   = "ready"
+	ReportStatusFailed  = "failed"
+	ReportStatusExpired = "expired"
+)
+
+// ReportTypeTransactions: Type of report..
+type ReportTypeTransactions string
+
+const (
+	ReportTypeTransactionsAdjustments          = "adjustments"
+	ReportTypeTransactionsAdjustmentLineItems  = "adjustment_line_items"
+	ReportTypeTransactionsTransactions         = "transactions"
+	ReportTypeTransactionsTransactionLineItems = "transaction_line_items"
+	ReportTypeTransactionsProductsPrices       = "products_prices"
+	ReportTypeTransactionsDiscounts            = "discounts"
+)
+
+// Name: Field name to filter by..
+type ReportsName string
+
+const (
+	ReportsNameAction           = "action"
+	ReportsNameCurrencyCode     = "currency_code"
+	ReportsNameStatus           = "status"
+	ReportsNameUpdatedAt        = "updated_at"
+	ReportsNameCollectionMode   = "collection_mode"
+	ReportsNameOrigin           = "origin"
+	ReportsNameProductStatus    = "product_status"
+	ReportsNamePriceStatus      = "price_status"
+	ReportsNameProductType      = "product_type"
+	ReportsNamePriceType        = "price_type"
+	ReportsNameProductUpdatedAt = "product_updated_at"
+	ReportsNamePriceUpdatedAt   = "price_updated_at"
+	ReportsNameType             = "type"
+)
+
+// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise..
+type ReportsOperator *string
+
+const (
+	ReportsOperatorLt  = "lt"
+	ReportsOperatorGte = "gte"
+)
+
+// ReportFilters: List of filters applied to this report.
+type ReportFilters struct {
+	// Name: Field name to filter by.
+	Name string `json:"name,omitempty"`
+	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
+	Operator *string `json:"operator,omitempty"`
+	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
+	Value string `json:"value,omitempty"`
 }
 
 // Report: Represents a report entity.
@@ -103,6 +167,11 @@ type TransactionsReports struct {
 	// Filters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
 	Filters []ReportsReportsReportFilters `json:"filters,omitempty"`
 }
+
+// Type: Type of report to create..
+type Type string
+
+const TypeProductsPrices = "products_prices"
 
 // ReportsReportsReportsReportFilters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `product_updated_at` and `price_updated_at` are greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
 type ReportsReportsReportsReportFilters struct {

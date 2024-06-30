@@ -4,6 +4,7 @@ package paddle
 
 import (
 	"context"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -39,6 +40,13 @@ var ErrDiscountRestrictedProductNotActive = &paddleerr.Error{
 // See https://developer.paddle.com/errors/discounts/discount_restricted_product_price_not_active for more information.
 var ErrDiscountRestrictedProductPriceNotActive = &paddleerr.Error{
 	Code: "discount_restricted_product_price_not_active",
+	Type: paddleerr.ErrorTypeRequestError,
+}
+
+// ErrDiscountUsageLimitLessThanTimesUsed represents a `discount_usage_limit_less_than_times_used` error.
+// See https://developer.paddle.com/errors/discounts/discount_usage_limit_less_than_times_used for more information.
+var ErrDiscountUsageLimitLessThanTimesUsed = &paddleerr.Error{
+	Code: "discount_usage_limit_less_than_times_used",
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
