@@ -2,21 +2,21 @@
 
 package paddlenotification
 
-// AddressCreated represents a address webhook notification entity.
+// AddressCreated represents the address.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type AddressCreated struct {
 	GenericNotificationsEvent
 	Data AddressNotification `json:"data"`
 }
 
-// AddressImported represents a address webhook notification entity.
+// AddressImported represents the address.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type AddressImported struct {
 	GenericNotificationsEvent
 	Data AddressNotification `json:"data"`
 }
 
-// AddressUpdated represents a address webhook notification entity.
+// AddressUpdated represents the address.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type AddressUpdated struct {
 	GenericNotificationsEvent

@@ -602,18 +602,11 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
-	//changePreview, err := s.PaddleAPI.PreviewChange(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/)
-	//if err != nil {
-	//	slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
-	//	renderCtx.ErrorMessage = "Failed to change your subscription. Please contact support for assistance."
-	//	return renderCtx, settingsBillingTemplate, nil
-	//}
-
-	// TODO: Remove this stub when Paddle SDK will be fixed
-	// https://github.com/PaddleHQ/paddle-go-sdk/issues/8
-	changePreview := &billing.ChangePreview{
-		ChargeAmount:   123,
-		ChargeCurrency: "EUR",
+	changePreview, err := s.PaddleAPI.PreviewChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to change your subscription. Please contact support for assistance."
+		return renderCtx, settingsBillingTemplate, nil
 	}
 
 	renderCtx.PreviewOpen = true

@@ -519,42 +519,6 @@ type PriceQuantity struct {
 	Maximum int `json:"maximum,omitempty"`
 }
 
-// Price: Represents a price entity.
-type Price struct {
-	// ID: Unique Paddle ID for this price, prefixed with `pri_`.
-	ID string `json:"id,omitempty"`
-	// ProductID: Paddle ID for the product that this price is for, prefixed with `pro_`.
-	ProductID string `json:"product_id,omitempty"`
-	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
-	Description string `json:"description,omitempty"`
-	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type string `json:"type,omitempty"`
-	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
-	Name *string `json:"name,omitempty"`
-	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
-	BillingCycle *Duration `json:"billing_cycle,omitempty"`
-	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
-	TrialPeriod *Duration `json:"trial_period,omitempty"`
-	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
-	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
-	UnitPrice Money `json:"unit_price,omitempty"`
-	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
-	UnitPriceOverrides []UnitPriceOverride `json:"unit_price_overrides,omitempty"`
-	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns.
-	Quantity PriceQuantity `json:"quantity,omitempty"`
-	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
-	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
-	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
-	CreatedAt string `json:"created_at,omitempty"`
-	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
-	UpdatedAt string `json:"updated_at,omitempty"`
-}
-
 // Pagination: Keys used for working with paginated results.
 type Pagination struct {
 	// PerPage: Number of entities per page for this response. May differ from the number requested if the requested number is greater than the maximum.
@@ -573,32 +537,6 @@ type MetaPaginated struct {
 	RequestID string `json:"request_id,omitempty"`
 	// Pagination: Keys used for working with paginated results.
 	Pagination Pagination `json:"pagination,omitempty"`
-}
-
-// Product: Represents a product entity.
-type Product struct {
-	// ID: Unique Paddle ID for this product, prefixed with `pro_`.
-	ID string `json:"id,omitempty"`
-	// Name: Name of this product.
-	Name string `json:"name,omitempty"`
-	// Description: Short description for this product.
-	Description *string `json:"description,omitempty"`
-	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type string `json:"type,omitempty"`
-	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory string `json:"tax_category,omitempty"`
-	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
-	ImageURL *string `json:"image_url,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
-	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
-	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
-	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
-	CreatedAt string `json:"created_at,omitempty"`
-	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
-	UpdatedAt string `json:"updated_at,omitempty"`
 }
 
 // Meta: Information about this response.
@@ -807,6 +745,8 @@ type TransactionPayoutTotals struct {
 type CurrencyCodeChargebacks string
 
 const (
+	CurrencyCodeChargebacksAUD = "AUD"
+	CurrencyCodeChargebacksCAD = "CAD"
 	CurrencyCodeChargebacksEUR = "EUR"
 	CurrencyCodeChargebacksGBP = "GBP"
 	CurrencyCodeChargebacksUSD = "USD"
@@ -1248,33 +1188,6 @@ type Business struct {
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 }
 
-// Customer: Customer for this transaction. Returned when the `include` parameter is used with the `customer` value and the transaction has a `customer_id`.
-type Customer struct {
-	// ID: Unique Paddle ID for this customer entity, prefixed with `ctm_`.
-	ID string `json:"id,omitempty"`
-	// Name: Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).
-	Name *string `json:"name,omitempty"`
-	// Email: Email address for this customer.
-	Email string `json:"email,omitempty"`
-	/*
-	   MarketingConsent: Whether this customer opted into marketing from you.
-	   Set to `true` by Paddle where a customer checks the marketing consent box when using Paddle Checkout; `false` otherwise.
-	*/
-	MarketingConsent bool `json:"marketing_consent,omitempty"`
-	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// Locale: Valid IETF BCP 47 short form locale tag. If omitted, defaults to `en`.
-	Locale string `json:"locale,omitempty"`
-	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
-	CreatedAt string `json:"created_at,omitempty"`
-	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
-	UpdatedAt string `json:"updated_at,omitempty"`
-	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
-	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
-}
-
 // DiscountStatus: Whether this entity can be used in Paddle. `expired` and `used` are set automatically by Paddle..
 type DiscountStatus string
 
@@ -1334,30 +1247,6 @@ type Discount struct {
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 }
 
-// TransactionSubscriptionPriceCreateWithProductID: Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.
-type TransactionSubscriptionPriceCreateWithProductID struct {
-	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
-	Description string `json:"description,omitempty"`
-	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
-	Name *string `json:"name,omitempty"`
-	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
-	BillingCycle *Duration `json:"billing_cycle,omitempty"`
-	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
-	TrialPeriod *Duration `json:"trial_period,omitempty"`
-	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
-	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
-	UnitPrice Money `json:"unit_price,omitempty"`
-	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
-	UnitPriceOverrides []UnitPriceOverride `json:"unit_price_overrides,omitempty"`
-	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.
-	Quantity PriceQuantity `json:"quantity,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// ProductID: Paddle ID for the product that this price is for, prefixed with `pro_`.
-	ProductID string `json:"product_id,omitempty"`
-}
-
 // TransactionSubscriptionProductCreate: Product object for a non-catalog item to charge for.
 type TransactionSubscriptionProductCreate struct {
 	// Name: Name of this product.
@@ -1370,30 +1259,6 @@ type TransactionSubscriptionProductCreate struct {
 	ImageURL *string `json:"image_url,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
-}
-
-// TransactionSubscriptionPriceCreateWithProduct: Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.
-type TransactionSubscriptionPriceCreateWithProduct struct {
-	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
-	Description string `json:"description,omitempty"`
-	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
-	Name *string `json:"name,omitempty"`
-	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
-	BillingCycle *Duration `json:"billing_cycle,omitempty"`
-	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
-	TrialPeriod *Duration `json:"trial_period,omitempty"`
-	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
-	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
-	UnitPrice Money `json:"unit_price,omitempty"`
-	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
-	UnitPriceOverrides []UnitPriceOverride `json:"unit_price_overrides,omitempty"`
-	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.
-	Quantity PriceQuantity `json:"quantity,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// Product: Product object for a non-catalog item to charge for.
-	Product TransactionSubscriptionProductCreate `json:"product,omitempty"`
 }
 
 // AddressPreview: Address for this preview. Send one of `address_id`, `customer_ip_address`, or the `address` object when previewing.
@@ -1427,144 +1292,4 @@ type EventType struct {
 	// AvailableVersions: List of API versions that this event type supports.
 	AvailableVersions []int `json:"available_versions,omitempty"`
 }
-
-// SubscriptionStatus: Status of this subscription. Set automatically by Paddle. Use the pause subscription or cancel subscription operations to change..
-type SubscriptionStatus string
-
-const (
-	SubscriptionStatusActive   = "active"
-	SubscriptionStatusCanceled = "canceled"
-	SubscriptionStatusPastDue  = "past_due"
-	SubscriptionStatusPaused   = "paused"
-	SubscriptionStatusTrialing = "trialing"
-)
-
-// SubscriptionDiscount: Details of the discount applied to this subscription.
-type SubscriptionDiscount struct {
-	// ID: Unique Paddle ID for this discount, prefixed with `dsc_`.
-	ID string `json:"id,omitempty"`
-	// StartsAt: RFC 3339 datetime string of when this discount was first applied.
-	StartsAt string `json:"starts_at,omitempty"`
-	// EndsAt: RFC 3339 datetime string of when this discount no longer applies. Where a discount has `maximum_recurring_intervals`, this is the date of the last billing period where this discount applies. `null` where a discount recurs forever.
-	EndsAt *string `json:"ends_at,omitempty"`
-}
-
-// ScheduledChangeAction: Kind of change that's scheduled to be applied to this subscription..
-type ScheduledChangeAction string
-
-const (
-	ScheduledChangeActionCancel = "cancel"
-	ScheduledChangeActionPause  = "pause"
-	ScheduledChangeActionResume = "resume"
-)
-
-// SubscriptionScheduledChange: Change that's scheduled to be applied to a subscription. Use the pause subscription, cancel subscription, and resume subscription operations to create scheduled changes. `null` if no scheduled changes.
-type SubscriptionScheduledChange struct {
-	// Action: Kind of change that's scheduled to be applied to this subscription.
-	Action string `json:"action,omitempty"`
-	// EffectiveAt: RFC 3339 datetime string of when this scheduled change takes effect.
-	EffectiveAt string `json:"effective_at,omitempty"`
-	// ResumeAt: RFC 3339 datetime string of when a paused subscription should resume. Only used for `pause` scheduled changes.
-	ResumeAt *string `json:"resume_at,omitempty"`
-}
-
-// SubscriptionItemStatus: Status of this subscription item. Set automatically by Paddle..
-type SubscriptionItemStatus string
-
-const (
-	SubscriptionItemStatusActive   = "active"
-	SubscriptionItemStatusInactive = "inactive"
-	SubscriptionItemStatusTrialing = "trialing"
-)
-
-// SubscriptionItem: Represents a subscription item.
-type SubscriptionItem struct {
-	// Status: Status of this subscription item. Set automatically by Paddle.
-	Status string `json:"status,omitempty"`
-	// Quantity: Quantity of this item on the subscription.
-	Quantity int `json:"quantity,omitempty"`
-	// Recurring: Whether this is a recurring item. `false` if one-time.
-	Recurring bool `json:"recurring,omitempty"`
-	// CreatedAt: RFC 3339 datetime string of when this item was added to this subscription.
-	CreatedAt string `json:"created_at,omitempty"`
-	// UpdatedAt: RFC 3339 datetime string of when this item was last updated on this subscription.
-	UpdatedAt string `json:"updated_at,omitempty"`
-	// PreviouslyBilledAt: RFC 3339 datetime string of when this item was last billed.
-	PreviouslyBilledAt *string `json:"previously_billed_at,omitempty"`
-	// NextBilledAt: RFC 3339 datetime string of when this item is next scheduled to be billed.
-	NextBilledAt *string `json:"next_billed_at,omitempty"`
-	// TrialDates: Trial dates for this item.
-	TrialDates *TimePeriod `json:"trial_dates,omitempty"`
-	// Price: Related price entity for this item. This reflects the price entity at the time it was added to the subscription.
-	Price Price `json:"price,omitempty"`
-}
-
-/*
-ReportStatus: Status of this report. Set automatically by Paddle.
-
-Reports are created as `pending` initially, then move to `ready` when they're available to download..
-*/
-type ReportStatus string
-
-const (
-	ReportStatusPending = "pending"
-	ReportStatusReady   = "ready"
-	ReportStatusFailed  = "failed"
-	ReportStatusExpired = "expired"
-)
-
-// ReportTypeTransactions: Type of report..
-type ReportTypeTransactions string
-
-const (
-	ReportTypeTransactionsAdjustments          = "adjustments"
-	ReportTypeTransactionsAdjustmentLineItems  = "adjustment_line_items"
-	ReportTypeTransactionsTransactions         = "transactions"
-	ReportTypeTransactionsTransactionLineItems = "transaction_line_items"
-	ReportTypeTransactionsProductsPrices       = "products_prices"
-	ReportTypeTransactionsDiscounts            = "discounts"
-)
-
-// Name: Field name to filter by..
-type SharedName string
-
-const (
-	SharedNameAction           = "action"
-	SharedNameCurrencyCode     = "currency_code"
-	SharedNameStatus           = "status"
-	SharedNameUpdatedAt        = "updated_at"
-	SharedNameCollectionMode   = "collection_mode"
-	SharedNameOrigin           = "origin"
-	SharedNameProductStatus    = "product_status"
-	SharedNamePriceStatus      = "price_status"
-	SharedNameProductType      = "product_type"
-	SharedNamePriceType        = "price_type"
-	SharedNameProductUpdatedAt = "product_updated_at"
-	SharedNamePriceUpdatedAt   = "price_updated_at"
-	SharedNameType             = "type"
-)
-
-// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise..
-type SharedOperator *string
-
-const (
-	SharedOperatorLt  = "lt"
-	SharedOperatorGte = "gte"
-)
-
-// ReportFilters: List of filters applied to this report.
-type ReportFilters struct {
-	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
-	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
-	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
-	Value string `json:"value,omitempty"`
-}
-
-// Type: Type of report to create..
-type Type string
-
-const TypeProductsPrices = "products_prices"
-
 type CustomData map[string]any

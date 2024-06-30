@@ -2,25 +2,33 @@
 
 package paddlenotification
 
-// BusinessCreated represents a business webhook notification entity.
+// BusinessCreated represents the business.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessCreated struct {
 	GenericNotificationsEvent
 	Data BusinessNotification `json:"data"`
 }
 
-// BusinessImported represents a business webhook notification entity.
+// BusinessImported represents the business.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessImported struct {
 	GenericNotificationsEvent
 	Data BusinessNotification `json:"data"`
 }
 
-// BusinessUpdated represents a business webhook notification entity.
+// BusinessUpdated represents the business.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessUpdated struct {
 	GenericNotificationsEvent
 	Data BusinessNotification `json:"data"`
+}
+
+// Contacts: List of contacts related to this business, typically used for sending invoices.
+type Contacts struct {
+	// Name: Full name of this contact.
+	Name string `json:"name,omitempty"`
+	// Email: Email address for this contact.
+	Email string `json:"email,omitempty"`
 }
 
 // BusinessNotification: New or changed entity.

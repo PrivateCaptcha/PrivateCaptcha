@@ -4,6 +4,7 @@ package paddle
 
 import (
 	"context"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -42,8 +43,8 @@ var ErrPriceDuplicateCurrencyOverrideForCountry = &paddleerr.Error{
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
-// PriceIncludes: Represents a price entity with included entities.
-type PriceIncludes struct {
+// Price: Represents a price entity with included entities.
+type Price struct {
 	// ID: Unique Paddle ID for this price, prefixed with `pri_`.
 	ID string `json:"id,omitempty"`
 	// ProductID: Paddle ID for the product that this price is for, prefixed with `pro_`.
@@ -126,7 +127,7 @@ type ListPricesRequest struct {
 }
 
 // ListPrices performs the GET operation on a Prices resource.
-func (c *PricesClient) ListPrices(ctx context.Context, req *ListPricesRequest) (res *Collection[*PriceIncludes], err error) {
+func (c *PricesClient) ListPrices(ctx context.Context, req *ListPricesRequest) (res *Collection[*Price], err error) {
 	if err := c.doer.Do(ctx, "GET", "/prices", req, &res); err != nil {
 		return nil, err
 	}
@@ -180,7 +181,7 @@ type GetPriceRequest struct {
 }
 
 // GetPrice performs the GET operation on a Prices resource.
-func (c *PricesClient) GetPrice(ctx context.Context, req *GetPriceRequest) (res *PriceIncludes, err error) {
+func (c *PricesClient) GetPrice(ctx context.Context, req *GetPriceRequest) (res *Price, err error) {
 	if err := c.doer.Do(ctx, "GET", "/prices/{price_id}", req, &res); err != nil {
 		return nil, err
 	}
