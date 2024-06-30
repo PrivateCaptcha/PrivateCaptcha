@@ -4,6 +4,7 @@ package paddle
 
 import (
 	"context"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -14,8 +15,8 @@ var ErrProductTaxCategoryNotApproved = &paddleerr.Error{
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
-// ProductWithIncludes: Represents a product entity with included entities.
-type ProductWithIncludes struct {
+// Product: Represents a product entity with included entities.
+type Product struct {
 	// ID: Unique Paddle ID for this product, prefixed with `pro_`.
 	ID string `json:"id,omitempty"`
 	// Name: Name of this product.
@@ -85,7 +86,7 @@ type ListProductsRequest struct {
 }
 
 // ListProducts performs the GET operation on a Products resource.
-func (c *ProductsClient) ListProducts(ctx context.Context, req *ListProductsRequest) (res *Collection[*ProductWithIncludes], err error) {
+func (c *ProductsClient) ListProducts(ctx context.Context, req *ListProductsRequest) (res *Collection[*Product], err error) {
 	if err := c.doer.Do(ctx, "GET", "/products", req, &res); err != nil {
 		return nil, err
 	}
@@ -129,7 +130,7 @@ type GetProductRequest struct {
 }
 
 // GetProduct performs the GET operation on a Products resource.
-func (c *ProductsClient) GetProduct(ctx context.Context, req *GetProductRequest) (res *ProductWithIncludes, err error) {
+func (c *ProductsClient) GetProduct(ctx context.Context, req *GetProductRequest) (res *Product, err error) {
 	if err := c.doer.Do(ctx, "GET", "/products/{product_id}", req, &res); err != nil {
 		return nil, err
 	}

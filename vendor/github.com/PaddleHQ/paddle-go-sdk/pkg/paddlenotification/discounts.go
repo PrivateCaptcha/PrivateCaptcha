@@ -2,26 +2,45 @@
 
 package paddlenotification
 
-// DiscountCreated represents a discount webhook notification entity.
+// DiscountCreated represents the discount.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type DiscountCreated struct {
 	GenericNotificationsEvent
 	Data DiscountNotification `json:"data"`
 }
 
-// DiscountImported represents a discount webhook notification entity.
+// DiscountImported represents the discount.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type DiscountImported struct {
 	GenericNotificationsEvent
 	Data DiscountNotification `json:"data"`
 }
 
-// DiscountUpdated represents a discount webhook notification entity.
+// DiscountUpdated represents the discount.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type DiscountUpdated struct {
 	GenericNotificationsEvent
 	Data DiscountNotification `json:"data"`
 }
+
+// DiscountStatus: Whether this entity can be used in Paddle. `expired` and `used` are set automatically by Paddle..
+type DiscountStatus string
+
+const (
+	DiscountStatusActive   = "active"
+	DiscountStatusArchived = "archived"
+	DiscountStatusExpired  = "expired"
+	DiscountStatusUsed     = "used"
+)
+
+// Type: Type of discount..
+type Type string
+
+const (
+	TypeFlat        = "flat"
+	TypeFlatPerSeat = "flat_per_seat"
+	TypePercentage  = "percentage"
+)
 
 // DiscountNotification: New or changed entity.
 type DiscountNotification struct {

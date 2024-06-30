@@ -5,6 +5,7 @@ package paddle
 import (
 	"context"
 	"encoding/json"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 	paddlenotification "github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
 )

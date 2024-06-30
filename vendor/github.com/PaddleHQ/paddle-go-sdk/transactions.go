@@ -5,6 +5,7 @@ package paddle
 import (
 	"context"
 	"encoding/json"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -40,6 +41,13 @@ var ErrTransactionDefaultCheckoutURLNotSet = &paddleerr.Error{
 // See https://developer.paddle.com/errors/transactions/transaction_checkout_not_enabled for more information.
 var ErrTransactionCheckoutNotEnabled = &paddleerr.Error{
 	Code: "transaction_checkout_not_enabled",
+	Type: paddleerr.ErrorTypeRequestError,
+}
+
+// ErrTransactionPayoutAccountRequired represents a `transaction_payout_account_required` error.
+// See https://developer.paddle.com/errors/transactions/transaction_payout_account_required for more information.
+var ErrTransactionPayoutAccountRequired = &paddleerr.Error{
+	Code: "transaction_payout_account_required",
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
@@ -266,8 +274,8 @@ type AdjustmentsTotals struct {
 	CurrencyCode string `json:"currency_code,omitempty"`
 }
 
-// TransactionIncludes: Represents a transaction entity with included entities.
-type TransactionIncludes struct {
+// Transaction: Represents a transaction entity with included entities.
+type Transaction struct {
 	// ID: Unique Paddle ID for this transaction entity, prefixed with `txn_`.
 	ID string `json:"id,omitempty"`
 	// Status: Status of this transaction. You may set a transaction to `billed` or `canceled`, other statuses are set automatically by Paddle. Automatically-collected transactions may return `completed` if payment is captured successfully, or `past_due` if payment failed.
@@ -338,6 +346,30 @@ type CatalogItem struct {
 	PriceID string `json:"price_id,omitempty"`
 }
 
+// TransactionPriceCreateWithProductID: Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.
+type TransactionPriceCreateWithProductID struct {
+	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
+	Description string `json:"description,omitempty"`
+	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
+	Name *string `json:"name,omitempty"`
+	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
+	BillingCycle *Duration `json:"billing_cycle,omitempty"`
+	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
+	TrialPeriod *Duration `json:"trial_period,omitempty"`
+	// TaxMode: How tax is calculated for this price.
+	TaxMode string `json:"tax_mode,omitempty"`
+	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
+	UnitPrice Money `json:"unit_price,omitempty"`
+	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
+	UnitPriceOverrides []UnitPriceOverride `json:"unit_price_overrides,omitempty"`
+	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.
+	Quantity PriceQuantity `json:"quantity,omitempty"`
+	// CustomData: Your own structured key-value data.
+	CustomData CustomData `json:"custom_data,omitempty"`
+	// ProductID: Paddle ID for the product that this price is for, prefixed with `pro_`.
+	ProductID string `json:"product_id,omitempty"`
+}
+
 // NonCatalogPriceForAnExistingProduct: Add a non-catalog price for an existing product in your catalog to a transaction. In this case, the product you're billing for is a catalog product, but you charge a specific price for it.
 type NonCatalogPriceForAnExistingProduct struct {
 	// Quantity: Quantity of this item on the transaction.
@@ -345,7 +377,31 @@ type NonCatalogPriceForAnExistingProduct struct {
 	// Proration: How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.
 	Proration *Proration `json:"proration,omitempty"`
 	// Price: Price object for a non-catalog item to charge for. Include a `product_id` to relate this non-catalog price to an existing catalog price.
-	Price TransactionSubscriptionPriceCreateWithProductID `json:"price,omitempty"`
+	Price TransactionPriceCreateWithProductID `json:"price,omitempty"`
+}
+
+// TransactionPriceCreateWithProduct: Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.
+type TransactionPriceCreateWithProduct struct {
+	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
+	Description string `json:"description,omitempty"`
+	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
+	Name *string `json:"name,omitempty"`
+	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
+	BillingCycle *Duration `json:"billing_cycle,omitempty"`
+	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
+	TrialPeriod *Duration `json:"trial_period,omitempty"`
+	// TaxMode: How tax is calculated for this price.
+	TaxMode string `json:"tax_mode,omitempty"`
+	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
+	UnitPrice Money `json:"unit_price,omitempty"`
+	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
+	UnitPriceOverrides []UnitPriceOverride `json:"unit_price_overrides,omitempty"`
+	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns. If omitted, defaults to 1-100.
+	Quantity PriceQuantity `json:"quantity,omitempty"`
+	// CustomData: Your own structured key-value data.
+	CustomData CustomData `json:"custom_data,omitempty"`
+	// Product: Product object for a non-catalog item to charge for.
+	Product TransactionSubscriptionProductCreate `json:"product,omitempty"`
 }
 
 // NonCatalogPriceAndProduct: Add a non-catalog price for a non-catalog product in your catalog to a transaction. In this case, the product and price that you're billing for are specific to this transaction.
@@ -355,7 +411,7 @@ type NonCatalogPriceAndProduct struct {
 	// Proration: How proration was calculated for this item. Populated when a transaction is created from a subscription change, where `proration_billing_mode` was `prorated_immediately` or `prorated_next_billing_period`. Set automatically by Paddle.
 	Proration *Proration `json:"proration,omitempty"`
 	// Price: Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.
-	Price TransactionSubscriptionPriceCreateWithProduct `json:"price,omitempty"`
+	Price TransactionPriceCreateWithProduct `json:"price,omitempty"`
 }
 
 // TransactionsCheckout: Paddle Checkout details for this transaction. You may pass a URL when creating or updating an automatically-collected transaction, or when creating or updating a manually-collected transaction where `billing_details.enable_checkout` is `true`.
@@ -389,7 +445,7 @@ type TransactionsNonCatalogPriceForAnExistingProduct struct {
 	// Proration: How proration was calculated for this item. `null` for transaction previews.
 	Proration *Proration `json:"proration,omitempty"`
 	// Price: Price object for a non-catalog item to preview charging for. Include a `product_id` to relate this non-catalog price to an existing catalog price.
-	Price TransactionSubscriptionPriceCreateWithProductID `json:"price,omitempty"`
+	Price TransactionPriceCreateWithProductID `json:"price,omitempty"`
 }
 
 // TransactionsNonCatalogPriceAndProduct: Add a non-catalog price for a non-catalog product in your catalog to a transaction. In this case, the product and price that you're billing for are specific to this transaction.
@@ -401,7 +457,7 @@ type TransactionsNonCatalogPriceAndProduct struct {
 	// Proration: How proration was calculated for this item. `null` for transaction previews.
 	Proration *Proration `json:"proration,omitempty"`
 	// Price: Price object for a non-catalog item to preview charging for. Include a `product` object to create a non-catalog product for this non-catalog price.
-	Price TransactionSubscriptionPriceCreateWithProduct `json:"price,omitempty"`
+	Price TransactionPriceCreateWithProduct `json:"price,omitempty"`
 }
 
 // NewCountryAndZipPostalCodeItemsTransactionsCatalogItem takes a TransactionsCatalogItem type
@@ -779,6 +835,10 @@ type ListTransactionsRequest struct {
 	// If set to true, will be included on the response.
 	IncludeAdjustmentsTotals bool `in:"paddle_include=adjustments_totals" json:"-"`
 
+	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
+	// If set to true, will be included on the response.
+	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
+
 	// IncludeBusiness allows requesting the business sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeBusiness bool `in:"paddle_include=business" json:"-"`
@@ -790,14 +850,10 @@ type ListTransactionsRequest struct {
 	// IncludeDiscount allows requesting the discount sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeDiscount bool `in:"paddle_include=discount" json:"-"`
-
-	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
-	// If set to true, will be included on the response.
-	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
 }
 
 // ListTransactions performs the GET operation on a Transactions resource.
-func (c *TransactionsClient) ListTransactions(ctx context.Context, req *ListTransactionsRequest) (res *Collection[*TransactionIncludes], err error) {
+func (c *TransactionsClient) ListTransactions(ctx context.Context, req *ListTransactionsRequest) (res *Collection[*Transaction], err error) {
 	if err := c.doer.Do(ctx, "GET", "/transactions", req, &res); err != nil {
 		return nil, err
 	}
@@ -905,6 +961,10 @@ type CreateTransactionRequest struct {
 	// If set to true, will be included on the response.
 	IncludeAdjustmentsTotals bool `in:"paddle_include=adjustments_totals" json:"-"`
 
+	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
+	// If set to true, will be included on the response.
+	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
+
 	// IncludeBusiness allows requesting the business sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeBusiness bool `in:"paddle_include=business" json:"-"`
@@ -916,14 +976,10 @@ type CreateTransactionRequest struct {
 	// IncludeDiscount allows requesting the discount sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeDiscount bool `in:"paddle_include=discount" json:"-"`
-
-	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
-	// If set to true, will be included on the response.
-	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
 }
 
 // CreateTransaction performs the POST operation on a Transactions resource.
-func (c *TransactionsClient) CreateTransaction(ctx context.Context, req *CreateTransactionRequest) (res *TransactionIncludes, err error) {
+func (c *TransactionsClient) CreateTransaction(ctx context.Context, req *CreateTransactionRequest) (res *Transaction, err error) {
 	if err := c.doer.Do(ctx, "POST", "/transactions", req, &res); err != nil {
 		return nil, err
 	}
@@ -1009,6 +1065,10 @@ type GetTransactionRequest struct {
 	// If set to true, will be included on the response.
 	IncludeAdjustmentsTotals bool `in:"paddle_include=adjustments_totals" json:"-"`
 
+	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
+	// If set to true, will be included on the response.
+	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
+
 	// IncludeBusiness allows requesting the business sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeBusiness bool `in:"paddle_include=business" json:"-"`
@@ -1020,14 +1080,10 @@ type GetTransactionRequest struct {
 	// IncludeDiscount allows requesting the discount sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeDiscount bool `in:"paddle_include=discount" json:"-"`
-
-	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
-	// If set to true, will be included on the response.
-	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
 }
 
 // GetTransaction performs the GET operation on a Transactions resource.
-func (c *TransactionsClient) GetTransaction(ctx context.Context, req *GetTransactionRequest) (res *TransactionIncludes, err error) {
+func (c *TransactionsClient) GetTransaction(ctx context.Context, req *GetTransactionRequest) (res *Transaction, err error) {
 	if err := c.doer.Do(ctx, "GET", "/transactions/{transaction_id}", req, &res); err != nil {
 		return nil, err
 	}
@@ -1134,6 +1190,10 @@ type UpdateTransactionRequest struct {
 	// If set to true, will be included on the response.
 	IncludeAdjustmentsTotals bool `in:"paddle_include=adjustments_totals" json:"-"`
 
+	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
+	// If set to true, will be included on the response.
+	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
+
 	// IncludeBusiness allows requesting the business sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeBusiness bool `in:"paddle_include=business" json:"-"`
@@ -1145,14 +1205,10 @@ type UpdateTransactionRequest struct {
 	// IncludeDiscount allows requesting the discount sub-resource as part of this request.
 	// If set to true, will be included on the response.
 	IncludeDiscount bool `in:"paddle_include=discount" json:"-"`
-
-	// IncludeAvailablePaymentMethods allows requesting the available_payment_methods sub-resource as part of this request.
-	// If set to true, will be included on the response.
-	IncludeAvailablePaymentMethods bool `in:"paddle_include=available_payment_methods" json:"-"`
 }
 
 // UpdateTransaction performs the PATCH operation on a Transactions resource.
-func (c *TransactionsClient) UpdateTransaction(ctx context.Context, req *UpdateTransactionRequest) (res *TransactionIncludes, err error) {
+func (c *TransactionsClient) UpdateTransaction(ctx context.Context, req *UpdateTransactionRequest) (res *Transaction, err error) {
 	if err := c.doer.Do(ctx, "PATCH", "/transactions/{transaction_id}", req, &res); err != nil {
 		return nil, err
 	}

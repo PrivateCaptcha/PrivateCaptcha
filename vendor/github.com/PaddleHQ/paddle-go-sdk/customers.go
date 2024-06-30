@@ -4,6 +4,7 @@ package paddle
 
 import (
 	"context"
+
 	paddleerr "github.com/PaddleHQ/paddle-go-sdk/pkg/paddleerr"
 )
 
@@ -28,8 +29,8 @@ var ErrCustomerEmailInvalid = &paddleerr.Error{
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
-// CustomerIncludes: Represents a customer entity with included entities.
-type CustomerIncludes struct {
+// Customer: Represents a customer entity with included entities.
+type Customer struct {
 	// ID: Unique Paddle ID for this customer entity, prefixed with `ctm_`.
 	ID string `json:"id,omitempty"`
 	// Name: Full name of this customer. Required when creating transactions where `collection_mode` is `manual` (invoices).
@@ -130,7 +131,7 @@ type GetCustomerRequest struct {
 }
 
 // GetCustomer performs the GET operation on a Customers resource.
-func (c *CustomersClient) GetCustomer(ctx context.Context, req *GetCustomerRequest) (res *CustomerIncludes, err error) {
+func (c *CustomersClient) GetCustomer(ctx context.Context, req *GetCustomerRequest) (res *Customer, err error) {
 	if err := c.doer.Do(ctx, "GET", "/customers/{customer_id}", req, &res); err != nil {
 		return nil, err
 	}
