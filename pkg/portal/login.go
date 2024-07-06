@@ -55,7 +55,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.Store.FindUserByEmail(ctx, email)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to find user by email", "email", email)
 		data.Error = "User with such email does not exist."

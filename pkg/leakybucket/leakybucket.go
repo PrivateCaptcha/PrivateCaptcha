@@ -2,15 +2,7 @@ package leakybucket
 
 import (
 	"errors"
-	"math"
 	"time"
-)
-
-const (
-	// although it seems to be quite generic, current implementation is somewhat locked on value "1" because
-	// of how we're calculating the leaked amount in Add(). Fix is trivial (keep separate time for
-	// updating the mean), but "1" is good enough anyways. Also the algorithm uses leak rate per ++second++.
-	leakyBucketTimeUnitSeconds = 1
 )
 
 var (
@@ -21,39 +13,37 @@ var (
 type TLevel = uint32
 
 type LeakyBucket[TKey comparable] interface {
-	Level(tnow time.Time) int64
+	Level(tnow time.Time) TLevel
 	// Adds "usage" of n units. Returns how much was actually added to the bucket and previous bucket level
 	Add(tnow time.Time, n TLevel) (TLevel, TLevel)
-	Update(capacity TLevel, leakRatePerSecond float64)
+	Update(capacity TLevel, leakInterval time.Duration)
 	Key() TKey
 	Index() int
 	SetIndex(i int)
 	LastAccessTime() time.Time
-	LeakRatePerSecond() float64
+	LeakInterval() time.Duration
 	Capacity() TLevel
-	Init(key TKey, capacity TLevel, leakRatePerSecond float64, t time.Time)
+	Init(key TKey, capacity TLevel, leakInterval time.Duration, t time.Time)
 }
 
 type ConstLeakyBucket[TKey comparable] struct {
 	// key of the bucket in the hashmap
-	key               TKey
-	lastAccessTime    time.Time
-	level             TLevel
-	capacity          TLevel
-	leakRatePerSecond float64
+	key            TKey
+	lastAccessTime time.Time
+	level          TLevel
+	capacity       TLevel
+	// each {leakInterval} we loose 1 bucket level
+	// e.g. to have 5 levels/second leak rate use {leakInterval = time.Second / 5}
+	leakInterval time.Duration
 	// index of this bucket in the priority queue (needed to implement it "the Go way")
 	index int
 }
 
-func (lb *ConstLeakyBucket[TKey]) Init(key TKey, capacity TLevel, leakRatePerSecond float64, t time.Time) {
+func (lb *ConstLeakyBucket[TKey]) Init(key TKey, capacity TLevel, leakInterval time.Duration, tnow time.Time) {
 	lb.key = key
 	lb.capacity = capacity
-	lb.leakRatePerSecond = leakRatePerSecond
-	lb.lastAccessTime = t
-}
-
-func (lb *ConstLeakyBucket[TKey]) LastAccessTime() time.Time {
-	return lb.lastAccessTime
+	lb.leakInterval = leakInterval
+	lb.lastAccessTime = tnow
 }
 
 func (lb *ConstLeakyBucket[TKey]) Index() int {
@@ -64,8 +54,8 @@ func (lb *ConstLeakyBucket[TKey]) SetIndex(i int) {
 	lb.index = i
 }
 
-func (lb *ConstLeakyBucket[TKey]) LeakRatePerSecond() float64 {
-	return lb.leakRatePerSecond
+func (lb *ConstLeakyBucket[TKey]) LeakInterval() time.Duration {
+	return lb.leakInterval
 }
 
 func (lb *ConstLeakyBucket[TKey]) Capacity() TLevel {
@@ -76,97 +66,103 @@ func (lb *ConstLeakyBucket[TKey]) Key() TKey {
 	return lb.key
 }
 
-func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakRatePerSecond float64) {
-	lb.capacity = capacity
-	lb.leakRatePerSecond = leakRatePerSecond
+func (lb *ConstLeakyBucket[TKey]) LastAccessTime() time.Time {
+	return lb.lastAccessTime
 }
 
-func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) int64 {
+func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Duration) {
+	lb.capacity = capacity
+	lb.leakInterval = leakInterval
+}
+
+func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
-	seconds := diff.Seconds()
-	var leaked int64 = 0
-	// we only leak for "future" time (from the perspective of lastAccessTime)
-	if seconds > 0 {
-		leaked = int64(diff.Seconds()*lb.leakRatePerSecond + 0.5)
-	}
+	var leaked int64 = int64(diff / lb.leakInterval)
 	var currLevel int64 = max(0, int64(lb.level)-leaked)
-	return currLevel
+	return TLevel(currLevel)
 }
 
 func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	diff := tnow.Sub(lb.lastAccessTime)
-	seconds := diff.Seconds()
 
-	var leaked int64 = 0
+	var leaked int64 = max(int64(diff/lb.leakInterval), 0)
 	// leakage is constant, so if event is in past, we already accounted for leak during that time
 	// so it means that only the current level could have been larger
-	if seconds > 0 {
-		// there're 86400 seconds in a day so whatever the leak rate, we hope that leaked will not become so large
-		// floating point number that this will impact int64 (meaning, this bucket should get GC'd faster)
-		leaked = int64(diff.Seconds()*lb.leakRatePerSecond + 0.5)
-		lb.lastAccessTime = tnow
+	if diff > 0 {
+		// We took leekage into account at {leakRate} boundary so this is preserving the "unaccounted" part of a leak
+		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
 	}
 
-	prevLevel := lb.level
 	var currLevel int64 = max(0, int64(lb.level)-leaked)
 	var nextLevel int64 = min(int64(lb.capacity), currLevel+int64(n))
 	lb.level = TLevel(nextLevel)
 
-	return prevLevel, TLevel(nextLevel - currLevel)
+	return TLevel(nextLevel), TLevel(nextLevel - currLevel)
 }
 
-func NewConstBucket[TKey comparable](key TKey, capacity TLevel, leakRatePerSecond float64, t time.Time) *ConstLeakyBucket[TKey] {
+func NewConstBucket[TKey comparable](key TKey, capacity TLevel, leakInterval time.Duration, t time.Time) *ConstLeakyBucket[TKey] {
 	b := &ConstLeakyBucket[TKey]{}
-	b.Init(key, capacity, leakRatePerSecond, t)
+	b.Init(key, capacity, leakInterval, t)
 	return b
 }
 
-// Variable LeakyBucket, that updates it's leakRatePerSecond with a leakyBucketTimeUnitSeconds step
+// Variable LeakyBucket, that updates it's leaking rate
 type VarLeakyBucket[TKey comparable] struct {
 	ConstLeakyBucket[TKey]
-	// ------ non-leak-specific fields ------
-	// running mean of all the elements added to the bucket. LeakyBucket adapts leak rate to
-	// changing statistical properties of the elements added to the bucket
-	mean float64
-	// we change {mean} only in different time windows (current resolution is 1 second)
-	// and {pendingSum} is what accumulates added elements for the last time window
+	// ConstLeakBucket always leaks 1 level per {leakInterval}, but {VarLeakyBucket} removes {leakRate} levels
+	// and reculates {leakRate} after each {leakInterval} (leakRate is the running mean)
+	leakRate float64
+	// we change {leakRate} only in different time windows (with resolution of {leakInterval})
+	// and {pendingSum} is what accumulates added elements for the yet unaccounted time window
 	pendingSum int64
 	// total count of items added to the bucket. NOTE: in case of uint64 overflow happens
 	// we just reset all stats and continue as usual
 	count uint64
 }
 
-func NewVarBucket[TKey comparable](key TKey, capacity TLevel, leakRatePerSecond float64, t time.Time) *VarLeakyBucket[TKey] {
-	b := &VarLeakyBucket[TKey]{}
-	b.Init(key, capacity, leakRatePerSecond, t)
+func NewVarBucket[TKey comparable](key TKey, capacity TLevel, leakInterval time.Duration, t time.Time) *VarLeakyBucket[TKey] {
+	b := &VarLeakyBucket[TKey]{
+		leakRate:   1.0, // to start like the ConstLeakyBucket, we leak 1 level per leakInterval
+		pendingSum: 0,
+		count:      1, // this is needed to have "previous" empty bucket for averages
+	}
+	b.Init(key, capacity, leakInterval, t)
 	return b
 }
 
-func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
-	tnow = tnow.Truncate(leakyBucketTimeUnitSeconds * time.Second)
+func (lb *VarLeakyBucket[TKey]) LeakInterval() time.Duration {
+	nanoseconds := float64(lb.leakInterval.Nanoseconds()) / lb.leakRate
+	return time.Duration(nanoseconds) * time.Nanosecond
+}
 
+func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
-	seconds := diff.Seconds()
+	var leaked int64 = int64(lb.leakRate * float64(diff) / float64(lb.leakInterval))
+	var currLevel int64 = max(0, int64(lb.level)-leaked)
+	return TLevel(currLevel)
+}
 
-	var leaked int64 = 0
-	if seconds > 0 {
-		leaked = int64(seconds*lb.leakRatePerSecond + 0.5)
+func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
+	diff := tnow.Sub(lb.lastAccessTime)
+	intervals := max(diff/lb.leakInterval, 0)
+	var leaked int64 = int64(lb.leakRate * float64(intervals))
+	if diff > 0 {
+		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
 	}
 
-	prevLevel := lb.level
 	var currLevel int64 = max(0, int64(lb.level)-leaked)
 	var nextLevel int64 = min(int64(lb.capacity), currLevel+int64(n))
 	lb.level = TLevel(nextLevel)
 
-	lb.pendingSum += int64(n)
-
-	if pendingCount := math.Abs(seconds); pendingCount >= leakyBucketTimeUnitSeconds {
-		lb.count++
+	// this is the way of saying "is this the new {leakRate} interval at {tnow}"
+	// NOTE: we are interested in sign of the {pendingCount} as diff can be negative
+	if pendingCount := (diff / lb.leakInterval); pendingCount > 0 {
+		lb.count += uint64(pendingCount)
 
 		// unlikely uint64 "overflow" protection
 		if lb.count == 0 {
 			lb.count = 1
-			lb.mean = 0.0
+			lb.leakRate = 0.0
 		}
 
 		// we multiply mean by pendingCount accordingly to the formula of calculating mean if we skipped some elements
@@ -175,14 +171,16 @@ func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 		// or, if we will skip x[k-1] and x[k-2] elements (they are 0)
 		// M[k] = (x[k] + x[k-1] + x[k-2] + (k-3)*M[k-3]) / k (and so on)
 		// elements for us are zeroes for "missing" time windows without a value
-		lb.mean = lb.mean + (float64(lb.pendingSum)-pendingCount*lb.mean)/(float64(lb.count)+pendingCount)
+		lb.leakRate = lb.leakRate + (float64(lb.pendingSum)-float64(pendingCount)*lb.leakRate)/(float64(lb.count))
 		lb.pendingSum = 0
-
-		lb.leakRatePerSecond = lb.mean
-		if seconds > 0 {
-			lb.lastAccessTime = tnow
-		}
 	}
 
-	return prevLevel, TLevel(nextLevel - currLevel)
+	// {pendingSum} should be updated AFTER we update the {leakRate}. There are 2 cases:
+	// 1. we add element to the "current/last" bucket, so we need to accumulate {pendingSum} and do nothing
+	// 2. we add element to the _new_ bucket, so if we increment {pendingSum} before calculating {leakRate},
+	//    we will will "split" the sum of the bucket into calculating now and in future, when we cross the boundary
+	//    again, so this will make {pendingCount} incorrectly taken into account (like "twice")
+	lb.pendingSum += int64(n)
+
+	return TLevel(nextLevel), TLevel(nextLevel - currLevel)
 }

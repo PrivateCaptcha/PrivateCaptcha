@@ -16,7 +16,6 @@ const (
 	LevelSmall     = 125
 	LevelMedium    = 150
 	LevelHigh      = 160
-	bucketsCount   = 5
 	leakyBucketCap = math.MaxUint32
 	// this one is arbitrary as we can support "many"
 	maxBucketsToKeep = 1_000_000
@@ -30,17 +29,15 @@ type Levels struct {
 	batchSize       int
 	accessLogCancel context.CancelFunc
 	cleanupCancel   context.CancelFunc
-	bucketSize      time.Duration
 }
 
-func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
+func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration, cleanupCallback leakybucket.BucketCallback[int32]) *Levels {
 	levels := &Levels{
 		timeSeries:   timeSeries,
-		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, 0.0 /*leakRatePerSecond*/),
+		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, bucketSize),
 		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
-		bucketSize:   bucketSize,
 	}
 
 	var accessCtx context.Context
@@ -54,13 +51,13 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 	var cancelCtx context.Context
 	cancelCtx, levels.cleanupCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_stats"))
-	go levels.cleanupStats(cancelCtx)
+	go levels.cleanupStats(cancelCtx, cleanupCallback)
 
 	return levels
 }
 
 func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
-	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize)
+	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize, nil)
 }
 
 func minDifficultyForLevel(level dbgen.DifficultyLevel) uint8 {
@@ -116,10 +113,10 @@ func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.Dif
 
 func (l *Levels) Shutdown() {
 	slog.Debug("Shutting down levels routines")
-	close(l.accessChan)
 	l.accessLogCancel()
-	close(l.backfillChan)
+	close(l.accessChan)
 	l.cleanupCancel()
+	close(l.backfillChan)
 }
 
 func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, leakybucket.TLevel) {
@@ -134,7 +131,7 @@ func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(addResult.CurrentLevel()), minDifficulty, p.Growth), addResult.CurrentLevel()
+	return requestsToDifficulty(float64(addResult.CurrLevel), minDifficulty, p.Growth), addResult.CurrLevel
 }
 
 func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
@@ -169,11 +166,11 @@ func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property
 	l.accessChan <- ar
 }
 
-func (l *Levels) cleanupStats(ctx context.Context) {
+func (l *Levels) cleanupStats(ctx context.Context, cleanupCallback leakybucket.BucketCallback[int32]) {
 	// bucket window is currently 5 minutes so it may change at a minute step
 	// here we have 30 seconds since 1 minute sounds like way too long
 	common.ChunkedCleanup(ctx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.buckets.Cleanup(t, size)
+		return l.buckets.Cleanup(ctx, t, size, cleanupCallback)
 	})
 }
 
@@ -197,7 +194,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			continue
 		}
 
-		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.bucketSize)
+		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.buckets.LeakInterval())
 
 		if err != nil {
 			blog.ErrorContext(ctx, "Failed to backfill stats", common.ErrAttr(err))
@@ -211,11 +208,11 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			for _, count := range counts {
 				addResult = l.buckets.Add(r.PropertyID, count.Count, count.Timestamp)
 			}
-			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrentLevel())
+			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrLevel)
 		}
 
 		if (len(cache) > maxCacheSize) || (time.Since(lastCleanupTime) >= cacheDuration) {
-			slog.DebugContext(ctx, "Cleaning up backfill cache")
+			slog.DebugContext(ctx, "Cleaning up backfill cache", "size", len(cache))
 			for key, value := range cache {
 				if tnow.Sub(value) > cacheDuration {
 					delete(cache, key)
@@ -231,7 +228,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 
 func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 	var batch []*common.AccessRecord
-	slog.DebugContext(ctx, "Processing access log", "interval", delay)
+	slog.DebugContext(ctx, "Processing access log", "interval", delay.String())
 
 	for running := true; running; {
 		select {
@@ -248,19 +245,13 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 
 			if len(batch) >= l.batchSize {
 				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
-					slog.DebugContext(ctx, "Inserted batch of access records", "size", len(batch))
 					batch = []*common.AccessRecord{}
-				} else {
-					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
 				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
-					slog.DebugContext(ctx, "Inserted batch of access records after delay", "size", len(batch))
 					batch = []*common.AccessRecord{}
-				} else {
-					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
 			}
 		}

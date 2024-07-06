@@ -88,7 +88,7 @@ func isSiteKeyValid(sitekey string) bool {
 // the only purpose of this routine is to cache properties
 func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Duration) {
 	var batch []string
-	slog.DebugContext(ctx, "Backfilling properties", "interval", delay)
+	slog.DebugContext(ctx, "Backfilling properties", "interval", delay.String())
 
 	for running := true; running; {
 		select {

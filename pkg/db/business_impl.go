@@ -397,7 +397,7 @@ func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle
 	})
 }
 
-func (impl *businessStoreImpl) findUser(ctx context.Context, email string) (*dbgen.User, error) {
+func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
 	if len(email) == 0 {
 		return nil, ErrInvalidInput
 	}
@@ -422,6 +422,26 @@ func (impl *businessStoreImpl) findUser(ctx context.Context, email string) (*dbg
 	}
 
 	if user != nil {
+		_ = impl.cache.Set(ctx, cacheKey, user)
+	}
+
+	return user, nil
+}
+
+func (impl *businessStoreImpl) findUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
+	user, err := impl.queries.GetUserBySubscriptionID(ctx, Int(subscriptionID))
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve user by subscriptionID", "subscriptionID", subscriptionID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if user != nil {
+		cacheKey := emailCacheKey(user.Email)
 		_ = impl.cache.Set(ctx, cacheKey, user)
 	}
 
@@ -534,11 +554,11 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 	return subscription, nil
 }
 
-func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) error {
+func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
 	subscription, err := impl.queries.UpdateSubscription(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update subscription in DB", "paddleSubscriptionID", params.PaddleSubscriptionID, common.ErrAttr(err))
-		return err
+		return nil, err
 	}
 
 	slog.DebugContext(ctx, "Updated subscription in DB", "id", subscription.ID, "status", subscription.Status)
@@ -548,7 +568,7 @@ func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *d
 		_ = impl.cache.Set(ctx, cacheKey, subscription)
 	}
 
-	return nil
+	return subscription, nil
 }
 
 func (impl *businessStoreImpl) findOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
@@ -979,6 +999,75 @@ func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category
 	}
 
 	slog.DebugContext(ctx, "Created support ticket in DB", "ticketID", ticket.ID)
+
+	return nil
+}
+
+func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
+	subscriptions, err := impl.queries.GetSubscriptionsByUserIDs(ctx, userIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user subscriptions", "userIDs", len(userIDs), common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched user subscriptions", "count", len(subscriptions))
+
+	return subscriptions, err
+}
+
+func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
+	if len(violations) == 0 {
+		return nil
+	}
+
+	slog.DebugContext(ctx, "About to insert usage limit violations", "count", len(violations))
+
+	userIDs := make([]int32, 0, len(violations))
+	for _, v := range violations {
+		userIDs = append(userIDs, int32(v.UserID))
+	}
+
+	subscriptions, err := impl.retrieveSubscriptionsByUserIDs(ctx, userIDs)
+	if err != nil {
+		return err
+	}
+
+	userIDs = nil
+
+	userProducts := make(map[int32]string)
+	for _, s := range subscriptions {
+		userProducts[s.UserID] = s.Subscription.PaddleProductID
+	}
+
+	params := &dbgen.AddUsageLimitViolationsParams{
+		UserIds:  make([]int32, 0, len(violations)),
+		Products: make([]string, 0, len(violations)),
+		Limits:   make([]int64, 0, len(violations)),
+		Counts:   make([]int64, 0, len(violations)),
+		Dates:    make([]pgtype.Date, 0, len(violations)),
+	}
+
+	for _, v := range violations {
+		product, ok := userProducts[int32(v.UserID)]
+		if !ok {
+			slog.WarnContext(ctx, "Did not find user subscription product", "userID", v.UserID)
+		}
+		params.UserIds = append(params.UserIds, int32(v.UserID))
+		params.Products = append(params.Products, product)
+		params.Limits = append(params.Limits, int64(v.Limit))
+		params.Counts = append(params.Counts, int64(v.Count))
+		params.Dates = append(params.Dates, Date(v.Timestamp))
+	}
+
+	userProducts = map[int32]string{}
+
+	err = impl.queries.AddUsageLimitViolations(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to add usage limits violations", "count", len(violations), common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Added usage limits violations", "count", len(violations))
 
 	return nil
 }

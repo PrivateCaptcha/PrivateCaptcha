@@ -39,9 +39,10 @@ func NewHTTPRateLimiter(header string) (*HTTPRateLimiter, error) {
 		// NOTE: this assumes correct configuration of the whole chain of reverse proxies
 		leakyBucketCap    = 5
 		leakRatePerSecond = 0.5
+		leakInterval      = (1.0 / leakRatePerSecond) * time.Second
 	)
 
-	buckets := leakybucket.NewManager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]](maxBucketsToKeep, leakyBucketCap, leakRatePerSecond)
+	buckets := leakybucket.NewManager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]](maxBucketsToKeep, leakyBucketCap, leakInterval)
 
 	// we setup a separate bucket for "missing" IPs with empty key
 	// with a more generous burst, assuming a misconfiguration on our side
@@ -70,7 +71,7 @@ func (l *HTTPRateLimiter) cleanup(ctx context.Context) {
 	time.Sleep(10 * time.Second)
 
 	common.ChunkedCleanup(ctx, 1*time.Second, 10*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.buckets.Cleanup(t, size)
+		return l.buckets.Cleanup(ctx, t, size, nil)
 	})
 }
 
@@ -113,8 +114,9 @@ func (l *HTTPRateLimiter) RateLimitKeyFunc(keyFunc KeyFunc, next http.HandlerFun
 	}
 }
 
-func (l *HTTPRateLimiter) UpdateLimits(key string, capacity leakybucket.TLevel, leakRatePerSecond float64) bool {
-	return l.buckets.Update(key, capacity, leakRatePerSecond)
+func (l *HTTPRateLimiter) UpdateLimits(key string, capacity leakybucket.TLevel, rateLimitPerSecond float64) bool {
+	interval := float64(time.Second) / rateLimitPerSecond
+	return l.buckets.Update(key, capacity, time.Duration(interval))
 }
 
 func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {

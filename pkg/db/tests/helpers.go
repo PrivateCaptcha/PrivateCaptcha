@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 	"unicode"
@@ -55,4 +56,15 @@ func CreateNewBareAccount(ctx context.Context, store *db.BusinessStore, testName
 	name, orgName := createUserAndOrgName(testName)
 
 	return store.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
+}
+
+func CreatePropertyForOrg(ctx context.Context, store *db.BusinessStore, org *dbgen.Organization) (*dbgen.Property, error) {
+	return store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:       fmt.Sprintf("user %v property", org.UserID.Int32),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(org.UserID.Int32),
+		OrgOwnerID: db.Int(org.UserID.Int32),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
+	})
 }

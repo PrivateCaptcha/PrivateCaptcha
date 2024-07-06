@@ -201,7 +201,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		return nil, errInvalidSession
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.Store.FindUserByEmail(ctx, email)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
 		return nil, errInvalidSession
@@ -403,7 +403,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		return renderCtx, orgMembersTemplate, nil
 	}
 
-	inviteUser, err := s.Store.FindUser(ctx, inviteEmail)
+	inviteUser, err := s.Store.FindUserByEmail(ctx, inviteEmail)
 	if err != nil {
 		renderCtx.ErrorMessage = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
 		return renderCtx, orgMembersTemplate, nil

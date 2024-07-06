@@ -27,7 +27,8 @@ func TestBackfillLevels(t *testing.T) {
 	levels := difficulty.NewLevelsEx(timeSeries, 200,
 		testBucketSize,
 		500*time.Millisecond, /*access log*/
-		700*time.Millisecond /*backfill*/)
+		700*time.Millisecond, /*backfill*/
+		nil /*cleanup callback*/)
 	defer levels.Shutdown()
 	tnow := time.Now()
 	userID := int32(123)
@@ -46,19 +47,23 @@ func TestBackfillLevels(t *testing.T) {
 
 	var diff uint8
 	var level leakybucket.TLevel
+	// NOTE: for the buckets that are "the same", we will not update {leakRate} on the 2+ go as
+	// from the bucket's perspective following events will be "in the past" (time will be advanced on the 1st go)
+	// and for the past events we only increment the level, as the leak "has been accounted for"
 	buckets := []int{5, 4, 3, 2, 2, 1, 1, 1, 1}
 	nanoseconds := testBucketSize.Nanoseconds()
 	const iterations = 1000
-	diffInterval := int64(nanoseconds / iterations)
+	diffInterval := time.Duration(nanoseconds / iterations)
 
 	for _, bucket := range buckets {
 		btime := tnow.Add(-time.Duration(bucket) * testBucketSize)
 
 		for i := 0; i < iterations; i++ {
 			fingerprint := fingerprints[rand.Intn(len(fingerprints))]
-			diff, level = levels.DifficultyEx(fingerprint, prop, btime.Add(time.Duration(int64(i)*diffInterval)*time.Nanosecond))
-			if (i+1)%500 == 0 {
-				slog.Debug("Simulating requests", "difficulty", diff, "level", level)
+			t := btime.Add(time.Duration(i) * diffInterval)
+			diff, level = levels.DifficultyEx(fingerprint, prop, t)
+			if (i+1)%250 == 0 {
+				slog.Debug("Simulating requests", "difficulty", diff, "level", level, "eventTime", t, "i", i, "bucket", bucket)
 			}
 		}
 	}

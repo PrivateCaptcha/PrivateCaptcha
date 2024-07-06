@@ -131,10 +131,17 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 
 	orgName := common.OrgNameFromName(customer.Name)
 
-	if _, _, err = s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName, existingUserID); (err != nil) && (err != db.ErrDuplicateAccount) {
+	user, _, err := s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName, existingUserID)
+	if (err != nil) && (err != db.ErrDuplicateAccount) {
 		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
+	}
+
+	if plan, err := billing.FindPlanByProductID(subscrParams.PaddleProductID, s.stage); err == nil {
+		_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+	} else {
+		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -194,7 +201,7 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 	}
 
 	elog := slog.With("eventID", evt.EventID, "subscriptionID", evt.Data.ID)
-	elog.DebugContext(ctx, "Handling subscription updated event")
+	elog.InfoContext(ctx, "Handling subscription updated event")
 
 	subscrParams, err := s.newUpdateSubscriptionParams(ctx, &evt.Data)
 	if err != nil {
@@ -203,10 +210,19 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = s.businessDB.UpdateSubscription(ctx, subscrParams); err != nil {
+	subscription, err := s.businessDB.UpdateSubscription(ctx, subscrParams)
+	if err != nil {
 		elog.ErrorContext(ctx, "Failed to update the subscription", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
+	}
+
+	if plan, err := billing.FindPlanByProductID(subscrParams.PaddleProductID, s.stage); err == nil {
+		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
+			_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+		}
+	} else {
+		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -240,7 +256,7 @@ func (s *server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err = s.businessDB.UpdateSubscription(ctx, subscrParams); err != nil {
+	if _, err = s.businessDB.UpdateSubscription(ctx, subscrParams); err != nil {
 		elog.ErrorContext(ctx, "Failed to update the subscription", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

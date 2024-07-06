@@ -17,7 +17,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -27,11 +26,6 @@ import (
 
 var (
 	GitCommit string
-)
-
-const (
-	propertyBucketSize = 5 * time.Minute
-	levelsBatchSize    = 100
 )
 
 func run(ctx context.Context, getenv func(string) string, stderr io.Writer) error {
@@ -64,12 +58,10 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	businessDB := db.NewBusiness(pool, cache, 5*time.Minute)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
-	levels := difficulty.NewLevels(timeSeriesDB, levelsBatchSize, propertyBucketSize)
-
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, levels, 30*time.Second, paddleAPI, os.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, 30*time.Second, paddleAPI, os.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
@@ -93,6 +85,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, 1*time.Second)
 
 	apiServer.Setup(router, "api", apiAuth)
+	apiServer.StartMaintenanceJobs()
 
 	portalServer.Init()
 	portalServer.Setup(router, ratelimiter.RateLimit)
@@ -131,7 +124,6 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		defer wg.Done()
 		<-ctx.Done()
 		slog.Debug("Shutting down gracefully...")
-		levels.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
 		portalServer.Shutdown()

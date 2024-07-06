@@ -65,7 +65,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.Store.FindUser(ctx, email); err == nil {
+	if _, err := s.Store.FindUserByEmail(ctx, email); err == nil {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.EmailError = "Such email is already registered. Login instead?"
 		s.render(w, r, registerFormTemplate, data)

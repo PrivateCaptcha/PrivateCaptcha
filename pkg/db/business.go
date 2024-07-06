@@ -114,8 +114,12 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 	return s.defaultImpl.cachePuzzle(ctx, p, tnow)
 }
 
-func (s *BusinessStore) FindUser(ctx context.Context, email string) (*dbgen.User, error) {
-	return s.defaultImpl.findUser(ctx, email)
+func (s *BusinessStore) FindUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
+	return s.defaultImpl.findUserByEmail(ctx, email)
+}
+
+func (s *BusinessStore) FindUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
+	return s.defaultImpl.findUserBySubscriptionID(ctx, subscriptionID)
 }
 
 func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
@@ -138,7 +142,7 @@ func (s *BusinessStore) RetrieveSubscription(ctx context.Context, sID int32) (*d
 	return s.defaultImpl.retrieveSubscription(ctx, sID)
 }
 
-func (s *BusinessStore) UpdateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) error {
+func (s *BusinessStore) UpdateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
 	return s.defaultImpl.updateSubscription(ctx, params)
 }
 
@@ -163,7 +167,7 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 
 		subscriptionID = &subscription.ID
 
-		if existingUser, err := impl.findUser(ctx, email); err == nil {
+		if existingUser, err := impl.findUserByEmail(ctx, email); err == nil {
 			slog.InfoContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
 			if ((existingUser.ID == existingUserID) || (existingUserID == -1)) && !existingUser.SubscriptionID.Valid {
 				if err := impl.updateUserSubscription(ctx, existingUser.ID, subscription.ID); err != nil {
@@ -313,4 +317,8 @@ func (s *BusinessStore) CachePaddlePrices(ctx context.Context, prices map[string
 
 func (s *BusinessStore) RetrievePaddlePrices(ctx context.Context) (map[string]int, error) {
 	return s.defaultImpl.retrievePaddlePrices(ctx)
+}
+
+func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
+	return s.defaultImpl.addUsageLimitsViolations(ctx, violations)
 }

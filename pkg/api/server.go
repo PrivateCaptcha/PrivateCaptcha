@@ -26,30 +26,34 @@ import (
 )
 
 const (
-	maxSolutionsBodySize = 256 * 1024
-	maxPaddleBodySize    = 10 * 1024
-	verifyBatchSize      = 100
+	maxSolutionsBodySize  = 256 * 1024
+	maxPaddleBodySize     = 10 * 1024
+	verifyBatchSize       = 100
+	propertyBucketSize    = 5 * time.Minute
+	levelsBatchSize       = 100
+	updateLimitsBatchSize = 100
 )
 
 var (
 	errProductNotFound = errors.New("product not found")
+	errNoop            = errors.New("nothing to do")
 )
 
 type server struct {
-	stage           string
-	businessDB      *db.BusinessStore
-	timeSeries      *db.TimeSeriesStore
-	levels          *difficulty.Levels
-	uaKey           [64]byte
-	salt            []byte
-	verifyLogChan   chan *common.VerifyRecord
-	verifyLogCancel context.CancelFunc
-	paddleAPI       billing.PaddleAPI
+	stage             string
+	businessDB        *db.BusinessStore
+	timeSeries        *db.TimeSeriesStore
+	levels            *difficulty.Levels
+	uaKey             [64]byte
+	salt              []byte
+	verifyLogChan     chan *common.VerifyRecord
+	verifyLogCancel   context.CancelFunc
+	paddleAPI         billing.PaddleAPI
+	maintenanceCancel context.CancelFunc
 }
 
 func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
-	levels *difficulty.Levels,
 	verifyFlushInterval time.Duration,
 	paddleAPI billing.PaddleAPI,
 	getenv func(string) string) *server {
@@ -57,11 +61,13 @@ func NewServer(store *db.BusinessStore,
 		stage:         getenv("STAGE"),
 		businessDB:    store,
 		timeSeries:    timeSeries,
-		levels:        levels,
 		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
 		salt:          []byte(getenv("API_SALT")),
 		paddleAPI:     paddleAPI,
 	}
+
+	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
+		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/, nil /*cleanup callback*/)
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
 		copy(srv.uaKey[:], byteArray[:])
@@ -69,10 +75,10 @@ func NewServer(store *db.BusinessStore,
 		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
 	}
 
-	var cancelCtx context.Context
-	cancelCtx, srv.verifyLogCancel = context.WithCancel(
+	var cancelVerifyCtx context.Context
+	cancelVerifyCtx, srv.verifyLogCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "flush_verify_log"))
-	go srv.flushVerifyLog(cancelCtx, verifyFlushInterval)
+	go srv.flushVerifyLog(cancelVerifyCtx, verifyFlushInterval)
 
 	return srv
 }
@@ -117,9 +123,15 @@ func (s *server) Setup(router *http.ServeMux, prefix string, auth *authMiddlewar
 }
 
 func (s *server) Shutdown() {
+	s.levels.Shutdown()
+
 	slog.Debug("Shutting down API server routines")
-	close(s.verifyLogChan)
 	s.verifyLogCancel()
+	close(s.verifyLogChan)
+
+	if s.maintenanceCancel != nil {
+		s.maintenanceCancel()
+	}
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
@@ -385,7 +397,7 @@ func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puz
 
 func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 	var batch []*common.VerifyRecord
-	slog.DebugContext(ctx, "Processing verify log", "interval", delay)
+	slog.DebugContext(ctx, "Processing verify log", "interval", delay.String())
 
 	for running := true; running; {
 		select {
@@ -402,25 +414,33 @@ func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 
 			if len(batch) >= verifyBatchSize {
 				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
-					slog.DebugContext(ctx, "Inserted batch of verify records", "size", len(batch))
 					batch = []*common.VerifyRecord{}
-				} else {
-					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
 				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
-					slog.DebugContext(ctx, "Inserted batch of access records after delay", "size", len(batch))
 					batch = []*common.VerifyRecord{}
-				} else {
-					slog.ErrorContext(ctx, "Failed to process batch", common.ErrAttr(err))
 				}
 			}
 		}
 	}
 
 	slog.InfoContext(ctx, "Finished processing verify log")
+}
+
+func (s *server) StartMaintenanceJobs() {
+	var maintenanceCtx context.Context
+	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "api_maintenance"))
+
+	// it will be a truly great problem to have when these will be not enough
+	const maxUsersToCheck = 200
+	const checkInterval = 4 * time.Hour
+
+	// NOTE: because of {maxUsers} limit, we _may_ not find all violations, but it's considered OK
+	// at this time business-wise, as they will be dealt with likely semi-manually anyways
+	go s.checkUsageLimits(maintenanceCtx, checkInterval, 1*time.Minute, maxUsersToCheck)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

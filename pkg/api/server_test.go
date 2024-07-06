@@ -13,7 +13,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -49,8 +48,6 @@ func TestMain(m *testing.M) {
 	}
 
 	timeSeries = db.NewTimeSeries(clickhouse)
-	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
-	defer levels.Shutdown()
 
 	cache, err = db.NewMemoryCache(1 * time.Minute)
 	if err != nil {
@@ -68,7 +65,7 @@ func TestMain(m *testing.M) {
 	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, 100*time.Millisecond)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, levels, 2*time.Second, &billing.StubPaddleClient{}, os.Getenv)
+	s = NewServer(store, timeSeries, 2*time.Second, &billing.StubPaddleClient{}, os.Getenv)
 	defer s.Shutdown()
 
 	// TODO: seed data
