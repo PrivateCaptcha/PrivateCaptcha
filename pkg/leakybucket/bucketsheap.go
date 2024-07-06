@@ -6,8 +6,8 @@ type BucketsHeap[TKey comparable] []LeakyBucket[TKey]
 func (pq BucketsHeap[TKey]) Len() int { return len(pq) }
 
 func (pq BucketsHeap[TKey]) Less(i, j int) bool {
-	// we want for the oldest items to be the last in the list (as removing from the end of array is faster)
-	return pq[i].LastAccessTime().After(pq[j].LastAccessTime())
+	// we want for the oldest items to be the first in the list
+	return pq[i].LastAccessTime().Before(pq[j].LastAccessTime())
 }
 
 func (pq BucketsHeap[TKey]) Swap(i, j int) {
@@ -33,10 +33,10 @@ func (pq *BucketsHeap[TKey]) Pop() any {
 	return item
 }
 
-func (pq *BucketsHeap[TKey]) Last() LeakyBucket[TKey] {
+func (pq *BucketsHeap[TKey]) Peek() LeakyBucket[TKey] {
 	count := len(*pq)
 	if count > 0 {
-		return (*pq)[count-1]
+		return (*pq)[0]
 	}
 
 	return nil

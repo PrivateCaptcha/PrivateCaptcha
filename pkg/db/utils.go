@@ -44,6 +44,14 @@ func Timestampz(t time.Time) pgtype.Timestamptz {
 	}
 }
 
+func Date(t time.Time) pgtype.Date {
+	return pgtype.Date{
+		Time:             t,
+		InfinityModifier: pgtype.Finite,
+		Valid:            true,
+	}
+}
+
 func UUIDToSiteKey(uuid pgtype.UUID) string {
 	if !uuid.Valid {
 		return ""

@@ -83,7 +83,7 @@ func subscriptionCreatedSuite(ctx context.Context, evt *paddle.SubscriptionCreat
 		t.Errorf("Unexpected response code: %v", resp.StatusCode)
 	}
 
-	user, err := store.FindUser(ctx, email)
+	user, err := store.FindUserByEmail(ctx, email)
 	if err != nil {
 		t.Fatal(err)
 	}

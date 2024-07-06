@@ -112,7 +112,7 @@ func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration,
 		Jitter: true,
 	}
 
-	slog.DebugContext(ctx, "Starting cleaning up", "maxInterval", maxInterval)
+	slog.DebugContext(ctx, "Starting chunked clean up", "maxInterval", maxInterval.String(), "size", defaultChunkSize)
 
 	deleteChunk := defaultChunkSize
 

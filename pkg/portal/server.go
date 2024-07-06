@@ -436,12 +436,14 @@ func (s *Server) csrf(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) StartMaintenanceJobs() {
 	var maintenanceCtx context.Context
 	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "maintenance"))
+		context.WithValue(context.Background(), common.TraceIDContextKey, "portal_maintenance"))
 
 	go s.updatePaddlePrices(maintenanceCtx, 6*time.Hour, 1*time.Minute)
 	go s.gcSessions(maintenanceCtx, s.Session.MaxLifetime)
 }
 
 func (s *Server) Shutdown() {
-	s.maintenanceCancel()
+	if s.maintenanceCancel != nil {
+		s.maintenanceCancel()
+	}
 }
