@@ -18,7 +18,9 @@ const (
 	verifyLogTableName    = "privatecaptcha.verify_logs"
 	accessLogTableName    = "privatecaptcha.request_logs"
 	accessLogTableName5m  = "privatecaptcha.request_logs_5m"
+	accessLogTableName1h  = "privatecaptcha.request_logs_1h"
 	accessLogTableName1mo = "privatecaptcha.request_logs_1mo"
+	userLimitsTableName   = "privatecaptcha.user_limits"
 )
 
 type TimeSeriesStore struct {
@@ -65,6 +67,11 @@ SETTINGS use_query_cache = true`
 }
 
 func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {
+	if len(records) == 0 {
+		slog.WarnContext(ctx, "Attempt to insert empty access log batch")
+		return nil
+	}
+
 	scope, err := ts.clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
@@ -85,10 +92,22 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 		}
 	}
 
-	return scope.Commit()
+	err = scope.Commit()
+	if err == nil {
+		slog.DebugContext(ctx, "Inserted batch of access records", "size", len(records))
+	} else {
+		slog.ErrorContext(ctx, "Failed to insert access log batch", common.ErrAttr(err))
+	}
+
+	return err
 }
 
 func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*common.VerifyRecord) error {
+	if len(records) == 0 {
+		slog.WarnContext(ctx, "Attempt to insert empty verify batch")
+		return nil
+	}
+
 	scope, err := ts.clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
@@ -109,7 +128,52 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 		}
 	}
 
-	return scope.Commit()
+	err = scope.Commit()
+	if err == nil {
+		slog.DebugContext(ctx, "Inserted batch of verify records", "size", len(records))
+	} else {
+		slog.ErrorContext(ctx, "Failed to insert verify log batch", common.ErrAttr(err))
+	}
+
+	return err
+}
+
+func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int32]int64) error {
+	if len(records) == 0 {
+		slog.WarnContext(ctx, "Attempt to insert empty limit records")
+		return nil
+	}
+
+	scope, err := ts.clickhouse.Begin()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
+		return err
+	}
+
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", userLimitsTableName))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
+		return err
+	}
+
+	tnow := time.Now().UTC()
+
+	for key, value := range records {
+		_, err = batch.Exec(uint32(key), uint64(value), tnow)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "userID", key)
+			return err
+		}
+	}
+
+	err = scope.Commit()
+	if err == nil {
+		slog.DebugContext(ctx, "Updated user limits", "count", len(records))
+	} else {
+		slog.ErrorContext(ctx, "Failed to update user limits", common.ErrAttr(err))
+	}
+
+	return err
 }
 
 func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, bucketSize time.Duration) ([]*common.TimeCount, error) {
@@ -261,6 +325,54 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 
 	slog.InfoContext(ctx, "Fetched time period stats", "count", len(results), "orgID", orgID, "propID", propertyID,
 		"from", timeFrom, "period", period)
+
+	return results, nil
+}
+
+// takes {maxUsers} that were active since time {from} and checks if they violated their plan limits
+// assumes that somebody has filled in the limits table previously
+func (ts *TimeSeriesStore) FindUserLimitsViolations(ctx context.Context, from time.Time, maxUsers int) ([]*common.UserTimeCount, error) {
+	// NOTE: also can restrict monthly timestamp by the end of current month with:
+	// AND timestamp < toStartOfMonth(addMonths(now(), 1))
+	const limitsQuery = `SELECT rl.user_id, rl.monthly_count, ul.limit, rl.latest_timestamp
+	FROM (
+		SELECT user_id, SUM(count) AS monthly_count, MAX(timestamp) as latest_timestamp
+		FROM %s FINAL
+		WHERE user_id IN (
+			SELECT DISTINCT user_id
+			FROM %s
+			WHERE timestamp >= toStartOfHour({timestamp:DateTime})
+			LIMIT {maxUsers:UInt32}
+		)
+		AND timestamp >= toStartOfMonth(now())
+		GROUP BY user_id
+	) AS rl
+	JOIN %s AS ul ON rl.user_id = ul.user_id
+	WHERE rl.monthly_count > ul.limit`
+
+	query := fmt.Sprintf(limitsQuery, accessLogTableName1mo, accessLogTableName1h, userLimitsTableName)
+	rows, err := ts.clickhouse.Query(query,
+		clickhouse.Named("maxUsers", strconv.Itoa(maxUsers)),
+		clickhouse.Named("timestamp", from.UTC().Format(time.DateTime)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query user limits violations", "maxUsers", maxUsers, "from", from, common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.UserTimeCount, 0)
+
+	for rows.Next() {
+		uc := &common.UserTimeCount{}
+		if err := rows.Scan(&uc.UserID, &uc.Count, &uc.Limit, &uc.Timestamp); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from user limits query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, uc)
+	}
+
+	slog.DebugContext(ctx, "Found usage violations", "count", len(results))
 
 	return results, nil
 }

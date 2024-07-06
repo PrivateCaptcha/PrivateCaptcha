@@ -18,7 +18,7 @@ func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration,
 		slog.WarnContext(ctx, "Paddle prices are not cached properly", common.ErrAttr(err))
 	}
 
-	slog.DebugContext(ctx, "Updating Paddle prices", "interval", interval)
+	slog.DebugContext(ctx, "Updating Paddle prices", "interval", interval.String())
 
 	ticker := time.NewTicker(interval)
 	for running := true; running; {
@@ -42,7 +42,7 @@ func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration,
 }
 
 func (s *Server) gcSessions(ctx context.Context, interval time.Duration) {
-	slog.DebugContext(ctx, "Clearing user sessions", "interval", interval)
+	slog.DebugContext(ctx, "Clearing user sessions", "interval", interval.String())
 
 	ticker := time.NewTicker(interval)
 	for running := true; running; {

@@ -259,6 +259,15 @@ type Support struct {
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type UsageLimitViolation struct {
+	UserID          int32              `db:"user_id" json:"user_id"`
+	PaddleProductID string             `db:"paddle_product_id" json:"paddle_product_id"`
+	RequestsLimit   int64              `db:"requests_limit" json:"requests_limit"`
+	RequestsCount   int64              `db:"requests_count" json:"requests_count"`
+	DetectionDate   pgtype.Date        `db:"detection_date" json:"detection_date"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
 type User struct {
 	ID             int32              `db:"id" json:"id"`
 	Name           string             `db:"name" json:"name"`

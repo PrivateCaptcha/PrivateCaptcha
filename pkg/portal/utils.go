@@ -96,7 +96,7 @@ func (s *Server) sessionUser(w http.ResponseWriter, r *http.Request) (*dbgen.Use
 		return nil, errInvalidSession
 	}
 
-	user, err := s.Store.FindUser(ctx, email)
+	user, err := s.Store.FindUserByEmail(ctx, email)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
 		return nil, err
