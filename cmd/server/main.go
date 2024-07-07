@@ -34,17 +34,17 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 
 	cache, cerr := db.NewMemoryCache(5 * time.Minute)
 	if cerr != nil {
-		panic(cerr)
+		return cerr
 	}
 
 	paddleAPI, err := billing.NewPaddleAPI(getenv)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	ratelimiter, err := ratelimit.NewHTTPRateLimiter(getenv(common.ConfigRateLimitHeader))
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	pool, clickhouse, dberr := db.Migrate(getenv)
