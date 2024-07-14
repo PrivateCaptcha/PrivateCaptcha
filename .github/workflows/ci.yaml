@@ -83,7 +83,7 @@ jobs:
       run: ./docker/run-clickhouse.sh
 
     - name: Integration Tests
-      run: make test-integration
+      run: ./docker/run-tests.sh
       env:
         PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?sslmode=disable
         PC_CLICKHOUSE_HOST: localhost
