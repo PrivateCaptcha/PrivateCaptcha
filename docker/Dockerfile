@@ -46,8 +46,8 @@ FROM golang:1.22.1
 
 COPY --from=backend-builder /app/bin/server /app/server
 
-ENV PC_HOST 0.0.0.0
-ENV PC_PORT 8080
+ENV PC_HOST=0.0.0.0
+ENV PC_PORT=8080
 EXPOSE 8080
 
 CMD ["/app/server", "-mode", "run"]
