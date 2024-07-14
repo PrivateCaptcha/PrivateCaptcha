@@ -46,6 +46,8 @@ services:
     develop:
       watch:
         - action: rebuild
+          path: ../cmd/server
+        - action: rebuild
           path: ../pkg/db
         - action: rebuild
           path: Dockerfile

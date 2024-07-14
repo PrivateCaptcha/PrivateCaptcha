@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
@@ -52,7 +53,7 @@ func TestDetectUsageViolations(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	for attempt := 0; attempt < 5; attempt++ {
-		violations, err := s.doCheckUsageLimits(ctx, tnow /*from*/, 10 /*maxUsers*/)
+		violations, err := db.CheckUsageLimits(ctx, store, timeSeries, tnow /*from*/, 10 /*maxUsers*/)
 		if err != nil {
 			t.Error(err)
 		}
@@ -65,7 +66,7 @@ func TestDetectUsageViolations(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}
 
-	violations, err := s.doCheckUsageLimits(ctx, tnow /*from*/, 10 /*maxUsers*/)
+	violations, err := db.CheckUsageLimits(ctx, store, timeSeries, tnow /*from*/, 10 /*maxUsers*/)
 	if err != nil {
 		t.Fatal(err)
 	}
