@@ -50,4 +50,4 @@ ENV PC_HOST 0.0.0.0
 ENV PC_PORT 8080
 EXPOSE 8080
 
-CMD ["/app/server"]
+CMD ["/app/server", "-mode", "run"]

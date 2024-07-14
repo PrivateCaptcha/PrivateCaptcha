@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"database/sql"
 	"flag"
 	"net/http"
@@ -55,7 +56,7 @@ func TestMain(m *testing.M) {
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
 	var dberr error
-	pool, clickhouse, dberr = db.Migrate(os.Getenv)
+	pool, clickhouse, dberr = db.Connect(context.Background(), os.Getenv)
 	if dberr != nil {
 		panic(dberr)
 	}

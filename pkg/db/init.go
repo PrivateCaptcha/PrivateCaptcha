@@ -16,16 +16,28 @@ var (
 	globalDBErr      error
 )
 
-func Migrate(getenv func(string) string) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, getenv func(string) string) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(getenv, true /*migrate*/)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, getenv, false /*migrate*/)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func connectEx(getenv func(string) string, migrate bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func Migrate(ctx context.Context, getenv func(string) string) error {
+	pool, clickhouse, err := connectEx(ctx, getenv, true /*migrate*/)
+	if err != nil {
+		return err
+	}
+
+	defer pool.Close()
+	defer clickhouse.Close()
+
+	return err
+}
+
+func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	verbose := getenv("VERBOSE") == "1"
-	errs, ctx := errgroup.WithContext(context.Background())
+	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
 		opts := ClickHouseConnectOpts{
