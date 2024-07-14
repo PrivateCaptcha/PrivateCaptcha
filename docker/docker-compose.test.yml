@@ -19,8 +19,10 @@ services:
       RATE_LIMIT_HEADER: X-REAL-IP
       # VERBOSE: 1
     depends_on:
-      - postgres
-      - clickhouse
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
     networks:
       - test_postgres_network
       - test_clickhouse_network

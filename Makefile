@@ -10,9 +10,6 @@ test-unit:
 bench-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -bench=. -benchtime=20s -short ./...
 
-test-integration:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -v ./...
-
 test-docker:
 	@docker compose -f docker/docker-compose.test.yml down -v
 	@docker compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate

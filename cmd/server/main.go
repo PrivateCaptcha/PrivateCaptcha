@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -26,6 +27,7 @@ import (
 
 var (
 	GitCommit string
+	flagMode  = flag.String("mode", "", "migrate | run")
 )
 
 func run(ctx context.Context, getenv func(string) string, stderr io.Writer) error {
@@ -47,7 +49,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		return err
 	}
 
-	pool, clickhouse, dberr := db.Migrate(getenv)
+	pool, clickhouse, dberr := db.Connect(ctx, getenv)
 	if dberr != nil {
 		return dberr
 	}
@@ -142,8 +144,29 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	return nil
 }
 
+func migrate(ctx context.Context, getenv func(string) string) error {
+	stage := getenv("STAGE")
+	common.SetupLogs(stage, getenv("VERBOSE") == "1")
+
+	ctx = context.WithValue(ctx, common.TraceIDContextKey, "migration")
+	return db.Migrate(ctx, getenv)
+}
+
 func main() {
-	if err := run(context.Background(), os.Getenv, os.Stderr); err != nil {
+	flag.Parse()
+
+	var err error
+
+	switch *flagMode {
+	case "run":
+		err = run(context.Background(), os.Getenv, os.Stderr)
+	case "migrate":
+		err = migrate(context.Background(), os.Getenv)
+	default:
+		err = fmt.Errorf("unknown mode: '%s'", *flagMode)
+	}
+
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}

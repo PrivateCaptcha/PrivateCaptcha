@@ -11,10 +11,8 @@ services:
       PC_PORT: 8080
       VERBOSE: 1
     depends_on:
-      postgres:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
     develop:
       watch:
         - action: rebuild
@@ -31,6 +29,31 @@ services:
       - postgres_network
       - clickhouse_network
       - server_network
+
+  migration:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    command:
+      /app/server -mode migrate
+    env_file:
+      - pc.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    develop:
+      watch:
+        - action: rebuild
+          path: ../pkg/db
+        - action: rebuild
+          path: Dockerfile
+        - action: rebuild
+          path: pc.env
+    networks:
+      - postgres_network
+      - clickhouse_network
 
   paddlemock:
     build:
