@@ -19,6 +19,7 @@ var (
 	ErrRecordNotFound   = errors.New("record not found")
 	ErrSoftDeleted      = errors.New("record is marked as deleted")
 	ErrDuplicateAccount = errors.New("this subscrption already has an account")
+	ErrLocked           = errors.New("lock is already acquired")
 	errInvalidCacheType = errors.New("cache record type does not match")
 	markerData          = []byte{'{', '}'}
 )
@@ -321,4 +322,43 @@ func (s *BusinessStore) RetrievePaddlePrices(ctx context.Context) (map[string]in
 
 func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
 	return s.defaultImpl.addUsageLimitsViolations(ctx, violations)
+}
+
+func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, ttl time.Duration) (*dbgen.Lock, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	db := dbgen.New(s.pool)
+	impl := &businessStoreImpl{queries: db.WithTx(tx)}
+	lock, err := impl.acquireLock(ctx, name, data, ttl)
+	if err != nil {
+		return nil, err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return lock, nil
+}
+
+func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	db := dbgen.New(s.pool)
+	impl := &businessStoreImpl{queries: db.WithTx(tx)}
+	err = impl.releaseLock(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

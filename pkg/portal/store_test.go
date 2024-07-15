@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -100,5 +101,74 @@ func TestSoftDeleteProperty(t *testing.T) {
 	idx = slices.IndexFunc(orgProperties, func(p *dbgen.Property) bool { return p.ID == prop.ID })
 	if idx != -1 {
 		t.Errorf("Soft-deleted property found in organization properties")
+	}
+}
+
+func TestLockTwice(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+	const lockDuration = 2 * time.Second
+	var lockName = t.Name()
+
+	lock, err := store.AcquireLock(ctx, lockName, nil, lockDuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialExpiration := lock.ExpiresAt.Time
+
+	const iterations = 100
+
+	for i := 0; i < iterations; i++ {
+		tnow := time.Now().UTC()
+		if tnow.After(initialExpiration) {
+			// lock is actually not active anymore so it's not an error
+			break
+		}
+
+		if lock, err = store.AcquireLock(ctx, lockName, nil, lockDuration); err == nil {
+			t.Fatalf("Was able to acquire a lock again right away. i=%v tnow=%v expires_at=%v", i, tnow, lock.ExpiresAt.Time)
+		}
+
+		time.Sleep(lockDuration / iterations)
+	}
+
+	// now it should succeed after the lock TTL
+	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLockUnlock(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+	const lockDuration = 10 * time.Second
+	var lockName = t.Name()
+
+	_, err := store.AcquireLock(ctx, lockName, nil, lockDuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	if err == nil {
+		t.Fatal("Was able to acquire a lock again right away")
+	}
+
+	err = store.ReleaseLock(ctx, lockName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// this time it should succeed as we just released the lock
+	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	if err != nil {
+		t.Fatal("Was able to acquire a lock again right away")
 	}
 }
