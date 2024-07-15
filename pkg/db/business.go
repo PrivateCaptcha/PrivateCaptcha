@@ -324,7 +324,7 @@ func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations
 	return s.defaultImpl.addUsageLimitsViolations(ctx, violations)
 }
 
-func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, ttl time.Duration) (*dbgen.Lock, error) {
+func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -333,7 +333,7 @@ func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byt
 
 	db := dbgen.New(s.pool)
 	impl := &businessStoreImpl{queries: db.WithTx(tx)}
-	lock, err := impl.acquireLock(ctx, name, data, ttl)
+	lock, err := impl.acquireLock(ctx, name, data, expiration)
 	if err != nil {
 		return nil, err
 	}

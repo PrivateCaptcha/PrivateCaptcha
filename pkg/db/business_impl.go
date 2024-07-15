@@ -1072,15 +1072,15 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 	return nil
 }
 
-func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, ttl time.Duration) (*dbgen.Lock, error) {
-	if (len(name) == 0) || (ttl < 0) {
+func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
+	if (len(name) == 0) || expiration.IsZero() {
 		return nil, ErrInvalidInput
 	}
 
 	lock, err := impl.queries.InsertLock(ctx, &dbgen.InsertLockParams{
-		Name:    name,
-		Data:    data,
-		Column3: ttl,
+		Name:      name,
+		Data:      data,
+		ExpiresAt: Timestampz(expiration),
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
