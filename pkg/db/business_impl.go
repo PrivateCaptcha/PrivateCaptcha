@@ -1071,3 +1071,36 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 
 	return nil
 }
+
+func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, ttl time.Duration) (*dbgen.Lock, error) {
+	if (len(name) == 0) || (ttl < 0) {
+		return nil, ErrInvalidInput
+	}
+
+	lock, err := impl.queries.InsertLock(ctx, &dbgen.InsertLockParams{
+		Name:    name,
+		Data:    data,
+		Column3: ttl,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// slog.WarnContext(ctx, "Lock is still taken", "name", name)
+			return nil, ErrLocked
+		}
+		slog.ErrorContext(ctx, "Failed to acquire a lock", "name", name, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Acquired a lock", "name", name, "expires_at", lock.ExpiresAt.Time)
+
+	return lock, nil
+}
+
+func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) error {
+	err := impl.queries.DeleteLock(ctx, name)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to release a lock", "name", name, common.ErrAttr(err))
+	}
+
+	return err
+}
