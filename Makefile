@@ -21,6 +21,9 @@ vendors:
 
 build: build-server
 
+build-tests:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ ./...
+
 build-server:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" -o bin/server cmd/server/*.go
 

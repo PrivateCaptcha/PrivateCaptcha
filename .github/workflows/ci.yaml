@@ -82,6 +82,9 @@ jobs:
     - name: Run clickhouse
       run: ./docker/run-clickhouse.sh
 
+    - name: Build tests
+      run: make build-tests
+
     - name: Integration Tests
       run: ./docker/run-tests.sh
       env:

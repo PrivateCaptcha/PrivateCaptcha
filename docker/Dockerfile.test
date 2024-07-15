@@ -1,6 +1,24 @@
-FROM golang:1.22.1-alpine
+FROM golang:1.22.1 AS tests-builder
 
 COPY . /app/
+
+WORKDIR /app
+
+RUN mkdir bin
+
+ENV GOMODCACHE=/cache/gomod
+ENV GOCACHE=/cache/gobuild
+
+ARG GIT_COMMIT=HEAD
+RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
+
+RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ ./...
+
+FROM golang:1.22.1-alpine
+
+COPY --from=tests-builder /app/bin/server /app/bin/server
+COPY --from=tests-builder /app/tests /app/tests
+COPY --from=tests-builder /app/docker /app/docker
 
 WORKDIR /app
 
