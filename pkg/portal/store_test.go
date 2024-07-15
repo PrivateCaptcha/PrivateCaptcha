@@ -120,8 +120,9 @@ func TestLockTwice(t *testing.T) {
 	initialExpiration := lock.ExpiresAt.Time
 
 	const iterations = 100
+	i := 0
 
-	for i := 0; i < iterations; i++ {
+	for i = 0; i < iterations; i++ {
 		tnow := time.Now().UTC()
 		if tnow.After(initialExpiration) {
 			// lock is actually not active anymore so it's not an error
@@ -133,6 +134,10 @@ func TestLockTwice(t *testing.T) {
 		}
 
 		time.Sleep(lockDuration / iterations)
+	}
+
+	if i < 75 {
+		t.Errorf("Lock was released too soon. i=%v", i)
 	}
 
 	// now it should succeed after the lock TTL
