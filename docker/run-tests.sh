@@ -11,7 +11,19 @@ echo "Migrating..."
 ./bin/server -mode migrate
 # env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go run cmd/server/main.go -mode migrate
 
-for f in `ls tests/`; do
+TESTS_DIR="tests"
+
+if [ ! -d "$TESTS_DIR" ]; then
+    echo "Tests directory does not exist"
+    exit 1
+fi
+
+if [ -z "$(ls -A $TESTS_DIR)" ]; then
+    echo "No tests available"
+    exit 2
+fi
+
+for f in `ls $TESTS_DIR/`; do
     echo "Running $f..."
     ./tests/$f -test.v -test.parallel 1
 done
