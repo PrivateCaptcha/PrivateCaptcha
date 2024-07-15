@@ -19,6 +19,7 @@ func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration,
 	}
 
 	slog.DebugContext(ctx, "Updating Paddle prices", "interval", interval.String())
+	const paddlePricesLock = "paddle_prices_job"
 
 	ticker := time.NewTicker(interval)
 	for running := true; running; {
@@ -27,13 +28,19 @@ func (s *Server) updatePaddlePrices(ctx context.Context, interval time.Duration,
 			running = false
 			ticker.Stop()
 		case <-ticker.C:
-			products := billing.GetProductsForStage(s.Stage)
-			if prices, err := s.PaddleAPI.GetPrices(ctx, products); err == nil {
-				if err = s.Store.CachePaddlePrices(ctx, prices); err != nil {
-					slog.ErrorContext(ctx, "Failed to cache paddle prices", common.ErrAttr(err))
-				}
+			tnow := time.Now().UTC()
+			// NOTE: same logic as in api/maintenance, where we do not intend to release the lock in normal circumstances
+			if _, err := s.Store.AcquireLock(ctx, paddlePricesLock, nil /*data*/, tnow.Add(interval-1*time.Second)); err == nil {
+				products := billing.GetProductsForStage(s.Stage)
+				if prices, err := s.PaddleAPI.GetPrices(ctx, products); err == nil {
+					if err = s.Store.CachePaddlePrices(ctx, prices); err != nil {
+						slog.ErrorContext(ctx, "Failed to cache paddle prices", common.ErrAttr(err))
+					}
 
-				billing.UpdatePlansPrices(prices, s.Stage)
+					billing.UpdatePlansPrices(prices, s.Stage)
+				} else {
+					s.Store.ReleaseLock(ctx, paddlePricesLock)
+				}
 			}
 		}
 	}

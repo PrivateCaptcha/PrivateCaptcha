@@ -6,12 +6,14 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
 func (s *server) checkUsageLimits(ctx context.Context, interval, initialPause time.Duration, maxUsers int) {
 	time.Sleep(initialPause)
 
 	slog.DebugContext(ctx, "Checking usage limits", "interval", interval.String(), "maxUsers", maxUsers)
+	const usageLimitsLock = "usage_limits_job"
 
 	ticker := time.NewTicker(interval)
 	for running := true; running; {
@@ -20,30 +22,24 @@ func (s *server) checkUsageLimits(ctx context.Context, interval, initialPause ti
 			running = false
 			ticker.Stop()
 		case <-ticker.C:
-			_, _ = s.doCheckUsageLimits(ctx, time.Now().Add(-interval), maxUsers)
+			tnow := time.Now().UTC()
+			// we use a smaller interval for the actual lock duration to account for monotonous clock discrepancies
+			if _, err := s.businessDB.AcquireLock(ctx, usageLimitsLock, nil /*data*/, tnow.Add(interval-1*time.Second)); err == nil {
+				if _, err := db.CheckUsageLimits(ctx, s.businessDB, s.timeSeries, tnow.Add(-interval), maxUsers); err != nil {
+					// NOTE: in usual circumstances we do not release the lock, letting it expire by TTL, thus effectively
+					// preventing other possible maintenance jobs during the interval. The only use-case is when the job
+					// itself fails, then we want somebody to retry "sooner"
+					s.businessDB.ReleaseLock(ctx, usageLimitsLock)
+				}
+			} else {
+				level := slog.LevelError
+				if err == db.ErrLocked {
+					level = slog.LevelWarn
+				}
+				slog.Log(ctx, level, "Failed to acquire a lock for checking limits", common.ErrAttr(err))
+			}
 		}
 	}
 
 	slog.DebugContext(ctx, "Finished checking usage limits")
-}
-
-func (s *server) doCheckUsageLimits(ctx context.Context, from time.Time, maxUsers int) ([]*common.UserTimeCount, error) {
-	violations, err := s.timeSeries.FindUserLimitsViolations(ctx, from, maxUsers)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to check user limits", common.ErrAttr(err))
-		return nil, err
-	}
-
-	if len(violations) == 0 {
-		slog.InfoContext(ctx, "No violations found")
-		return violations, nil
-	}
-
-	err = s.businessDB.AddUsageLimitsViolations(ctx, violations)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to add usage limits violations", common.ErrAttr(err))
-		return violations, err
-	}
-
-	return violations, nil
 }
