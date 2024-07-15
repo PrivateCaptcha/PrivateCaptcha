@@ -113,11 +113,11 @@ func TestLockTwice(t *testing.T) {
 	const lockDuration = 2 * time.Second
 	var lockName = t.Name()
 
-	lock, err := store.AcquireLock(ctx, lockName, nil, lockDuration)
+	initialExpiration := time.Now().UTC().Add(lockDuration)
+	lock, err := store.AcquireLock(ctx, lockName, nil, initialExpiration)
 	if err != nil {
 		t.Fatal(err)
 	}
-	initialExpiration := lock.ExpiresAt.Time
 
 	const iterations = 100
 	i := 0
@@ -129,7 +129,7 @@ func TestLockTwice(t *testing.T) {
 			break
 		}
 
-		if lock, err = store.AcquireLock(ctx, lockName, nil, lockDuration); err == nil {
+		if lock, err = store.AcquireLock(ctx, lockName, nil, tnow.Add(lockDuration)); err == nil {
 			t.Fatalf("Was able to acquire a lock again right away. i=%v tnow=%v expires_at=%v", i, tnow, lock.ExpiresAt.Time)
 		}
 
@@ -141,7 +141,7 @@ func TestLockTwice(t *testing.T) {
 	}
 
 	// now it should succeed after the lock TTL
-	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	_, err = store.AcquireLock(ctx, lockName, nil, time.Now().UTC().Add(lockDuration))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,13 +155,14 @@ func TestLockUnlock(t *testing.T) {
 	ctx := context.TODO()
 	const lockDuration = 10 * time.Second
 	var lockName = t.Name()
+	expiration := time.Now().UTC().Add(lockDuration)
 
-	_, err := store.AcquireLock(ctx, lockName, nil, lockDuration)
+	_, err := store.AcquireLock(ctx, lockName, nil, expiration)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	_, err = store.AcquireLock(ctx, lockName, nil, expiration)
 	if err == nil {
 		t.Fatal("Was able to acquire a lock again right away")
 	}
@@ -172,7 +173,7 @@ func TestLockUnlock(t *testing.T) {
 	}
 
 	// this time it should succeed as we just released the lock
-	_, err = store.AcquireLock(ctx, lockName, nil, lockDuration)
+	_, err = store.AcquireLock(ctx, lockName, nil, expiration)
 	if err != nil {
 		t.Fatal("Was able to acquire a lock again right away")
 	}

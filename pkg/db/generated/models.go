@@ -204,9 +204,9 @@ type Cache struct {
 }
 
 type Lock struct {
-	Name      string           `db:"name" json:"name"`
-	Data      []byte           `db:"data" json:"data"`
-	ExpiresAt pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+	Name      string             `db:"name" json:"name"`
+	Data      []byte             `db:"data" json:"data"`
+	ExpiresAt pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
 type Organization struct {

@@ -8,7 +8,7 @@ package generated
 import (
 	"context"
 
-	"time"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteLock = `-- name: DeleteLock :exec
@@ -22,7 +22,7 @@ func (q *Queries) DeleteLock(ctx context.Context, name string) error {
 
 const insertLock = `-- name: InsertLock :one
 INSERT INTO locks (name, data, expires_at)
-VALUES ($1, $2, NOW() + $3::INTERVAL)
+VALUES ($1, $2, $3)
 ON CONFLICT (name) DO UPDATE
 SET expires_at = EXCLUDED.expires_at
 WHERE locks.expires_at <= NOW()
@@ -30,13 +30,13 @@ RETURNING name, data, expires_at
 `
 
 type InsertLockParams struct {
-	Name    string        `db:"name" json:"name"`
-	Data    []byte        `db:"data" json:"data"`
-	Column3 time.Duration `db:"column_3" json:"column_3"`
+	Name      string             `db:"name" json:"name"`
+	Data      []byte             `db:"data" json:"data"`
+	ExpiresAt pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 }
 
 func (q *Queries) InsertLock(ctx context.Context, arg *InsertLockParams) (*Lock, error) {
-	row := q.db.QueryRow(ctx, insertLock, arg.Name, arg.Data, arg.Column3)
+	row := q.db.QueryRow(ctx, insertLock, arg.Name, arg.Data, arg.ExpiresAt)
 	var i Lock
 	err := row.Scan(&i.Name, &i.Data, &i.ExpiresAt)
 	return &i, err
