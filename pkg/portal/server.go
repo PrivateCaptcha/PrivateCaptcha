@@ -439,7 +439,8 @@ func (s *Server) StartMaintenanceJobs() {
 		context.WithValue(context.Background(), common.TraceIDContextKey, "portal_maintenance"))
 
 	paddlePricesJob := &db.UniquePeriodicJob{
-		Store: s.Store,
+		LockDuration: 6 * time.Hour,
+		Store:        s.Store,
 		Job: &PaddlePricesJob{
 			Stage:     s.Stage,
 			PaddleAPI: s.PaddleAPI,

@@ -19,11 +19,11 @@ type PaddlePricesJob struct {
 var _ common.PeriodicJob = (*PaddlePricesJob)(nil)
 
 func (j *PaddlePricesJob) Interval() time.Duration {
-	return 6 * time.Hour
+	return 30 * time.Minute
 }
 
 func (j *PaddlePricesJob) Jitter() time.Duration {
-	return j.Interval() / 2
+	return 5 * time.Minute
 }
 
 func (j *PaddlePricesJob) Name() string {

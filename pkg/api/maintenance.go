@@ -19,11 +19,11 @@ type UsageLimitsJob struct {
 var _ common.PeriodicJob = (*UsageLimitsJob)(nil)
 
 func (j *UsageLimitsJob) Interval() time.Duration {
-	return 3 * time.Hour
+	return 30 * time.Minute
 }
 
 func (j *UsageLimitsJob) Jitter() time.Duration {
-	return j.Interval() / 2
+	return 5 * time.Minute
 }
 
 func (j *UsageLimitsJob) Name() string {
