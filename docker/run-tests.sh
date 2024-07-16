@@ -25,7 +25,7 @@ fi
 
 for f in `ls $TESTS_DIR/`; do
     echo "Running $f..."
-    ./$TESTS_DIR/$f -test.v -test.parallel 1
+    ./$TESTS_DIR/$f -test.v -test.parallel 1 # -test.run "^TestUniqueJob"
 done
 
 echo "Success"
