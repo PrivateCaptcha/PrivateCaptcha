@@ -88,6 +88,10 @@ func TestDetectUsageViolations(t *testing.T) {
 }
 
 func TestUsersWithConsecutiveViolations(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	ctx := context.TODO()
 	tnow := time.Now()
 
@@ -141,6 +145,10 @@ func TestUsersWithConsecutiveViolations(t *testing.T) {
 }
 
 func TestUsersWithLargeViolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	ctx := context.TODO()
 	tnow := time.Now()
 	const rate = 1.25
