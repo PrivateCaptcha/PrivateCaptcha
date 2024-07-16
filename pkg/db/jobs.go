@@ -8,23 +8,45 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
-func CheckUsageLimits(ctx context.Context, businessDB *BusinessStore, timeSeries *TimeSeriesStore, from time.Time, maxUsers int) ([]*common.UserTimeCount, error) {
-	violations, err := timeSeries.FindUserLimitsViolations(ctx, from, maxUsers)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to check user limits", common.ErrAttr(err))
-		return nil, err
+type UniquePeriodicJob struct {
+	Job   common.PeriodicJob
+	Store *BusinessStore
+}
+
+var _ common.PeriodicJob = (*UniquePeriodicJob)(nil)
+
+func (j *UniquePeriodicJob) Interval() time.Duration {
+	return j.Job.Interval()
+}
+
+func (j *UniquePeriodicJob) Jitter() time.Duration {
+	return j.Job.Jitter()
+}
+
+func (j *UniquePeriodicJob) Name() string {
+	return j.Job.Name()
+}
+
+func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
+	var jerr error
+	lockName := j.Job.Name()
+	expiration := time.Now().UTC().Add(j.Job.Interval())
+	// we always acquire the lock for {interval} duration so after (interval + jitter) it will definitely be free
+	if _, err := j.Store.AcquireLock(ctx, lockName, nil /*data*/, expiration); err == nil {
+		jerr = j.RunOnce(ctx)
+		if jerr != nil {
+			// NOTE: in usual circumstances we do not release the lock, letting it expire by TTL, thus effectively
+			// preventing other possible maintenance jobs during the interval. The only use-case is when the job
+			// itself fails, then we want somebody to retry "sooner"
+			j.Store.ReleaseLock(ctx, lockName)
+		}
+	} else {
+		level := slog.LevelError
+		if err == ErrLocked {
+			level = slog.LevelWarn
+		}
+		slog.Log(ctx, level, "Failed to acquire a lock for periodic job", "name", lockName, common.ErrAttr(err))
 	}
 
-	if len(violations) == 0 {
-		slog.InfoContext(ctx, "No violations found")
-		return violations, nil
-	}
-
-	err = businessDB.AddUsageLimitsViolations(ctx, violations)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to add usage limits violations", common.ErrAttr(err))
-		return violations, err
-	}
-
-	return violations, nil
+	return jerr
 }
