@@ -9,37 +9,55 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
-func (s *server) checkUsageLimits(ctx context.Context, interval, initialPause time.Duration, maxUsers int) {
-	time.Sleep(initialPause)
+type UsageLimitsJob struct {
+	MaxUsers   int
+	From       time.Time
+	BusinessDB *db.BusinessStore
+	TimeSeries *db.TimeSeriesStore
+}
 
-	slog.DebugContext(ctx, "Checking usage limits", "interval", interval.String(), "maxUsers", maxUsers)
-	const usageLimitsLock = "usage_limits_job"
+var _ common.PeriodicJob = (*UsageLimitsJob)(nil)
 
-	ticker := time.NewTicker(interval)
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-			ticker.Stop()
-		case <-ticker.C:
-			tnow := time.Now().UTC()
-			// we use a smaller interval for the actual lock duration to account for monotonous clock discrepancies
-			if _, err := s.businessDB.AcquireLock(ctx, usageLimitsLock, nil /*data*/, tnow.Add(interval-1*time.Second)); err == nil {
-				if _, err := db.CheckUsageLimits(ctx, s.businessDB, s.timeSeries, tnow.Add(-interval), maxUsers); err != nil {
-					// NOTE: in usual circumstances we do not release the lock, letting it expire by TTL, thus effectively
-					// preventing other possible maintenance jobs during the interval. The only use-case is when the job
-					// itself fails, then we want somebody to retry "sooner"
-					s.businessDB.ReleaseLock(ctx, usageLimitsLock)
-				}
-			} else {
-				level := slog.LevelError
-				if err == db.ErrLocked {
-					level = slog.LevelWarn
-				}
-				slog.Log(ctx, level, "Failed to acquire a lock for checking limits", common.ErrAttr(err))
-			}
-		}
+func (j *UsageLimitsJob) Interval() time.Duration {
+	return 3 * time.Hour
+}
+
+func (j *UsageLimitsJob) Jitter() time.Duration {
+	return j.Interval() / 2
+}
+
+func (j *UsageLimitsJob) Name() string {
+	return "usage_limits_job"
+}
+
+func (j *UsageLimitsJob) RunOnce(ctx context.Context) error {
+	// NOTE: because of {maxUsers} limit, we _may_ not find all violations, but it's considered OK
+	// at this time business-wise, as they will be dealt with likely semi-manually anyways
+	_, err := j.findViolations(ctx)
+	// NOTE: this will lead to possible "missed" intervals if we actually failed to check the limits
+	// but it's OK since this is not a deterministic process anyways due to many factors (e.g. maxUsers limit)
+	j.From = time.Now().UTC()
+
+	return err
+}
+
+func (j *UsageLimitsJob) findViolations(ctx context.Context) ([]*common.UserTimeCount, error) {
+	violations, err := j.TimeSeries.FindUserLimitsViolations(ctx, j.From, j.MaxUsers)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to check user limits", common.ErrAttr(err))
+		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Finished checking usage limits")
+	if len(violations) == 0 {
+		slog.InfoContext(ctx, "No violations found")
+		return violations, nil
+	}
+
+	err = j.BusinessDB.AddUsageLimitsViolations(ctx, violations)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to add usage limits violations", common.ErrAttr(err))
+		return violations, err
+	}
+
+	return violations, nil
 }
