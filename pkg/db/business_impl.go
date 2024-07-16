@@ -1072,6 +1072,34 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 	return nil
 }
 
+func (impl *businessStoreImpl) retrieveUsersWithConsecutiveViolations(ctx context.Context) ([]*dbgen.GetUsersWithConsecutiveViolationsRow, error) {
+	rows, err := impl.queries.GetUsersWithConsecutiveViolations(ctx)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*dbgen.GetUsersWithConsecutiveViolationsRow{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to query users with consecutive limits violations", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return rows, nil
+}
+
+func (impl *businessStoreImpl) retrieveUsersWithLargeViolations(ctx context.Context, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
+	rows, err := impl.queries.GetUsersWithLargeViolations(ctx, rate)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*dbgen.GetUsersWithLargeViolationsRow{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to query users with large limits violations", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return rows, nil
+}
+
 func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	if (len(name) == 0) || expiration.IsZero() {
 		return nil, ErrInvalidInput

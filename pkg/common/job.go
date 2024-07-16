@@ -27,6 +27,7 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 			running = false
 			// introduction of jitter is supposed to help in case we have multiple workers to distribute the load
 		case <-time.After(interval + time.Duration(randv2.Int64N(int64(jitter)))):
+			jlog.DebugContext(ctx, "Running periodic job once")
 			_ = j.RunOnce(ctx)
 		}
 	}

@@ -86,3 +86,110 @@ func TestDetectUsageViolations(t *testing.T) {
 		t.Errorf("Unexpected requests count: %v", v.Count)
 	}
 }
+
+func TestUsersWithConsecutiveViolations(t *testing.T) {
+	ctx := context.TODO()
+	tnow := time.Now()
+
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store.AddUsageLimitsViolations(ctx, []*common.UserTimeCount{
+		&common.UserTimeCount{
+			UserID:    uint32(user.ID),
+			Timestamp: tnow.AddDate(0, -1, 0),
+			Count:     100,
+			Limit:     99,
+		},
+	})
+
+	rows, err := store.RetrieveUsersWithConsecutiveViolations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) > 0 {
+		t.Errorf("Should have not found any consecutive violations so far")
+	}
+
+	store.AddUsageLimitsViolations(ctx, []*common.UserTimeCount{
+		&common.UserTimeCount{
+			UserID:    uint32(user.ID),
+			Timestamp: tnow,
+			Count:     100,
+			Limit:     99,
+		},
+	})
+
+	rows, err = store.RetrieveUsersWithConsecutiveViolations(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, row := range rows {
+		if row.User.ID == user.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Cannot find user violation. count=%v", len(rows))
+	}
+}
+
+func TestUsersWithLargeViolation(t *testing.T) {
+	ctx := context.TODO()
+	tnow := time.Now()
+	const rate = 1.25
+
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store.AddUsageLimitsViolations(ctx, []*common.UserTimeCount{
+		&common.UserTimeCount{
+			UserID:    uint32(user.ID),
+			Timestamp: tnow,
+			Count:     124,
+			Limit:     100,
+		},
+	})
+
+	rows, err := store.RetrieveUsersWithLargeViolations(ctx, rate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rows) > 0 {
+		t.Errorf("Should have not found any large violations so far")
+	}
+
+	store.AddUsageLimitsViolations(ctx, []*common.UserTimeCount{
+		&common.UserTimeCount{
+			UserID:    uint32(user.ID),
+			Timestamp: tnow,
+			Count:     126,
+			Limit:     100,
+		},
+	})
+
+	rows, err = store.RetrieveUsersWithLargeViolations(ctx, rate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	found := false
+	for _, row := range rows {
+		if row.User.ID == user.ID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("Cannot find user violation. count=%v", len(rows))
+	}
+}
