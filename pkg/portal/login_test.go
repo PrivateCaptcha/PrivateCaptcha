@@ -13,6 +13,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 )
 
 func parseCsrfToken(body string) (string, error) {
@@ -121,11 +122,11 @@ func TestPostLogin(t *testing.T) {
 	}
 
 	// Check if the two-factor code is set in the StubMailer
-	stubMailer, ok := server.Mailer.(*StubMailer)
+	stubMailer, ok := server.Mailer.(*email.StubMailer)
 	if !ok {
 		t.Fatal("failed to cast Mailer to StubMailer")
 	}
-	if stubMailer.lastCode == 0 {
+	if stubMailer.LastCode == 0 {
 		t.Error("two-factor code not set in StubMailer")
 	}
 }

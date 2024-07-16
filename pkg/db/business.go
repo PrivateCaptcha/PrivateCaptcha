@@ -324,6 +324,14 @@ func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations
 	return s.defaultImpl.addUsageLimitsViolations(ctx, violations)
 }
 
+func (s *BusinessStore) RetrieveUsersWithConsecutiveViolations(ctx context.Context) ([]*dbgen.GetUsersWithConsecutiveViolationsRow, error) {
+	return s.defaultImpl.retrieveUsersWithConsecutiveViolations(ctx)
+}
+
+func (s *BusinessStore) RetrieveUsersWithLargeViolations(ctx context.Context, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
+	return s.defaultImpl.retrieveUsersWithLargeViolations(ctx, rate)
+}
+
 func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

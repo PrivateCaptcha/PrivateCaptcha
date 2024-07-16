@@ -44,3 +44,87 @@ func (q *Queries) AddUsageLimitViolations(ctx context.Context, arg *AddUsageLimi
 	)
 	return err
 }
+
+const getUsersWithConsecutiveViolations = `-- name: GetUsersWithConsecutiveViolations :many
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
+FROM usage_limit_violations v1
+JOIN usage_limit_violations v2 ON v1.user_id = v2.user_id
+JOIN users u ON v1.user_id = u.id
+WHERE EXTRACT(YEAR FROM v1.detection_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+  AND EXTRACT(MONTH FROM v1.detection_date) = EXTRACT(MONTH FROM CURRENT_DATE)
+  AND EXTRACT(YEAR FROM v2.detection_date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 MONTH')
+  AND EXTRACT(MONTH FROM v2.detection_date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 MONTH')
+`
+
+type GetUsersWithConsecutiveViolationsRow struct {
+	User User `db:"user" json:"user"`
+}
+
+func (q *Queries) GetUsersWithConsecutiveViolations(ctx context.Context) ([]*GetUsersWithConsecutiveViolationsRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWithConsecutiveViolations)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetUsersWithConsecutiveViolationsRow
+	for rows.Next() {
+		var i GetUsersWithConsecutiveViolationsRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Name,
+			&i.User.Email,
+			&i.User.SubscriptionID,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.User.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsersWithLargeViolations = `-- name: GetUsersWithLargeViolations :many
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
+FROM users u
+JOIN usage_limit_violations uv ON u.id = uv.user_id
+WHERE uv.requests_count >= ($1::float * uv.requests_limit)
+  AND EXTRACT(YEAR FROM uv.detection_date) = EXTRACT(YEAR FROM CURRENT_DATE)
+  AND EXTRACT(MONTH FROM uv.detection_date) = EXTRACT(MONTH FROM CURRENT_DATE)
+`
+
+type GetUsersWithLargeViolationsRow struct {
+	User User `db:"user" json:"user"`
+}
+
+func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, dollar_1 float64) ([]*GetUsersWithLargeViolationsRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWithLargeViolations, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetUsersWithLargeViolationsRow
+	for rows.Next() {
+		var i GetUsersWithLargeViolationsRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Name,
+			&i.User.Email,
+			&i.User.SubscriptionID,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.User.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

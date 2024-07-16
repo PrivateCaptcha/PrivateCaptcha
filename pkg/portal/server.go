@@ -172,7 +172,7 @@ type Server struct {
 	template          *web.Template
 	XSRF              XSRFMiddleware
 	Session           session.Manager
-	Mailer            Mailer
+	Mailer            common.Mailer
 	Stage             string
 	PaddleAPI         billing.PaddleAPI
 	maintenanceCancel context.CancelFunc

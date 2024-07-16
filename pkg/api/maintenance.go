@@ -61,3 +61,47 @@ func (j *UsageLimitsJob) findViolations(ctx context.Context) ([]*common.UserTime
 
 	return violations, nil
 }
+
+type NotifyLimitsViolationsJob struct {
+	Mailer common.AdminMailer
+	Store  *db.BusinessStore
+}
+
+var _ common.PeriodicJob = (*NotifyLimitsViolationsJob)(nil)
+
+func (j *NotifyLimitsViolationsJob) Interval() time.Duration {
+	return 1 * time.Hour
+}
+
+func (j *NotifyLimitsViolationsJob) Jitter() time.Duration {
+	return 5 * time.Minute
+}
+
+func (j *NotifyLimitsViolationsJob) Name() string {
+	return "notify_limits_violations_job"
+}
+
+func (j *NotifyLimitsViolationsJob) RunOnce(ctx context.Context) error {
+	consecutiveViolations, err := j.Store.RetrieveUsersWithConsecutiveViolations(ctx)
+	if err != nil {
+		return err
+	}
+
+	emails := make([]string, 0, len(consecutiveViolations))
+	for _, v := range consecutiveViolations {
+		emails = append(emails, v.User.Email)
+	}
+
+	const rate = 1.25
+	largeViolations, err := j.Store.RetrieveUsersWithLargeViolations(ctx, rate)
+	if err != nil {
+		return err
+	}
+
+	for _, v := range largeViolations {
+		// NOTE: it's OK to duplicate emails _at this point_ as processing is manual anyways
+		emails = append(emails, v.User.Email)
+	}
+
+	return j.Mailer.SendUsageViolations(ctx, emails)
+}

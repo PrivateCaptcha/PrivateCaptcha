@@ -49,6 +49,7 @@ type server struct {
 	verifyLogChan     chan *common.VerifyRecord
 	verifyLogCancel   context.CancelFunc
 	paddleAPI         billing.PaddleAPI
+	adminMailer       common.AdminMailer
 	maintenanceCancel context.CancelFunc
 }
 
@@ -56,11 +57,13 @@ func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
 	verifyFlushInterval time.Duration,
 	paddleAPI billing.PaddleAPI,
+	adminMailer common.AdminMailer,
 	getenv func(string) string) *server {
 	srv := &server{
 		stage:         getenv("STAGE"),
 		businessDB:    store,
 		timeSeries:    timeSeries,
+		adminMailer:   adminMailer,
 		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
 		salt:          []byte(getenv("API_SALT")),
 		paddleAPI:     paddleAPI,
@@ -445,8 +448,17 @@ func (s *server) StartMaintenanceJobs() {
 			TimeSeries: s.timeSeries,
 		},
 	}
-
 	go common.RunPeriodicJob(maintenanceCtx, limitsJob)
+
+	violationsJob := &db.UniquePeriodicJob{
+		LockDuration: 24 * time.Hour,
+		Store:        s.businessDB,
+		Job: &NotifyLimitsViolationsJob{
+			Mailer: s.adminMailer,
+			Store:  s.businessDB,
+		},
+	}
+	go common.RunPeriodicJob(maintenanceCtx, violationsJob)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

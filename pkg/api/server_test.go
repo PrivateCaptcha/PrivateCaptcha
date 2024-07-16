@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -66,7 +67,7 @@ func TestMain(m *testing.M) {
 	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, 100*time.Millisecond)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, 2*time.Second, &billing.StubPaddleClient{}, os.Getenv)
+	s = NewServer(store, timeSeries, 2*time.Second, &billing.StubPaddleClient{}, &email.StubAdminMailer{}, os.Getenv)
 	defer s.Shutdown()
 
 	// TODO: seed data
