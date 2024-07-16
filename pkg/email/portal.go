@@ -1,27 +1,24 @@
-package portal
+package email
 
 import (
 	"context"
 	"log/slog"
-)
 
-type Mailer interface {
-	SendTwoFactor(ctx context.Context, email string, code int) error
-	SendSupportRequest(ctx context.Context, email string, category string, message string) error
-}
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+)
 
 // TODO: Implement actual SMTP mailer
 type StubMailer struct {
-	lastCode  int
-	lastEmail string
+	LastCode  int
+	LastEmail string
 }
 
-var _ Mailer = (*StubMailer)(nil)
+var _ common.Mailer = (*StubMailer)(nil)
 
 func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int) error {
 	slog.InfoContext(ctx, "Sent two factor code via email", "code", code, "email", email)
-	sm.lastCode = code
-	sm.lastEmail = email
+	sm.LastCode = code
+	sm.LastEmail = email
 	return nil
 }
 

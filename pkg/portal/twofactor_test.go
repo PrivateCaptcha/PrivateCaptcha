@@ -15,6 +15,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	emailpkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 )
 
 func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*http.Cookie, error) {
@@ -28,7 +29,7 @@ func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	stubMailer, ok := server.Mailer.(*StubMailer)
+	stubMailer, ok := server.Mailer.(*emailpkg.StubMailer)
 	if !ok {
 		return nil, errors.New("failed to cast Mailer to StubMailer")
 	}
@@ -42,7 +43,7 @@ func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*
 	form = url.Values{}
 	form.Add(common.ParamCSRFToken, server.XSRF.Token(email))
 	form.Add(common.ParamEmail, email)
-	form.Add(common.ParamVerificationCode, strconv.Itoa(stubMailer.lastCode))
+	form.Add(common.ParamVerificationCode, strconv.Itoa(stubMailer.LastCode))
 
 	// now send the 2fa request
 	req = httptest.NewRequest("POST", "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))

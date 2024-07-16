@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -63,7 +64,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, 30*time.Second, paddleAPI, os.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, 30*time.Second, paddleAPI, &email.StubAdminMailer{}, os.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
@@ -78,7 +79,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer:    &portal.StubMailer{},
+		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
 	}
 
