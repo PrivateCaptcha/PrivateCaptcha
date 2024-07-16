@@ -434,13 +434,18 @@ func (s *server) StartMaintenanceJobs() {
 	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "api_maintenance"))
 
-	// it will be a truly great problem to have when these will be not enough
-	const maxUsersToCheck = 200
-	const checkInterval = 4 * time.Hour
+	limitsJob := &db.UniquePeriodicJob{
+		Store: s.businessDB,
+		Job: &UsageLimitsJob{
+			// it will be a truly great problem to have when these will be not enough
+			MaxUsers:   200,
+			From:       time.Now().UTC(),
+			BusinessDB: s.businessDB,
+			TimeSeries: s.timeSeries,
+		},
+	}
 
-	// NOTE: because of {maxUsers} limit, we _may_ not find all violations, but it's considered OK
-	// at this time business-wise, as they will be dealt with likely semi-manually anyways
-	go s.checkUsageLimits(maintenanceCtx, checkInterval, 1*time.Minute, maxUsersToCheck)
+	go common.RunPeriodicJob(maintenanceCtx, limitsJob)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

@@ -438,7 +438,17 @@ func (s *Server) StartMaintenanceJobs() {
 	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "portal_maintenance"))
 
-	go s.updatePaddlePrices(maintenanceCtx, 6*time.Hour, 1*time.Minute)
+	paddlePricesJob := &db.UniquePeriodicJob{
+		Store: s.Store,
+		Job: &PaddlePricesJob{
+			Stage:     s.Stage,
+			PaddleAPI: s.PaddleAPI,
+			Store:     s.Store,
+		},
+	}
+
+	go common.RunPeriodicJob(maintenanceCtx, paddlePricesJob)
+	go s.warmupPaddlePrices(maintenanceCtx, 5*time.Second)
 	go s.gcSessions(maintenanceCtx, s.Session.MaxLifetime)
 }
 

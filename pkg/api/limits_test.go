@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
@@ -52,8 +51,15 @@ func TestDetectUsageViolations(t *testing.T) {
 	// we need to wait for the timeout in the ProcessAccessLog()
 	time.Sleep(1 * time.Second)
 
+	job := &UsageLimitsJob{
+		MaxUsers:   10,
+		BusinessDB: store,
+		TimeSeries: timeSeries,
+		From:       tnow,
+	}
+
 	for attempt := 0; attempt < 5; attempt++ {
-		violations, err := db.CheckUsageLimits(ctx, store, timeSeries, tnow /*from*/, 10 /*maxUsers*/)
+		violations, err := job.findViolations(ctx)
 		if err != nil {
 			t.Error(err)
 		}
@@ -66,7 +72,7 @@ func TestDetectUsageViolations(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}
 
-	violations, err := db.CheckUsageLimits(ctx, store, timeSeries, tnow /*from*/, 10 /*maxUsers*/)
+	violations, err := job.findViolations(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
