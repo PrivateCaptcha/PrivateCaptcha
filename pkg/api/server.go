@@ -435,7 +435,8 @@ func (s *server) StartMaintenanceJobs() {
 		context.WithValue(context.Background(), common.TraceIDContextKey, "api_maintenance"))
 
 	limitsJob := &db.UniquePeriodicJob{
-		Store: s.businessDB,
+		LockDuration: 4 * time.Hour,
+		Store:        s.businessDB,
 		Job: &UsageLimitsJob{
 			// it will be a truly great problem to have when these will be not enough
 			MaxUsers:   200,

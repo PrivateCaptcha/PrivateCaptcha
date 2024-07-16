@@ -11,6 +11,9 @@ import (
 type UniquePeriodicJob struct {
 	Job   common.PeriodicJob
 	Store *BusinessStore
+	// the usual logic is that we acquire lock for a longer duration than the job interval therefore
+	// when there are multiple workers, there's a higher chance of "stealing" the work
+	LockDuration time.Duration
 }
 
 var _ common.PeriodicJob = (*UniquePeriodicJob)(nil)
@@ -30,10 +33,10 @@ func (j *UniquePeriodicJob) Name() string {
 func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
 	var jerr error
 	lockName := j.Job.Name()
-	expiration := time.Now().UTC().Add(j.Job.Interval())
-	// we always acquire the lock for {interval} duration so after (interval + jitter) it will definitely be free
+	expiration := time.Now().UTC().Add(j.LockDuration)
+
 	if _, err := j.Store.AcquireLock(ctx, lockName, nil /*data*/, expiration); err == nil {
-		jerr = j.RunOnce(ctx)
+		jerr = j.Job.RunOnce(ctx)
 		if jerr != nil {
 			// NOTE: in usual circumstances we do not release the lock, letting it expire by TTL, thus effectively
 			// preventing other possible maintenance jobs during the interval. The only use-case is when the job
