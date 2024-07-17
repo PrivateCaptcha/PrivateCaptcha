@@ -450,7 +450,7 @@ func (s *server) StartMaintenanceJobs() {
 	}
 	go common.RunPeriodicJob(maintenanceCtx, limitsJob)
 
-	violationsJob := &db.UniquePeriodicJob{
+	notifyViolationsJob := &db.UniquePeriodicJob{
 		LockDuration: 24 * time.Hour,
 		Store:        s.businessDB,
 		Job: &NotifyLimitsViolationsJob{
@@ -458,7 +458,7 @@ func (s *server) StartMaintenanceJobs() {
 			Store:  s.businessDB,
 		},
 	}
-	go common.RunPeriodicJob(maintenanceCtx, violationsJob)
+	go common.RunPeriodicJob(maintenanceCtx, notifyViolationsJob)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {
