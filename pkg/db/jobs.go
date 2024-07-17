@@ -35,6 +35,8 @@ func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
 	lockName := j.Job.Name()
 	expiration := time.Now().UTC().Add(j.LockDuration)
 
+	// TODO: Acquire the lock incrementally instead of the full duration
+	// this will help to handle situations when we crash and don't release the lock
 	if _, err := j.Store.AcquireLock(ctx, lockName, nil /*data*/, expiration); err == nil {
 		jerr = j.Job.RunOnce(ctx)
 		if jerr != nil {
