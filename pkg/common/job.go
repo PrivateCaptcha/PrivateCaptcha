@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	randv2 "math/rand/v2"
+	"runtime/debug"
 	"time"
 )
 
@@ -16,6 +17,13 @@ type PeriodicJob interface {
 
 func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 	jlog := slog.With("name", j.Name())
+
+	defer func() {
+		if rvr := recover(); rvr != nil {
+			jlog.ErrorContext(ctx, "Periodic job crashed", "panic", rvr, "stack", string(debug.Stack()))
+		}
+	}()
+
 	jlog.DebugContext(ctx, "Running periodic job", "interval", j.Interval().String())
 
 	interval := j.Interval()
