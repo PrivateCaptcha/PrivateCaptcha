@@ -266,12 +266,12 @@ type Support struct {
 }
 
 type UsageLimitViolation struct {
-	UserID          int32              `db:"user_id" json:"user_id"`
-	PaddleProductID string             `db:"paddle_product_id" json:"paddle_product_id"`
-	RequestsLimit   int64              `db:"requests_limit" json:"requests_limit"`
-	RequestsCount   int64              `db:"requests_count" json:"requests_count"`
-	DetectionDate   pgtype.Date        `db:"detection_date" json:"detection_date"`
-	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	UserID          int32       `db:"user_id" json:"user_id"`
+	PaddleProductID string      `db:"paddle_product_id" json:"paddle_product_id"`
+	RequestsLimit   int64       `db:"requests_limit" json:"requests_limit"`
+	RequestsCount   int64       `db:"requests_count" json:"requests_count"`
+	DetectionMonth  pgtype.Date `db:"detection_month" json:"detection_month"`
+	LastViolatedAt  pgtype.Date `db:"last_violated_at" json:"last_violated_at"`
 }
 
 type User struct {
