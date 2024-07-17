@@ -92,7 +92,8 @@ func (j *NotifyLimitsViolationsJob) RunOnce(ctx context.Context) error {
 		emails = append(emails, v.User.Email)
 	}
 
-	const rate = 1.25
+	// rate of volume change between plans is approximately 25% and here we check if user is over ~2 plans
+	const rate = 1.25 * 1.25
 	largeViolations, err := j.Store.RetrieveUsersWithLargeViolations(ctx, rate)
 	if err != nil {
 		return err
