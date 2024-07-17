@@ -10,7 +10,11 @@ import (
 
 type PeriodicJob interface {
 	RunOnce(ctx context.Context) error
+	// NOTE: Interval() defines how many times the job will _attempt_ to run
+	// the "actual" interval for the most jobs will be determined by the
+	// duration of the lock they hold in DB. Somewhat confusing, I know.
 	Interval() time.Duration
+	// NOTE: if no jitter is needed, return 1, not 0
 	Jitter() time.Duration
 	Name() string
 }
