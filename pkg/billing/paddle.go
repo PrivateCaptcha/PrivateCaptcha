@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"time"
 
 	paddle "github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/jpillora/backoff"
 )
 
 var (
@@ -64,7 +66,12 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 		return nil, err
 	}
 
-	return &paddleClient{sdk: pc}, nil
+	return &retryPaddleClient{
+		paddleAPI:  &paddleClient{sdk: pc},
+		attempts:   5,
+		minBackoff: 500 * time.Millisecond,
+		maxBackoff: 4 * time.Second,
+	}, nil
 }
 
 func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
@@ -72,7 +79,6 @@ func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) 
 		return nil, errInvalidArgument
 	}
 
-	// TODO: Add retry with exponential backoff for paddle calls
 	if customer, err := pc.sdk.GetCustomer(ctx, &paddle.GetCustomerRequest{CustomerID: customerID}); err == nil {
 		return &CustomerInfo{
 			Name:  *customer.Name,
@@ -109,7 +115,6 @@ func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Pri
 		ProductID: productIDs,
 	})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to list Paddle prices", common.ErrAttr(err))
 		return map[string]int{}, err
 	}
 
@@ -124,7 +129,6 @@ func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Pri
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to iterate the prices", common.ErrAttr(err))
 		return result, err
 	}
 
@@ -150,7 +154,6 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to preview Paddle subscription update", common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -181,8 +184,6 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update Paddle subscription", "subscriptionID", subscriptionID, "priceID", priceID,
-			common.ErrAttr(err))
 		return err
 	}
 
@@ -201,11 +202,196 @@ func (pc *paddleClient) CancelSubscription(ctx context.Context, subscriptionID s
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "subscriptionID", subscriptionID, common.ErrAttr(err))
 		return err
 	}
 
 	slog.DebugContext(ctx, "Cancelled Paddle subscription", "subscriptionID", subscriptionID)
 
 	return nil
+}
+
+type retryPaddleClient struct {
+	paddleAPI  PaddleAPI
+	attempts   int
+	minBackoff time.Duration
+	maxBackoff time.Duration
+}
+
+var _ PaddleAPI = (*retryPaddleClient)(nil)
+
+func (rpc *retryPaddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
+	var ci *CustomerInfo
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		ci, err = rpc.paddleAPI.GetCustomerInfo(ctx, customerID)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to get customer info", "attempt", i, "customerID", customerID, common.ErrAttr(err))
+	}
+
+	return ci, err
+}
+
+func (rpc *retryPaddleClient) GetManagementURLs(ctx context.Context, subscriptionID string) (*ManagementURLs, error) {
+	var mu *ManagementURLs
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		mu, err = rpc.paddleAPI.GetManagementURLs(ctx, subscriptionID)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to get management URLs", "attempt", i, "subscriptionID", subscriptionID, common.ErrAttr(err))
+	}
+
+	return mu, err
+}
+
+func (rpc *retryPaddleClient) GetPrices(ctx context.Context, productIDs []string) (Prices, error) {
+	var prices Prices
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		prices, err = rpc.paddleAPI.GetPrices(ctx, productIDs)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to get products prices", "attempt", i, "count", len(productIDs), common.ErrAttr(err))
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to list Paddle prices", common.ErrAttr(err))
+	}
+
+	return prices, err
+}
+
+func (rpc *retryPaddleClient) PreviewChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) (*ChangePreview, error) {
+	var preview *ChangePreview
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		preview, err = rpc.paddleAPI.PreviewChangeSubscription(ctx, subscriptionID, priceID, quantity)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to get change preview", "attempt", i, "subscriptionID", subscriptionID, common.ErrAttr(err))
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to preview Paddle subscription update", common.ErrAttr(err))
+	}
+
+	return preview, err
+}
+
+func (rpc *retryPaddleClient) ChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error {
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		err = rpc.paddleAPI.ChangeSubscription(ctx, subscriptionID, priceID, quantity)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to change subscription", "attempt", i, "subscriptionID", subscriptionID, common.ErrAttr(err))
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update Paddle subscription", "subscriptionID", subscriptionID, "priceID", priceID,
+			common.ErrAttr(err))
+	}
+
+	return err
+}
+
+func (rpc *retryPaddleClient) CancelSubscription(ctx context.Context, subscriptionID string) error {
+	var err error
+
+	b := &backoff.Backoff{
+		Min:    rpc.minBackoff,
+		Max:    rpc.maxBackoff,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for i := 0; i < rpc.attempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		err = rpc.paddleAPI.CancelSubscription(ctx, subscriptionID)
+		if err == nil {
+			break
+		}
+
+		slog.WarnContext(ctx, "Failed to cancel Paddle subscription", "attempt", i, "subscriptionID", subscriptionID, common.ErrAttr(err))
+	}
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "subscriptionID", subscriptionID, common.ErrAttr(err))
+	}
+
+	return err
 }
