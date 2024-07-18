@@ -19,11 +19,17 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
+)
+
+const (
+	maxCacheSize    = 1_000_000
+	maxBlockedUsers = 1000
 )
 
 var (
@@ -35,7 +41,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
-	cache, cerr := db.NewMemoryCache(5 * time.Minute)
+	cache, cerr := db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
 	if cerr != nil {
 		return cerr
 	}
@@ -64,10 +70,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, 30*time.Second, paddleAPI, &email.StubAdminMailer{}, os.Getenv)
+	blockedUsers := db.NewStaticCache[int32, int64](maxBlockedUsers, -1 /*missing data*/)
+	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, blockedUsers, 1*time.Second /*backfill duration*/)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, os.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
-
 	portalServer := &portal.Server{
 		Stage:      stage,
 		Store:      businessDB,
@@ -82,18 +89,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
 	}
+	portalServer.Init()
 
 	router := http.NewServeMux()
-
-	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, 1*time.Second)
-
-	apiServer.Setup(router, "api", apiAuth)
-	apiServer.StartMaintenanceJobs()
-
-	portalServer.Init()
+	apiServer.Setup(router, "api")
 	portalServer.Setup(router, ratelimiter.RateLimit)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
-	portalServer.StartMaintenanceJobs()
 
 	host := getenv("PC_HOST")
 	if host == "" {
@@ -121,15 +122,48 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		}
 	}()
 
+	// start maintenance jobs
+	jobs := maintenance.NewJobs(businessDB)
+	jobs.AddLocked(4*time.Hour, &maintenance.UsageLimitsJob{
+		MaxUsers:   200, // it will be a truly great problem to have when 200 will be not enough
+		From:       common.StartOfMonth(),
+		BusinessDB: businessDB,
+		TimeSeries: timeSeriesDB,
+	})
+	jobs.AddLocked(24*time.Hour, &maintenance.NotifyLimitsViolationsJob{
+		Mailer: &email.StubAdminMailer{},
+		Store:  businessDB,
+	})
+	jobs.AddLocked(6*time.Hour, &maintenance.PaddlePricesJob{
+		Stage:     stage,
+		PaddleAPI: paddleAPI,
+		Store:     businessDB,
+	})
+	jobs.Add(&maintenance.SessionsCleanupJob{
+		Session: portalServer.Session,
+	})
+	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
+	jobs.Add(&maintenance.ThrottleViolationsJob{
+		Stage:        stage,
+		BlockedUsers: blockedUsers,
+		Store:        businessDB,
+		From:         common.StartOfMonth(),
+	})
+	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
+		Store: businessDB,
+		Stage: stage,
+	})
+	jobs.Run()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
 		slog.Debug("Shutting down gracefully...")
+		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
-		portalServer.Shutdown()
 		businessDB.Shutdown()
 		apiAuth.Shutdown()
 		ratelimiter.Shutdown()

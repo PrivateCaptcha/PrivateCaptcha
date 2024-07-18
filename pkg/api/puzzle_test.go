@@ -21,7 +21,7 @@ import (
 
 func puzzleSuite(sitekey string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", auth)
+	s.Setup(srv, "")
 
 	//srv.HandleFunc("/", catchAll)
 

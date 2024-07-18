@@ -1,4 +1,4 @@
-package db
+package maintenance
 
 import (
 	"context"
@@ -6,11 +6,12 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
 type UniquePeriodicJob struct {
 	Job   common.PeriodicJob
-	Store *BusinessStore
+	Store *db.BusinessStore
 	// the usual logic is that we acquire lock for a longer duration than the job interval therefore
 	// when there are multiple workers, there's a higher chance of "stealing" the work
 	LockDuration time.Duration
@@ -47,7 +48,7 @@ func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
 		}
 	} else {
 		level := slog.LevelError
-		if err == ErrLocked {
+		if err == db.ErrLocked {
 			level = slog.LevelWarn
 		}
 		slog.Log(ctx, level, "Failed to acquire a lock for periodic job", "name", lockName, common.ErrAttr(err))

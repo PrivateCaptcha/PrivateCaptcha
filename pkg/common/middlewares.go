@@ -75,6 +75,7 @@ func NoCache(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// The reason this exists is because http.MaxBytesHandler works with http.Handler instead of http.HandlerFunc
 func MaxBytesHandler(next http.HandlerFunc, maxSize int64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r2 := *r

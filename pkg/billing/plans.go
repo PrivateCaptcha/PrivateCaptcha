@@ -19,6 +19,15 @@ type Plan struct {
 	RequestsLimit        int64
 	OrgsLimit            int
 	PropertiesLimit      int
+	ThrottleLimit        int64
+}
+
+func (p *Plan) ShouldBeThrottled(requestsCount int64) bool {
+	if (p.RequestsLimit <= 0) || (p.ThrottleLimit <= 0) {
+		return false
+	}
+
+	return (requestsCount > p.RequestsLimit) && (requestsCount > p.ThrottleLimit)
 }
 
 const (
@@ -44,6 +53,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        5_000, // next plan's limit
 		},
 		{
 			Name:                 "Private Captcha 5K",
@@ -56,6 +66,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        10_000, // next plan's limit
 		},
 		{
 			Name:                 "Private Captcha 10K",
@@ -68,6 +79,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        25_000, // next plan's limit
 		},
 		{
 			Name:                 "Private Captcha 25K",
@@ -80,6 +92,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        50_000, // next plan's limit
 		},
 		{
 			Name:                 "Private Captcha 50K",
@@ -92,6 +105,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        100_000, // next plan's limit
 		},
 		{
 			Name:                 "Private Captcha 100K",
@@ -104,6 +118,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        200_000, // x2
 		},
 	}
 
@@ -119,6 +134,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        20_000,
 		},
 	}
 
