@@ -22,6 +22,34 @@ type Plan struct {
 	ThrottleLimit        int64
 }
 
+func (p *Plan) IsValid() bool {
+	return len(p.Name) > 0 &&
+		len(p.PaddleProductID) > 0 &&
+		len(p.PaddlePriceIDYearly) > 0 &&
+		len(p.PaddlePriceIDMonthly) > 0 &&
+		p.PriceMonthly > 0 &&
+		p.PriceYearly > 0 &&
+		p.RequestsLimit > 0
+}
+
+func (p *Plan) IsDowngradeFor(other *Plan) bool {
+	if (p == nil) || (other == nil) {
+		return false
+	}
+
+	if !p.IsValid() || !other.IsValid() {
+		return false
+	}
+
+	return (p.RequestsLimit < other.RequestsLimit) &&
+		(p.PriceMonthly < other.PriceMonthly) &&
+		(p.PriceYearly < other.PriceYearly)
+}
+
+func (p *Plan) IsLegitUsage(requestsCount int64) bool {
+	return requestsCount <= p.RequestsLimit
+}
+
 func (p *Plan) ShouldBeThrottled(requestsCount int64) bool {
 	if (p.RequestsLimit <= 0) || (p.ThrottleLimit <= 0) {
 		return false
