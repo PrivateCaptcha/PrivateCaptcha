@@ -9,7 +9,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
-	"github.com/jpillora/backoff"
 )
 
 const (
@@ -38,25 +37,7 @@ func (j *PaddlePricesJob) Name() string {
 
 func (j *PaddlePricesJob) RunOnce(ctx context.Context) error {
 	products := billing.GetProductsForStage(j.Stage)
-	var prices billing.Prices
-	var err error
-
-	b := &backoff.Backoff{
-		Min:    1 * time.Second,
-		Max:    5 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
-
-	for i := 0; i < paddlePricesAttempts; i++ {
-		prices, err = j.PaddleAPI.GetPrices(ctx, products)
-		if err == nil {
-			break
-		}
-
-		time.Sleep(b.Duration())
-	}
-
+	prices, err := j.PaddleAPI.GetPrices(ctx, products)
 	if err == nil {
 		if err = j.Store.CachePaddlePrices(ctx, prices); err != nil {
 			slog.ErrorContext(ctx, "Failed to cache paddle prices", common.ErrAttr(err))
