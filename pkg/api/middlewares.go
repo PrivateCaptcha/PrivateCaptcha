@@ -26,9 +26,10 @@ type authMiddleware struct {
 	batchSize      int
 	backfillCancel context.CancelFunc
 	privateAPIKey  string
+	blockedUsers   common.Cache[int32, int64]
 }
 
-func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, ratelimiter *ratelimit.HTTPRateLimiter, backfillDelay time.Duration) *authMiddleware {
+func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, ratelimiter *ratelimit.HTTPRateLimiter, blockedUsers common.Cache[int32, int64], backfillDelay time.Duration) *authMiddleware {
 	const batchSize = 10
 
 	am := &authMiddleware{
@@ -37,6 +38,7 @@ func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, rate
 		sitekeyChan:   make(chan string, batchSize),
 		batchSize:     batchSize,
 		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
+		blockedUsers:  blockedUsers,
 	}
 
 	var backfillCtx context.Context
@@ -51,6 +53,22 @@ func (am *authMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	close(am.sitekeyChan)
 	am.backfillCancel()
+}
+
+func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64) {
+	if oldLimit, err := am.blockedUsers.Get(ctx, userID); err == nil {
+		if newLimit > oldLimit {
+			slog.InfoContext(ctx, "Unblocking throttled user for auth", "userID", userID, "oldLimit", oldLimit, "newLimit", newLimit)
+			am.blockedUsers.Delete(ctx, userID)
+		} else {
+			slog.WarnContext(ctx, "Cannot unblock user for auth", "userID", userID, "oldLimit", oldLimit, "newLimit", newLimit)
+		}
+	}
+}
+
+func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64) {
+	am.blockedUsers.Set(ctx, userID, limit)
+	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit)
 }
 
 func (am *authMiddleware) retrieveSiteKey(r *http.Request) string {
@@ -190,6 +208,11 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		// also not blacklisted etc.
 
 		if property != nil {
+			if _, err := am.blockedUsers.Get(ctx, property.OrgOwnerID.Int32); err == nil {
+				http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+				return
+			}
+
 			ctx = context.WithValue(ctx, common.PropertyContextKey, property)
 		} else {
 			ctx = context.WithValue(ctx, common.SitekeyContextKey, sitekey)

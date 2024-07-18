@@ -40,30 +40,29 @@ var (
 )
 
 type server struct {
-	stage             string
-	businessDB        *db.BusinessStore
-	timeSeries        *db.TimeSeriesStore
-	levels            *difficulty.Levels
-	uaKey             [64]byte
-	salt              []byte
-	verifyLogChan     chan *common.VerifyRecord
-	verifyLogCancel   context.CancelFunc
-	paddleAPI         billing.PaddleAPI
-	adminMailer       common.AdminMailer
-	maintenanceCancel context.CancelFunc
+	stage           string
+	businessDB      *db.BusinessStore
+	timeSeries      *db.TimeSeriesStore
+	levels          *difficulty.Levels
+	auth            *authMiddleware
+	uaKey           [64]byte
+	salt            []byte
+	verifyLogChan   chan *common.VerifyRecord
+	verifyLogCancel context.CancelFunc
+	paddleAPI       billing.PaddleAPI
 }
 
 func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
+	auth *authMiddleware,
 	verifyFlushInterval time.Duration,
 	paddleAPI billing.PaddleAPI,
-	adminMailer common.AdminMailer,
 	getenv func(string) string) *server {
 	srv := &server{
 		stage:         getenv("STAGE"),
 		businessDB:    store,
 		timeSeries:    timeSeries,
-		adminMailer:   adminMailer,
+		auth:          auth,
 		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
 		salt:          []byte(getenv("API_SALT")),
 		paddleAPI:     paddleAPI,
@@ -113,7 +112,7 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *server) Setup(router *http.ServeMux, prefix string, auth *authMiddleware) {
+func (s *server) Setup(router *http.ServeMux, prefix string) {
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
 	}
@@ -122,7 +121,7 @@ func (s *server) Setup(router *http.ServeMux, prefix string, auth *authMiddlewar
 		prefix += "/"
 	}
 
-	s.setupWithPrefix(prefix, router, auth)
+	s.setupWithPrefix(prefix, router, s.auth)
 }
 
 func (s *server) Shutdown() {
@@ -131,10 +130,6 @@ func (s *server) Shutdown() {
 	slog.Debug("Shutting down API server routines")
 	s.verifyLogCancel()
 	close(s.verifyLogChan)
-
-	if s.maintenanceCancel != nil {
-		s.maintenanceCancel()
-	}
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
@@ -430,35 +425,6 @@ func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 	}
 
 	slog.InfoContext(ctx, "Finished processing verify log")
-}
-
-func (s *server) StartMaintenanceJobs() {
-	var maintenanceCtx context.Context
-	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "api_maintenance"))
-
-	limitsJob := &db.UniquePeriodicJob{
-		LockDuration: 4 * time.Hour,
-		Store:        s.businessDB,
-		Job: &UsageLimitsJob{
-			// it will be a truly great problem to have when these will be not enough
-			MaxUsers:   200,
-			From:       time.Now().UTC(),
-			BusinessDB: s.businessDB,
-			TimeSeries: s.timeSeries,
-		},
-	}
-	go common.RunPeriodicJob(maintenanceCtx, limitsJob)
-
-	notifyViolationsJob := &db.UniquePeriodicJob{
-		LockDuration: 24 * time.Hour,
-		Store:        s.businessDB,
-		Job: &NotifyLimitsViolationsJob{
-			Mailer: s.adminMailer,
-			Store:  s.businessDB,
-		},
-	}
-	go common.RunPeriodicJob(maintenanceCtx, notifyViolationsJob)
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {

@@ -14,14 +14,13 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
 	s          *server
-	cache      common.Cache
+	cache      common.Cache[string, any]
 	timeSeries *db.TimeSeriesStore
 	auth       *authMiddleware
 	store      *db.BusinessStore
@@ -51,7 +50,7 @@ func TestMain(m *testing.M) {
 
 	timeSeries = db.NewTimeSeries(clickhouse)
 
-	cache, err = db.NewMemoryCache(1 * time.Minute)
+	cache, err = db.NewMemoryCache[string, any](1*time.Minute, 100, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -64,10 +63,11 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, 100*time.Millisecond)
+	blockedUsers := db.NewStaticCache[int32, int64](100 /*cap*/, -1 /*missing data*/)
+	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, 100*time.Millisecond)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, 2*time.Second, &billing.StubPaddleClient{}, &email.StubAdminMailer{}, os.Getenv)
+	s = NewServer(store, timeSeries, auth, 2*time.Second /*flush interval*/, &billing.StubPaddleClient{}, os.Getenv)
 	defer s.Shutdown()
 
 	// TODO: seed data
