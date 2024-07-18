@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
 type TestJob struct {
@@ -29,7 +29,7 @@ func TestUniqueJob(t *testing.T) {
 
 	job := &TestJob{}
 
-	uniqueJob := &db.UniquePeriodicJob{
+	uniqueJob := &maintenance.UniquePeriodicJob{
 		Job:          job,
 		Store:        store,
 		LockDuration: 1 * time.Second,

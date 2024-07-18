@@ -10,22 +10,19 @@ import (
 	"github.com/maypok86/otter"
 )
 
-const (
-	maxCacheSize = 1_000_000
-	missingData  = 0xC0010FF // cool off
-)
-
 var (
 	ErrNegativeCacheHit = errors.New("negative hit")
 	ErrCacheMiss        = errors.New("cache miss")
+	ErrSetMissing       = errors.New("cannot set missing value directly")
 )
 
-type memcache struct {
-	store otter.Cache[string, any]
+type memcache[TKey comparable, TValue comparable] struct {
+	store        otter.Cache[TKey, TValue]
+	missingValue TValue
 }
 
-func NewMemoryCache(expiration time.Duration) (*memcache, error) {
-	store, err := otter.MustBuilder[string, any](maxCacheSize).
+func NewMemoryCache[TKey comparable, TValue comparable](expiration time.Duration, maxCacheSize int, missingValue TValue) (*memcache[TKey, TValue], error) {
+	store, err := otter.MustBuilder[TKey, TValue](maxCacheSize).
 		WithTTL(expiration).
 		Build()
 
@@ -33,20 +30,21 @@ func NewMemoryCache(expiration time.Duration) (*memcache, error) {
 		return nil, err
 	}
 
-	return &memcache{
-		store: store,
+	return &memcache[TKey, TValue]{
+		store:        store,
+		missingValue: missingValue,
 	}, nil
 }
 
-var _ common.Cache = (*memcache)(nil)
+var _ common.Cache[int, any] = (*memcache[int, any])(nil)
 
-func (c *memcache) Get(ctx context.Context, key string) (any, error) {
+func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (any, error) {
 	data, found := c.store.Get(key)
 	if !found {
 		return nil, ErrCacheMiss
 	}
 
-	if mark, ok := data.(uint32); ok && mark == missingData {
+	if data == c.missingValue {
 		return nil, ErrNegativeCacheHit
 	}
 
@@ -55,15 +53,19 @@ func (c *memcache) Get(ctx context.Context, key string) (any, error) {
 	return data, nil
 }
 
-func (c *memcache) SetMissing(ctx context.Context, key string) error {
-	c.store.Set(key, uint32(missingData))
+func (c *memcache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
+	c.store.Set(key, c.missingValue)
 
 	slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "key", key)
 
 	return nil
 }
 
-func (c *memcache) Set(ctx context.Context, key string, t any) error {
+func (c *memcache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
+	if t == c.missingValue {
+		return ErrSetMissing
+	}
+
 	c.store.Set(key, t)
 
 	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "key", key)
@@ -71,7 +73,7 @@ func (c *memcache) Set(ctx context.Context, key string, t any) error {
 	return nil
 }
 
-func (c *memcache) Delete(ctx context.Context, key string) error {
+func (c *memcache[TKey, TValue]) Delete(ctx context.Context, key TKey) error {
 	c.store.Delete(key)
 
 	slog.Log(ctx, common.LevelTrace, "Deleted item from memory cache", "key", key)

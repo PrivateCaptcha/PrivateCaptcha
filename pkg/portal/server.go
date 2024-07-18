@@ -166,16 +166,15 @@ func (ac *alertRenderContext) ClearAlerts() {
 }
 
 type Server struct {
-	Store             *db.BusinessStore
-	TimeSeries        *db.TimeSeriesStore
-	Prefix            string
-	template          *web.Template
-	XSRF              XSRFMiddleware
-	Session           session.Manager
-	Mailer            common.Mailer
-	Stage             string
-	PaddleAPI         billing.PaddleAPI
-	maintenanceCancel context.CancelFunc
+	Store      *db.BusinessStore
+	TimeSeries *db.TimeSeriesStore
+	Prefix     string
+	template   *web.Template
+	XSRF       XSRFMiddleware
+	Session    session.Manager
+	Mailer     common.Mailer
+	Stage      string
+	PaddleAPI  billing.PaddleAPI
 }
 
 func (s *Server) Init() {
@@ -430,31 +429,5 @@ func (s *Server) csrf(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-	}
-}
-
-func (s *Server) StartMaintenanceJobs() {
-	var maintenanceCtx context.Context
-	maintenanceCtx, s.maintenanceCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "portal_maintenance"))
-
-	paddlePricesJob := &db.UniquePeriodicJob{
-		LockDuration: 6 * time.Hour,
-		Store:        s.Store,
-		Job: &PaddlePricesJob{
-			Stage:     s.Stage,
-			PaddleAPI: s.PaddleAPI,
-			Store:     s.Store,
-		},
-	}
-
-	go common.RunPeriodicJob(maintenanceCtx, paddlePricesJob)
-	go s.warmupPaddlePrices(maintenanceCtx, 5*time.Second)
-	go s.gcSessions(maintenanceCtx, s.Session.MaxLifetime)
-}
-
-func (s *Server) Shutdown() {
-	if s.maintenanceCancel != nil {
-		s.maintenanceCancel()
 	}
 }

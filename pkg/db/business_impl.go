@@ -24,7 +24,7 @@ var (
 	errUnsupported = errors.New("not supported")
 )
 
-func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string) (*T, error) {
+func fetchCachedOne[T any](ctx context.Context, cache common.Cache[string, any], key string) (*T, error) {
 	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func fetchCachedOne[T any](ctx context.Context, cache common.Cache, key string) 
 	return nil, errInvalidCacheType
 }
 
-func fetchCachedMany[T any](ctx context.Context, cache common.Cache, key string) ([]*T, error) {
+func fetchCachedMany[T any](ctx context.Context, cache common.Cache[string, any], key string) ([]*T, error) {
 	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func (c *txCache) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
-func (c *txCache) Commit(ctx context.Context, cache common.Cache) {
+func (c *txCache) Commit(ctx context.Context, cache common.Cache[string, any]) {
 	for key := range c.del {
 		cache.Delete(ctx, key)
 	}
@@ -94,7 +94,7 @@ func (c *txCache) Commit(ctx context.Context, cache common.Cache) {
 
 type businessStoreImpl struct {
 	queries *dbgen.Queries
-	cache   common.Cache
+	cache   common.Cache[string, any]
 }
 
 func (impl *businessStoreImpl) deleteExpiredCache(ctx context.Context) error {
@@ -1015,6 +1015,7 @@ func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Contex
 	return subscriptions, err
 }
 
+// NOTE: This function has a side-effect that updates PaddleProductID field in the violations array, if found valid
 func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
 	if len(violations) == 0 {
 		return nil
@@ -1051,7 +1052,12 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 		product, ok := userProducts[int32(v.UserID)]
 		if !ok {
 			slog.WarnContext(ctx, "Did not find user subscription product", "userID", v.UserID)
+			continue
 		}
+
+		// This is an important side-effect of this function
+		v.PaddleProductID = product
+
 		params.UserIds = append(params.UserIds, int32(v.UserID))
 		params.Products = append(params.Products, product)
 		params.Limits = append(params.Limits, int64(v.Limit))
@@ -1086,8 +1092,11 @@ func (impl *businessStoreImpl) retrieveUsersWithConsecutiveViolations(ctx contex
 	return rows, nil
 }
 
-func (impl *businessStoreImpl) retrieveUsersWithLargeViolations(ctx context.Context, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
-	rows, err := impl.queries.GetUsersWithLargeViolations(ctx, rate)
+func (impl *businessStoreImpl) retrieveUsersWithLargeViolations(ctx context.Context, from time.Time, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
+	rows, err := impl.queries.GetUsersWithLargeViolations(ctx, &dbgen.GetUsersWithLargeViolationsParams{
+		Column1: rate,
+		Column2: Date(from),
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return []*dbgen.GetUsersWithLargeViolationsRow{}, nil

@@ -51,7 +51,10 @@ SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.d
 FROM usage_limit_violations v1
 JOIN usage_limit_violations v2 ON v1.user_id = v2.user_id
 JOIN users u ON v1.user_id = u.id
-WHERE EXTRACT(YEAR FROM v1.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE)
+JOIN subscriptions s ON u.subscription_id = s.id
+WHERE s.paddle_product_id = v1.paddle_product_id
+  AND u.deleted_at IS NULL
+  AND EXTRACT(YEAR FROM v1.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE)
   AND EXTRACT(MONTH FROM v1.detection_month) = EXTRACT(MONTH FROM CURRENT_DATE)
   AND EXTRACT(YEAR FROM v2.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 MONTH')
   AND EXTRACT(MONTH FROM v2.detection_month) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 MONTH')
@@ -90,20 +93,28 @@ func (q *Queries) GetUsersWithConsecutiveViolations(ctx context.Context) ([]*Get
 }
 
 const getUsersWithLargeViolations = `-- name: GetUsersWithLargeViolations :many
-SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.paddle_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at
 FROM users u
 JOIN usage_limit_violations uv ON u.id = uv.user_id
-WHERE uv.requests_count >= ($1::float * uv.requests_limit)
-  AND EXTRACT(YEAR FROM uv.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE)
-  AND EXTRACT(MONTH FROM uv.detection_month) = EXTRACT(MONTH FROM CURRENT_DATE)
+JOIN subscriptions s ON u.subscription_id = s.id
+WHERE s.paddle_product_id = uv.paddle_product_id
+  AND u.deleted_at IS NULL
+  AND uv.requests_count >= ($1::float * uv.requests_limit)
+  AND uv.last_violated_at >= $2::date
 `
 
-type GetUsersWithLargeViolationsRow struct {
-	User User `db:"user" json:"user"`
+type GetUsersWithLargeViolationsParams struct {
+	Column1 float64     `db:"column_1" json:"column_1"`
+	Column2 pgtype.Date `db:"column_2" json:"column_2"`
 }
 
-func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, dollar_1 float64) ([]*GetUsersWithLargeViolationsRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWithLargeViolations, dollar_1)
+type GetUsersWithLargeViolationsRow struct {
+	User                User                `db:"user" json:"user"`
+	UsageLimitViolation UsageLimitViolation `db:"usage_limit_violation" json:"usage_limit_violation"`
+}
+
+func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, arg *GetUsersWithLargeViolationsParams) ([]*GetUsersWithLargeViolationsRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWithLargeViolations, arg.Column1, arg.Column2)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +130,12 @@ func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, dollar_1 floa
 			&i.User.CreatedAt,
 			&i.User.UpdatedAt,
 			&i.User.DeletedAt,
+			&i.UsageLimitViolation.UserID,
+			&i.UsageLimitViolation.PaddleProductID,
+			&i.UsageLimitViolation.RequestsLimit,
+			&i.UsageLimitViolation.RequestsCount,
+			&i.UsageLimitViolation.DetectionMonth,
+			&i.UsageLimitViolation.LastViolatedAt,
 		); err != nil {
 			return nil, err
 		}

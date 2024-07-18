@@ -220,6 +220,7 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 	if plan, err := billing.FindPlanByProductID(subscrParams.PaddleProductID, s.stage); err == nil {
 		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
 			_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+			s.auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit)
 		}
 	} else {
 		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
@@ -256,7 +257,11 @@ func (s *server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err = s.businessDB.UpdateSubscription(ctx, subscrParams); err != nil {
+	if subscription, err := s.businessDB.UpdateSubscription(ctx, subscrParams); err == nil {
+		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
+			s.auth.BlockUser(ctx, user.ID, 0 /*limit*/)
+		}
+	} else {
 		elog.ErrorContext(ctx, "Failed to update the subscription", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

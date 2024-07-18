@@ -5,11 +5,11 @@ import (
 	"time"
 )
 
-type Cache interface {
-	Get(ctx context.Context, key string) (any, error)
-	SetMissing(ctx context.Context, key string) error
-	Set(ctx context.Context, key string, t any) error
-	Delete(ctx context.Context, key string) error
+type Cache[TKey comparable, TValue any] interface {
+	Get(ctx context.Context, key TKey) (TValue, error)
+	SetMissing(ctx context.Context, key TKey) error
+	Set(ctx context.Context, key TKey, t TValue) error
+	Delete(ctx context.Context, key TKey) error
 }
 
 type SessionStore interface {

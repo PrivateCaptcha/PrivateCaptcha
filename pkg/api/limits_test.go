@@ -51,15 +51,8 @@ func TestDetectUsageViolations(t *testing.T) {
 	// we need to wait for the timeout in the ProcessAccessLog()
 	time.Sleep(1 * time.Second)
 
-	job := &UsageLimitsJob{
-		MaxUsers:   10,
-		BusinessDB: store,
-		TimeSeries: timeSeries,
-		From:       tnow,
-	}
-
 	for attempt := 0; attempt < 5; attempt++ {
-		violations, err := job.findViolations(ctx)
+		violations, err := timeSeries.FindUserLimitsViolations(ctx, tnow /*from*/, 10 /*max users*/)
 		if err != nil {
 			t.Error(err)
 		}
@@ -72,7 +65,7 @@ func TestDetectUsageViolations(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	}
 
-	violations, err := job.findViolations(ctx)
+	violations, err := timeSeries.FindUserLimitsViolations(ctx, tnow /*from*/, 10 /*max users*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +160,7 @@ func TestUsersWithLargeViolation(t *testing.T) {
 		},
 	})
 
-	rows, err := store.RetrieveUsersWithLargeViolations(ctx, rate)
+	rows, err := store.RetrieveUsersWithLargeViolations(ctx, tnow, rate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +178,7 @@ func TestUsersWithLargeViolation(t *testing.T) {
 		},
 	})
 
-	rows, err = store.RetrieveUsersWithLargeViolations(ctx, rate)
+	rows, err = store.RetrieveUsersWithLargeViolations(ctx, tnow, rate)
 	if err != nil {
 		t.Fatal(err)
 	}

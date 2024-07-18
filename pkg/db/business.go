@@ -27,7 +27,7 @@ var (
 type BusinessStore struct {
 	pool        *pgxpool.Pool
 	defaultImpl *businessStoreImpl
-	cache       common.Cache
+	cache       common.Cache[string, any]
 	cancelFunc  context.CancelFunc
 }
 
@@ -47,7 +47,7 @@ func orgUsersCacheKey(orgID int32) string             { return "orgusers/" + str
 func userAPIKeysCacheKey(userID int32) string         { return "userapikeys/" + strconv.Itoa(int(userID)) }
 func subscriptionCacheKey(sID int32) string           { return "subscr/" + strconv.Itoa(int(sID)) }
 
-func NewBusiness(pool *pgxpool.Pool, cache common.Cache, cleanupInterval time.Duration) *BusinessStore {
+func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any], cleanupInterval time.Duration) *BusinessStore {
 	s := &BusinessStore{
 		pool:        pool,
 		defaultImpl: &businessStoreImpl{cache: cache, queries: dbgen.New(pool)},
@@ -328,8 +328,8 @@ func (s *BusinessStore) RetrieveUsersWithConsecutiveViolations(ctx context.Conte
 	return s.defaultImpl.retrieveUsersWithConsecutiveViolations(ctx)
 }
 
-func (s *BusinessStore) RetrieveUsersWithLargeViolations(ctx context.Context, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
-	return s.defaultImpl.retrieveUsersWithLargeViolations(ctx, rate)
+func (s *BusinessStore) RetrieveUsersWithLargeViolations(ctx context.Context, from time.Time, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
+	return s.defaultImpl.retrieveUsersWithLargeViolations(ctx, from, rate)
 }
 
 func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
