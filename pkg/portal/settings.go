@@ -659,6 +659,29 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
+	if newPlan, err := billing.FindPlanByPriceID(priceID, s.Stage); (err == nil) && newPlan.IsDowngradeFor(renderCtx.CurrentPlan) {
+		slog.DebugContext(ctx, "Downgrade attempt detected", "oldPlan", renderCtx.CurrentPlan.Name, "newPlan", newPlan.Name)
+		timeFrom := time.Now().UTC().AddDate(0 /*years*/, -3 /*months*/, 0 /*days*/)
+		if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID, timeFrom); err == nil {
+			anyHigher := false
+
+			for _, stat := range stats {
+				if !newPlan.IsLegitUsage(int64(stat.Count)) {
+					slog.WarnContext(ctx, "Found exceeding usage", "timestamp", stat.Timestamp, "count", stat.Count, "limit", newPlan.RequestsLimit)
+					anyHigher = true
+					break
+				}
+			}
+
+			if anyHigher {
+				renderCtx.ErrorMessage = "To downgrade, last 2 months usage has to be within new plan's limits."
+				return renderCtx, settingsBillingTemplate, nil
+			}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to find new billing plan", "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+	}
+
 	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/); err == nil {
 		renderCtx.SuccessMessage = "Subscription was updated successfully."
 	} else {
@@ -684,7 +707,8 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 
 	data := []*point{}
 
-	if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID); err == nil {
+	timeFrom := time.Now().UTC().AddDate(-1 /*years*/, 0 /*months*/, 0 /*days*/)
+	if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID, timeFrom); err == nil {
 		anyNonZero := false
 		for _, st := range stats {
 			if st.Count > 0 {

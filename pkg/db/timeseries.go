@@ -210,8 +210,7 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32) ([]*common.TimeCount, error) {
-	timeFrom := time.Now().UTC().AddDate(-1, 0 /*months*/, 0 /*days*/)
+func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
 	query := `SELECT timestamp, sum(count) as count
 FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
@@ -219,7 +218,7 @@ GROUP BY timestamp
 ORDER BY timestamp`
 	rows, err := ts.clickhouse.Query(fmt.Sprintf(query, accessLogTableName1mo),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
-		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+		clickhouse.Named("timestamp", from.Format(time.DateTime)))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute account stats query", common.ErrAttr(err))
 		return nil, err
