@@ -55,8 +55,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	store = db.NewBusiness(pool, cache, 5*time.Second)
-	defer store.Shutdown()
+	store = db.NewBusiness(pool, cache)
 
 	ratelimiter, err := ratelimit.NewHTTPRateLimiter(os.Getenv(common.ConfigRateLimitHeader))
 	if err != nil {
