@@ -73,8 +73,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	store = db.NewBusiness(pool, cache, 5*time.Second)
-	defer store.Shutdown()
+	store = db.NewBusiness(pool, cache)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 

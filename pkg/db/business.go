@@ -28,7 +28,6 @@ type BusinessStore struct {
 	pool        *pgxpool.Pool
 	defaultImpl *businessStoreImpl
 	cache       common.Cache[string, any]
-	cancelFunc  context.CancelFunc
 }
 
 type puzzleCacheMarker struct {
@@ -47,41 +46,16 @@ func orgUsersCacheKey(orgID int32) string             { return "orgusers/" + str
 func userAPIKeysCacheKey(userID int32) string         { return "userapikeys/" + strconv.Itoa(int(userID)) }
 func subscriptionCacheKey(sID int32) string           { return "subscr/" + strconv.Itoa(int(sID)) }
 
-func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any], cleanupInterval time.Duration) *BusinessStore {
-	s := &BusinessStore{
+func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessStore {
+	return &BusinessStore{
 		pool:        pool,
 		defaultImpl: &businessStoreImpl{cache: cache, queries: dbgen.New(pool)},
 		cache:       cache,
 	}
-
-	var ctx context.Context
-	ctx, s.cancelFunc = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_db_cache"))
-	go s.cleanupCache(ctx, cleanupInterval)
-
-	return s
 }
 
-func (s *BusinessStore) Shutdown() {
-	slog.Debug("Shutting down cache cleanup")
-	s.cancelFunc()
-}
-
-func (s *BusinessStore) cleanupCache(ctx context.Context, interval time.Duration) {
-	slog.Debug("Store cache cleanup started")
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-		case <-time.After(interval):
-			err := s.defaultImpl.deleteExpiredCache(ctx)
-			if err != nil {
-				slog.ErrorContext(ctx, "Failed to delete expired items", common.ErrAttr(err))
-				continue
-			}
-		}
-	}
-	slog.Debug("Store cache cleanup finished")
+func (s *BusinessStore) DeleteExpiredCache(ctx context.Context) error {
+	return s.defaultImpl.deleteExpiredCache(ctx)
 }
 
 func (s *BusinessStore) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {

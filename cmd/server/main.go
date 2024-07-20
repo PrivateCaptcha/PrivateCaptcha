@@ -64,7 +64,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	businessDB := db.NewBusiness(pool, cache, 5*time.Minute)
+	businessDB := db.NewBusiness(pool, cache)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
@@ -149,6 +149,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		Store:        businessDB,
 		From:         common.StartOfMonth(),
 	})
+	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
 		Store: businessDB,
 		Stage: stage,
@@ -164,7 +165,6 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
-		businessDB.Shutdown()
 		apiAuth.Shutdown()
 		ratelimiter.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

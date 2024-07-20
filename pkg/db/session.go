@@ -51,8 +51,8 @@ func (ss *SessionStore) MaxLifetime() time.Duration {
 
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
-	close(ss.persistChan)
 	ss.processCancel()
+	close(ss.persistChan)
 }
 
 func (ss *SessionStore) Init(ctx context.Context, s *common.Session) error {
