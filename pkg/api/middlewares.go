@@ -51,8 +51,8 @@ func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, rate
 
 func (am *authMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
-	close(am.sitekeyChan)
 	am.backfillCancel()
+	close(am.sitekeyChan)
 }
 
 func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64) {
