@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS deleted_record_insert ON properties CASCADE;
+
 ALTER TABLE properties DROP CONSTRAINT IF EXISTS unique_property_name_per_organization;
 DROP INDEX IF EXISTS index_property_external_id;
 

@@ -422,8 +422,8 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.SoftDeleteAPIKey(ctx, user.ID, int32(keyID)); err != nil {
-		slog.ErrorContext(ctx, "Failed to soft-delete the key", "keyID", keyID, common.ErrAttr(err))
+	if err := s.Store.DeleteAPIKey(ctx, user.ID, int32(keyID)); err != nil {
+		slog.ErrorContext(ctx, "Failed to delete the API key", "keyID", keyID, common.ErrAttr(err))
 		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
