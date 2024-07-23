@@ -1140,3 +1140,34 @@ func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context) error {
 
 	return err
 }
+
+func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context, since time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	properties, err := impl.queries.GetSoftDeletedProperties(ctx, &dbgen.GetSoftDeletedPropertiesParams{
+		DeletedAt: Timestampz(since),
+		Limit:     int32(limit),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted properties", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Found soft-deleted properties", "count", len(properties))
+
+	return properties, nil
+}
+
+func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32) error {
+	if len(ids) == 0 {
+		slog.WarnContext(ctx, "No properties to delete")
+		return nil
+	}
+
+	err := impl.queries.DeleteProperties(ctx, ids)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete properties", "count", len(ids), common.ErrAttr(err))
+	}
+
+	return err
+}
