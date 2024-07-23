@@ -13,3 +13,6 @@ CREATE TABLE IF NOT EXISTS subscriptions(
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_paddle ON subscriptions(paddle_subscription_id);
+
+CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON subscriptions
+   FOR EACH ROW EXECUTE FUNCTION deleted_record_insert();

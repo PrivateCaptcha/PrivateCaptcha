@@ -29,3 +29,25 @@ func (j *CleanupDBCacheJob) Name() string {
 func (j *CleanupDBCacheJob) RunOnce(ctx context.Context) error {
 	return j.Store.DeleteExpiredCache(ctx)
 }
+
+type CleanupDeletedRecordsJob struct {
+	Store *db.BusinessStore
+}
+
+var _ common.PeriodicJob = (*CleanupDeletedRecordsJob)(nil)
+
+func (j *CleanupDeletedRecordsJob) Interval() time.Duration {
+	return 24 * time.Hour
+}
+
+func (j *CleanupDeletedRecordsJob) Jitter() time.Duration {
+	return 1
+}
+
+func (j *CleanupDeletedRecordsJob) Name() string {
+	return "cleanup_deleted_records_job"
+}
+
+func (j *CleanupDeletedRecordsJob) RunOnce(ctx context.Context) error {
+	return j.Store.DeleteDeletedRecords(ctx)
+}
