@@ -5,9 +5,9 @@ CREATE TABLE IF NOT EXISTS properties(
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     external_id UUID DEFAULT gen_random_uuid(),
-    org_id INT REFERENCES organizations(id),
-    creator_id INT REFERENCES users(id),
-    org_owner_id INT REFERENCES users(id),
+    org_id INT REFERENCES organizations(id) ON DELETE CASCADE,
+    creator_id INT REFERENCES users(id) ON DELETE CASCADE,
+    org_owner_id INT REFERENCES users(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL,
     level difficulty_level NOT NULL DEFAULT 'medium',
     growth difficulty_growth NOT NULL DEFAULT 'medium',
@@ -19,3 +19,6 @@ CREATE TABLE IF NOT EXISTS properties(
 CREATE UNIQUE INDEX IF NOT EXISTS index_property_external_id ON properties(external_id);
 
 ALTER TABLE properties ADD CONSTRAINT unique_property_name_per_organization UNIQUE (name, org_id);
+
+CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON properties
+   FOR EACH ROW EXECUTE FUNCTION deleted_record_insert();

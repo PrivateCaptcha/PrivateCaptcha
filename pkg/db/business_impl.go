@@ -181,7 +181,7 @@ func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32,
 		slog.DebugContext(ctx, "Soft-deleted user organizations", "userID", userID)
 	}
 
-	if err := impl.queries.SoftDeleteUserAPIKeys(ctx, Int(userID)); err != nil {
+	if err := impl.queries.DeleteUserAPIKeys(ctx, Int(userID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user API keys", "userID", userID, common.ErrAttr(err))
 		return err
 	} else {
@@ -285,9 +285,6 @@ func (impl *businessStoreImpl) getCachedAPIKey(ctx context.Context, secret strin
 	cacheKey := APIKeyCacheKey(secret)
 
 	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
-		if apiKey.DeletedAt.Valid {
-			return apiKey, ErrSoftDeleted
-		}
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -300,9 +297,6 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 	cacheKey := APIKeyCacheKey(secret)
 
 	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
-		if apiKey.DeletedAt.Valid {
-			return apiKey, ErrSoftDeleted
-		}
 		return apiKey, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
@@ -327,10 +321,6 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 
 	if apiKey != nil {
 		_ = impl.cache.Set(ctx, cacheKey, apiKey)
-
-		if apiKey.DeletedAt.Valid {
-			return apiKey, ErrSoftDeleted
-		}
 	}
 
 	return apiKey, nil
@@ -957,8 +947,8 @@ func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, n
 	return key, nil
 }
 
-func (impl *businessStoreImpl) softDeleteAPIKey(ctx context.Context, userID, keyID int32) error {
-	key, err := impl.queries.SoftDeleteAPIKey(ctx, &dbgen.SoftDeleteAPIKeyParams{
+func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID int32) error {
+	key, err := impl.queries.DeleteAPIKey(ctx, &dbgen.DeleteAPIKeyParams{
 		ID:     keyID,
 		UserID: Int(userID),
 	})
@@ -968,11 +958,11 @@ func (impl *businessStoreImpl) softDeleteAPIKey(ctx context.Context, userID, key
 			return ErrRecordNotFound
 		}
 
-		slog.ErrorContext(ctx, "Failed to mark API Key as deleted in DB", "keyID", keyID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to delete API key", "keyID", keyID, "userID", userID, common.ErrAttr(err))
 		return err
 	}
 
-	slog.DebugContext(ctx, "Soft-deleted API Key", "keyID", keyID)
+	slog.DebugContext(ctx, "Deleted API Key", "keyID", keyID, "userID", userID)
 
 	// invalidate keys cache
 	if key != nil {
@@ -1137,6 +1127,15 @@ func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) err
 	err := impl.queries.DeleteLock(ctx, name)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to release a lock", "name", name, common.ErrAttr(err))
+	}
+
+	return err
+}
+
+func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context) error {
+	err := impl.queries.DeleteDeletedRecords(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to cleanup deleted records", common.ErrAttr(err))
 	}
 
 	return err

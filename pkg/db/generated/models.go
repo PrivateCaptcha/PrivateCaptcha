@@ -192,7 +192,6 @@ type APIKey struct {
 	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
-	DeletedAt  pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	Notes      pgtype.Text        `db:"notes" json:"notes"`
 }
 
@@ -201,6 +200,14 @@ type Cache struct {
 	Key       string           `db:"key" json:"key"`
 	Value     []byte           `db:"value" json:"value"`
 	ExpiresAt pgtype.Timestamp `db:"expires_at" json:"expires_at"`
+}
+
+type DeletedRecord struct {
+	ID        pgtype.UUID        `db:"id" json:"id"`
+	Data      []byte             `db:"data" json:"data"`
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	TableName string             `db:"table_name" json:"table_name"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type Lock struct {

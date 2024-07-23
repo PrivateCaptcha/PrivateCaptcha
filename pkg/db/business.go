@@ -278,8 +278,8 @@ func (s *BusinessStore) UpdateAPIKey(ctx context.Context, externalID pgtype.UUID
 	return s.defaultImpl.updateAPIKey(ctx, externalID, expiration, enabled)
 }
 
-func (s *BusinessStore) SoftDeleteAPIKey(ctx context.Context, userID, keyID int32) error {
-	return s.defaultImpl.softDeleteAPIKey(ctx, userID, keyID)
+func (s *BusinessStore) DeleteAPIKey(ctx context.Context, userID, keyID int32) error {
+	return s.defaultImpl.deleteAPIKey(ctx, userID, keyID)
 }
 
 func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
@@ -343,4 +343,8 @@ func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (s *BusinessStore) DeleteDeletedRecords(ctx context.Context) error {
+	return s.defaultImpl.deleteDeletedRecords(ctx)
 }

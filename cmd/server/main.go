@@ -150,6 +150,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		From:         common.StartOfMonth(),
 	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
+	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB})
 	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
 		Store: businessDB,
 		Stage: stage,

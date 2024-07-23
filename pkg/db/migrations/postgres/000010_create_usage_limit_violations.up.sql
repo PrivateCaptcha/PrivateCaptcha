@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS usage_limit_violations(
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     paddle_product_id TEXT NOT NULL,
     requests_limit BIGINT NOT NULL,
     requests_count BIGINT NOT NULL,
