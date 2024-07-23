@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -16,9 +17,12 @@ import (
 
 const (
 	verifyLogTableName    = "privatecaptcha.verify_logs"
+	verifyLogTable1h      = "privatecaptcha.verify_logs_1h"
+	verifyLogTable1d      = "privatecaptcha.verify_logs_1d"
 	accessLogTableName    = "privatecaptcha.request_logs"
 	accessLogTableName5m  = "privatecaptcha.request_logs_5m"
 	accessLogTableName1h  = "privatecaptcha.request_logs_1h"
+	accessLogTableName1d  = "privatecaptcha.request_logs_1d"
 	accessLogTableName1mo = "privatecaptcha.request_logs_1mo"
 	userLimitsTableName   = "privatecaptcha.user_limits"
 )
@@ -176,9 +180,7 @@ func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int
 	return err
 }
 
-func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, bucketSize time.Duration) ([]*common.TimeCount, error) {
-	// 12 because we keep last hour of 5-minute intervals in Clickhouse, so we grab all of them
-	timeFrom := time.Now().UTC().Add(-time.Duration(12) * bucketSize)
+func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
 	query := `SELECT timestamp, sum(count) as count
 FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
@@ -188,7 +190,7 @@ ORDER BY timestamp`
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
-		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+		clickhouse.Named("timestamp", from.Format(time.DateTime)))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute property stats query", common.ErrAttr(err))
 		return nil, err
@@ -206,6 +208,8 @@ ORDER BY timestamp`
 		}
 		results = append(results, bc)
 	}
+
+	slog.DebugContext(ctx, "Read property stats", "count", len(results), "from", from)
 
 	return results, nil
 }
@@ -374,4 +378,35 @@ func (ts *TimeSeriesStore) FindUserLimitsViolations(ctx context.Context, from ti
 	slog.DebugContext(ctx, "Found usage violations", "count", len(results))
 
 	return results, nil
+}
+
+func (ts *TimeSeriesStore) lightDelete(ctx context.Context, tables []string, column string, ids string) error {
+	for _, table := range tables {
+		query := fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", table, column, ids)
+		if _, err := ts.clickhouse.Exec(query); err != nil {
+			slog.ErrorContext(ctx, "Failed to delete data", "table", table, "column", column, common.ErrAttr(err))
+			return err
+		}
+		slog.DebugContext(ctx, "Deleted data in ClickHouse", "column", column, "table", table)
+	}
+
+	return nil
+}
+
+func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs []int32) error {
+	if len(propertyIDs) == 0 {
+		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
+		return nil
+	}
+
+	idStrings := make([]string, len(propertyIDs))
+	for i, id := range propertyIDs {
+		idStrings[i] = fmt.Sprintf("%d", id)
+	}
+	idsStr := strings.Join(idStrings, ",")
+
+	// NOTE: access table for 1 month is not included as it does not have property_id column
+	tables := []string{accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, verifyLogTable1h, verifyLogTable1d}
+
+	return ts.lightDelete(ctx, tables, "property_id", idsStr)
 }

@@ -348,3 +348,11 @@ func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
 func (s *BusinessStore) DeleteDeletedRecords(ctx context.Context) error {
 	return s.defaultImpl.deleteDeletedRecords(ctx)
 }
+
+func (s *BusinessStore) RetrieveSoftDeletedProperties(ctx context.Context, since time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	return s.defaultImpl.retrieveSoftDeletedProperties(ctx, since, limit)
+}
+
+func (s *BusinessStore) DeleteProperties(ctx context.Context, ids []int32) error {
+	return s.defaultImpl.deleteProperties(ctx, ids)
+}

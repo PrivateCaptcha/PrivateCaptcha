@@ -194,7 +194,9 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 			continue
 		}
 
-		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, l.buckets.LeakInterval())
+		// 12 because we keep last hour of 5-minute intervals in Clickhouse, so we grab all of them
+		timeFrom := time.Now().UTC().Add(-time.Duration(12) * l.buckets.LeakInterval())
+		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, timeFrom)
 
 		if err != nil {
 			blog.ErrorContext(ctx, "Failed to backfill stats", common.ErrAttr(err))

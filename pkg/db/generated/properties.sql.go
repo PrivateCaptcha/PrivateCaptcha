@@ -55,6 +55,15 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 	return &i, err
 }
 
+const deleteProperties = `-- name: DeleteProperties :exec
+DELETE FROM properties WHERE id = ANY($1::INT[])
+`
+
+func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error {
+	_, err := q.db.Exec(ctx, deleteProperties, dollar_1)
+	return err
+}
+
 const getOrgProperties = `-- name: GetOrgProperties :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
 `
@@ -180,6 +189,60 @@ func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, err
 		&i.DeletedAt,
 	)
 	return &i, err
+}
+
+const getSoftDeletedProperties = `-- name: GetSoftDeletedProperties :many
+SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at
+FROM properties p
+JOIN organizations o ON p.org_id = o.id
+JOIN users u ON o.user_id = u.id
+WHERE p.deleted_at IS NOT NULL
+  AND p.deleted_at < $1
+  AND o.deleted_at IS NULL
+  AND u.deleted_at IS NULL
+LIMIT $2
+`
+
+type GetSoftDeletedPropertiesParams struct {
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	Limit     int32              `db:"limit" json:"limit"`
+}
+
+type GetSoftDeletedPropertiesRow struct {
+	Property Property `db:"property" json:"property"`
+}
+
+func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDeletedPropertiesParams) ([]*GetSoftDeletedPropertiesRow, error) {
+	rows, err := q.db.Query(ctx, getSoftDeletedProperties, arg.DeletedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetSoftDeletedPropertiesRow
+	for rows.Next() {
+		var i GetSoftDeletedPropertiesRow
+		if err := rows.Scan(
+			&i.Property.ID,
+			&i.Property.Name,
+			&i.Property.ExternalID,
+			&i.Property.OrgID,
+			&i.Property.CreatorID,
+			&i.Property.OrgOwnerID,
+			&i.Property.Domain,
+			&i.Property.Level,
+			&i.Property.Growth,
+			&i.Property.CreatedAt,
+			&i.Property.UpdatedAt,
+			&i.Property.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :exec
