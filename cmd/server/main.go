@@ -155,6 +155,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		Store: businessDB,
 		Stage: stage,
 	})
+	jobs.AddLocked(24*time.Hour, &maintenance.DeleteSoftDeletedDataJob{
+		Since:      30 * 24 * time.Hour,
+		BusinessDB: businessDB,
+		TimeSeries: timeSeriesDB,
+	})
 	jobs.Run()
 
 	var wg sync.WaitGroup
