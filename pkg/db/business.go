@@ -241,7 +241,7 @@ func (s *BusinessStore) UpdateUser(ctx context.Context, userID int32, name strin
 	return s.defaultImpl.updateUser(ctx, userID, name, newEmail, oldEmail)
 }
 
-func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email string) error {
+func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -251,7 +251,7 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32, email 
 	db := dbgen.New(s.pool)
 	tmpCache := NewTxCache()
 	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx)}
-	err = impl.softDeleteUser(ctx, userID, email)
+	err = impl.softDeleteUser(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -363,4 +363,12 @@ func (s *BusinessStore) RetrieveSoftDeletedOrganizations(ctx context.Context, be
 
 func (s *BusinessStore) DeleteOrganizations(ctx context.Context, ids []int32) error {
 	return s.defaultImpl.deleteOrganizations(ctx, ids)
+}
+
+func (s *BusinessStore) RetrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
+	return s.defaultImpl.retrieveSoftDeletedUsers(ctx, before, limit)
+}
+
+func (s *BusinessStore) DeleteUsers(ctx context.Context, ids []int32) error {
+	return s.defaultImpl.deleteUsers(ctx, ids)
 }

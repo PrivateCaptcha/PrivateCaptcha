@@ -36,6 +36,60 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 	return &i, err
 }
 
+const deleteUsers = `-- name: DeleteUsers :exec
+DELETE FROM users WHERE id = ANY($1::INT[])
+`
+
+func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) error {
+	_, err := q.db.Exec(ctx, deleteUsers, dollar_1)
+	return err
+}
+
+const getSoftDeletedUsers = `-- name: GetSoftDeletedUsers :many
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
+FROM users u
+WHERE u.deleted_at IS NOT NULL
+  AND u.deleted_at < $1
+LIMIT $2
+`
+
+type GetSoftDeletedUsersParams struct {
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	Limit     int32              `db:"limit" json:"limit"`
+}
+
+type GetSoftDeletedUsersRow struct {
+	User User `db:"user" json:"user"`
+}
+
+func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUsersParams) ([]*GetSoftDeletedUsersRow, error) {
+	rows, err := q.db.Query(ctx, getSoftDeletedUsers, arg.DeletedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetSoftDeletedUsersRow
+	for rows.Next() {
+		var i GetSoftDeletedUsersRow
+		if err := rows.Scan(
+			&i.User.ID,
+			&i.User.Name,
+			&i.User.Email,
+			&i.User.SubscriptionID,
+			&i.User.CreatedAt,
+			&i.User.UpdatedAt,
+			&i.User.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
 `
@@ -74,13 +128,23 @@ func (q *Queries) GetUserBySubscriptionID(ctx context.Context, subscriptionID pg
 	return &i, err
 }
 
-const softDeleteUser = `-- name: SoftDeleteUser :exec
-UPDATE users SET deleted_at = NOW() WHERE id = $1
+const softDeleteUser = `-- name: SoftDeleteUser :one
+UPDATE users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, softDeleteUser, id)
-	return err
+func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
+	row := q.db.QueryRow(ctx, softDeleteUser, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.SubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
 }
 
 const updateUserData = `-- name: UpdateUserData :one
