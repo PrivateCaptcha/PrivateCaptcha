@@ -25,3 +25,15 @@ UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1;
 
 -- name: SoftDeleteUserOrganizations :exec
 UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1;
+
+-- name: GetSoftDeletedOrganizations :many
+SELECT sqlc.embed(o)
+FROM organizations o
+JOIN users u ON o.user_id = u.id
+WHERE o.deleted_at IS NOT NULL
+  AND o.deleted_at < $1
+  AND u.deleted_at IS NULL
+LIMIT $2;
+
+-- name: DeleteOrganizations :exec
+DELETE FROM organizations WHERE id = ANY($1::INT[]);

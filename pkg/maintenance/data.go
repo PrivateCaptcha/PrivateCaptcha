@@ -9,7 +9,8 @@ import (
 )
 
 const (
-	maxSoftDeletedProperties = 30
+	maxSoftDeletedProperties    = 30
+	maxSoftDeletedOrganizations = 30
 )
 
 type GarbageCollectDataJob struct {
@@ -46,10 +47,34 @@ func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time
 	}
 
 	return nil
+}
+
+func (j *GarbageCollectDataJob) purgeOrganizations(ctx context.Context, before time.Time) error {
+	// NOTE: we're processing organizations that are soft-deleted, but user is not
+	if organizations, err := j.BusinessDB.RetrieveSoftDeletedOrganizations(ctx, before, maxSoftDeletedOrganizations); (err == nil) && (len(organizations) > 0) {
+		ids := make([]int32, 0, len(organizations))
+		for _, p := range organizations {
+			ids = append(ids, p.Organization.ID)
+		}
+
+		if err := j.TimeSeries.DeleteOrganizationsData(ctx, ids); err == nil {
+			_ = j.BusinessDB.DeleteOrganizations(ctx, ids)
+		}
+	}
+
+	return nil
 
 }
 
 func (j *GarbageCollectDataJob) RunOnce(ctx context.Context) error {
 	before := time.Now().UTC().Add(-j.Age)
-	return j.purgeProperties(ctx, before)
+	if err := j.purgeProperties(ctx, before); err != nil {
+		return err
+	}
+
+	if err := j.purgeOrganizations(ctx, before); err != nil {
+		return err
+	}
+
+	return nil
 }

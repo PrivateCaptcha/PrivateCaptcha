@@ -32,6 +32,15 @@ type TimeSeriesStore struct {
 	statsQueryTemplate *template.Template
 }
 
+func idsToString(ids []int32) string {
+	idStrings := make([]string, len(ids))
+	for i, id := range ids {
+		idStrings[i] = fmt.Sprintf("%d", id)
+	}
+	idsStr := strings.Join(idStrings, ",")
+	return idsStr
+}
+
 func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesStore {
 	// ClickHouse docs:
 	// The join (a search in the right table) is run before filtering in WHERE and before aggregation.
@@ -399,14 +408,29 @@ func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs
 		return nil
 	}
 
-	idStrings := make([]string, len(propertyIDs))
-	for i, id := range propertyIDs {
-		idStrings[i] = fmt.Sprintf("%d", id)
-	}
-	idsStr := strings.Join(idStrings, ",")
+	ids := idsToString(propertyIDs)
 
 	// NOTE: access table for 1 month is not included as it does not have property_id column
-	tables := []string{accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, verifyLogTable1h, verifyLogTable1d}
+	tables := []string{
+		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d,
+		verifyLogTable1h, verifyLogTable1d,
+	}
 
-	return ts.lightDelete(ctx, tables, "property_id", idsStr)
+	return ts.lightDelete(ctx, tables, "property_id", ids)
+}
+
+func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error {
+	if len(orgIDs) == 0 {
+		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
+		return nil
+	}
+
+	ids := idsToString(orgIDs)
+
+	tables := []string{
+		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, accessLogTableName1mo,
+		verifyLogTable1h, verifyLogTable1d,
+	}
+
+	return ts.lightDelete(ctx, tables, "org_id", ids)
 }
