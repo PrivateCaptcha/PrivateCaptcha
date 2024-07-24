@@ -1171,3 +1171,34 @@ func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32
 
 	return err
 }
+
+func (impl *businessStoreImpl) retrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
+	organizations, err := impl.queries.GetSoftDeletedOrganizations(ctx, &dbgen.GetSoftDeletedOrganizationsParams{
+		DeletedAt: Timestampz(before),
+		Limit:     int32(limit),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted organizations", "before", before, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Found soft-deleted organizations", "count", len(organizations), "before", before)
+
+	return organizations, nil
+}
+
+func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []int32) error {
+	if len(ids) == 0 {
+		slog.WarnContext(ctx, "No organizations to delete")
+		return nil
+	}
+
+	err := impl.queries.DeleteOrganizations(ctx, ids)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete organizations", "count", len(ids), common.ErrAttr(err))
+	}
+
+	return err
+}

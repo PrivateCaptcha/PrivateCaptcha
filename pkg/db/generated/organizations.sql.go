@@ -34,6 +34,15 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 	return &i, err
 }
 
+const deleteOrganizations = `-- name: DeleteOrganizations :exec
+DELETE FROM organizations WHERE id = ANY($1::INT[])
+`
+
+func (q *Queries) DeleteOrganizations(ctx context.Context, dollar_1 []int32) error {
+	_, err := q.db.Exec(ctx, deleteOrganizations, dollar_1)
+	return err
+}
+
 const findUserOrgByName = `-- name: FindUserOrgByName :one
 SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
 `
@@ -73,6 +82,52 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 		&i.DeletedAt,
 	)
 	return &i, err
+}
+
+const getSoftDeletedOrganizations = `-- name: GetSoftDeletedOrganizations :many
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at
+FROM organizations o
+JOIN users u ON o.user_id = u.id
+WHERE o.deleted_at IS NOT NULL
+  AND o.deleted_at < $1
+  AND u.deleted_at IS NULL
+LIMIT $2
+`
+
+type GetSoftDeletedOrganizationsParams struct {
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	Limit     int32              `db:"limit" json:"limit"`
+}
+
+type GetSoftDeletedOrganizationsRow struct {
+	Organization Organization `db:"organization" json:"organization"`
+}
+
+func (q *Queries) GetSoftDeletedOrganizations(ctx context.Context, arg *GetSoftDeletedOrganizationsParams) ([]*GetSoftDeletedOrganizationsRow, error) {
+	rows, err := q.db.Query(ctx, getSoftDeletedOrganizations, arg.DeletedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetSoftDeletedOrganizationsRow
+	for rows.Next() {
+		var i GetSoftDeletedOrganizationsRow
+		if err := rows.Scan(
+			&i.Organization.ID,
+			&i.Organization.Name,
+			&i.Organization.UserID,
+			&i.Organization.CreatedAt,
+			&i.Organization.UpdatedAt,
+			&i.Organization.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getUserOrganizations = `-- name: GetUserOrganizations :many
