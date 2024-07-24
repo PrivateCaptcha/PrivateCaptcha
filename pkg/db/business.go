@@ -356,3 +356,11 @@ func (s *BusinessStore) RetrieveSoftDeletedProperties(ctx context.Context, befor
 func (s *BusinessStore) DeleteProperties(ctx context.Context, ids []int32) error {
 	return s.defaultImpl.deleteProperties(ctx, ids)
 }
+
+func (s *BusinessStore) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
+	return s.defaultImpl.retrieveSoftDeletedOrganizations(ctx, before, limit)
+}
+
+func (s *BusinessStore) DeleteOrganizations(ctx context.Context, ids []int32) error {
+	return s.defaultImpl.deleteOrganizations(ctx, ids)
+}
