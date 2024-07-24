@@ -13,5 +13,15 @@ UPDATE users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNI
 -- name: UpdateUserSubscription :one
 UPDATE users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING *;
 
--- name: SoftDeleteUser :exec
-UPDATE users SET deleted_at = NOW() WHERE id = $1;
+-- name: SoftDeleteUser :one
+UPDATE users SET deleted_at = NOW() WHERE id = $1 RETURNING *;
+
+-- name: GetSoftDeletedUsers :many
+SELECT sqlc.embed(u)
+FROM users u
+WHERE u.deleted_at IS NOT NULL
+  AND u.deleted_at < $1
+LIMIT $2;
+
+-- name: DeleteUsers :exec
+DELETE FROM users WHERE id = ANY($1::INT[]);

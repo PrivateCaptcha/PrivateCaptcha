@@ -434,3 +434,19 @@ func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs [
 
 	return ts.lightDelete(ctx, tables, "org_id", ids)
 }
+
+func (ts *TimeSeriesStore) DeleteUsersData(ctx context.Context, userIDs []int32) error {
+	if len(userIDs) == 0 {
+		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
+		return nil
+	}
+
+	ids := idsToString(userIDs)
+
+	tables := []string{
+		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, accessLogTableName1mo,
+		verifyLogTable1h, verifyLogTable1d,
+	}
+
+	return ts.lightDelete(ctx, tables, "user_id", ids)
+}

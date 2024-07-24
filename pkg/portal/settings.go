@@ -301,7 +301,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.Store.SoftDeleteUser(ctx, user.ID, user.Email); err == nil {
+	if err := s.Store.SoftDeleteUser(ctx, user.ID); err == nil {
 		s.logout(w, r)
 	} else {
 		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
