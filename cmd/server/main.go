@@ -150,13 +150,13 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		From:         common.StartOfMonth(),
 	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
-	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB})
+	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})
 	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
 		Store: businessDB,
 		Stage: stage,
 	})
-	jobs.AddLocked(24*time.Hour, &maintenance.DeleteSoftDeletedDataJob{
-		Since:      30 * 24 * time.Hour,
+	jobs.AddLocked(24*time.Hour, &maintenance.GarbageCollectDataJob{
+		Age:        30 * 24 * time.Hour,
 		BusinessDB: businessDB,
 		TimeSeries: timeSeriesDB,
 	})

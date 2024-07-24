@@ -58,8 +58,8 @@ func TestCleanupPropertyData(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	job := &maintenance.DeleteSoftDeletedDataJob{
-		Since:      0,
+	job := &maintenance.GarbageCollectDataJob{
+		Age:        0,
 		BusinessDB: store,
 		TimeSeries: timeSeries,
 	}

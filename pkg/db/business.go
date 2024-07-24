@@ -345,12 +345,12 @@ func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
 	return tx.Commit(ctx)
 }
 
-func (s *BusinessStore) DeleteDeletedRecords(ctx context.Context) error {
-	return s.defaultImpl.deleteDeletedRecords(ctx)
+func (s *BusinessStore) DeleteDeletedRecords(ctx context.Context, before time.Time) error {
+	return s.defaultImpl.deleteDeletedRecords(ctx, before)
 }
 
-func (s *BusinessStore) RetrieveSoftDeletedProperties(ctx context.Context, since time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
-	return s.defaultImpl.retrieveSoftDeletedProperties(ctx, since, limit)
+func (s *BusinessStore) RetrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	return s.defaultImpl.retrieveSoftDeletedProperties(ctx, before, limit)
 }
 
 func (s *BusinessStore) DeleteProperties(ctx context.Context, ids []int32) error {

@@ -1132,27 +1132,27 @@ func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) err
 	return err
 }
 
-func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context) error {
-	err := impl.queries.DeleteDeletedRecords(ctx)
+func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context, before time.Time) error {
+	err := impl.queries.DeleteDeletedRecords(ctx, Timestampz(before))
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to cleanup deleted records", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to cleanup deleted records", "before", before, common.ErrAttr(err))
 	}
 
 	return err
 }
 
-func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context, since time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
 	properties, err := impl.queries.GetSoftDeletedProperties(ctx, &dbgen.GetSoftDeletedPropertiesParams{
-		DeletedAt: Timestampz(since),
+		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve soft deleted properties", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted properties", "before", before, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Found soft-deleted properties", "count", len(properties))
+	slog.DebugContext(ctx, "Found soft-deleted properties", "count", len(properties), "before", before)
 
 	return properties, nil
 }

@@ -12,29 +12,29 @@ const (
 	maxSoftDeletedProperties = 30
 )
 
-type DeleteSoftDeletedDataJob struct {
-	Since      time.Duration
+type GarbageCollectDataJob struct {
+	Age        time.Duration
 	BusinessDB *db.BusinessStore
 	TimeSeries *db.TimeSeriesStore
 }
 
-var _ common.PeriodicJob = (*DeleteSoftDeletedDataJob)(nil)
+var _ common.PeriodicJob = (*GarbageCollectDataJob)(nil)
 
-func (j *DeleteSoftDeletedDataJob) Interval() time.Duration {
+func (j *GarbageCollectDataJob) Interval() time.Duration {
 	return 1 * time.Hour
 }
 
-func (j *DeleteSoftDeletedDataJob) Jitter() time.Duration {
+func (j *GarbageCollectDataJob) Jitter() time.Duration {
 	return 1 * time.Hour
 }
 
-func (j *DeleteSoftDeletedDataJob) Name() string {
-	return "delete_soft_deleted_data_job"
+func (j *GarbageCollectDataJob) Name() string {
+	return "garbage_collect_data_job"
 }
 
-func (j *DeleteSoftDeletedDataJob) purgeProperties(ctx context.Context, since time.Time) error {
+func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time.Time) error {
 	// NOTE: we're processing properties that are soft-deleted, but org is not
-	if properties, err := j.BusinessDB.RetrieveSoftDeletedProperties(ctx, since, maxSoftDeletedProperties); (err == nil) && (len(properties) > 0) {
+	if properties, err := j.BusinessDB.RetrieveSoftDeletedProperties(ctx, before, maxSoftDeletedProperties); (err == nil) && (len(properties) > 0) {
 		ids := make([]int32, 0, len(properties))
 		for _, p := range properties {
 			ids = append(ids, p.Property.ID)
@@ -49,6 +49,7 @@ func (j *DeleteSoftDeletedDataJob) purgeProperties(ctx context.Context, since ti
 
 }
 
-func (j *DeleteSoftDeletedDataJob) RunOnce(ctx context.Context) error {
-	return j.purgeProperties(ctx, time.Now().UTC().Add(-j.Since))
+func (j *GarbageCollectDataJob) RunOnce(ctx context.Context) error {
+	before := time.Now().UTC().Add(-j.Age)
+	return j.purgeProperties(ctx, before)
 }
