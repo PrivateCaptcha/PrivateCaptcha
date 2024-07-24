@@ -32,6 +32,7 @@ func (j *CleanupDBCacheJob) RunOnce(ctx context.Context) error {
 
 type CleanupDeletedRecordsJob struct {
 	Store *db.BusinessStore
+	Age   time.Duration
 }
 
 var _ common.PeriodicJob = (*CleanupDeletedRecordsJob)(nil)
@@ -49,5 +50,6 @@ func (j *CleanupDeletedRecordsJob) Name() string {
 }
 
 func (j *CleanupDeletedRecordsJob) RunOnce(ctx context.Context) error {
-	return j.Store.DeleteDeletedRecords(ctx)
+	before := time.Now().UTC().Add(-j.Age)
+	return j.Store.DeleteDeletedRecords(ctx, before)
 }

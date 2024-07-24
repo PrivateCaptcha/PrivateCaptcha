@@ -7,13 +7,15 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteDeletedRecords = `-- name: DeleteDeletedRecords :exec
-DELETE FROM deleted_record WHERE deleted_at < NOW() - '1 year'::interval
+DELETE FROM deleted_record WHERE deleted_at < $1
 `
 
-func (q *Queries) DeleteDeletedRecords(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, deleteDeletedRecords)
+func (q *Queries) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, deleteDeletedRecords, deletedAt)
 	return err
 }
