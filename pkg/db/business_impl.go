@@ -166,8 +166,9 @@ func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name s
 	return org, nil
 }
 
-func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32, email string) error {
-	if err := impl.queries.SoftDeleteUser(ctx, userID); err != nil {
+func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32) error {
+	user, err := impl.queries.SoftDeleteUser(ctx, userID)
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", userID, common.ErrAttr(err))
 		return err
 	} else {
@@ -200,7 +201,7 @@ func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32,
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
 
-	_ = impl.cache.Delete(ctx, emailCacheKey(email))
+	_ = impl.cache.Delete(ctx, emailCacheKey(user.Email))
 
 	return nil
 }
@@ -1152,7 +1153,7 @@ func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Found soft-deleted properties", "count", len(properties), "before", before)
+	slog.DebugContext(ctx, "Fetched soft-deleted properties", "count", len(properties), "before", before)
 
 	return properties, nil
 }
@@ -1183,7 +1184,7 @@ func (impl *businessStoreImpl) retrieveSoftDeletedOrganizations(ctx context.Cont
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Found soft-deleted organizations", "count", len(organizations), "before", before)
+	slog.DebugContext(ctx, "Fetched soft-deleted organizations", "count", len(organizations), "before", before)
 
 	return organizations, nil
 }
@@ -1198,6 +1199,37 @@ func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []in
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organizations", "count", len(ids), common.ErrAttr(err))
+	}
+
+	return err
+}
+
+func (impl *businessStoreImpl) retrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
+	users, err := impl.queries.GetSoftDeletedUsers(ctx, &dbgen.GetSoftDeletedUsersParams{
+		DeletedAt: Timestampz(before),
+		Limit:     int32(limit),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted users", "before", before, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched soft-deleted users", "count", len(users), "before", before)
+
+	return users, nil
+}
+
+func (impl *businessStoreImpl) deleteUsers(ctx context.Context, ids []int32) error {
+	if len(ids) == 0 {
+		slog.WarnContext(ctx, "No users to delete")
+		return nil
+	}
+
+	err := impl.queries.DeleteUsers(ctx, ids)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete users", "count", len(ids), common.ErrAttr(err))
 	}
 
 	return err

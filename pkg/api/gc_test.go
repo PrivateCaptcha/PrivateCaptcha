@@ -108,3 +108,25 @@ func TestGCOrganizationData(t *testing.T) {
 		return store.SoftDeleteOrganization(ctx, p.OrgID.Int32, p.OrgOwnerID.Int32)
 	}, t)
 }
+
+func TestGCUserData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := db_test.CreatePropertyForOrg(ctx, store, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
+		return store.SoftDeleteUser(ctx, p.OrgOwnerID.Int32)
+	}, t)
+}
