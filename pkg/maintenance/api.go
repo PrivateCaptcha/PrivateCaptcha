@@ -105,10 +105,10 @@ func (j *NotifyLimitsViolationsJob) RunOnce(ctx context.Context) error {
 }
 
 type ThrottleViolationsJob struct {
-	Stage        string
-	BlockedUsers common.Cache[int32, int64]
-	Store        *db.BusinessStore
-	From         time.Time
+	Stage      string
+	UserLimits common.Cache[int32, *common.UserLimitStatus]
+	Store      *db.BusinessStore
+	From       time.Time
 }
 
 var _ common.PeriodicJob = (*ThrottleViolationsJob)(nil)
@@ -156,14 +156,11 @@ func (j *ThrottleViolationsJob) RunOnce(ctx context.Context) error {
 			slog.InfoContext(ctx, "Found user to be throttled", "userID", v.User.ID, "productID", productID,
 				"count", v.UsageLimitViolation.RequestsCount, "limit", v.UsageLimitViolation.RequestsLimit)
 
-			if err := j.BlockedUsers.Set(ctx, int32(v.User.ID), v.UsageLimitViolation.RequestsLimit); err != nil {
+			if err := j.UserLimits.Set(ctx, int32(v.User.ID), &common.UserLimitStatus{Status: v.Status, Limit: v.UsageLimitViolation.RequestsLimit}); err != nil {
 				slog.ErrorContext(ctx, "Failed to add user to block", "userID", v.User.ID, common.ErrAttr(err))
 			}
 		}
 	}
-
-	// TODO: expire "old" blocked users from static cache
-	// Currently static cache is, well, "static"
 
 	return nil
 }

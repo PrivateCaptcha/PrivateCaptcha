@@ -113,6 +113,14 @@ func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, 
 	return s.defaultImpl.createNewOrganization(ctx, name, userID)
 }
 
+func (s *BusinessStore) RetrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
+	return s.defaultImpl.retrieveSubscriptionsByUserIDs(ctx, userIDs)
+}
+
+func (s *BusinessStore) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
+	return s.defaultImpl.retrieveUsersWithoutSubscription(ctx, userIDs)
+}
+
 func (s *BusinessStore) RetrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
 	return s.defaultImpl.retrieveSubscription(ctx, sID)
 }

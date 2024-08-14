@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -26,10 +27,14 @@ type authMiddleware struct {
 	batchSize      int
 	backfillCancel context.CancelFunc
 	privateAPIKey  string
-	blockedUsers   common.Cache[int32, int64]
+	userLimits     common.Cache[int32, *common.UserLimitStatus]
 }
 
-func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, ratelimiter *ratelimit.HTTPRateLimiter, blockedUsers common.Cache[int32, int64], backfillDelay time.Duration) *authMiddleware {
+func NewAuthMiddleware(getenv func(string) string,
+	store *db.BusinessStore,
+	ratelimiter *ratelimit.HTTPRateLimiter,
+	userLimits common.Cache[int32, *common.UserLimitStatus],
+	backfillDelay time.Duration) *authMiddleware {
 	const batchSize = 10
 
 	am := &authMiddleware{
@@ -38,7 +43,7 @@ func NewAuthMiddleware(getenv func(string) string, store *db.BusinessStore, rate
 		sitekeyChan:   make(chan string, batchSize),
 		batchSize:     batchSize,
 		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
-		blockedUsers:  blockedUsers,
+		userLimits:    userLimits,
 	}
 
 	var backfillCtx context.Context
@@ -55,20 +60,24 @@ func (am *authMiddleware) Shutdown() {
 	close(am.sitekeyChan)
 }
 
-func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64) {
-	if oldLimit, err := am.blockedUsers.Get(ctx, userID); err == nil {
-		if newLimit > oldLimit {
-			slog.InfoContext(ctx, "Unblocking throttled user for auth", "userID", userID, "oldLimit", oldLimit, "newLimit", newLimit)
-			am.blockedUsers.Delete(ctx, userID)
+func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64, newStatus string) {
+	if status, err := am.userLimits.Get(ctx, userID); err == nil {
+		if (newLimit > status.Limit) || (!billing.IsSubscriptionActive(status.Status) && billing.IsSubscriptionActive(newStatus)) {
+			slog.InfoContext(ctx, "Unblocking throttled user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
+				"oldStatus", status.Status, "newStatus", status)
+			am.userLimits.Delete(ctx, userID)
 		} else {
-			slog.WarnContext(ctx, "Cannot unblock user for auth", "userID", userID, "oldLimit", oldLimit, "newLimit", newLimit)
+			slog.WarnContext(ctx, "Cannot unblock user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
+				"oldStatus", status.Status, "newStatus", status)
 		}
+	} else {
+		slog.DebugContext(ctx, "User was not blocked", "userID", userID, common.ErrAttr(err))
 	}
 }
 
-func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64) {
-	am.blockedUsers.Set(ctx, userID, limit)
-	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit)
+func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64, status string) {
+	am.userLimits.Set(ctx, userID, &common.UserLimitStatus{Status: status, Limit: limit})
+	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
 }
 
 func (am *authMiddleware) retrieveSiteKey(r *http.Request) string {
@@ -103,7 +112,56 @@ func isSiteKeyValid(sitekey string) bool {
 	return true
 }
 
-// the only purpose of this routine is to cache properties
+func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
+	usersMap := make(map[int32]bool)
+	for _, p := range properties {
+		userID := p.OrgOwnerID.Int32
+
+		if _, err := am.userLimits.Get(ctx, userID); err == db.ErrCacheMiss {
+			usersMap[userID] = true
+		}
+	}
+
+	result := make([]int32, 0, len(usersMap))
+	for key := range usersMap {
+		result = append(result, key)
+	}
+
+	return result
+}
+
+func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) error {
+	owners := am.unknownPropertiesOwners(ctx, properties)
+	if len(owners) == 0 {
+		slog.DebugContext(ctx, "No new users to check")
+		return nil
+	}
+
+	if subscriptions, err := am.Store.RetrieveSubscriptionsByUserIDs(ctx, owners); err == nil {
+		for _, s := range subscriptions {
+			if !billing.IsSubscriptionActive(s.Subscription.Status) {
+				am.userLimits.Set(ctx, s.UserID, &common.UserLimitStatus{Status: s.Subscription.Status, Limit: 0})
+				slog.DebugContext(ctx, "Found user with inactive subscription", "userID", s.UserID, "status", s.Subscription.Status)
+			} else {
+				am.userLimits.SetMissing(ctx, s.UserID)
+			}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to check subscriptions", common.ErrAttr(err))
+	}
+
+	if users, err := am.Store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
+		for _, u := range users {
+			am.userLimits.Set(ctx, u.ID, &common.UserLimitStatus{Status: "", Limit: 0})
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))
+	}
+
+	return nil
+}
+
+// the only purpose of this routine is to cache properties and block users without a subscription
 func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Duration) {
 	var batch []string
 	slog.DebugContext(ctx, "Backfilling properties", "interval", delay.String())
@@ -122,18 +180,22 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 			batch = append(batch, sitekey)
 
 			if len(batch) >= am.batchSize {
-				if _, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys based on batch size", "count", len(batch))
+				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
 					batch = []string{}
+					_ = am.checkPropertyOwners(ctx, properties)
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
-				if _, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys after the delay", "count", len(batch))
+				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
 					batch = []string{}
+					_ = am.checkPropertyOwners(ctx, properties)
 				}
 			}
 		}
@@ -185,10 +247,15 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// NOTE: there's a potential problem here if the property is still cached then
+		// we will not backfill and, thus, verify the subscription validity of the user
 		property, err := am.Store.GetCachedPropertyBySitekey(ctx, sitekey)
+
+		// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
 
 		if err != nil {
 			switch err {
+			// this will happen when the user does not have such property or it was deleted
 			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
@@ -204,12 +271,13 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
-		// TODO: Verify if user is an active subscriber
-		// also not blacklisted etc.
-
 		if property != nil {
-			if _, err := am.blockedUsers.Get(ctx, property.OrgOwnerID.Int32); err == nil {
-				http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			if status, err := am.userLimits.Get(ctx, property.OrgOwnerID.Int32); err == nil {
+				if !billing.IsSubscriptionActive(status.Status) {
+					http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				} else {
+					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+				}
 				return
 			}
 

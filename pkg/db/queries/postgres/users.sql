@@ -25,3 +25,6 @@ LIMIT $2;
 
 -- name: DeleteUsers :exec
 DELETE FROM users WHERE id = ANY($1::INT[]);
+
+-- name: GetUsersWithoutSubscription :many
+SELECT * FROM USERS where id = ANY($1::INT[]) AND subscription_id IS NULL;
