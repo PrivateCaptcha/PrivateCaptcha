@@ -51,15 +51,7 @@ func randomUUID() *pgtype.UUID {
 	return eid
 }
 
-func TestGetPuzzleUnauthorized(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	t.Parallel()
-
-	sitekey := db.UUIDToSiteKey(*randomUUID())
-
+func puzzleSuiteWithBackfillWait(t *testing.T, sitekey string) {
 	resp, err := puzzleSuite(sitekey)
 	if err != nil {
 		t.Fatal(err)
@@ -70,8 +62,7 @@ func TestGetPuzzleUnauthorized(t *testing.T) {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 
-	// x3 backfill delay
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(3 * authBackfillDelay)
 
 	resp, err = puzzleSuite(sitekey)
 	if err != nil {
@@ -81,6 +72,90 @@ func TestGetPuzzleUnauthorized(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
+}
+
+func TestGetPuzzleWithoutAccount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	sitekey := db.UUIDToSiteKey(*randomUUID())
+
+	puzzleSuiteWithBackfillWait(t, sitekey)
+}
+
+func TestGetPuzzleWithoutSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := context.TODO()
+
+	user, org, err := db_test.CreateNewBareAccount(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:       t.Name(),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	if err := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); err != nil {
+		t.Fatal(err)
+	}
+
+	puzzleSuiteWithBackfillWait(t, sitekey)
+}
+
+func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := context.TODO()
+
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:       t.Name(),
+		OrgID:      db.Int(org.ID),
+		CreatorID:  db.Int(user.ID),
+		OrgOwnerID: db.Int(user.ID),
+		Level:      dbgen.DifficultyLevelMedium,
+		Growth:     dbgen.DifficultyGrowthMedium,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	if err := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db_test.CancelUserSubscription(ctx, store, user.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	puzzleSuiteWithBackfillWait(t, sitekey)
 }
 
 func fetchPuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {

@@ -128,6 +128,38 @@ func (q *Queries) GetUserBySubscriptionID(ctx context.Context, subscriptionID pg
 	return &i, err
 }
 
+const getUsersWithoutSubscription = `-- name: GetUsersWithoutSubscription :many
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM USERS where id = ANY($1::INT[]) AND subscription_id IS NULL
+`
+
+func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error) {
+	rows, err := q.db.Query(ctx, getUsersWithoutSubscription, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Email,
+			&i.SubscriptionID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteUser = `-- name: SoftDeleteUser :one
 UPDATE users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `

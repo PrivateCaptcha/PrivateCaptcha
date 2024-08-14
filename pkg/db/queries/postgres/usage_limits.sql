@@ -27,7 +27,7 @@ WHERE s.paddle_product_id = v1.paddle_product_id
   AND EXTRACT(MONTH FROM v2.detection_month) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 MONTH');
 
 -- name: GetUsersWithLargeViolations :many
-SELECT sqlc.embed(u), sqlc.embed(uv)
+SELECT sqlc.embed(u), sqlc.embed(uv), s.status as status
 FROM users u
 JOIN usage_limit_violations uv ON u.id = uv.user_id
 JOIN subscriptions s ON u.subscription_id = s.id

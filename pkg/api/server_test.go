@@ -26,6 +26,10 @@ var (
 	store      *db.BusinessStore
 )
 
+const (
+	authBackfillDelay = 100 * time.Millisecond
+)
+
 func fakeRateLimiter(next http.HandlerFunc) http.HandlerFunc {
 	return next
 }
@@ -62,8 +66,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	blockedUsers := db.NewStaticCache[int32, int64](100 /*cap*/, -1 /*missing data*/)
-	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, 100*time.Millisecond)
+	blockedUsers := db.NewStaticCache[int32, *common.UserLimitStatus](100 /*cap*/, nil /*missing data*/)
+	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, authBackfillDelay)
 	defer auth.Shutdown()
 
 	s = NewServer(store, timeSeries, auth, 2*time.Second /*flush interval*/, &billing.StubPaddleClient{}, os.Getenv)
