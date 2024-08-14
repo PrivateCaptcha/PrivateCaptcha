@@ -29,7 +29,7 @@ import (
 
 const (
 	maxCacheSize    = 1_000_000
-	maxBlockedUsers = 1000
+	maxLimitedUsers = 100_000
 )
 
 var (
@@ -41,9 +41,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
-	cache, cerr := db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
-	if cerr != nil {
-		return cerr
+	var cache common.Cache[string, any]
+	var err error
+	cache, err = db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create memory cache for server", common.ErrAttr(err))
+		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
 	}
 
 	paddleAPI, err := billing.NewPaddleAPI(getenv)
@@ -70,8 +73,13 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	blockedUsers := db.NewStaticCache[int32, int64](maxBlockedUsers, -1 /*missing data*/)
-	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, blockedUsers, 1*time.Second /*backfill duration*/)
+	var userLimits common.Cache[int32, *common.UserLimitStatus]
+	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](3*time.Hour, maxLimitedUsers, nil /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create memory cache for user limits", common.ErrAttr(err))
+		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
+	}
+	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
 	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, os.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
@@ -144,10 +152,10 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	})
 	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
 	jobs.Add(&maintenance.ThrottleViolationsJob{
-		Stage:        stage,
-		BlockedUsers: blockedUsers,
-		Store:        businessDB,
-		From:         common.StartOfMonth(),
+		Stage:      stage,
+		UserLimits: userLimits,
+		Store:      businessDB,
+		From:       common.StartOfMonth(),
 	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})

@@ -37,6 +37,10 @@ func Bool(b bool) pgtype.Bool {
 }
 
 func Timestampz(t time.Time) pgtype.Timestamptz {
+	if t.IsZero() {
+		return pgtype.Timestamptz{Valid: false}
+	}
+
 	return pgtype.Timestamptz{
 		Time:             t,
 		InfinityModifier: pgtype.Finite,

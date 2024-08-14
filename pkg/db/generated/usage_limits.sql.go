@@ -93,7 +93,7 @@ func (q *Queries) GetUsersWithConsecutiveViolations(ctx context.Context) ([]*Get
 }
 
 const getUsersWithLargeViolations = `-- name: GetUsersWithLargeViolations :many
-SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.paddle_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.paddle_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at, s.status as status
 FROM users u
 JOIN usage_limit_violations uv ON u.id = uv.user_id
 JOIN subscriptions s ON u.subscription_id = s.id
@@ -111,6 +111,7 @@ type GetUsersWithLargeViolationsParams struct {
 type GetUsersWithLargeViolationsRow struct {
 	User                User                `db:"user" json:"user"`
 	UsageLimitViolation UsageLimitViolation `db:"usage_limit_violation" json:"usage_limit_violation"`
+	Status              string              `db:"status" json:"status"`
 }
 
 func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, arg *GetUsersWithLargeViolationsParams) ([]*GetUsersWithLargeViolationsRow, error) {
@@ -136,6 +137,7 @@ func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, arg *GetUsers
 			&i.UsageLimitViolation.RequestsCount,
 			&i.UsageLimitViolation.DetectionMonth,
 			&i.UsageLimitViolation.LastViolatedAt,
+			&i.Status,
 		); err != nil {
 			return nil, err
 		}

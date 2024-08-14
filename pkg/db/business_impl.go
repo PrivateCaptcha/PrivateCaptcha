@@ -1000,14 +1000,36 @@ func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category
 	return nil
 }
 
-func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
-	subscriptions, err := impl.queries.GetSubscriptionsByUserIDs(ctx, userIDs)
+func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
+	users, err := impl.queries.GetUsersWithoutSubscription(ctx, userIDs)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve user subscriptions", "userIDs", len(userIDs), common.ErrAttr(err))
+		if err == pgx.ErrNoRows {
+			return []*dbgen.User{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve users without subscriptions", "userIDs", len(userIDs), common.ErrAttr(err))
+
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched user subscriptions", "count", len(subscriptions))
+	slog.DebugContext(ctx, "Fetched users without subscriptions", "count", len(users), "userIDs", len(userIDs))
+
+	return users, err
+}
+
+func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
+	subscriptions, err := impl.queries.GetSubscriptionsByUserIDs(ctx, userIDs)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*dbgen.GetSubscriptionsByUserIDsRow{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve user subscriptions", "userIDs", len(userIDs), common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched users subscriptions", "count", len(subscriptions), "userIDs", len(userIDs))
 
 	return subscriptions, err
 }
@@ -1028,6 +1050,10 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 	subscriptions, err := impl.retrieveSubscriptionsByUserIDs(ctx, userIDs)
 	if err != nil {
 		return err
+	}
+	if len(subscriptions) == 0 {
+		slog.ErrorContext(ctx, "Fetched no subscriptions by userIDs", "userIDs", len(userIDs))
+		return ErrRecordNotFound
 	}
 
 	userIDs = nil

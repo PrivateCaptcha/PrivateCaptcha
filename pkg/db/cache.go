@@ -38,14 +38,18 @@ func NewMemoryCache[TKey comparable, TValue comparable](expiration time.Duration
 
 var _ common.Cache[int, any] = (*memcache[int, any])(nil)
 
-func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (any, error) {
+func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, error) {
 	data, found := c.store.Get(key)
 	if !found {
-		return nil, ErrCacheMiss
+		slog.Log(ctx, common.LevelTrace, "Item not found in memory cache", "key", key)
+		var zero TValue
+		return zero, ErrCacheMiss
 	}
 
 	if data == c.missingValue {
-		return nil, ErrNegativeCacheHit
+		slog.Log(ctx, common.LevelTrace, "Item set as missing in memory cache", "key", key)
+		var zero TValue
+		return zero, ErrNegativeCacheHit
 	}
 
 	slog.Log(ctx, common.LevelTrace, "Found item in memory cache", "key", key)
