@@ -245,13 +245,28 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 	return items, nil
 }
 
-const softDeleteProperty = `-- name: SoftDeleteProperty :exec
-UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
+const softDeleteProperty = `-- name: SoftDeleteProperty :one
+UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
 `
 
-func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, softDeleteProperty, id)
-	return err
+func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {
+	row := q.db.QueryRow(ctx, softDeleteProperty, id)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.Domain,
+		&i.Level,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
 }
 
 const updateProperty = `-- name: UpdateProperty :one
