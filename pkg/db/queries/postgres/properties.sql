@@ -20,8 +20,8 @@ SELECT * from properties WHERE id = $1;
 -- name: GetOrgProperties :many
 SELECT * from properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at;
 
--- name: SoftDeleteProperty :exec
-UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1;
+-- name: SoftDeleteProperty :one
+UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *;
 
 -- name: GetSoftDeletedProperties :many
 SELECT sqlc.embed(p)
