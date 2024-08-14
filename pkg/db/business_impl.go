@@ -255,12 +255,8 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 	}
 
 	properties, err := impl.queries.GetPropertiesByExternalID(ctx, keys)
-	if err != nil {
+	if err != nil && err != pgx.ErrNoRows {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekeys", common.ErrAttr(err))
-		if err == pgx.ErrNoRows {
-			return nil, ErrRecordNotFound
-		}
-
 		return nil, err
 	}
 
