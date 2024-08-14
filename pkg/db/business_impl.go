@@ -651,7 +651,8 @@ func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32,
 }
 
 func (impl *businessStoreImpl) softDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
-	if err := impl.queries.SoftDeleteProperty(ctx, propID); err != nil {
+	property, err := impl.queries.SoftDeleteProperty(ctx, propID)
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", propID, common.ErrAttr(err))
 		return err
 	}
@@ -659,6 +660,9 @@ func (impl *businessStoreImpl) softDeleteProperty(ctx context.Context, propID in
 	slog.DebugContext(ctx, "Soft-deleted property", "propID", propID)
 
 	// update caches
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	// cache mostly used in API server
+	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
 	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(propID))
 	// invalidate org properties in cache as we just deleted a property
 	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(orgID))
