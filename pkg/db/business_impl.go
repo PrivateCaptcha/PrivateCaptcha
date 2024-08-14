@@ -534,7 +534,13 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 
 	subscription, err := impl.queries.GetSubscriptionByID(ctx, sID)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			impl.cache.SetMissing(ctx, cacheKey)
+			return nil, ErrRecordNotFound
+		}
+
 		slog.ErrorContext(ctx, "Failed to fetch subscription from DB", "id", sID, common.ErrAttr(err))
+
 		return nil, err
 	}
 
