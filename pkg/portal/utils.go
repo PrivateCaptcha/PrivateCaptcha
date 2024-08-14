@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"net/http"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -115,13 +116,27 @@ func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		billingPath := fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint)
+
 		if !user.SubscriptionID.Valid {
 			slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
-			url := s.relURL(fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint))
+			url := s.relURL(billingPath)
 			common.Redirect(url, w, r)
 			return
 		}
-		// TODO: Verify that actual Paddle subscription is valid
+
+		if subscr, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
+			if !billing.IsSubscriptionActive(subscr.Status) {
+				slog.WarnContext(ctx, "User's subscription is not active", "status", subscr.Status, "userID", user.ID)
+				url := s.relURL(billingPath)
+				common.Redirect(url, w, r)
+				return
+			}
+		} else {
+			slog.ErrorContext(ctx, "Failed to check user subscription", "userID", user.ID, common.ErrAttr(err))
+			s.redirectError(http.StatusInternalServerError, w, r)
+			return
+		}
 
 		next.ServeHTTP(w, r)
 	}
