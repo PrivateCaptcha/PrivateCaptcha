@@ -246,12 +246,14 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 			batch = append(batch, ar)
 
 			if len(batch) >= l.batchSize {
+				slog.Log(ctx, common.LevelTrace, "Saving access log", "count", len(batch), "reason", "batch")
 				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
 					batch = []*common.AccessRecord{}
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
+				slog.Log(ctx, common.LevelTrace, "Saving access log", "count", len(batch), "reason", "timeout")
 				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
 					batch = []*common.AccessRecord{}
 				}

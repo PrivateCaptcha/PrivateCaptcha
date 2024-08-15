@@ -29,7 +29,7 @@ import (
 
 const (
 	maxCacheSize    = 1_000_000
-	maxLimitedUsers = 100_000
+	maxLimitedUsers = 10_000
 )
 
 var (
