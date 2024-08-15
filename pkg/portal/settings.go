@@ -391,10 +391,19 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 		return renderCtx, settingsAPIKeysTemplate, nil
 	}
 
+	apiKeyRequestsPerSecond := 1.0
+	if user.SubscriptionID.Valid {
+		if subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
+			if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+				apiKeyRequestsPerSecond = plan.APIRequestsPerSecond
+			}
+		}
+	}
+
 	months := monthsFromParam(ctx, r.FormValue(common.ParamMonths))
 	tnow := time.Now().UTC()
 	expiration := tnow.AddDate(0, months, 0)
-	key, err := s.Store.CreateAPIKey(ctx, user.ID, formName, expiration)
+	key, err := s.Store.CreateAPIKey(ctx, user.ID, formName, expiration, apiKeyRequestsPerSecond)
 	if err == nil {
 		userKey := apiKeyToUserAPIKey(key, tnow)
 		userKey.Secret = db.UUIDToSecret(key.ExternalID)

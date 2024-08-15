@@ -15,9 +15,7 @@ import (
 )
 
 const (
-	maxTokenSize            = 300
-	apiKeyBurstRequests     = 50
-	apiKeyRequestsPerSecond = 10
+	maxTokenSize = 300
 )
 
 type authMiddleware struct {
@@ -359,9 +357,7 @@ func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 			// rate limiter key will be the {secret} itself _only_ when we are cached
 			// which means if it's not, then we have just fetched the record from DB
 			if rateLimiterKey, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (rateLimiterKey != secret) {
-				// TODO: Set these limits per subscription plan quota
-				// this can be propagated to the APIKey record itself
-				am.ratelimiter.UpdateLimits(secret, apiKeyBurstRequests, apiKeyRequestsPerSecond)
+				am.ratelimiter.UpdateLimits(secret, uint32(apiKey.RequestsBurst), apiKey.RequestsPerSecond)
 			}
 		}
 

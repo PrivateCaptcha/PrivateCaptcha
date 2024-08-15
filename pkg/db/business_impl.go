@@ -930,11 +930,20 @@ func (impl *businessStoreImpl) updateAPIKey(ctx context.Context, externalID pgty
 	return nil
 }
 
-func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, name string, expiration time.Time) (*dbgen.APIKey, error) {
+func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
+	// current logic is that initial values will be set per plan and adjusted manually in DB if requested by customer
+	const apiKeyRequestsBurst = 10
+	burst := int32(requestsPerSecond * 2)
+	if burst < apiKeyRequestsBurst {
+		burst = apiKeyRequestsBurst
+	}
+
 	key, err := impl.queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
-		Name:      name,
-		UserID:    Int(userID),
-		ExpiresAt: Timestampz(expiration),
+		Name:              name,
+		UserID:            Int(userID),
+		ExpiresAt:         Timestampz(expiration),
+		RequestsPerSecond: requestsPerSecond,
+		RequestsBurst:     burst,
 	})
 
 	if err != nil {
@@ -977,8 +986,34 @@ func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID i
 		cacheKey := APIKeyCacheKey(secret)
 		_ = impl.cache.Delete(ctx, cacheKey)
 
-		_ = impl.cache.Delete(ctx, userAPIKeysCacheKey(userID))
 	}
+
+	_ = impl.cache.Delete(ctx, userAPIKeysCacheKey(userID))
+
+	return nil
+}
+
+func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
+	err := impl.queries.UpdateUserAPIKeysRateLimits(ctx, &dbgen.UpdateUserAPIKeysRateLimitsParams{
+		RequestsPerSecond: requestsPerSecond,
+		UserID:            Int(userID),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			slog.WarnContext(ctx, "Failed to find user API Keys", "userID", userID)
+			return ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to update user API keys rate limit", "userID", userID, "rateLimit", requestsPerSecond,
+			common.ErrAttr(err))
+
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated user API keys rate limit", "userID", userID)
+
+	// invalidate keys cache
+	_ = impl.cache.Delete(ctx, userAPIKeysCacheKey(userID))
 
 	return nil
 }
