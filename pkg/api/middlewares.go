@@ -40,7 +40,7 @@ func NewAuthMiddleware(getenv func(string) string,
 	am := &authMiddleware{
 		ratelimiter:   ratelimiter,
 		Store:         store,
-		sitekeyChan:   make(chan string, batchSize),
+		sitekeyChan:   make(chan string, 3*batchSize),
 		batchSize:     batchSize,
 		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
 		userLimits:    userLimits,
@@ -117,6 +117,10 @@ func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, propertie
 	for _, p := range properties {
 		userID := p.OrgOwnerID.Int32
 
+		if _, ok := usersMap[userID]; ok {
+			continue
+		}
+
 		if _, err := am.userLimits.Get(ctx, userID); err == db.ErrCacheMiss {
 			usersMap[userID] = true
 		}
@@ -130,11 +134,11 @@ func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, propertie
 	return result
 }
 
-func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) error {
+func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) {
 	owners := am.unknownPropertiesOwners(ctx, properties)
 	if len(owners) == 0 {
-		slog.DebugContext(ctx, "No new users to check")
-		return nil
+		slog.DebugContext(ctx, "No new users to check", "properties", len(properties))
+		return
 	}
 
 	if subscriptions, err := am.Store.RetrieveSubscriptionsByUserIDs(ctx, owners); err == nil {
@@ -157,8 +161,6 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 	} else {
 		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))
 	}
-
-	return nil
 }
 
 // the only purpose of this routine is to cache properties and block users without a subscription
@@ -180,22 +182,22 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 			batch = append(batch, sitekey)
 
 			if len(batch) >= am.batchSize {
-				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys based on batch size", "count", len(batch))
+				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "batch")
 				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
 					batch = []string{}
-					_ = am.checkPropertyOwners(ctx, properties)
+					am.checkPropertyOwners(ctx, properties)
 				}
 			}
 		case <-time.After(delay):
 			if len(batch) > 0 {
-				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys after the delay", "count", len(batch))
+				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "timeout")
 				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
 					batch = []string{}
-					_ = am.checkPropertyOwners(ctx, properties)
+					am.checkPropertyOwners(ctx, properties)
 				}
 			}
 		}
