@@ -230,8 +230,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(get(common.LoginEndpoint), ratelimiter(s.handler(s.getLogin)))
 	router.HandleFunc(get(common.RegisterEndpoint), ratelimiter(s.handler(s.getRegister)))
 	router.HandleFunc(get(common.TwoFactorEndpoint), ratelimiter(s.getTwoFactor))
-	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), ratelimiter(s.error))
-	router.HandleFunc(get(common.ExpiredEndpoint), ratelimiter(s.expired))
+	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), ratelimiter(common.CacheControl(s.error)))
+	router.HandleFunc(get(common.ExpiredEndpoint), ratelimiter(common.CacheControl(s.expired)))
 	router.HandleFunc(get(common.LogoutEndpoint), ratelimiter(s.logout))
 
 	// configured with middlewares
