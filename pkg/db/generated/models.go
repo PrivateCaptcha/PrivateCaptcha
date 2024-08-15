@@ -185,14 +185,16 @@ func (ns NullSupportCategory) Value() (driver.Value, error) {
 }
 
 type APIKey struct {
-	ID         int32              `db:"id" json:"id"`
-	Name       string             `db:"name" json:"name"`
-	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
-	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
-	Enabled    pgtype.Bool        `db:"enabled" json:"enabled"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	ExpiresAt  pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
-	Notes      pgtype.Text        `db:"notes" json:"notes"`
+	ID                int32              `db:"id" json:"id"`
+	Name              string             `db:"name" json:"name"`
+	ExternalID        pgtype.UUID        `db:"external_id" json:"external_id"`
+	UserID            pgtype.Int4        `db:"user_id" json:"user_id"`
+	Enabled           pgtype.Bool        `db:"enabled" json:"enabled"`
+	RequestsPerSecond float64            `db:"requests_per_second" json:"requests_per_second"`
+	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ExpiresAt         pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
+	Notes             pgtype.Text        `db:"notes" json:"notes"`
 }
 
 type Cache struct {

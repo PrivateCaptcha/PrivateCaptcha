@@ -20,6 +20,7 @@ type Plan struct {
 	OrgsLimit            int
 	PropertiesLimit      int
 	ThrottleLimit        int64
+	APIRequestsPerSecond float64
 }
 
 func (p *Plan) IsValid() bool {
@@ -61,6 +62,7 @@ func (p *Plan) ShouldBeThrottled(requestsCount int64) bool {
 const (
 	defaultOrgLimit        = 10
 	defaultPropertiesLimit = 50
+	defaultAPIKeyRequests  = 1.0
 	version1               = 1
 )
 
@@ -82,6 +84,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        5_000, // next plan's limit
+			APIRequestsPerSecond: 1.0,
 		},
 		{
 			Name:                 "Private Captcha 5K",
@@ -95,6 +98,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        10_000, // next plan's limit
+			APIRequestsPerSecond: 1.0,
 		},
 		{
 			Name:                 "Private Captcha 10K",
@@ -108,6 +112,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        25_000, // next plan's limit
+			APIRequestsPerSecond: 2.0,
 		},
 		{
 			Name:                 "Private Captcha 25K",
@@ -121,6 +126,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        50_000, // next plan's limit
+			APIRequestsPerSecond: 2.0,
 		},
 		{
 			Name:                 "Private Captcha 50K",
@@ -134,6 +140,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        100_000, // next plan's limit
+			APIRequestsPerSecond: 4.0,
 		},
 		{
 			Name:                 "Private Captcha 100K",
@@ -147,6 +154,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        200_000, // x2
+			APIRequestsPerSecond: 10.0,
 		},
 	}
 
@@ -163,6 +171,7 @@ var (
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
 			ThrottleLimit:        20_000,
+			APIRequestsPerSecond: 1.0,
 		},
 	}
 
