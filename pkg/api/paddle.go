@@ -222,6 +222,7 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
 			_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
 			s.auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit, subscription.Status)
+			_ = s.businessDB.UpdateUserAPIKeysRateLimits(ctx, user.ID, plan.APIRequestsPerSecond)
 		}
 	} else {
 		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))

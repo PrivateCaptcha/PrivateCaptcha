@@ -278,8 +278,8 @@ func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) (
 	return s.defaultImpl.retrieveUserAPIKeys(ctx, userID)
 }
 
-func (s *BusinessStore) CreateAPIKey(ctx context.Context, userID int32, name string, expiration time.Time) (*dbgen.APIKey, error) {
-	return s.defaultImpl.createAPIKey(ctx, userID, name, expiration)
+func (s *BusinessStore) CreateAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
+	return s.defaultImpl.createAPIKey(ctx, userID, name, expiration, requestsPerSecond)
 }
 
 func (s *BusinessStore) UpdateAPIKey(ctx context.Context, externalID pgtype.UUID, expiration time.Time, enabled bool) error {
@@ -288,6 +288,10 @@ func (s *BusinessStore) UpdateAPIKey(ctx context.Context, externalID pgtype.UUID
 
 func (s *BusinessStore) DeleteAPIKey(ctx context.Context, userID, keyID int32) error {
 	return s.defaultImpl.deleteAPIKey(ctx, userID, keyID)
+}
+
+func (s *BusinessStore) UpdateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
+	return s.defaultImpl.updateUserAPIKeysRateLimits(ctx, userID, requestsPerSecond)
 }
 
 func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
