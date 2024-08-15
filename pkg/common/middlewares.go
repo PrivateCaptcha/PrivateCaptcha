@@ -75,6 +75,13 @@ func NoCache(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func CacheControl(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=86400")
+		next.ServeHTTP(w, r)
+	}
+}
+
 // The reason this exists is because http.MaxBytesHandler works with http.Handler instead of http.HandlerFunc
 func MaxBytesHandler(next http.HandlerFunc, maxSize int64) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
