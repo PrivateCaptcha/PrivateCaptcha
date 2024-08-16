@@ -740,7 +740,6 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 		Data: data,
 	}
 
-	// TODO: add CORS headers for chart response
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 

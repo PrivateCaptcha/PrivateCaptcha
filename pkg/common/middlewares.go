@@ -35,7 +35,7 @@ func traceID() string {
 func Logged(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
-		ctx := TraceContext(r.Context(), traceID)
+		ctx := TraceContextFunc(r.Context(), traceID)
 
 		slog.DebugContext(ctx, "Started request", "path", r.URL.Path, "method", r.Method)
 		defer slog.DebugContext(ctx, "Finished request", "path", r.URL.Path, "method", r.Method,
@@ -124,6 +124,14 @@ func StrPathArg(r *http.Request, name string) (string, error) {
 }
 
 type Middleware func(http.HandlerFunc) http.HandlerFunc
+
+func HandlerWrapper(handler func(http.Handler) http.Handler) Middleware {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			handler(next).ServeHTTP(w, r)
+		}
+	}
+}
 
 // this exists because of https://github.com/justinas/alice/issues/25
 type MiddlewareChain struct {

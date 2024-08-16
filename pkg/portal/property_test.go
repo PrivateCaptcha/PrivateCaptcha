@@ -48,7 +48,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, fakeRateLimiter)
+	server.Setup(srv, fakeRateLimiter, testPortalDomain)
 
 	cookie, err := authenticateSuite(ctx, user2.Email, srv)
 	if err != nil {

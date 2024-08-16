@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -37,9 +38,17 @@ func (h *contextHandler) WithGroup(name string) slog.Handler {
 	return &contextHandler{h.Handler.WithGroup(name)}
 }
 
-func TraceContext(ctx context.Context, traceID func() string) context.Context {
+func TraceContextFunc(ctx context.Context, traceID func() string) context.Context {
 	if tid, ok := ctx.Value(TraceIDContextKey).(string); !ok || (len(tid) == 0) {
 		ctx = context.WithValue(ctx, TraceIDContextKey, traceID())
+	}
+
+	return ctx
+}
+
+func TraceContext(ctx context.Context, traceID string) context.Context {
+	if tid, ok := ctx.Value(TraceIDContextKey).(string); !ok || (len(tid) == 0) {
+		ctx = context.WithValue(ctx, TraceIDContextKey, traceID)
 	}
 
 	return ctx
@@ -90,4 +99,14 @@ func TraceIDAttr(tid string) slog.Attr {
 		Key:   "traceID",
 		Value: slog.StringValue(tid),
 	}
+}
+
+type FmtLogger struct {
+	Ctx   context.Context
+	Level slog.Level
+}
+
+func (l *FmtLogger) Printf(s string, args ...interface{}) {
+	msg := fmt.Sprintf(s, args...)
+	slog.Log(l.Ctx, l.Level, msg)
 }
