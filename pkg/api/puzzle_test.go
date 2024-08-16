@@ -19,7 +19,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func puzzleSuite(sitekey string) (*http.Response, error) {
+const (
+	testPropertyDomain = "example.com"
+)
+
+func makeOriginHeader(domain string) string {
+	if !strings.HasPrefix(domain, "https://") {
+		return "https://" + domain
+	}
+	return domain
+}
+
+func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "")
 
@@ -29,6 +40,8 @@ func puzzleSuite(sitekey string) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Set("Origin", makeOriginHeader(domain))
 
 	q := req.URL.Query()
 	q.Add(common.ParamSiteKey, sitekey)
@@ -51,8 +64,8 @@ func randomUUID() *pgtype.UUID {
 	return eid
 }
 
-func puzzleSuiteWithBackfillWait(t *testing.T, sitekey string) {
-	resp, err := puzzleSuite(sitekey)
+func puzzleSuiteWithBackfillWait(t *testing.T, sitekey, domain string) {
+	resp, err := puzzleSuite(sitekey, domain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +77,7 @@ func puzzleSuiteWithBackfillWait(t *testing.T, sitekey string) {
 
 	time.Sleep(3 * authBackfillDelay)
 
-	resp, err = puzzleSuite(sitekey)
+	resp, err = puzzleSuite(sitekey, domain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +96,7 @@ func TestGetPuzzleWithoutAccount(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(*randomUUID())
 
-	puzzleSuiteWithBackfillWait(t, sitekey)
+	puzzleSuiteWithBackfillWait(t, sitekey, testPropertyDomain)
 }
 
 func TestGetPuzzleWithoutSubscription(t *testing.T) {
@@ -105,6 +118,7 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -117,7 +131,7 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	puzzleSuiteWithBackfillWait(t, sitekey)
+	puzzleSuiteWithBackfillWait(t, sitekey, property.Domain)
 }
 
 func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
@@ -139,6 +153,7 @@ func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -155,7 +170,7 @@ func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	puzzleSuiteWithBackfillWait(t, sitekey)
+	puzzleSuiteWithBackfillWait(t, sitekey, property.Domain)
 }
 
 func fetchPuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
@@ -196,6 +211,7 @@ func TestGetPuzzle(t *testing.T) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -203,7 +219,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := puzzleSuite(db.UUIDToSiteKey(property.ExternalID))
+	resp, err := puzzleSuite(db.UUIDToSiteKey(property.ExternalID), property.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,6 +256,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -254,7 +271,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err := puzzleSuite(sitekey)
+	resp, err := puzzleSuite(sitekey, property.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}

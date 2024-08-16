@@ -232,11 +232,15 @@ func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
 	})
 }
 
+func (am *authMiddleware) originAllowed(origin string) bool {
+	return len(origin) > 0
+}
+
 func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodOptions {
-			// TODO: Return correct CORS headers
-			next.ServeHTTP(w, r)
+		origin := r.Header.Get("Origin")
+		if len(origin) == 0 {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
@@ -250,9 +254,6 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		// NOTE: there's a potential problem here if the property is still cached then
 		// we will not backfill and, thus, verify the subscription validity of the user
 		property, err := am.Store.GetCachedPropertyBySitekey(ctx, sitekey)
-
-		// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
-
 		if err != nil {
 			switch err {
 			// this will happen when the user does not have such property or it was deleted
@@ -272,7 +273,20 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if property != nil {
+			if originHost, err := common.ParseDomainName(origin); err == nil {
+				if originHost != property.Domain {
+					slog.WarnContext(ctx, "Origin header to domain mismatch", "origin", originHost, "domain", property.Domain)
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					return
+				}
+			} else {
+				slog.WarnContext(ctx, "Failed to parse origin domain name", common.ErrAttr(err))
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
+
 			if status, err := am.userLimits.Get(ctx, property.OrgOwnerID.Int32); err == nil {
+				// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
 				if !billing.IsSubscriptionActive(status.Status) {
 					http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				} else {

@@ -250,7 +250,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 		return common.MaxBytesHandler(next, 256*1024)
 	}
 
-	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting (unlike the API)
+	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
 	router.HandleFunc(get(common.LoginEndpoint), corsHandler(ratelimiter(s.handler(s.getLogin))))
