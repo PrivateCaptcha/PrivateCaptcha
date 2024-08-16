@@ -67,7 +67,7 @@ func TestPostTwoFactor(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, fakeRateLimiter)
+	server.Setup(srv, fakeRateLimiter, testPortalDomain)
 
 	ctx := context.TODO()
 
