@@ -99,15 +99,20 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	}
 	portalServer.Init()
 
-	router := http.NewServeMux()
-	apiServer.Setup(router, "api")
-	portalServer.Setup(router, ratelimiter.RateLimit)
-	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
-
 	host := getenv("PC_HOST")
 	if host == "" {
 		host = "localhost"
 	}
+
+	portalDomain := getenv("PC_PORTAL_DOMAIN")
+	if portalDomain == "" {
+		portalDomain = host
+	}
+
+	router := http.NewServeMux()
+	apiServer.Setup(router, "api")
+	portalServer.Setup(router, ratelimiter.RateLimit, portalDomain)
+	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 
 	port := getenv("PC_PORT")
 	if port == "" {

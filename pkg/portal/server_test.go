@@ -26,6 +26,10 @@ var (
 	store      *db.BusinessStore
 )
 
+const (
+	testPortalDomain = ""
+)
+
 func fakeRateLimiter(next http.HandlerFunc) http.HandlerFunc {
 	return next
 }

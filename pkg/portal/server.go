@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/cors"
+
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -175,6 +177,7 @@ type Server struct {
 	Mailer     common.Mailer
 	Stage      string
 	PaddleAPI  billing.PaddleAPI
+	cors       *cors.Cors
 }
 
 func (s *Server) Init() {
@@ -183,8 +186,29 @@ func (s *Server) Init() {
 	s.Session.Path = prefix
 }
 
-func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
-	s.setupWithPrefix(s.relURL("/"), router, ratelimiter)
+func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware, domain string) {
+	if len(domain) == 0 {
+		domain = "*"
+	}
+
+	corsOpts := cors.Options{
+		AllowedOrigins:   []string{domain},
+		AllowCredentials: true,
+		// non-captcha headers were taken from rs/cors defaults
+		AllowedHeaders: []string{common.HeaderCSRFToken, "accept", "content-type", "x-requested-with"},
+		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodHead, http.MethodPut, http.MethodDelete},
+		Debug:          s.Stage != common.StageProd,
+		MaxAge:         60, /*seconds*/
+	}
+
+	if corsOpts.Debug {
+		corsOpts.Logger = &common.FmtLogger{Ctx: common.TraceContext(context.TODO(), "cors"), Level: common.LevelTrace}
+	}
+
+	s.cors = cors.New(corsOpts)
+	corsHandler := common.HandlerWrapper(s.cors.Handler)
+
+	s.setupWithPrefix(s.relURL("/"), router, ratelimiter, corsHandler)
 }
 
 func (s *Server) relURL(url string) string {
@@ -195,7 +219,7 @@ func (s *Server) partsURL(a ...string) string {
 	return s.relURL(strings.Join(a, "/"))
 }
 
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter common.Middleware) {
+func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter, corsHandler common.Middleware) {
 	slog.Debug("Setting up the routes", "prefix", prefix)
 
 	route := func(method string, parts ...string) string {
@@ -226,20 +250,23 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 		return common.MaxBytesHandler(next, 256*1024)
 	}
 
+	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting (unlike the API)
+
 	// separately configured "public" ones
-	router.HandleFunc(get(common.LoginEndpoint), ratelimiter(s.handler(s.getLogin)))
-	router.HandleFunc(get(common.RegisterEndpoint), ratelimiter(s.handler(s.getRegister)))
-	router.HandleFunc(get(common.TwoFactorEndpoint), ratelimiter(s.getTwoFactor))
-	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), ratelimiter(common.CacheControl(s.error)))
-	router.HandleFunc(get(common.ExpiredEndpoint), ratelimiter(common.CacheControl(s.expired)))
-	router.HandleFunc(get(common.LogoutEndpoint), ratelimiter(s.logout))
+	router.HandleFunc(get(common.LoginEndpoint), corsHandler(ratelimiter(s.handler(s.getLogin))))
+	router.HandleFunc(get(common.RegisterEndpoint), corsHandler(ratelimiter(s.handler(s.getRegister))))
+	router.HandleFunc(get(common.TwoFactorEndpoint), corsHandler(ratelimiter(s.getTwoFactor)))
+	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), corsHandler(ratelimiter(common.CacheControl(s.error))))
+	router.HandleFunc(get(common.ExpiredEndpoint), corsHandler(ratelimiter(common.CacheControl(s.expired))))
+	router.HandleFunc(get(common.LogoutEndpoint), corsHandler(ratelimiter(s.logout)))
 
 	// configured with middlewares
-	openWrite := common.NewMiddleWareChain(common.Recovered, ratelimiter, common.Logged, maxBytesHandler)
+	openWrite := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler)
 	writeChain := openWrite.Add(s.csrf)
-	privateReadChain := common.NewMiddleWareChain(ratelimiter, s.private)
 	privateWriteChain := writeChain.Add(s.private)
 	subscribedWrite := privateWriteChain.Add(s.subscribed)
+
+	privateReadChain := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, s.private)
 	subscribedRead := privateReadChain.Add(s.subscribed)
 
 	router.HandleFunc(post(common.LoginEndpoint), openWrite.Build(s.postLogin))
@@ -286,7 +313,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(post(common.SupportEndpoint), privateWriteChain.Build(s.handler(s.postSupport)))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", privateReadChain.Build(s.getPortal))
 	// wildcard
-	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", ratelimiter(common.Logged(s.notFound)))
+	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", corsHandler(ratelimiter(common.Logged(s.notFound))))
 }
 
 func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
