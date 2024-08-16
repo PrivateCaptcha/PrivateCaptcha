@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -146,4 +147,26 @@ func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration,
 	}
 
 	slog.DebugContext(ctx, "Finished cleaning up")
+}
+
+func ParseDomainName(input string) (string, error) {
+	parsedURL, err := url.Parse(input)
+	if err != nil {
+		return "", err
+	}
+
+	domain := parsedURL.Host
+	if domain == "" {
+		domain = input
+	}
+
+	if slashIndex := strings.LastIndex(domain, "/"); slashIndex != -1 {
+		domain = domain[:slashIndex]
+	}
+
+	if colonIndex := strings.LastIndex(domain, ":"); colonIndex != -1 {
+		domain = domain[:colonIndex]
+	}
+
+	return domain, nil
 }

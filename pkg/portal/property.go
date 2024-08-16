@@ -261,7 +261,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	domain := r.FormValue(common.ParamDomain)
+	paramDomain := r.FormValue(common.ParamDomain)
+	domain, err := common.ParseDomainName(paramDomain)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse domain name", "domain", paramDomain, common.ErrAttr(err))
+		renderCtx.DomainError = "Invalid format of domain name"
+		s.render(w, r, createPropertyFormTemplate, renderCtx)
+		return
+	}
 	if domainError := s.validateDomainName(ctx, domain); len(domainError) > 0 {
 		renderCtx.DomainError = domainError
 		s.render(w, r, createPropertyFormTemplate, renderCtx)

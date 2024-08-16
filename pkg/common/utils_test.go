@@ -65,3 +65,31 @@ func TestMaskEmail(t *testing.T) {
 		})
 	}
 }
+
+func TestCleanupDomain(t *testing.T) {
+	testCases := []struct {
+		domain   string
+		expected string
+	}{
+		{"bar.com", "bar.com"},
+		{"bar.com/", "bar.com"},
+		{"bar.com/api", "bar.com"},
+		{"bar.com/index.html", "bar.com"},
+		{"http://bar.com", "bar.com"},
+		{"http://bar.com/index.html", "bar.com"},
+		{"https://bar.com", "bar.com"},
+		{"https://bar.com/api", "bar.com"},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("cleanupDomain_%v", i), func(t *testing.T) {
+			actual, err := ParseDomainName(tc.domain)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if actual != tc.expected {
+				t.Errorf("Actual domain (%v) is different from expected (%v)", actual, tc.expected)
+			}
+		})
+	}
+}
