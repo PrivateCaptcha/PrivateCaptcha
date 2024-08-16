@@ -8,6 +8,7 @@ const (
 	HeaderContentLength   = "Content-Length"
 	HeaderAuthorization   = "Authorization"
 	HeaderCSRFToken       = "X-CSRF-Token"
+	HeaderCaptchaVersion  = "X-PC-Captcha-Version"
 	ContentTypePlain      = "text/plain"
 	ContentTypeJSON       = "application/json"
 	ContentTypeURLEncoded = "application/x-www-form-urlencoded"

@@ -47,8 +47,8 @@ func verifySuite(response, secret string) (*http.Response, error) {
 	return resp, nil
 }
 
-func solutionsSuite(ctx context.Context, sitekey string) (string, string, error) {
-	resp, err := puzzleSuite(sitekey)
+func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string, error) {
+	resp, err := puzzleSuite(sitekey, domain)
 	if err != nil {
 		return "", "", err
 	}
@@ -84,6 +84,7 @@ func setupVerifySuite(username string) (string, string, error) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -91,7 +92,7 @@ func setupVerifySuite(username string) (string, string, error) {
 		return "", "", err
 	}
 
-	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
 	if err != nil {
 		return "", "", err
 	}
@@ -205,6 +206,7 @@ func TestVerifyCachePriority(t *testing.T) {
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
+		Domain:     testPropertyDomain,
 		Level:      dbgen.DifficultyLevelMedium,
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
@@ -212,7 +214,7 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID))
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}

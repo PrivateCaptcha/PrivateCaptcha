@@ -22,6 +22,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/rs/cors"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -50,6 +51,7 @@ type server struct {
 	verifyLogChan   chan *common.VerifyRecord
 	verifyLogCancel context.CancelFunc
 	paddleAPI       billing.PaddleAPI
+	cors            *cors.Cors
 }
 
 func NewServer(store *db.BusinessStore,
@@ -121,7 +123,24 @@ func (s *server) Setup(router *http.ServeMux, prefix string) {
 		prefix += "/"
 	}
 
-	s.setupWithPrefix(prefix, router, s.auth)
+	corsOpts := cors.Options{
+		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
+		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
+		AllowOriginFunc: s.auth.originAllowed,
+		AllowedHeaders:  []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
+		AllowedMethods:  []string{http.MethodGet},
+		Debug:           s.stage != common.StageProd,
+		MaxAge:          60, /*seconds*/
+	}
+
+	if corsOpts.Debug {
+		corsOpts.Logger = &common.FmtLogger{Ctx: common.TraceContext(context.TODO(), "cors"), Level: common.LevelTrace}
+	}
+
+	s.cors = cors.New(corsOpts)
+	corsHandler := common.HandlerWrapper(s.cors.Handler)
+
+	s.setupWithPrefix(prefix, router, s.auth, corsHandler)
 }
 
 func (s *server) Shutdown() {
@@ -132,11 +151,12 @@ func (s *server) Shutdown() {
 	close(s.verifyLogChan)
 }
 
-func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware) {
-	chain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
+func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware, corsHandler common.Middleware) {
+	puzzleChain := common.NewMiddleWareChain(common.Recovered, corsHandler, common.NoCache)
+	verifyChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	// NOTE: auth middleware provides rate limiting internally
-	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, chain.Build(auth.Sitekey(s.puzzle)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, chain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize)))))
+	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.Build(auth.Sitekey(s.puzzle)))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize)))))
@@ -190,21 +210,6 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 }
 
 func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
-	if (r.Method != http.MethodGet) && (r.Method != http.MethodOptions) {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
-
-	// TODO: Set CORS for the domain, associated with property
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "x-pc-captcha-version, Content-Type")
-
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
 	ctx := r.Context()
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
