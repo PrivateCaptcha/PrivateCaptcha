@@ -121,4 +121,4 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         run: |
-          aws s3 cp --endpoint-url=${{ secrets.AWS_ENDPOINT_URL }} bin/server s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server
+          aws s3 cp --debug --endpoint-url=${{ secrets.AWS_ENDPOINT_URL }} bin/server s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server
