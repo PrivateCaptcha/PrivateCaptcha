@@ -28,6 +28,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/coreos/go-systemd/v22/activation"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -39,8 +40,9 @@ const (
 )
 
 var (
-	GitCommit string
-	flagMode  = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
+	GitCommit   string
+	flagMode    = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
+	envFileFlag = flag.String("env", "", "Path to .env file")
 )
 
 func run(ctx context.Context, getenv func(string) string, stderr io.Writer, systemdListener bool) error {
@@ -238,6 +240,13 @@ func main() {
 	flag.Parse()
 
 	var err error
+
+	if len(*envFileFlag) > 0 {
+		err = godotenv.Load(*envFileFlag)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+		}
+	}
 
 	switch *flagMode {
 	case modeServer, modeSystemd:
