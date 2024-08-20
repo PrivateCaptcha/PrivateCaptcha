@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -25,19 +27,23 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
+	"github.com/coreos/go-systemd/v22/activation"
 )
 
 const (
 	maxCacheSize    = 1_000_000
 	maxLimitedUsers = 10_000
+	modeMigrate     = "migrate"
+	modeSystemd     = "systemd"
+	modeServer      = "server"
 )
 
 var (
 	GitCommit string
-	flagMode  = flag.String("mode", "", "migrate | run")
+	flagMode  = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
 )
 
-func run(ctx context.Context, getenv func(string) string, stderr io.Writer) error {
+func run(ctx context.Context, getenv func(string) string, stderr io.Writer, systemdListener bool) error {
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
@@ -114,13 +120,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 	portalServer.Setup(router, ratelimiter.RateLimit, portalDomain)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 
-	port := getenv("PC_PORT")
-	if port == "" {
-		port = "8080"
-	}
-
 	httpServer := &http.Server{
-		Addr:              net.JoinHostPort(host, port),
 		Handler:           router,
 		ReadHeaderTimeout: 4 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -128,10 +128,37 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		WriteTimeout:      10 * time.Second,
 	}
 
+	var listeners []net.Listener
+	if systemdListener {
+		listeners, err = activation.Listeners()
+		if err != nil {
+			slog.Error("Failed to retrieve systemd listeners", common.ErrAttr(err))
+			return err
+		}
+
+		if len(listeners) != 1 {
+			slog.Error("Unexpected number of systemd listeners available", "count", len(listeners))
+			return errors.New("unexpected number of systemd listeners")
+		}
+	} else {
+		port := getenv("PC_PORT")
+		if port == "" {
+			port = "8080"
+		}
+
+		address := net.JoinHostPort(host, port)
+		listener, err := net.Listen("tcp", address)
+		if err != nil {
+			slog.Error("Failed to listen", "address", address, common.ErrAttr(err))
+			return err
+		}
+		listeners = append(listeners, listener)
+	}
+
 	go func() {
-		slog.Info("Listening", "address", httpServer.Addr, "version", GitCommit)
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Error listening and serving", common.ErrAttr(err))
+		slog.Info("Listening", "address", listeners[0].Addr().String(), "version", GitCommit)
+		if err := httpServer.Serve(listeners[0]); err != nil && err != http.ErrServerClosed {
+			slog.Error("Error serving", common.ErrAttr(err))
 		}
 	}()
 
@@ -188,6 +215,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer) erro
 		ratelimiter.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		httpServer.SetKeepAlivesEnabled(false)
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
 		}
@@ -212,9 +240,9 @@ func main() {
 	var err error
 
 	switch *flagMode {
-	case "run":
-		err = run(context.Background(), os.Getenv, os.Stderr)
-	case "migrate":
+	case modeServer, modeSystemd:
+		err = run(context.Background(), os.Getenv, os.Stderr, (*flagMode == modeSystemd))
+	case modeMigrate:
 		err = migrate(context.Background(), os.Getenv)
 	default:
 		err = fmt.Errorf("unknown mode: '%s'", *flagMode)
