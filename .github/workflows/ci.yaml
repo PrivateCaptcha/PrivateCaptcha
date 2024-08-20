@@ -71,7 +71,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.22'
 
     - name: Build server
       run: make build-server
@@ -94,3 +94,34 @@ jobs:
         PC_CLICKHOUSE_USER: default
         UA_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
         RATE_LIMIT_HEADER: X-REAL-IP
+
+    - uses: actions/upload-artifact@master
+      with:
+        name: privatecaptcha
+        path: bin/server
+
+  deploy:
+    name: Deploy captcha binary
+    runs-on: ubuntu-latest
+    needs: tests
+    if: ${{ success() && github.ref == 'refs/heads/main' }}
+    steps:
+      - uses: actions/download-artifact@master
+        with:
+          name: privatecaptcha
+          path: bin/server
+
+      - name: Extract branch name
+        shell: bash
+        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
+        id: extract_branch
+
+      - name: Set AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Copy files to S3 bucket
+        run: |
+          aws s3 cp --endpoint-url=${{ secrets.AWS_ENDPOINT_URL }} bin/server s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server
