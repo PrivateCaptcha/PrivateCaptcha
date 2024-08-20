@@ -10,6 +10,7 @@ require (
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/golang-migrate/migrate/v4 v4.17.0
 	github.com/jackc/pgx/v5 v5.5.5
+	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
 	github.com/maypok86/otter v1.2.1
 	github.com/realclientip/realclientip-go v1.0.0
