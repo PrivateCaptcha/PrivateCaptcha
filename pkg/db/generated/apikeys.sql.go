@@ -12,7 +12,7 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO apikeys (name, user_id, expires_at, requests_per_second, requests_burst) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
+INSERT INTO backend.apikeys (name, user_id, expires_at, requests_per_second, requests_burst) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
 `
 
 type CreateAPIKeyParams struct {
@@ -48,7 +48,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*A
 }
 
 const deleteAPIKey = `-- name: DeleteAPIKey :one
-DELETE FROM apikeys WHERE id=$1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
+DELETE FROM backend.apikeys WHERE id=$1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
 `
 
 type DeleteAPIKeyParams struct {
@@ -75,7 +75,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*A
 }
 
 const deleteUserAPIKeys = `-- name: DeleteUserAPIKeys :exec
-DELETE FROM apikeys WHERE user_id = $1
+DELETE FROM backend.apikeys WHERE user_id = $1
 `
 
 func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) error {
@@ -84,7 +84,7 @@ func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) err
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM apikeys WHERE external_id = $1
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM backend.apikeys WHERE external_id = $1
 `
 
 func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error) {
@@ -106,7 +106,7 @@ func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.U
 }
 
 const getUserAPIKeys = `-- name: GetUserAPIKeys :many
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM apikeys WHERE user_id = $1 AND deleted_at IS NULL AND expires_at > NOW()
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM backend.apikeys WHERE user_id = $1 AND deleted_at IS NULL AND expires_at > NOW()
 `
 
 func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error) {
@@ -141,7 +141,7 @@ func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*AP
 }
 
 const updateAPIKey = `-- name: UpdateAPIKey :one
-UPDATE apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
+UPDATE backend.apikeys SET expires_at = $1, enabled = $2 WHERE external_id = $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
 `
 
 type UpdateAPIKeyParams struct {
@@ -169,7 +169,7 @@ func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*A
 }
 
 const updateUserAPIKeysRateLimits = `-- name: UpdateUserAPIKeysRateLimits :exec
-UPDATE apikeys SET requests_per_second = $1 WHERE user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes
+UPDATE backend.apikeys SET requests_per_second = $1 WHERE user_id = $2
 `
 
 type UpdateUserAPIKeysRateLimitsParams struct {

@@ -3,6 +3,10 @@ sql:
   - engine: "postgresql"
     queries: "queries/postgres"
     schema: "migrations/postgres"
+    database:
+      uri: "${PC_POSTGRES}"
+    rules:
+    - sqlc/db-prepare
     gen:
       go:
         package: "generated"
@@ -14,7 +18,35 @@ sql:
         emit_params_struct_pointers: true
         #emit_pointers_for_null_types: true
         rename:
-          apikey: "APIKey"
+          #"backend_(.*)": "$1"
+          backend_deleted_record: DeletedRecord
+          backend_apikey: "APIKey"
+          backend_subscription: Subscription
+          backend_user: User
+          backend_organization: Organization
+          backend_access_level: AccessLevel
+          backend_organization_user: OrganizationUser
+          backend_difficulty_level: DifficultyLevel
+          backend_difficulty_growth: DifficultyGrowth
+          backend_property: Property
+          backend_cache: Cache
+          backend_support_category: SupportCategory
+          backend_support: Support
+          backend_usage_limit_violation: UsageLimitViolation
+          backend_lock: Lock
+          backend_difficulty_level_small: DifficultyLevelSmall
+          backend_difficulty_level_medium: DifficultyLevelMedium
+          backend_difficulty_level_high: DifficultyLevelHigh
+          backend_difficulty_growth_slow: DifficultyGrowthSlow
+          backend_difficulty_growth_medium: DifficultyGrowthMedium
+          backend_difficulty_growth_fast: DifficultyGrowthFast
+          backend_access_level_member: AccessLevelMember
+          backend_access_level_invited: AccessLevelInvited
+          backend_access_level_owner: AccessLevelOwner
+          backend_support_category_question: SupportCategoryQuestion
+          backend_support_category_suggestion: SupportCategorySuggestion
+          backend_support_category_problem: SupportCategoryProblem
+          backend_support_category_unknown: SupportCategoryUnknown
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"

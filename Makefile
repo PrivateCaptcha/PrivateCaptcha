@@ -12,7 +12,8 @@ bench-unit:
 
 test-docker:
 	@docker compose -f docker/docker-compose.test.yml down -v
-	@docker compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate
+	@docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm migration
+	@docker compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate testserver
 	@docker compose -f docker/docker-compose.test.yml down -v
 
 vendors:
@@ -54,3 +55,9 @@ clean-docker:
 
 sqlc:
 	cd pkg/db && sqlc generate
+
+vet-sqlc:
+	cd pkg/db && sqlc vet
+
+vet-docker:
+	@docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm vetsqlc

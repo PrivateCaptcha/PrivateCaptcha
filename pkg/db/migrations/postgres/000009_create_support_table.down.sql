@@ -1,3 +1,3 @@
-DROP TABLE IF EXISTS support;
+DROP TABLE IF EXISTS backend.support;
 
-DROP TYPE support_category;
+DROP TYPE backend.support_category;

@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS locks;
+DROP TABLE IF EXISTS backend.locks;

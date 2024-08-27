@@ -12,7 +12,7 @@ import (
 )
 
 const createCache = `-- name: CreateCache :exec
-INSERT INTO cache (key, value, expires_at) VALUES ($1, $2, NOW() + $3::INTERVAL)
+INSERT INTO backend.cache (key, value, expires_at) VALUES ($1, $2, NOW() + $3::INTERVAL)
 ON CONFLICT (key) DO UPDATE 
 SET value = EXCLUDED.value, expires_at = EXCLUDED.expires_at
 `
@@ -29,7 +29,7 @@ func (q *Queries) CreateCache(ctx context.Context, arg *CreateCacheParams) error
 }
 
 const deleteCachedByKey = `-- name: DeleteCachedByKey :exec
-DELETE FROM cache WHERE key = $1
+DELETE FROM backend.cache WHERE key = $1
 `
 
 func (q *Queries) DeleteCachedByKey(ctx context.Context, key string) error {
@@ -38,7 +38,7 @@ func (q *Queries) DeleteCachedByKey(ctx context.Context, key string) error {
 }
 
 const deleteExpiredCache = `-- name: DeleteExpiredCache :exec
-DELETE FROM cache WHERE expires_at < NOW()
+DELETE FROM backend.cache WHERE expires_at < NOW()
 `
 
 func (q *Queries) DeleteExpiredCache(ctx context.Context) error {
@@ -47,7 +47,7 @@ func (q *Queries) DeleteExpiredCache(ctx context.Context) error {
 }
 
 const getCachedByKey = `-- name: GetCachedByKey :one
-SELECT value FROM cache WHERE key = $1 AND expires_at >= NOW()
+SELECT value FROM backend.cache WHERE key = $1 AND expires_at >= NOW()
 `
 
 func (q *Queries) GetCachedByKey(ctx context.Context, key string) ([]byte, error) {
@@ -58,7 +58,7 @@ func (q *Queries) GetCachedByKey(ctx context.Context, key string) ([]byte, error
 }
 
 const updateCacheExpiration = `-- name: UpdateCacheExpiration :exec
-UPDATE cache SET expires_at = NOW() + $2::INTERVAL WHERE key = $1
+UPDATE backend.cache SET expires_at = NOW() + $2::INTERVAL WHERE key = $1
 `
 
 type UpdateCacheExpirationParams struct {

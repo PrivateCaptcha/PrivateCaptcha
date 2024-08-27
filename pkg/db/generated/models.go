@@ -32,7 +32,7 @@ func (e *AccessLevel) Scan(src interface{}) error {
 }
 
 type NullAccessLevel struct {
-	AccessLevel AccessLevel `json:"access_level"`
+	AccessLevel AccessLevel `json:"backend_access_level"`
 	Valid       bool        `json:"valid"` // Valid is true if AccessLevel is not NULL
 }
 
@@ -75,7 +75,7 @@ func (e *DifficultyGrowth) Scan(src interface{}) error {
 }
 
 type NullDifficultyGrowth struct {
-	DifficultyGrowth DifficultyGrowth `json:"difficulty_growth"`
+	DifficultyGrowth DifficultyGrowth `json:"backend_difficulty_growth"`
 	Valid            bool             `json:"valid"` // Valid is true if DifficultyGrowth is not NULL
 }
 
@@ -118,7 +118,7 @@ func (e *DifficultyLevel) Scan(src interface{}) error {
 }
 
 type NullDifficultyLevel struct {
-	DifficultyLevel DifficultyLevel `json:"difficulty_level"`
+	DifficultyLevel DifficultyLevel `json:"backend_difficulty_level"`
 	Valid           bool            `json:"valid"` // Valid is true if DifficultyLevel is not NULL
 }
 
@@ -162,7 +162,7 @@ func (e *SupportCategory) Scan(src interface{}) error {
 }
 
 type NullSupportCategory struct {
-	SupportCategory SupportCategory `json:"support_category"`
+	SupportCategory SupportCategory `json:"backend_support_category"`
 	Valid           bool            `json:"valid"` // Valid is true if SupportCategory is not NULL
 }
 

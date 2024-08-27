@@ -12,7 +12,7 @@ import (
 )
 
 const createOrganization = `-- name: CreateOrganization :one
-INSERT INTO organizations (name, user_id) VALUES ($1, $2) RETURNING id, name, user_id, created_at, updated_at, deleted_at
+INSERT INTO backend.organizations (name, user_id) VALUES ($1, $2) RETURNING id, name, user_id, created_at, updated_at, deleted_at
 `
 
 type CreateOrganizationParams struct {
@@ -35,7 +35,7 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 }
 
 const deleteOrganizations = `-- name: DeleteOrganizations :exec
-DELETE FROM organizations WHERE id = ANY($1::INT[])
+DELETE FROM backend.organizations WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) DeleteOrganizations(ctx context.Context, dollar_1 []int32) error {
@@ -44,7 +44,7 @@ func (q *Queries) DeleteOrganizations(ctx context.Context, dollar_1 []int32) err
 }
 
 const findUserOrgByName = `-- name: FindUserOrgByName :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, user_id, created_at, updated_at, deleted_at from backend.organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type FindUserOrgByNameParams struct {
@@ -67,7 +67,7 @@ func (q *Queries) FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameP
 }
 
 const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from organizations WHERE id = $1
+SELECT id, name, user_id, created_at, updated_at, deleted_at from backend.organizations WHERE id = $1
 `
 
 func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
@@ -86,8 +86,8 @@ func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organizat
 
 const getSoftDeletedOrganizations = `-- name: GetSoftDeletedOrganizations :many
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at
-FROM organizations o
-JOIN users u ON o.user_id = u.id
+FROM backend.organizations o
+JOIN backend.users u ON o.user_id = u.id
 WHERE o.deleted_at IS NOT NULL
   AND o.deleted_at < $1
   AND u.deleted_at IS NULL
@@ -131,11 +131,11 @@ func (q *Queries) GetSoftDeletedOrganizations(ctx context.Context, arg *GetSoftD
 }
 
 const getUserOrganizations = `-- name: GetUserOrganizations :many
-SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
 UNION ALL
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
-FROM organizations o
-JOIN organization_users ou ON o.id = ou.org_id
+FROM backend.organizations o
+JOIN backend.organization_users ou ON o.id = ou.org_id
 WHERE ou.user_id = $1 AND o.deleted_at IS NULL
 `
 
@@ -173,7 +173,7 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 }
 
 const softDeleteOrganization = `-- name: SoftDeleteOrganization :exec
-UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
 `
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
@@ -182,7 +182,7 @@ func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
 }
 
 const softDeleteUserOrganizations = `-- name: SoftDeleteUserOrganizations :exec
-UPDATE organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1
 `
 
 func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error {
@@ -191,7 +191,7 @@ func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype
 }
 
 const updateOrganization = `-- name: UpdateOrganization :one
-UPDATE organizations SET name = $1, updated_at = NOW()
+UPDATE backend.organizations SET name = $1, updated_at = NOW()
 WHERE id = $2
 RETURNING id, name, user_id, created_at, updated_at, deleted_at
 `

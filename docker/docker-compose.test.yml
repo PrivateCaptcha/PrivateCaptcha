@@ -9,7 +9,7 @@ services:
       STAGE: test
       PC_PRIVATE_API_KEY: c669dfd7daa53b63c5565ed29484f1169
       PC_PORT: 8080
-      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable
+      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=disable&search_path=backend
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
       PC_CLICKHOUSE_USER: default
@@ -24,6 +24,41 @@ services:
     networks:
       - test_postgres_network
       - test_clickhouse_network
+
+  migration:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.test
+    command:
+      /app/bin/server -mode migrate
+    environment:
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable&search_path=public
+      PC_CLICKHOUSE_HOST: clickhouse
+      PC_CLICKHOUSE_DB: privatecaptcha
+      PC_CLICKHOUSE_USER: default
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - test_postgres_network
+      - test_clickhouse_network
+
+  vetsqlc:
+    image: sqlc/sqlc
+    command:
+      vet
+    environment:
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable&search_path=public
+    working_dir: /src
+    volumes:
+      - ../pkg/db:/src
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    networks:
+      - test_postgres_network
 
   postgres:
     image: postgres:alpine
