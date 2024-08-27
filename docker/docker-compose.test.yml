@@ -12,7 +12,8 @@ services:
       PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=disable&search_path=backend
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
-      PC_CLICKHOUSE_USER: default
+      PC_CLICKHOUSE_USER: captchasrv
+      PC_CLICKHOUSE_PASSWORD: uwnhNn4YW01
       UA_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
       RATE_LIMIT_HEADER: X-REAL-IP
       # VERBOSE: 1
@@ -92,6 +93,7 @@ services:
       - test_clickhouse_network
     volumes:
       - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml
       - test_clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       # - ./clickhouse-logs:/var/log/clickhouse-server/
