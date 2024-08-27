@@ -12,7 +12,7 @@ import (
 )
 
 const createProperty = `-- name: CreateProperty :one
-INSERT INTO properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
+INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
 `
@@ -56,7 +56,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 }
 
 const deleteProperties = `-- name: DeleteProperties :exec
-DELETE FROM properties WHERE id = ANY($1::INT[])
+DELETE FROM backend.properties WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error {
@@ -65,7 +65,7 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error 
 }
 
 const getOrgProperties = `-- name: GetOrgProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
 `
 
 func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*Property, error) {
@@ -102,7 +102,7 @@ func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*P
 }
 
 const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgPropertyByNameParams struct {
@@ -131,7 +131,7 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 }
 
 const getPropertiesByExternalID = `-- name: GetPropertiesByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from backend.properties WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error) {
@@ -168,7 +168,7 @@ func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgty
 }
 
 const getPropertyByID = `-- name: GetPropertyByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from properties WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from backend.properties WHERE id = $1
 `
 
 func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, error) {
@@ -193,9 +193,9 @@ func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, err
 
 const getSoftDeletedProperties = `-- name: GetSoftDeletedProperties :many
 SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at
-FROM properties p
-JOIN organizations o ON p.org_id = o.id
-JOIN users u ON o.user_id = u.id
+FROM backend.properties p
+JOIN backend.organizations o ON p.org_id = o.id
+JOIN backend.users u ON o.user_id = u.id
 WHERE p.deleted_at IS NOT NULL
   AND p.deleted_at < $1
   AND o.deleted_at IS NULL
@@ -246,7 +246,7 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
-UPDATE properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {
@@ -270,7 +270,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 }
 
 const updateProperty = `-- name: UpdateProperty :one
-UPDATE properties SET name = $1, level = $2, growth = $3, updated_at = NOW()
+UPDATE backend.properties SET name = $1, level = $2, growth = $3, updated_at = NOW()
 WHERE id = $4
 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
 `

@@ -1,3 +1,3 @@
-DROP TABLE IF EXISTS organization_users;
+DROP TABLE IF EXISTS backend.organization_users;
 
-DROP TYPE access_level;
+DROP TYPE backend.access_level;

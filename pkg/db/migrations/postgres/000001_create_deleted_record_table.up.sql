@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS deleted_record (
+CREATE TABLE IF NOT EXISTS backend.deleted_records (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     data jsonb NOT NULL,
     deleted_at timestamptz NOT NULL DEFAULT current_timestamp,
@@ -6,11 +6,11 @@ CREATE TABLE IF NOT EXISTS deleted_record (
     updated_at timestamptz NOT NULL DEFAULT current_timestamp
 );
 
-CREATE OR REPLACE FUNCTION deleted_record_insert() RETURNS trigger
+CREATE OR REPLACE FUNCTION backend.deleted_record_insert() RETURNS trigger
     LANGUAGE plpgsql
 AS $$
     BEGIN
-        EXECUTE 'INSERT INTO deleted_record (data, table_name) VALUES ($1, $2)'
+        EXECUTE 'INSERT INTO backend.deleted_records (data, table_name) VALUES ($1, $2)'
         USING to_jsonb(OLD.*), TG_TABLE_NAME;
 
         RETURN OLD;

@@ -12,7 +12,7 @@ import (
 )
 
 const createSupportTicket = `-- name: CreateSupportTicket :one
-INSERT INTO support (category, message, user_id) VALUES ($1, $2, $3) RETURNING id, category, external_id, message, resolution, user_id, created_at
+INSERT INTO backend.support (category, message, user_id) VALUES ($1, $2, $3) RETURNING id, category, external_id, message, resolution, user_id, created_at
 `
 
 type CreateSupportTicketParams struct {

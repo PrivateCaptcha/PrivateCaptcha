@@ -12,7 +12,7 @@ import (
 )
 
 const addUsageLimitViolations = `-- name: AddUsageLimitViolations :exec
-INSERT INTO usage_limit_violations (user_id, paddle_product_id, requests_limit, requests_count, detection_month, last_violated_at)
+INSERT INTO backend.usage_limit_violations (user_id, paddle_product_id, requests_limit, requests_count, detection_month, last_violated_at)
 SELECT unnest($1::INT[]) AS user_id,
        unnest($2::TEXT[]) AS paddle_product_id,
        unnest($3::BIGINT[]) AS requests_limit,
@@ -48,10 +48,10 @@ func (q *Queries) AddUsageLimitViolations(ctx context.Context, arg *AddUsageLimi
 
 const getUsersWithConsecutiveViolations = `-- name: GetUsersWithConsecutiveViolations :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
-FROM usage_limit_violations v1
-JOIN usage_limit_violations v2 ON v1.user_id = v2.user_id
-JOIN users u ON v1.user_id = u.id
-JOIN subscriptions s ON u.subscription_id = s.id
+FROM backend.usage_limit_violations v1
+JOIN backend.usage_limit_violations v2 ON v1.user_id = v2.user_id
+JOIN backend.users u ON v1.user_id = u.id
+JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE s.paddle_product_id = v1.paddle_product_id
   AND u.deleted_at IS NULL
   AND EXTRACT(YEAR FROM v1.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -94,9 +94,9 @@ func (q *Queries) GetUsersWithConsecutiveViolations(ctx context.Context) ([]*Get
 
 const getUsersWithLargeViolations = `-- name: GetUsersWithLargeViolations :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.paddle_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at, s.status as status
-FROM users u
-JOIN usage_limit_violations uv ON u.id = uv.user_id
-JOIN subscriptions s ON u.subscription_id = s.id
+FROM backend.users u
+JOIN backend.usage_limit_violations uv ON u.id = uv.user_id
+JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE s.paddle_product_id = uv.paddle_product_id
   AND u.deleted_at IS NULL
   AND uv.requests_count >= ($1::float * uv.requests_limit)
