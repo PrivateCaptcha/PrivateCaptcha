@@ -114,6 +114,7 @@ services:
       retries: 3
     volumes:
       - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml
       - clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       - ./clickhouse-logs:/var/log/clickhouse-server/
