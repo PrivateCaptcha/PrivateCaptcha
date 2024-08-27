@@ -1,1 +1,1 @@
-DROP TABLE IF EXISTS usage_limit_violations;
+DROP TABLE IF EXISTS backend.usage_limit_violations;

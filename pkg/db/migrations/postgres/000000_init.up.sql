@@ -1,1 +1,17 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE USER captchasrv WITH PASSWORD 'QMS0fJmTHS8Gzq';
+
+CREATE SCHEMA backend AUTHORIZATION captchasrv;
+
+REVOKE ALL ON SCHEMA backend FROM public;
+
+GRANT USAGE ON SCHEMA backend TO captchasrv;
+
+-- future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO captchasrv;
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT USAGE, UPDATE ON SEQUENCES TO captchasrv;
+
+ALTER USER captchasrv SET search_path TO backend;
+
+SET search_path TO backend;

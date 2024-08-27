@@ -85,15 +85,33 @@ jobs:
     - name: Build tests
       run: make build-tests
 
-    - name: Integration Tests
-      run: ./docker/run-tests.sh
+    - name: Migrate Databases
       env:
-        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?sslmode=disable
+        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?sslmode=disable&search_path=public
+        PC_CLICKHOUSE_HOST: localhost
+        PC_CLICKHOUSE_DB: privatecaptcha
+        PC_CLICKHOUSE_USER: default
+      run: ./bin/server -mode migrate
+
+    - name: Set up sqlc
+      uses: sqlc-dev/setup-sqlc@v4
+      with:
+        sqlc-version: '1.27.0'
+
+    - name: Vet Postgres queries
+      env:
+        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?sslmode=disable&search_path=backend
+      run: make vet-sqlc
+
+    - name: Integration Tests
+      env:
+        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?sslmode=disable&search_path=backend
         PC_CLICKHOUSE_HOST: localhost
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
         UA_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
         RATE_LIMIT_HEADER: X-REAL-IP
+      run: ./docker/run-tests.sh
 
     - uses: actions/upload-artifact@master
       with:

@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS subscriptions(
+CREATE TABLE IF NOT EXISTS backend.subscriptions(
     id SERIAL PRIMARY KEY,
     paddle_product_id TEXT NOT NULL,
     paddle_price_id TEXT NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS subscriptions(
     updated_at TIMESTAMPTZ DEFAULT current_timestamp
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_paddle ON subscriptions(paddle_subscription_id);
+CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_paddle ON backend.subscriptions(paddle_subscription_id);
 
-CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON subscriptions
-   FOR EACH ROW EXECUTE FUNCTION deleted_record_insert();
+CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON backend.subscriptions
+   FOR EACH ROW EXECUTE FUNCTION backend.deleted_record_insert();

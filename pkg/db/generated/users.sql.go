@@ -12,7 +12,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
 type CreateUserParams struct {
@@ -37,7 +37,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 }
 
 const deleteUsers = `-- name: DeleteUsers :exec
-DELETE FROM users WHERE id = ANY($1::INT[])
+DELETE FROM backend.users WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) error {
@@ -47,7 +47,7 @@ func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) error {
 
 const getSoftDeletedUsers = `-- name: GetSoftDeletedUsers :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
-FROM users u
+FROM backend.users u
 WHERE u.deleted_at IS NOT NULL
   AND u.deleted_at < $1
 LIMIT $2
@@ -91,7 +91,7 @@ func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUs
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -110,7 +110,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 }
 
 const getUserBySubscriptionID = `-- name: GetUserBySubscriptionID :one
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM users WHERE subscription_id = $1
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE subscription_id = $1
 `
 
 func (q *Queries) GetUserBySubscriptionID(ctx context.Context, subscriptionID pgtype.Int4) (*User, error) {
@@ -129,7 +129,7 @@ func (q *Queries) GetUserBySubscriptionID(ctx context.Context, subscriptionID pg
 }
 
 const getUsersWithoutSubscription = `-- name: GetUsersWithoutSubscription :many
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM USERS where id = ANY($1::INT[]) AND subscription_id IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users where id = ANY($1::INT[]) AND subscription_id IS NULL
 `
 
 func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error) {
@@ -161,7 +161,7 @@ func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []in
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :one
-UPDATE users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
@@ -180,7 +180,7 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
 }
 
 const updateUserData = `-- name: UpdateUserData :one
-UPDATE users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
 type UpdateUserDataParams struct {
@@ -205,7 +205,7 @@ func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams)
 }
 
 const updateUserSubscription = `-- name: UpdateUserSubscription :one
-UPDATE users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
 `
 
 type UpdateUserSubscriptionParams struct {

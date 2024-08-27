@@ -1,3 +1,3 @@
-DROP TRIGGER IF EXISTS deleted_record_insert ON organizations CASCADE;
+DROP TRIGGER IF EXISTS deleted_record_insert ON backend.organizations CASCADE;
 
-DROP TABLE IF EXISTS organizations;
+DROP TABLE IF EXISTS backend.organizations;

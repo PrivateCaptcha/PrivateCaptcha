@@ -22,4 +22,4 @@ COPY --from=tests-builder /app/docker /app/docker
 
 WORKDIR /app
 
-ENTRYPOINT ["/bin/sh", "/app/docker/run-tests.sh"]
+CMD ["/bin/sh", "/app/docker/run-tests.sh"]

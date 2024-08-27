@@ -12,7 +12,7 @@ import (
 )
 
 const deleteDeletedRecords = `-- name: DeleteDeletedRecords :exec
-DELETE FROM deleted_record WHERE deleted_at < $1
+DELETE FROM backend.deleted_records WHERE deleted_at < $1
 `
 
 func (q *Queries) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error {

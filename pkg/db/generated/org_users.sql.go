@@ -11,8 +11,8 @@ import (
 
 const getOrganizationUsers = `-- name: GetOrganizationUsers :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, ou.level
-FROM organization_users ou
-JOIN users u ON ou.user_id = u.id
+FROM backend.organization_users ou
+JOIN backend.users u ON ou.user_id = u.id
 WHERE ou.org_id = $1 AND u.deleted_at IS NULL
 `
 
@@ -51,7 +51,7 @@ func (q *Queries) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*Get
 }
 
 const inviteUserToOrg = `-- name: InviteUserToOrg :one
-INSERT INTO organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at
+INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at
 `
 
 type InviteUserToOrgParams struct {
@@ -73,7 +73,7 @@ func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParam
 }
 
 const removeUserFromOrg = `-- name: RemoveUserFromOrg :exec
-DELETE FROM organization_users WHERE org_id = $1 AND user_id = $2
+DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2
 `
 
 type RemoveUserFromOrgParams struct {
@@ -87,7 +87,7 @@ func (q *Queries) RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgP
 }
 
 const updateOrgMembershipLevel = `-- name: UpdateOrgMembershipLevel :exec
-UPDATE organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4
+UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4
 `
 
 type UpdateOrgMembershipLevelParams struct {

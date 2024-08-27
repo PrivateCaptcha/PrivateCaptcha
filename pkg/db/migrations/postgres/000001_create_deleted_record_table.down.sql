@@ -1,3 +1,3 @@
-DROP FUNCTION IF EXISTS deleted_record_insert;
+DROP FUNCTION IF EXISTS backend.deleted_record_insert;
 
-DROP TABLE IF EXISTS deleted_record;
+DROP TABLE IF EXISTS backend.deleted_records;
