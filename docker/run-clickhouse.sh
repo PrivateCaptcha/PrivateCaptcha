@@ -10,6 +10,7 @@ docker run -d --rm \
     --ulimit nofile=262144:262144 \
     -e CLICKHOUSE_DB=privatecaptcha \
     -v $(pwd)/docker/clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml \
+    -v $(pwd)/docker/clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml \
     clickhouse/clickhouse-server:23.8.9-alpine
 
 echo "Waiting for clickhouse healthcheck..."
