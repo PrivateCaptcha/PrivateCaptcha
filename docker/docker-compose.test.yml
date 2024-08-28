@@ -33,7 +33,7 @@ services:
     command:
       /app/bin/server -mode migrate
     environment:
-      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable&search_path=public
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
       PC_CLICKHOUSE_USER: default
@@ -51,7 +51,7 @@ services:
     command:
       vet
     environment:
-      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=disable&search_path=public
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
     working_dir: /src
     volumes:
       - ../pkg/db:/src
@@ -62,7 +62,11 @@ services:
       - test_postgres_network
 
   postgres:
-    image: postgres:alpine
+    image: postgres
+    command: >
+        -c ssl=on 
+        -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+        -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
     environment:
       POSTGRES_DB: privatecaptcha
       POSTGRES_USER: postgres
