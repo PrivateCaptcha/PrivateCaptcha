@@ -6,7 +6,7 @@ sql:
     database:
       uri: "${PC_POSTGRES}"
     rules:
-    - sqlc/db-prepare
+      - sqlc/db-prepare
     gen:
       go:
         package: "generated"
