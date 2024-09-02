@@ -1,5 +1,0 @@
-DROP USER IF EXISTS captchasrv;
-
-DROP SCHEMA IF EXISTS backend CASCADE;
-
-DROP EXTENSION IF EXISTS "uuid-ossp";

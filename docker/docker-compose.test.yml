@@ -51,7 +51,8 @@ services:
     command:
       vet
     environment:
-      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      SQLCDEBUG: dumpvetenv=1
     working_dir: /src
     volumes:
       - ../pkg/db:/src
@@ -67,6 +68,8 @@ services:
         -c ssl=on 
         -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
         -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+        -c log_statement=all
+        -c log_destination=stderr
     environment:
       POSTGRES_DB: privatecaptcha
       POSTGRES_USER: postgres
@@ -80,6 +83,7 @@ services:
       - test_postgres_network
     volumes:
       - test_postgres_data_volume:/var/lib/postgresql/data
+      - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql
 
   clickhouse:
     image: clickhouse/clickhouse-server:23.8.9-alpine
@@ -98,6 +102,7 @@ services:
     volumes:
       - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml
       - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml
+      - ../pkg/db/migrations/init/clickhouse.sql:/docker-entrypoint-initdb.d/init.sql
       - test_clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       # - ./clickhouse-logs:/var/log/clickhouse-server/
