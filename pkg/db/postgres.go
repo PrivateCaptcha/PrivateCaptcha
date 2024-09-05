@@ -4,6 +4,8 @@ import (
 	"context"
 	"embed"
 	"log/slog"
+	"strconv"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/golang-migrate/migrate/v4"
@@ -15,7 +17,9 @@ import (
 )
 
 const (
-	pgMigrationsSchema = "public"
+	pgMigrationsSchema                = "public"
+	pgIdleInTransactionSessionTimeout = 10 * time.Second
+	pgStatementTimeout                = 10 * time.Second
 )
 
 //go:embed migrations/postgres/*.sql
@@ -38,15 +42,38 @@ func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, 
 	}
 }
 
-func connectPostgres(ctx context.Context, dbURL string, verbose bool) (*pgxpool.Pool, error) {
-	slog.Debug("Connecting to Postgres...")
-	config, err := pgxpool.ParseConfig(dbURL)
+func createPgxConfig(ctx context.Context, getenv func(string) string, verbose bool) (config *pgxpool.Config, err error) {
+	dbURL := getenv("PC_POSTGRES")
+	config, err = pgxpool.ParseConfig(dbURL)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse Postgres URL", "url", dbURL, common.ErrAttr(err))
 		return nil, err
 	}
+
+	if len(dbURL) == 0 {
+		config.ConnConfig.Host = getenv("PC_POSTGRES_HOST")
+		config.ConnConfig.Port = 5432 // Default PostgreSQL port
+		config.ConnConfig.Database = getenv("PC_POSTGRES_DB")
+		config.ConnConfig.User = getenv("PC_POSTGRES_USER")
+		config.ConnConfig.Password = getenv("PC_POSTGRES_PASSWORD")
+		config.ConnConfig.TLSConfig = nil // not using SSL
+	}
+
 	if verbose {
 		config.ConnConfig.Tracer = &myQueryTracer{}
 	}
+
+	config.ConnConfig.RuntimeParams["application_name"] = "privatecaptcha"
+	config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] =
+		strconv.Itoa(int(pgIdleInTransactionSessionTimeout.Milliseconds()))
+	config.ConnConfig.RuntimeParams["statement_timeout"] =
+		strconv.Itoa(int(pgStatementTimeout.Milliseconds()))
+
+	return
+}
+
+func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
+	slog.Debug("Connecting to Postgres...")
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
@@ -98,7 +125,7 @@ func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	slog.DebugContext(ctx, "Postgres migrated")
+	slog.DebugContext(ctx, "Postgres migrated", "changes", (err != migrate.ErrNoChange))
 
 	return nil
 }

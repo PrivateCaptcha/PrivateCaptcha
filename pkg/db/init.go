@@ -45,6 +45,7 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (p
 			Database: getenv("PC_CLICKHOUSE_DB"),
 			User:     getenv("PC_CLICKHOUSE_USER"),
 			Password: getenv("PC_CLICKHOUSE_PASSWORD"),
+			Port:     9000,
 			Verbose:  verbose,
 		}
 		clickhouse = connectClickhouse(opts)
@@ -60,8 +61,13 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (p
 	})
 
 	errs.Go(func() error {
+		config, cerr := createPgxConfig(ctx, getenv, verbose)
+		if cerr != nil {
+			return cerr
+		}
+
 		var perr error
-		pool, perr = connectPostgres(ctx, getenv("PC_POSTGRES"), verbose)
+		pool, perr = connectPostgres(ctx, config)
 		if perr != nil {
 			return perr
 		}
