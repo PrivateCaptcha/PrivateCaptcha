@@ -113,7 +113,7 @@ func TestLockTwice(t *testing.T) {
 	const lockDuration = 2 * time.Second
 	var lockName = t.Name()
 
-	initialExpiration := time.Now().UTC().Add(lockDuration)
+	initialExpiration := time.Now().UTC().Add(lockDuration).Truncate(time.Millisecond)
 	lock, err := store.AcquireLock(ctx, lockName, nil, initialExpiration)
 	if err != nil {
 		t.Fatal(err)
@@ -123,14 +123,14 @@ func TestLockTwice(t *testing.T) {
 	i := 0
 
 	for i = 0; i < iterations; i++ {
-		tnow := time.Now().UTC()
-		if tnow.After(initialExpiration) {
+		tnow := time.Now().UTC().Truncate(time.Millisecond)
+		if tnow.Equal(initialExpiration) || tnow.After(initialExpiration) {
 			// lock is actually not active anymore so it's not an error
 			break
 		}
 
 		if lock, err = store.AcquireLock(ctx, lockName, nil, tnow.Add(lockDuration)); err == nil {
-			t.Fatalf("Was able to acquire a lock again right away. i=%v tnow=%v expires_at=%v", i, tnow, lock.ExpiresAt.Time)
+			t.Fatalf("Was able to acquire a lock again. i=%v tnow=%v expires_at=%v", i, tnow, lock.ExpiresAt.Time)
 		}
 
 		time.Sleep(lockDuration / iterations)
