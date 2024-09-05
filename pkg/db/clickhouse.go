@@ -23,13 +23,14 @@ type ClickHouseConnectOpts struct {
 	Database string
 	User     string
 	Password string
+	Port     int
 	Verbose  bool
 }
 
 func connectClickhouse(opts ClickHouseConnectOpts) *sql.DB {
 	slog.Debug("Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
 	conn := clickhouse.OpenDB(&clickhouse.Options{
-		Addr: []string{opts.Host + ":9000"},
+		Addr: []string{fmt.Sprintf("%s:%v", opts.Host, opts.Port)},
 		Auth: clickhouse.Auth{
 			Database: opts.Database,
 			Username: opts.User,
@@ -90,7 +91,7 @@ func migrateClickhouse(ctx context.Context, db *sql.DB, dbName string) error {
 		return err
 	}
 
-	slog.InfoContext(ctx, "Clickhouse migrated")
+	slog.InfoContext(ctx, "Clickhouse migrated", "changes", (err != migrate.ErrNoChange))
 
 	return nil
 }
