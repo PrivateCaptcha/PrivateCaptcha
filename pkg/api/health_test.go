@@ -10,6 +10,10 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:   store,
 		TimeSeriesDB: timeSeries,
