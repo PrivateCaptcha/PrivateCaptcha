@@ -10,6 +10,7 @@ const (
 	HeaderCSRFToken       = "X-CSRF-Token"
 	HeaderCaptchaVersion  = "X-PC-Captcha-Version"
 	ContentTypePlain      = "text/plain"
+	ContentTypeHTML       = "text/html"
 	ContentTypeJSON       = "application/json"
 	ContentTypeURLEncoded = "application/x-www-form-urlencoded"
 	ParamSiteKey          = "sitekey"

@@ -79,6 +79,28 @@ SETTINGS use_query_cache = true`
 	}
 }
 
+func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
+	rows, err := ts.clickhouse.Query("SELECT 1")
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute ping query", common.ErrAttr(err))
+		return err
+	}
+
+	defer rows.Close()
+
+	if rows.Next() {
+		var v int32
+		if err := rows.Scan(&v); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from ping query", common.ErrAttr(err))
+			return err
+		}
+
+		slog.Log(ctx, common.LevelTrace, "Pinged ClickHouse", "result", v)
+	}
+
+	return nil
+}
+
 func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {
 	if len(records) == 0 {
 		slog.WarnContext(ctx, "Attempt to insert empty access log batch")

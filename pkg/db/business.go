@@ -54,6 +54,10 @@ func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessS
 	}
 }
 
+func (s *BusinessStore) Ping(ctx context.Context) error {
+	return s.defaultImpl.ping(ctx)
+}
+
 func (s *BusinessStore) DeleteExpiredCache(ctx context.Context) error {
 	return s.defaultImpl.deleteExpiredCache(ctx)
 }

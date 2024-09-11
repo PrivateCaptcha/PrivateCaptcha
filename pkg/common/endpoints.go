@@ -35,4 +35,5 @@ const (
 	UpdateEndpoint              = "update"
 	PreviewEndpoint             = "preview"
 	UsageEndpoint               = "usage"
+	HealthEndpoint              = "health"
 )
