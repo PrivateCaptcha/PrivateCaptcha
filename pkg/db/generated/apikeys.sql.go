@@ -106,7 +106,7 @@ func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.U
 }
 
 const getUserAPIKeys = `-- name: GetUserAPIKeys :many
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM backend.apikeys WHERE user_id = $1 AND deleted_at IS NULL AND expires_at > NOW()
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes FROM backend.apikeys WHERE user_id = $1 AND expires_at > NOW()
 `
 
 func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error) {
