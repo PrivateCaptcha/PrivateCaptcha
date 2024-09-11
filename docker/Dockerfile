@@ -42,7 +42,7 @@ ARG GIT_COMMIT=HEAD
 RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
 
 # Final stage: Production container
-FROM golang:1.22.1
+FROM gcr.io/distroless/static-debian12
 
 COPY --from=backend-builder /app/bin/server /app/server
 
