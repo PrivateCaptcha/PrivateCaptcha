@@ -5,6 +5,8 @@ sql:
     schema: "migrations/postgres"
     database:
       uri: "${PC_POSTGRES}"
+    analyzer:
+      database: false
     rules:
       - sqlc/db-prepare
     gen:
