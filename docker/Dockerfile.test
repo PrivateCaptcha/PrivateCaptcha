@@ -14,7 +14,7 @@ RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobu
 
 RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ ./...
 
-FROM golang:1.22.1-alpine
+FROM debian:stable-slim
 
 COPY --from=tests-builder /app/bin/server /app/bin/server
 COPY --from=tests-builder /app/tests /app/tests
