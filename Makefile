@@ -54,7 +54,7 @@ clean-docker:
 	@docker compose -f docker/docker-compose.local.yml down -v --remove-orphans
 
 sqlc:
-	cd pkg/db && sqlc generate
+	cd pkg/db && sqlc generate --no-remote
 
 vet-sqlc:
 	cd pkg/db && sqlc vet

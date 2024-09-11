@@ -97,6 +97,15 @@ type businessStoreImpl struct {
 	cache   common.Cache[string, any]
 }
 
+func (impl *businessStoreImpl) ping(ctx context.Context) error {
+	v, err := impl.queries.Ping(ctx)
+	if err != nil {
+		return err
+	}
+	slog.Log(ctx, common.LevelTrace, "Pinged Postgres", "result", v)
+	return nil
+}
+
 func (impl *businessStoreImpl) deleteExpiredCache(ctx context.Context) error {
 	return impl.queries.DeleteExpiredCache(ctx)
 }

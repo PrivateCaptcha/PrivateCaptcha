@@ -118,9 +118,18 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	}
 
 	router := http.NewServeMux()
+	healthCheck := &maintenance.HealthCheckJob{
+		BusinessDB:   businessDB,
+		TimeSeriesDB: timeSeriesDB,
+		WithSystemd:  systemdListener,
+		Router:       router,
+	}
+
 	apiServer.Setup(router, "api")
 	portalServer.Setup(router, ratelimiter.RateLimit, portalDomain)
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
+	defaultAPIChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
+	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(healthCheck.Handler))
 
 	httpServer := &http.Server{
 		Handler:           router,
@@ -166,6 +175,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 
 	// start maintenance jobs
 	jobs := maintenance.NewJobs(businessDB)
+	jobs.Add(healthCheck)
 	jobs.AddLocked(4*time.Hour, &maintenance.UsageLimitsJob{
 		MaxUsers:   200, // it will be a truly great problem to have when 200 will be not enough
 		From:       common.StartOfMonth(),

@@ -7,6 +7,7 @@ require (
 	github.com/PaddleHQ/paddle-go-sdk v0.4.0
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/badoux/checkmail v1.2.4
+	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/golang-migrate/migrate/v4 v4.17.0
 	github.com/jackc/pgx/v5 v5.5.5
