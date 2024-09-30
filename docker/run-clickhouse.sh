@@ -16,6 +16,6 @@ docker run -d --rm \
 
 echo "Waiting for clickhouse healthcheck..."
 
-wget --no-verbose --tries=10 --timeout=1 --spider http://localhost:8123/?query=SELECT%201 || exit 1
+wget --no-verbose --tries=10 --timeout=1 -O - http://localhost:8123/?query=SELECT%201 || exit 1
 
 echo "Done"
