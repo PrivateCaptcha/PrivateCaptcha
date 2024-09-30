@@ -90,7 +90,7 @@ services:
     environment:
       CLICKHOUSE_DB: privatecaptcha
     healthcheck:
-      test: wget --no-verbose --tries=1 --spider http://0.0.0.0:8123/?query=SELECT%201 || exit 1
+      test: wget --no-verbose --tries=1 -O - http://0.0.0.0:8123/?query=SELECT%201 || exit 1
       interval: 3s
       timeout: 3s
       retries: 3
