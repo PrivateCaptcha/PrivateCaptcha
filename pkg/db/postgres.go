@@ -86,7 +86,10 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
 	db := stdlib.OpenDBFromPool(pool)
 
-	d, err := iofs.New(postgresMigrationsFS, "migrations/postgres")
+	data := struct{}{}
+	tplFS := NewTemplateFS(postgresMigrationsFS, data)
+
+	d, err := iofs.New(tplFS, "migrations/postgres")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from Postgres migrations IOFS", common.ErrAttr(err))
 		return err
