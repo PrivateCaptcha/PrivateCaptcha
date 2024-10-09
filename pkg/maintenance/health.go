@@ -104,7 +104,7 @@ func (hc *HealthCheckJob) checkHTTP(ctx context.Context) int32 {
 	return result
 }
 
-func (hc *HealthCheckJob) Handler(w http.ResponseWriter, r *http.Request) {
+func (hc *HealthCheckJob) HandlerFunc(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 	healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy()
 	if healthy {

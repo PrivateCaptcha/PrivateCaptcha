@@ -21,9 +21,13 @@ var errTemplateNotFound = errors.New("template with such name does not exist")
 //go:embed static
 var staticFiles embed.FS
 
-func Static() http.Handler {
+func Static() http.HandlerFunc {
 	sub, _ := fs.Sub(staticFiles, "static")
-	return http.FileServer(http.FS(sub))
+	srv := http.FileServer(http.FS(sub))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		srv.ServeHTTP(w, r)
+	}
 }
 
 //go:embed layouts/*/*.html
