@@ -54,6 +54,8 @@ services:
         - action: rebuild
           path: ../cmd/server
         - action: rebuild
+          path: ../widget
+        - action: rebuild
           path: ../pkg/db
         - action: rebuild
           path: Dockerfile
