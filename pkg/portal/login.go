@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
@@ -20,6 +21,7 @@ const (
 
 type loginRenderContext struct {
 	csrfRenderContext
+	LoginSitekey    string
 	Error           string
 	CaptchaEndpoint string
 	CaptchaDebug    bool
@@ -30,7 +32,8 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		CaptchaEndpoint: common.RelURL("/", common.PuzzleEndpoint),
+		LoginSitekey:    strings.ReplaceAll(db.PortalPropertyID, "-", ""),
+		CaptchaEndpoint: s.ApiRelURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:    s.Stage != common.StageProd,
 	}, loginTemplate, nil
 }
@@ -49,7 +52,8 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		CaptchaEndpoint: "/" + common.PuzzleEndpoint,
+		LoginSitekey:    strings.ReplaceAll(db.PortalPropertyID, "-", ""),
+		CaptchaEndpoint: s.ApiRelURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:    s.Stage != common.StageProd,
 	}
 
