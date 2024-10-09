@@ -20,7 +20,9 @@ const (
 
 type loginRenderContext struct {
 	csrfRenderContext
-	Error string
+	Error           string
+	CaptchaEndpoint string
+	CaptchaDebug    bool
 }
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -28,6 +30,8 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
+		CaptchaEndpoint: common.RelURL("/", common.PuzzleEndpoint),
+		CaptchaDebug:    s.Stage != common.StageProd,
 	}, loginTemplate, nil
 }
 
@@ -45,6 +49,8 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
+		CaptchaEndpoint: "/" + common.PuzzleEndpoint,
+		CaptchaDebug:    s.Stage != common.StageProd,
 	}
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))

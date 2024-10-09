@@ -1,0 +1,277 @@
+'use strict';
+
+import { getPuzzle, Puzzle } from './puzzle.js'
+import { WorkersPool } from './workerspool.js'
+import { CaptchaElement, STATE_EMPTY, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP } from './html.js';
+
+window.customElements.define('private-captcha', CaptchaElement);
+
+const PUZZLE_ENDPOINT_URL = '/api/puzzle';
+
+function findParentFormElement(element) {
+    while (element && element.tagName !== 'FORM') {
+        element = element.parentElement;
+    }
+    return element;
+}
+
+export class CaptchaWidget {
+    constructor(element, options = {}) {
+        this._element = element;
+        this._puzzle = null;
+        this._expiryTimeout = null;
+        this._state = STATE_EMPTY;
+        this._lastProgress = null;
+        this._userStarted = false; // aka 'user started while we were initializing'
+
+        this._options = Object.assign({
+            startMode: element.dataset["startMode"] || "click",
+            debug: element.dataset["debug"],
+            fieldName: element.dataset["solutionField"] || "private-captcha-solution",
+            puzzleEndpoint: element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
+            sitekey: element.dataset["sitekey"] || "",
+            displayMode: element.dataset["displayMode"] || "widget",
+            lang: element.dataset["lang"] || "en",
+            styles: element.dataset["styles"] || "",
+        }, options);
+
+        this._workersPool = new WorkersPool({
+            workersReady: this.onWorkersReady.bind(this),
+            workerError: this.onWorkerError.bind(this),
+            workCompleted: this.onWorkCompleted.bind(this),
+            progress: this.onWorkProgress.bind(this),
+        }, this._options.debug);
+
+        const form = findParentFormElement(this._element);
+        if (form) {
+            // NOTE: this does not work on Safari by (Apple) design if we click a button
+            // "once" means listener will be removed after being called, "passive" - cannot use preventDefault()
+            form.addEventListener('focusin', this.onFocusIn.bind(this), { once: true, passive: true });
+            this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ''}></private-captcha>`;
+            this._element.addEventListener('check', this.onChecked.bind(this));
+
+            if (DISPLAY_POPUP === this._options.displayMode) {
+                const anchor = form.querySelector(".private-captcha-anchor");
+                if (anchor) {
+                    anchor.style.position = "relative";
+                } else {
+                    console.warn('[privatecaptcha] cannot find anchor for popup')
+                }
+            }
+        } else {
+            console.warn('[privatecaptcha] cannot find form element');
+        }
+    }
+
+    // fetches puzzle from the server and setup workers
+    async init(autoStart) {
+        this.trace("init() was called");
+
+        const sitekey = this._options.sitekey || this._element.dataset["sitekey"];
+        if (!sitekey) {
+            console.error("[privatecaptcha] sitekey not set on captcha element");
+            return;
+        }
+
+        if (this._state != STATE_EMPTY) {
+            console.warn("[privatecaptcha] captcha has already been initialized")
+            return;
+        }
+
+        if (this._workersPool) {
+            this._workersPool.stop();
+        }
+
+        const startWorkers = (this._options.startMode == "auto") || autoStart;
+
+        try {
+            this.setState(STATE_LOADING);
+            this.trace('fetching puzzle');
+            const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
+            this._puzzle = new Puzzle(puzzleData);
+            const expirationMillis = this._puzzle.expirationMillis();
+            this.trace(`parsed puzzle buffer. ttl=${expirationMillis / 1000}`);
+            if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+            this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis);
+            this._workersPool.init(this._puzzle.ID, this._puzzle.puzzleBuffer, startWorkers);
+        } catch (e) {
+            // TODO: set failed state
+            console.error('[privatecaptcha]', e);
+            this.setState(STATE_EMPTY);
+            this.setProgressState(STATE_EMPTY);
+        }
+    }
+
+    start() {
+        if (this._state !== STATE_READY) {
+            console.warn(`[privatecaptcha] solving has already been started. state=${this._state}`);
+            return;
+        }
+
+        this.trace('starting solving captcha');
+
+        try {
+            this.setState(STATE_IN_PROGRESS);
+            this._workersPool.solve(this._puzzle);
+            this.signalStarted();
+        } catch (e) {
+            console.error('[privatecaptcha]', e);
+        }
+    }
+
+    signalStarted() {
+        const callback = this._element.dataset['startedCallback'];
+        if (callback) {
+            window[callback]();
+        }
+    }
+
+    signalFinished() {
+        const callback = this._element.dataset['finishedCallback'];
+        if (callback) {
+            window[callback]();
+        }
+    }
+
+    ensureNoSolutionField() {
+        const solutionField = this._element.querySelector(`input[name="${this._options.fieldName}"]`);
+        if (solutionField) {
+            try {
+                this._element.removeChild(solutionField);
+            } catch (e) {
+                console.warn('[privatecaptcha]', e);
+            }
+        }
+    }
+
+    expire() {
+        this.trace('time to expire captcha');
+        this.setState(STATE_EMPTY);
+        this.setProgressState(STATE_EMPTY);
+        this.ensureNoSolutionField();
+        this.init(this._userStarted);
+    }
+
+    onFocusIn(event) {
+        this.trace('onFocusIn event handler');
+        const pcElement = this._element.querySelector('private-captcha');
+        if (pcElement && (event.target == pcElement)) {
+            this.trace('skipping focusin event on captcha element')
+            return;
+        }
+        this.init(false /*start*/);
+        // this handles both STATE_LOADING and STATE_EMPTY (reset)
+        this.setProgressState(this._state);
+    }
+
+    onChecked() {
+        this.trace('onChecked event handler')
+        this._userStarted = true;
+
+        // always show spinner when user clicked
+        let progressState = STATE_IN_PROGRESS;
+        let signal = false;
+
+        switch (this._state) {
+            case STATE_READY:
+                this.start();
+                break;
+            case STATE_EMPTY:
+                this.init(true /*start*/);
+                break;
+            case STATE_LOADING:
+                // this will be handled in onWorkersReady()
+                break;
+            case STATE_IN_PROGRESS:
+                setTimeout(() => this.setProgress(this._lastProgress), 500);
+                break;
+            case STATE_VERIFIED:
+                // happens when we finished verification fully in the background, still should animate "the end"
+                progressState = STATE_VERIFIED;
+                signal = true;
+                break;
+            default:
+                console.warn('[privatecaptcha] onChecked: unexpected state. state=' + this._state);
+        };
+
+        this.setProgressState(progressState);
+        if (signal) { this.signalFinished(); }
+    }
+
+    onWorkersReady(autoStart) {
+        this.trace(`workers are ready. autostart=${autoStart}`);
+
+        this.setState(STATE_READY);
+        if (!this._userStarted) {
+            this.setProgressState(STATE_READY);
+        }
+
+        if (autoStart || this._userStarted) {
+            this.start();
+        }
+    }
+
+    onWorkerError(error) {
+        console.error('[privatecaptcha] error in worker:', error)
+    }
+
+    onWorkCompleted() {
+        if (this._state !== STATE_IN_PROGRESS) {
+            console.warn(`[privatecaptcha] solving has not been started. state=${this._state}`);
+            return;
+        }
+
+        this.setState(STATE_VERIFIED);
+        if (this._userStarted) {
+            this.setProgressState(STATE_VERIFIED);
+        }
+
+        const solutions = this._workersPool.serializeSolutions();
+        const payload = `${solutions}.${this._puzzle.rawData}`;
+        this.trace(`work completed. payload=${payload}`);
+
+        this.ensureNoSolutionField();
+        this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
+
+        if (this._userStarted) {
+            this.signalFinished();
+        }
+    }
+
+    onWorkProgress(percent) {
+        this.trace(`progress changed. percent=${percent}`);
+        this.setProgress(percent);
+    }
+
+    // this updates the "UI" state of the widget
+    setProgressState(state) {
+        const pcElement = this._element.querySelector('private-captcha');
+        if (pcElement) { pcElement.setState(state); }
+        else { console.error('[privatecaptcha] component not found when changing state'); }
+    }
+
+    // this updates the "internal" (actual) state
+    setState(state) {
+        this.trace(`change state. old=${this._state} new=${state}`);
+        this._state = state;
+        if (this._options.debug) {
+            const pcElement = this._element.querySelector('private-captcha');
+            if (pcElement) { pcElement.setDebugState(state); }
+        }
+    }
+
+    setProgress(progress) {
+        this._lastProgress = progress;
+        if ((STATE_IN_PROGRESS == this._state) || (STATE_VERIFIED == this._state)) {
+            const pcElement = this._element.querySelector('private-captcha');
+            if (pcElement) { pcElement.setProgress(progress); }
+            else { console.error('[privatecaptcha] component not found when updating progress'); }
+        }
+    }
+
+    trace(str) {
+        if (this._options.debug) {
+            console.debug('[privatecaptcha]', str)
+        }
+    }
+}

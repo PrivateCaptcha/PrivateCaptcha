@@ -27,6 +27,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
+	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/joho/godotenv"
 )
@@ -130,6 +131,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
 	defaultAPIChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(ratelimiter.RateLimit(healthCheck.Handler)))
+	router.Handle("GET /widget/", http.StripPrefix("/widget/", widget.Static()))
 
 	httpServer := &http.Server{
 		Handler:           router,

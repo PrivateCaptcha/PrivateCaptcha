@@ -1,0 +1,18 @@
+{
+  "name": "widget",
+  "version": "1.0.0",
+  "main": "index.js",
+  "devDependencies": {
+    "esbuild": "^0.19.12"
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "base64-arraybuffer": "^1.0.2",
+    "blake2b-wasm": "^2.4.0",
+    "blakejs": "^1.2.1",
+    "esbuild-plugin-inline-worker": "^0.1.1"
+  }
+}

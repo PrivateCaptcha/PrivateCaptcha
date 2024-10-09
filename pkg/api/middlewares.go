@@ -238,15 +238,18 @@ func (am *authMiddleware) originAllowed(origin string) bool {
 
 func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		origin := r.Header.Get("Origin")
 		if len(origin) == 0 {
+			slog.Log(ctx, common.LevelTrace, "Origin header is missing from the request")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		ctx := r.Context()
 		sitekey := am.retrieveSiteKey(r)
 		if !isSiteKeyValid(sitekey) {
+			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}

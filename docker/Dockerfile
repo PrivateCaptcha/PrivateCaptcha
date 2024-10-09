@@ -1,17 +1,40 @@
 # Stage 1: Frontend build
 FROM node:latest AS frontend-builder
 
+#############################################
+############# Building web ##################
+#############################################
 # has to be done first because `npm install` fails otherwise
 WORKDIR /app/web
 
 # Install dependencies and build the frontend
 COPY ./web/package.json /app/web/package.json
-RUN --mount=type=cache,target=/cache/npm npm install
+RUN --mount=type=cache,target=/cache/web npm install
 
 # copy the rest
 COPY ./web /app/web
 
-RUN --mount=type=cache,target=/cache/npm,sharing=locked npm run build
+RUN --mount=type=cache,target=/cache/web,sharing=locked npm run build
+
+
+################################################
+############# Building widget ##################
+################################################
+# has to be done first because `npm install` fails otherwise
+WORKDIR /app/widget
+
+# Install dependencies and build the frontend
+COPY ./widget/package.json /app/widget/package.json
+RUN --mount=type=cache,target=/cache/widget npm install
+
+# copy the rest
+COPY ./widget /app/widget
+
+RUN --mount=type=cache,target=/cache/widget,sharing=locked npm run build
+
+################################################
+############# Building backend #################
+################################################
 
 # Stage 2: Backend build
 FROM golang:1.22.1 AS backend-builder
@@ -22,8 +45,10 @@ COPY ./vendor /app/vendor
 COPY ./cmd/server /app/cmd/server
 COPY ./pkg /app/pkg
 COPY ./web /app/web
+COPY ./widget /app/widget
 
 COPY --from=frontend-builder /app/web/static /app/web/static
+COPY --from=frontend-builder /app/widget/static /app/widget/static
 
 # "Build" JS (will possibly be replaced by esbuild/webpack in future)
 COPY --from=frontend-builder /app/web/js/index.js /app/web/static/js/bundle.js
