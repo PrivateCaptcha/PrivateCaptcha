@@ -181,7 +181,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	}
 
 	go func() {
-		slog.Info("Listening", "address", listeners[0].Addr().String(), "version", GitCommit)
+		slog.Info("Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", stage)
 		if err := httpServer.Serve(listeners[0]); err != nil && err != http.ErrServerClosed {
 			slog.Error("Error serving", common.ErrAttr(err))
 		}
