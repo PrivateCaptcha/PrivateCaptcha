@@ -83,10 +83,15 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 	return pool, nil
 }
 
-func migratePostgres(ctx context.Context, pool *pgxpool.Pool) error {
+type migrateContext struct {
+	PortalPropertyID string
+	PortalDomain     string
+	AdminEmail       string
+}
+
+func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext) error {
 	db := stdlib.OpenDBFromPool(pool)
 
-	data := struct{}{}
 	tplFS := NewTemplateFS(postgresMigrationsFS, data)
 
 	d, err := iofs.New(tplFS, "migrations/postgres")

@@ -22,6 +22,7 @@ var (
 	ErrLocked           = errors.New("lock is already acquired")
 	errInvalidCacheType = errors.New("cache record type does not match")
 	markerData          = []byte{'{', '}'}
+	PortalPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
 )
 
 type BusinessStore struct {
