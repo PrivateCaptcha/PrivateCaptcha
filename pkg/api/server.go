@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -38,6 +37,8 @@ const (
 var (
 	errProductNotFound = errors.New("product not found")
 	errNoop            = errors.New("nothing to do")
+	errIPNotFound      = errors.New("no valid IP address found")
+	errAPIKeyNotSet    = errors.New("API key is not set in context")
 )
 
 type server struct {
@@ -53,6 +54,8 @@ type server struct {
 	paddleAPI       billing.PaddleAPI
 	cors            *cors.Cors
 }
+
+var _ puzzle.Verifier = (*server)(nil)
 
 func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
@@ -87,28 +90,20 @@ func NewServer(store *db.BusinessStore,
 	return srv
 }
 
-type verifyError int
+type apiKeyOwnerSource struct{}
 
-const (
-	verifyNoError           verifyError = 0
-	verifyErrorOther        verifyError = 1
-	duplicateSolutionsError verifyError = 2
-	invalidSolutionError    verifyError = 3
-	parseResponseError      verifyError = 4
-	signatureHashMismatch   verifyError = 5
-	puzzleExpiredError      verifyError = 6
-	invalidPropertyError    verifyError = 7
-	wrongOwnerError         verifyError = 8
-	verifiedBeforeError     verifyError = 9
-)
+func (a *apiKeyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
+	apiKey, ok := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey)
+	if !ok {
+		return -1, errAPIKeyNotSet
+	}
 
-var (
-	errIPNotFound = errors.New("no valid IP address found")
-)
+	return apiKey.UserID.Int32, nil
+}
 
 type verifyResponse struct {
-	Success    bool          `json:"success"`
-	ErrorCodes []verifyError `json:"error-codes,omitempty"`
+	Success    bool                 `json:"success"`
+	ErrorCodes []puzzle.VerifyError `json:"error-codes,omitempty"`
 	// other fields from Recaptcha - unclear if we need them
 	// ChallengeTS common.JSONTime       `json:"challenge_ts"`
 	// Hostname    string                `json:"hostname"`
@@ -156,7 +151,7 @@ func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *aut
 	verifyChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	// NOTE: auth middleware provides rate limiting internally
 	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.Build(auth.Sitekey(s.puzzle)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verify, maxSolutionsBodySize)))))
+	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verifyHandler, maxSolutionsBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize)))))
@@ -178,11 +173,12 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	// this is done in order to not check the DB on the hot path (decrease attack surface)
 	if !ok {
 		sitekey := ctx.Value(common.SitekeyContextKey).(string)
-		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey)
 		uuid := db.UUIDFromSiteKey(sitekey)
 		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
 		puzzle.PropertyID = uuid.Bytes
 		puzzle.Difficulty = difficulty.LevelMedium
+		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey,
+			"difficulty", puzzle.Difficulty)
 		return puzzle, nil
 	}
 
@@ -246,7 +242,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...verifyError) {
+func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...puzzle.VerifyError) {
 	response := &verifyResponse{
 		Success:    false,
 		ErrorCodes: errors,
@@ -255,65 +251,46 @@ func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, er
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
-func (s *server) verify(w http.ResponseWriter, r *http.Request) {
+func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {
+	solutionsData, puzzleBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse puzzle", common.ErrAttr(err))
+		return puzzle.ParseResponseError, nil
+	}
+
+	puzzleObject, property, verr := s.verifyPuzzleValid(ctx, puzzleBytes, expectedOwner, tnow)
+	if verr != puzzle.VerifyNoError {
+		return verr, nil
+	}
+
+	if verr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); verr != puzzle.VerifyNoError {
+		return verr, nil
+	}
+
+	if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
+		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
+	}
+
+	s.addVerifyRecord(ctx, puzzleObject, property)
+
+	return puzzle.VerifyNoError, nil
+}
+
+func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	data := r.FormValue(common.ParamResponse)
-	parts := strings.Split(data, ".")
-	if len(parts) != 3 {
-		slog.ErrorContext(ctx, "Wrong number of parts", "count", len(parts))
-		s.sendVerifyErrors(ctx, w, parseResponseError)
-		return
-	}
 
-	solutionsData, puzzleData, signature := parts[0], parts[1], parts[2]
-
-	puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleData)
+	verr, err := s.Verify(ctx, data, &apiKeyOwnerSource{}, time.Now().UTC())
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to decode puzzle data", common.ErrAttr(err))
-		s.sendVerifyErrors(ctx, w, parseResponseError)
-		return
-	}
-
-	hasher := hmac.New(sha1.New, s.salt)
-	if _, werr := hasher.Write(puzzleBytes); werr != nil {
-		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	hash := hasher.Sum(nil)
-
-	requestHash, err := base64.StdEncoding.DecodeString(signature)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to decode signature bytes", common.ErrAttr(err))
-		s.sendVerifyErrors(ctx, w, parseResponseError)
-		return
-	}
-
-	if !bytes.Equal(hash, requestHash) {
-		slog.ErrorContext(ctx, "Puzzle hash is not equal", common.ErrAttr(err))
-		s.sendVerifyErrors(ctx, w, signatureHashMismatch)
-		return
-	}
-
-	tnow := time.Now().UTC()
-	puzzle, propertyAndOrg, verr := s.verifyPuzzleValid(ctx, puzzleBytes, tnow)
-	if verr != verifyNoError {
+	if verr != puzzle.VerifyNoError {
 		s.sendVerifyErrors(ctx, w, verr)
 		return
 	}
-
-	if verr := s.verifySolutionsValid(ctx, puzzle, puzzleBytes, solutionsData); verr != verifyNoError {
-		s.sendVerifyErrors(ctx, w, verr)
-		return
-	}
-
-	if cerr := s.businessDB.CachePuzzle(ctx, puzzle, tnow); cerr != nil {
-		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
-	}
-
-	s.addVerifyRecord(ctx, puzzle, propertyAndOrg)
 
 	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
 }
@@ -330,76 +307,47 @@ func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 	s.verifyLogChan <- vr
 }
 
-func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, verifyError) {
+func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {
 	p := new(puzzle.Puzzle)
 
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
-		return nil, nil, parseResponseError
+		return nil, nil, puzzle.ParseResponseError
 	}
 
 	if !tnow.Before(p.Expiration) {
 		slog.WarnContext(ctx, "Puzzle is expired", "expiration", p.Expiration, "now", tnow)
-		return p, nil, puzzleExpiredError
+		return p, nil, puzzle.PuzzleExpiredError
 	}
 
 	if s.businessDB.CheckPuzzleCached(ctx, p) {
-		return p, nil, verifiedBeforeError
+		return p, nil, puzzle.VerifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
 	properties, err := s.businessDB.RetrievePropertiesBySitekey(ctx, []string{sitekey})
 	if (err != nil) || (len(properties) != 1) {
 		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) || (err == db.ErrSoftDeleted) {
-			return p, nil, invalidPropertyError
+			return p, nil, puzzle.InvalidPropertyError
 		}
 
 		slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
-		return p, nil, verifyErrorOther
+		return p, nil, puzzle.VerifyErrorOther
 	}
 
 	property := properties[0]
-	apiKey := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey)
 
-	if property.OrgOwnerID != apiKey.UserID {
-		slog.WarnContext(ctx, "Org owner does not match API key owner", "api_key_user", apiKey.UserID.Int32,
-			"org_user", property.OrgOwnerID.Int32)
-		return p, property, wrongOwnerError
+	if ownerID, err := expectedOwner.OwnerID(ctx); err == nil {
+		if property.OrgOwnerID.Int32 != ownerID {
+			slog.WarnContext(ctx, "Org owner does not match expected owner", "expected_owner", ownerID,
+				"org_owner", property.OrgOwnerID.Int32)
+			return p, property, puzzle.WrongOwnerError
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to fetch owner ID", common.ErrAttr(err))
 	}
 
-	return p, property, verifyNoError
-}
-
-func (s *server) verifySolutionsValid(ctx context.Context, p *puzzle.Puzzle, puzzleBytes []byte, solutionsData string) verifyError {
-	solutions, err := puzzle.NewSolutions(solutionsData)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
-		return parseResponseError
-	}
-
-	if uerr := solutions.CheckUnique(ctx); uerr != nil {
-		slog.ErrorContext(ctx, "Solutions are not unique", common.ErrAttr(uerr))
-		return duplicateSolutionsError
-	}
-
-	if len(puzzleBytes) < puzzle.PuzzleBytesLength {
-		extendedPuzzleBytes := make([]byte, puzzle.PuzzleBytesLength)
-		copy(extendedPuzzleBytes, puzzleBytes)
-		puzzleBytes = extendedPuzzleBytes
-	}
-
-	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, p.Difficulty)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to verify solutions", common.ErrAttr(err))
-		return invalidSolutionError
-	}
-
-	if solutionsCount != int(p.SolutionsCount) {
-		slog.WarnContext(ctx, "Invalid solutions count", "expected", p.SolutionsCount, "actual", solutionsCount)
-		return invalidSolutionError
-	}
-
-	return verifyNoError
+	return p, property, puzzle.VerifyNoError
 }
 
 func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {

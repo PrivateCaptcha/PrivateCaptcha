@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
@@ -180,6 +181,7 @@ type Server struct {
 	PaddleAPI  billing.PaddleAPI
 	cors       *cors.Cors
 	ApiRelURL  string
+	Verifier   puzzle.Verifier
 }
 
 func (s *Server) Init() {

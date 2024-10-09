@@ -1,12 +1,16 @@
 package portal
 
 import (
+	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
@@ -17,14 +21,36 @@ const (
 	loginStepCompleted    = 3
 	loginFormTemplate     = "login/form.html"
 	loginTemplate         = "login/login.html"
+	loginSolutionField    = "plSolution"
+)
+
+var (
+	errPortalPropertyNotFound = errors.New("portal property not found")
 )
 
 type loginRenderContext struct {
 	csrfRenderContext
-	LoginSitekey    string
-	Error           string
-	CaptchaEndpoint string
-	CaptchaDebug    bool
+	LoginSitekey         string
+	EmailError           string
+	CaptchaError         string
+	CaptchaEndpoint      string
+	CaptchaSolutionField string
+	CaptchaDebug         bool
+}
+
+type portalPropertyOwnerSource struct {
+	Store   *db.BusinessStore
+	Sitekey string
+}
+
+func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
+	properties, err := s.Store.RetrievePropertiesBySitekey(ctx, []string{s.Sitekey})
+	if (err != nil) || (len(properties) != 1) {
+		slog.ErrorContext(ctx, "Failed to fetch login property", common.ErrAttr(err))
+		return -1, errPortalPropertyNotFound
+	}
+
+	return properties[0].OrgOwnerID.Int32, nil
 }
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -32,9 +58,10 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		LoginSitekey:    strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint: s.ApiRelURL + "/" + common.PuzzleEndpoint,
-		CaptchaDebug:    s.Stage != common.StageProd,
+		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
+		CaptchaEndpoint:      s.ApiRelURL + "/" + common.PuzzleEndpoint,
+		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaSolutionField: loginSolutionField,
 	}, loginTemplate, nil
 }
 
@@ -52,15 +79,26 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		LoginSitekey:    strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint: s.ApiRelURL + "/" + common.PuzzleEndpoint,
-		CaptchaDebug:    s.Stage != common.StageProd,
+		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
+		CaptchaEndpoint:      s.ApiRelURL + "/" + common.PuzzleEndpoint,
+		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaSolutionField: loginSolutionField,
+	}
+
+	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.LoginSitekey}
+
+	captchaSolution := r.FormValue(loginSolutionField)
+	verr, err := s.Verifier.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
+	if err != nil || verr != puzzle.VerifyNoError {
+		data.CaptchaError = "Captcha verification failed"
+		s.render(w, r, loginFormTemplate, data)
+		return
 	}
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err = checkmail.ValidateFormat(email); err != nil {
 		slog.Warn("Failed to validate email format", common.ErrAttr(err))
-		data.Error = "Email address is not valid."
+		data.EmailError = "Email address is not valid."
 		s.render(w, r, loginFormTemplate, data)
 		return
 	}
@@ -68,7 +106,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := s.Store.FindUserByEmail(ctx, email)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to find user by email", "email", email)
-		data.Error = "User with such email does not exist."
+		data.EmailError = "User with such email does not exist."
 		s.render(w, r, loginFormTemplate, data)
 		return
 	}

@@ -3,6 +3,7 @@
 import { CaptchaWidget } from './widget.js';
 
 window.privateCaptcha = {
+    setup: setupPrivateCaptcha,
     // just a class declaration
     //CaptchaWidget: CaptchaWidget,
 };
@@ -15,7 +16,7 @@ function findCaptchaElements() {
     return elements;
 }
 
-function setup() {
+function setupPrivateCaptcha() {
     let autoWidget = window.privateCaptcha.autoWidget;
 
     const elements = findCaptchaElements();
@@ -30,7 +31,7 @@ function setup() {
 }
 
 if (document.readyState !== 'loading') {
-    setup();
+    setupPrivateCaptcha();
 } else {
-    document.addEventListener('DOMContentLoaded', setup);
+    document.addEventListener('DOMContentLoaded', setupPrivateCaptcha);
 }

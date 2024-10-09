@@ -121,6 +121,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
 		ApiRelURL: "http://" + apiDomain,
+		Verifier:  apiServer,
 	}
 	portalServer.Init()
 

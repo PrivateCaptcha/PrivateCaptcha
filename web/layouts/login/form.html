@@ -2,13 +2,13 @@
     <div>
         <label for="{{ .Const.Email }}" class="pc-form-label"> Email </label>
         <div class="mt-2.5 relative">
-            {{- if .Params.Error -}}
+            {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" placeholder="Email address" class="pc-form-input-base {{ if .Params.Error }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" name="{{ .Const.Email }}" placeholder="Email address" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
-        {{- if .Params.Error -}}
-        <p class="pc-form-error-text">{{ .Params.Error }}</p>
+        {{- if .Params.EmailError -}}
+        <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
         {{- end -}}
     </div>
 </div>
@@ -16,11 +16,15 @@
 
 <div class="private-captcha mt-8"
     data-sitekey="{{.Params.LoginSitekey}}"
+    data-solution-field="{{.Params.CaptchaSolutionField}}"
     data-start-mode="click"
     data-finished-callback="onCaptchaSolved"
     data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
     data-styles=":host { --border-radius: .75rem; }"
     {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
 </div>
+{{- if .Params.CaptchaError -}}
+<p class="pc-form-error-text">{{ .Params.CaptchaError }}</p>
+{{- end -}}
 
 <button id="loginSubmit" type="submit" class="pc-form-button" disabled> Sign in </button>
