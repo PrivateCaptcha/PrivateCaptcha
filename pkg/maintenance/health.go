@@ -18,9 +18,10 @@ type HealthCheckJob struct {
 	BusinessDB     *db.BusinessStore
 	TimeSeriesDB   *db.TimeSeriesStore
 	Router         *http.ServeMux
-	WithSystemd    bool
 	postgresFlag   atomic.Int32
 	clickhouseFlag atomic.Int32
+	CheckInterval  time.Duration
+	WithSystemd    bool
 }
 
 const (
@@ -31,6 +32,10 @@ const (
 var _ common.PeriodicJob = (*HealthCheckJob)(nil)
 
 func (j *HealthCheckJob) Interval() time.Duration {
+	if j.CheckInterval > 0 {
+		return j.CheckInterval
+	}
+
 	return 5 * time.Second
 }
 

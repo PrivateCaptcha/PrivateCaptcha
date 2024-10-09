@@ -125,11 +125,14 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	portalServer.Init()
 
 	healthCheck := &maintenance.HealthCheckJob{
-		BusinessDB:   businessDB,
-		TimeSeriesDB: timeSeriesDB,
-		WithSystemd:  systemdListener,
-		Router:       router,
-		Stage:        stage,
+		BusinessDB:    businessDB,
+		TimeSeriesDB:  timeSeriesDB,
+		WithSystemd:   systemdListener,
+		CheckInterval: 5 * time.Second,
+		Router:        router,
+	}
+	if stage != common.StageProd {
+		healthCheck.CheckInterval = 1 * time.Minute
 	}
 
 	portalServer.Setup(router, ratelimiter.RateLimit)
