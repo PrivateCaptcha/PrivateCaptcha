@@ -22,7 +22,7 @@ import (
 
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "")
+	s.Setup(srv, "", "")
 
 	//srv.HandleFunc("/", catchAll)
 
@@ -125,7 +125,7 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 }
 
-func checkVerifyError(resp *http.Response, expected verifyError) error {
+func checkVerifyError(resp *http.Response, expected puzzle.VerifyError) error {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
@@ -137,7 +137,7 @@ func checkVerifyError(resp *http.Response, expected verifyError) error {
 		return err
 	}
 
-	if expected == verifyNoError {
+	if expected == puzzle.VerifyNoError {
 		if !response.Success {
 			return fmt.Errorf("Expected successful verification")
 		}
@@ -183,7 +183,7 @@ func TestVerifyPuzzleReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := checkVerifyError(resp, verifiedBeforeError); err != nil {
+	if err := checkVerifyError(resp, puzzle.VerifiedBeforeError); err != nil {
 		t.Fatal(err)
 	}
 }

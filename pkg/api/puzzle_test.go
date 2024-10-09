@@ -32,7 +32,7 @@ func makeOriginHeader(domain string) string {
 
 func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "")
+	s.Setup(srv, "", "")
 
 	//srv.HandleFunc("/", catchAll)
 
