@@ -14,12 +14,14 @@ WITH subscription_insert AS (
     SELECT 'Private Captcha', id FROM user_insert
     RETURNING id AS org_id, user_id
 )
-INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain)
+INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain, level, growth)
 SELECT
     'Portal login',
     '{{ .PortalPropertyID }}',
     org_id,
     user_id,
     user_id,
-    '{{ .PortalDomain }}'
+    '{{ .PortalDomain }}',
+    'small',
+    'fast'
 FROM org_insert;
