@@ -27,7 +27,6 @@ func (p *Plan) IsValid() bool {
 	return len(p.Name) > 0 &&
 		len(p.PaddleProductID) > 0 &&
 		len(p.PaddlePriceIDYearly) > 0 &&
-		len(p.PaddlePriceIDMonthly) > 0 &&
 		p.PriceMonthly > 0 &&
 		p.PriceYearly > 0 &&
 		p.RequestsLimit > 0
@@ -73,9 +72,9 @@ var (
 
 	devPlans = []*Plan{
 		{
-			Name:                 "Private Captcha 1K",
-			PaddleProductID:      "pro_01j0379m2fed2nrf4hb2gmb6gh",
-			PaddlePriceIDMonthly: "pri_01j037bk2bwtpryzqzafg1kyxk",
+			Name:            "Private Captcha 1K",
+			PaddleProductID: "pro_01j0379m2fed2nrf4hb2gmb6gh",
+			//PaddlePriceIDMonthly: "pri_01j037bk2bwtpryzqzafg1kyxk",
 			PaddlePriceIDYearly:  "pri_01j037cm0ny17tk8t9d7qksntq",
 			PriceMonthly:         9,
 			PriceYearly:          9 * 11,
