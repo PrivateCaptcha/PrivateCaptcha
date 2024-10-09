@@ -10,7 +10,7 @@
             <label aria-label="{{$plan.Name}}" aria-description="€{{$plan.PriceMonthly}} per month, €{{$plan.PriceYearly}} per year, {{$plan.RequestsLimit}} requests included"
                 :class="productID == '{{ $plan.PaddleProductID }}' ? 'z-10 border-indigo-200 bg-indigo-50' : 'border-gray-200'"
                 class="relative flex cursor-pointer flex-col {{if eq $i 0}}rounded-tl-md rounded-tr-md{{else if eq (plus1 $i) $plansN}}rounded-bl-md rounded-br-md{{end}} border p-4 focus:outline-none md:grid md:grid-cols-3 md:pl-4 md:pr-6"
-                @click="productID = '{{$plan.PaddleProductID}}'; priceIDs = ['{{$plan.PaddlePriceIDMonthly}}', '{{$plan.PaddlePriceIDYearly}}']"
+                @click="productID = '{{$plan.PaddleProductID}}'; priceIDs = [{{if $plan.PaddlePriceIDMonthly}}'{{$plan.PaddlePriceIDMonthly}}', {{end}}'{{$plan.PaddlePriceIDYearly}}']"
                 >
                 <span class="flex items-center text-sm">
                     <input type="radio" name="{{$.Const.Product}}" value="{{$plan.PaddleProductID}}" class="h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-600 active:ring-2 active:ring-indigo-600 active:ring-offset-2" {{if eq $plan.PaddleProductID $.Params.CurrentPlan.PaddleProductID}}checked{{end}}>
@@ -20,12 +20,16 @@
                 </span>
                 </span>
                 <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-center">
+                    {{- if $plan.PaddlePriceIDMonthly -}}
                     <span class="font-medium" :class="productID == '{{ $plan.PaddleProductID }}' ? 'text-indigo-900' : 'text-gray-900'">€{{$plan.PriceMonthly}} / mo</span>
                     <span :class="productID == '{{ $plan.PaddleProductID }}' ? 'text-indigo-900' : 'text-gray-900'">(€{{$plan.PriceYearly}} / yr)</span>
+                    {{- else -}}
+                    <span class="font-medium" :class="productID == '{{ $plan.PaddleProductID }}' ? 'text-indigo-900' : 'text-gray-900'">€{{$plan.PriceYearly}} / yr</span>
+                    {{- end -}}
                 </span>
                 <span class="ml-6 pl-1 text-sm md:ml-0 md:pl-0 md:text-right"
                     :class="productID == '{{ $plan.PaddleProductID }}' ? 'text-indigo-700' : 'text-gray-500'">
-                    {{$plan.RequestsLimit}} requests included
+                    {{$plan.RequestsLimit}} requests included / mo
                 </span>
             </label>
             {{ end }}
@@ -36,8 +40,11 @@
 <div class="pt-6 text-right flex justify-between">
     <div class="flex items-center">
         <input type="hidden" name="{{$.Const.Yearly}}" x-model.boolean="annual" />
-        <button type="button" :class="annual ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2" role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual">
-            <span aria-hidden="true" :class="annual ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
+        <button type="button"
+            class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
+            :class="(priceIDs.length === 1) ? 'bg-indigo-50' : (annual ? 'bg-indigo-600' : 'bg-gray-200')"
+            role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual" x-bind:disabled="priceIDs.length && (priceIDs.length === 1)">
+            <span aria-hidden="true" :class="(annual || (priceIDs.length === 1)) ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
         </button>
         <span class="ml-3 text-sm" id="annual-billing-label">
             <span class="font-medium text-gray-900">Annual billing</span>

@@ -582,10 +582,9 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return nil, "", err
 	}
 
-	yearly := common.ParseBoolean(r.FormValue(common.ParamYearly))
 	previewPeriod := "monthly"
 	priceID := plan.PaddlePriceIDMonthly
-	if yearly {
+	if yearly := common.ParseBoolean(r.FormValue(common.ParamYearly)); yearly || (len(plan.PaddlePriceIDMonthly) == 0) {
 		priceID = plan.PaddlePriceIDYearly
 		previewPeriod = "annual"
 	}
@@ -642,7 +641,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 	}
 	priceID := r.FormValue(common.ParamPrice)
 	if _, err := billing.FindPlanByPriceID(priceID, s.Stage); err != nil {
-		slog.ErrorContext(ctx, "PriceID argument is not valid", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "PriceID is not valid", "priceID", priceID, common.ErrAttr(err))
 		return nil, "", err
 	}
 
