@@ -32,11 +32,14 @@ services:
       dockerfile: ./docker/Dockerfile.test
     command:
       /app/bin/server -mode migrate
+    env_file:
+      - pc.env
     environment:
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
       PC_CLICKHOUSE_USER: default
+      PC_CLICKHOUSE_PASSWORD: ''
     depends_on:
       postgres:
         condition: service_healthy
