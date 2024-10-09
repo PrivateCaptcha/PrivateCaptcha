@@ -114,15 +114,7 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *server) Setup(router *http.ServeMux, prefix string) {
-	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + prefix
-	}
-
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-
+func (s *server) Setup(router *http.ServeMux, domain, prefix string) {
 	corsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
@@ -140,7 +132,14 @@ func (s *server) Setup(router *http.ServeMux, prefix string) {
 	s.cors = cors.New(corsOpts)
 	corsHandler := common.HandlerWrapper(s.cors.Handler)
 
-	s.setupWithPrefix(prefix, router, s.auth, corsHandler)
+	if !strings.HasPrefix(prefix, "/") {
+		prefix = "/" + prefix
+	}
+
+	if !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	s.setupWithPrefix(domain+prefix, router, s.auth, corsHandler)
 }
 
 func (s *server) Shutdown() {
@@ -152,6 +151,7 @@ func (s *server) Shutdown() {
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware, corsHandler common.Middleware) {
+	slog.Debug("Setting up the API routes", "prefix", prefix)
 	puzzleChain := common.NewMiddleWareChain(common.Recovered, corsHandler, common.NoCache)
 	verifyChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	// NOTE: auth middleware provides rate limiting internally
@@ -160,6 +160,10 @@ func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *aut
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize)))))
 	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize)))))
+
+	if s.stage != common.StageProd {
+		router.HandleFunc(prefix+"{path...}", corsHandler(common.Logged(catchAll)))
+	}
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {

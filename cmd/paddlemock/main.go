@@ -53,6 +53,7 @@ func main() {
 	pcAPIKey := os.Getenv("PC_PRIVATE_API_KEY")
 
 	http.HandleFunc("/"+common.PaddleSubscriptionCreated, func(w http.ResponseWriter, r *http.Request) {
+		slog.Debug("Handling request", "path", r.URL.Path, "method", r.Method)
 		if r.Method != http.MethodPost {
 			http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 			return
@@ -123,6 +124,7 @@ func main() {
 			return
 		}
 
+		slog.Debug("Sending request", "dest", pcEndpoint)
 		req, err := http.NewRequest("POST", pcEndpoint, bytes.NewBuffer(data))
 		if err != nil {
 			http.Error(w, "Failed to create request", http.StatusInternalServerError)
@@ -131,9 +133,11 @@ func main() {
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
 		req.Header.Set(common.HeaderAuthorization, "Bearer "+pcAPIKey)
+		req.Host = "api." + os.Getenv("PC_DOMAIN")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
+			slog.Error("Failed to send the HTTP request", common.ErrAttr(err))
 			http.Error(w, "Failed to send request to target endpoint", http.StatusInternalServerError)
 			return
 		}
@@ -142,9 +146,11 @@ func main() {
 		// Read the response from the target endpoint
 		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
+			slog.Error("Failed to read the response", common.ErrAttr(err))
 			http.Error(w, "Failed to read response from target endpoint", http.StatusInternalServerError)
 			return
 		}
+		slog.Debug("Received the response", "code", resp.StatusCode)
 
 		// Write the response back to the client
 		w.Header().Set("Content-Type", "application/json")

@@ -36,11 +36,14 @@ services:
       dockerfile: ./docker/Dockerfile
     command:
       /app/server -mode migrate
+    env_file:
+      - pc.env
     environment:
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
       PC_CLICKHOUSE_HOST: clickhouse
       PC_CLICKHOUSE_DB: privatecaptcha
       PC_CLICKHOUSE_USER: default
+      PC_CLICKHOUSE_PASSWORD: ''
     depends_on:
       postgres:
         condition: service_healthy
@@ -69,7 +72,7 @@ services:
     env_file:
       - pc.env
     environment:
-      SERVER_BASE_URL: http://server:8080/api/
+      SERVER_BASE_URL: http://server:8080/
     depends_on:
       server:
         condition: service_started

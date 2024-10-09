@@ -91,12 +91,27 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
 	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, os.Getenv)
 
+	host := getenv("PC_HOST")
+	if host == "" {
+		host = "localhost"
+	}
+
+	domain := getenv("PC_DOMAIN")
+	if domain == "" {
+		domain = host
+	}
+
+	router := http.NewServeMux()
+
+	apiDomain := "api." + domain
+	apiServer.Setup(router, apiDomain, "" /*prefix*/)
+
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
 		Stage:      stage,
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
-		Prefix:     "portal",
+		Domain:     "portal." + domain,
 		XSRF:       portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "pcsid",
@@ -105,33 +120,23 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		},
 		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
+		ApiRelURL: "http://" + apiDomain,
 	}
 	portalServer.Init()
 
-	host := getenv("PC_HOST")
-	if host == "" {
-		host = "localhost"
-	}
-
-	portalDomain := getenv("PC_PORTAL_DOMAIN")
-	if portalDomain == "" {
-		portalDomain = host
-	}
-
-	router := http.NewServeMux()
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:   businessDB,
 		TimeSeriesDB: timeSeriesDB,
 		WithSystemd:  systemdListener,
 		Router:       router,
+		Stage:        stage,
 	}
 
-	apiServer.Setup(router, "api")
-	portalServer.Setup(router, ratelimiter.RateLimit, portalDomain)
-	router.Handle("GET /assets/", http.StripPrefix("/assets/", web.Static()))
+	portalServer.Setup(router, ratelimiter.RateLimit)
+	router.Handle("GET "+portalServer.Domain+"/assets/", http.StripPrefix("/assets/", web.Static()))
 	defaultAPIChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(ratelimiter.RateLimit(healthCheck.Handler)))
-	router.Handle("GET /widget/", http.StripPrefix("/widget/", widget.Static()))
+	router.Handle("GET "+portalServer.Domain+"/widget/", http.StripPrefix("/widget/", widget.Static()))
 
 	httpServer := &http.Server{
 		Handler:           router,
@@ -157,6 +162,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		port := getenv("PC_PORT")
 		if port == "" {
 			port = "8080"
+		}
+		if stage != common.StageProd {
+			portalServer.ApiRelURL += ":" + port
 		}
 
 		address := net.JoinHostPort(host, port)
