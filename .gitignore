@@ -25,3 +25,4 @@ node_modules
 web/static/js/bundle.js
 
 pc.env
+.aider*
