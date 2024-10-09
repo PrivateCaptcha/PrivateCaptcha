@@ -31,7 +31,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	healthCheck.Handler(w, req)
+	healthCheck.HandlerFunc(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Unexpected status code %d", w.Code)

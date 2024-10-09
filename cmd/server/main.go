@@ -137,9 +137,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	}
 
 	portalServer.Setup(router, ratelimiter.RateLimit)
-	router.Handle("GET "+portalServer.Domain+"/assets/", http.StripPrefix("/assets/", web.Static()))
+	router.Handle("GET "+portalServer.Domain+"/assets/", http.StripPrefix("/assets/", ratelimiter.RateLimit(web.Static())))
 	defaultAPIChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
-	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(ratelimiter.RateLimit(healthCheck.Handler)))
+	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(ratelimiter.RateLimit(healthCheck.HandlerFunc)))
 	router.Handle("GET "+portalServer.Domain+"/widget/", http.StripPrefix("/widget/", widget.Static()))
 
 	httpServer := &http.Server{
