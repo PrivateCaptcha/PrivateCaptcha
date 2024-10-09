@@ -170,6 +170,7 @@ func (ac *alertRenderContext) ClearAlerts() {
 type Server struct {
 	Store      *db.BusinessStore
 	TimeSeries *db.TimeSeriesStore
+	Domain     string
 	Prefix     string
 	template   *web.Template
 	XSRF       XSRFMiddleware
@@ -178,21 +179,23 @@ type Server struct {
 	Stage      string
 	PaddleAPI  billing.PaddleAPI
 	cors       *cors.Cors
+	ApiRelURL  string
 }
 
 func (s *Server) Init() {
-	prefix := s.relURL("/")
+	prefix := common.RelURL(s.Prefix, "/")
 	s.template = web.NewTemplates(funcMap(prefix))
 	s.Session.Path = prefix
 }
 
-func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware, domain string) {
-	if len(domain) == 0 {
-		domain = "*"
+func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
+	corsDomain := s.Domain
+	if len(corsDomain) == 0 {
+		corsDomain = "*"
 	}
 
 	corsOpts := cors.Options{
-		AllowedOrigins:   []string{domain},
+		AllowedOrigins:   []string{corsDomain},
 		AllowCredentials: true,
 		// non-captcha headers were taken from rs/cors defaults
 		AllowedHeaders: []string{common.HeaderCSRFToken, "accept", "content-type", "x-requested-with"},
@@ -208,7 +211,7 @@ func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware, dom
 	s.cors = cors.New(corsOpts)
 	corsHandler := common.HandlerWrapper(s.cors.Handler)
 
-	s.setupWithPrefix(s.relURL("/"), router, ratelimiter, corsHandler)
+	s.setupWithPrefix(s.Domain+s.relURL("/"), router, ratelimiter, corsHandler)
 }
 
 func (s *Server) relURL(url string) string {
@@ -220,7 +223,7 @@ func (s *Server) partsURL(a ...string) string {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter, corsHandler common.Middleware) {
-	slog.Debug("Setting up the routes", "prefix", prefix)
+	slog.Debug("Setting up the portal routes", "prefix", prefix)
 
 	route := func(method string, parts ...string) string {
 		return method + " " + prefix + strings.Join(parts, "/")
