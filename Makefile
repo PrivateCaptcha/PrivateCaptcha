@@ -38,7 +38,11 @@ build-js:
 	rm -v web/static/js/* || echo 'Nothing to remove'
 	cd web && npm run build
 
-serve: build-js build-server
+build-widget:
+	rm -v widget/static/js/* || echo 'Nothing to remove'
+	cd widget && npm run build
+
+serve: build-js build-widget build-server
 	bin/server
 
 run:
