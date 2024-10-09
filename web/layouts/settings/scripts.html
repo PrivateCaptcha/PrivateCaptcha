@@ -16,10 +16,12 @@ function loadScript(url, callback) {
 function openCheckout(priceIDs, annual) {
     if (!priceIDs) { return; }
     if (!Array.isArray(priceIDs)) { return; }
-    if (priceIDs.length != 2) { return; }
+    if (priceIDs.length < 1) { return; }
+    const selectedPrice = (priceIDs.length === 1) ? priceIDs[0] : priceIDs[annual ? 1 : 0];
+    if (selectedPrice.length === 0) { return; }
     Paddle.Checkout.open({
                          items: [{
-                             priceId: priceIDs[annual ? 1 : 0],
+                             priceId: selectedPrice,
                              quantity: 1
                          }],
                          customer: {
