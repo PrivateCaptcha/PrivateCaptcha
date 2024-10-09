@@ -15,11 +15,12 @@
 <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
 
 <div class="private-captcha mt-8"
-    data-sitekey="<your sitekey>"
+    data-sitekey="{{.Params.LoginSitekey}}"
     data-start-mode="click"
+    data-finished-callback="onCaptchaSolved"
     data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
     data-styles=":host { --border-radius: .75rem; }"
     {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
 </div>
 
-<button type="submit" class="pc-form-button"> Sign in </button>
+<button id="loginSubmit" type="submit" class="pc-form-button" disabled> Sign in </button>

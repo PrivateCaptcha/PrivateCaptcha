@@ -6,7 +6,7 @@ WITH subscription_insert AS (
 ), user_insert AS (
     -- Create an admin user
     INSERT INTO backend.users (name, email, subscription_id)
-    SELECT 'PC Admin', 'admin@privatecaptcha.com', id FROM subscription_insert
+    SELECT 'PC Admin', '{{ .AdminEmail }}', id FROM subscription_insert
     RETURNING id
 ), org_insert AS (
     -- Create an organization for the admin user
@@ -14,4 +14,12 @@ WITH subscription_insert AS (
     SELECT 'Private Captcha', id FROM user_insert
     RETURNING id AS org_id, user_id
 )
-
+INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain)
+SELECT
+    'Portal login',
+    '{{ .PortalPropertyID }}',
+    org_id,
+    user_id,
+    user_id,
+    '{{ .PortalDomain }}'
+FROM org_insert;

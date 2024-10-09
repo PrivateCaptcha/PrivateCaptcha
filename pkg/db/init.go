@@ -76,7 +76,12 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (p
 		}
 
 		if migrate {
-			return migratePostgres(ctx, pool)
+			migrateCtx := &migrateContext{
+				PortalPropertyID: PortalPropertyID,
+				PortalDomain:     "portal." + getenv("PC_DOMAIN"),
+				AdminEmail:       getenv("PC_ADMIN_EMAIL"),
+			}
+			return migratePostgres(ctx, pool, migrateCtx)
 		}
 
 		return nil
