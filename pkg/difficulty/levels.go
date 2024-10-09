@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	LevelSmall     = 125
-	LevelMedium    = 150
-	LevelHigh      = 160
+	LevelSmall     = 80
+	LevelMedium    = 100
+	LevelHigh      = 120
 	leakyBucketCap = math.MaxUint32
 	// this one is arbitrary as we can support "many"
 	maxBucketsToKeep = 1_000_000
