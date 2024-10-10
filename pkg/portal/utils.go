@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"math/rand"
@@ -87,19 +88,16 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session
 	return sess
 }
 
-func (s *Server) sessionUser(w http.ResponseWriter, r *http.Request) (*dbgen.User, error) {
-	ctx := r.Context()
-	sess := s.session(w, r)
-
-	email, ok := sess.Get(session.KeyUserEmail).(string)
+func (s *Server) sessionUser(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
+	userID, ok := sess.Get(session.KeyUserID).(int32)
 	if !ok {
-		slog.ErrorContext(ctx, "Failed to get email from session")
+		slog.ErrorContext(ctx, "Failed to get userID from session")
 		return nil, errInvalidSession
 	}
 
-	user, err := s.Store.FindUserByEmail(ctx, email)
+	user, err := s.Store.RetrieveUser(ctx, userID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to find user by ID", "id", userID, common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -110,7 +108,7 @@ func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		user, err := s.sessionUser(w, r)
+		user, err := s.sessionUser(ctx, s.session(w, r))
 		if err != nil {
 			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 			return

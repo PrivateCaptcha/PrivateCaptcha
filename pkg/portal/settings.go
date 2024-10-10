@@ -137,7 +137,8 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 }
 
 func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	user, err := s.sessionUser(w, r)
+	ctx := r.Context()
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -148,10 +149,8 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Name: user.Name,
+		csrfRenderContext: s.createCsrfContext(user),
+		Name:              user.Name,
 	}
 
 	return renderCtx, settingsGeneralTemplate, nil
@@ -159,7 +158,8 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	sess := s.session(w, r)
+	user, err := s.sessionUser(ctx, sess)
 	if err != nil {
 		return nil, "", err
 	}
@@ -171,11 +171,6 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 		return nil, "", err
 	}
 
-	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
-	if !ok {
-		slog.ErrorContext(ctx, "Failed to obtain session")
-		return nil, "", errInvalidSession
-	}
 	sess.Set(session.KeyTwoFactorCode, code)
 
 	renderCtx := &settingsGeneralRenderContext{
@@ -198,7 +193,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -266,7 +261,6 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if err := s.Store.UpdateUser(ctx, user.ID, renderCtx.Name, renderCtx.Email /*new email*/, user.Email /*old email*/); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
-			sess.Set(session.KeyUserEmail, renderCtx.Email)
 			sess.Set(session.KeyUserName, renderCtx.Name)
 		} else {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
@@ -278,7 +272,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -312,7 +306,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -355,7 +349,7 @@ func monthsFromParam(ctx context.Context, param string) int {
 
 func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -418,7 +412,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -489,7 +483,7 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 
 func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -508,7 +502,7 @@ func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Request) (*billing.ManagementURLs, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return nil, err
@@ -565,7 +559,7 @@ func (s *Server) getUpdateSubscription(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -629,7 +623,7 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -702,7 +696,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
@@ -745,7 +739,7 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}

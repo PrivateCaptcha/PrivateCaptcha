@@ -35,7 +35,7 @@ type puzzleCacheMarker struct {
 	Data [4]byte
 }
 
-func emailCacheKey(email string) string               { return "email/" + email }
+func userCacheKey(id int32) string                    { return "user/" + strconv.Itoa(int(id)) }
 func APIKeyCacheKey(str string) string                { return "apikey/" + str }
 func puzzleCacheKey(str string) string                { return "puzzle/" + str }
 func orgCacheKey(orgID int32) string                  { return "org/" + strconv.Itoa(int(orgID)) }
@@ -93,6 +93,10 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 	}
 
 	return s.defaultImpl.cachePuzzle(ctx, p, tnow)
+}
+
+func (s *BusinessStore) RetrieveUser(ctx context.Context, id int32) (*dbgen.User, error) {
+	return s.defaultImpl.retrieveUser(ctx, id)
 }
 
 func (s *BusinessStore) FindUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {

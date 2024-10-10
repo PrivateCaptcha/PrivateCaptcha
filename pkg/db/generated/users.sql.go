@@ -109,6 +109,25 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 	return &i, err
 }
 
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE id = $1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Email,
+		&i.SubscriptionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
 const getUserBySubscriptionID = `-- name: GetUserBySubscriptionID :one
 SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE subscription_id = $1
 `

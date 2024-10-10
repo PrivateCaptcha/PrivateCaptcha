@@ -141,6 +141,8 @@ func funcMap(prefix string) template.FuncMap {
 	}
 }
 
+type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
+
 type Model = any
 type ModelFunc func(http.ResponseWriter, *http.Request) (Model, string, error)
 
@@ -274,8 +276,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 
 	// configured with middlewares
 	openWrite := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler)
-	writeChain := openWrite.Add(s.csrf)
-	privateWriteChain := writeChain.Add(s.private)
+	csrfEmailChain := openWrite.Add(s.csrf(s.csrfUserEmailKeyFunc))
+	privateWriteChain := openWrite.Add(s.csrf(s.csrfUserIDKeyFunc), s.private)
 	subscribedWrite := privateWriteChain.Add(s.subscribed)
 
 	privateReadChain := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, s.private)
@@ -283,8 +285,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 
 	router.HandleFunc(post(common.LoginEndpoint), openWrite.Build(s.postLogin))
 	router.HandleFunc(post(common.RegisterEndpoint), openWrite.Build(s.postRegister))
-	router.HandleFunc(post(common.TwoFactorEndpoint), writeChain.Build(s.postTwoFactor))
-	router.HandleFunc(post(common.ResendEndpoint), writeChain.Build(s.resend2fa))
+	router.HandleFunc(post(common.TwoFactorEndpoint), csrfEmailChain.Build(s.postTwoFactor))
+	router.HandleFunc(post(common.ResendEndpoint), csrfEmailChain.Build(s.resend2fa))
 	router.HandleFunc(get(common.OrgEndpoint, common.NewEndpoint), privateReadChain.Build(s.handler(s.getNewOrg)))
 	router.HandleFunc(post(common.OrgEndpoint, common.NewEndpoint), privateWriteChain.Build(s.postNewOrg))
 	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadChain.Build(s.getPortal))
@@ -433,41 +435,5 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-	}
-}
-
-func (s *Server) csrf(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		switch r.Method {
-		case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		token := r.Header.Get(common.HeaderCSRFToken)
-		if len(token) == 0 {
-			token = r.FormValue(common.ParamCSRFToken)
-		}
-
-		if len(token) > 0 {
-			sess := s.session(w, r)
-			email, ok := sess.Get(session.KeyUserEmail).(string)
-			if !ok {
-				slog.WarnContext(ctx, "Session does not contain a valid email")
-			}
-
-			if s.XSRF.VerifyToken(token, email) {
-				next.ServeHTTP(w, r)
-				return
-			} else {
-				slog.WarnContext(ctx, "Failed to verify CSRF token")
-			}
-		} else {
-			slog.WarnContext(ctx, "CSRF token is missing")
-		}
-
-		common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
 	}
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
 
@@ -122,17 +121,13 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	sess := s.Session.SessionStart(w, r)
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok || (len(email) == 0) {
-		slog.ErrorContext(ctx, "Failed to get user email from context")
-		return nil, "", errInvalidSession
+	user, err := s.sessionUser(ctx, s.session(w, r))
+	if err != nil {
+		return nil, "", err
 	}
 
 	return &orgWizardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(email),
-		},
+		csrfRenderContext: s.createCsrfContext(user),
 	}, orgWizardTemplate, nil
 }
 
@@ -157,7 +152,7 @@ func (s *Server) validateOrgName(ctx context.Context, name string, userID int32)
 
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -171,9 +166,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &orgWizardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
+		csrfRenderContext: s.createCsrfContext(user),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -196,16 +189,9 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *common.Session) (*orgDashboardRenderContext, error) {
 	slog.DebugContext(ctx, "Creating org dashboard context", "orgID", orgID)
 
-	email, ok := sess.Get(session.KeyUserEmail).(string)
-	if !ok || (len(email) == 0) {
-		slog.ErrorContext(ctx, "Failed to get user email from context")
-		return nil, errInvalidSession
-	}
-
-	user, err := s.Store.FindUserByEmail(ctx, email)
+	user, err := s.sessionUser(ctx, sess)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find user by email", common.ErrAttr(err))
-		return nil, errInvalidSession
+		return nil, err
 	}
 
 	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
@@ -220,9 +206,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	}
 
 	renderCtx := &orgDashboardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
+		csrfRenderContext:         s.createCsrfContext(user),
 		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs),
 	}
@@ -295,7 +279,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -311,11 +295,9 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 	}
 
 	renderCtx := &orgPropertiesRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		CurrentOrg: orgToUserOrg(org, user.ID),
-		Properties: propertiesToUserProperties(ctx, properties),
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
+		Properties:        propertiesToUserProperties(ctx, properties),
 	}
 
 	return renderCtx, orgPropertiesTemplate, nil
@@ -323,7 +305,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 
 func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -334,8 +316,9 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 	}
 
 	renderCtx := &orgMemberRenderContext{
-		CurrentOrg: orgToUserOrg(org, user.ID),
-		CanEdit:    org.UserID.Int32 == user.ID,
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
+		CanEdit:           org.UserID.Int32 == user.ID,
 	}
 
 	if user.ID != org.UserID.Int32 {
@@ -349,7 +332,6 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 		return nil, "", err
 	}
 
-	renderCtx.Token = s.XSRF.Token(user.Email)
 	renderCtx.Members = usersToOrgUsers(members)
 
 	return renderCtx, orgMembersTemplate, nil
@@ -357,7 +339,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 
 func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -380,12 +362,10 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 	}
 
 	renderCtx := &orgMemberRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		CurrentOrg: orgToUserOrg(org, user.ID),
-		Members:    usersToOrgUsers(members),
-		CanEdit:    org.UserID.Int32 == user.ID,
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
+		Members:           usersToOrgUsers(members),
+		CanEdit:           org.UserID.Int32 == user.ID,
 	}
 
 	if !renderCtx.CanEdit {
@@ -424,7 +404,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -466,7 +446,7 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -488,7 +468,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -509,7 +489,8 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	user, err := s.sessionUser(w, r)
+	ctx := r.Context()
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -520,11 +501,9 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, 
 	}
 
 	renderCtx := &orgSettingsRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		CurrentOrg: orgToUserOrg(org, user.ID),
-		CanEdit:    org.UserID.Int32 == user.ID,
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
+		CanEdit:           org.UserID.Int32 == user.ID,
 	}
 
 	return renderCtx, orgSettingsTemplate, nil
@@ -532,7 +511,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, 
 
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -548,11 +527,9 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 	}
 
 	renderCtx := &orgSettingsRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		CurrentOrg: orgToUserOrg(org, user.ID),
-		CanEdit:    org.UserID.Int32 == user.ID,
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
+		CanEdit:           org.UserID.Int32 == user.ID,
 	}
 
 	if !renderCtx.CanEdit {
@@ -581,7 +558,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
