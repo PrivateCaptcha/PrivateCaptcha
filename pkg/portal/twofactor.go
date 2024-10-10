@@ -118,6 +118,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	sess.Set(session.KeyLoginStep, loginStepCompleted)
 	sess.Delete(session.KeyTwoFactorCode)
+	sess.Delete(session.KeyUserEmail)
 	sess.Set(session.KeyPersistent, true)
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering

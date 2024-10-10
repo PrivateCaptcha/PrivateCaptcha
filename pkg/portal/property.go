@@ -160,7 +160,8 @@ func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.Difficult
 }
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	user, err := s.sessionUser(w, r)
+	ctx := r.Context()
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -171,9 +172,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 	}
 
 	data := &propertyWizardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
+		csrfRenderContext: s.createCsrfContext(user),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -233,7 +232,7 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 // This one cannot be "MVC" function because it redirects in case of success
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return
@@ -253,10 +252,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		CurrentOrg: orgToUserOrg(org, user.ID),
+		csrfRenderContext: s.createCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -393,18 +390,16 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		return nil, errInvalidPathArg
 	}
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, err
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Property: propertyToUserProperty(property),
-		Org:      orgToUserOrg(org, user.ID),
-		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		csrfRenderContext: s.createCsrfContext(user),
+		Property:          propertyToUserProperty(property),
+		Org:               orgToUserOrg(org, user.ID),
+		CanEdit:           (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
 	return renderCtx, nil
 }
@@ -474,7 +469,7 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -501,13 +496,11 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Property: propertyToUserProperty(property),
-		Org:      orgToUserOrg(org, user.ID),
-		Tab:      2, // settings
-		CanEdit:  (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		csrfRenderContext: s.createCsrfContext(user),
+		Property:          propertyToUserProperty(property),
+		Org:               orgToUserOrg(org, user.ID),
+		Tab:               2, // settings
+		CanEdit:           (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
 
 	if !renderCtx.CanEdit {
@@ -563,7 +556,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		s.redirectError(http.StatusUnauthorized, w, r)
 		return

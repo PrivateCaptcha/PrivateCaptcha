@@ -145,7 +145,7 @@ func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name st
 
 	if user != nil {
 		// we need to update cache as we just set user as missing when checking for it's existence
-		cacheKey := emailCacheKey(email)
+		cacheKey := userCacheKey(user.ID)
 		_ = impl.cache.Set(ctx, cacheKey, user)
 	}
 
@@ -210,7 +210,7 @@ func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32)
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
 
-	_ = impl.cache.Delete(ctx, emailCacheKey(user.Email))
+	_ = impl.cache.Delete(ctx, userCacheKey(user.ID))
 
 	return nil
 }
@@ -393,22 +393,41 @@ func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle
 	})
 }
 
-func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
-	if len(email) == 0 {
-		return nil, ErrInvalidInput
-	}
-
-	cacheKey := emailCacheKey(email)
+func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {
+	cacheKey := userCacheKey(userID)
 	if user, err := fetchCachedOne[dbgen.User](ctx, impl.cache, cacheKey); err == nil {
 		return user, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
 	}
 
-	user, err := impl.queries.GetUserByEmail(ctx, email)
+	user, err := impl.queries.GetUserByID(ctx, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			impl.cache.SetMissing(ctx, cacheKey)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve user by ID", "id", userID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if user != nil {
+		_ = impl.cache.Set(ctx, cacheKey, user)
+	}
+
+	return user, nil
+}
+
+func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
+	if len(email) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	user, err := impl.queries.GetUserByEmail(ctx, email)
+	if err != nil {
+		if err == pgx.ErrNoRows {
 			return nil, ErrRecordNotFound
 		}
 
@@ -418,6 +437,7 @@ func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string
 	}
 
 	if user != nil {
+		cacheKey := userCacheKey(user.ID)
 		_ = impl.cache.Set(ctx, cacheKey, user)
 	}
 
@@ -437,7 +457,7 @@ func (impl *businessStoreImpl) findUserBySubscriptionID(ctx context.Context, sub
 	}
 
 	if user != nil {
-		cacheKey := emailCacheKey(user.Email)
+		cacheKey := userCacheKey(user.ID)
 		_ = impl.cache.Set(ctx, cacheKey, user)
 	}
 
@@ -861,7 +881,7 @@ func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userI
 	slog.DebugContext(ctx, "Updated user subscription", "userID", userID, "subscriptionID", subscriptionID)
 
 	if user != nil {
-		_ = impl.cache.Set(ctx, emailCacheKey(user.Email), user)
+		_ = impl.cache.Set(ctx, userCacheKey(user.ID), user)
 	}
 
 	return nil
@@ -881,11 +901,8 @@ func (impl *businessStoreImpl) updateUser(ctx context.Context, userID int32, nam
 
 	slog.DebugContext(ctx, "Updated user", "userID", userID)
 
-	// delete old email from cache
-	_ = impl.cache.Delete(ctx, emailCacheKey(oldEmail))
-
 	if user != nil {
-		_ = impl.cache.Set(ctx, emailCacheKey(newEmail), user)
+		_ = impl.cache.Set(ctx, userCacheKey(user.ID), user)
 	}
 
 	return nil
