@@ -25,3 +25,7 @@ SELECT
     'small',
     'fast'
 FROM org_insert;
+
+{{ if eq .Stage "dev" }}
+INSERT INTO backend.system_notifications (message) VALUES ('This is a test system notification for {{.Stage}}');
+{{ end }}
