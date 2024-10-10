@@ -1,3 +1,6 @@
+-- name: GetUserByID :one
+SELECT * FROM backend.users WHERE id = $1;
+
 -- name: GetUserByEmail :one
 SELECT * FROM backend.users WHERE email = $1 AND deleted_at IS NULL;
 

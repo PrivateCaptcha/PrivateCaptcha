@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,7 +58,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 
 	// Send PUT request as the second user to update the property
 	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(user2.Email))
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user2.ID))))
 	form.Set(common.ParamName, "Updated Property Name")
 	form.Set(common.ParamDifficulty, "0")
 	form.Set(common.ParamGrowth, "2")

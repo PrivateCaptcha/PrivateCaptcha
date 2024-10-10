@@ -25,7 +25,8 @@ type supportRenderContext struct {
 }
 
 func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	user, err := s.sessionUser(w, r)
+	ctx := r.Context()
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -62,7 +63,7 @@ func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory 
 func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(w, r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
