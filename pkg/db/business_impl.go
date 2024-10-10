@@ -1310,3 +1310,51 @@ func (impl *businessStoreImpl) deleteUsers(ctx context.Context, ids []int32) err
 
 	return err
 }
+
+func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
+	cacheKey := notificationCacheKey(id)
+
+	if notif, err := fetchCachedOne[dbgen.SystemNotification](ctx, impl.cache, cacheKey); err == nil {
+		return notif, nil
+	}
+
+	notification, err := impl.queries.GetNotificationById(ctx, id)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			impl.cache.SetMissing(ctx, cacheKey)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve notification by ID", "notifID", id, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	if notification != nil {
+		_ = impl.cache.Set(ctx, cacheKey, notification)
+	}
+
+	return notification, nil
+}
+
+func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
+	n, err := impl.queries.GetLastActiveNotification(ctx, &dbgen.GetLastActiveNotificationParams{
+		Column1: Timestampz(tnow),
+		UserID:  Int(userID),
+	})
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve system notification", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	cacheKey := notificationCacheKey(n.ID)
+	_ = impl.cache.Set(ctx, cacheKey, n)
+
+	slog.DebugContext(ctx, "Retrieved system notification", "userID", userID, "notifID", n.ID)
+
+	return n, err
+}

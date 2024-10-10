@@ -36,4 +36,5 @@ const (
 	PreviewEndpoint             = "preview"
 	UsageEndpoint               = "usage"
 	HealthEndpoint              = "health"
+	NotificationEndpoint        = "notification"
 )

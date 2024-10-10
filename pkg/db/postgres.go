@@ -84,6 +84,7 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 }
 
 type migrateContext struct {
+	Stage            string
 	PortalPropertyID string
 	PortalDomain     string
 	AdminEmail       string

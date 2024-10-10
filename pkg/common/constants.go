@@ -37,5 +37,6 @@ const (
 	ParamProperty         = "property"
 	ParamKey              = "key"
 	ParamCode             = "code"
+	ParamID               = "id"
 	ConfigRateLimitHeader = "RATE_LIMIT_HEADER"
 )
