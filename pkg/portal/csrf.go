@@ -17,7 +17,7 @@ func (s *Server) createCsrfContext(user *dbgen.User) csrfRenderContext {
 }
 
 func (s *Server) csrfUserEmailKeyFunc(w http.ResponseWriter, r *http.Request) string {
-	sess := s.session(w, r)
+	sess := s.Session.SessionStart(w, r)
 	userEmail, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.WarnContext(r.Context(), "Session does not contain a valid email")
@@ -27,7 +27,7 @@ func (s *Server) csrfUserEmailKeyFunc(w http.ResponseWriter, r *http.Request) st
 }
 
 func (s *Server) csrfUserIDKeyFunc(w http.ResponseWriter, r *http.Request) string {
-	sess := s.session(w, r)
+	sess := s.Session.SessionStart(w, r)
 	userID, ok := sess.Get(session.KeyUserID).(int32)
 	if !ok {
 		slog.WarnContext(r.Context(), "Session does not contain a valid userID")
