@@ -36,6 +36,7 @@ const (
 	maxCacheSize    = 1_000_000
 	maxLimitedUsers = 10_000
 	modeMigrate     = "migrate"
+	modeRollback    = "rollback"
 	modeSystemd     = "systemd"
 	modeServer      = "server"
 )
@@ -252,12 +253,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	return nil
 }
 
-func migrate(ctx context.Context, getenv func(string) string) error {
+func migrate(ctx context.Context, getenv func(string) string, up bool) error {
 	stage := getenv("STAGE")
 	common.SetupLogs(stage, getenv("VERBOSE") == "1")
 
 	ctx = context.WithValue(ctx, common.TraceIDContextKey, "migration")
-	return db.Migrate(ctx, getenv)
+	return db.Migrate(ctx, getenv, up)
 }
 
 func main() {
@@ -276,7 +277,9 @@ func main() {
 	case modeServer, modeSystemd:
 		err = run(context.Background(), os.Getenv, os.Stderr, (*flagMode == modeSystemd))
 	case modeMigrate:
-		err = migrate(context.Background(), os.Getenv)
+		err = migrate(context.Background(), os.Getenv, true /*up*/)
+	case modeRollback:
+		err = migrate(context.Background(), os.Getenv, false /*up*/)
 	default:
 		err = fmt.Errorf("unknown mode: '%s'", *flagMode)
 	}

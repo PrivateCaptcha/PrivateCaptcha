@@ -89,14 +89,16 @@ type migrateContext struct {
 	AdminEmail       string
 }
 
-func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext) error {
+func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext, up bool) error {
 	db := stdlib.OpenDBFromPool(pool)
 
 	tplFS := NewTemplateFS(postgresMigrationsFS, data)
 
+	mlog := slog.With("up", up)
+
 	d, err := iofs.New(tplFS, "migrations/postgres")
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read from Postgres migrations IOFS", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to read from Postgres migrations IOFS", common.ErrAttr(err))
 		return err
 	}
 
@@ -105,35 +107,39 @@ func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateConte
 	// the fix is to add '&search_path=public' to the connection string to force specific schema (for migrations table only)
 	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{SchemaName: pgMigrationsSchema})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create migrate driver", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to create migrate driver", common.ErrAttr(err))
 		return err
 	}
 
 	m, err := migrate.NewWithInstance("iofs", d, "postgres", driver)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create migration engine for Postgres", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to create migration engine for Postgres", common.ErrAttr(err))
 		return err
 	}
 
 	defer func() {
 		srcErr, dstErr := m.Close()
 		if srcErr != nil {
-			slog.ErrorContext(ctx, "Source error when running migrations", common.ErrAttr(srcErr))
+			mlog.ErrorContext(ctx, "Source error when running migrations", common.ErrAttr(srcErr))
 		}
 		if dstErr != nil {
-			slog.ErrorContext(ctx, "Destination error when running migrations", common.ErrAttr(dstErr))
+			mlog.ErrorContext(ctx, "Destination error when running migrations", common.ErrAttr(dstErr))
 		}
-		slog.DebugContext(ctx, "Closed Postgres migrate connection")
+		mlog.DebugContext(ctx, "Closed Postgres migrate connection")
 	}()
 
-	slog.DebugContext(ctx, "Running Postgres migrations...")
-	err = m.Up()
+	mlog.DebugContext(ctx, "Running Postgres migrations...")
+	if up {
+		err = m.Up()
+	} else {
+		err = m.Down()
+	}
 	if err != nil && err != migrate.ErrNoChange {
-		slog.ErrorContext(ctx, "Failed to apply migrations in Postgres", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to apply migrations in Postgres", common.ErrAttr(err))
 		return err
 	}
 
-	slog.DebugContext(ctx, "Postgres migrated", "changes", (err != migrate.ErrNoChange))
+	mlog.DebugContext(ctx, "Postgres migrated", "changes", (err != migrate.ErrNoChange))
 
 	return nil
 }

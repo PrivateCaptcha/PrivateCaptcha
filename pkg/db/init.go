@@ -18,13 +18,13 @@ var (
 
 func Connect(ctx context.Context, getenv func(string) string) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, getenv, false /*migrate*/)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, getenv, false /*migrate*/, false)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func Migrate(ctx context.Context, getenv func(string) string) error {
-	pool, clickhouse, err := connectEx(ctx, getenv, true /*migrate*/)
+func Migrate(ctx context.Context, getenv func(string) string, up bool) error {
+	pool, clickhouse, err := connectEx(ctx, getenv, true /*migrate*/, up)
 	if err != nil {
 		return err
 	}
@@ -35,7 +35,7 @@ func Migrate(ctx context.Context, getenv func(string) string) error {
 	return err
 }
 
-func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	verbose := getenv("VERBOSE") == "1"
 	errs, ctx := errgroup.WithContext(ctx)
 
@@ -76,12 +76,16 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate bool) (p
 		}
 
 		if migrate {
+			domain := getenv("PC_DOMAIN")
 			migrateCtx := &migrateContext{
 				PortalPropertyID: PortalPropertyID,
-				PortalDomain:     "portal." + getenv("PC_DOMAIN"),
+				PortalDomain:     "portal." + domain,
 				AdminEmail:       getenv("PC_ADMIN_EMAIL"),
 			}
-			return migratePostgres(ctx, pool, migrateCtx)
+			if len(migrateCtx.AdminEmail) == 0 {
+				migrateCtx.AdminEmail = "admin@" + domain
+			}
+			return migratePostgres(ctx, pool, migrateCtx, up)
 		}
 
 		return nil
