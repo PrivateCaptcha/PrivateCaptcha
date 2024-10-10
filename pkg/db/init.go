@@ -78,6 +78,7 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool
 		if migrate {
 			domain := getenv("PC_DOMAIN")
 			migrateCtx := &migrateContext{
+				Stage:            getenv("STAGE"),
 				PortalPropertyID: PortalPropertyID,
 				PortalDomain:     "portal." + domain,
 				AdminEmail:       getenv("PC_ADMIN_EMAIL"),

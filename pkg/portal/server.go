@@ -73,6 +73,7 @@ var (
 		Price                string
 		HeaderCSRFToken      string
 		UsageEndpoint        string
+		NotificationEndpoint string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -118,6 +119,7 @@ var (
 		Price:                common.ParamPrice,
 		HeaderCSRFToken:      common.HeaderCSRFToken,
 		UsageEndpoint:        common.UsageEndpoint,
+		NotificationEndpoint: common.NotificationEndpoint,
 	}
 )
 
@@ -152,6 +154,11 @@ type requestContext struct {
 
 type csrfRenderContext struct {
 	Token string
+}
+
+type systemNotificationContext struct {
+	Notification   string
+	NotificationID string
 }
 
 type alertRenderContext struct {
@@ -316,6 +323,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(delete(common.UserEndpoint), privateWriteChain.Build(s.deleteAccount))
 	router.HandleFunc(get(common.SupportEndpoint), privateReadChain.Build(s.handler(s.getSupport)))
 	router.HandleFunc(post(common.SupportEndpoint), privateWriteChain.Build(s.handler(s.postSupport)))
+	router.HandleFunc(delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Add(s.private).Build(s.dismissNotification))
 	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", privateReadChain.Build(s.getPortal))
 	// wildcard
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", corsHandler(ratelimiter(common.Logged(s.notFound))))

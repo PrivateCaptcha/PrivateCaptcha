@@ -46,6 +46,7 @@ func userOrgsCacheKey(userID int32) string            { return "userorgs/" + str
 func orgUsersCacheKey(orgID int32) string             { return "orgusers/" + strconv.Itoa(int(orgID)) }
 func userAPIKeysCacheKey(userID int32) string         { return "userapikeys/" + strconv.Itoa(int(userID)) }
 func subscriptionCacheKey(sID int32) string           { return "subscr/" + strconv.Itoa(int(sID)) }
+func notificationCacheKey(ID int32) string            { return "notif/" + strconv.Itoa(int(ID)) }
 
 func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessStore {
 	return &BusinessStore{
@@ -388,4 +389,12 @@ func (s *BusinessStore) RetrieveSoftDeletedUsers(ctx context.Context, before tim
 
 func (s *BusinessStore) DeleteUsers(ctx context.Context, ids []int32) error {
 	return s.defaultImpl.deleteUsers(ctx, ids)
+}
+
+func (s *BusinessStore) RetrieveNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
+	return s.defaultImpl.retrieveNotification(ctx, id)
+}
+
+func (s *BusinessStore) RetrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
+	return s.defaultImpl.retrieveUserNotification(ctx, tnow, userID)
 }

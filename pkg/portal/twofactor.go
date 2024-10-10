@@ -1,9 +1,11 @@
 package portal
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -102,6 +104,17 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	go func(bctx context.Context) {
+		if userID, ok := sess.Get(session.KeyUserID).(int32); ok {
+			slog.DebugContext(bctx, "Fetching system notification for user", "userID", userID)
+			if n, err := s.Store.RetrieveUserNotification(bctx, time.Now().UTC(), userID); err == nil {
+				sess.Set(session.KeyNotificationID, n.ID)
+			}
+		} else {
+			slog.WarnContext(bctx, "UserID not found in session")
+		}
+	}(common.CopyTraceID(ctx, context.Background()))
 
 	sess.Set(session.KeyLoginStep, loginStepCompleted)
 	sess.Delete(session.KeyTwoFactorCode)

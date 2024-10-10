@@ -13,6 +13,10 @@ WITH subscription_insert AS (
     INSERT INTO backend.organizations (name, user_id)
     SELECT 'Private Captcha', id FROM user_insert
     RETURNING id AS org_id, user_id
+), notify_insert AS (
+    INSERT INTO backend.system_notifications (message, user_id)
+    SELECT 'This is a test system notification for {{.Stage}}', id FROM user_insert
+    RETURNING id as notification_id
 )
 INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain, level, growth)
 SELECT
@@ -26,6 +30,4 @@ SELECT
     'fast'
 FROM org_insert;
 
-{{ if eq .Stage "dev" }}
-INSERT INTO backend.system_notifications (message) VALUES ('This is a test system notification for {{.Stage}}');
-{{ end }}
+
