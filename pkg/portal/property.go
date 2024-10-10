@@ -62,6 +62,11 @@ type propertyDashboardRenderContext struct {
 	CanEdit   bool
 }
 
+type propertyIntegrationsRenderContext struct {
+	propertyDashboardRenderContext
+	Sitekey string
+}
+
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
 	return &userProperty{
 		ID:     strconv.Itoa(int(p.ID)),
@@ -448,9 +453,20 @@ func (s *Server) getPropertySettings(w http.ResponseWriter, r *http.Request) (Mo
 }
 
 func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	renderCtx, err := s.getOrgProperty(w, r)
+	dashboardCtx, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, "", err
+	}
+
+	// should just hit cache right away
+	property, err := s.property(r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	renderCtx := &propertyIntegrationsRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		Sitekey:                        db.UUIDToSiteKey(property.ExternalID),
 	}
 
 	return renderCtx, propertyDashboardIntegrationsTemplate, nil

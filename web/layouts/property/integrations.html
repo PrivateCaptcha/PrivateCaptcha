@@ -44,19 +44,28 @@
                         <div class="ml-4">
                             <h3 class="text-base font-semibold leading-6 text-gray-900">HTML/JS Snippet</h3>
                             <p class="text-sm text-gray-500">
-                            Works with any application or backend system
+                            Works with any web application
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-        <div class="bg-gray-200 px-6 py-5 sm:p-6 sm:flex sm:items-start sm:justify-between">
-            <div class="sm:flex sm:items-start">
-                <code class="inline-block rounded-md px-3 py-2 text-sm font-mono text-gray-800">{{ `<script defer src="https://privatecaptcha.com/snippet.js"></script>` }}</code>
+        <div class="bg-gray-200 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
+            <div class="grow">
+                <code class="block rounded-md bg-gray-200 text-gray-800">
+                    <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this to the <head> of your website -->` }}
+{{ `<script defer src="https://privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}
+
+{{ `<!-- Add this to your form -->` }}
+{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
+                </code>
             </div>
             <div class="mt-4 sm:ml-6 sm:mt-0 sm:flex-shrink-0">
-                <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Copy</button>
+                <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    onclick="var textarea = document.getElementById('snippet'); textarea.focus(); textarea.select(); document.execCommand('copy');">
+                    Copy
+                </button>
             </div>
         </div>
     </div>
