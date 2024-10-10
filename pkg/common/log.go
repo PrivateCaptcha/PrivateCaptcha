@@ -54,6 +54,14 @@ func TraceContext(ctx context.Context, traceID string) context.Context {
 	return ctx
 }
 
+func CopyTraceID(from context.Context, to context.Context) context.Context {
+	if tid, ok := from.Value(TraceIDContextKey).(string); ok && (len(tid) > 0) {
+		return context.WithValue(to, TraceIDContextKey, tid)
+	}
+
+	return to
+}
+
 func SetupLogs(stage string, verbose bool) {
 	opts := &slog.HandlerOptions{
 		Level: slog.LevelDebug,

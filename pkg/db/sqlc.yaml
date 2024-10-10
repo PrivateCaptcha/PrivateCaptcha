@@ -49,6 +49,7 @@ sql:
           backend_support_category_suggestion: SupportCategorySuggestion
           backend_support_category_problem: SupportCategoryProblem
           backend_support_category_unknown: SupportCategoryUnknown
+          backend_system_notification: SystemNotification
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"

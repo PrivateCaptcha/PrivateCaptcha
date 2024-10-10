@@ -63,6 +63,7 @@ type userOrg struct {
 
 type orgDashboardRenderContext struct {
 	csrfRenderContext
+	systemNotificationContext
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
@@ -222,7 +223,8 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(user.Email),
 		},
-		Orgs: orgsToUserOrgs(orgs),
+		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
+		Orgs:                      orgsToUserOrgs(orgs),
 	}
 
 	idx := -1

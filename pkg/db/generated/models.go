@@ -274,6 +274,15 @@ type Support struct {
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
+type SystemNotification struct {
+	ID        int32              `db:"id" json:"id"`
+	Message   string             `db:"message" json:"message"`
+	StartDate pgtype.Timestamptz `db:"start_date" json:"start_date"`
+	EndDate   pgtype.Timestamptz `db:"end_date" json:"end_date"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
+	IsActive  pgtype.Bool        `db:"is_active" json:"is_active"`
+}
+
 type UsageLimitViolation struct {
 	UserID          int32       `db:"user_id" json:"user_id"`
 	PaddleProductID string      `db:"paddle_product_id" json:"paddle_product_id"`

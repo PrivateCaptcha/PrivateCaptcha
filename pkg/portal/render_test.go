@@ -215,11 +215,14 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardIntegrationsTemplate,
-			model: &propertyDashboardRenderContext{
-				csrfRenderContext: stubToken(),
-				Property:          stubProperty("Foo", "123"),
-				Org:               stubOrg("123"),
-				CanEdit:           true,
+			model: &propertyIntegrationsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					csrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				Sitekey: "qwerty",
 			},
 		},
 		// same as above, but property settings _template_
