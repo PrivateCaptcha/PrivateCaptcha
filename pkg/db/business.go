@@ -402,3 +402,7 @@ func (s *BusinessStore) RetrieveNotification(ctx context.Context, id int32) (*db
 func (s *BusinessStore) RetrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
 	return s.defaultImpl.retrieveUserNotification(ctx, tnow, userID)
 }
+
+func (s *BusinessStore) CreateNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
+	return s.defaultImpl.createNotification(ctx, message, tnow, duration, userID)
+}

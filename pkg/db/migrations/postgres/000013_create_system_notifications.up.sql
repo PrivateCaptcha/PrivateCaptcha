@@ -4,5 +4,6 @@ CREATE TABLE IF NOT EXISTS backend.system_notifications(
     start_date TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     end_date TIMESTAMPTZ DEFAULT NULL,
     user_id INTEGER DEFAULT NULL,
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY(user_id) REFERENCES backend.users(id) ON DELETE SET NULL
 );

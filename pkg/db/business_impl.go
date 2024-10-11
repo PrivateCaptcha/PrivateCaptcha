@@ -1375,3 +1375,36 @@ func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tno
 
 	return n, err
 }
+
+func (impl *businessStoreImpl) createNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
+	arg := &dbgen.CreateNotificationParams{
+		Message:   message,
+		StartDate: Timestampz(tnow),
+		EndDate:   pgtype.Timestamptz{Valid: false},
+		UserID:    pgtype.Int4{Valid: false},
+	}
+
+	if duration != nil {
+		arg.EndDate = Timestampz(tnow.Add(*duration))
+	}
+
+	if userID != nil {
+		arg.UserID = Int(*userID)
+	}
+
+	n, err := impl.queries.CreateNotification(ctx, arg)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create a system notification", common.ErrAttr(err))
+		return nil, err
+	}
+
+	if n != nil {
+		cacheKey := notificationCacheKey(n.ID)
+		_ = impl.cache.Set(ctx, cacheKey, n)
+	}
+
+	slog.DebugContext(ctx, "Created system notification", "notifID", n.ID)
+
+	return n, err
+}
