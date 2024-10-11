@@ -12,3 +12,7 @@ SELECT * FROM backend.system_notifications
    start_date DESC
  LIMIT 1;
 
+-- name: CreateNotification :one
+INSERT INTO backend.system_notifications (message, start_date, end_date, user_id)
+VALUES ($1, $2, $3, $4)
+RETURNING *;

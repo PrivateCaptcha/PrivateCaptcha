@@ -11,6 +11,38 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const createNotification = `-- name: CreateNotification :one
+INSERT INTO backend.system_notifications (message, start_date, end_date, user_id)
+VALUES ($1, $2, $3, $4)
+RETURNING id, message, start_date, end_date, user_id, is_active
+`
+
+type CreateNotificationParams struct {
+	Message   string             `db:"message" json:"message"`
+	StartDate pgtype.Timestamptz `db:"start_date" json:"start_date"`
+	EndDate   pgtype.Timestamptz `db:"end_date" json:"end_date"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) CreateNotification(ctx context.Context, arg *CreateNotificationParams) (*SystemNotification, error) {
+	row := q.db.QueryRow(ctx, createNotification,
+		arg.Message,
+		arg.StartDate,
+		arg.EndDate,
+		arg.UserID,
+	)
+	var i SystemNotification
+	err := row.Scan(
+		&i.ID,
+		&i.Message,
+		&i.StartDate,
+		&i.EndDate,
+		&i.UserID,
+		&i.IsActive,
+	)
+	return &i, err
+}
+
 const getLastActiveNotification = `-- name: GetLastActiveNotification :one
 SELECT id, message, start_date, end_date, user_id, is_active FROM backend.system_notifications
  WHERE is_active = TRUE AND
