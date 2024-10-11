@@ -112,7 +112,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 				sess.Set(session.KeyNotificationID, n.ID)
 			}
 		} else {
-			slog.WarnContext(bctx, "UserID not found in session")
+			slog.ErrorContext(bctx, "UserID not found in session")
 		}
 	}(common.CopyTraceID(ctx, context.Background()))
 
