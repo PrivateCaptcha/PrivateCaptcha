@@ -206,12 +206,12 @@ func TestSystemNotification(t *testing.T) {
 		t.Errorf("Cannot retrieve generic user notification: %v", err)
 	}
 
-	userNotification, err := store.CreateNotification(ctx, "message", tnow, nil /*duration*/, &user.ID)
+	userNotification, err := store.CreateNotification(ctx, "message", tnow.Add(-1*time.Minute), nil /*duration*/, &user.ID)
 	if err != nil {
 		t.Error(err)
 	}
 
-	// specific notification has precedence over general one, even though both are active
+	// specific notification has precedence over general one, even though both are active AND system notification is "fresher"
 	if n, err := store.RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != userNotification.ID) {
 		t.Errorf("Cannot retrieve specific user notification: %v", err)
 	}
