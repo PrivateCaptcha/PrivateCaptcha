@@ -15,7 +15,7 @@ WITH subscription_insert AS (
     RETURNING id AS org_id, user_id
 ), notify_insert AS (
     INSERT INTO backend.system_notifications (message, user_id)
-    SELECT 'This is a test system notification for {{.Stage}}', id FROM user_insert
+    SELECT 'This is a <i>test</i> system notification for <strong>{{.Stage}}</strong>', id FROM user_insert
     RETURNING id as notification_id
 )
 INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain, level, growth)

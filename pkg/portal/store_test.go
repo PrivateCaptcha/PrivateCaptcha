@@ -178,3 +178,41 @@ func TestLockUnlock(t *testing.T) {
 		t.Fatal("Was able to acquire a lock again right away")
 	}
 }
+
+func TestSystemNotification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+	tnow := time.Now().UTC()
+
+	// Create a new user and organization
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	if _, err := store.RetrieveUserNotification(ctx, tnow, user.ID); err != db.ErrRecordNotFound {
+		t.Errorf("Unexpected result for user notification: %v", err)
+	}
+
+	generalNotification, err := store.CreateNotification(ctx, "message", tnow, nil /*duration*/, nil /*userID*/)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if n, err := store.RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != generalNotification.ID) {
+		t.Errorf("Cannot retrieve generic user notification: %v", err)
+	}
+
+	userNotification, err := store.CreateNotification(ctx, "message", tnow, nil /*duration*/, &user.ID)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// specific notification has precedence over general one, even though both are active
+	if n, err := store.RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != userNotification.ID) {
+		t.Errorf("Cannot retrieve specific user notification: %v", err)
+	}
+}
