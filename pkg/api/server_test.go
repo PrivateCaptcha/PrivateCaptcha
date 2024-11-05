@@ -61,10 +61,7 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusiness(pool, cache)
 
-	ratelimiter, err := ratelimit.NewHTTPRateLimiter(os.Getenv(common.ConfigRateLimitHeader))
-	if err != nil {
-		panic(err)
-	}
+	ratelimiter := ratelimit.NewIPAddrRateLimiter(os.Getenv(common.ConfigRateLimitHeader))
 
 	blockedUsers := db.NewStaticCache[int32, *common.UserLimitStatus](100 /*cap*/, nil /*missing data*/)
 	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, authBackfillDelay)

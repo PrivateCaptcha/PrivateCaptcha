@@ -64,10 +64,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		return err
 	}
 
-	ratelimiter, err := ratelimit.NewHTTPRateLimiter(getenv(common.ConfigRateLimitHeader))
-	if err != nil {
-		return err
-	}
+	ratelimiter := ratelimit.NewIPAddrRateLimiter(getenv(common.ConfigRateLimitHeader))
 
 	pool, clickhouse, dberr := db.Connect(ctx, getenv)
 	if dberr != nil {
