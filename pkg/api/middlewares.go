@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 )
 
@@ -19,30 +20,36 @@ const (
 )
 
 type authMiddleware struct {
-	Store          *db.BusinessStore
-	ratelimiter    *ratelimit.HTTPRateLimiter
-	sitekeyChan    chan string
-	batchSize      int
-	backfillCancel context.CancelFunc
-	privateAPIKey  string
-	userLimits     common.Cache[int32, *common.UserLimitStatus]
+	Store             *db.BusinessStore
+	ipRateLimiter     ratelimit.HTTPRateLimiter
+	apiKeyRateLimiter ratelimit.HTTPRateLimiter
+	apiKeyBuckets     *ratelimit.StringBuckets
+	sitekeyChan       chan string
+	batchSize         int
+	backfillCancel    context.CancelFunc
+	privateAPIKey     string
+	userLimits        common.Cache[int32, *common.UserLimitStatus]
 }
 
 func NewAuthMiddleware(getenv func(string) string,
 	store *db.BusinessStore,
-	ratelimiter *ratelimit.HTTPRateLimiter,
+	ipRateLimiter ratelimit.HTTPRateLimiter,
 	userLimits common.Cache[int32, *common.UserLimitStatus],
 	backfillDelay time.Duration) *authMiddleware {
 	const batchSize = 10
 
 	am := &authMiddleware{
-		ratelimiter:   ratelimiter,
+		ipRateLimiter: ipRateLimiter,
+		apiKeyBuckets: ratelimit.NewAPIKeyBuckets(),
 		Store:         store,
 		sitekeyChan:   make(chan string, 3*batchSize),
 		batchSize:     batchSize,
 		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
 		userLimits:    userLimits,
 	}
+
+	am.apiKeyRateLimiter = ratelimit.NewAPIKeyRateLimiter(
+		getenv(common.ConfigRateLimitHeader), am.apiKeyBuckets, am.apiKeyKeyFunc)
 
 	var backfillCtx context.Context
 	backfillCtx, am.backfillCancel = context.WithCancel(
@@ -54,6 +61,7 @@ func NewAuthMiddleware(getenv func(string) string,
 
 func (am *authMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
+	am.apiKeyRateLimiter.Shutdown()
 	am.backfillCancel()
 	close(am.sitekeyChan)
 }
@@ -205,7 +213,7 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 }
 
 func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
-	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+	return am.ipRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		authHeader := r.Header.Get(common.HeaderAuthorization)
 		if authHeader == "" {
@@ -237,7 +245,7 @@ func (am *authMiddleware) originAllowed(origin string) bool {
 }
 
 func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
-	return am.ratelimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+	return am.ipRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		origin := r.Header.Get("Origin")
@@ -339,11 +347,11 @@ func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
 		}
 	}
 
-	return am.ratelimiter.ClientIP(r)
+	return ""
 }
 
 func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
-	return am.ratelimiter.RateLimitKeyFunc(am.apiKeyKeyFunc, func(w http.ResponseWriter, r *http.Request) {
+	return am.apiKeyRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)
 		if len(secret) != db.SecretLen {
@@ -374,11 +382,16 @@ func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 			// rate limiter key will be the {secret} itself _only_ when we are cached
 			// which means if it's not, then we have just fetched the record from DB
 			if rateLimiterKey, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (rateLimiterKey != secret) {
-				am.ratelimiter.UpdateLimits(secret, uint32(apiKey.RequestsBurst), apiKey.RequestsPerSecond)
+				am.updateLimits(secret, uint32(apiKey.RequestsBurst), apiKey.RequestsPerSecond)
 			}
 		}
 
 		ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (am *authMiddleware) updateLimits(key string, capacity leakybucket.TLevel, rateLimitPerSecond float64) bool {
+	interval := float64(time.Second) / rateLimitPerSecond
+	return am.apiKeyBuckets.Update(key, capacity, time.Duration(interval))
 }
