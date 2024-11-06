@@ -145,6 +145,14 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		WriteTimeout:      10 * time.Second,
 	}
 
+	updateConfigFunc := func() {
+		maintenanceMode := common.EnvToBool(getenv("PC_MAINTENANCE_MODE"))
+		businessDB.UpdateConfig(maintenanceMode)
+		timeSeriesDB.UpdateConfig(maintenanceMode)
+		portalServer.UpdateConfig(maintenanceMode)
+	}
+	updateConfigFunc()
+
 	var listeners []net.Listener
 	if systemdListener {
 		listeners, err = activation.Listeners()
@@ -178,7 +186,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	quit := make(chan struct{})
 	go func() {
 		signals := make(chan os.Signal, 1)
-		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		defer func() {
 			signal.Stop(signals)
 			close(signals)
@@ -191,6 +199,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 			}
 			slog.DebugContext(ctx, "Received signal", "signal", sig)
 			switch sig {
+			case syscall.SIGHUP:
+				updateConfigFunc()
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
 				close(quit)
