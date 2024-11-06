@@ -98,6 +98,10 @@ type businessStoreImpl struct {
 }
 
 func (impl *businessStoreImpl) ping(ctx context.Context) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	v, err := impl.queries.Ping(ctx)
 	if err != nil {
 		return err
@@ -107,10 +111,18 @@ func (impl *businessStoreImpl) ping(ctx context.Context) error {
 }
 
 func (impl *businessStoreImpl) deleteExpiredCache(ctx context.Context) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	return impl.queries.DeleteExpiredCache(ctx)
 }
 
 func (impl *businessStoreImpl) createNewSubscription(ctx context.Context, params *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	subscription, err := impl.queries.CreateSubscription(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create a subscription in DB", common.ErrAttr(err))
@@ -126,6 +138,10 @@ func (impl *businessStoreImpl) createNewSubscription(ctx context.Context, params
 }
 
 func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name string, subscriptionID *int32) (*dbgen.User, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	params := &dbgen.CreateUserParams{
 		Name:  name,
 		Email: email,
@@ -153,6 +169,10 @@ func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name st
 }
 
 func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	org, err := impl.queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
 		Name:   name,
 		UserID: Int(userID),
@@ -176,6 +196,10 @@ func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name s
 }
 
 func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	user, err := impl.queries.SoftDeleteUser(ctx, userID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", userID, common.ErrAttr(err))
@@ -263,6 +287,10 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 		return nil, ErrInvalidInput
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	properties, err := impl.queries.GetPropertiesByExternalID(ctx, keys)
 	if err != nil && err != pgx.ErrNoRows {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekeys", common.ErrAttr(err))
@@ -308,6 +336,10 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 		return nil, ErrNegativeCacheHit
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	eid := UUIDFromSecret(secret)
 	if !eid.Valid {
 		return nil, ErrInvalidInput
@@ -333,6 +365,10 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 }
 
 func (impl *businessStoreImpl) checkPuzzleCached(ctx context.Context, puzzleID string) bool {
+	if impl.queries == nil {
+		return false
+	}
+
 	key := puzzleCacheKey(puzzleID)
 
 	data, err := impl.queries.GetCachedByKey(ctx, key)
@@ -351,6 +387,10 @@ func (impl *businessStoreImpl) cachePaddlePrices(ctx context.Context, prices map
 		return ErrInvalidInput
 	}
 
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	data, err := json.Marshal(prices)
 	if err != nil {
 		return err
@@ -364,6 +404,10 @@ func (impl *businessStoreImpl) cachePaddlePrices(ctx context.Context, prices map
 }
 
 func (impl *businessStoreImpl) retrievePaddlePrices(ctx context.Context) (map[string]int, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	data, err := impl.queries.GetCachedByKey(ctx, paddlePricesKey)
 	if err == pgx.ErrNoRows {
 		return nil, ErrCacheMiss
@@ -383,6 +427,10 @@ func (impl *businessStoreImpl) retrievePaddlePrices(ctx context.Context) (map[st
 }
 
 func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	key := puzzleCacheKey(p.PuzzleIDString())
 	diff := p.Expiration.Sub(tnow)
 
@@ -399,6 +447,10 @@ func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (
 		return user, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	user, err := impl.queries.GetUserByID(ctx, userID)
@@ -425,6 +477,10 @@ func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string
 		return nil, ErrInvalidInput
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	user, err := impl.queries.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -445,6 +501,10 @@ func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string
 }
 
 func (impl *businessStoreImpl) findUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	user, err := impl.queries.GetUserBySubscriptionID(ctx, Int(subscriptionID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -469,6 +529,10 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 
 	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, cacheKey); err == nil {
 		return orgs, nil
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	orgs, err := impl.queries.GetUserOrganizations(ctx, Int(userID))
@@ -504,6 +568,10 @@ func (impl *businessStoreImpl) retrieveOrganization(ctx context.Context, orgID i
 		return org, nil
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	org, err := impl.queries.GetOrganizationByID(ctx, orgID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -528,6 +596,10 @@ func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int3
 
 	if prop, err := fetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 		return prop, nil
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	property, err := impl.queries.GetPropertyByID(ctx, propID)
@@ -557,6 +629,10 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 		return subscription, nil
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	subscription, err := impl.queries.GetSubscriptionByID(ctx, sID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -577,6 +653,10 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 }
 
 func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	subscription, err := impl.queries.UpdateSubscription(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update subscription in DB", "paddleSubscriptionID", params.PaddleSubscriptionID, common.ErrAttr(err))
@@ -596,6 +676,10 @@ func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *d
 func (impl *businessStoreImpl) findOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
 	if len(name) == 0 {
 		return nil, ErrInvalidInput
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	property, err := impl.queries.GetOrgPropertyByName(ctx, &dbgen.GetOrgPropertyByNameParams{
@@ -620,6 +704,10 @@ func (impl *businessStoreImpl) findOrg(ctx context.Context, name string, userID 
 		return nil, ErrInvalidInput
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	org, err := impl.queries.FindUserOrgByName(ctx, &dbgen.FindUserOrgByNameParams{
 		UserID: Int(userID),
 		Name:   name,
@@ -638,6 +726,10 @@ func (impl *businessStoreImpl) findOrg(ctx context.Context, name string, userID 
 }
 
 func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	property, err := impl.queries.CreateProperty(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property in DB", "name", params.Name, "org", params.OrgID, common.ErrAttr(err))
@@ -657,6 +749,10 @@ func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *db
 }
 
 func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	property, err := impl.queries.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
 		Name:   name,
 		Level:  level,
@@ -680,6 +776,10 @@ func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32,
 }
 
 func (impl *businessStoreImpl) softDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	property, err := impl.queries.SoftDeleteProperty(ctx, propID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", propID, common.ErrAttr(err))
@@ -706,6 +806,10 @@ func (impl *businessStoreImpl) retrieveOrgProperties(ctx context.Context, orgID 
 		return properties, nil
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	properties, err := impl.queries.GetOrgProperties(ctx, Int(orgID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -725,6 +829,10 @@ func (impl *businessStoreImpl) retrieveOrgProperties(ctx context.Context, orgID 
 }
 
 func (impl *businessStoreImpl) updateOrganization(ctx context.Context, orgID int32, name string) (*dbgen.Organization, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	org, err := impl.queries.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
 		Name: name,
 		ID:   orgID,
@@ -746,6 +854,10 @@ func (impl *businessStoreImpl) updateOrganization(ctx context.Context, orgID int
 }
 
 func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	if err := impl.queries.SoftDeleteOrganization(ctx, orgID); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark organization as deleted in DB", "orgID", orgID, common.ErrAttr(err))
 		return err
@@ -769,6 +881,10 @@ func (impl *businessStoreImpl) retrieveOrganizationUsers(ctx context.Context, or
 		return users, nil
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	users, err := impl.queries.GetOrganizationUsers(ctx, orgID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to fetch organization users", "orgID", orgID, common.ErrAttr(err))
@@ -785,6 +901,10 @@ func (impl *businessStoreImpl) retrieveOrganizationUsers(ctx context.Context, or
 }
 
 func (impl *businessStoreImpl) inviteUserToOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	_, err := impl.queries.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
 		OrgID:  orgID,
 		UserID: userID,
@@ -804,6 +924,10 @@ func (impl *businessStoreImpl) inviteUserToOrg(ctx context.Context, orgID int32,
 }
 
 func (impl *businessStoreImpl) joinOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  userID,
@@ -826,6 +950,10 @@ func (impl *businessStoreImpl) joinOrg(ctx context.Context, orgID int32, userID 
 }
 
 func (impl *businessStoreImpl) leaveOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  userID,
@@ -848,6 +976,10 @@ func (impl *businessStoreImpl) leaveOrg(ctx context.Context, orgID int32, userID
 }
 
 func (impl *businessStoreImpl) removeUserFromOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
 		OrgID:  orgID,
 		UserID: userID,
@@ -868,6 +1000,10 @@ func (impl *businessStoreImpl) removeUserFromOrg(ctx context.Context, orgID int3
 }
 
 func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userID, subscriptionID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	user, err := impl.queries.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
 		ID:             userID,
 		SubscriptionID: Int(subscriptionID),
@@ -888,6 +1024,10 @@ func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userI
 }
 
 func (impl *businessStoreImpl) updateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	user, err := impl.queries.UpdateUserData(ctx, &dbgen.UpdateUserDataParams{
 		Name:  name,
 		Email: newEmail,
@@ -915,6 +1055,10 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 		return keys, nil
 	}
 
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	keys, err := impl.queries.GetUserAPIKeys(ctx, Int(userID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user API keys", "userID", userID, common.ErrAttr(err))
@@ -931,6 +1075,10 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 }
 
 func (impl *businessStoreImpl) updateAPIKey(ctx context.Context, externalID pgtype.UUID, expiration time.Time, enabled bool) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	key, err := impl.queries.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
 		ExpiresAt:  Timestampz(expiration),
 		Enabled:    Bool(enabled),
@@ -957,6 +1105,10 @@ func (impl *businessStoreImpl) updateAPIKey(ctx context.Context, externalID pgty
 }
 
 func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	// current logic is that initial values will be set per plan and adjusted manually in DB if requested by customer
 	const apiKeyRequestsBurst = 10
 	burst := int32(requestsPerSecond * 2)
@@ -990,6 +1142,10 @@ func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, n
 }
 
 func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	key, err := impl.queries.DeleteAPIKey(ctx, &dbgen.DeleteAPIKeyParams{
 		ID:     keyID,
 		UserID: Int(userID),
@@ -1020,6 +1176,10 @@ func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID i
 }
 
 func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.UpdateUserAPIKeysRateLimits(ctx, &dbgen.UpdateUserAPIKeysRateLimitsParams{
 		RequestsPerSecond: requestsPerSecond,
 		UserID:            Int(userID),
@@ -1045,6 +1205,10 @@ func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, 
 }
 
 func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	ticket, err := impl.queries.CreateSupportTicket(ctx, &dbgen.CreateSupportTicketParams{
 		Category: category,
 		Message:  Text(message),
@@ -1062,6 +1226,10 @@ func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category
 }
 
 func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	users, err := impl.queries.GetUsersWithoutSubscription(ctx, userIDs)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1079,6 +1247,10 @@ func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Cont
 }
 
 func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	subscriptions, err := impl.queries.GetSubscriptionsByUserIDs(ctx, userIDs)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1099,6 +1271,10 @@ func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Contex
 func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
 	if len(violations) == 0 {
 		return nil
+	}
+
+	if impl.queries == nil {
+		return ErrMaintenance
 	}
 
 	slog.DebugContext(ctx, "About to insert usage limit violations", "count", len(violations))
@@ -1163,6 +1339,10 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 }
 
 func (impl *businessStoreImpl) retrieveUsersWithConsecutiveViolations(ctx context.Context) ([]*dbgen.GetUsersWithConsecutiveViolationsRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	rows, err := impl.queries.GetUsersWithConsecutiveViolations(ctx)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1177,6 +1357,10 @@ func (impl *businessStoreImpl) retrieveUsersWithConsecutiveViolations(ctx contex
 }
 
 func (impl *businessStoreImpl) retrieveUsersWithLargeViolations(ctx context.Context, from time.Time, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	rows, err := impl.queries.GetUsersWithLargeViolations(ctx, &dbgen.GetUsersWithLargeViolationsParams{
 		Column1: rate,
 		Column2: Date(from),
@@ -1196,6 +1380,10 @@ func (impl *businessStoreImpl) retrieveUsersWithLargeViolations(ctx context.Cont
 func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	if (len(name) == 0) || expiration.IsZero() {
 		return nil, ErrInvalidInput
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	lock, err := impl.queries.InsertLock(ctx, &dbgen.InsertLockParams{
@@ -1218,6 +1406,9 @@ func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, dat
 }
 
 func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
 	err := impl.queries.DeleteLock(ctx, name)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to release a lock", "name", name, common.ErrAttr(err))
@@ -1227,6 +1418,10 @@ func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) err
 }
 
 func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context, before time.Time) error {
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.DeleteDeletedRecords(ctx, Timestampz(before))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to cleanup deleted records", "before", before, common.ErrAttr(err))
@@ -1236,6 +1431,10 @@ func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context, before 
 }
 
 func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	properties, err := impl.queries.GetSoftDeletedProperties(ctx, &dbgen.GetSoftDeletedPropertiesParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
@@ -1257,6 +1456,10 @@ func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32
 		return nil
 	}
 
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.DeleteProperties(ctx, ids)
 
 	if err != nil {
@@ -1267,6 +1470,10 @@ func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32
 }
 
 func (impl *businessStoreImpl) retrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	organizations, err := impl.queries.GetSoftDeletedOrganizations(ctx, &dbgen.GetSoftDeletedOrganizationsParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
@@ -1288,6 +1495,10 @@ func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []in
 		return nil
 	}
 
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.DeleteOrganizations(ctx, ids)
 
 	if err != nil {
@@ -1298,6 +1509,10 @@ func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []in
 }
 
 func (impl *businessStoreImpl) retrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	users, err := impl.queries.GetSoftDeletedUsers(ctx, &dbgen.GetSoftDeletedUsersParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
@@ -1319,6 +1534,10 @@ func (impl *businessStoreImpl) deleteUsers(ctx context.Context, ids []int32) err
 		return nil
 	}
 
+	if impl.queries == nil {
+		return ErrMaintenance
+	}
+
 	err := impl.queries.DeleteUsers(ctx, ids)
 
 	if err != nil {
@@ -1333,6 +1552,10 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 
 	if notif, err := fetchCachedOne[dbgen.SystemNotification](ctx, impl.cache, cacheKey); err == nil {
 		return notif, nil
+	}
+
+	if impl.queries == nil {
+		return nil, ErrMaintenance
 	}
 
 	notification, err := impl.queries.GetNotificationById(ctx, id)
@@ -1355,6 +1578,10 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 }
 
 func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	n, err := impl.queries.GetLastActiveNotification(ctx, &dbgen.GetLastActiveNotificationParams{
 		Column1: Timestampz(tnow),
 		UserID:  Int(userID),
@@ -1377,6 +1604,10 @@ func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tno
 }
 
 func (impl *businessStoreImpl) createNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
 	arg := &dbgen.CreateNotificationParams{
 		Message:   message,
 		StartDate: Timestampz(tnow),

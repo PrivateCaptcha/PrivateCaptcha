@@ -85,6 +85,27 @@ func TestGetLogin(t *testing.T) {
 	}
 }
 
+func TestGetLoginMaintenance(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+
+	server.UpdateConfig(true /*maintenance mode*/)
+	defer server.UpdateConfig(false /*maintenance mode*/)
+
+	srv := http.NewServeMux()
+	server.Setup(srv, fakeRateLimiter)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	resp := w.Result()
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("handler returned wrong status code: got %v want %v", resp.StatusCode, http.StatusSeeOther)
+	}
+}
+
 func TestPostLogin(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

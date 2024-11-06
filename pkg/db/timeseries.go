@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -30,6 +31,7 @@ const (
 type TimeSeriesStore struct {
 	clickhouse         *sql.DB
 	statsQueryTemplate *template.Template
+	maintenanceMode    atomic.Bool
 }
 
 func idsToString(ids []int32) string {
@@ -79,6 +81,10 @@ SETTINGS use_query_cache = true`
 	}
 }
 
+func (ts *TimeSeriesStore) UpdateConfig(maintenanceMode bool) {
+	ts.maintenanceMode.Store(maintenanceMode)
+}
+
 func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
 	rows, err := ts.clickhouse.Query("SELECT 1")
 	if err != nil {
@@ -101,10 +107,18 @@ func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
 	return nil
 }
 
+func (ts *TimeSeriesStore) isAvailable() bool {
+	return (ts.maintenanceMode.Load() == false)
+}
+
 func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {
 	if len(records) == 0 {
 		slog.WarnContext(ctx, "Attempt to insert empty access log batch")
 		return nil
+	}
+
+	if !ts.isAvailable() {
+		return ErrMaintenance
 	}
 
 	scope, err := ts.clickhouse.Begin()
@@ -143,6 +157,10 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 		return nil
 	}
 
+	if !ts.isAvailable() {
+		return ErrMaintenance
+	}
+
 	scope, err := ts.clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
@@ -179,6 +197,10 @@ func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int
 		return nil
 	}
 
+	if !ts.isAvailable() {
+		return ErrMaintenance
+	}
+
 	scope, err := ts.clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
@@ -212,6 +234,10 @@ func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int
 }
 
 func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
+	if !ts.isAvailable() {
+		return nil, ErrMaintenance
+	}
+
 	query := `SELECT timestamp, sum(count) as count
 FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
@@ -246,6 +272,10 @@ ORDER BY timestamp`
 }
 
 func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
+	if !ts.isAvailable() {
+		return nil, ErrMaintenance
+	}
+
 	query := `SELECT timestamp, sum(count) as count
 FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
@@ -276,6 +306,10 @@ ORDER BY timestamp`
 }
 
 func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
+	if !ts.isAvailable() {
+		return nil, ErrMaintenance
+	}
+
 	tnow := time.Now().UTC()
 	var timeFrom time.Time
 	var requestsTable string
@@ -366,6 +400,10 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 // takes {maxUsers} that were active since time {from} and checks if they violated their plan limits
 // assumes that somebody has filled in the limits table previously
 func (ts *TimeSeriesStore) FindUserLimitsViolations(ctx context.Context, from time.Time, maxUsers int) ([]*common.UserTimeCount, error) {
+	if !ts.isAvailable() {
+		return nil, ErrMaintenance
+	}
+
 	// NOTE: also can restrict monthly timestamp by the end of current month with:
 	// AND timestamp < toStartOfMonth(addMonths(now(), 1))
 	const limitsQuery = `SELECT rl.user_id, rl.monthly_count, ul.limit, rl.latest_timestamp
@@ -430,6 +468,10 @@ func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs
 		return nil
 	}
 
+	if !ts.isAvailable() {
+		return ErrMaintenance
+	}
+
 	ids := idsToString(propertyIDs)
 
 	// NOTE: access table for 1 month is not included as it does not have property_id column
@@ -447,6 +489,10 @@ func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs [
 		return nil
 	}
 
+	if !ts.isAvailable() {
+		return ErrMaintenance
+	}
+
 	ids := idsToString(orgIDs)
 
 	tables := []string{
@@ -461,6 +507,10 @@ func (ts *TimeSeriesStore) DeleteUsersData(ctx context.Context, userIDs []int32)
 	if len(userIDs) == 0 {
 		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
 		return nil
+	}
+
+	if !ts.isAvailable() {
+		return ErrMaintenance
 	}
 
 	ids := idsToString(userIDs)

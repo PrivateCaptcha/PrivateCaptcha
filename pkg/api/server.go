@@ -259,21 +259,23 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 	}
 
 	puzzleObject, property, verr := s.verifyPuzzleValid(ctx, puzzleBytes, expectedOwner, tnow)
-	if verr != puzzle.VerifyNoError {
+	if verr != puzzle.VerifyNoError && verr != puzzle.MaintenanceModeError {
 		return verr, nil
 	}
 
-	if verr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); verr != puzzle.VerifyNoError {
-		return verr, nil
+	if serr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); serr != puzzle.VerifyNoError {
+		return serr, nil
 	}
 
-	if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
-		slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
+	if (puzzleObject != nil) && (property != nil) {
+		if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
+			slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
+		}
+
+		s.addVerifyRecord(ctx, puzzleObject, property)
 	}
 
-	s.addVerifyRecord(ctx, puzzleObject, property)
-
-	return puzzle.VerifyNoError, nil
+	return verr, nil
 }
 
 func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
@@ -287,12 +289,17 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if verr != puzzle.VerifyNoError {
+	if (verr != puzzle.VerifyNoError) && (verr != puzzle.MaintenanceModeError) {
 		s.sendVerifyErrors(ctx, w, verr)
 		return
 	}
 
-	common.SendJSONResponse(ctx, w, &verifyResponse{Success: true}, map[string]string{})
+	response := &verifyResponse{Success: true}
+	if verr == puzzle.MaintenanceModeError {
+		response.ErrorCodes = []puzzle.VerifyError{puzzle.MaintenanceModeError}
+	}
+
+	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
 func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property) {
@@ -327,12 +334,15 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, expe
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
 	properties, err := s.businessDB.RetrievePropertiesBySitekey(ctx, []string{sitekey})
 	if (err != nil) || (len(properties) != 1) {
-		if (err == db.ErrNegativeCacheHit) || (err == db.ErrRecordNotFound) || (err == db.ErrSoftDeleted) {
+		switch err {
+		case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 			return p, nil, puzzle.InvalidPropertyError
+		case db.ErrMaintenance:
+			return p, nil, puzzle.MaintenanceModeError
+		default:
+			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
+			return p, nil, puzzle.VerifyErrorOther
 		}
-
-		slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
-		return p, nil, puzzle.VerifyErrorOther
 	}
 
 	property := properties[0]
