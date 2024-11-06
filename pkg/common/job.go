@@ -48,7 +48,7 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 
 	defer func() {
 		if rvr := recover(); rvr != nil {
-			jlog.ErrorContext(ctx, "One-off job crashed", "panic", rvr, "stack", string(debug.Stack()))
+			jlog.ErrorContext(ctx, "Periodic job crashed", "panic", rvr, "stack", string(debug.Stack()))
 		}
 	}()
 
@@ -68,5 +68,5 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 		}
 	}
 
-	jlog.DebugContext(ctx, "Peridic job finished")
+	jlog.DebugContext(ctx, "Periodic job finished")
 }
