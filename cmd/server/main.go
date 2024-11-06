@@ -55,7 +55,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	var err error
 	cache, err = db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
 	if err != nil {
-		slog.Error("Failed to create memory cache for server", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
 	}
 
@@ -77,13 +77,10 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	businessDB := db.NewBusiness(pool, cache)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
-
 	var userLimits common.Cache[int32, *common.UserLimitStatus]
 	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](3*time.Hour, maxLimitedUsers, nil /*missing value*/)
 	if err != nil {
-		slog.Error("Failed to create memory cache for user limits", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
 		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
 	}
 	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
@@ -152,12 +149,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	if systemdListener {
 		listeners, err = activation.Listeners()
 		if err != nil {
-			slog.Error("Failed to retrieve systemd listeners", common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to retrieve systemd listeners", common.ErrAttr(err))
 			return err
 		}
 
 		if len(listeners) != 1 {
-			slog.Error("Unexpected number of systemd listeners available", "count", len(listeners))
+			slog.ErrorContext(ctx, "Unexpected number of systemd listeners available", "count", len(listeners))
 			return errors.New("unexpected number of systemd listeners")
 		}
 	} else {
@@ -172,16 +169,40 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		address := net.JoinHostPort(host, port)
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
-			slog.Error("Failed to listen", "address", address, common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
 			return err
 		}
 		listeners = append(listeners, listener)
 	}
 
+	quit := make(chan struct{})
 	go func() {
-		slog.Info("Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", stage)
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
+		defer func() {
+			signal.Stop(signals)
+			close(signals)
+		}()
+		for {
+			sig, ok := <-signals
+			if !ok {
+				slog.DebugContext(ctx, "Signals channel closed")
+				return
+			}
+			slog.DebugContext(ctx, "Received signal", "signal", sig)
+			switch sig {
+			case syscall.SIGINT, syscall.SIGTERM:
+				healthCheck.Shutdown(ctx)
+				close(quit)
+				return
+			}
+		}
+	}()
+
+	go func() {
+		slog.InfoContext(ctx, "Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", stage)
 		if err := httpServer.Serve(listeners[0]); err != nil && err != http.ErrServerClosed {
-			slog.Error("Error serving", common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Error serving", common.ErrAttr(err))
 		}
 	}()
 
@@ -230,8 +251,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		<-ctx.Done()
-		slog.Debug("Shutting down gracefully...")
+		<-quit
+		slog.DebugContext(ctx, "Shutting down gracefully")
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
@@ -243,7 +264,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
 		}
-		slog.Debug("Shutdown finished")
+		slog.DebugContext(ctx, "Shutdown finished")
 	}()
 
 	wg.Wait()
@@ -272,7 +293,7 @@ func main() {
 
 	switch *flagMode {
 	case modeServer, modeSystemd:
-		err = run(context.Background(), os.Getenv, os.Stderr, (*flagMode == modeSystemd))
+		err = run(common.TraceContext(context.Background(), "main"), os.Getenv, os.Stderr, (*flagMode == modeSystemd))
 	case modeMigrate:
 		err = migrate(context.Background(), os.Getenv, true /*up*/)
 	case modeRollback:
