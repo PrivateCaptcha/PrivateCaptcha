@@ -170,3 +170,12 @@ func ParseDomainName(input string) (string, error) {
 
 	return domain, nil
 }
+
+func EnvToBool(value string) bool {
+	switch value {
+	case "1", "Y", "y", "yes", "true", "YES", "TRUE":
+		return true
+	default:
+		return false
+	}
+}

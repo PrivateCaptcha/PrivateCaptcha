@@ -71,12 +71,12 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 	return puzzleStr, solutions.String(), nil
 }
 
-func setupVerifySuite(username string) (string, string, error) {
+func setupVerifySuite(username string) (string, string, string, error) {
 	ctx := context.TODO()
 
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
@@ -89,20 +89,21 @@ func setupVerifySuite(username string) (string, string, error) {
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
-	return fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID), nil
+	return fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID), sitekey, nil
 }
 
 func TestVerifyPuzzle(t *testing.T) {
@@ -110,7 +111,7 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, err := setupVerifySuite(t.Name())
+	payload, apiKey, _, err := setupVerifySuite(t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +164,7 @@ func TestVerifyPuzzleReplay(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, err := setupVerifySuite(t.Name())
+	payload, apiKey, _, err := setupVerifySuite(t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,5 +283,38 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestVerifyMaintenanceMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// NOTE: this test cannot be run in parallel as it modifies the global DB state (maintenance mode)
+	// t.Parallel()
+
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
+	cache.Delete(context.TODO(), cacheKey)
+
+	store.UpdateConfig(true /*maintenance mode*/)
+	defer store.UpdateConfig(false /*maintenance mode*/)
+
+	resp, err := verifySuite(payload, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	if err := checkVerifyError(resp, puzzle.MaintenanceModeError); err != nil {
+		t.Fatal(err)
 	}
 }

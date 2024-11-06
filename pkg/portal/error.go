@@ -51,6 +51,8 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		data.Detail = "This page does not exist."
 	case http.StatusUnauthorized:
 		data.Detail = "You need to log in to view this page."
+	case http.StatusServiceUnavailable:
+		data.Detail = "This page is temporarily unavailable. Please check back later."
 	default:
 		data.Detail = "Sorry, an unexpected error has occurred. Our team has been notified."
 	}

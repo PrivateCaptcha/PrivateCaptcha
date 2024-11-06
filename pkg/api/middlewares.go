@@ -141,6 +141,10 @@ func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, propertie
 }
 
 func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) {
+	if len(properties) == 0 {
+		return
+	}
+
 	owners := am.unknownPropertiesOwners(ctx, properties)
 	if len(owners) == 0 {
 		slog.DebugContext(ctx, "No new users to check", "properties", len(properties))
@@ -199,7 +203,7 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 		case <-time.After(delay):
 			if len(batch) > 0 {
 				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "timeout")
-				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); (err != nil) && (err != db.ErrMaintenance) {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
 					batch = []string{}

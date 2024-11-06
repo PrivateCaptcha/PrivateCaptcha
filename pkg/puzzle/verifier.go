@@ -31,6 +31,7 @@ const (
 	InvalidPropertyError    VerifyError = 6
 	WrongOwnerError         VerifyError = 7
 	VerifiedBeforeError     VerifyError = 8
+	MaintenanceModeError    VerifyError = 9
 )
 
 type OwnerIDSource interface {

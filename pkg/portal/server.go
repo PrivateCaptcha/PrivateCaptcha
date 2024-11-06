@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/rs/cors"
@@ -178,25 +179,30 @@ func (ac *alertRenderContext) ClearAlerts() {
 }
 
 type Server struct {
-	Store      *db.BusinessStore
-	TimeSeries *db.TimeSeriesStore
-	Domain     string
-	Prefix     string
-	template   *web.Template
-	XSRF       XSRFMiddleware
-	Session    session.Manager
-	Mailer     common.Mailer
-	Stage      string
-	PaddleAPI  billing.PaddleAPI
-	cors       *cors.Cors
-	ApiRelURL  string
-	Verifier   puzzle.Verifier
+	Store           *db.BusinessStore
+	TimeSeries      *db.TimeSeriesStore
+	Domain          string
+	Prefix          string
+	template        *web.Template
+	XSRF            XSRFMiddleware
+	Session         session.Manager
+	Mailer          common.Mailer
+	Stage           string
+	PaddleAPI       billing.PaddleAPI
+	cors            *cors.Cors
+	ApiRelURL       string
+	Verifier        puzzle.Verifier
+	maintenanceMode atomic.Bool
 }
 
 func (s *Server) Init() {
 	prefix := common.RelURL(s.Prefix, "/")
 	s.template = web.NewTemplates(funcMap(prefix))
 	s.Session.Path = prefix
+}
+
+func (s *Server) UpdateConfig(maintenanceMode bool) {
+	s.maintenanceMode.Store(maintenanceMode)
 }
 
 func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
@@ -267,15 +273,15 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
-	router.HandleFunc(get(common.LoginEndpoint), corsHandler(ratelimiter(s.handler(s.getLogin))))
-	router.HandleFunc(get(common.RegisterEndpoint), corsHandler(ratelimiter(s.handler(s.getRegister))))
-	router.HandleFunc(get(common.TwoFactorEndpoint), corsHandler(ratelimiter(s.getTwoFactor)))
+	router.HandleFunc(get(common.LoginEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getLogin)))))
+	router.HandleFunc(get(common.RegisterEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getRegister)))))
+	router.HandleFunc(get(common.TwoFactorEndpoint), corsHandler(ratelimiter(s.maintenance(s.getTwoFactor))))
 	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), corsHandler(ratelimiter(common.CacheControl(s.error))))
 	router.HandleFunc(get(common.ExpiredEndpoint), corsHandler(ratelimiter(common.CacheControl(s.expired))))
 	router.HandleFunc(get(common.LogoutEndpoint), corsHandler(ratelimiter(s.logout)))
 
 	// configured with middlewares
-	openWrite := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler)
+	openWrite := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler, s.maintenance)
 	csrfEmailChain := openWrite.Add(s.csrf(s.csrfUserEmailKeyFunc))
 	privateWriteChain := openWrite.Add(s.csrf(s.csrfUserIDKeyFunc), s.private)
 	subscribedWrite := privateWriteChain.Add(s.subscribed)
@@ -331,6 +337,10 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", corsHandler(ratelimiter(common.Logged(s.notFound))))
 }
 
+func (s *Server) isMaintenanceMode() bool {
+	return s.maintenanceMode.Load()
+}
+
 func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -342,6 +352,8 @@ func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
 				common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 			case errInvalidPathArg, errInvalidRequestArg:
 				s.redirectError(http.StatusBadRequest, w, r)
+			case db.ErrMaintenance:
+				s.redirectError(http.StatusServiceUnavailable, w, r)
 			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)
@@ -416,6 +428,18 @@ func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request)
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, http.StatusNotFound)
+}
+
+func (s *Server) maintenance(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.isMaintenanceMode() {
+			slog.Log(r.Context(), common.LevelTrace, "Rejecting request under maintenance mode")
+			s.redirectError(http.StatusServiceUnavailable, w, r)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }
 
 func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
