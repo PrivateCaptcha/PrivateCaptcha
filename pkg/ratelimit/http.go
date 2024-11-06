@@ -44,6 +44,8 @@ type httpRateLimiter[TKey comparable] struct {
 	keyFunc         func(r *http.Request) TKey
 }
 
+var _ HTTPRateLimiter = (*httpRateLimiter[string])(nil)
+
 func (l *httpRateLimiter[TKey]) Shutdown() {
 	l.cleanupCancel()
 }
