@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "devDependencies": {
-    "esbuild": "^0.19.12"
+    "esbuild": "^0.19.12",
+    "esbuild-plugin-inline-worker": "^0.1.1"
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
@@ -12,7 +13,6 @@
   "dependencies": {
     "base64-arraybuffer": "^1.0.2",
     "blake2b-wasm": "^2.4.0",
-    "blakejs": "^1.2.1",
-    "esbuild-plugin-inline-worker": "^0.1.1"
+    "blakejs": "^1.2.1"
   }
 }
