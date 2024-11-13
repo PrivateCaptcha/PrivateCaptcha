@@ -127,7 +127,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		CheckInterval: 5 * time.Second,
 		Router:        router,
 	}
-	if stage != common.StageProd {
+	if "slow" == getenv("HEALTHCHECK") {
 		healthCheck.CheckInterval = 1 * time.Minute
 	}
 
