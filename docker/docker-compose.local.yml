@@ -10,6 +10,7 @@ services:
     environment:
       PC_PORT: 8080
       VERBOSE: 1
+      HEALTHCHECK: slow
     depends_on:
       migration:
         condition: service_completed_successfully
