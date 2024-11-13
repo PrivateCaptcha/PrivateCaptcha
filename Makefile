@@ -42,7 +42,13 @@ build-widget:
 	rm -v widget/static/js/* || echo 'Nothing to remove'
 	cd widget && npm run build
 
-serve: build-js build-widget build-server
+copy-static-js:
+	cp -v web/js/index.js web/static/js/bundle.js
+	cp -v web/js/htmx.min.js web/static/js/
+	cp -v web/js/alpine.min.js web/static/js/
+	cp -v web/js/d3.v7.min.js web/static/js/
+
+serve: build-js build-widget copy-static-js build-server
 	bin/server
 
 run:
