@@ -33,7 +33,7 @@ func clientIP(strategy realclientip.Strategy, r *http.Request) string {
 
 type HTTPRateLimiter interface {
 	Shutdown()
-	RateLimit(next http.HandlerFunc) http.HandlerFunc
+	RateLimit(next http.Handler) http.Handler
 }
 
 type httpRateLimiter[TKey comparable] struct {
@@ -59,8 +59,8 @@ func (l *httpRateLimiter[TKey]) cleanup(ctx context.Context) {
 	})
 }
 
-func (l *httpRateLimiter[TKey]) RateLimit(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		key := l.keyFunc(r)
 
 		addResult := l.buckets.Add(key, 1, time.Now())
@@ -73,7 +73,7 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.HandlerFunc) http.HandlerFun
 		} else {
 			l.rejectedHandler.ServeHTTP(w, r)
 		}
-	}
+	})
 }
 
 func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {

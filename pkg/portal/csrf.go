@@ -8,6 +8,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/justinas/alice"
 )
 
 func (s *Server) createCsrfContext(user *dbgen.User) csrfRenderContext {
@@ -37,9 +38,9 @@ func (s *Server) csrfUserIDKeyFunc(w http.ResponseWriter, r *http.Request) strin
 	return strconv.Itoa(int(userID))
 }
 
-func (s *Server) csrf(keyFunc CsrfKeyFunc) common.Middleware {
-	return func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) csrf(keyFunc CsrfKeyFunc) alice.Constructor {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 
 			switch r.Method {
@@ -66,6 +67,6 @@ func (s *Server) csrf(keyFunc CsrfKeyFunc) common.Middleware {
 			}
 
 			common.Redirect(s.relURL(common.ExpiredEndpoint), w, r)
-		}
+		})
 	}
 }

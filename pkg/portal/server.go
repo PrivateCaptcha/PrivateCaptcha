@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/justinas/alice"
 	"github.com/rs/cors"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -205,7 +206,7 @@ func (s *Server) UpdateConfig(maintenanceMode bool) {
 	s.maintenanceMode.Store(maintenanceMode)
 }
 
-func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
+func (s *Server) Setup(router *http.ServeMux, ratelimiter alice.Constructor) {
 	corsDomain := s.Domain
 	if len(corsDomain) == 0 {
 		corsDomain = "*"
@@ -226,9 +227,8 @@ func (s *Server) Setup(router *http.ServeMux, ratelimiter common.Middleware) {
 	}
 
 	s.cors = cors.New(corsOpts)
-	corsHandler := common.HandlerWrapper(s.cors.Handler)
 
-	s.setupWithPrefix(s.Domain+s.relURL("/"), router, ratelimiter, corsHandler)
+	s.setupWithPrefix(s.Domain+s.relURL("/"), router, ratelimiter, s.cors.Handler)
 }
 
 func (s *Server) relURL(url string) string {
@@ -239,7 +239,7 @@ func (s *Server) partsURL(a ...string) string {
 	return s.relURL(strings.Join(a, "/"))
 }
 
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter, corsHandler common.Middleware) {
+func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter, corsHandler alice.Constructor) {
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
 
 	route := func(method string, parts ...string) string {
@@ -266,83 +266,84 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 		return fmt.Sprintf("{%s}", s)
 	}
 
-	maxBytesHandler := func(next http.HandlerFunc) http.HandlerFunc {
-		return common.MaxBytesHandler(next, 256*1024)
+	maxBytesHandler := func(next http.Handler) http.Handler {
+		return http.MaxBytesHandler(next, 256*1024)
 	}
 
 	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
-	router.HandleFunc(get(common.LoginEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getLogin)))))
-	router.HandleFunc(get(common.RegisterEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getRegister)))))
-	router.HandleFunc(get(common.TwoFactorEndpoint), corsHandler(ratelimiter(s.maintenance(s.getTwoFactor))))
-	router.HandleFunc(get(common.ErrorEndpoint, arg(common.ParamCode)), corsHandler(ratelimiter(common.CacheControl(s.error))))
-	router.HandleFunc(get(common.ExpiredEndpoint), corsHandler(ratelimiter(common.CacheControl(s.expired))))
-	router.HandleFunc(get(common.LogoutEndpoint), corsHandler(ratelimiter(s.logout)))
+	router.Handle(get(common.LoginEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getLogin)))))
+	router.Handle(get(common.RegisterEndpoint), corsHandler(ratelimiter(s.maintenance(s.handler(s.getRegister)))))
+	router.Handle(get(common.TwoFactorEndpoint), corsHandler(ratelimiter(s.maintenance(http.HandlerFunc(s.getTwoFactor)))))
+	router.Handle(get(common.ErrorEndpoint, arg(common.ParamCode)), corsHandler(ratelimiter(common.CacheControl(http.HandlerFunc(s.error)))))
+	router.Handle(get(common.ExpiredEndpoint), corsHandler(ratelimiter(common.CacheControl(http.HandlerFunc(s.expired)))))
+	router.Handle(get(common.LogoutEndpoint), corsHandler(ratelimiter(http.HandlerFunc(s.logout))))
 
 	// configured with middlewares
-	openWrite := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler, s.maintenance)
-	csrfEmailChain := openWrite.Add(s.csrf(s.csrfUserEmailKeyFunc))
-	privateWriteChain := openWrite.Add(s.csrf(s.csrfUserIDKeyFunc), s.private)
-	subscribedWrite := privateWriteChain.Add(s.subscribed)
+	openWrite := alice.New(common.Recovered, corsHandler, ratelimiter, common.Logged, maxBytesHandler, s.maintenance)
+	csrfEmailChain := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
+	privateWriteChain := openWrite.Append(s.csrf(s.csrfUserIDKeyFunc), s.private)
+	subscribedWrite := privateWriteChain.Append(s.subscribed)
 
-	privateReadChain := common.NewMiddleWareChain(common.Recovered, corsHandler, ratelimiter, s.private)
-	subscribedRead := privateReadChain.Add(s.subscribed)
+	privateReadChain := alice.New(common.Recovered, corsHandler, ratelimiter, s.private)
+	privateFreshReadChain := privateReadChain.Append(common.NoCache)
+	subscribedRead := privateReadChain.Append(s.subscribed)
 
-	router.HandleFunc(post(common.LoginEndpoint), openWrite.Build(s.postLogin))
-	router.HandleFunc(post(common.RegisterEndpoint), openWrite.Build(s.postRegister))
-	router.HandleFunc(post(common.TwoFactorEndpoint), csrfEmailChain.Build(s.postTwoFactor))
-	router.HandleFunc(post(common.ResendEndpoint), csrfEmailChain.Build(s.resend2fa))
-	router.HandleFunc(get(common.OrgEndpoint, common.NewEndpoint), privateReadChain.Build(s.handler(s.getNewOrg)))
-	router.HandleFunc(post(common.OrgEndpoint, common.NewEndpoint), privateWriteChain.Build(s.postNewOrg))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadChain.Build(s.getPortal))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateReadChain.Build(s.handler(s.getOrgDashboard)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateReadChain.Build(s.handler(s.getOrgMembers)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getOrgSettings)))
-	router.HandleFunc(post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.handler(s.postOrgMembers)))
-	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWriteChain.Build(s.deleteOrgMembers))
-	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.joinOrg))
-	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Build(s.leaveOrg))
-	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWriteChain.Build(s.handler(s.putOrg)))
-	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWriteChain.Build(s.deleteOrg))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedRead.Build(s.handler(s.getNewOrgProperty)))
-	router.HandleFunc(post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedWrite.Build(s.postNewOrgProperty))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateReadChain.Build(s.handler(s.getPropertyDashboard)))
-	router.HandleFunc(put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWriteChain.Build(s.handler(s.putProperty)))
-	router.HandleFunc(delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWriteChain.Build(s.deleteProperty))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateReadChain.Build(s.handler(s.getPropertyReports)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getPropertySettings)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateReadChain.Build(s.handler(s.getPropertyIntegrations)))
-	router.HandleFunc(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateReadChain.Build(common.NoCache(s.getPropertyStats)))
-	router.HandleFunc(get(common.SettingsEndpoint), privateReadChain.Build(s.handler(s.getSettings)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateReadChain.Build(s.handler(s.getGeneralSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWriteChain.Build(s.handler(s.editEmail)))
-	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWriteChain.Build(s.handler(s.putGeneralSettings)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), privateReadChain.Build(s.handler(s.getAPIKeysSettings)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint), privateReadChain.Build(s.handler(s.getUsageSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWriteChain.Build(s.handler(s.postAPIKeySettings)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateReadChain.Build(s.handler(s.getBillingSettings)))
-	router.HandleFunc(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), privateWriteChain.Build(s.handler(s.postBillingPreview)))
-	router.HandleFunc(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateWriteChain.Build(s.handler(s.putBilling)))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), subscribedRead.Build(s.getCancelSubscription))
-	router.HandleFunc(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), subscribedRead.Build(s.getUpdateSubscription))
-	router.HandleFunc(get(common.UserEndpoint, common.StatsEndpoint), privateReadChain.Build(common.NoCache(s.getAccountStats)))
-	router.HandleFunc(delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWriteChain.Build(s.deleteAPIKey))
-	router.HandleFunc(delete(common.UserEndpoint), privateWriteChain.Build(s.deleteAccount))
-	router.HandleFunc(get(common.SupportEndpoint), privateReadChain.Build(s.handler(s.getSupport)))
-	router.HandleFunc(post(common.SupportEndpoint), privateWriteChain.Build(s.handler(s.postSupport)))
-	router.HandleFunc(delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Add(s.private).Build(s.dismissNotification))
-	router.HandleFunc(http.MethodGet+" "+prefix+"{$}", privateReadChain.Build(s.getPortal))
+	router.Handle(post(common.LoginEndpoint), openWrite.ThenFunc(s.postLogin))
+	router.Handle(post(common.RegisterEndpoint), openWrite.ThenFunc(s.postRegister))
+	router.Handle(post(common.TwoFactorEndpoint), csrfEmailChain.ThenFunc(s.postTwoFactor))
+	router.Handle(post(common.ResendEndpoint), csrfEmailChain.ThenFunc(s.resend2fa))
+	router.Handle(get(common.OrgEndpoint, common.NewEndpoint), privateReadChain.Then(s.handler(s.getNewOrg)))
+	router.Handle(post(common.OrgEndpoint, common.NewEndpoint), privateWriteChain.ThenFunc(s.postNewOrg))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadChain.ThenFunc(s.getPortal))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateReadChain.Then(s.handler(s.getOrgDashboard)))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateReadChain.Then(s.handler(s.getOrgMembers)))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Then(s.handler(s.getOrgSettings)))
+	router.Handle(post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.Then(s.handler(s.postOrgMembers)))
+	router.Handle(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWriteChain.ThenFunc(s.deleteOrgMembers))
+	router.Handle(put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.ThenFunc(s.joinOrg))
+	router.Handle(delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWriteChain.ThenFunc(s.leaveOrg))
+	router.Handle(put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWriteChain.Then(s.handler(s.putOrg)))
+	router.Handle(delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWriteChain.ThenFunc(s.deleteOrg))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedRead.Then(s.handler(s.getNewOrgProperty)))
+	router.Handle(post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedWrite.ThenFunc(s.postNewOrgProperty))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateReadChain.Then(s.handler(s.getPropertyDashboard)))
+	router.Handle(put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWriteChain.Then(s.handler(s.putProperty)))
+	router.Handle(delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWriteChain.ThenFunc(s.deleteProperty))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateReadChain.Then(s.handler(s.getPropertyReports)))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateReadChain.Then(s.handler(s.getPropertySettings)))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateReadChain.Then(s.handler(s.getPropertyIntegrations)))
+	router.Handle(get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateFreshReadChain.ThenFunc(s.getPropertyStats))
+	router.Handle(get(common.SettingsEndpoint), privateReadChain.Then(s.handler(s.getSettings)))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateReadChain.Then(s.handler(s.getGeneralSettings)))
+	router.Handle(post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWriteChain.Then(s.handler(s.editEmail)))
+	router.Handle(put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWriteChain.Then(s.handler(s.putGeneralSettings)))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint), privateReadChain.Then(s.handler(s.getAPIKeysSettings)))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint), privateReadChain.Then(s.handler(s.getUsageSettings)))
+	router.Handle(post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWriteChain.Then(s.handler(s.postAPIKeySettings)))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateReadChain.Then(s.handler(s.getBillingSettings)))
+	router.Handle(post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), privateWriteChain.Then(s.handler(s.postBillingPreview)))
+	router.Handle(put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), privateWriteChain.Then(s.handler(s.putBilling)))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), subscribedRead.ThenFunc(s.getCancelSubscription))
+	router.Handle(get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), subscribedRead.ThenFunc(s.getUpdateSubscription))
+	router.Handle(get(common.UserEndpoint, common.StatsEndpoint), privateFreshReadChain.ThenFunc(s.getAccountStats))
+	router.Handle(delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWriteChain.ThenFunc(s.deleteAPIKey))
+	router.Handle(delete(common.UserEndpoint), privateWriteChain.ThenFunc(s.deleteAccount))
+	router.Handle(get(common.SupportEndpoint), privateReadChain.Then(s.handler(s.getSupport)))
+	router.Handle(post(common.SupportEndpoint), privateWriteChain.Then(s.handler(s.postSupport)))
+	router.Handle(delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
+	router.Handle(http.MethodGet+" "+prefix+"{$}", privateReadChain.ThenFunc(s.getPortal))
 	// wildcard
-	router.HandleFunc(http.MethodGet+" "+prefix+"{path...}", corsHandler(ratelimiter(common.Logged(s.notFound))))
+	router.Handle(http.MethodGet+" "+prefix+"{path...}", corsHandler(ratelimiter(common.Logged(http.HandlerFunc(s.notFound)))))
 }
 
 func (s *Server) isMaintenanceMode() bool {
 	return s.maintenanceMode.Load()
 }
 
-func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handler(modelFunc ModelFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// such composition makes business logic and rendering testable separately
 		renderCtx, tpl, err := modelFunc(w, r)
@@ -362,7 +363,7 @@ func (s *Server) handler(modelFunc ModelFunc) http.HandlerFunc {
 		}
 
 		s.render(w, r, tpl, renderCtx)
-	}
+	})
 }
 
 func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *requestContext) (bytes.Buffer, error) {
@@ -430,8 +431,8 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, http.StatusNotFound)
 }
 
-func (s *Server) maintenance(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) maintenance(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.isMaintenanceMode() {
 			slog.Log(r.Context(), common.LevelTrace, "Rejecting request under maintenance mode")
 			s.redirectError(http.StatusServiceUnavailable, w, r)
@@ -439,11 +440,11 @@ func (s *Server) maintenance(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
-func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) private(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess := s.Session.SessionStart(w, r)
 
 		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
@@ -459,5 +460,5 @@ func (s *Server) private(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
-	}
+	})
 }
