@@ -27,7 +27,7 @@ var (
 	store      *db.BusinessStore
 )
 
-func fakeRateLimiter(next http.HandlerFunc) http.HandlerFunc {
+func fakeRateLimiter(next http.Handler) http.Handler {
 	return next
 }
 

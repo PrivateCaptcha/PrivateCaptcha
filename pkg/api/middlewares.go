@@ -216,8 +216,8 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 	slog.DebugContext(ctx, "Finished backfilling properties")
 }
 
-func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
-	return am.ipRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+func (am *authMiddleware) Private(next http.Handler) http.Handler {
+	return am.ipRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		authHeader := r.Header.Get(common.HeaderAuthorization)
 		if authHeader == "" {
@@ -241,15 +241,15 @@ func (am *authMiddleware) Private(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next.ServeHTTP(w, r)
-	})
+	}))
 }
 
 func (am *authMiddleware) originAllowed(origin string) bool {
 	return len(origin) > 0
 }
 
-func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
-	return am.ipRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
+	return am.ipRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		origin := r.Header.Get("Origin")
@@ -316,7 +316,7 @@ func (am *authMiddleware) Sitekey(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}))
 }
 
 func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
@@ -354,8 +354,8 @@ func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
 	return ""
 }
 
-func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
-	return am.apiKeyRateLimiter.RateLimit(func(w http.ResponseWriter, r *http.Request) {
+func (am *authMiddleware) APIKey(next http.Handler) http.Handler {
+	return am.apiKeyRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := am.retrieveSecret(r)
 		if len(secret) != db.SecretLen {
@@ -392,7 +392,7 @@ func (am *authMiddleware) APIKey(next http.HandlerFunc) http.HandlerFunc {
 
 		ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
 		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	}))
 }
 
 func (am *authMiddleware) updateLimits(key string, capacity leakybucket.TLevel, rateLimitPerSecond float64) bool {

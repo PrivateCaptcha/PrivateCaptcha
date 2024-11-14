@@ -30,6 +30,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/joho/godotenv"
+	"github.com/justinas/alice"
 )
 
 const (
@@ -133,8 +134,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 
 	portalServer.Setup(router, ratelimiter.RateLimit)
 	router.Handle("GET "+portalServer.Domain+"/assets/", http.StripPrefix("/assets/", ratelimiter.RateLimit(web.Static())))
-	defaultAPIChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
-	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Build(ratelimiter.RateLimit(healthCheck.HandlerFunc)))
+	defaultAPIChain := alice.New(common.NoCache, common.Recovered)
+	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
 	router.Handle("GET "+portalServer.Domain+"/widget/", http.StripPrefix("/widget/", widget.Static()))
 
 	httpServer := &http.Server{
