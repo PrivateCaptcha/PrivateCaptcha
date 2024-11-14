@@ -104,8 +104,8 @@ func (s *Server) sessionUser(ctx context.Context, sess *common.Session) (*dbgen.
 	return user, nil
 }
 
-func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) subscribed(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
 		user, err := s.sessionUser(ctx, s.session(w, r))
@@ -137,7 +137,7 @@ func (s *Server) subscribed(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

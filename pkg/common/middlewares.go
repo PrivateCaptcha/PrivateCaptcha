@@ -32,8 +32,8 @@ func traceID() string {
 	return xid.New().String()
 }
 
-func Logged(h http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func Logged(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		ctx := TraceContextFunc(r.Context(), traceID)
 
@@ -42,11 +42,11 @@ func Logged(h http.HandlerFunc) http.HandlerFunc {
 			"duration", time.Since(t).Milliseconds())
 
 		h.ServeHTTP(w, r.WithContext(ctx))
-	}
+	})
 }
 
-func Recovered(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func Recovered(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rvr := recover(); rvr != nil {
 				if rvr == http.ErrAbortHandler {
@@ -62,33 +62,24 @@ func Recovered(next http.HandlerFunc) http.HandlerFunc {
 		}()
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
-func NoCache(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func NoCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for k, v := range noCacheHeaders {
 			w.Header().Set(k, v)
 		}
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
-func CacheControl(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func CacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		next.ServeHTTP(w, r)
-	}
-}
-
-// The reason this exists is because http.MaxBytesHandler works with http.Handler instead of http.HandlerFunc
-func MaxBytesHandler(next http.HandlerFunc, maxSize int64) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		r2 := *r
-		r2.Body = http.MaxBytesReader(w, r.Body, maxSize)
-		next.ServeHTTP(w, &r2)
-	}
+	})
 }
 
 func Redirect(url string, w http.ResponseWriter, r *http.Request) {
@@ -121,50 +112,4 @@ func StrPathArg(r *http.Request, name string) (string, error) {
 	}
 
 	return value, nil
-}
-
-type Middleware func(http.HandlerFunc) http.HandlerFunc
-
-func HandlerWrapper(handler func(http.Handler) http.Handler) Middleware {
-	return func(next http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			handler(next).ServeHTTP(w, r)
-		}
-	}
-}
-
-// this exists because of https://github.com/justinas/alice/issues/25
-type MiddlewareChain struct {
-	handlers []Middleware
-}
-
-func NewMiddleWareChain(handlers ...Middleware) *MiddlewareChain {
-	return &MiddlewareChain{
-		handlers: handlers,
-	}
-}
-
-func (c *MiddlewareChain) Build(final http.HandlerFunc) http.HandlerFunc {
-	if len(c.handlers) == 0 {
-		return final
-	}
-
-	chain := final
-	for i := len(c.handlers) - 1; i >= 0; i-- {
-		chain = c.handlers[i](chain)
-	}
-
-	return chain
-}
-
-func (c *MiddlewareChain) Add(m ...Middleware) *MiddlewareChain {
-	return &MiddlewareChain{
-		handlers: append(c.handlers, m...),
-	}
-}
-
-func (c *MiddlewareChain) AddMany(other *MiddlewareChain) *MiddlewareChain {
-	return &MiddlewareChain{
-		handlers: append(c.handlers, other.handlers...),
-	}
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/justinas/alice"
 	"github.com/rs/cors"
 	"golang.org/x/crypto/blake2b"
 )
@@ -125,7 +126,6 @@ func (s *server) Setup(router *http.ServeMux, domain, prefix string) {
 	}
 
 	s.cors = cors.New(corsOpts)
-	corsHandler := common.HandlerWrapper(s.cors.Handler)
 
 	if !strings.HasPrefix(prefix, "/") {
 		prefix = "/" + prefix
@@ -134,7 +134,7 @@ func (s *server) Setup(router *http.ServeMux, domain, prefix string) {
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
-	s.setupWithPrefix(domain+prefix, router, s.auth, corsHandler)
+	s.setupWithPrefix(domain+prefix, router, s.auth, s.cors.Handler)
 }
 
 func (s *server) Shutdown() {
@@ -145,19 +145,19 @@ func (s *server) Shutdown() {
 	close(s.verifyLogChan)
 }
 
-func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware, corsHandler common.Middleware) {
+func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware, corsHandler alice.Constructor) {
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	puzzleChain := common.NewMiddleWareChain(common.Recovered, corsHandler, common.NoCache)
-	verifyChain := common.NewMiddleWareChain(common.NoCache, common.Recovered)
+	puzzleChain := alice.New(common.Recovered, corsHandler, common.NoCache)
+	verifyChain := alice.New(common.NoCache, common.Recovered)
 	// NOTE: auth middleware provides rate limiting internally
-	router.HandleFunc(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.Build(auth.Sitekey(s.puzzle)))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Build(auth.APIKey(common.Logged(common.MaxBytesHandler(s.verifyHandler, maxSolutionsBodySize)))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCreated, maxPaddleBodySize)))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionUpdated, maxPaddleBodySize)))))
-	router.HandleFunc(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(common.MaxBytesHandler(s.subscriptionCancelled, maxPaddleBodySize)))))
+	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.Then(auth.Sitekey(http.HandlerFunc(s.puzzle))))
+	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(auth.APIKey(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))))
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionCreated), maxPaddleBodySize)))))
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionUpdated), maxPaddleBodySize)))))
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionCancelled), maxPaddleBodySize)))))
 
 	if s.stage != common.StageProd {
-		router.HandleFunc(prefix+"{path...}", corsHandler(common.Logged(catchAll)))
+		router.Handle(prefix+"{path...}", corsHandler(common.Logged(http.HandlerFunc(catchAll))))
 	}
 }
 
