@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
@@ -101,6 +102,7 @@ func TestMain(m *testing.M) {
 		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
 		Verifier:  &fakeCaptchaVerifier{result: puzzle.VerifyNoError},
+		Metrics:   monitoring.NewStub(),
 	}
 
 	server.Init()

@@ -22,6 +22,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -84,8 +85,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
 		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
 	}
-	apiAuth := api.NewAuthMiddleware(os.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
-	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, os.Getenv)
+	apiAuth := api.NewAuthMiddleware(getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
+	metrics := monitoring.NewService(getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, metrics, getenv)
 
 	host := getenv("PC_HOST")
 	if host == "" {
@@ -118,6 +120,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		PaddleAPI: paddleAPI,
 		ApiRelURL: "http://" + apiDomain,
 		Verifier:  apiServer,
+		Metrics:   metrics,
 	}
 	portalServer.Init()
 
@@ -172,6 +175,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 			port = "8080"
 		}
 		if stage != common.StageProd {
+			// TODO: Fix this properly
 			portalServer.ApiRelURL += ":" + port
 		}
 
@@ -258,6 +262,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	})
 	jobs.Run()
 
+	metrics.StartServing(ctx)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -269,6 +275,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		apiServer.Shutdown()
 		apiAuth.Shutdown()
 		ratelimiter.Shutdown()
+		metrics.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
