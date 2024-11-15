@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/justinas/alice"
@@ -54,6 +55,7 @@ type server struct {
 	verifyLogCancel context.CancelFunc
 	paddleAPI       billing.PaddleAPI
 	cors            *cors.Cors
+	metrics         monitoring.Metrics
 }
 
 var _ puzzle.Verifier = (*server)(nil)
@@ -63,6 +65,7 @@ func NewServer(store *db.BusinessStore,
 	auth *authMiddleware,
 	verifyFlushInterval time.Duration,
 	paddleAPI billing.PaddleAPI,
+	metrics monitoring.Metrics,
 	getenv func(string) string) *server {
 	srv := &server{
 		stage:         getenv("STAGE"),
@@ -72,6 +75,7 @@ func NewServer(store *db.BusinessStore,
 		verifyLogChan: make(chan *common.VerifyRecord, 3*verifyBatchSize/2),
 		salt:          []byte(getenv("API_SALT")),
 		paddleAPI:     paddleAPI,
+		metrics:       metrics,
 	}
 
 	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
@@ -134,7 +138,7 @@ func (s *server) Setup(router *http.ServeMux, domain, prefix string) {
 	if !strings.HasSuffix(prefix, "/") {
 		prefix += "/"
 	}
-	s.setupWithPrefix(domain+prefix, router, s.auth, s.cors.Handler)
+	s.setupWithPrefix(domain+prefix, router, s.cors.Handler)
 }
 
 func (s *server) Shutdown() {
@@ -145,19 +149,24 @@ func (s *server) Shutdown() {
 	close(s.verifyLogChan)
 }
 
-func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, auth *authMiddleware, corsHandler alice.Constructor) {
+func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, corsHandler alice.Constructor) {
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	puzzleChain := alice.New(common.Recovered, corsHandler, common.NoCache)
-	verifyChain := alice.New(common.NoCache, common.Recovered)
+	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, corsHandler, common.NoCache, s.auth.Sitekey)
+	verifyChain := alice.New(common.Recovered, s.metrics.Handler, common.NoCache, s.auth.APIKey, monitoring.Logged)
 	// NOTE: auth middleware provides rate limiting internally
-	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.Then(auth.Sitekey(http.HandlerFunc(s.puzzle))))
-	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(auth.APIKey(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionCreated), maxPaddleBodySize)))))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionUpdated), maxPaddleBodySize)))))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, common.Recovered(auth.Private(common.Logged(http.MaxBytesHandler(http.HandlerFunc(s.subscriptionCancelled), maxPaddleBodySize)))))
+	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.ThenFunc(s.puzzle))
+	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
+
+	maxBytesHandler := func(next http.Handler) http.Handler {
+		return http.MaxBytesHandler(next, maxPaddleBodySize)
+	}
+	paddleChain := alice.New(common.Recovered, s.metrics.Handler, common.NoCache, s.auth.Private, monitoring.Logged, maxBytesHandler)
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
+	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
 
 	if s.stage != common.StageProd {
-		router.Handle(prefix+"{path...}", corsHandler(common.Logged(http.HandlerFunc(catchAll))))
+		router.Handle(prefix+"{path...}", corsHandler(monitoring.Logged(http.HandlerFunc(catchAll))))
 	}
 }
 

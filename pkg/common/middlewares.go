@@ -7,8 +7,6 @@ import (
 	"runtime/debug"
 	"strconv"
 	"time"
-
-	"github.com/rs/xid"
 )
 
 const (
@@ -27,23 +25,6 @@ var (
 		"X-Accel-Expires": "0",
 	}
 )
-
-func traceID() string {
-	return xid.New().String()
-}
-
-func Logged(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		ctx := TraceContextFunc(r.Context(), traceID)
-
-		slog.DebugContext(ctx, "Started request", "path", r.URL.Path, "method", r.Method)
-		defer slog.DebugContext(ctx, "Finished request", "path", r.URL.Path, "method", r.Method,
-			"duration", time.Since(t).Milliseconds())
-
-		h.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
 
 func Recovered(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
