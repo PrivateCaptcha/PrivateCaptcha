@@ -81,6 +81,7 @@ func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) ht
 
 func (s *service) StartServing(ctx context.Context) {
 	if len(s.address) == 0 {
+		slog.WarnContext(ctx, "Metrics serving address is empty")
 		return
 	}
 
@@ -93,6 +94,7 @@ func (s *service) StartServing(ctx context.Context) {
 	}
 
 	go func() {
+		slog.InfoContext(ctx, "Serving metrics", "address", s.server.Addr)
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.ErrorContext(ctx, "Error serving metrics", common.ErrAttr(err))
 		}
@@ -101,6 +103,7 @@ func (s *service) StartServing(ctx context.Context) {
 
 func (s *service) Shutdown() {
 	if s.server != nil {
+		slog.DebugContext(ctx, "Stopping serving metrics")
 		s.server.Close()
 	}
 }
