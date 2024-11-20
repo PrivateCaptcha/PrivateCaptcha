@@ -103,7 +103,6 @@ func (s *service) StartServing(ctx context.Context) {
 
 func (s *service) Shutdown() {
 	if s.server != nil {
-		slog.DebugContext(ctx, "Stopping serving metrics")
 		s.server.Close()
 	}
 }
