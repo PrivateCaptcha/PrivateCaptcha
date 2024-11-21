@@ -36,3 +36,6 @@ LIMIT $2;
 
 -- name: DeleteProperties :exec
 DELETE FROM backend.properties WHERE id = ANY($1::INT[]);
+
+-- name: GetProperties :many
+SELECT * FROM backend.properties LIMIT $1;

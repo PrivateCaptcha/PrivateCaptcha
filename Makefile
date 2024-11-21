@@ -20,13 +20,16 @@ vendors:
 	go mod tidy
 	go mod vendor
 
-build: build-server
+build: build-server build-loadtest
 
 build-tests:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ ./...
 
 build-server:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" -o bin/server cmd/server/*.go
+
+build-loadtest:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/loadtest cmd/loadtest/*.go
 
 deploy:
 	echo "Nothing here"
