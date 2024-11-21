@@ -1,4 +1,4 @@
-FROM golang:1.22.1 AS paddle-builder
+FROM golang:1.23.2 AS paddle-builder
 
 # Copy the backend source code
 COPY ./go.mod ./go.sum /app/
@@ -17,7 +17,7 @@ ARG GIT_COMMIT=HEAD
 RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/paddlemock -ldflags="-s -w" -o ../../bin/paddlemock
 
 # Final stage: Production container
-FROM golang:1.22.1
+FROM gcr.io/distroless/static-debian12
 
 COPY --from=paddle-builder /app/bin/paddlemock /app/paddlemock
 
