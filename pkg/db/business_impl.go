@@ -1639,3 +1639,20 @@ func (impl *businessStoreImpl) createNotification(ctx context.Context, message s
 
 	return n, err
 }
+
+func (impl *businessStoreImpl) retrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
+	if impl.queries == nil {
+		return nil, ErrMaintenance
+	}
+
+	properties, err := impl.queries.GetProperties(ctx, int32(limit))
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve properties", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched properties", "count", len(properties))
+
+	return properties, nil
+}

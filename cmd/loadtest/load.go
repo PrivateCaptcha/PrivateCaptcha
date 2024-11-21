@@ -1,0 +1,106 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	randv2 "math/rand/v2"
+	"net/http"
+	"os"
+	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	vegeta "github.com/tsenart/vegeta/v12/lib"
+)
+
+func loadProperties(count int, getenv func(string) string) ([]*dbgen.Property, error) {
+	ctx := context.TODO()
+	var cache common.Cache[string, any]
+	var err error
+	cache, err = db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
+		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
+	}
+
+	pool, clickhouse, dberr := db.Connect(ctx, getenv)
+	if dberr != nil {
+		return nil, dberr
+	}
+
+	defer pool.Close()
+	/*defer*/ clickhouse.Close()
+
+	businessDB := db.NewBusiness(pool, cache)
+
+	properties, err := businessDB.RetrieveProperties(ctx, count)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.Info("Fetched properties", "count", len(properties))
+
+	return properties, nil
+}
+
+func generateRandomIPv4() string {
+	// Generate a random 32-bit integer
+	ipInt := randv2.Uint32()
+	// Extract each byte and format as IP address
+	return fmt.Sprintf("%d.%d.%d.%d",
+		(ipInt>>24)&0xFF,
+		(ipInt>>16)&0xFF,
+		(ipInt>>8)&0xFF,
+		ipInt&0xFF)
+}
+
+func puzzleTargeter(properties []*dbgen.Property, getenv func(string) string) vegeta.Targeter {
+	pcDomain := getenv("PC_DOMAIN")
+	rateLimitHeader := getenv("RATE_LIMIT_HEADER")
+
+	return func(tgt *vegeta.Target) error {
+		if tgt == nil {
+			return vegeta.ErrNilTarget
+		}
+
+		tgt.Method = http.MethodGet
+
+		property := properties[randv2.IntN(len(properties))]
+		sitekey := db.UUIDToSiteKey(property.ExternalID)
+		tgt.URL = fmt.Sprintf("http://api.%s/%s?%s=%s", pcDomain, common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
+
+		header := http.Header{}
+		header.Add("Origin", property.Domain)
+		header.Add(rateLimitHeader, generateRandomIPv4())
+		tgt.Header = header
+
+		return nil
+	}
+}
+
+func load(usersCount int, getenv func(string) string, freq int, durationSeconds int) error {
+	properties, err := loadProperties(usersCount, getenv)
+	if err != nil {
+		return err
+	}
+
+	rate := vegeta.Rate{Freq: freq, Per: time.Second}
+	duration := time.Duration(durationSeconds) * time.Second
+	targeter := puzzleTargeter(properties, getenv)
+	attacker := vegeta.NewAttacker()
+
+	slog.Info("Attacking", "duration", duration.String(), "rate", rate.String())
+
+	var metrics vegeta.Metrics
+	for res := range attacker.Attack(targeter, rate, duration, "Big Bang!") {
+		metrics.Add(res)
+	}
+	metrics.Close()
+
+	reporter := vegeta.NewTextReporter(&metrics)
+	reporter(os.Stdout)
+
+	return nil
+}

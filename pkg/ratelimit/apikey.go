@@ -26,7 +26,7 @@ func NewAPIKeyBuckets() *StringBuckets {
 
 	// we setup a separate bucket for "missing" IPs with empty key
 	// with a more generous burst, assuming a misconfiguration on our side
-	buckets.SetDefaultBucket(leakybucket.NewConstBucket[string]("", 10 /*capacity*/, 1.0 /*leakRatePerSecond*/, time.Now()))
+	buckets.SetDefaultBucket(leakybucket.NewConstBucket[string]("", 10 /*capacity*/, leakInterval, time.Now()))
 
 	return buckets
 }

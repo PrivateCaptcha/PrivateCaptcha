@@ -130,6 +130,43 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 	return &i, err
 }
 
+const getProperties = `-- name: GetProperties :many
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at FROM backend.properties LIMIT $1
+`
+
+func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getProperties, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.Domain,
+			&i.Level,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPropertiesByExternalID = `-- name: GetPropertiesByExternalID :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at from backend.properties WHERE external_id = ANY($1::UUID[])
 `

@@ -440,3 +440,7 @@ func (s *BusinessStore) RetrieveUserNotification(ctx context.Context, tnow time.
 func (s *BusinessStore) CreateNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
 	return s.impl().createNotification(ctx, message, tnow, duration, userID)
 }
+
+func (s *BusinessStore) RetrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
+	return s.impl().retrieveProperties(ctx, limit)
+}

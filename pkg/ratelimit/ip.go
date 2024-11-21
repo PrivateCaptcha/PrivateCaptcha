@@ -39,11 +39,11 @@ func NewIPAddrRateLimiter(header string) HTTPRateLimiter {
 		leakInterval      = (1.0 / leakRatePerSecond) * time.Second
 	)
 
-	buckets := leakybucket.NewManager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr], *leakybucket.ConstLeakyBucket[netip.Addr]](maxBucketsToKeep, leakyBucketCap, leakInterval)
+	buckets := leakybucket.NewManager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr]](maxBucketsToKeep, leakyBucketCap, leakInterval)
 
 	// we setup a separate bucket for "missing" IPs with empty key
 	// with a more generous burst, assuming a misconfiguration on our side
-	buckets.SetDefaultBucket(leakybucket.NewConstBucket[netip.Addr](netip.Addr{}, 50 /*capacity*/, 1.0 /*leakRatePerSecond*/, time.Now()))
+	buckets.SetDefaultBucket(leakybucket.NewConstBucket(netip.Addr{}, 50 /*capacity*/, leakInterval, time.Now()))
 
 	limiter := &httpRateLimiter[netip.Addr]{
 		rejectedHandler: defaultRejectedHandler,
