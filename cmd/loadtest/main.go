@@ -23,6 +23,7 @@ var (
 	flagPropertiesCount = flag.Int("property-count", 100, "number of properties to seed")
 	flagRatePerSecond   = flag.Int("rps", 100, "Requests per second")
 	flagDuration        = flag.Int("duration", 10, "Duration of the load test (seconds)")
+	flagSitekeyPercent  = flag.Int("sitekey-percent", 100, "Percent of valid sitekey requests")
 )
 
 func main() {
@@ -47,7 +48,8 @@ func main() {
 	case modeSeed:
 		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, os.Getenv)
 	case modeTest:
-		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), os.Getenv, *flagRatePerSecond, *flagDuration)
+		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), os.Getenv, *flagRatePerSecond, *flagDuration,
+			*flagSitekeyPercent)
 	default:
 		err = fmt.Errorf("unknown mode: '%s'", *flagMode)
 	}

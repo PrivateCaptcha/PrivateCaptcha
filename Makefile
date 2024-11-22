@@ -60,6 +60,9 @@ run:
 run-docker:
 	@docker compose -f docker/docker-compose.local.yml up --build
 
+profile-docker:
+	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.monitoring.yml up --build
+
 watch-docker:
 	@docker compose -f docker/docker-compose.local.yml watch
 
