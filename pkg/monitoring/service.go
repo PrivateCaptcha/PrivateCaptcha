@@ -88,6 +88,8 @@ func (s *service) StartServing(ctx context.Context) {
 	metricsRouter := http.NewServeMux()
 	metricsRouter.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{Registry: s.registry}))
 
+	s.setupProfiling(ctx, metricsRouter)
+
 	s.server = &http.Server{
 		Addr:    s.address,
 		Handler: metricsRouter,

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	randv2 "math/rand/v2"
@@ -56,7 +57,17 @@ func generateRandomIPv4() string {
 		ipInt&0xFF)
 }
 
-func puzzleTargeter(properties []*dbgen.Property, getenv func(string) string) vegeta.Targeter {
+func randomSiteKey() string {
+	array := make([]byte, 16)
+
+	for i := range array {
+		array[i] = byte(randv2.Int())
+	}
+
+	return hex.EncodeToString(array[:])
+}
+
+func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, getenv func(string) string) vegeta.Targeter {
 	pcDomain := getenv("PC_DOMAIN")
 	rateLimitHeader := getenv("RATE_LIMIT_HEADER")
 
@@ -67,8 +78,18 @@ func puzzleTargeter(properties []*dbgen.Property, getenv func(string) string) ve
 
 		tgt.Method = http.MethodGet
 
+		var sitekey string
 		property := properties[randv2.IntN(len(properties))]
-		sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+		// in sitekeyPercent % of cases, we want to send valid sitekey
+		// - if sitekeyPercent is 100, then 100 is always >= (rand() % 100)
+		// - if sitekeyPercent is 0, then we always send invalid
+		if sitekeyPercent >= randv2.IntN(100) {
+			sitekey = db.UUIDToSiteKey(property.ExternalID)
+		} else {
+			sitekey = randomSiteKey()
+		}
+
 		tgt.URL = fmt.Sprintf("http://api.%s/%s?%s=%s", pcDomain, common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
 
 		header := http.Header{}
@@ -80,7 +101,7 @@ func puzzleTargeter(properties []*dbgen.Property, getenv func(string) string) ve
 	}
 }
 
-func load(usersCount int, getenv func(string) string, freq int, durationSeconds int) error {
+func load(usersCount int, getenv func(string) string, freq int, durationSeconds int, sitekeyPercent int) error {
 	properties, err := loadProperties(usersCount, getenv)
 	if err != nil {
 		return err
@@ -88,7 +109,7 @@ func load(usersCount int, getenv func(string) string, freq int, durationSeconds 
 
 	rate := vegeta.Rate{Freq: freq, Per: time.Second}
 	duration := time.Duration(durationSeconds) * time.Second
-	targeter := puzzleTargeter(properties, getenv)
+	targeter := puzzleTargeter(properties, sitekeyPercent, getenv)
 	attacker := vegeta.NewAttacker()
 
 	slog.Info("Attacking", "duration", duration.String(), "rate", rate.String())

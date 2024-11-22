@@ -51,7 +51,8 @@ var (
 
 func run(ctx context.Context, getenv func(string) string, stderr io.Writer, systemdListener bool) error {
 	stage := getenv("STAGE")
-	common.SetupLogs(stage, getenv("VERBOSE") == "1")
+	verbose := getenv("VERBOSE") == "1"
+	common.SetupLogs(stage, verbose)
 
 	var cache common.Cache[string, any]
 	var err error
@@ -102,7 +103,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	router := http.NewServeMux()
 
 	apiDomain := "api." + domain
-	apiServer.Setup(router, apiDomain, "" /*prefix*/)
+	apiServer.Setup(router, apiDomain, "" /*prefix*/, verbose)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
