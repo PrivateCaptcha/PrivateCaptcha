@@ -114,14 +114,14 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *server) Setup(router *http.ServeMux, domain, prefix string) {
+func (s *server) Setup(router *http.ServeMux, domain, prefix string, verbose bool) {
 	corsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
 		AllowOriginFunc: s.auth.originAllowed,
 		AllowedHeaders:  []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
 		AllowedMethods:  []string{http.MethodGet},
-		Debug:           s.stage != common.StageProd,
+		Debug:           verbose,
 		MaxAge:          60, /*seconds*/
 	}
 

@@ -64,7 +64,8 @@ ENV GOMODCACHE=/cache/gomod
 ENV GOCACHE=/cache/gobuild
 
 ARG GIT_COMMIT=HEAD
-RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" -o ../../bin/server
+ARG EXTRA_BUILD_FLAGS=
+RUN --mount=type=cache,target=/cache/gomod --mount=type=cache,target=/cache/gobuild,sharing=locked env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -C cmd/server -ldflags="-s -w -X main.GitCommit=${GIT_COMMIT}" ${EXTRA_BUILD_FLAGS} -o ../../bin/server
 
 # Final stage: Production container
 FROM gcr.io/distroless/static-debian12

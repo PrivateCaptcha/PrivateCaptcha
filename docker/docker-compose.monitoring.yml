@@ -1,0 +1,39 @@
+services:
+  server:
+    ports:
+      # this is the default Golang endpoint for pprof which we are currently not using, but it's here for explicit use
+      - 6060:6060
+    build:
+      args:
+        - EXTRA_BUILD_FLAGS="-tags profile"
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    depends_on:
+      - server
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - 9090:9090
+    networks:
+      - server_network
+      - prometheus_network
+
+  grafana:
+    image: grafana/grafana-oss:latest-ubuntu
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    networks:
+      - prometheus_network
+    volumes:
+      #- ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml
+      - ./grafana/dashboard_provider.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+networks:
+  prometheus_network:
