@@ -2,8 +2,11 @@
 <clickhouse>
   <!-- {{ 2 * number_of_cpu_cores }} -->
   <max_concurrent_queries>2</max_concurrent_queries>
-  <!-- Lower mark cache size from 5GB to 1GB. -->
-  <mark_cache_size>1073741824</mark_cache_size>
+  <!--
+  Lower mark cache size from 5GB to 1GB. 
+  https://clickhouse.com/docs/en/operations/server-configuration-parameters/settings#mark_cache_size
+  -->
+  <mark_cache_size>2147483648</mark_cache_size>
   <merge_tree>
     <!--
     Choose a value between 1024 and 4096.
@@ -40,6 +43,18 @@
       The default is 16.
       -->
       <background_pool_size>2</background_pool_size>
+      <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_threads -->
+      <!--<max_threads>1</max_threads>-->
+      <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_block_size -->
+      <max_block_size>8192</max_block_size>
+      <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_download_threads -->
+      <max_download_threads>1</max_download_threads>
+      <!--
+      https://clickhouse.com/docs/en/operations/settings/settings#input_format_parallel_parsing -->
+      <input_format_parallel_parsing>0</input_format_parallel_parsing>
+      <!--
+      https://clickhouse.com/docs/en/operations/settings/settings#output_format_parallel_formatting -->
+      <output_format_parallel_formatting>0</output_format_parallel_formatting>
     </default>
   </profiles>
   <logger>
