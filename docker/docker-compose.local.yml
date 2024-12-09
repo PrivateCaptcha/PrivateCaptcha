@@ -108,7 +108,7 @@ services:
     networks:
       - postgres_network
     volumes:
-      - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - postgres_data_volume:/var/lib/postgresql/data
 
   clickhouse:
@@ -126,9 +126,9 @@ services:
       timeout: 3s
       retries: 3
     volumes:
-      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml
-      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml
-      - ../pkg/db/migrations/init/clickhouse.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml:ro
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml:ro
+      - ../pkg/db/migrations/init/clickhouse.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       - ./clickhouse-logs:/var/log/clickhouse-server/
