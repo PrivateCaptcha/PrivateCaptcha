@@ -117,12 +117,13 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer:    &email.StubMailer{},
 		PaddleAPI: paddleAPI,
 		ApiRelURL: "http://" + apiDomain,
 		Verifier:  apiServer,
 		Metrics:   metrics,
 	}
+	portalMailer := email.NewPortalMailer("http://"+portalServer.Domain, getenv)
+	portalServer.Mailer = portalMailer
 	portalServer.Init()
 
 	healthCheck := &maintenance.HealthCheckJob{
@@ -178,6 +179,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		if stage != common.StageProd {
 			// TODO: Fix this properly
 			portalServer.ApiRelURL += ":" + port
+			portalMailer.Domain += ":" + port
 		}
 
 		address := net.JoinHostPort(host, port)
