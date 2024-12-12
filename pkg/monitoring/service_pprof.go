@@ -3,13 +3,14 @@
 package monitoring
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
 )
 
 // NOTE: (default) alternative would be to _ import the pprof package and start http server on :6060
-func (s *service) setupProfiling(mux *http.ServeMux) {
+func (s *service) setupProfiling(ctx context.Context, mux *http.ServeMux) {
 	slog.DebugContext(ctx, "Enabling profiling endpoints")
 
 	mux.HandleFunc("/debug/pprof/", pprof.Index)

@@ -5,7 +5,7 @@ services:
       - 6060:6060
     build:
       args:
-        - EXTRA_BUILD_FLAGS="-tags profile"
+        EXTRA_BUILD_FLAGS: '-tags profile'
 
   prometheus:
     image: prom/prometheus:v2.55.1
