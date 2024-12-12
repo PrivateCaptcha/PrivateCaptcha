@@ -65,6 +65,9 @@ github.com/go-faster/city
 # github.com/go-faster/errors v0.6.1
 ## explicit; go 1.18
 github.com/go-faster/errors
+# github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
+## explicit
+github.com/go-gomail/gomail
 # github.com/golang-migrate/migrate/v4 v4.17.0
 ## explicit; go 1.18
 github.com/golang-migrate/migrate/v4
@@ -308,6 +311,11 @@ google.golang.org/protobuf/reflect/protoregistry
 google.golang.org/protobuf/runtime/protoiface
 google.golang.org/protobuf/runtime/protoimpl
 google.golang.org/protobuf/types/known/timestamppb
+# gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc
+## explicit
+gopkg.in/alexcesaro/quotedprintable.v3
+# gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
+## explicit
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
