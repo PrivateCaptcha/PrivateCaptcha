@@ -59,8 +59,6 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		TextBody: textBodyTpl.String(),
 		Subject:  "[Private Captcha] Your verification code",
 		Email:    email,
-		Campaign: "2fa",
-		Track:    false,
 	}
 	err := pm.mailer.SendEmail(ctx, msg)
 	slog.InfoContext(ctx, "Sent two factor code", "email", email, "code", code, common.ErrAttr(err))
