@@ -34,6 +34,7 @@ const (
 	propertyBucketSize    = 5 * time.Minute
 	levelsBatchSize       = 100
 	updateLimitsBatchSize = 100
+	maxVerifyBatchSize    = 100_000
 )
 
 var (
@@ -374,6 +375,11 @@ func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 	slog.DebugContext(ctx, "Processing verify log", "interval", delay.String())
 
 	for running := true; running; {
+		if len(batch) > maxVerifyBatchSize {
+			slog.ErrorContext(ctx, "Dropping pending verify log due to errors", "count", len(batch))
+			batch = []*common.VerifyRecord{}
+		}
+
 		select {
 		case <-ctx.Done():
 			running = false

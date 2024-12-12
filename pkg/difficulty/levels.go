@@ -18,7 +18,8 @@ const (
 	LevelHigh      = 120
 	leakyBucketCap = math.MaxUint32
 	// this one is arbitrary as we can support "many"
-	maxBucketsToKeep = 1_000_000
+	maxBucketsToKeep    = 1_000_000
+	maxPendingBatchSize = 100_000
 )
 
 type Levels struct {
@@ -233,6 +234,11 @@ func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
 	slog.DebugContext(ctx, "Processing access log", "interval", delay.String())
 
 	for running := true; running; {
+		if len(batch) > maxPendingBatchSize {
+			slog.ErrorContext(ctx, "Dropping pending access log due to errors", "count", len(batch))
+			batch = []*common.AccessRecord{}
+		}
+
 		select {
 		case <-ctx.Done():
 			running = false
