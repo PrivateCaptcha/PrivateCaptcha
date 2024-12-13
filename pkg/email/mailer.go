@@ -57,13 +57,21 @@ func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
 	return d, nil
 }
 
-type SimpleMailer struct {
+func NewMailer(getenv func(string) string) *simpleMailer {
+	return &simpleMailer{
+		URL:      getenv("SMTP_ENDPOINT"),
+		Username: getenv("SMTP_USERNAME"),
+		Password: getenv("SMTP_PASSWORD"),
+	}
+}
+
+type simpleMailer struct {
 	URL      string
 	Username string
 	Password string
 }
 
-func (sm *SimpleMailer) SendEmail(ctx context.Context, msg *Message) error {
+func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 	if !msg.Valid() {
 		return errInvalidMessage
 	}
