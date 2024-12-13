@@ -3,6 +3,7 @@ package email
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"text/template"
 	"time"
@@ -13,8 +14,12 @@ import (
 type PortalMailer struct {
 	mailer                *SimpleMailer
 	Domain                string
+	emailFrom             string
+	supportEmail          string
 	twofactorHTMLTemplate *template.Template
 	twofactorTextTemplate *template.Template
+	supportHTMLTemplate   *template.Template
+	supportTextTemplate   *template.Template
 }
 
 func NewPortalMailer(domain string, getenv func(string) string) *PortalMailer {
@@ -23,11 +28,14 @@ func NewPortalMailer(domain string, getenv func(string) string) *PortalMailer {
 			URL:      getenv("SMTP_ENDPOINT"),
 			Username: getenv("SMTP_USERNAME"),
 			Password: getenv("SMTP_PASSWORD"),
-			Sender:   getenv("PC_EMAIL_FROM"),
 		},
+		emailFrom:             getenv("PC_EMAIL_FROM"),
+		supportEmail:          getenv("PC_SUPPORT_EMAIL"),
 		Domain:                domain,
 		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
 		twofactorTextTemplate: template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
+		supportHTMLTemplate:   template.Must(template.New("HtmlBody").Parse(SupportHTMLTemplate)),
+		supportTextTemplate:   template.Must(template.New("TextBody").Parse(supportTextTemplate)),
 	}
 }
 
@@ -55,10 +63,12 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	}
 
 	msg := &Message{
-		HTMLBody: htmlBodyTpl.String(),
-		TextBody: textBodyTpl.String(),
-		Subject:  "[Private Captcha] Your verification code",
-		Email:    email,
+		HTMLBody:  htmlBodyTpl.String(),
+		TextBody:  textBodyTpl.String(),
+		Subject:   fmt.Sprintf("[%s] Your verification code", common.PrivateCaptcha),
+		EmailTo:   email,
+		EmailFrom: pm.emailFrom,
+		NameFrom:  common.PrivateCaptcha,
 	}
 	err := pm.mailer.SendEmail(ctx, msg)
 	slog.InfoContext(ctx, "Sent two factor code", "email", email, "code", code, common.ErrAttr(err))
@@ -66,8 +76,40 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	return err
 }
 
-func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, category string, message string) error {
-	// TODO: Implement sending support request email
-	slog.InfoContext(ctx, "Sent support request", "category", category, "email", email)
-	return nil
+func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, req *common.SupportRequest) error {
+	data := struct {
+		Message     string
+		Domain      string
+		CurrentYear int
+		TicketID    string
+	}{
+		Message:     req.Text,
+		Domain:      pm.Domain,
+		CurrentYear: time.Now().Year(),
+		TicketID:    req.TicketID,
+	}
+
+	var htmlBodyTpl bytes.Buffer
+	if err := pm.supportHTMLTemplate.Execute(&htmlBodyTpl, data); err != nil {
+		return err
+	}
+
+	var textBodyTpl bytes.Buffer
+	if err := pm.supportTextTemplate.Execute(&textBodyTpl, data); err != nil {
+		return err
+	}
+
+	msg := &Message{
+		HTMLBody:  htmlBodyTpl.String(),
+		TextBody:  textBodyTpl.String(),
+		Subject:   fmt.Sprintf("[%s] Support request %s", req.Category, req.ShortTicketID()),
+		EmailTo:   pm.supportEmail,
+		EmailFrom: pm.emailFrom,
+		NameFrom:  common.PrivateCaptcha,
+		ReplyTo:   email,
+	}
+	err := pm.mailer.SendEmail(ctx, msg)
+	slog.InfoContext(ctx, "Sent support email", "email", email, common.ErrAttr(err))
+
+	return err
 }

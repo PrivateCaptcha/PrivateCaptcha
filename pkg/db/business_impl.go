@@ -1204,9 +1204,9 @@ func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, 
 	return nil
 }
 
-func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
+func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) (*dbgen.Support, error) {
 	if impl.queries == nil {
-		return ErrMaintenance
+		return nil, ErrMaintenance
 	}
 
 	ticket, err := impl.queries.CreateSupportTicket(ctx, &dbgen.CreateSupportTicketParams{
@@ -1217,12 +1217,12 @@ func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create support ticket", "userID", userID, common.ErrAttr(err))
-		return err
+		return nil, err
 	}
 
 	slog.DebugContext(ctx, "Created support ticket in DB", "ticketID", ticket.ID)
 
-	return nil
+	return ticket, nil
 }
 
 func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {

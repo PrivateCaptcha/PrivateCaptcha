@@ -45,6 +45,9 @@ build-widget:
 	rm -v widget/static/js/* || echo 'Nothing to remove'
 	cd widget && npm run build
 
+build-view-emails:
+	env GOFLAGS="-mod=vendor" go build -o bin/viewemails cmd/viewemails/*.go
+
 copy-static-js:
 	cp -v web/js/index.js web/static/js/bundle.js
 	cp -v web/js/htmx.min.js web/static/js/
@@ -77,3 +80,9 @@ vet-sqlc:
 
 vet-docker:
 	@docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm vetsqlc
+
+view-emails: build-view-emails
+	bin/viewemails
+
+run-view-emails: build-view-emails
+	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'

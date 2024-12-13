@@ -330,7 +330,7 @@ func (s *BusinessStore) UpdateUserAPIKeysRateLimits(ctx context.Context, userID 
 	return s.impl().updateUserAPIKeysRateLimits(ctx, userID, requestsPerSecond)
 }
 
-func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) error {
+func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) (*dbgen.Support, error) {
 	return s.impl().createSupportTicket(ctx, category, message, userID)
 }
 

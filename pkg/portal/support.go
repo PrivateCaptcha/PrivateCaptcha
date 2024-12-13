@@ -32,9 +32,7 @@ func (s *Server) getSupport(w http.ResponseWriter, r *http.Request) (Model, stri
 	}
 
 	renderCtx := &supportRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
+		csrfRenderContext: s.createCsrfContext(user),
 	}
 
 	return renderCtx, supportTemplate, nil
@@ -77,11 +75,9 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 	message := strings.TrimSpace(r.FormValue(common.ParamMessage))
 
 	renderCtx := &supportRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Message:  message,
-		Category: r.FormValue(common.ParamCategory),
+		csrfRenderContext: s.createCsrfContext(user),
+		Message:           message,
+		Category:          r.FormValue(common.ParamCategory),
 	}
 
 	if len(message) < 10 {
@@ -90,11 +86,21 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 		return renderCtx, supportFormTemplate, nil
 	}
 
-	if err := s.Mailer.SendSupportRequest(ctx, user.Email, string(category), message); err == nil {
+	req := &common.SupportRequest{
+		Category: string(category),
+		Text:     message,
+	}
+
+	ticket, err := s.Store.CreateSupportTicket(ctx, category, message, user.ID)
+	if err == nil {
+		if data, err := ticket.ExternalID.MarshalJSON(); err == nil {
+			req.TicketID = strings.Trim(string(data), "\"")
+		}
+	}
+
+	if err := s.Mailer.SendSupportRequest(ctx, user.Email, req); err == nil {
 		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you soon."
 		renderCtx.Message = ""
-
-		_ = s.Store.CreateSupportTicket(ctx, category, message, user.ID)
 	} else {
 		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}
