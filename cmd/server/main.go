@@ -122,7 +122,8 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		Verifier:  apiServer,
 		Metrics:   metrics,
 	}
-	portalMailer := email.NewPortalMailer("http://"+portalServer.Domain, getenv)
+	mailer := email.NewMailer(getenv)
+	portalMailer := email.NewPortalMailer("http://"+portalServer.Domain, mailer, getenv)
 	portalServer.Mailer = portalMailer
 	portalServer.Init()
 
@@ -234,7 +235,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		TimeSeries: timeSeriesDB,
 	})
 	jobs.AddLocked(24*time.Hour, &maintenance.NotifyLimitsViolationsJob{
-		Mailer: &email.StubAdminMailer{},
+		Mailer: email.NewAdminMailer(mailer, getenv),
 		Store:  businessDB,
 	})
 	jobs.AddLocked(6*time.Hour, &maintenance.PaddlePricesJob{

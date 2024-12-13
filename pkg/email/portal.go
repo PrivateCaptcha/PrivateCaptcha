@@ -12,7 +12,7 @@ import (
 )
 
 type PortalMailer struct {
-	mailer                *SimpleMailer
+	mailer                *simpleMailer
 	Domain                string
 	emailFrom             string
 	supportEmail          string
@@ -22,13 +22,9 @@ type PortalMailer struct {
 	supportTextTemplate   *template.Template
 }
 
-func NewPortalMailer(domain string, getenv func(string) string) *PortalMailer {
+func NewPortalMailer(domain string, mailer *simpleMailer, getenv func(string) string) *PortalMailer {
 	return &PortalMailer{
-		mailer: &SimpleMailer{
-			URL:      getenv("SMTP_ENDPOINT"),
-			Username: getenv("SMTP_USERNAME"),
-			Password: getenv("SMTP_PASSWORD"),
-		},
+		mailer:                mailer,
 		emailFrom:             getenv("PC_EMAIL_FROM"),
 		supportEmail:          getenv("PC_SUPPORT_EMAIL"),
 		Domain:                domain,
