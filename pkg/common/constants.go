@@ -1,6 +1,7 @@
 package common
 
 const (
+	PrivateCaptcha        = "Private Captcha"
 	StageProd             = "prod"
 	StageDev              = "dev"
 	StageTest             = "test"
