@@ -21,7 +21,7 @@ func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int)
 	return nil
 }
 
-func (sm *StubMailer) SendSupportRequest(ctx context.Context, email string, category string, message string) error {
-	slog.InfoContext(ctx, "Sent support request", "category", category, "email", email)
+func (sm *StubMailer) SendSupportRequest(ctx context.Context, email string, req *common.SupportRequest) error {
+	slog.InfoContext(ctx, "Sent support request", "category", req.Category, "email", email)
 	return nil
 }

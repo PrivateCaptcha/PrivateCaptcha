@@ -12,11 +12,25 @@ import (
 )
 
 type Message struct {
-	HTMLBody string
-	TextBody string
-	Subject  string
-	Email    string
-	Name     string
+	HTMLBody  string
+	TextBody  string
+	Subject   string
+	EmailTo   string
+	NameTo    string
+	EmailFrom string
+	NameFrom  string
+	ReplyTo   string
+}
+
+var (
+	errInvalidMessage = errors.New("mail message is not valid")
+)
+
+func (m *Message) Valid() bool {
+	return (m != nil) &&
+		len(m.EmailTo) > 0 &&
+		len(m.EmailFrom) > 0 &&
+		(len(m.HTMLBody) > 0 || len(m.TextBody) > 0)
 }
 
 func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
@@ -47,16 +61,11 @@ type SimpleMailer struct {
 	URL      string
 	Username string
 	Password string
-	Sender   string
 }
 
 func (sm *SimpleMailer) SendEmail(ctx context.Context, msg *Message) error {
-	if len(msg.Email) == 0 {
-		return errors.New("email is empty")
-	}
-
-	if len(sm.Sender) == 0 {
-		return errors.New("sender is empty")
+	if !msg.Valid() {
+		return errInvalidMessage
 	}
 
 	dialer, err := smtpDialer(sm.URL, sm.Username, sm.Password)
@@ -66,9 +75,13 @@ func (sm *SimpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 
 	m := gomail.NewMessage()
 
-	m.SetAddressHeader("To", msg.Email, msg.Name)
-	m.SetAddressHeader("From", sm.Sender, "Private Captcha")
+	m.SetAddressHeader("To", msg.EmailTo, msg.NameTo)
+	m.SetAddressHeader("From", msg.EmailFrom, msg.NameFrom)
 	m.SetHeader("Subject", msg.Subject)
+	if len(msg.ReplyTo) > 0 {
+		m.SetHeader("Reply-To", msg.ReplyTo)
+
+	}
 	//m.SetHeader("X-Mailer", xMailer)
 
 	hasBody := false
