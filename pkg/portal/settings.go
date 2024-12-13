@@ -179,12 +179,10 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Name:           user.Name,
-		TwoFactorEmail: common.MaskEmail(user.Email, '*'),
-		EditEmail:      true,
+		csrfRenderContext: s.createCsrfContext(user),
+		Name:              user.Name,
+		TwoFactorEmail:    common.MaskEmail(user.Email, '*'),
+		EditEmail:         true,
 	}
 
 	return renderCtx, settingsGeneralFormTemplate, nil
@@ -213,11 +211,9 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Name:      user.Name,
-		EditEmail: (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
+		csrfRenderContext: s.createCsrfContext(user),
+		Name:              user.Name,
+		EditEmail:         (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
 	}
 
 	anyChange := false
@@ -323,10 +319,8 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Keys: apiKeysToUserAPIKeys(keys, time.Now().UTC()),
+		csrfRenderContext: s.createCsrfContext(user),
+		Keys:              apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	return renderCtx, settingsAPIKeysTemplate, nil
@@ -372,10 +366,8 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 			Email:  user.Email,
 			UserID: user.ID,
 		},
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
-		Keys: apiKeysToUserAPIKeys(keys, time.Now().UTC()),
+		csrfRenderContext: s.createCsrfContext(user),
+		Keys:              apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -436,9 +428,7 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.User) (*settingsBillingRenderContext, error) {
 	renderCtx := &settingsBillingRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(user.Email),
-		},
+		csrfRenderContext: s.createCsrfContext(user),
 		settingsCommonRenderContext: settingsCommonRenderContext{
 			Tab:    2,
 			Email:  user.Email,
