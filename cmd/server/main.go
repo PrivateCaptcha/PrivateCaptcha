@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
@@ -49,10 +50,8 @@ var (
 	envFileFlag = flag.String("env", "", "Path to .env file")
 )
 
-func run(ctx context.Context, getenv func(string) string, stderr io.Writer, systemdListener bool) error {
-	stage := getenv("STAGE")
-	verbose := getenv("VERBOSE") == "1"
-	common.SetupLogs(stage, verbose)
+func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListener bool) error {
+	common.SetupLogs(cfg.Stage(), cfg.Verbose())
 
 	var cache common.Cache[string, any]
 	var err error
@@ -62,14 +61,14 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
 	}
 
-	paddleAPI, err := billing.NewPaddleAPI(getenv)
+	paddleAPI, err := billing.NewPaddleAPI(cfg.Getenv)
 	if err != nil {
 		return err
 	}
 
-	ratelimiter := ratelimit.NewIPAddrRateLimiter(getenv(common.ConfigRateLimitHeader))
+	ratelimiter := ratelimit.NewIPAddrRateLimiter(cfg.RateLimiterHeader())
 
-	pool, clickhouse, dberr := db.Connect(ctx, getenv)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
 		return dberr
 	}
@@ -86,31 +85,19 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
 		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
 	}
-	apiAuth := api.NewAuthMiddleware(getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
-	metrics := monitoring.NewService(getenv)
-	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, metrics, getenv)
-
-	host := getenv("PC_HOST")
-	if host == "" {
-		host = "localhost"
-	}
-
-	domain := getenv("PC_DOMAIN")
-	if domain == "" {
-		domain = host
-	}
+	apiAuth := api.NewAuthMiddleware(cfg.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
+	metrics := monitoring.NewService(cfg.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, metrics, cfg.Getenv)
 
 	router := http.NewServeMux()
 
-	apiDomain := "api." + domain
-	apiServer.Setup(router, apiDomain, "" /*prefix*/, verbose)
+	apiServer.Setup(router, cfg.APIDomain(), "" /*prefix*/, cfg.Verbose())
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
-		Stage:      stage,
+		Stage:      cfg.Stage(),
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
-		Domain:     "portal." + domain,
 		XSRF:       portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "pcsid",
@@ -118,12 +105,12 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
 		PaddleAPI: paddleAPI,
-		ApiRelURL: "http://" + apiDomain,
+		APIURL:    cfg.APIURL(),
 		Verifier:  apiServer,
 		Metrics:   metrics,
 	}
-	mailer := email.NewMailer(getenv)
-	portalMailer := email.NewPortalMailer("http://"+portalServer.Domain, mailer, getenv)
+	mailer := email.NewMailer(cfg.Getenv)
+	portalMailer := email.NewPortalMailer(cfg.PortalURL(), mailer, cfg.Getenv)
 	portalServer.Mailer = portalMailer
 	portalServer.Init()
 
@@ -131,18 +118,15 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		BusinessDB:    businessDB,
 		TimeSeriesDB:  timeSeriesDB,
 		WithSystemd:   systemdListener,
-		CheckInterval: 5 * time.Second,
+		CheckInterval: cfg.HealthCheckInterval(),
 		Router:        router,
 	}
-	if "slow" == getenv("HEALTHCHECK") {
-		healthCheck.CheckInterval = 1 * time.Minute
-	}
 
-	portalServer.Setup(router, ratelimiter.RateLimit)
-	router.Handle("GET "+portalServer.Domain+"/assets/", http.StripPrefix("/assets/", ratelimiter.RateLimit(web.Static())))
+	portalServer.Setup(router, cfg.PortalDomain(), ratelimiter.RateLimit)
+	router.Handle("GET "+cfg.PortalDomain()+"/assets/", http.StripPrefix("/assets/", ratelimiter.RateLimit(web.Static())))
 	defaultAPIChain := alice.New(common.NoCache, common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
-	router.Handle("GET "+portalServer.Domain+"/widget/", http.StripPrefix("/widget/", widget.Static()))
+	router.Handle("GET "+cfg.PortalDomain()+"/widget/", http.StripPrefix("/widget/", widget.Static()))
 
 	httpServer := &http.Server{
 		Handler:           router,
@@ -153,7 +137,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	}
 
 	updateConfigFunc := func() {
-		maintenanceMode := common.EnvToBool(getenv("PC_MAINTENANCE_MODE"))
+		maintenanceMode := cfg.MaintenanceMode()
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
 		portalServer.UpdateConfig(maintenanceMode)
@@ -173,17 +157,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 			return errors.New("unexpected number of systemd listeners")
 		}
 	} else {
-		port := getenv("PC_PORT")
-		if port == "" {
-			port = "8080"
-		}
-		if stage != common.StageProd {
-			// TODO: Fix this properly
-			portalServer.ApiRelURL += ":" + port
-			portalMailer.Domain += ":" + port
-		}
-
-		address := net.JoinHostPort(host, port)
+		address := cfg.ListenAddress()
 		listener, err := net.Listen("tcp", address)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
@@ -219,7 +193,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	}()
 
 	go func() {
-		slog.InfoContext(ctx, "Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", stage)
+		slog.InfoContext(ctx, "Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", cfg.Stage())
 		if err := httpServer.Serve(listeners[0]); err != nil && err != http.ErrServerClosed {
 			slog.ErrorContext(ctx, "Error serving", common.ErrAttr(err))
 		}
@@ -235,11 +209,11 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 		TimeSeries: timeSeriesDB,
 	})
 	jobs.AddLocked(24*time.Hour, &maintenance.NotifyLimitsViolationsJob{
-		Mailer: email.NewAdminMailer(mailer, getenv),
+		Mailer: email.NewAdminMailer(mailer, cfg.Getenv),
 		Store:  businessDB,
 	})
 	jobs.AddLocked(6*time.Hour, &maintenance.PaddlePricesJob{
-		Stage:     stage,
+		Stage:     cfg.Stage(),
 		PaddleAPI: paddleAPI,
 		Store:     businessDB,
 	})
@@ -248,7 +222,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	})
 	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
 	jobs.Add(&maintenance.ThrottleViolationsJob{
-		Stage:      stage,
+		Stage:      cfg.Stage(),
 		UserLimits: userLimits,
 		Store:      businessDB,
 		From:       common.StartOfMonth(),
@@ -257,7 +231,7 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})
 	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
 		Store: businessDB,
-		Stage: stage,
+		Stage: cfg.Stage(),
 	})
 	jobs.AddLocked(24*time.Hour, &maintenance.GarbageCollectDataJob{
 		Age:        30 * 24 * time.Hour,
@@ -293,12 +267,9 @@ func run(ctx context.Context, getenv func(string) string, stderr io.Writer, syst
 	return nil
 }
 
-func migrate(ctx context.Context, getenv func(string) string, up bool) error {
-	stage := getenv("STAGE")
-	common.SetupLogs(stage, getenv("VERBOSE") == "1")
-
-	ctx = context.WithValue(ctx, common.TraceIDContextKey, "migration")
-	return db.Migrate(ctx, getenv, up)
+func migrate(ctx context.Context, cfg *config.Config, up bool) error {
+	common.SetupLogs(cfg.Stage(), cfg.Verbose())
+	return db.Migrate(ctx, cfg, up)
 }
 
 func main() {
@@ -313,13 +284,21 @@ func main() {
 		}
 	}
 
+	cfg, err := config.New(os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
+
 	switch *flagMode {
 	case modeServer, modeSystemd:
-		err = run(common.TraceContext(context.Background(), "main"), os.Getenv, os.Stderr, (*flagMode == modeSystemd))
+		ctx := common.TraceContext(context.Background(), "main")
+		err = run(ctx, cfg, os.Stderr, (*flagMode == modeSystemd))
 	case modeMigrate:
-		err = migrate(context.Background(), os.Getenv, true /*up*/)
+		ctx := common.TraceContext(context.Background(), "migration")
+		err = migrate(ctx, cfg, true /*up*/)
 	case modeRollback:
-		err = migrate(context.Background(), os.Getenv, false /*up*/)
+		ctx := common.TraceContext(context.Background(), "migration")
+		err = migrate(ctx, cfg, false /*up*/)
 	default:
 		err = fmt.Errorf("unknown mode: '%s'", *flagMode)
 	}

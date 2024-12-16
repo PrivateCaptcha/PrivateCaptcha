@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/joho/godotenv"
 )
 
@@ -44,11 +45,16 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
+	cfg, err := config.New(os.Getenv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
+
 	switch *flagMode {
 	case modeSeed:
-		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, os.Getenv)
+		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, cfg)
 	case modeTest:
-		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), os.Getenv, *flagRatePerSecond, *flagDuration,
+		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), cfg, *flagRatePerSecond, *flagDuration,
 			*flagSitekeyPercent)
 	default:
 		err = fmt.Errorf("unknown mode: '%s'", *flagMode)

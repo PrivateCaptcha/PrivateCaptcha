@@ -11,6 +11,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
@@ -23,6 +24,7 @@ import (
 
 var (
 	server     *Server
+	cfg        *config.Config
 	cache      common.Cache[string, any]
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
@@ -65,10 +67,16 @@ func TestMain(m *testing.M) {
 
 	common.SetupLogs("test", true)
 
+	var cerr error
+	cfg, cerr = config.New(os.Getenv)
+	if cerr != nil {
+		panic(cerr)
+	}
+
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
 	var dberr error
-	pool, clickhouse, dberr = db.Connect(context.Background(), os.Getenv)
+	pool, clickhouse, dberr = db.Connect(context.Background(), cfg)
 	if dberr != nil {
 		panic(dberr)
 	}

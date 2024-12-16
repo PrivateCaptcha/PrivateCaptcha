@@ -96,7 +96,7 @@ func TestGetLoginMaintenance(t *testing.T) {
 	defer server.UpdateConfig(false /*maintenance mode*/)
 
 	srv := http.NewServeMux()
-	server.Setup(srv, fakeRateLimiter)
+	server.Setup(srv, cfg.PortalDomain(), fakeRateLimiter)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	resp := w.Result()

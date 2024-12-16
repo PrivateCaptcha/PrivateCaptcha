@@ -3,9 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"sync"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 )
@@ -17,15 +17,15 @@ var (
 	globalDBErr      error
 )
 
-func Connect(ctx context.Context, getenv func(string) string) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, getenv, false /*migrate*/, false)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, false /*migrate*/, false)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func Migrate(ctx context.Context, getenv func(string) string, up bool) error {
-	pool, clickhouse, err := connectEx(ctx, getenv, true /*migrate*/, up)
+func Migrate(ctx context.Context, cfg *config.Config, up bool) error {
+	pool, clickhouse, err := connectEx(ctx, cfg, true /*migrate*/, up)
 	if err != nil {
 		return err
 	}
@@ -36,18 +36,17 @@ func Migrate(ctx context.Context, getenv func(string) string, up bool) error {
 	return err
 }
 
-func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
-	verbose := getenv("VERBOSE") == "1"
+func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
 		opts := ClickHouseConnectOpts{
-			Host:     getenv("PC_CLICKHOUSE_HOST"),
-			Database: getenv("PC_CLICKHOUSE_DB"),
-			User:     getenv("PC_CLICKHOUSE_USER"),
-			Password: getenv("PC_CLICKHOUSE_PASSWORD"),
+			Host:     cfg.Getenv("PC_CLICKHOUSE_HOST"),
+			Database: cfg.Getenv("PC_CLICKHOUSE_DB"),
+			User:     cfg.Getenv("PC_CLICKHOUSE_USER"),
+			Password: cfg.Getenv("PC_CLICKHOUSE_PASSWORD"),
 			Port:     9000,
-			Verbose:  verbose,
+			Verbose:  cfg.Verbose(),
 		}
 		clickhouse = connectClickhouse(opts)
 		if perr := clickhouse.Ping(); perr != nil {
@@ -62,7 +61,7 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool
 	})
 
 	errs.Go(func() error {
-		config, cerr := createPgxConfig(ctx, getenv, verbose)
+		config, cerr := createPgxConfig(ctx, cfg.Getenv, cfg.Verbose())
 		if cerr != nil {
 			return cerr
 		}
@@ -77,16 +76,11 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool
 		}
 
 		if migrate {
-			domain := getenv("PC_DOMAIN")
 			migrateCtx := &migrateContext{
-				Stage:            getenv("STAGE"),
+				Stage:            cfg.Stage(),
 				PortalPropertyID: PortalPropertyID,
-				PortalDomain:     "portal." + domain,
-				AdminEmail:       getenv("PC_ADMIN_EMAIL"),
-			}
-			if len(migrateCtx.AdminEmail) == 0 {
-				slog.WarnContext(ctx, "Admin email config is empty. Using domain instead")
-				migrateCtx.AdminEmail = "admin@" + domain
+				PortalDomain:     cfg.PortalDomain(),
+				AdminEmail:       cfg.AdminEmail(),
 			}
 			return migratePostgres(ctx, pool, migrateCtx, up)
 		}
