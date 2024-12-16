@@ -256,12 +256,12 @@ func (impl *businessStoreImpl) getCachedPropertyBySitekey(ctx context.Context, s
 	}
 }
 
-func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, sitekeys []string) ([]*dbgen.Property, error) {
+func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]struct{}) ([]*dbgen.Property, error) {
 	keys := make([]pgtype.UUID, 0, len(sitekeys))
 	keysMap := make(map[string]bool)
 	result := make([]*dbgen.Property, 0, len(sitekeys))
 
-	for _, sitekey := range sitekeys {
+	for sitekey := range sitekeys {
 		eid := UUIDFromSiteKey(sitekey)
 		if !eid.Valid {
 			continue
