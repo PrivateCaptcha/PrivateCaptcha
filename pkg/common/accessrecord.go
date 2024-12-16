@@ -16,4 +16,5 @@ type VerifyRecord struct {
 	PropertyID int32
 	PuzzleID   uint64
 	Timestamp  time.Time
+	Status     int8
 }

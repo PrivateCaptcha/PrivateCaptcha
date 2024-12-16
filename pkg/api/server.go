@@ -274,16 +274,17 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 	}
 
 	if serr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); serr != puzzle.VerifyNoError {
+		s.addVerifyRecord(ctx, puzzleObject, property, serr)
 		return serr, nil
 	}
 
-	if (puzzleObject != nil) && (property != nil) {
+	if puzzleObject != nil {
 		if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
 			slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 		}
-
-		s.addVerifyRecord(ctx, puzzleObject, property)
 	}
+
+	s.addVerifyRecord(ctx, puzzleObject, property, puzzle.VerifyNoError)
 
 	return verr, nil
 }
@@ -312,13 +313,19 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, map[string]string{})
 }
 
-func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property) {
+func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {
+	if (p == nil) || (property == nil) {
+		slog.ErrorContext(ctx, "Invalid input for verify record")
+		return
+	}
+
 	vr := &common.VerifyRecord{
 		UserID:     property.OrgOwnerID.Int32,
 		OrgID:      property.OrgID.Int32,
 		PropertyID: property.ID,
 		PuzzleID:   p.PuzzleID,
 		Timestamp:  time.Now().UTC(),
+		Status:     int8(verr),
 	}
 
 	s.verifyLogChan <- vr
