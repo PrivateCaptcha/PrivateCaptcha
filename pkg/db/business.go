@@ -86,7 +86,7 @@ func (s *BusinessStore) GetCachedPropertyBySitekey(ctx context.Context, sitekey 
 	return s.impl().getCachedPropertyBySitekey(ctx, sitekey)
 }
 
-func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekeys []string) ([]*dbgen.Property, error) {
+func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]struct{}) ([]*dbgen.Property, error) {
 	return s.impl().retrievePropertiesBySitekey(ctx, sitekeys)
 }
 

@@ -175,7 +175,7 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 
 // the only purpose of this routine is to cache properties and block users without a subscription
 func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Duration) {
-	var batch []string
+	batch := map[string]struct{}{}
 	slog.DebugContext(ctx, "Backfilling properties", "interval", delay.String())
 
 	for running := true; running; {
@@ -189,14 +189,14 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 				break
 			}
 
-			batch = append(batch, sitekey)
+			batch[sitekey] = struct{}{}
 
 			if len(batch) >= am.batchSize {
 				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "batch")
 				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
-					batch = []string{}
+					batch = make(map[string]struct{})
 					am.checkPropertyOwners(ctx, properties)
 				}
 			}
@@ -206,7 +206,7 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 				if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); (err != nil) && (err != db.ErrMaintenance) {
 					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 				} else {
-					batch = []string{}
+					batch = make(map[string]struct{})
 					am.checkPropertyOwners(ctx, properties)
 				}
 			}
