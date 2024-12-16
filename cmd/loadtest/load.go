@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
 
-func loadProperties(count int, getenv func(string) string) ([]*dbgen.Property, error) {
+func loadProperties(count int, cfg *config.Config) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
 	var cache common.Cache[string, any]
 	var err error
@@ -26,7 +27,7 @@ func loadProperties(count int, getenv func(string) string) ([]*dbgen.Property, e
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
 	}
 
-	pool, clickhouse, dberr := db.Connect(ctx, getenv)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
 		return nil, dberr
 	}
@@ -67,10 +68,7 @@ func randomSiteKey() string {
 	return hex.EncodeToString(array[:])
 }
 
-func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, getenv func(string) string) vegeta.Targeter {
-	pcDomain := getenv("PC_DOMAIN")
-	rateLimitHeader := getenv("RATE_LIMIT_HEADER")
-
+func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg *config.Config) vegeta.Targeter {
 	return func(tgt *vegeta.Target) error {
 		if tgt == nil {
 			return vegeta.ErrNilTarget
@@ -90,26 +88,26 @@ func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, getenv fun
 			sitekey = randomSiteKey()
 		}
 
-		tgt.URL = fmt.Sprintf("http://api.%s/%s?%s=%s", pcDomain, common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
+		tgt.URL = fmt.Sprintf("%s/%s?%s=%s", cfg.APIURL(), common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
 
 		header := http.Header{}
 		header.Add("Origin", property.Domain)
-		header.Add(rateLimitHeader, generateRandomIPv4())
+		header.Add(cfg.RateLimiterHeader(), generateRandomIPv4())
 		tgt.Header = header
 
 		return nil
 	}
 }
 
-func load(usersCount int, getenv func(string) string, freq int, durationSeconds int, sitekeyPercent int) error {
-	properties, err := loadProperties(usersCount, getenv)
+func load(usersCount int, cfg *config.Config, freq int, durationSeconds int, sitekeyPercent int) error {
+	properties, err := loadProperties(usersCount, cfg)
 	if err != nil {
 		return err
 	}
 
 	rate := vegeta.Rate{Freq: freq, Per: time.Second}
 	duration := time.Duration(durationSeconds) * time.Second
-	targeter := puzzleTargeter(properties, sitekeyPercent, getenv)
+	targeter := puzzleTargeter(properties, sitekeyPercent, cfg)
 	attacker := vegeta.NewAttacker()
 
 	slog.Info("Attacking", "duration", duration.String(), "rate", rate.String())
