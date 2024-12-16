@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS privatecaptcha.verify_logs_1h
     org_id UInt32,
     property_id UInt32,
     timestamp DateTime,
-    count UInt32
+    success_count UInt32,
+    failure_count UInt32
 )
 ENGINE = SummingMergeTree
 ORDER BY (user_id, org_id, property_id, timestamp)
@@ -16,6 +17,7 @@ SELECT
     org_id,
     property_id,
     toStartOfHour(timestamp) AS timestamp,
-    count() AS count
+    countIf(status = 0) AS success_count,
+    countIf(status != 0) AS failure_count
 FROM privatecaptcha.verify_logs
 GROUP BY user_id, org_id, property_id, timestamp;
