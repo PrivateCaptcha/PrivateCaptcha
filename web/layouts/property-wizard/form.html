@@ -1,4 +1,8 @@
 <div class="space-y-4">
+    {{- if .Params.ErrorMessage -}}
+    {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- end -}}
+
     <div>
         <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
         <div class="mt-2 relative">
