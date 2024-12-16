@@ -48,8 +48,8 @@ build-widget:
 build-view-emails:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewemails cmd/viewemails/*.go
 
-build-view-captcha:
-	env GOFLAGS="-mod=vendor" go build -o bin/viewcaptcha cmd/viewcaptcha/*.go
+build-view-widget:
+	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
 
 copy-static-js:
 	cp -v web/js/index.js web/static/js/bundle.js
@@ -90,8 +90,8 @@ view-emails: build-view-emails
 run-view-emails: build-view-emails
 	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'
 
-view-captcha: build-view-captcha
-	bin/viewcaptcha
+view-widget: build-view-widget
+	bin/viewwidget
 
-run-view-captcha: build-view-captcha build-js build-widget
-	reflex -r '^(pkg\/widget|pkg\/web|cmd\/viewcaptcha)/' -s -- sh -c 'make view-captcha'
+run-view-widget: build-view-widget build-js build-widget
+	reflex -r '^(pkg\/widget|pkg\/web|cmd\/viewwidget)/' -s -- sh -c 'make view-widget'
