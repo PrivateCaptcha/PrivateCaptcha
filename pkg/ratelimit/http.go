@@ -2,6 +2,7 @@ package ratelimit
 
 import (
 	"context"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 
 var (
 	defaultRejectedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "path", r.URL.Path)
 		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 	})
 )
