@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"log/slog"
 	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -84,6 +85,7 @@ func connectEx(ctx context.Context, getenv func(string) string, migrate, up bool
 				AdminEmail:       getenv("PC_ADMIN_EMAIL"),
 			}
 			if len(migrateCtx.AdminEmail) == 0 {
+				slog.WarnContext(ctx, "Admin email config is empty. Using domain instead")
 				migrateCtx.AdminEmail = "admin@" + domain
 			}
 			return migratePostgres(ctx, pool, migrateCtx, up)

@@ -24,6 +24,7 @@ type Message struct {
 
 var (
 	errInvalidMessage = errors.New("mail message is not valid")
+	errInvalidEmail   = errors.New("email is not valid")
 )
 
 func (m *Message) Valid() bool {
@@ -107,7 +108,8 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 
 	err = dialer.DialAndSend(m)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to send an email", "host", dialer.Host, "port", dialer.Port, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to send an email", "email", msg.EmailTo, "host", dialer.Host, "port", dialer.Port,
+			common.ErrAttr(err))
 		return err
 	}
 

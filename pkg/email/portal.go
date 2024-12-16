@@ -16,6 +16,7 @@ type PortalMailer struct {
 	Domain                string
 	emailFrom             string
 	supportEmail          string
+	adminEmail            string
 	twofactorHTMLTemplate *template.Template
 	twofactorTextTemplate *template.Template
 	supportHTMLTemplate   *template.Template
@@ -27,6 +28,7 @@ func NewPortalMailer(domain string, mailer *simpleMailer, getenv func(string) st
 		mailer:                mailer,
 		emailFrom:             getenv("PC_EMAIL_FROM"),
 		supportEmail:          getenv("PC_SUPPORT_EMAIL"),
+		adminEmail:            getenv("PC_ADMIN_EMAIL"),
 		Domain:                domain,
 		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
 		twofactorTextTemplate: template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
@@ -38,6 +40,10 @@ func NewPortalMailer(domain string, mailer *simpleMailer, getenv func(string) st
 var _ common.Mailer = (*PortalMailer)(nil)
 
 func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code int) error {
+	if len(email) == 0 {
+		return errInvalidEmail
+	}
+
 	data := struct {
 		Code        int
 		Domain      string
@@ -66,10 +72,25 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		EmailFrom: pm.emailFrom,
 		NameFrom:  common.PrivateCaptcha,
 	}
-	err := pm.mailer.SendEmail(ctx, msg)
-	slog.InfoContext(ctx, "Sent two factor code", "email", email, "code", code, common.ErrAttr(err))
 
-	return err
+	clog := slog.With("email", email, "code", code)
+
+	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
+		level := slog.LevelError
+
+		if email == pm.adminEmail {
+			level = slog.LevelWarn
+			err = nil
+		}
+
+		clog.Log(ctx, level, "Failed to send two factor code", common.ErrAttr(err))
+
+		return err
+	}
+
+	clog.InfoContext(ctx, "Sent two factor code")
+
+	return nil
 }
 
 func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, req *common.SupportRequest) error {
@@ -104,8 +125,14 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 		NameFrom:  common.PrivateCaptcha,
 		ReplyTo:   email,
 	}
-	err := pm.mailer.SendEmail(ctx, msg)
-	slog.InfoContext(ctx, "Sent support email", "email", email, common.ErrAttr(err))
 
-	return err
+	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
+		slog.ErrorContext(ctx, "Failed to send support request", common.ErrAttr(err))
+
+		return err
+	}
+
+	slog.InfoContext(ctx, "Sent support email", "email", email)
+
+	return nil
 }
