@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -37,8 +38,8 @@ func (s *server) Setup(router *http.ServeMux) {
 }
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux) {
-	router.HandleFunc(prefix+common.PuzzleEndpoint, s.chaos(s.puzzle))
-	router.HandleFunc(http.MethodPost+" "+prefix+"submit", s.submit)
+	router.Handle(prefix+common.PuzzleEndpoint, monitoring.Logged(http.HandlerFunc(s.chaos(s.puzzle))))
+	router.Handle(http.MethodPost+" "+prefix+"submit", monitoring.Logged(http.HandlerFunc(s.submit)))
 }
 
 // this helps to test backoff
