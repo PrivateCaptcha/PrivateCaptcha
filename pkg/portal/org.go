@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -71,6 +72,7 @@ type orgDashboardRenderContext struct {
 
 type orgWizardRenderContext struct {
 	csrfRenderContext
+	alertRenderContext
 	NameError string
 }
 
@@ -150,6 +152,25 @@ func (s *Server) validateOrgName(ctx context.Context, name string, userID int32)
 	return ""
 }
 
+func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string {
+	var subscription *dbgen.Subscription
+	var err error
+
+	if user.SubscriptionID.Valid {
+		subscription, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
+			return ""
+		}
+	}
+
+	if (subscription == nil) || !billing.IsSubscriptionActive(subscription.Status) {
+		return "You need an active subscription to create new organizations"
+	}
+
+	return ""
+}
+
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.sessionUser(ctx, s.session(w, r))
@@ -166,12 +187,19 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &orgWizardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		csrfRenderContext:  s.createCsrfContext(user),
+		alertRenderContext: alertRenderContext{},
 	}
 
 	name := r.FormValue(common.ParamName)
 	if nameError := s.validateOrgName(ctx, name, user.ID); len(nameError) > 0 {
 		renderCtx.NameError = nameError
+		s.render(w, r, createOrgFormTemplate, renderCtx)
+		return
+	}
+
+	if limitError := s.validateOrgsLimit(ctx, user); len(limitError) > 0 {
+		renderCtx.ErrorMessage = limitError
 		s.render(w, r, createOrgFormTemplate, renderCtx)
 		return
 	}

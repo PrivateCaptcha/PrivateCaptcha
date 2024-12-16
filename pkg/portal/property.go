@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -32,6 +33,7 @@ var (
 
 type propertyWizardRenderContext struct {
 	csrfRenderContext
+	alertRenderContext
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -229,6 +231,25 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 	return "Failed to resolve domain name."
 }
 
+func (s *Server) validatePropertiesLimit(ctx context.Context, user *dbgen.User) string {
+	var subscription *dbgen.Subscription
+	var err error
+
+	if user.SubscriptionID.Valid {
+		subscription, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
+			return ""
+		}
+	}
+
+	if (subscription == nil) || !billing.IsSubscriptionActive(subscription.Status) {
+		return "You need an active subscription to create new properties"
+	}
+
+	return ""
+}
+
 // This one cannot be "MVC" function because it redirects in case of success
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -252,8 +273,9 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID),
+		csrfRenderContext:  s.createCsrfContext(user),
+		alertRenderContext: alertRenderContext{},
+		CurrentOrg:         orgToUserOrg(org, user.ID),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -273,6 +295,12 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 	if domainError := s.validateDomainName(ctx, domain); len(domainError) > 0 {
 		renderCtx.DomainError = domainError
+		s.render(w, r, createPropertyFormTemplate, renderCtx)
+		return
+	}
+
+	if limitError := s.validatePropertiesLimit(ctx, user); len(limitError) > 0 {
+		renderCtx.ErrorMessage = limitError
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
