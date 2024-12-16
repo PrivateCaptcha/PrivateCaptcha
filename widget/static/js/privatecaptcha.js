@@ -375,7 +375,7 @@
   };
 
   // js/styles.css
-  var styles_default = '.pc-captcha-widget {\n    --dark-color: #070113;\n    --accent-color: #0080A0;\n    --gray-color: #E0E0E0;\n    --light-color: #F2F2F2;\n    --lighter-color: #FFF;\n    --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */\n    --label-spacing: 10px;\n\n    display: inline-flex;\n    align-items: center;\n    max-width: 360px;\n    padding: 12px 16px;\n    border: 1px solid var(--gray-color);\n    border-radius: 2px;\n    gap: 64px;\n}\n\n.pc-captcha-widget.hidden {\n    display: none;\n}\n\n.pc-captcha-widget.floating {\n    position: absolute;\n    left: 0;\n    top: 0;\n    transform: translate(0, -100%);\n    background-color: #FFF;\n}\n\n.pc-interactive-area {\n    display: flex;\n    align-items: center;\n    position: relative;\n    min-width: 160px;\n    font-size: 1em;\n}\n\n.pc-interactive-area label {\n    padding-left: var(--label-spacing);\n    color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"] {\n    width: 32px;\n    height: 32px;\n    margin: 0 0 0 var(--extra-spacing);\n    appearance: none;\n    background-color: var(--lighter-color);\n    border: 2px solid var(--dark-color);\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.pc-interactive-area input[type="checkbox"]+label {\n    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));\n}\n\n@keyframes colorChange {\n    0%, 100% { border-color: var(--dark-color); }\n    50% { border-color: var(--gray-color); }\n}\n\n.pc-interactive-area input[type="checkbox"].loading {\n    animation: colorChange 2s infinite;\n    animation-timing-function: ease-in-out;\n    background-color: var(--light-color);\n}\n\n.pc-interactive-area input[type="checkbox"].ready {\n    background-color: var(--lighter-color);\n    border-color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover {\n    background-color: var(--lighter-color);\n    border-color: var(--accent-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover + label {\n    cursor: pointer;\n    /* color: var(--dark-color); /* Highlight the text */\n}\n\n@keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n@-webkit-keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@-webkit-keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@-webkit-keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n\n.pc-interactive-area .dots span {\n    animation: dots-1 2s infinite steps(1);\n    -webkit-animation: dots-1 2s infinite steps(1);\n}\n\n.pc-interactive-area .dots span:first-child + span {\n    animation-name: dots-2;\n    -webkit-animation-name: dots-2;\n}\n\n .pc-interactive-area .dots span:first-child + span + span {\n    animation-name: dots-3;\n    -webkit-animation-name: dots-3;\n}\n\n#pc-progress {\n    display: flex;\n    justify-content: center;\n}\n\n.pc-info {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    margin-right: var(--extra-spacing);\n    color: var(--dark-color);\n}\n\n.company-logo {\n    max-width: 100px;\n    height: auto;\n}\n\na.pc-link {\n    margin-top: 5px;\n    text-decoration: none;\n    color: currentcolor;\n    text-align: center;\n    font-size: 0.55em;\n    text-transform: uppercase;\n    font-weight: 700;\n    line-height: 1.1em;\n}\n\na.pc-link:hover {\n    text-decoration: underline;\n}\n\n@keyframes checkmark {\n    0% {\n        stroke-dashoffset: 100px\n    }\n    100% {\n        stroke-dashoffset: 0px\n    }\n}\n\nsvg.verified polyline {\n    animation: checkmark 0.35s ease-in-out 0.1s backwards;\n}\n\n#pc-debug {\n    font-size: 12px;\n    color: var(--gray-color);\n    position: absolute;\n    top: 100%;\n    left: 50px; /*30px checkbox + 2*10 margins*/\n}\n';
+  var styles_default = ':host {\n    --dark-color: #070113;\n    --accent-color: #0080A0;\n    --gray-color: #E0E0E0;\n    --light-color: #F2F2F2;\n    --lighter-color: #FFF;\n    --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */\n    --label-spacing: 10px;\n    --border-radius: 2px;\n}\n\n.pc-captcha-widget {\n    display: inline-flex;\n    align-items: center;\n    max-width: 360px;\n    padding: 12px 16px;\n    border: 1px solid var(--gray-color);\n    border-radius: var(--border-radius);\n    gap: 64px;\n}\n\n.pc-captcha-widget.hidden {\n    display: none;\n}\n\n.pc-captcha-widget.floating {\n    position: absolute;\n    left: 0;\n    top: 0;\n    transform: translate(0, -100%);\n    background-color: #FFF;\n}\n\n.pc-interactive-area {\n    display: flex;\n    align-items: center;\n    position: relative;\n    min-width: 160px;\n    font-size: 1em;\n}\n\n.pc-interactive-area label {\n    padding-left: var(--label-spacing);\n    color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"] {\n    width: 32px;\n    height: 32px;\n    margin: 0 0 0 var(--extra-spacing);\n    appearance: none;\n    background-color: var(--lighter-color);\n    border: 2px solid var(--dark-color);\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.pc-interactive-area input[type="checkbox"]+label {\n    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));\n}\n\n@keyframes colorChange {\n    0%, 100% { border-color: var(--dark-color); }\n    50% { border-color: var(--gray-color); }\n}\n\n.pc-interactive-area input[type="checkbox"].loading {\n    animation: colorChange 2s infinite;\n    animation-timing-function: ease-in-out;\n    background-color: var(--light-color);\n}\n\n.pc-interactive-area input[type="checkbox"].ready {\n    background-color: var(--lighter-color);\n    border-color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover {\n    background-color: var(--lighter-color);\n    border-color: var(--accent-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover + label {\n    cursor: pointer;\n    /* color: var(--dark-color); /* Highlight the text */\n}\n\n@keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n@-webkit-keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@-webkit-keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@-webkit-keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n\n.pc-interactive-area .dots span {\n    animation: dots-1 2s infinite steps(1);\n    -webkit-animation: dots-1 2s infinite steps(1);\n}\n\n.pc-interactive-area .dots span:first-child + span {\n    animation-name: dots-2;\n    -webkit-animation-name: dots-2;\n}\n\n .pc-interactive-area .dots span:first-child + span + span {\n    animation-name: dots-3;\n    -webkit-animation-name: dots-3;\n}\n\n#pc-progress {\n    display: flex;\n    justify-content: center;\n}\n\n.pc-info {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    margin-right: var(--extra-spacing);\n    color: var(--dark-color);\n}\n\n.company-logo {\n    max-width: 100px;\n    height: auto;\n}\n\na.pc-link {\n    margin-top: 5px;\n    text-decoration: none;\n    color: currentcolor;\n    text-align: center;\n    font-size: 0.55em;\n    text-transform: uppercase;\n    font-weight: 700;\n    line-height: 1.1em;\n}\n\na.pc-link:hover {\n    text-decoration: underline;\n}\n\n@keyframes checkmark {\n    0% {\n        stroke-dashoffset: 100px\n    }\n    100% {\n        stroke-dashoffset: 0px\n    }\n}\n\nsvg.verified polyline {\n    animation: checkmark 0.35s ease-in-out 0.1s backwards;\n}\n\n#pc-debug {\n    font-size: 12px;\n    color: var(--gray-color);\n    position: absolute;\n    top: 100%;\n    left: 50px; /*30px checkbox + 2*10 margins*/\n}\n';
 
   // js/strings.js
   var CLICK_TO_VERIFY = "click_to_verify";
@@ -411,9 +411,9 @@
 <polyline class="st0" stroke="#F2F2F2" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
 </svg>
 `;
-  var activeAreaEmptyCheckbox = `<input type="checkbox" id="${CHECKBOX_ID}">`;
+  var activeAreaEmptyCheckbox = `<input type="checkbox" id="${CHECKBOX_ID}" required>`;
   function checkbox(cls) {
-    return `<input type="checkbox" id="${CHECKBOX_ID}" class="${cls}">`;
+    return `<input type="checkbox" id="${CHECKBOX_ID}" class="${cls}" required>`;
   }
   function label(text, forElement) {
     return `<label for="${forElement}">${text}</label>`;
@@ -438,6 +438,12 @@
       const sheet = new CSSStyleSheet();
       sheet.replace(styles_default);
       this._root.adoptedStyleSheets.push(sheet);
+      const extraStyles = this.getAttribute("extra-styles");
+      if (extraStyles) {
+        const overridesSheet = new CSSStyleSheet();
+        overridesSheet.replace(extraStyles);
+        this._root.adoptedStyleSheets.push(overridesSheet);
+      }
       this.setState(STATE_EMPTY);
     }
     setState(state) {
@@ -574,7 +580,8 @@
         puzzleEndpoint: element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
         sitekey: element.dataset["sitekey"] || "",
         displayMode: element.dataset["displayMode"] || "widget",
-        lang: element.dataset["lang"] || "en"
+        lang: element.dataset["lang"] || "en",
+        styles: element.dataset["styles"] || ""
       }, options);
       this._workersPool = new WorkersPool({
         workersReady: this.onWorkersReady.bind(this),
@@ -585,7 +592,7 @@
       const form = findParentFormElement(this._element);
       if (form) {
         form.addEventListener("focusin", this.onFocusIn.bind(this), { once: true, passive: true });
-        this._element.innerHTML = `<private-captcha${this._options.debug ? ' debug="true"' : ""} display-mode="${this._options.displayMode}" lang="${this._options.lang}"></private-captcha>`;
+        this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ""}></private-captcha>`;
         this._element.addEventListener("check", this.onChecked.bind(this));
         if (DISPLAY_POPUP === this._options.displayMode) {
           const anchor = form.querySelector(".private-captcha-anchor");
@@ -797,6 +804,7 @@
 
   // js/captcha.js
   window.privateCaptcha = {
+    setup: setupPrivateCaptcha
     // just a class declaration
     //CaptchaWidget: CaptchaWidget,
   };
@@ -807,7 +815,7 @@
     }
     return elements;
   }
-  function setup() {
+  function setupPrivateCaptcha() {
     let autoWidget = window.privateCaptcha.autoWidget;
     const elements = findCaptchaElements();
     for (let htmlElement of elements) {
@@ -819,8 +827,8 @@
     window.privateCaptcha.autoWidget = autoWidget;
   }
   if (document.readyState !== "loading") {
-    setup();
+    setupPrivateCaptcha();
   } else {
-    document.addEventListener("DOMContentLoaded", setup);
+    document.addEventListener("DOMContentLoaded", setupPrivateCaptcha);
   }
 })();
