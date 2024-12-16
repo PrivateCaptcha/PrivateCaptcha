@@ -133,7 +133,7 @@ func main() {
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
 		req.Header.Set(common.HeaderAuthorization, "Bearer "+pcAPIKey)
-		req.Host = "api." + os.Getenv("PC_DOMAIN")
+		req.Host = os.Getenv("PC_API_BASE_URL")
 
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

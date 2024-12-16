@@ -11,6 +11,7 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/rs/xid"
@@ -27,7 +28,7 @@ var (
 	growthLevels     = []dbgen.DifficultyGrowth{dbgen.DifficultyGrowthSlow, dbgen.DifficultyGrowthMedium, dbgen.DifficultyGrowthFast}
 )
 
-func seed(usersCount, orgsCount, propertiesCount int, getenv func(string) string) error {
+func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error {
 	ctx := context.TODO()
 
 	var cache common.Cache[string, any]
@@ -38,7 +39,7 @@ func seed(usersCount, orgsCount, propertiesCount int, getenv func(string) string
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
 	}
 
-	pool, clickhouse, dberr := db.Connect(ctx, getenv)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
 		return dberr
 	}
@@ -48,8 +49,7 @@ func seed(usersCount, orgsCount, propertiesCount int, getenv func(string) string
 
 	businessDB := db.NewBusiness(pool, cache)
 
-	stage := getenv("STAGE")
-	plans, ok := billing.GetPlansForStage(stage)
+	plans, ok := billing.GetPlansForStage(cfg.Stage())
 	if !ok || (len(plans) == 0) {
 		return errors.New("no billing plans available for current stage")
 	}

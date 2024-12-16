@@ -59,7 +59,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 			Token: s.XSRF.Token(""),
 		},
 		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint:      s.ApiRelURL + "/" + common.PuzzleEndpoint,
+		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: loginSolutionField,
 	}, loginTemplate, nil
@@ -80,7 +80,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 			Token: s.XSRF.Token(""),
 		},
 		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint:      s.ApiRelURL + "/" + common.PuzzleEndpoint,
+		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: loginSolutionField,
 	}

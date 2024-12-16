@@ -183,7 +183,7 @@ func (ac *alertRenderContext) ClearAlerts() {
 type Server struct {
 	Store           *db.BusinessStore
 	TimeSeries      *db.TimeSeriesStore
-	Domain          string
+	APIURL          string
 	Prefix          string
 	template        *web.Template
 	XSRF            XSRFMiddleware
@@ -192,7 +192,6 @@ type Server struct {
 	Stage           string
 	PaddleAPI       billing.PaddleAPI
 	cors            *cors.Cors
-	ApiRelURL       string
 	Verifier        puzzle.Verifier
 	Metrics         monitoring.Metrics
 	maintenanceMode atomic.Bool
@@ -208,8 +207,8 @@ func (s *Server) UpdateConfig(maintenanceMode bool) {
 	s.maintenanceMode.Store(maintenanceMode)
 }
 
-func (s *Server) Setup(router *http.ServeMux, ratelimiter alice.Constructor) {
-	corsDomain := s.Domain
+func (s *Server) Setup(router *http.ServeMux, domain string, ratelimiter alice.Constructor) {
+	corsDomain := domain
 	if len(corsDomain) == 0 {
 		slog.Error("CORS portal server domain is empty")
 		corsDomain = "*"
@@ -231,7 +230,7 @@ func (s *Server) Setup(router *http.ServeMux, ratelimiter alice.Constructor) {
 
 	s.cors = cors.New(corsOpts)
 
-	s.setupWithPrefix(s.Domain+s.relURL("/"), router, ratelimiter, s.cors.Handler)
+	s.setupWithPrefix(domain+s.relURL("/"), router, ratelimiter, s.cors.Handler)
 }
 
 func (s *Server) relURL(url string) string {
