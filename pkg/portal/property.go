@@ -407,29 +407,43 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	tabParam := r.URL.Query().Get(common.ParamTab)
-	var tab int
+	var model Model
+	var derr error
 	switch tabParam {
 	case "integrations":
-		tab = 1
+		if integrationsCtx, err := s.getPropertyIntegrations(w, r); err == nil {
+			integrationsCtx.propertyDashboardRenderContext.Tab = 1
+			model = integrationsCtx
+		} else {
+			derr = err
+		}
 	case "settings":
-		tab = 2
+		if renderCtx, err := s.getOrgProperty(w, r); err == nil {
+			renderCtx.Tab = 2
+			model = renderCtx
+		} else {
+			derr = err
+		}
 	default:
 		if tabParam != "reports" {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
-		tab = 0
+		if renderCtx, err := s.getOrgProperty(w, r); err == nil {
+			renderCtx.Tab = 0
+			model = renderCtx
+		} else {
+			derr = err
+		}
 	}
 
-	renderCtx, err := s.getOrgProperty(w, r)
-	if err != nil {
-		return nil, "", err
+	if derr != nil {
+		return nil, "", derr
 	}
-	renderCtx.Tab = tab
 
-	return renderCtx, propertyDashboardTemplate, nil
+	return model, propertyDashboardTemplate, nil
 }
 
-func (s *Server) getPropertyReports(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	renderCtx, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, "", err
@@ -438,7 +452,7 @@ func (s *Server) getPropertyReports(w http.ResponseWriter, r *http.Request) (Mod
 	return renderCtx, propertyDashboardReportsTemplate, nil
 }
 
-func (s *Server) getPropertySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	renderCtx, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, "", err
@@ -447,16 +461,16 @@ func (s *Server) getPropertySettings(w http.ResponseWriter, r *http.Request) (Mo
 	return renderCtx, propertyDashboardSettingsTemplate, nil
 }
 
-func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (*propertyIntegrationsRenderContext, error) {
 	dashboardCtx, err := s.getOrgProperty(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// should just hit cache right away
 	property, err := s.property(r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &propertyIntegrationsRenderContext{
@@ -464,7 +478,16 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 		Sitekey:                        db.UUIDToSiteKey(property.ExternalID),
 	}
 
-	return renderCtx, propertyDashboardIntegrationsTemplate, nil
+	return renderCtx, nil
+}
+
+func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	ctx, err := s.getPropertyIntegrations(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return ctx, propertyDashboardIntegrationsTemplate, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
