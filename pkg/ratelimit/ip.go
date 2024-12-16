@@ -32,7 +32,7 @@ func NewIPAddrRateLimiter(header string) HTTPRateLimiter {
 
 	const (
 		maxBucketsToKeep = 1_000_000
-		// we are allowing 1 request per 2 seconds from a single client IP address with a 5 requests burst
+		// we are allowing 1 request per 2 seconds from a single client IP address with a {leakyBucketCap} requests burst
 		// NOTE: this assumes correct configuration of the whole chain of reverse proxies
 		leakyBucketCap    = 5
 		leakRatePerSecond = 0.5
