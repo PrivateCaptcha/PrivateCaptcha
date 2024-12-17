@@ -1,6 +1,6 @@
 {{define "scripts"}}
 {{template "default-scripts.html" .}}
-<script defer src="/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
+<script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
 <script>
     function onCaptchaSolved() {
         var submitButton = document.querySelector('#loginSubmit');

@@ -17,6 +17,8 @@ type Config struct {
 	apiDomain     string
 	portalBaseURL string
 	portalDomain  string
+	cdnBaseURL    string
+	cdnDomain     string
 	scheme        string
 	verbose       bool
 }
@@ -87,6 +89,12 @@ func (c *Config) init() error {
 		return err
 	}
 
+	c.cdnBaseURL = strings.TrimRight(c.getenv("PC_CDN_BASE_URL"), "/")
+	c.cdnDomain, _, err = splitHostPort(c.cdnDomain)
+	if err != nil {
+		return err
+	}
+
 	c.scheme = c.getenv("PC_SCHEME")
 	switch c.scheme {
 	case "http", "https":
@@ -106,6 +114,10 @@ func (c *Config) Stage() string {
 
 func (c *Config) Verbose() bool {
 	return c.verbose
+}
+
+func (c *Config) CDNDomain() string {
+	return c.cdnDomain
 }
 
 func (c *Config) APIDomain() string {
@@ -132,6 +144,10 @@ func (c *Config) ListenAddress() string {
 
 func (c *Config) APIURL() string {
 	return fmt.Sprintf("%s://%s", c.scheme, c.apiBaseURL)
+}
+
+func (c *Config) CDNURL() string {
+	return fmt.Sprintf("%s://%s", c.scheme, c.cdnBaseURL)
 }
 
 func (c *Config) PortalURL() string {

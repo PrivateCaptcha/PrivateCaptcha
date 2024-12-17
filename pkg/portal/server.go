@@ -157,6 +157,7 @@ type requestContext struct {
 	CurrentYear int
 	UserName    string
 	UserEmail   string
+	CDN         string
 }
 
 type csrfRenderContext struct {
@@ -186,6 +187,7 @@ type Server struct {
 	Store           *db.BusinessStore
 	TimeSeries      *db.TimeSeriesStore
 	APIURL          string
+	CDNURL          string
 	Prefix          string
 	template        *web.Template
 	XSRF            XSRFMiddleware
@@ -420,6 +422,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		Path:        r.URL.Path,
 		LoggedIn:    ok && loggedIn,
 		CurrentYear: time.Now().Year(),
+		CDN:         s.CDNURL,
 	}
 
 	sess := s.Session.SessionStart(w, r)
