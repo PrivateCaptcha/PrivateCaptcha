@@ -209,9 +209,11 @@
             let x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
             let y = d3.scaleLinear().range([height, 0]);
 
-            // we will always have more or equal requested to verified
             x.domain(requested.map(function(d) { return d.x; }));
-            y.domain([0, d3.max(requested, function(d) { return d.y; }) * 1.2]);
+            // we will always have more or equal requested to verified?
+            const requestedMax = d3.max(requested, function(d) { return d.y; });
+            const verifiedMax = d3.max(verified, function(d) { return d.y; });
+            y.domain([0, Math.max(requestedMax, verifiedMax) * 1.2]);
 
             // Filter the domain of the X scale to include only every other value
             let xTickValues = x.domain().filter(xTickFilter);
