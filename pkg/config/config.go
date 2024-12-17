@@ -108,6 +108,10 @@ func (c *Config) init() error {
 	return nil
 }
 
+func (c *Config) Reload() {
+	// BUMP
+}
+
 func (c *Config) Stage() string {
 	return c.stage
 }
