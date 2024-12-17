@@ -2,7 +2,7 @@
 
 import { getPuzzle, Puzzle } from './puzzle.js'
 import { WorkersPool } from './workerspool.js'
-import { CaptchaElement, STATE_EMPTY, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP } from './html.js';
+import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP } from './html.js';
 
 window.customElements.define('private-captcha', CaptchaElement);
 
@@ -73,8 +73,8 @@ export class CaptchaWidget {
             return;
         }
 
-        if (this._state != STATE_EMPTY) {
-            console.warn("[privatecaptcha] captcha has already been initialized")
+        if ((this._state != STATE_EMPTY) && (this._state != STATE_ERROR)) {
+            console.warn(`[privatecaptcha] captcha has already been initialized. state=${this._state}`)
             return;
         }
 
@@ -95,10 +95,13 @@ export class CaptchaWidget {
             this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis);
             this._workersPool.init(this._puzzle.ID, this._puzzle.puzzleBuffer, startWorkers);
         } catch (e) {
-            // TODO: set failed state
             console.error('[privatecaptcha]', e);
-            this.setState(STATE_EMPTY);
-            this.setProgressState(STATE_EMPTY);
+            if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+            this.setState(STATE_ERROR);
+            this.setProgressState(this._userStarted ? STATE_VERIFIED : STATE_EMPTY);
+            if (this._userStarted) {
+                this.signalErrored();
+            }
         }
     }
 
@@ -133,6 +136,13 @@ export class CaptchaWidget {
         }
     }
 
+    signalErrored() {
+        const callback = this._element.dataset['erroredCallback'];
+        if (callback) {
+            window[callback]();
+        }
+    }
+
     ensureNoSolutionField() {
         const solutionField = this._element.querySelector(`input[name="${this._options.fieldName}"]`);
         if (solutionField) {
@@ -142,6 +152,16 @@ export class CaptchaWidget {
                 console.warn('[privatecaptcha]', e);
             }
         }
+    }
+
+    reset() {
+        this.trace('reset captcha')
+        this.setState(STATE_EMPTY);
+        this.setProgressState(STATE_EMPTY);
+        if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+        this.ensureNoSolutionField();
+        this._userStarted = false;
+        this.init(false /*start*/);
     }
 
     expire() {
@@ -165,7 +185,7 @@ export class CaptchaWidget {
     }
 
     onChecked() {
-        this.trace('onChecked event handler')
+        this.trace(`onChecked event handler. state=${this._state}`);
         this._userStarted = true;
 
         // always show spinner when user clicked
@@ -177,6 +197,7 @@ export class CaptchaWidget {
                 this.start();
                 break;
             case STATE_EMPTY:
+            case STATE_ERROR:
                 this.init(true /*start*/);
                 break;
             case STATE_LOADING:

@@ -87,11 +87,13 @@ vet-docker:
 view-emails: build-view-emails
 	bin/viewemails
 
-run-view-emails: build-view-emails
+run-view-emails:
 	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'
 
-view-widget: build-view-widget
+view-widget: build-js build-widget build-view-widget
 	bin/viewwidget
 
-run-view-widget: build-view-widget build-js build-widget
-	reflex -r '^(pkg\/widget|pkg\/web|cmd\/viewwidget)/' -s -- sh -c 'make view-widget'
+run-view-widget:
+	reflex -r '^(widget|web|cmd\/viewwidget)/' \
+		-R '^(web/static/js|widget/static/js|widget/node_modules|web/node_modules)' \
+		-s -- sh -c 'make view-widget'
