@@ -39,7 +39,7 @@
                 <div class="ml-4 mt-4">
                     <div class="flex items-center">
                         <div class="flex-shrink-0">
-                            <img class="h-12 w-12" src="/assets/img/html5.svg" alt="">
+                            <img class="h-12 w-12" src="{{$.Ctx.CDN}}/portal/img/html5.svg" alt="">
                         </div>
                         <div class="ml-4">
                             <h3 class="text-base font-semibold leading-6 text-gray-900">HTML/JS Snippet</h3>
@@ -55,7 +55,7 @@
             <div class="grow">
                 <code class="block rounded-md bg-gray-200 text-gray-800">
                     <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this to the <head> of your website -->` }}
-{{ `<script defer src="https://privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}
+{{ `<script defer src="` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
 
 {{ `<!-- Add this to your form -->` }}
 {{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
@@ -78,7 +78,7 @@
             <ul role="list" class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">
                 <li class="overflow-hidden rounded-xl border border-gray-200">
                     <div class="flex items-center gap-x-4 border-b border-gray-900/5 bg-gray-50 p-6">
-                        <img src="/assets/img/wordpress.png" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
+                        <img src="{{$.Ctx.CDN}}/portal/img/wordpress.png" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
                         <div class="text-sm font-medium leading-6 text-gray-900">WordPress</div>
                         <div class="ml-auto">
                             <span class="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming soon</span>
@@ -86,13 +86,13 @@
                     </div>
                     <dl class="-my-3 x-6 py-4 text-sm leading-6">
                         <div class="flex justify-between gap-x-4 py-3 px-6">
-                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Setup</button>
+                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50" disabled>Setup</button>
                         </div>
                     </dl>
                 </li>
                 <li class="overflow-hidden rounded-xl border border-gray-200">
                     <div class="flex items-center gap-x-4 border-b border-gray-900/5 bg-gray-50 p-6">
-                        <img src="/assets/img/React.svg" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
+                        <img src="{{$.Ctx.CDN}}/portal/img/React.svg" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
                         <div class="text-sm font-medium leading-6 text-gray-900">React</div>
                         <div class="ml-auto">
                             <span class="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming soon</span>
@@ -100,7 +100,7 @@
                     </div>
                     <dl class="-my-3 x-6 py-4 text-sm leading-6">
                         <div class="flex justify-between gap-x-4 py-3 px-6">
-                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Setup</button>
+                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50" disabled>Setup</button>
                         </div>
                     </dl>
                 </li>
