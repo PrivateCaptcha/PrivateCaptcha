@@ -14,6 +14,7 @@ import (
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 )
 
 const (
@@ -81,8 +82,8 @@ SETTINGS use_query_cache = true`
 	}
 }
 
-func (ts *TimeSeriesStore) UpdateConfig(maintenanceMode bool) {
-	ts.maintenanceMode.Store(maintenanceMode)
+func (ts *TimeSeriesStore) UpdateConfig(cfg *config.Config) {
+	ts.maintenanceMode.Store(cfg.MaintenanceMode())
 }
 
 func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
