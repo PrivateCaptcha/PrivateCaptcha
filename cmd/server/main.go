@@ -106,6 +106,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		},
 		PaddleAPI: paddleAPI,
 		APIURL:    cfg.APIURL(),
+		CDNURL:    cfg.CDNURL(),
 		Verifier:  apiServer,
 		Metrics:   metrics,
 	}
@@ -123,10 +124,10 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	}
 
 	portalServer.Setup(router, cfg.PortalDomain(), ratelimiter.RateLimit)
-	router.Handle("GET "+cfg.PortalDomain()+"/assets/", http.StripPrefix("/assets/", ratelimiter.RateLimit(web.Static())))
 	defaultAPIChain := alice.New(common.NoCache, common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
-	router.Handle("GET "+cfg.PortalDomain()+"/widget/", http.StripPrefix("/widget/", widget.Static()))
+	router.Handle("GET "+cfg.CDNDomain()+"/portal/", http.StripPrefix("/portal/", ratelimiter.RateLimit(web.Static())))
+	router.Handle("GET "+cfg.CDNDomain()+"/widget/", http.StripPrefix("/widget/", ratelimiter.RateLimit(widget.Static())))
 
 	httpServer := &http.Server{
 		Handler:           router,
