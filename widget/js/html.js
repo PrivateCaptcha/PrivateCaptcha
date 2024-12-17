@@ -7,6 +7,7 @@ import * as i18n from './strings.js';
 window.customElements.define('progress-ring', ProgressRing);
 
 export const STATE_EMPTY = 'empty';
+export const STATE_ERROR = 'error';
 export const STATE_LOADING = 'loading';
 export const STATE_READY = 'ready';
 export const STATE_IN_PROGRESS = 'inprogress';
