@@ -59,7 +59,7 @@ ORDER BY agg_time
 verifies AS (
 SELECT
 toDateTime({{.TimeFuncVerifies}}) AS agg_time,
-sum(count) AS count
+sum(success_count) AS count
 FROM {{.VerifiesTable}} FINAL
 WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY agg_time
