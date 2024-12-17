@@ -19,7 +19,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
@@ -208,8 +207,8 @@ func (s *Server) Init() {
 	s.Session.Path = prefix
 }
 
-func (s *Server) UpdateConfig(cfg *config.Config) {
-	s.maintenanceMode.Store(cfg.MaintenanceMode())
+func (s *Server) UpdateConfig(maintenanceMode bool) {
+	s.maintenanceMode.Store(maintenanceMode)
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, ratelimiter alice.Constructor) {

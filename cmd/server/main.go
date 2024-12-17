@@ -138,10 +138,10 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	}
 
 	updateConfigFunc := func() {
-		cfg.Reload()
-		businessDB.UpdateConfig(cfg)
-		timeSeriesDB.UpdateConfig(cfg)
-		portalServer.UpdateConfig(cfg)
+		maintenanceMode := cfg.MaintenanceMode()
+		businessDB.UpdateConfig(maintenanceMode)
+		timeSeriesDB.UpdateConfig(maintenanceMode)
+		portalServer.UpdateConfig(maintenanceMode)
 	}
 	updateConfigFunc()
 

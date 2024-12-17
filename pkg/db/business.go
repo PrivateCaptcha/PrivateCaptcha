@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -62,8 +61,8 @@ func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessS
 	}
 }
 
-func (s *BusinessStore) UpdateConfig(cfg *config.Config) {
-	s.maintenanceMode.Store(cfg.MaintenanceMode())
+func (s *BusinessStore) UpdateConfig(maintenanceMode bool) {
+	s.maintenanceMode.Store(maintenanceMode)
 }
 
 func (s *BusinessStore) impl() *businessStoreImpl {
