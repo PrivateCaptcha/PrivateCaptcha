@@ -392,6 +392,7 @@
   // js/html.js
   window.customElements.define("progress-ring", ProgressRing);
   var STATE_EMPTY = "empty";
+  var STATE_ERROR = "error";
   var STATE_LOADING = "loading";
   var STATE_READY = "ready";
   var STATE_IN_PROGRESS = "inprogress";
@@ -614,8 +615,8 @@
         console.error("[privatecaptcha] sitekey not set on captcha element");
         return;
       }
-      if (this._state != STATE_EMPTY) {
-        console.warn("[privatecaptcha] captcha has already been initialized");
+      if (this._state != STATE_EMPTY && this._state != STATE_ERROR) {
+        console.warn(`[privatecaptcha] captcha has already been initialized. state=${this._state}`);
         return;
       }
       if (this._workersPool) {
@@ -636,8 +637,14 @@
         this._workersPool.init(this._puzzle.ID, this._puzzle.puzzleBuffer, startWorkers);
       } catch (e) {
         console.error("[privatecaptcha]", e);
-        this.setState(STATE_EMPTY);
-        this.setProgressState(STATE_EMPTY);
+        if (this._expiryTimeout) {
+          clearTimeout(this._expiryTimeout);
+        }
+        this.setState(STATE_ERROR);
+        this.setProgressState(this._userStarted ? STATE_VERIFIED : STATE_EMPTY);
+        if (this._userStarted) {
+          this.signalErrored();
+        }
       }
     }
     start() {
@@ -666,6 +673,12 @@
         window[callback]();
       }
     }
+    signalErrored() {
+      const callback = this._element.dataset["erroredCallback"];
+      if (callback) {
+        window[callback]();
+      }
+    }
     ensureNoSolutionField() {
       const solutionField = this._element.querySelector(`input[name="${this._options.fieldName}"]`);
       if (solutionField) {
@@ -675,6 +688,20 @@
           console.warn("[privatecaptcha]", e);
         }
       }
+    }
+    reset() {
+      this.trace("reset captcha");
+      this.setState(STATE_EMPTY);
+      this.setProgressState(STATE_EMPTY);
+      if (this._expiryTimeout) {
+        clearTimeout(this._expiryTimeout);
+      }
+      this.ensureNoSolutionField();
+      this._userStarted = false;
+      this.init(
+        false
+        /*start*/
+      );
     }
     expire() {
       this.trace("time to expire captcha");
@@ -697,7 +724,7 @@
       this.setProgressState(this._state);
     }
     onChecked() {
-      this.trace("onChecked event handler");
+      this.trace(`onChecked event handler. state=${this._state}`);
       this._userStarted = true;
       let progressState = STATE_IN_PROGRESS;
       let signal = false;
@@ -706,6 +733,7 @@
           this.start();
           break;
         case STATE_EMPTY:
+        case STATE_ERROR:
           this.init(
             true
             /*start*/
