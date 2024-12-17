@@ -98,7 +98,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		Stage:      cfg.Stage(),
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
-		XSRF:       portal.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+		XSRF:       portal.XSRFMiddleware{Key: "pckey", Timeout: 1 * time.Hour},
 		Session: session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
