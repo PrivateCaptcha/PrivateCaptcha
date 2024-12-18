@@ -16,14 +16,19 @@ var (
 	ErrSetMissing       = errors.New("cannot set missing value directly")
 )
 
+const (
+	UserLimitTTL    = 3 * time.Hour
+	DefaultCacheTTL = 5 * time.Minute
+)
+
 type memcache[TKey comparable, TValue comparable] struct {
-	store        otter.Cache[TKey, TValue]
+	store        otter.CacheWithVariableTTL[TKey, TValue]
 	missingValue TValue
 }
 
-func NewMemoryCache[TKey comparable, TValue comparable](expiration time.Duration, maxCacheSize int, missingValue TValue) (*memcache[TKey, TValue], error) {
+func NewMemoryCache[TKey comparable, TValue comparable](maxCacheSize int, missingValue TValue) (*memcache[TKey, TValue], error) {
 	store, err := otter.MustBuilder[TKey, TValue](maxCacheSize).
-		WithTTL(expiration).
+		WithVariableTTL().
 		Build()
 
 	if err != nil {
@@ -57,22 +62,22 @@ func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, err
 	return data, nil
 }
 
-func (c *memcache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
-	c.store.Set(key, c.missingValue)
+func (c *memcache[TKey, TValue]) SetMissing(ctx context.Context, key TKey, ttl time.Duration) error {
+	c.store.Set(key, c.missingValue, ttl)
 
-	slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "key", key)
+	slog.Log(ctx, common.LevelTrace, "Set item as missing in memory cache", "key", key, "ttl", ttl)
 
 	return nil
 }
 
-func (c *memcache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
+func (c *memcache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue, ttl time.Duration) error {
 	if t == c.missingValue {
 		return ErrSetMissing
 	}
 
-	c.store.Set(key, t)
+	c.store.Set(key, t, ttl)
 
-	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "key", key)
+	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "key", key, "ttl", ttl)
 
 	return nil
 }

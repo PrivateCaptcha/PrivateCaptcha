@@ -21,7 +21,7 @@ func loadProperties(count int, cfg *config.Config) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
 	var cache common.Cache[string, any]
 	var err error
-	cache, err = db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
+	cache, err = db.NewMemoryCache[string, any](maxCacheSize, nil /*missing value*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)

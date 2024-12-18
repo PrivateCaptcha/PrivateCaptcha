@@ -266,7 +266,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	err = cache.SetMissing(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	err = cache.SetMissing(ctx, db.PropertyBySitekeyCacheKey(sitekey), db.DefaultCacheTTL)
 	if err != nil {
 		t.Fatal(err)
 	}
