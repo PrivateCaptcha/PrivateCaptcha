@@ -33,23 +33,31 @@ func createUserAndOrgName(testName string) (string, string) {
 	return name, orgName
 }
 
-func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
-	email := testName + "@privatecaptcha.com"
-
+func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
 	testPlan := billing.TestPlans[0]
 	tnow := time.Now()
 
-	name, orgName := createUserAndOrgName(testName)
-
-	return store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
+	return &dbgen.CreateSubscriptionParams{
 		PaddleProductID:      testPlan.PaddleProductID,
 		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
 		Status:               paddle.SubscriptionStatusTrialing,
+		Source:               dbgen.SubscriptionSourceInternal,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
-	}, email, name, orgName, -1 /*existingUserID*/)
+	}
+}
+
+func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
+	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams())
+}
+
+func CreateNewAccountForTestEx(ctx context.Context, store *db.BusinessStore, testName string, subscrParams *dbgen.CreateSubscriptionParams) (*dbgen.User, *dbgen.Organization, error) {
+	email := testName + "@privatecaptcha.com"
+	name, orgName := createUserAndOrgName(testName)
+
+	return store.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existingUserID*/)
 }
 
 func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID int32) error {

@@ -50,6 +50,9 @@ sql:
           backend_support_category_problem: SupportCategoryProblem
           backend_support_category_unknown: SupportCategoryUnknown
           backend_system_notification: SystemNotification
+          backend_subscription_source: SubscriptionSource
+          backend_subscription_source_paddle: SubscriptionSourcePaddle
+          backend_subscription_source_internal: SubscriptionSourceInternal
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"

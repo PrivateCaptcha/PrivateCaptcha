@@ -8,6 +8,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
 
@@ -16,7 +17,9 @@ func TestCancelURL(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 	ctx := context.TODO()
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	subscrParams := db_tests.CreateNewSubscriptionParams()
+	subscrParams.Source = dbgen.SubscriptionSourcePaddle
+	user, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), subscrParams)
 	if err != nil {
 		t.Fatal(err)
 	}

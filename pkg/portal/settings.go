@@ -25,10 +25,12 @@ const (
 	settingsAPIKeysTemplate     = "settings/apikeys.html"
 	settingsBillingTemplate     = "settings/billing.html"
 	settingsUsageTemplate       = "settings/usage.html"
+	internalSubscriptionMessage = "Please contact support to change internal subscription."
 )
 
 var (
-	errMissingSubscription = errors.New("user does not have a subscription")
+	errMissingSubscription  = errors.New("user does not have a subscription")
+	errInternalSubscription = errors.New("internal subscription")
 )
 
 type settingsCommonRenderContext struct {
@@ -511,6 +513,12 @@ func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Reque
 		return nil, err
 	}
 
+	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+		slog.WarnContext(ctx, "Cannot modify internal subscription", "userID", user.ID, "subscription", subscription.Source)
+		http.Error(w, "", http.StatusNotAcceptable)
+		return nil, errInternalSubscription
+	}
+
 	urls, err := s.PaddleAPI.GetManagementURLs(ctx, subscription.PaddleSubscriptionID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to fetch Paddle URLs", common.ErrAttr(err))
@@ -594,6 +602,11 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
+	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+		renderCtx.ErrorMessage = internalSubscriptionMessage
+		return renderCtx, settingsBillingTemplate, nil
+	}
+
 	changePreview, err := s.PaddleAPI.PreviewChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
@@ -672,6 +685,11 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to find new billing plan", "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+	}
+
+	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+		renderCtx.ErrorMessage = internalSubscriptionMessage
+		return renderCtx, settingsBillingTemplate, nil
 	}
 
 	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/); err == nil {

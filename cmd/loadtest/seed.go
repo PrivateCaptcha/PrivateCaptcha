@@ -84,6 +84,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 		PaddlePriceID:        plan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
+		Source:               dbgen.SubscriptionSourceInternal,
 		Status:               paddle.SubscriptionStatusTrialing,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
