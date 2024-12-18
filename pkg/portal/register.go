@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
@@ -89,26 +90,26 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)
 }
 
-func (s *Server) doRegister(ctx context.Context, sess *common.Session) error {
+func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		return errIncompleteSession
+		return nil, errIncompleteSession
 	}
 
 	name, ok := sess.Get(session.KeyUserName).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get user name from session")
-		return errIncompleteSession
+		return nil, errIncompleteSession
 	}
 
 	orgName := common.OrgNameFromName(name)
 
-	_, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName, -1 /*existing user ID*/)
+	user, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName, -1 /*existing user ID*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
-		return err
+		return nil, err
 	}
 
-	return nil
+	return user, nil
 }
