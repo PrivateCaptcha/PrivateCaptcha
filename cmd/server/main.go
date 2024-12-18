@@ -94,6 +94,9 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 
 	apiServer.Setup(router, cfg.APIDomain(), "" /*prefix*/, cfg.Verbose())
 
+	mailer := email.NewMailer(cfg.Getenv)
+	portalMailer := email.NewPortalMailer(cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
+
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
 		Stage:      cfg.Stage(),
@@ -110,10 +113,8 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		CDNURL:    cfg.CDNURL(),
 		Verifier:  apiServer,
 		Metrics:   metrics,
+		Mailer:    portalMailer,
 	}
-	mailer := email.NewMailer(cfg.Getenv)
-	portalMailer := email.NewPortalMailer(cfg.PortalURL(), mailer, cfg.Getenv)
-	portalServer.Mailer = portalMailer
 	portalServer.Init()
 
 	healthCheck := &maintenance.HealthCheckJob{
