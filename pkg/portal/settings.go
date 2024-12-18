@@ -28,7 +28,7 @@ const (
 )
 
 var (
-	errMissingSubsciption = errors.New("user does not have a subscription")
+	errMissingSubscription = errors.New("user does not have a subscription")
 )
 
 type settingsCommonRenderContext struct {
@@ -501,7 +501,7 @@ func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Reque
 	if !user.SubscriptionID.Valid {
 		slog.ErrorContext(ctx, "Cannot get Paddle URLs without subscription", "userID", user.ID)
 		http.Error(w, "", http.StatusInternalServerError)
-		return nil, errMissingSubsciption
+		return nil, errMissingSubscription
 	}
 
 	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
@@ -580,7 +580,7 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 
 	if !renderCtx.IsSubscribed {
 		slog.ErrorContext(ctx, "Attemp to preview subscription change while not subscribed", "userID", user.ID)
-		return nil, "", errMissingSubsciption
+		return nil, "", errMissingSubscription
 	}
 
 	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
@@ -637,7 +637,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 
 	if !renderCtx.IsSubscribed {
 		slog.ErrorContext(ctx, "Attemp to update subscription while not subscribed", "userID", user.ID)
-		return nil, "", errMissingSubsciption
+		return nil, "", errMissingSubscription
 	}
 
 	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
