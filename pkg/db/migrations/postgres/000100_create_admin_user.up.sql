@@ -30,4 +30,3 @@ SELECT
     'fast'
 FROM org_insert;
 
-

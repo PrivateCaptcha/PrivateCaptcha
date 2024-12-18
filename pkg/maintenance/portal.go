@@ -9,6 +9,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
@@ -96,5 +97,33 @@ func (j *WarmupPaddlePrices) RunOnce(ctx context.Context) error {
 		slog.WarnContext(ctx, "Paddle prices are not cached properly", common.ErrAttr(err))
 	}
 
-	return err
+	return nil
+}
+
+type WarmupPortalAuth struct {
+	Store *db.BusinessStore
+}
+
+var _ common.OneOffJob = (*WarmupPortalAuth)(nil)
+
+func (j *WarmupPortalAuth) Name() string {
+	return "warmup_portal_auth"
+}
+
+func (j *WarmupPortalAuth) InitialPause() time.Duration {
+	return 5 * time.Second
+}
+
+func (j *WarmupPortalAuth) RunOnce(ctx context.Context) error {
+	portalUUID := pgtype.UUID{}
+	if err := portalUUID.Scan(db.PortalPropertyID); err != nil {
+		return err
+	}
+	sitekey := db.UUIDToSiteKey(portalUUID)
+
+	if _, err := j.Store.RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}}); err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
+	}
+
+	return nil
 }

@@ -239,6 +239,9 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		BusinessDB: businessDB,
 		TimeSeries: timeSeriesDB,
 	})
+	jobs.AddOneOff(&maintenance.WarmupPortalAuth{
+		Store: businessDB,
+	})
 	jobs.Run()
 
 	metrics.StartServing(ctx)
