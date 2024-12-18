@@ -34,7 +34,7 @@ const (
               <tbody>
                 <tr>
                   <td>
-                    <img alt="Private Captcha" height="30" src="{{.Domain}}/assets/img/pc-logo-dark.svg" style="display:block;outline:none;border:none;text-decoration:none" />
+                    <img alt="Private Captcha" height="30" src="{{.CDN}}/portal/img/pc-logo-dark.svg" style="display:block;outline:none;border:none;text-decoration:none" />
                   </td>
                 </tr>
               </tbody>

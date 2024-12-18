@@ -13,7 +13,8 @@ import (
 
 type PortalMailer struct {
 	mailer                *simpleMailer
-	Domain                string
+	cdn                   string
+	domain                string
 	emailFrom             string
 	supportEmail          string
 	adminEmail            string
@@ -23,13 +24,14 @@ type PortalMailer struct {
 	supportTextTemplate   *template.Template
 }
 
-func NewPortalMailer(domain string, mailer *simpleMailer, getenv func(string) string) *PortalMailer {
+func NewPortalMailer(cdn, domain string, mailer *simpleMailer, getenv func(string) string) *PortalMailer {
 	return &PortalMailer{
 		mailer:                mailer,
 		emailFrom:             getenv("PC_EMAIL_FROM"),
 		supportEmail:          getenv("PC_SUPPORT_EMAIL"),
 		adminEmail:            getenv("PC_ADMIN_EMAIL"),
-		Domain:                domain,
+		cdn:                   cdn,
+		domain:                domain,
 		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
 		twofactorTextTemplate: template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
 		supportHTMLTemplate:   template.Must(template.New("HtmlBody").Parse(SupportHTMLTemplate)),
@@ -48,9 +50,11 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		Code        int
 		Domain      string
 		CurrentYear int
+		CDN         string
 	}{
 		Code:        code,
-		Domain:      pm.Domain,
+		CDN:         pm.cdn,
+		Domain:      pm.domain,
 		CurrentYear: time.Now().Year(),
 	}
 
@@ -99,9 +103,11 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 		Domain      string
 		CurrentYear int
 		TicketID    string
+		CDN         string
 	}{
 		Message:     req.Text,
-		Domain:      pm.Domain,
+		CDN:         pm.cdn,
+		Domain:      pm.domain,
 		CurrentYear: time.Now().Year(),
 		TicketID:    req.TicketID,
 	}
