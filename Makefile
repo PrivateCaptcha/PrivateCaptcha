@@ -39,11 +39,11 @@ build-docker:
 
 build-js:
 	rm -v web/static/js/* || echo 'Nothing to remove'
-	cd web && npm run build
+	cd web && env STAGE="$(STAGE)" npm run build
 
 build-widget:
 	rm -v widget/static/js/* || echo 'Nothing to remove'
-	cd widget && npm run build
+	cd widget && env STAGE="$(STAGE)" npm run build
 
 build-view-emails:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewemails cmd/viewemails/*.go

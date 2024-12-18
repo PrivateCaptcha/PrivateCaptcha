@@ -61,15 +61,19 @@ jobs:
     - name: Install portal NPM dependencies
       run: npm ci
       working-directory: ./web
-  
+
     - name: Install widget NPM dependencies
       run: npm ci
       working-directory: ./widget
 
     - name: Build web
+      env:
+        STAGE: prod
       run: make build-js
 
     - name: Build widget
+      env:
+        STAGE: prod
       run: make build-widget
 
     - name: Copy static js
