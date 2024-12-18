@@ -7,8 +7,8 @@ import (
 
 type Cache[TKey comparable, TValue any] interface {
 	Get(ctx context.Context, key TKey) (TValue, error)
-	SetMissing(ctx context.Context, key TKey) error
-	Set(ctx context.Context, key TKey, t TValue) error
+	SetMissing(ctx context.Context, key TKey, ttl time.Duration) error
+	Set(ctx context.Context, key TKey, t TValue, ttl time.Duration) error
 	Delete(ctx context.Context, key TKey) error
 }
 

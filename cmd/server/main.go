@@ -55,7 +55,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 
 	var cache common.Cache[string, any]
 	var err error
-	cache, err = db.NewMemoryCache[string, any](5*time.Minute, maxCacheSize, nil /*missing value*/)
+	cache, err = db.NewMemoryCache[string, any](maxCacheSize, nil /*missing value*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
 		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
@@ -80,7 +80,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
 	var userLimits common.Cache[int32, *common.UserLimitStatus]
-	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](3*time.Hour, maxLimitedUsers, nil /*missing value*/)
+	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing value*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
 		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)

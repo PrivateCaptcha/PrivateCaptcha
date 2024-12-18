@@ -55,8 +55,8 @@ func notificationCacheKey(ID int32) string            { return "notif/" + strcon
 func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessStore {
 	return &BusinessStore{
 		pool:          pool,
-		defaultImpl:   &businessStoreImpl{cache: cache, queries: dbgen.New(pool)},
-		cacheOnlyImpl: &businessStoreImpl{cache: cache},
+		defaultImpl:   &businessStoreImpl{cache: cache, queries: dbgen.New(pool), ttl: DefaultCacheTTL},
+		cacheOnlyImpl: &businessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
 		cache:         cache,
 	}
 }
@@ -170,7 +170,7 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 
 	db := dbgen.New(s.pool)
 	tmpCache := NewTxCache()
-	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx)}
+	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx), ttl: DefaultCacheTTL}
 
 	var subscriptionID *int32
 
@@ -294,7 +294,7 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32) error 
 
 	db := dbgen.New(s.pool)
 	tmpCache := NewTxCache()
-	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx)}
+	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx), ttl: DefaultCacheTTL}
 	err = impl.softDeleteUser(ctx, userID)
 	if err != nil {
 		return err
@@ -366,7 +366,7 @@ func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byt
 	defer tx.Rollback(ctx)
 
 	db := dbgen.New(s.pool)
-	impl := &businessStoreImpl{queries: db.WithTx(tx)}
+	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}
 	lock, err := impl.acquireLock(ctx, name, data, expiration)
 	if err != nil {
 		return nil, err
@@ -392,7 +392,7 @@ func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
 	defer tx.Rollback(ctx)
 
 	db := dbgen.New(s.pool)
-	impl := &businessStoreImpl{queries: db.WithTx(tx)}
+	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}
 	err = impl.releaseLock(ctx, name)
 	if err != nil {
 		return err

@@ -156,7 +156,8 @@ func (j *ThrottleViolationsJob) RunOnce(ctx context.Context) error {
 			slog.InfoContext(ctx, "Found user to be throttled", "userID", v.User.ID, "productID", productID,
 				"count", v.UsageLimitViolation.RequestsCount, "limit", v.UsageLimitViolation.RequestsLimit)
 
-			if err := j.UserLimits.Set(ctx, int32(v.User.ID), &common.UserLimitStatus{Status: v.Status, Limit: v.UsageLimitViolation.RequestsLimit}); err != nil {
+			status := &common.UserLimitStatus{Status: v.Status, Limit: v.UsageLimitViolation.RequestsLimit}
+			if err := j.UserLimits.Set(ctx, int32(v.User.ID), status, db.UserLimitTTL); err != nil {
 				slog.ErrorContext(ctx, "Failed to add user to block", "userID", v.User.ID, common.ErrAttr(err))
 			}
 		}

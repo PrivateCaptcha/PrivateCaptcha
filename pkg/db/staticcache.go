@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 )
 
 var (
@@ -42,7 +43,7 @@ func (c *StaticCache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, 
 	}
 }
 
-func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
+func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey, ttl time.Duration) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
@@ -60,7 +61,7 @@ func (c *StaticCache[TKey, TValue]) compressUnsafe() {
 	}
 }
 
-func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
+func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue, ttl time.Duration) error {
 	c.mux.Lock()
 	defer c.mux.Unlock()
 
