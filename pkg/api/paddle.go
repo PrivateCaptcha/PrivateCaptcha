@@ -59,6 +59,7 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 		PaddleSubscriptionID: evt.Data.ID,
 		PaddleCustomerID:     evt.Data.CustomerID,
 		Status:               evt.Data.Status,
+		Source:               dbgen.SubscriptionSourcePaddle,
 	}
 
 	if subscr.TrialDates != nil {

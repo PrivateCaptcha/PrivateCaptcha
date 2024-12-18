@@ -1,3 +1,5 @@
+CREATE TYPE backend.subscription_source AS ENUM ('paddle', 'internal');
+
 CREATE TABLE IF NOT EXISTS backend.subscriptions(
     id SERIAL PRIMARY KEY,
     paddle_product_id TEXT NOT NULL,
@@ -5,6 +7,7 @@ CREATE TABLE IF NOT EXISTS backend.subscriptions(
     paddle_subscription_id TEXT NOT NULL,
     paddle_customer_id TEXT NOT NULL,
     status VARCHAR(255) NOT NULL,
+    source backend.subscription_source NOT NULL DEFAULT 'internal',
     trial_ends_at TIMESTAMPTZ,
     next_billed_at TIMESTAMPTZ,
     cancel_from TIMESTAMPTZ,

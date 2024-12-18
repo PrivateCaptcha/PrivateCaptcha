@@ -140,6 +140,48 @@ func (ns NullDifficultyLevel) Value() (driver.Value, error) {
 	return string(ns.DifficultyLevel), nil
 }
 
+type SubscriptionSource string
+
+const (
+	SubscriptionSourcePaddle   SubscriptionSource = "paddle"
+	SubscriptionSourceInternal SubscriptionSource = "internal"
+)
+
+func (e *SubscriptionSource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SubscriptionSource(s)
+	case string:
+		*e = SubscriptionSource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SubscriptionSource: %T", src)
+	}
+	return nil
+}
+
+type NullSubscriptionSource struct {
+	SubscriptionSource SubscriptionSource `json:"backend_subscription_source"`
+	Valid              bool               `json:"valid"` // Valid is true if SubscriptionSource is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSubscriptionSource) Scan(value interface{}) error {
+	if value == nil {
+		ns.SubscriptionSource, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SubscriptionSource.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSubscriptionSource) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SubscriptionSource), nil
+}
+
 type SupportCategory string
 
 const (
@@ -257,6 +299,7 @@ type Subscription struct {
 	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
 	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
 	Status               string             `db:"status" json:"status"`
+	Source               SubscriptionSource `db:"source" json:"source"`
 	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
 	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
 	CancelFrom           pgtype.Timestamptz `db:"cancel_from" json:"cancel_from"`
