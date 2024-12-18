@@ -38,7 +38,9 @@ func RunOneOffJob(ctx context.Context, j OneOffJob) {
 
 	jlog.DebugContext(ctx, "Running one-off job")
 
-	j.RunOnce(ctx)
+	if err := j.RunOnce(ctx); err != nil {
+		jlog.ErrorContext(ctx, "One-off job failed", ErrAttr(err))
+	}
 
 	jlog.DebugContext(ctx, "One-off job finished")
 }
