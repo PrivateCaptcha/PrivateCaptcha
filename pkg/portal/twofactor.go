@@ -52,6 +52,13 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
 	sess := s.Session.SessionStart(w, r)
 	step, ok := sess.Get(session.KeyLoginStep).(int)
 	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
@@ -67,25 +74,18 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := &twoFactorRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(email),
-		},
-		Email: common.MaskEmail(email, '*'),
-	}
-
-	err := r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
 	sentCode, ok := sess.Get(session.KeyTwoFactorCode).(int)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get verification code from session")
 		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 		return
+	}
+
+	data := &twoFactorRenderContext{
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(email),
+		},
+		Email: common.MaskEmail(email, '*'),
 	}
 
 	formCode := r.FormValue(common.ParamVerificationCode)
@@ -98,7 +98,9 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
-		if err = s.doRegister(ctx, sess); err != nil {
+		if user, err := s.doRegister(ctx, sess); err == nil {
+			sess.Set(session.KeyUserID, user.ID)
+		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
 			s.redirectError(http.StatusInternalServerError, w, r)
 			return
