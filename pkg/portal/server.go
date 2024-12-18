@@ -322,7 +322,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmailChain.ThenFunc(s.postTwoFactor))
 	router.Handle(rg.Post(common.ResendEndpoint), csrfEmailChain.ThenFunc(s.resend2fa))
 	router.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateReadChain.Then(s.handler(s.getNewOrg)))
-	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWriteChain.ThenFunc(s.postNewOrg))
+	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), subscribedWrite.ThenFunc(s.postNewOrg))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateReadChain.ThenFunc(s.getPortal))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateReadChain.Then(s.handler(s.getOrgDashboard)))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateReadChain.Then(s.handler(s.getOrgMembers)))
