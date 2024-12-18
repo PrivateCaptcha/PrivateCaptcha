@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -109,6 +110,12 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return nil, err
+	}
+
+	if plans, ok := billing.GetPlansForStage(s.Stage); ok && len(plans) > 0 {
+		// seed no-subscription user with the smallest plan's limits
+		plan := plans[0]
+		_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
 	}
 
 	return user, nil
