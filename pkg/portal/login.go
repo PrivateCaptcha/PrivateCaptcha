@@ -36,6 +36,7 @@ type loginRenderContext struct {
 	CaptchaEndpoint      string
 	CaptchaSolutionField string
 	CaptchaDebug         bool
+	CanRegister          bool
 }
 
 type portalPropertyOwnerSource struct {
@@ -62,6 +63,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: loginSolutionField,
+		CanRegister:          s.canRegister.Load(),
 	}, loginTemplate, nil
 }
 
@@ -83,6 +85,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: loginSolutionField,
+		CanRegister:          s.canRegister.Load(),
 	}
 
 	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.LoginSitekey}
@@ -97,7 +100,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err = checkmail.ValidateFormat(email); err != nil {
-		slog.Warn("Failed to validate email format", common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
 		s.render(w, r, loginFormTemplate, data)
 		return

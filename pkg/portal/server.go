@@ -19,6 +19,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
@@ -199,6 +200,7 @@ type Server struct {
 	Verifier        puzzle.Verifier
 	Metrics         monitoring.Metrics
 	maintenanceMode atomic.Bool
+	canRegister     atomic.Bool
 }
 
 func (s *Server) Init() {
@@ -207,8 +209,9 @@ func (s *Server) Init() {
 	s.Session.Path = prefix
 }
 
-func (s *Server) UpdateConfig(maintenanceMode bool) {
-	s.maintenanceMode.Store(maintenanceMode)
+func (s *Server) UpdateConfig(config *config.Config) {
+	s.maintenanceMode.Store(config.MaintenanceMode())
+	s.canRegister.Store(config.RegistrationAllowed())
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, ratelimiter alice.Constructor) {
@@ -383,6 +386,8 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 				s.redirectError(http.StatusBadRequest, w, r)
 			case db.ErrMaintenance:
 				s.redirectError(http.StatusServiceUnavailable, w, r)
+			case errRegistrationDisabled:
+				s.redirectError(http.StatusNotFound, w, r)
 			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)
