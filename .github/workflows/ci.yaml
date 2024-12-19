@@ -110,7 +110,7 @@ jobs:
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
         VERBOSE: 1
-      run: ./bin/server -mode migrate
+      run: ./bin/server -mode migrate -migrate-hash $GITHUB_SHA
 
     - name: Set up sqlc
       uses: sqlc-dev/setup-sqlc@v4
@@ -145,7 +145,7 @@ jobs:
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
         VERBOSE: 1
-      run: ./bin/server -mode rollback
+      run: ./bin/server -mode rollback -migrate-hash $GITHUB_SHA
 
     - uses: actions/upload-artifact@master
       with:
