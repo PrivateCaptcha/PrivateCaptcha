@@ -275,6 +275,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 
 func migrate(ctx context.Context, cfg *config.Config, up bool) error {
 	common.SetupLogs(cfg.Stage(), cfg.Verbose())
+	slog.InfoContext(ctx, "Migrating", "up", up, "version", GitCommit, "stage", cfg.Stage())
 	return db.Migrate(ctx, cfg, up)
 }
 
