@@ -143,7 +143,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		maintenanceMode := cfg.MaintenanceMode()
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
-		portalServer.UpdateConfig(maintenanceMode)
+		portalServer.UpdateConfig(cfg)
 	}
 	updateConfigFunc()
 

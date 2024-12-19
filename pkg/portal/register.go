@@ -15,7 +15,8 @@ import (
 )
 
 var (
-	errIncompleteSession = errors.New("data in session is incomplete")
+	errIncompleteSession    = errors.New("data in session is incomplete")
+	errRegistrationDisabled = errors.New("registration disabled")
 )
 
 const (
@@ -29,6 +30,10 @@ type registerRenderContext struct {
 }
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+	if !s.canRegister.Load() {
+		return nil, "", errRegistrationDisabled
+	}
+
 	return &registerRenderContext{
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
@@ -43,6 +48,12 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		s.redirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if !s.canRegister.Load() {
+		slog.WarnContext(ctx, "Registration is disabled")
+		s.redirectError(http.StatusNotImplemented, w, r)
 		return
 	}
 
@@ -61,7 +72,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err := checkmail.ValidateFormat(email); err != nil {
-		slog.Warn("Failed to validate email format", common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
 		s.render(w, r, registerFormTemplate, data)
 		return

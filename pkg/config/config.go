@@ -162,6 +162,10 @@ func (c *Config) MaintenanceMode() bool {
 	return common.EnvToBool(c.getenv("PC_MAINTENANCE_MODE"))
 }
 
+func (c *Config) RegistrationAllowed() bool {
+	return common.EnvToBool(c.getenv("PC_REGISTRATION_ALLOWED"))
+}
+
 func (c *Config) HealthCheckInterval() time.Duration {
 	if "slow" == c.getenv("HEALTHCHECK") {
 		return 1 * time.Minute
