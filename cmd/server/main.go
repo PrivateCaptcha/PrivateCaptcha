@@ -280,7 +280,7 @@ func migrate(ctx context.Context, cfg *config.Config, up bool) error {
 	}
 
 	if *migrateHashFlag != GitCommit {
-		return errors.New("target version does not match built version")
+		return fmt.Errorf("target version (%v) does not match built version (%v)", *migrateHashFlag, GitCommit)
 	}
 
 	common.SetupLogs(cfg.Stage(), cfg.Verbose())
