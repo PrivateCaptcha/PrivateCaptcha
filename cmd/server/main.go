@@ -45,10 +45,11 @@ const (
 )
 
 var (
-	GitCommit   string
-	flagMode    = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
-	envFileFlag = flag.String("env", "", "Path to .env file")
-	versionFlag = flag.Bool("version", false, "Print version and exit")
+	GitCommit       string
+	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
+	envFileFlag     = flag.String("env", "", "Path to .env file")
+	versionFlag     = flag.Bool("version", false, "Print version and exit")
+	migrateHashFlag = flag.String("migrate-hash", "", "Target migration version (git commit)")
 )
 
 func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListener bool) error {
