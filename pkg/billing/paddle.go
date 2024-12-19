@@ -36,6 +36,8 @@ type ChangePreview struct {
 type Prices map[string]int
 
 type PaddleAPI interface {
+	Environment() string
+	ClientToken() string
 	GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error)
 	GetManagementURLs(ctx context.Context, subscriptionID string) (*ManagementURLs, error)
 	GetPrices(ctx context.Context, productIDs []string) (Prices, error)
@@ -45,7 +47,9 @@ type PaddleAPI interface {
 }
 
 type paddleClient struct {
-	sdk *paddle.SDK
+	sdk         *paddle.SDK
+	environment string
+	clientToken string
 }
 
 var _ PaddleAPI = (*paddleClient)(nil)
@@ -67,11 +71,23 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 	}
 
 	return &retryPaddleClient{
-		paddleAPI:  &paddleClient{sdk: pc},
+		paddleAPI: &paddleClient{
+			sdk:         pc,
+			environment: getenv("PADDLE_ENVIRONMENT"),
+			clientToken: getenv("PADDLE_CLIENT_TOKEN"),
+		},
 		attempts:   5,
 		minBackoff: 500 * time.Millisecond,
 		maxBackoff: 4 * time.Second,
 	}, nil
+}
+
+func (pc *paddleClient) Environment() string {
+	return pc.environment
+}
+
+func (pc *paddleClient) ClientToken() string {
+	return pc.clientToken
 }
 
 func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
@@ -218,6 +234,14 @@ type retryPaddleClient struct {
 }
 
 var _ PaddleAPI = (*retryPaddleClient)(nil)
+
+func (rpc *retryPaddleClient) Environment() string {
+	return rpc.paddleAPI.Environment()
+}
+
+func (rpc *retryPaddleClient) ClientToken() string {
+	return rpc.paddleAPI.ClientToken()
+}
 
 func (rpc *retryPaddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
 	var ci *CustomerInfo

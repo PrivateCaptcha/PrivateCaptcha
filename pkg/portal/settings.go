@@ -37,6 +37,10 @@ type settingsCommonRenderContext struct {
 	Tab    int
 	Email  string
 	UserID int32
+	// NOTE: these 2 are here because scripts.html is common for all settings endpoints
+	// otherwise their place is in settingsBillingRenderContext
+	PaddleEnvironment string
+	PaddleClientToken string
 }
 
 type settingsUsageRenderContext struct {
@@ -139,6 +143,16 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 	return renderCtx, settingsTemplate, nil
 }
 
+func (s *Server) createSettingsCommonRenderContext(tab int, user *dbgen.User) settingsCommonRenderContext {
+	return settingsCommonRenderContext{
+		Tab:               tab,
+		Email:             user.Email,
+		UserID:            user.ID,
+		PaddleEnvironment: s.PaddleAPI.Environment(),
+		PaddleClientToken: s.PaddleAPI.ClientToken(),
+	}
+}
+
 func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(ctx, s.session(w, r))
@@ -147,13 +161,9 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	renderCtx := &settingsGeneralRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    0,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
-		csrfRenderContext: s.createCsrfContext(user),
-		Name:              user.Name,
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(0 /*tab*/, user),
+		csrfRenderContext:           s.createCsrfContext(user),
+		Name:                        user.Name,
 	}
 
 	return renderCtx, settingsGeneralTemplate, nil
@@ -177,15 +187,11 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 	sess.Set(session.KeyTwoFactorCode, code)
 
 	renderCtx := &settingsGeneralRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    0,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
-		csrfRenderContext: s.createCsrfContext(user),
-		Name:              user.Name,
-		TwoFactorEmail:    common.MaskEmail(user.Email, '*'),
-		EditEmail:         true,
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(0 /*tab*/, user),
+		csrfRenderContext:           s.createCsrfContext(user),
+		Name:                        user.Name,
+		TwoFactorEmail:              common.MaskEmail(user.Email, '*'),
+		EditEmail:                   true,
 	}
 
 	return renderCtx, settingsGeneralFormTemplate, nil
@@ -209,14 +215,10 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 	formEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 
 	renderCtx := &settingsGeneralRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    0,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
-		csrfRenderContext: s.createCsrfContext(user),
-		Name:              user.Name,
-		EditEmail:         (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(0 /*tab*/, user),
+		csrfRenderContext:           s.createCsrfContext(user),
+		Name:                        user.Name,
+		EditEmail:                   (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name)),
 	}
 
 	anyChange := false
@@ -317,13 +319,9 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	renderCtx := &settingsAPIKeysRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    1,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
-		csrfRenderContext: s.createCsrfContext(user),
-		Keys:              apiKeysToUserAPIKeys(keys, time.Now().UTC()),
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(1 /*tab*/, user),
+		csrfRenderContext:           s.createCsrfContext(user),
+		Keys:                        apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	return renderCtx, settingsAPIKeysTemplate, nil
@@ -364,13 +362,9 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	renderCtx := &settingsAPIKeysRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    1,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
-		csrfRenderContext: s.createCsrfContext(user),
-		Keys:              apiKeysToUserAPIKeys(keys, time.Now().UTC()),
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(1 /*tab*/, user),
+		csrfRenderContext:           s.createCsrfContext(user),
+		Keys:                        apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -431,12 +425,8 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.User) (*settingsBillingRenderContext, error) {
 	renderCtx := &settingsBillingRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    2,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
+		csrfRenderContext:           s.createCsrfContext(user),
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(2 /*tab*/, user),
 	}
 
 	if user.SubscriptionID.Valid {
@@ -756,11 +746,7 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model
 	}
 
 	renderCtx := &settingsUsageRenderContext{
-		settingsCommonRenderContext: settingsCommonRenderContext{
-			Tab:    3,
-			Email:  user.Email,
-			UserID: user.ID,
-		},
+		settingsCommonRenderContext: s.createSettingsCommonRenderContext(3 /*tab*/, user),
 	}
 
 	if user.SubscriptionID.Valid {
