@@ -64,7 +64,7 @@ run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
 
 run-docker:
-	@docker compose -f docker/docker-compose.local.yml up --build
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.local.yml up --build
 
 profile-docker:
 	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.monitoring.yml up --build

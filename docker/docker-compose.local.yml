@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
+      args:
+        GIT_COMMIT: '${GIT_COMMIT}'
     ports:
       - 8080:8080
     env_file:
@@ -35,8 +37,10 @@ services:
     build:
       context: ..
       dockerfile: ./docker/Dockerfile
+      args:
+        GIT_COMMIT: '${GIT_COMMIT}'
     command:
-      /app/server -mode migrate
+      /app/server -mode migrate -migrate-hash $GIT_COMMIT
     env_file:
       - pc.env
     environment:
