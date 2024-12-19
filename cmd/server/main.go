@@ -275,9 +275,6 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 }
 
 func migrate(ctx context.Context, cfg *config.Config, up bool) error {
-	common.SetupLogs(cfg.Stage(), cfg.Verbose())
-	slog.InfoContext(ctx, "Migrating", "up", up, "version", GitCommit, "stage", cfg.Stage())
-
 	if len(*migrateHashFlag) == 0 {
 		return errors.New("empty migrate hash")
 	}
@@ -285,6 +282,9 @@ func migrate(ctx context.Context, cfg *config.Config, up bool) error {
 	if *migrateHashFlag != GitCommit {
 		return errors.New("target version does not match built version")
 	}
+
+	common.SetupLogs(cfg.Stage(), cfg.Verbose())
+	slog.InfoContext(ctx, "Migrating", "up", up, "version", GitCommit, "stage", cfg.Stage())
 
 	return db.Migrate(ctx, cfg, up)
 }
