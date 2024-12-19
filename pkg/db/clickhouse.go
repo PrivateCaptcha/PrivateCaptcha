@@ -27,8 +27,8 @@ type ClickHouseConnectOpts struct {
 	Verbose  bool
 }
 
-func connectClickhouse(opts ClickHouseConnectOpts) *sql.DB {
-	slog.Debug("Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
+func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB {
+	slog.DebugContext(ctx, "Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
 	conn := clickhouse.OpenDB(&clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%v", opts.Host, opts.Port)},
 		Auth: clickhouse.Auth{

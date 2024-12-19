@@ -226,7 +226,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		renderCtx.TwoFactorEmail = common.MaskEmail(user.Email, '*')
 
 		if err := checkmail.ValidateFormat(formEmail); err != nil {
-			slog.Warn("Failed to validate email format", common.ErrAttr(err))
+			slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
 			return renderCtx, settingsGeneralFormTemplate, nil
 		}
