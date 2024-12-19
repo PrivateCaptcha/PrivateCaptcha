@@ -144,3 +144,9 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.Session.SessionDestroy(w, r)
 	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
 }
+
+func portalRobotsTXT(w http.ResponseWriter, r *http.Request) {
+	contents := "User-agent: *\nDisallow: /"
+	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
+	fmt.Fprint(w, contents)
+}

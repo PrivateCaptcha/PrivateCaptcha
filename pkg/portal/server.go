@@ -360,6 +360,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	router.Handle(rg.Get(common.SupportEndpoint), privateReadChain.Then(s.handler(s.getSupport)))
 	router.Handle(rg.Post(common.SupportEndpoint), privateWriteChain.Then(s.handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
+	router.Handle(rg.Get("robots.txt"), publicChain.ThenFunc(portalRobotsTXT))
 	router.Handle(http.MethodGet+" "+prefix+"{$}", privateReadChain.ThenFunc(s.getPortal))
 	// wildcard
 	router.Handle(http.MethodGet+" "+prefix+"{path...}", publicChain.ThenFunc(s.notFound))
