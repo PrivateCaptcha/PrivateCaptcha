@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -17,6 +18,15 @@ const (
 var (
 	invalidUUID = pgtype.UUID{Valid: false}
 )
+
+func IsInternalSubscription(source dbgen.SubscriptionSource) bool {
+	switch source {
+	case dbgen.SubscriptionSourcePaddle:
+		return false
+	default:
+		return true
+	}
+}
 
 func Text(text string) pgtype.Text {
 	return pgtype.Text{

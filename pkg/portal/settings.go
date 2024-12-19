@@ -437,7 +437,7 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 
 		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
 		if renderCtx.IsSubscribed {
-			renderCtx.CanManage = (subscription.Source == dbgen.SubscriptionSourcePaddle)
+			renderCtx.CanManage = !db.IsInternalSubscription(subscription.Source)
 
 			if subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now()) {
 				renderCtx.InfoMessage = fmt.Sprintf("Your subscription ends on %s.", subscription.CancelFrom.Time.Format("02 Jan 2006"))
@@ -506,7 +506,7 @@ func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Reque
 		return nil, err
 	}
 
-	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+	if db.IsInternalSubscription(subscription.Source) {
 		slog.WarnContext(ctx, "Cannot modify internal subscription", "userID", user.ID, "subscription", subscription.Source)
 		http.Error(w, "", http.StatusNotAcceptable)
 		return nil, errInternalSubscription
@@ -595,7 +595,7 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
-	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+	if db.IsInternalSubscription(subscription.Source) {
 		renderCtx.ErrorMessage = internalSubscriptionMessage
 		return renderCtx, settingsBillingTemplate, nil
 	}
@@ -680,7 +680,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		slog.ErrorContext(ctx, "Failed to find new billing plan", "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
 	}
 
-	if subscription.Source != dbgen.SubscriptionSourcePaddle {
+	if db.IsInternalSubscription(subscription.Source) {
 		renderCtx.ErrorMessage = internalSubscriptionMessage
 		return renderCtx, settingsBillingTemplate, nil
 	}
