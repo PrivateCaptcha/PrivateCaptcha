@@ -247,6 +247,7 @@ func TestRenderHTML(t *testing.T) {
 					SuccessMessage: "Test",
 				},
 				settingsCommonRenderContext: settingsCommonRenderContext{
+					Tab:   0,
 					Email: "foo@bar.com",
 				},
 				csrfRenderContext: stubToken(),

@@ -10,6 +10,14 @@ type StubPaddleClient struct {
 
 var _ PaddleAPI = (*StubPaddleClient)(nil)
 
+func (pc *StubPaddleClient) Environment() string {
+	return "stub"
+}
+
+func (pc *StubPaddleClient) ClientToken() string {
+	return "clientToken"
+}
+
 func (pc *StubPaddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
 	return pc.CustomerInfo, nil
 }

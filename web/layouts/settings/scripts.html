@@ -48,9 +48,9 @@ document.addEventListener('DOMContentLoaded', function (evt) {
     document.body.addEventListener("load-paddle", function(evt) {
         loadScript("https://cdn.paddle.com/paddle/v2/paddle.js",
                    function() {
-                       Paddle.Environment.set("sandbox");
+                       Paddle.Environment.set("{{ .Params.PaddleEnvironment }}");
                        Paddle.Initialize({
-                                         token: "test_ce810f8d4653bd9a769b7bfb74a",
+                                         token: "{{ .Params.PaddleClientToken }}",
                                          eventCallback: handlePaddleEventCallback
                        });
                    });
