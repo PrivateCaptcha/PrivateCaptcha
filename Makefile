@@ -11,10 +11,10 @@ bench-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -bench=. -benchtime=20s -short ./...
 
 test-docker:
-	@docker compose -f docker/docker-compose.test.yml down -v --remove-orphans
-	@docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm migration
-	@docker compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate testserver
-	@docker compose -f docker/docker-compose.test.yml down -v --remove-orphans
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.test.yml down -v --remove-orphans
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm migration
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.test.yml up --build --abort-on-container-exit --remove-orphans --force-recreate testserver
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.test.yml down -v --remove-orphans
 
 vendors:
 	go mod tidy
@@ -67,7 +67,7 @@ run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.local.yml up --build
 
 profile-docker:
-	@docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.monitoring.yml up --build
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.monitoring.yml up --build
 
 watch-docker:
 	@docker compose -f docker/docker-compose.local.yml watch
