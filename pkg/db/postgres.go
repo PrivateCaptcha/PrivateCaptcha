@@ -73,7 +73,7 @@ func createPgxConfig(ctx context.Context, getenv func(string) string, verbose bo
 }
 
 func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
-	slog.Debug("Connecting to Postgres...")
+	slog.DebugContext(ctx, "Connecting to Postgres...")
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))

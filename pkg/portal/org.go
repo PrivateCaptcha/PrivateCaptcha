@@ -408,7 +408,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 	}
 
 	if err := checkmail.ValidateFormat(inviteEmail); err != nil {
-		slog.Warn("Failed to validate email format", common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Email address is not valid."
 		return renderCtx, orgMembersTemplate, nil
 	}

@@ -42,10 +42,10 @@ func (j *jobs) AddOneOff(job common.OneOffJob) {
 }
 
 func (j *jobs) Run() {
-	slog.Debug("Starting maintenance jobs", "periodic", len(j.periodicJobs), "oneoff", len(j.oneOffJobs))
-
 	j.maintenanceCtx, j.maintenanceCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "maintenance"))
+
+	slog.DebugContext(j.maintenanceCtx, "Starting maintenance jobs", "periodic", len(j.periodicJobs), "oneoff", len(j.oneOffJobs))
 
 	for _, job := range j.periodicJobs {
 		go common.RunPeriodicJob(j.maintenanceCtx, job)

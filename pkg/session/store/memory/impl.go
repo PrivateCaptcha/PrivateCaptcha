@@ -83,7 +83,7 @@ func (p *Store) GC(ctx context.Context, maxLifetime time.Duration) {
 		}
 	}
 
-	slog.Debug("Finished GC memory store", "deleted", deleted)
+	slog.DebugContext(ctx, "Finished GC memory store", "deleted", deleted)
 }
 
 func (p *Store) Update(sess *common.Session) error {

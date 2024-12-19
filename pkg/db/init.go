@@ -48,7 +48,7 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 			Port:     9000,
 			Verbose:  cfg.Verbose(),
 		}
-		clickhouse = connectClickhouse(opts)
+		clickhouse = connectClickhouse(ctx, opts)
 		if perr := clickhouse.Ping(); perr != nil {
 			return perr
 		}
