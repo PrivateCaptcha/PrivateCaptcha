@@ -88,6 +88,7 @@ type settingsBillingRenderContext struct {
 	YearlyBilling   bool
 	IsSubscribed    bool
 	PreviewOpen     bool
+	CanManage       bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -446,6 +447,8 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 
 		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
 		if renderCtx.IsSubscribed {
+			renderCtx.CanManage = (subscription.Source == dbgen.SubscriptionSourcePaddle)
+
 			if subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now()) {
 				renderCtx.InfoMessage = fmt.Sprintf("Your subscription ends on %s.", subscription.CancelFrom.Time.Format("02 Jan 2006"))
 			} else if subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
