@@ -94,7 +94,7 @@ services:
       - postgres_data_volume:/var/lib/postgresql/data
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23.8.9-alpine
+    image: clickhouse/clickhouse-server:24.8.7-alpine
     environment:
       CLICKHOUSE_DB: privatecaptcha
     ports:

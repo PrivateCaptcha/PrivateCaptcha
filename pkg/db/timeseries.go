@@ -73,7 +73,7 @@ FROM requests
 LEFT OUTER JOIN verifies ON verifies.agg_time = requests.agg_time
 GROUP BY agg_time
 ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
-SETTINGS use_query_cache = true`
+SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`
 
 	return &TimeSeriesStore{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
