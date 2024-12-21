@@ -22,7 +22,7 @@ import (
 
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", "", true /*verbose*/)
+	s.Setup(srv, "", true /*verbose*/)
 
 	//srv.HandleFunc("/", catchAll)
 

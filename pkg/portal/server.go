@@ -237,7 +237,7 @@ func (s *Server) Setup(router *http.ServeMux, domain string, ratelimiter alice.C
 
 	s.cors = cors.New(corsOpts)
 
-	s.setupWithPrefix(domain+s.relURL("/"), router, ratelimiter, s.cors.Handler)
+	s.setupWithPrefix(domain, router, ratelimiter, s.cors.Handler)
 }
 
 func (s *Server) relURL(url string) string {
@@ -284,7 +284,8 @@ func (rg *routeGenerator) LastPath() string {
 	return result
 }
 
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimiter, corsHandler alice.Constructor) {
+func (s *Server) setupWithPrefix(domain string, router *http.ServeMux, ratelimiter, corsHandler alice.Constructor) {
+	prefix := domain + s.relURL("/")
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
 
 	rg := &routeGenerator{prefix: prefix}
@@ -300,7 +301,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, ratelimit
 	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
-	publicChain := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath), corsHandler, ratelimiter, monitoring.Logged)
+	publicChain := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath), common.HostFunc(domain), corsHandler, ratelimiter, monitoring.Logged)
 	publicCachedChain := publicChain.Append(common.CacheControl)
 	publicMaintenanceChain := publicChain.Append(s.maintenance)
 	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenanceChain.Then(s.handler(s.getLogin)))
