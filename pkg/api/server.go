@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -115,7 +114,7 @@ type verifyResponse struct {
 	// Hostname    string                `json:"hostname"`
 }
 
-func (s *server) Setup(router *http.ServeMux, domain, prefix string, verbose bool) {
+func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
 	corsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
@@ -132,14 +131,7 @@ func (s *server) Setup(router *http.ServeMux, domain, prefix string, verbose boo
 
 	s.cors = cors.New(corsOpts)
 
-	if !strings.HasPrefix(prefix, "/") {
-		prefix = "/" + prefix
-	}
-
-	if !strings.HasSuffix(prefix, "/") {
-		prefix += "/"
-	}
-	s.setupWithPrefix(domain+prefix, router, s.cors.Handler)
+	s.setupWithPrefix(domain, router, s.cors.Handler)
 }
 
 func (s *server) Shutdown() {
@@ -150,10 +142,11 @@ func (s *server) Shutdown() {
 	close(s.verifyLogChan)
 }
 
-func (s *server) setupWithPrefix(prefix string, router *http.ServeMux, corsHandler alice.Constructor) {
+func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler alice.Constructor) {
+	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, corsHandler, common.NoCache, s.auth.Sitekey)
-	verifyChain := alice.New(common.Recovered, s.metrics.Handler, common.NoCache, s.auth.APIKey, monitoring.Logged)
+	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, common.HostFunc(domain), corsHandler, common.NoCache, s.auth.Sitekey)
+	verifyChain := alice.New(common.Recovered, s.metrics.Handler, common.HostFunc(domain), common.NoCache, s.auth.APIKey, monitoring.Logged)
 	// NOTE: auth middleware provides rate limiting internally
 	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.ThenFunc(s.puzzle))
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))

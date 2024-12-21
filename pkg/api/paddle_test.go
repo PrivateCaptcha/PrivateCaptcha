@@ -138,7 +138,7 @@ func TestSubscriptionCreatedWithExisting(t *testing.T) {
 
 func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", "", true /*verbose*/)
+	s.Setup(srv, "", true /*verbose*/)
 
 	data, _ := json.Marshal(evt)
 	req, err := http.NewRequest(http.MethodPost, "/"+endpoint, bytes.NewReader(data))

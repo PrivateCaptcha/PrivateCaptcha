@@ -93,7 +93,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 
 	router := http.NewServeMux()
 
-	apiServer.Setup(router, cfg.APIDomain(), "" /*prefix*/, cfg.Verbose())
+	apiServer.Setup(router, cfg.APIDomain(), cfg.Verbose())
 
 	mailer := email.NewMailer(cfg.Getenv)
 	portalMailer := email.NewPortalMailer(cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
@@ -129,8 +129,10 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	portalServer.Setup(router, cfg.PortalDomain(), ratelimiter.RateLimit)
 	defaultAPIChain := alice.New(common.NoCache, common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
-	router.Handle("GET "+cfg.CDNDomain()+"/portal/", http.StripPrefix("/portal/", ratelimiter.RateLimit(web.Static())))
-	router.Handle("GET "+cfg.CDNDomain()+"/widget/", http.StripPrefix("/widget/", ratelimiter.RateLimit(widget.Static())))
+	cdnDomain := cfg.CDNDomain()
+	cdnChain := alice.New(common.Recovered, common.HostFunc(cdnDomain), ratelimiter.RateLimit, common.CacheControl)
+	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
+	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 
 	httpServer := &http.Server{
 		Handler:           router,

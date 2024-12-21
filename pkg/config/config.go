@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -9,10 +8,6 @@ import (
 	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-)
-
-var (
-	errInvalidHostPort = errors.New("invalid host and port value")
 )
 
 type Config struct {
@@ -38,7 +33,7 @@ func New(getenv func(string) string) (*Config, error) {
 
 func splitHostPort(s string) (domain string, port string, err error) {
 	if len(s) == 0 {
-		return "", "", errInvalidHostPort
+		return
 	}
 
 	domain, port, err = net.SplitHostPort(s)

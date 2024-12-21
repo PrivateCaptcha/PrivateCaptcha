@@ -3,6 +3,7 @@ package common
 import (
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -61,6 +62,31 @@ func CacheControl(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=86400")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func HostFunc(allowedHost string) func(http.Handler) http.Handler {
+	if len(allowedHost) == 0 {
+		return func(h http.Handler) http.Handler {
+			return h
+		}
+	}
+
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host := r.Host
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+
+			if host != allowedHost {
+				slog.Log(r.Context(), LevelTrace, "Host header mismatch", "expected", allowedHost, "actual", host)
+				http.Error(w, "", http.StatusForbidden)
+				return
+			}
+
+			h.ServeHTTP(w, r)
+		})
+	}
 }
 
 func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
