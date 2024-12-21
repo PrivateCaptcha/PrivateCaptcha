@@ -118,7 +118,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 		if step == loginStepCompleted {
 			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
-			common.Redirect(s.relURL("/"), w, r)
+			common.Redirect(s.relURL("/"), http.StatusOK, w, r)
 			return
 		} else {
 			slog.WarnContext(ctx, "Session present, but login not finished", "step", step, "email", email)
@@ -139,5 +139,5 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyTwoFactorCode, code)
 	sess.Set(session.KeyUserID, user.ID)
 
-	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)
+	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }

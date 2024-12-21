@@ -63,11 +63,11 @@ func CacheControl(next http.Handler) http.Handler {
 	})
 }
 
-func Redirect(url string, w http.ResponseWriter, r *http.Request) {
+func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.Header[headerHtmxRequest]; ok {
 		slog.Log(r.Context(), LevelTrace, "Redirecting using htmx header", "url", url)
 		w.Header().Set(headerHtmxRedirect, url)
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(code)
 	} else {
 		w.Header().Set("Location", url)
 		// w.Header().Set("Cache-Control", "public, max-age=86400")

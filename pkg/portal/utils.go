@@ -110,7 +110,7 @@ func (s *Server) subscribed(next http.Handler) http.Handler {
 
 		user, err := s.sessionUser(ctx, s.session(w, r))
 		if err != nil {
-			common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+			common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 			return
 		}
 
@@ -119,7 +119,7 @@ func (s *Server) subscribed(next http.Handler) http.Handler {
 		if !user.SubscriptionID.Valid {
 			slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
 			url := s.relURL(billingPath)
-			common.Redirect(url, w, r)
+			common.Redirect(url, http.StatusPaymentRequired, w, r)
 			return
 		}
 
@@ -127,7 +127,7 @@ func (s *Server) subscribed(next http.Handler) http.Handler {
 			if !billing.IsSubscriptionActive(subscr.Status) {
 				slog.WarnContext(ctx, "User's subscription is not active", "status", subscr.Status, "userID", user.ID)
 				url := s.relURL(billingPath)
-				common.Redirect(url, w, r)
+				common.Redirect(url, http.StatusPaymentRequired, w, r)
 				return
 			}
 		} else {
@@ -142,7 +142,7 @@ func (s *Server) subscribed(next http.Handler) http.Handler {
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.Session.SessionDestroy(w, r)
-	common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+	common.Redirect(s.relURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
 func portalRobotsTXT(w http.ResponseWriter, r *http.Request) {

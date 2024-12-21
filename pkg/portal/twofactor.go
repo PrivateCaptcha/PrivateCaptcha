@@ -28,14 +28,14 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess := s.Session.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -63,21 +63,21 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	step, ok := sess.Get(session.KeyLoginStep).(int)
 	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	sentCode, ok := sess.Get(session.KeyTwoFactorCode).(int)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get verification code from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -124,7 +124,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyPersistent, true)
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering
-	common.Redirect(s.relURL("/"), w, r)
+	common.Redirect(s.relURL("/"), http.StatusOK, w, r)
 }
 
 func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
@@ -133,14 +133,14 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	sess := s.Session.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
 

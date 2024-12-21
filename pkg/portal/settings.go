@@ -529,7 +529,7 @@ func (s *Server) getCancelSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(urls.CancelURL) > 0 {
-		common.Redirect(urls.CancelURL, w, r)
+		common.Redirect(urls.CancelURL, http.StatusOK, w, r)
 	} else {
 		http.Error(w, "URL is empty", http.StatusInternalServerError)
 	}
@@ -542,7 +542,7 @@ func (s *Server) getUpdateSubscription(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(urls.UpdateURL) > 0 {
-		common.Redirect(urls.UpdateURL, w, r)
+		common.Redirect(urls.UpdateURL, http.StatusOK, w, r)
 	} else {
 		http.Error(w, "URL is empty", http.StatusInternalServerError)
 	}
