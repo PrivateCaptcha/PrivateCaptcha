@@ -190,7 +190,9 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 			slog.DebugContext(ctx, "Received signal", "signal", sig)
 			switch sig {
 			case syscall.SIGHUP:
-				_ = godotenv.Load(*envFileFlag)
+				if len(*envFileFlag) > 0 {
+					_ = godotenv.Load(*envFileFlag)
+				}
 				updateConfigFunc()
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
