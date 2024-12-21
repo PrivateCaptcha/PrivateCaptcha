@@ -325,7 +325,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 
 	dashboardURL := s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID)), common.PropertyEndpoint, strconv.Itoa(int(property.ID)))
 	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
-	common.Redirect(dashboardURL, w, r)
+	common.Redirect(dashboardURL, http.StatusOK, w, r)
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
@@ -622,7 +622,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.Store.SoftDeleteProperty(ctx, property.ID, org.ID); err == nil {
-		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), w, r)
+		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), http.StatusOK, w, r)
 	} else {
 		s.redirectError(http.StatusInternalServerError, w, r)
 	}

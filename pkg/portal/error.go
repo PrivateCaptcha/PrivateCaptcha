@@ -63,7 +63,7 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	err := s.template.Render(ctx, &out, errorTemplate, actualData)
 	if err == nil {
 		w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(code)
 		out.WriteTo(w)
 	} else {
 		slog.ErrorContext(ctx, "Failed to render error template", common.ErrAttr(err))

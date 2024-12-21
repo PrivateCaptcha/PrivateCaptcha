@@ -381,7 +381,7 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 		if err != nil {
 			switch err {
 			case errInvalidSession:
-				common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+				common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 			case errInvalidPathArg, errInvalidRequestArg:
 				s.redirectError(http.StatusBadRequest, w, r)
 			case db.ErrMaintenance:
@@ -458,7 +458,7 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request) {
 	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
-	common.Redirect(url, w, r)
+	common.Redirect(url, code, w, r)
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
@@ -493,6 +493,6 @@ func (s *Server) private(next http.Handler) http.Handler {
 			}
 		}
 
-		common.Redirect(s.relURL(common.LoginEndpoint), w, r)
+		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 	})
 }

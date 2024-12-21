@@ -99,7 +99,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	sess.Set(session.KeyUserName, name)
 	sess.Set(session.KeyTwoFactorCode, code)
 
-	common.Redirect(s.relURL(common.TwoFactorEndpoint), w, r)
+	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }
 
 func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
