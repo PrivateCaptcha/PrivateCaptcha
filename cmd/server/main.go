@@ -136,10 +136,11 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 
 	httpServer := &http.Server{
 		Handler:           router,
-		ReadHeaderTimeout: 4 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
-		MaxHeaderBytes:    256 * 1024,
 		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1024 * 1024,
 	}
 
 	updateConfigFunc := func() {
