@@ -2,7 +2,6 @@ name: Publish Docker image
 
 on:
   push:
-    branches: [ "main" ]
     tags: [ '*' ]
 
 env:
@@ -14,6 +13,7 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
 
     permissions:
       contents: read
