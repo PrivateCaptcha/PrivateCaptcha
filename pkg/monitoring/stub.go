@@ -1,6 +1,10 @@
 package monitoring
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+)
 
 type stubMetrics struct{}
 
@@ -14,7 +18,5 @@ func (sm *stubMetrics) Handler(h http.Handler) http.Handler {
 	return h
 }
 func (sm *stubMetrics) HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return h
-	}
+	return common.NoopMiddleware
 }

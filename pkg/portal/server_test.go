@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -29,10 +28,6 @@ var (
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
 )
-
-func fakeRateLimiter(next http.Handler) http.Handler {
-	return next
-}
 
 type fakeCaptchaVerifier struct {
 	result puzzle.VerifyError

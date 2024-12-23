@@ -26,6 +26,7 @@ func Static() http.HandlerFunc {
 	srv := http.FileServer(http.FS(sub))
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		common.WriteCached(w)
 		srv.ServeHTTP(w, r)
 	}
 }

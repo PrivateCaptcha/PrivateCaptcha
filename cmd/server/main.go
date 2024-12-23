@@ -126,11 +126,12 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 		Router:        router,
 	}
 
-	portalServer.Setup(router, cfg.PortalDomain(), ratelimiter.RateLimit)
-	defaultAPIChain := alice.New(common.NoCache, common.Recovered)
+	portalDomain := cfg.PortalDomain()
+	portalServer.Setup(router, portalDomain, apiAuth.EdgeVerify(portalDomain), ratelimiter.RateLimit)
+	defaultAPIChain := alice.New(common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
 	cdnDomain := cfg.CDNDomain()
-	cdnChain := alice.New(common.Recovered, common.HostFunc(cdnDomain), ratelimiter.RateLimit, common.CacheControl)
+	cdnChain := alice.New(common.Recovered, apiAuth.EdgeVerify(cdnDomain), ratelimiter.RateLimit)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 

@@ -82,7 +82,7 @@ func puzzleSuiteWithBackfillWait(t *testing.T, sitekey, domain string) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusUnauthorized {
+	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 }
@@ -276,7 +276,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusUnauthorized {
+	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 }

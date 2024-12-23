@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -32,10 +31,6 @@ var (
 const (
 	authBackfillDelay = 100 * time.Millisecond
 )
-
-func fakeRateLimiter(next http.HandlerFunc) http.HandlerFunc {
-	return next
-}
 
 func TestMain(m *testing.M) {
 	flag.Parse()
