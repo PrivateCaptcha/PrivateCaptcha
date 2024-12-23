@@ -148,5 +148,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 func portalRobotsTXT(w http.ResponseWriter, r *http.Request) {
 	contents := "User-agent: *\nDisallow: /"
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
+	common.WriteCached(w)
 	fmt.Fprint(w, contents)
 }

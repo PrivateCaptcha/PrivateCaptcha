@@ -734,7 +734,7 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 		Data: data,
 	}
 
-	common.SendJSONResponse(ctx, w, response, map[string]string{})
+	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
 func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {

@@ -4,6 +4,8 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 //go:embed static
@@ -14,6 +16,7 @@ func Static() http.HandlerFunc {
 	srv := http.FileServer(http.FS(sub))
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		common.WriteCached(w)
 		srv.ServeHTTP(w, r)
 	}
 }

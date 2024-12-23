@@ -395,8 +395,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		Verified:  verified,
 	}
 
-	// TODO: add CORS headers for chart response
-	common.SendJSONResponse(ctx, w, response, map[string]string{})
+	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, error) {

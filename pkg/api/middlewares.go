@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -16,7 +17,8 @@ import (
 )
 
 const (
-	maxTokenSize = 300
+	maxTokenLen  = 300
+	maxHeaderLen = 100
 )
 
 type authMiddleware struct {
@@ -29,6 +31,8 @@ type authMiddleware struct {
 	backfillCancel    context.CancelFunc
 	privateAPIKey     string
 	userLimits        common.Cache[int32, *common.UserLimitStatus]
+	presharedHeader   string
+	presharedSecret   string
 }
 
 func NewAuthMiddleware(getenv func(string) string,
@@ -39,13 +43,15 @@ func NewAuthMiddleware(getenv func(string) string,
 	const batchSize = 10
 
 	am := &authMiddleware{
-		ipRateLimiter: ipRateLimiter,
-		apiKeyBuckets: ratelimit.NewAPIKeyBuckets(),
-		Store:         store,
-		sitekeyChan:   make(chan string, 3*batchSize),
-		batchSize:     batchSize,
-		privateAPIKey: getenv("PC_PRIVATE_API_KEY"),
-		userLimits:    userLimits,
+		ipRateLimiter:   ipRateLimiter,
+		apiKeyBuckets:   ratelimit.NewAPIKeyBuckets(),
+		Store:           store,
+		sitekeyChan:     make(chan string, 3*batchSize),
+		batchSize:       batchSize,
+		privateAPIKey:   getenv("PC_PRIVATE_API_KEY"),
+		userLimits:      userLimits,
+		presharedHeader: getenv(common.ConfigPresharedSecretHeader),
+		presharedSecret: getenv("PRESHARED_SECRET"),
 	}
 
 	am.apiKeyRateLimiter = ratelimit.NewAPIKeyRateLimiter(
@@ -216,6 +222,52 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 	slog.DebugContext(ctx, "Finished backfilling properties")
 }
 
+func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http.Handler {
+	if (len(allowedHost) == 0) && (len(am.presharedSecret) == 0) {
+		return common.NoopMiddleware
+	}
+
+	return func(h http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if len(allowedHost) > 0 {
+				host := r.Host
+				if h, _, err := net.SplitHostPort(host); err == nil {
+					host = h
+				}
+
+				if len(host) == 0 {
+					slog.Log(r.Context(), common.LevelTrace, "Host header missing")
+					http.Error(w, "", http.StatusUnauthorized)
+					return
+				}
+
+				if host != allowedHost {
+					slog.Log(r.Context(), common.LevelTrace, "Host header mismatch", "expected", allowedHost, "actual", host)
+					http.Error(w, "", http.StatusForbidden)
+					return
+				}
+			}
+
+			if len(am.presharedSecret) > 0 {
+				secretHeader := r.Header.Get(am.presharedHeader)
+				if len(secretHeader) == 0 {
+					slog.Log(r.Context(), common.LevelTrace, "Preshared secret missing")
+					http.Error(w, "", http.StatusUnauthorized)
+					return
+				}
+
+				if secretHeader != am.presharedSecret {
+					slog.Log(r.Context(), common.LevelTrace, "Preshared secret mismatch", "actual", secretHeader[:maxHeaderLen])
+					http.Error(w, "", http.StatusForbidden)
+					return
+				}
+			}
+
+			h.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
 	authHeader := r.Header.Get(common.HeaderAuthorization)
 	if len(authHeader) == 0 {
@@ -246,8 +298,8 @@ func (am *authMiddleware) Private(next http.Handler) http.Handler {
 		}
 
 		if token != am.privateAPIKey {
-			slog.WarnContext(ctx, "Invalid authorization token", "token", token[:maxTokenSize])
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+			slog.WarnContext(ctx, "Invalid authorization token", "token", token[:maxTokenLen])
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 
@@ -284,7 +336,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 			switch err {
 			// this will happen when the user does not have such property or it was deleted
 			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
-				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -314,7 +366,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 			if status, err := am.userLimits.Get(ctx, property.OrgOwnerID.Int32); err == nil {
 				// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
 				if !billing.IsSubscriptionActive(status.Status) {
-					http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				} else {
 					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 				}

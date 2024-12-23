@@ -145,8 +145,8 @@ func (s *server) Shutdown() {
 func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler alice.Constructor) {
 	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, common.HostFunc(domain), corsHandler, common.NoCache, s.auth.Sitekey)
-	verifyChain := alice.New(common.Recovered, s.metrics.Handler, common.HostFunc(domain), common.NoCache, s.auth.APIKey, monitoring.Logged)
+	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), corsHandler, s.auth.Sitekey)
+	verifyChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.APIKey, monitoring.Logged)
 	// NOTE: auth middleware provides rate limiting internally
 	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.ThenFunc(s.puzzle))
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
@@ -154,7 +154,7 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	maxBytesHandler := func(next http.Handler) http.Handler {
 		return http.MaxBytesHandler(next, maxPaddleBodySize)
 	}
-	paddleChain := alice.New(common.Recovered, s.metrics.Handler, common.NoCache, s.auth.Private, monitoring.Logged, maxBytesHandler)
+	paddleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.Private, monitoring.Logged, maxBytesHandler)
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
@@ -239,6 +239,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
 
 	w.WriteHeader(http.StatusOK)
+	common.WriteNoCache(w)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
 	if _, werr := w.Write(response); werr != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
@@ -303,7 +304,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		response.ErrorCodes = []puzzle.VerifyError{puzzle.MaintenanceModeError}
 	}
 
-	common.SendJSONResponse(ctx, w, response, map[string]string{})
+	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
 func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {

@@ -62,7 +62,8 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	var out bytes.Buffer
 	err := s.template.Render(ctx, &out, errorTemplate, actualData)
 	if err == nil {
-		w.Header().Set(common.HeaderContentType, "text/html; charset=utf-8")
+		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+		common.WriteCached(w)
 		w.WriteHeader(code)
 		out.WriteTo(w)
 	} else {
@@ -78,6 +79,8 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 		ErrorMessage: "Session expired",
 		Detail:       "Please begin again.",
 	}
+
+	common.WriteCached(w)
 
 	s.render(w, r, errorTemplate, data)
 }

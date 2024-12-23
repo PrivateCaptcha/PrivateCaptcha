@@ -3,7 +3,6 @@ package common
 import (
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -19,13 +18,20 @@ var (
 	errPathArgEmpty   = errors.New("path argument is empty")
 	epoch             = time.Unix(0, 0).UTC().Format(http.TimeFormat)
 	// taken from chi, which took it fron nginx
-	noCacheHeaders = map[string]string{
+	NoCacheHeaders = map[string]string{
 		"Expires":         epoch,
 		"Cache-Control":   "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
 		"Pragma":          "no-cache",
 		"X-Accel-Expires": "0",
 	}
+	CachedHeaders = map[string]string{
+		"Cache-Control": "public, max-age=86400",
+	}
 )
+
+func NoopMiddleware(next http.Handler) http.Handler {
+	return next
+}
 
 func Recovered(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,45 +53,15 @@ func Recovered(next http.Handler) http.Handler {
 	})
 }
 
-func NoCache(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for k, v := range noCacheHeaders {
-			w.Header().Set(k, v)
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func CacheControl(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		next.ServeHTTP(w, r)
-	})
-}
-
-func HostFunc(allowedHost string) func(http.Handler) http.Handler {
-	if len(allowedHost) == 0 {
-		return func(h http.Handler) http.Handler {
-			return h
-		}
+func WriteNoCache(w http.ResponseWriter) {
+	for k, v := range NoCacheHeaders {
+		w.Header().Set(k, v)
 	}
+}
 
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			host := r.Host
-			if h, _, err := net.SplitHostPort(host); err == nil {
-				host = h
-			}
-
-			if host != allowedHost {
-				slog.Log(r.Context(), LevelTrace, "Host header mismatch", "expected", allowedHost, "actual", host)
-				http.Error(w, "", http.StatusForbidden)
-				return
-			}
-
-			h.ServeHTTP(w, r)
-		})
+func WriteCached(w http.ResponseWriter) {
+	for k, v := range CachedHeaders {
+		w.Header().Set(k, v)
 	}
 }
 
@@ -96,7 +72,6 @@ func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
 	} else {
 		w.Header().Set("Location", url)
-		// w.Header().Set("Cache-Control", "public, max-age=86400")
 		http.Redirect(w, r, url, http.StatusSeeOther)
 	}
 }
