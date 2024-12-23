@@ -4,6 +4,7 @@ const (
 	PrivateCaptcha              = "Private Captcha"
 	StageProd                   = "prod"
 	StageDev                    = "dev"
+	StageStaging                = "staging"
 	StageTest                   = "test"
 	HeaderContentType           = "Content-Type"
 	HeaderContentLength         = "Content-Length"
