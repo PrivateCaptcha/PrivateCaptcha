@@ -96,7 +96,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	apiServer.Setup(router, cfg.APIDomain(), cfg.Verbose())
 
 	mailer := email.NewMailer(cfg.Getenv)
-	portalMailer := email.NewPortalMailer(cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
+	portalMailer := email.NewPortalMailer("https:"+cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
