@@ -271,6 +271,7 @@ func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http
 func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
 	authHeader := r.Header.Get(common.HeaderAuthorization)
 	if len(authHeader) == 0 {
+		slog.Log(ctx, common.LevelTrace, "Auth header is empty. Falling back to query string")
 		if secret := r.URL.Query().Get(common.ParamSecret); len(secret) > 0 {
 			return secret
 		}
@@ -293,6 +294,7 @@ func (am *authMiddleware) Private(next http.Handler) http.Handler {
 
 		token := am.retrieveAuthToken(ctx, r)
 		if len(token) == 0 {
+			slog.Log(ctx, common.LevelTrace, "Private auth token is empty")
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
