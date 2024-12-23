@@ -175,9 +175,10 @@ var (
 	}
 
 	stagePlans = map[string][]*Plan{
-		common.StageProd: prodPlans,
-		common.StageDev:  devPlans,
-		common.StageTest: TestPlans,
+		common.StageProd:    prodPlans,
+		common.StageStaging: devPlans,
+		common.StageDev:     devPlans,
+		common.StageTest:    TestPlans,
 	}
 )
 

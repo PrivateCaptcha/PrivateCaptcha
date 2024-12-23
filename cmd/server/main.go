@@ -286,7 +286,7 @@ func migrate(ctx context.Context, cfg *config.Config, up bool) error {
 		return errors.New("empty migrate hash")
 	}
 
-	if *migrateHashFlag != GitCommit {
+	if *migrateHashFlag != "ignore" && *migrateHashFlag != GitCommit {
 		return fmt.Errorf("target version (%v) does not match built version (%v)", *migrateHashFlag, GitCommit)
 	}
 
