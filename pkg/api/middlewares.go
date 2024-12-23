@@ -216,23 +216,34 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 	slog.DebugContext(ctx, "Finished backfilling properties")
 }
 
+func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
+	authHeader := r.Header.Get(common.HeaderAuthorization)
+	if len(authHeader) == 0 {
+		if secret := r.URL.Query().Get(common.ParamSecret); len(secret) > 0 {
+			return secret
+		}
+
+		slog.WarnContext(ctx, "Authorization header missing")
+		return ""
+	}
+
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		slog.WarnContext(ctx, "Invalid authorization header format", "header", authHeader)
+		return ""
+	}
+
+	return strings.TrimPrefix(authHeader, "Bearer ")
+}
+
 func (am *authMiddleware) Private(next http.Handler) http.Handler {
 	return am.ipRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		authHeader := r.Header.Get(common.HeaderAuthorization)
-		if authHeader == "" {
-			slog.WarnContext(ctx, "Authorization header missing")
+
+		token := am.retrieveAuthToken(ctx, r)
+		if len(token) == 0 {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-
-		if !strings.HasPrefix(authHeader, "Bearer ") {
-			slog.WarnContext(ctx, "Invalid authorization header format", "header", authHeader)
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-
-		token := strings.TrimPrefix(authHeader, "Bearer ")
 
 		if token != am.privateAPIKey {
 			slog.WarnContext(ctx, "Invalid authorization token", "token", token[:maxTokenSize])
