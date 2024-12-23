@@ -39,7 +39,8 @@ jobs:
         env:
           GIT_COMMIT: ${{ github.sha }}
         with:
-          context: docker/
+          context: .
+          file: docker/Dockerfile
           push: true
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}:latest
