@@ -55,7 +55,7 @@
             <div class="grow">
                 <code class="block rounded-md bg-gray-200 text-gray-800">
                     <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this to the <head> of your website -->` }}
-{{ `<script defer src="` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
+{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
 
 {{ `<!-- Add this to your form -->` }}
 {{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>

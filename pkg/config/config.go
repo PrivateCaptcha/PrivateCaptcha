@@ -19,7 +19,6 @@ type Config struct {
 	portalDomain  string
 	cdnBaseURL    string
 	cdnDomain     string
-	scheme        string
 	verbose       bool
 }
 
@@ -99,16 +98,6 @@ func (c *Config) init() error {
 		return err
 	}
 
-	c.scheme = c.getenv("PC_SCHEME")
-	switch c.scheme {
-	case "http", "https":
-		break
-	case "":
-		c.scheme = "http"
-	default:
-		return fmt.Errorf("unknown scheme: %s", c.scheme)
-	}
-
 	return nil
 }
 
@@ -147,15 +136,15 @@ func (c *Config) ListenAddress() string {
 }
 
 func (c *Config) APIURL() string {
-	return fmt.Sprintf("%s://%s", c.scheme, c.apiBaseURL)
+	return fmt.Sprintf("//%s", c.apiBaseURL)
 }
 
 func (c *Config) CDNURL() string {
-	return fmt.Sprintf("%s://%s", c.scheme, c.cdnBaseURL)
+	return fmt.Sprintf("//%s", c.cdnBaseURL)
 }
 
 func (c *Config) PortalURL() string {
-	return fmt.Sprintf("%s://%s", c.scheme, c.portalBaseURL)
+	return fmt.Sprintf("//%s", c.portalBaseURL)
 }
 
 func (c *Config) RateLimiterHeader() string {
