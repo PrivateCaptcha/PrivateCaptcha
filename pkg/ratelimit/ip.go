@@ -15,12 +15,13 @@ import (
 func clientIPAddr(strategy realclientip.Strategy, r *http.Request) netip.Addr {
 	ipStr := clientIP(strategy, r)
 	if len(ipStr) == 0 {
+		slog.WarnContext(r.Context(), "Empty IP address used for rate limiting")
 		return netip.Addr{}
 	}
 
 	addr, err := netip.ParseAddr(ipStr)
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Failed to parse netip.Addr", "ip", clientIP, common.ErrAttr(err))
+		slog.ErrorContext(r.Context(), "Failed to parse netip.Addr", "ip", ipStr, common.ErrAttr(err))
 		return netip.Addr{}
 	}
 
