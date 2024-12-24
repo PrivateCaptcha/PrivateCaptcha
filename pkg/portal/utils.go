@@ -151,3 +151,10 @@ func portalRobotsTXT(w http.ResponseWriter, r *http.Request) {
 	common.WriteCached(w)
 	fmt.Fprint(w, contents)
 }
+
+func (s *Server) static(tpl string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		renderCtx := &csrfRenderContext{}
+		s.render(w, r, tpl, renderCtx)
+	})
+}

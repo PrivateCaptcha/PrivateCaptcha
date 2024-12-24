@@ -79,6 +79,8 @@ var (
 		HeaderCSRFToken      string
 		UsageEndpoint        string
 		NotificationEndpoint string
+		LegalEndpoint        string
+		PrivacyEndpoint      string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -126,6 +128,8 @@ var (
 		HeaderCSRFToken:      common.HeaderCSRFToken,
 		UsageEndpoint:        common.UsageEndpoint,
 		NotificationEndpoint: common.NotificationEndpoint,
+		LegalEndpoint:        common.LegalEndpoint,
+		PrivacyEndpoint:      common.PrivacyEndpoint,
 	}
 )
 
@@ -363,6 +367,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, securityC
 	router.Handle(rg.Post(common.SupportEndpoint), privateWrite.Then(s.handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
 	router.Handle(rg.Get("robots.txt"), public.ThenFunc(portalRobotsTXT))
+	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
+	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
 	router.Handle(http.MethodGet+" "+prefix+"{$}", privateRead.ThenFunc(s.getPortal))
 	// wildcard
 	router.Handle(http.MethodGet+" "+prefix+"{path...}", public.ThenFunc(s.notFound))

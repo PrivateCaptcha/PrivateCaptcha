@@ -27,6 +27,8 @@ const (
 	UserEndpoint                = "user"
 	APIKeysEndpoint             = "apikeys"
 	SupportEndpoint             = "support"
+	LegalEndpoint               = "legal"
+	PrivacyEndpoint             = "privacy"
 	PaddleSubscriptionCreated   = "subscr_created"
 	PaddleSubscriptionUpdated   = "subscr_updated"
 	PaddleSubscriptionCancelled = "subscr_cancelled"
