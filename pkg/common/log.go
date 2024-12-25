@@ -115,7 +115,7 @@ func TraceIDAttr(tid string) slog.Attr {
 
 func SessionIDAttr(sid string) slog.Attr {
 	return slog.Attr{
-		Key:   "sessid",
+		Key:   "sessID",
 		Value: slog.StringValue(sid),
 	}
 }

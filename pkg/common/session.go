@@ -98,7 +98,7 @@ func (st *Session) Get(key SessionKey) SessionValue {
 		return v
 	}
 
-	slog.Log(context.TODO(), LevelTrace, "Access to missing key in session", "sid", st.sid, "key", key)
+	slog.Log(context.TODO(), LevelTrace, "Access to missing key in session", "sessID", st.sid, "key", key)
 	return nil
 }
 
