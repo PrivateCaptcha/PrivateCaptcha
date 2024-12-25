@@ -21,6 +21,10 @@ func (h *contextHandler) Handle(ctx context.Context, r slog.Record) error {
 		if tid, ok := ctx.Value(TraceIDContextKey).(string); ok && (len(tid) > 0) {
 			r.AddAttrs(TraceIDAttr(tid))
 		}
+
+		if sid, ok := ctx.Value(SessionIDContextKey).(string); ok && (len(sid) > 0) {
+			r.AddAttrs(SessionIDAttr(sid))
+		}
 	}
 
 	return h.Handler.Handle(ctx, r)
@@ -106,6 +110,13 @@ func TraceIDAttr(tid string) slog.Attr {
 	return slog.Attr{
 		Key:   "traceID",
 		Value: slog.StringValue(tid),
+	}
+}
+
+func SessionIDAttr(sid string) slog.Attr {
+	return slog.Attr{
+		Key:   "sessid",
+		Value: slog.StringValue(sid),
 	}
 }
 

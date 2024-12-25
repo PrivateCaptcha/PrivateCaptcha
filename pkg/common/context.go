@@ -12,4 +12,5 @@ const (
 	SessionContextKey      ContextKey = iota
 	SitekeyContextKey      ContextKey = iota
 	RateLimitKeyContextKey ContextKey = iota
+	SessionIDContextKey    ContextKey = iota
 )
