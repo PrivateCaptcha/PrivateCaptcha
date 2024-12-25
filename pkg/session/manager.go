@@ -2,15 +2,13 @@ package session
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/rs/xid"
 )
 
 type Manager struct {
@@ -21,11 +19,7 @@ type Manager struct {
 }
 
 func (m *Manager) sessionID() string {
-	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		return ""
-	}
-	return base64.URLEncoding.EncodeToString(b)
+	return xid.New().String()
 }
 
 func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session *common.Session) {

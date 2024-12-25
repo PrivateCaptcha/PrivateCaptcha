@@ -486,15 +486,18 @@ func (s *Server) private(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sess := s.Session.SessionStart(w, r)
 
+		ctx := r.Context()
+		ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.SessionID())
+
 		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 			if step == loginStepCompleted {
-				ctx := context.WithValue(r.Context(), common.LoggedInContextKey, true)
+				ctx = context.WithValue(ctx, common.LoggedInContextKey, true)
 				ctx = context.WithValue(ctx, common.SessionContextKey, sess)
 
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
 			} else {
-				slog.WarnContext(r.Context(), "Session present, but login not finished", "step", step, "sid", sess.SessionID())
+				slog.WarnContext(ctx, "Session present, but login not finished", "step", step)
 			}
 		}
 
