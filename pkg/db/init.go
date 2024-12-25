@@ -61,7 +61,7 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 	})
 
 	errs.Go(func() error {
-		config, cerr := createPgxConfig(ctx, cfg.Getenv, cfg.Verbose())
+		config, cerr := createPgxConfig(ctx, cfg.Getenv)
 		if cerr != nil {
 			return cerr
 		}

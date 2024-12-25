@@ -33,16 +33,22 @@ func (tracer *myQueryTracer) TraceQueryStart(
 	_ *pgx.Conn,
 	data pgx.TraceQueryStartData) context.Context {
 	slog.Log(ctx, common.LevelTrace, "Starting SQL command", "sql", data.SQL, "args", data.Args, "source", "postgres")
-	return ctx
+	return context.WithValue(ctx, common.TimeContextKey, time.Now())
 }
 
 func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
 	if data.Err != nil {
 		slog.Log(ctx, common.LevelTrace, "SQL command failed", common.ErrAttr(data.Err), "source", "postgres")
+	} else {
+		t, ok := ctx.Value(common.TimeContextKey).(time.Time)
+		if !ok {
+			t = time.Now()
+		}
+		slog.DebugContext(ctx, "SQL command finished", "source", "postgres", "duration", time.Since(t).Milliseconds())
 	}
 }
 
-func createPgxConfig(ctx context.Context, getenv func(string) string, verbose bool) (config *pgxpool.Config, err error) {
+func createPgxConfig(ctx context.Context, getenv func(string) string) (config *pgxpool.Config, err error) {
 	dbURL := getenv("PC_POSTGRES")
 	config, err = pgxpool.ParseConfig(dbURL)
 	if err != nil {
@@ -59,9 +65,7 @@ func createPgxConfig(ctx context.Context, getenv func(string) string, verbose bo
 		config.ConnConfig.TLSConfig = nil // not using SSL
 	}
 
-	if verbose {
-		config.ConnConfig.Tracer = &myQueryTracer{}
-	}
+	config.ConnConfig.Tracer = &myQueryTracer{}
 
 	config.ConnConfig.RuntimeParams["application_name"] = "privatecaptcha"
 	config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] =
