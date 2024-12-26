@@ -238,9 +238,9 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	encodedHash := base64.StdEncoding.EncodeToString(hash)
 	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
 
-	w.WriteHeader(http.StatusOK)
 	common.WriteNoCache(w)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
+	w.WriteHeader(http.StatusOK)
 	if _, werr := w.Write(response); werr != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
 	}

@@ -87,12 +87,12 @@ func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set(HeaderContentType, ContentTypeJSON)
 	w.Header().Set(HeaderContentLength, strconv.Itoa(len(response)))
 	for key, value := range headers {
 		w.Header().Set(key, value)
 	}
+	w.WriteHeader(http.StatusOK)
 
 	n, err := w.Write(response)
 	if err != nil {
