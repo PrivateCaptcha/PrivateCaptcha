@@ -100,15 +100,15 @@ type CreateDiscountRequest struct {
 	Amount string `json:"amount,omitempty"`
 	// Description: Short description for this discount for your reference. Not shown to customers.
 	Description string `json:"description,omitempty"`
-	// Type: Type of discount.
-	Type string `json:"type,omitempty"`
-	// EnabledForCheckout: Whether this discount can be applied by a customer at checkout.
+	// Type: Type of discount. Determines how this discount impacts the transaction total.
+	Type DiscountType `json:"type,omitempty"`
+	// EnabledForCheckout: Whether this discount can be applied by customers at checkout. If omitted, defaults to `false`.
 	EnabledForCheckout *bool `json:"enabled_for_checkout,omitempty"`
-	// Code: Unique code that customers can use to apply this discount at checkout. Use letters and numbers only, up to 16 characters. Paddle generates a random 10-character code if a code is not provided and `enabled_for_checkout` is `true`.
+	// Code: Unique code that customers can use to apply this discount at checkout. Use letters and numbers only, up to 16 characters. If omitted and `enabled_for_checkout` is `true`, Paddle generates a random 10-character code.
 	Code *string `json:"code,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Required where discount type is `flat` or `flat_per_seat`.
-	CurrencyCode *string `json:"currency_code,omitempty"`
-	// Recur: Whether this discount applies for multiple billing periods.
+	CurrencyCode *CurrencyCode `json:"currency_code,omitempty"`
+	// Recur: Whether this discount applies for multiple subscription billing periods. If omitted, defaults to `false`.
 	Recur *bool `json:"recur,omitempty"`
 	// MaximumRecurringIntervals: Amount of subscription billing periods that this discount recurs for. Requires `recur`. `null` if this discount recurs forever.
 	MaximumRecurringIntervals *int `json:"maximum_recurring_intervals,omitempty"`
@@ -116,7 +116,7 @@ type CreateDiscountRequest struct {
 	UsageLimit *int `json:"usage_limit,omitempty"`
 	// RestrictTo: Product or price IDs that this discount is for. When including a product ID, all prices for that product can be discounted. `null` if this discount applies to all products and prices.
 	RestrictTo []string `json:"restrict_to,omitempty"`
-	// ExpiresAt: RFC 3339 datetime string of when this discount expires. Discount can no longer be applied after this date has elapsed. `null` if this discount can be applied forever.
+	// ExpiresAt: RFC 3339 datetime string of when this discount expires. Discount can no longer be applied after this date has elapsed. `null` if this discount can be applied forever. If omitted, defaults to `null`.
 	ExpiresAt *string `json:"expires_at,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
@@ -152,20 +152,20 @@ type UpdateDiscountRequest struct {
 	DiscountID string `in:"path=discount_id" json:"-"`
 
 	// Status: Whether this entity can be used in Paddle. `expired` and `used` are set automatically by Paddle.
-	Status *PatchField[string] `json:"status,omitempty"`
+	Status *PatchField[DiscountStatus] `json:"status,omitempty"`
 	// Description: Short description for this discount for your reference. Not shown to customers.
 	Description *PatchField[string] `json:"description,omitempty"`
-	// EnabledForCheckout: Whether this discount can be applied by a customer at checkout.
+	// EnabledForCheckout: Whether this discount can be applied by customers at checkout.
 	EnabledForCheckout *PatchField[bool] `json:"enabled_for_checkout,omitempty"`
-	// Code: Unique code that customers can use to apply this discount at checkout. Use letters and numbers only, up to 16 characters. Paddle generates a random 10-character code if a code is not provided and `enabled_for_checkout` is `true`.
+	// Code: Unique code that customers can use to apply this discount at checkout.
 	Code *PatchField[*string] `json:"code,omitempty"`
-	// Type: Type of discount.
-	Type *PatchField[string] `json:"type,omitempty"`
+	// Type: Type of discount. Determines how this discount impacts the transaction total.
+	Type *PatchField[DiscountType] `json:"type,omitempty"`
 	// Amount: Amount to discount by. For `percentage` discounts, must be an amount between `0.01` and `100`. For `flat` and `flat_per_seat` discounts, amount in the lowest denomination for a currency.
 	Amount *PatchField[string] `json:"amount,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Required where discount type is `flat` or `flat_per_seat`.
-	CurrencyCode *PatchField[*string] `json:"currency_code,omitempty"`
-	// Recur: Whether this discount applies for multiple billing periods.
+	CurrencyCode *PatchField[*CurrencyCode] `json:"currency_code,omitempty"`
+	// Recur: Whether this discount applies for multiple subscription billing periods.
 	Recur *PatchField[bool] `json:"recur,omitempty"`
 	// MaximumRecurringIntervals: Amount of subscription billing periods that this discount recurs for. Requires `recur`. `null` if this discount recurs forever.
 	MaximumRecurringIntervals *PatchField[*int] `json:"maximum_recurring_intervals,omitempty"`

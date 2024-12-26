@@ -49,18 +49,18 @@ var ErrNotificationReplayInvalidOriginType = &paddleerr.Error{
 type NotificationStatus string
 
 const (
-	NotificationStatusNotAttempted = "not_attempted"
-	NotificationStatusNeedsRetry   = "needs_retry"
-	NotificationStatusDelivered    = "delivered"
-	NotificationStatusFailed       = "failed"
+	NotificationStatusNotAttempted NotificationStatus = "not_attempted"
+	NotificationStatusNeedsRetry   NotificationStatus = "needs_retry"
+	NotificationStatusDelivered    NotificationStatus = "delivered"
+	NotificationStatusFailed       NotificationStatus = "failed"
 )
 
-// Origin: Describes how this notification was created..
-type Origin string
+// NotificationOrigin: Describes how this notification was created..
+type NotificationOrigin string
 
 const (
-	OriginEvent  = "event"
-	OriginReplay = "replay"
+	NotificationOriginEvent  NotificationOrigin = "event"
+	NotificationOriginReplay NotificationOrigin = "replay"
 )
 
 // Notification: Represents a notification entity.
@@ -68,11 +68,11 @@ type Notification struct {
 	// ID: Unique Paddle ID for this notification, prefixed with `ntf_`.
 	ID string `json:"id,omitempty"`
 	// Type: Type of event sent by Paddle, in the format `entity.event_type`.
-	Type string `json:"type,omitempty"`
+	Type EventTypeName `json:"type,omitempty"`
 	// Status: Status of this notification.
-	Status string `json:"status,omitempty"`
+	Status NotificationStatus `json:"status,omitempty"`
 	// Payload: Notification payload. Includes the new or changed event.
-	Payload paddlenotification.NotificationsEvent `json:"payload,omitempty"`
+	Payload paddlenotification.NotificationEvent `json:"payload,omitempty"`
 	// OccurredAt: RFC 3339 datetime string of when this notification occurred.
 	OccurredAt string `json:"occurred_at,omitempty"`
 	// DeliveredAt: RFC 3339 datetime string of when this notification was delivered. `null` if not yet delivered successfully.
@@ -80,7 +80,7 @@ type Notification struct {
 	// ReplayedAt: RFC 3339 datetime string of when this notification was replayed. `null` if not replayed.
 	ReplayedAt *string `json:"replayed_at,omitempty"`
 	// Origin: Describes how this notification was created.
-	Origin string `json:"origin,omitempty"`
+	Origin NotificationOrigin `json:"origin,omitempty"`
 	// LastAttemptAt: RFC 3339 datetime string of when this notification was last attempted.
 	LastAttemptAt *string `json:"last_attempt_at,omitempty"`
 	// RetryAt: RFC 3339 datetime string of when this notification is scheduled to be retried.
@@ -98,7 +98,7 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	var t paddlenotification.NotificationsEvent
+	var t paddlenotification.NotificationEvent
 	switch n.Type {
 	case "address.created":
 		t = &paddlenotification.AddressCreated{}
@@ -185,7 +185,7 @@ func (n *Notification) UnmarshalJSON(data []byte) error {
 	case "transaction.updated":
 		t = &paddlenotification.TransactionUpdated{}
 	default:
-		t = &paddlenotification.GenericNotificationsEvent{}
+		t = &paddlenotification.GenericNotificationEvent{}
 	}
 
 	rawT, err := json.Marshal(n.Payload)

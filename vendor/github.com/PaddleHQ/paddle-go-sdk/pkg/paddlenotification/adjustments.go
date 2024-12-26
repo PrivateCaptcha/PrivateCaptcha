@@ -5,56 +5,56 @@ package paddlenotification
 // AdjustmentCreated represents the adjustment.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type AdjustmentCreated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data AdjustmentNotification `json:"data"`
 }
 
 // AdjustmentUpdated represents the adjustment.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type AdjustmentUpdated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data AdjustmentNotification `json:"data"`
 }
 
-// Action: How this adjustment impacts the related transaction. `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`..
-type Action string
+// AdjustmentAction: How this adjustment impacts the related transaction..
+type AdjustmentAction string
 
 const (
-	ActionCredit            = "credit"
-	ActionRefund            = "refund"
-	ActionChargeback        = "chargeback"
-	ActionChargebackReverse = "chargeback_reverse"
-	ActionChargebackWarning = "chargeback_warning"
-	ActionCreditReverse     = "credit_reverse"
+	AdjustmentActionCredit            AdjustmentAction = "credit"
+	AdjustmentActionRefund            AdjustmentAction = "refund"
+	AdjustmentActionChargeback        AdjustmentAction = "chargeback"
+	AdjustmentActionChargebackReverse AdjustmentAction = "chargeback_reverse"
+	AdjustmentActionChargebackWarning AdjustmentAction = "chargeback_warning"
+	AdjustmentActionCreditReverse     AdjustmentAction = "credit_reverse"
 )
 
 /*
 AdjustmentStatus: Status of this adjustment. Set automatically by Paddle.
 
-`refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`
-until they move to `approved` or `rejected` on review. Other kinds of adjustment do not need approval,
-so are created with the status `approved`..
+Most refunds for live accounts are created with the status of `pending_approval` until reviewed by Paddle, but some are automatically approved. For sandbox accounts, Paddle automatically approves refunds every ten minutes.
+
+Credit adjustments don't require approval from Paddle, so they're created as `approved`..
 */
 type AdjustmentStatus string
 
 const (
-	AdjustmentStatusPendingApproval = "pending_approval"
-	AdjustmentStatusApproved        = "approved"
-	AdjustmentStatusRejected        = "rejected"
-	AdjustmentStatusReversed        = "reversed"
+	AdjustmentStatusPendingApproval AdjustmentStatus = "pending_approval"
+	AdjustmentStatusApproved        AdjustmentStatus = "approved"
+	AdjustmentStatusRejected        AdjustmentStatus = "rejected"
+	AdjustmentStatusReversed        AdjustmentStatus = "reversed"
 )
 
 /*
-AdjustmentType: Type of adjustment for this transaction item. `tax` and `proration` are automatically created by Paddle.
+AdjustmentType: Type of adjustment for this transaction item. `tax` adjustments are automatically created by Paddle.
 Include `amount` when creating a `partial` adjustment..
 */
 type AdjustmentType string
 
 const (
-	AdjustmentTypeFull      = "full"
-	AdjustmentTypePartial   = "partial"
-	AdjustmentTypeTax       = "tax"
-	AdjustmentTypeProration = "proration"
+	AdjustmentTypeFull      AdjustmentType = "full"
+	AdjustmentTypePartial   AdjustmentType = "partial"
+	AdjustmentTypeTax       AdjustmentType = "tax"
+	AdjustmentTypeProration AdjustmentType = "proration"
 )
 
 // AdjustmentItemTotals: Breakdown of the total for an adjustment item.
@@ -74,16 +74,13 @@ type AdjustmentItem struct {
 	// ItemID: Paddle ID for the transaction item that this adjustment item relates to, prefixed with `txnitm_`.
 	ItemID string `json:"item_id,omitempty"`
 	/*
-	   Type: Type of adjustment for this transaction item. `tax` and `proration` are automatically created by Paddle.
+	   Type: Type of adjustment for this transaction item. `tax` adjustments are automatically created by Paddle.
 	   Include `amount` when creating a `partial` adjustment.
 	*/
-	Type string `json:"type,omitempty"`
+	Type AdjustmentType `json:"type,omitempty"`
 	// Amount: Amount adjusted for this transaction item. Required when adjustment type is `partial`.
 	Amount *string `json:"amount,omitempty"`
-	/*
-	   Proration: How proration was calculated for this adjustment item. Populated when an adjustment type is `proration`.
-	   Set automatically by Paddle.
-	*/
+	// Proration: How proration was calculated for this adjustment item.
 	Proration *Proration `json:"proration,omitempty"`
 	// Totals: Breakdown of the total for an adjustment item.
 	Totals AdjustmentItemTotals `json:"totals,omitempty"`
@@ -107,7 +104,7 @@ type AdjustmentTotals struct {
 	*/
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for this adjustment.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // PayoutTotalsAdjustment: Breakdown of how this adjustment affects your payout balance.
@@ -125,16 +122,34 @@ type PayoutTotalsAdjustment struct {
 	// Earnings: Adjusted payout earnings. This is the adjustment total plus adjusted Paddle fees, excluding chargeback fees.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
+}
+
+// AdjustmentTaxRateUsedTotals: Calculated totals for the tax applied to this adjustment.
+type AdjustmentTaxRateUsedTotals struct {
+	// Subtotal: Total before tax. For tax adjustments, the value is 0.
+	Subtotal string `json:"subtotal,omitempty"`
+	// Tax: Total tax on the subtotal.
+	Tax string `json:"tax,omitempty"`
+	// Total: Total after tax.
+	Total string `json:"total,omitempty"`
+}
+
+// AdjustmentTaxRateUsed: List of tax rates applied for this adjustment.
+type AdjustmentTaxRateUsed struct {
+	// TaxRate: Rate used to calculate tax for this adjustment.
+	TaxRate string `json:"tax_rate,omitempty"`
+	// Totals: Calculated totals for the tax applied to this adjustment.
+	Totals AdjustmentTaxRateUsedTotals `json:"totals,omitempty"`
 }
 
 // AdjustmentNotification: New or changed entity.
 type AdjustmentNotification struct {
 	// ID: Unique Paddle ID for this adjustment entity, prefixed with `adj_`.
 	ID string `json:"id,omitempty"`
-	// Action: How this adjustment impacts the related transaction. `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`.
-	Action string `json:"action,omitempty"`
-	// TransactionID: Paddle ID for the transaction related to this adjustment, prefixed with `txn_`.
+	// Action: How this adjustment impacts the related transaction.
+	Action AdjustmentAction `json:"action,omitempty"`
+	// TransactionID: Paddle ID of the transaction that this adjustment is for, prefixed with `txn_`.
 	TransactionID string `json:"transaction_id,omitempty"`
 	/*
 	   SubscriptionID: Paddle ID for the subscription related to this adjustment, prefixed with `sub_`.
@@ -146,33 +161,34 @@ type AdjustmentNotification struct {
 	   Set automatically by Paddle based on the `customer_id` of the related transaction.
 	*/
 	CustomerID string `json:"customer_id,omitempty"`
-	// Reason: Why this adjustment was created. Appears in the Paddle Dashboard. Retained for record-keeping purposes.
+	// Reason: Why this adjustment was created. Appears in the Paddle dashboard. Retained for record-keeping purposes.
 	Reason string `json:"reason,omitempty"`
 	/*
 	   CreditAppliedToBalance: Whether this adjustment was applied to the related customer's credit balance. Only returned for `credit` adjustments.
 
-	   `false` when the related transaction `collection_mode` is `manual` and its `status` is `billed`. The adjustment is used
-	   to reduce the `balance` due on the transaction.
+	   `false` where the related transaction is `billed`. The adjustment reduces the amount due on the transaction.
 
-	   `true` for automatically-collected transactions and `completed` manually-collected transactions.
+	   `true` where the related transaction is `completed`. The amount is added the customer's credit balance and used to pay future transactions.
 	*/
 	CreditAppliedToBalance *bool `json:"credit_applied_to_balance,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for this adjustment. Set automatically by Paddle based on the `currency_code` of the related transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	/*
 	   Status: Status of this adjustment. Set automatically by Paddle.
 
-	   `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`
-	   until they move to `approved` or `rejected` on review. Other kinds of adjustment do not need approval,
-	   so are created with the status `approved`.
+	   Most refunds for live accounts are created with the status of `pending_approval` until reviewed by Paddle, but some are automatically approved. For sandbox accounts, Paddle automatically approves refunds every ten minutes.
+
+	   Credit adjustments don't require approval from Paddle, so they're created as `approved`.
 	*/
-	Status string `json:"status,omitempty"`
+	Status AdjustmentStatus `json:"status,omitempty"`
 	// Items: List of items on this adjustment.
 	Items []AdjustmentItem `json:"items,omitempty"`
 	// Totals: Breakdown of the total for an adjustment.
 	Totals AdjustmentTotals `json:"totals,omitempty"`
 	// PayoutTotals: Breakdown of how this adjustment affects your payout balance.
 	PayoutTotals *PayoutTotalsAdjustment `json:"payout_totals,omitempty"`
+	// TaxRatesUsed: List of tax rates applied for this adjustment.
+	TaxRatesUsed []AdjustmentTaxRateUsed `json:"tax_rates_used,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
 	CreatedAt string `json:"created_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.

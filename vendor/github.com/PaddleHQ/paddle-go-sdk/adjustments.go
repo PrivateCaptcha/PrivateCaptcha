@@ -120,6 +120,18 @@ var ErrAdjustmentCannotAdjustImportedTransaction = &paddleerr.Error{
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
+// AdjustmentActionQuery: Return entities for the specified action..
+type AdjustmentActionQuery string
+
+const (
+	AdjustmentActionQueryChargeback        AdjustmentActionQuery = "chargeback"
+	AdjustmentActionQueryChargebackReverse AdjustmentActionQuery = "chargeback_reverse"
+	AdjustmentActionQueryChargebackWarning AdjustmentActionQuery = "chargeback_warning"
+	AdjustmentActionQueryCredit            AdjustmentActionQuery = "credit"
+	AdjustmentActionQueryCreditReverse     AdjustmentActionQuery = "credit_reverse"
+	AdjustmentActionQueryRefund            AdjustmentActionQuery = "refund"
+)
+
 // CustomerBalance: Totals for this credit balance. Where a customer has more than one subscription in this currency with a credit balance, includes totals for all subscriptions.
 type CustomerBalance struct {
 	// Available: Total amount of credit available to use.
@@ -135,7 +147,7 @@ type CreditBalance struct {
 	// CustomerID: Paddle ID of the customer that this credit balance is for, prefixed with `ctm_`.
 	CustomerID string `json:"customer_id,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for this credit balance.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	// Balance: Totals for this credit balance. Where a customer has more than one subscription in this currency with a credit balance, includes totals for all subscriptions.
 	Balance CustomerBalance `json:"balance,omitempty"`
 }
@@ -195,16 +207,17 @@ func (c *AdjustmentsClient) ListAdjustments(ctx context.Context, req *ListAdjust
 
 // CreateAdjustmentRequest is given as an input to CreateAdjustment.
 type CreateAdjustmentRequest struct {
-	// Action: How this adjustment impacts the related transaction. `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`.
-	Action string `json:"action,omitempty"`
-	// Items: List of items on this adjustment.
+	// Action: How this adjustment impacts the related transaction.
+	Action AdjustmentAction `json:"action,omitempty"`
+	// Items: List of transaction items to adjust.
 	Items []AdjustmentItem `json:"items,omitempty"`
-	// Reason: Why this adjustment was created. Appears in the Paddle Dashboard. Retained for record-keeping purposes.
+	// Reason: Why this adjustment was created. Appears in the Paddle dashboard. Retained for record-keeping purposes.
 	Reason string `json:"reason,omitempty"`
 	/*
-	   TransactionID: Paddle ID for the transaction related to this adjustment, prefixed with `txn_`.
-	   Transactions must be `billed` or `completed`. You can't create an adjustment for a transaction
-	   that has an adjustment that's `pending_approval`.
+	   TransactionID: Paddle ID of the transaction that this adjustment is for, prefixed with `txn_`.
+	   Transactions must be manually-collected, and have a status of `billed` or `completed`.
+
+	   You can't create an adjustment for a transaction that has a refund that's pending approval.
 	*/
 	TransactionID string `json:"transaction_id,omitempty"`
 }

@@ -58,7 +58,7 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 		PaddleProductID:      subscr.Price.ProductID,
 		PaddleSubscriptionID: evt.Data.ID,
 		PaddleCustomerID:     evt.Data.CustomerID,
-		Status:               evt.Data.Status,
+		Status:               string(evt.Data.Status),
 		Source:               dbgen.SubscriptionSourcePaddle,
 	}
 
@@ -160,7 +160,7 @@ func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddleno
 	params := &dbgen.UpdateSubscriptionParams{
 		PaddleProductID:      subscr.Price.ProductID,
 		PaddleSubscriptionID: data.ID,
-		Status:               data.Status,
+		Status:               string(data.Status),
 	}
 
 	if subscr.NextBilledAt != nil {
@@ -172,7 +172,7 @@ func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddleno
 	}
 
 	if data.ScheduledChange != nil {
-		if data.ScheduledChange.Action == paddle.ScheduledChangeActionCancel {
+		if data.ScheduledChange.Action == paddlenotification.ScheduledChangeActionCancel {
 			if cancelTime, err := time.Parse(time.RFC3339, data.ScheduledChange.EffectiveAt); err == nil {
 				params.CancelFrom = db.Timestampz(cancelTime)
 			} else {

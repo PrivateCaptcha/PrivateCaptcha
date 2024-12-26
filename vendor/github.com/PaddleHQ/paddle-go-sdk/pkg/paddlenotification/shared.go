@@ -2,247 +2,295 @@
 
 package paddlenotification
 
+// EventTypeName: Type of event sent by Paddle, in the format `entity.event_type`..
+type EventTypeName string
+
+const (
+	EventTypeNameAddressCreated           EventTypeName = "address.created"
+	EventTypeNameAddressImported          EventTypeName = "address.imported"
+	EventTypeNameAddressUpdated           EventTypeName = "address.updated"
+	EventTypeNameAdjustmentCreated        EventTypeName = "adjustment.created"
+	EventTypeNameAdjustmentUpdated        EventTypeName = "adjustment.updated"
+	EventTypeNameBusinessCreated          EventTypeName = "business.created"
+	EventTypeNameBusinessImported         EventTypeName = "business.imported"
+	EventTypeNameBusinessUpdated          EventTypeName = "business.updated"
+	EventTypeNameCustomerCreated          EventTypeName = "customer.created"
+	EventTypeNameCustomerImported         EventTypeName = "customer.imported"
+	EventTypeNameCustomerUpdated          EventTypeName = "customer.updated"
+	EventTypeNameDiscountCreated          EventTypeName = "discount.created"
+	EventTypeNameDiscountImported         EventTypeName = "discount.imported"
+	EventTypeNameDiscountUpdated          EventTypeName = "discount.updated"
+	EventTypeNamePayoutCreated            EventTypeName = "payout.created"
+	EventTypeNamePayoutPaid               EventTypeName = "payout.paid"
+	EventTypeNamePriceCreated             EventTypeName = "price.created"
+	EventTypeNamePriceImported            EventTypeName = "price.imported"
+	EventTypeNamePriceUpdated             EventTypeName = "price.updated"
+	EventTypeNameProductCreated           EventTypeName = "product.created"
+	EventTypeNameProductImported          EventTypeName = "product.imported"
+	EventTypeNameProductUpdated           EventTypeName = "product.updated"
+	EventTypeNameReportCreated            EventTypeName = "report.created"
+	EventTypeNameReportUpdated            EventTypeName = "report.updated"
+	EventTypeNameSubscriptionActivated    EventTypeName = "subscription.activated"
+	EventTypeNameSubscriptionCanceled     EventTypeName = "subscription.canceled"
+	EventTypeNameSubscriptionCreated      EventTypeName = "subscription.created"
+	EventTypeNameSubscriptionImported     EventTypeName = "subscription.imported"
+	EventTypeNameSubscriptionPastDue      EventTypeName = "subscription.past_due"
+	EventTypeNameSubscriptionPaused       EventTypeName = "subscription.paused"
+	EventTypeNameSubscriptionResumed      EventTypeName = "subscription.resumed"
+	EventTypeNameSubscriptionTrialing     EventTypeName = "subscription.trialing"
+	EventTypeNameSubscriptionUpdated      EventTypeName = "subscription.updated"
+	EventTypeNameTransactionBilled        EventTypeName = "transaction.billed"
+	EventTypeNameTransactionCanceled      EventTypeName = "transaction.canceled"
+	EventTypeNameTransactionCompleted     EventTypeName = "transaction.completed"
+	EventTypeNameTransactionCreated       EventTypeName = "transaction.created"
+	EventTypeNameTransactionPaid          EventTypeName = "transaction.paid"
+	EventTypeNameTransactionPastDue       EventTypeName = "transaction.past_due"
+	EventTypeNameTransactionPaymentFailed EventTypeName = "transaction.payment_failed"
+	EventTypeNameTransactionReady         EventTypeName = "transaction.ready"
+	EventTypeNameTransactionUpdated       EventTypeName = "transaction.updated"
+)
+
 // CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code for this address..
 type CountryCode string
 
 const (
-	CountryCodeAD = "AD"
-	CountryCodeAE = "AE"
-	CountryCodeAG = "AG"
-	CountryCodeAI = "AI"
-	CountryCodeAL = "AL"
-	CountryCodeAM = "AM"
-	CountryCodeAO = "AO"
-	CountryCodeAR = "AR"
-	CountryCodeAS = "AS"
-	CountryCodeAT = "AT"
-	CountryCodeAU = "AU"
-	CountryCodeAW = "AW"
-	CountryCodeAX = "AX"
-	CountryCodeAZ = "AZ"
-	CountryCodeBA = "BA"
-	CountryCodeBB = "BB"
-	CountryCodeBD = "BD"
-	CountryCodeBE = "BE"
-	CountryCodeBF = "BF"
-	CountryCodeBG = "BG"
-	CountryCodeBH = "BH"
-	CountryCodeBI = "BI"
-	CountryCodeBJ = "BJ"
-	CountryCodeBL = "BL"
-	CountryCodeBM = "BM"
-	CountryCodeBN = "BN"
-	CountryCodeBO = "BO"
-	CountryCodeBQ = "BQ"
-	CountryCodeBR = "BR"
-	CountryCodeBS = "BS"
-	CountryCodeBT = "BT"
-	CountryCodeBV = "BV"
-	CountryCodeBW = "BW"
-	CountryCodeBZ = "BZ"
-	CountryCodeCA = "CA"
-	CountryCodeCC = "CC"
-	CountryCodeCG = "CG"
-	CountryCodeCH = "CH"
-	CountryCodeCI = "CI"
-	CountryCodeCK = "CK"
-	CountryCodeCL = "CL"
-	CountryCodeCM = "CM"
-	CountryCodeCN = "CN"
-	CountryCodeCO = "CO"
-	CountryCodeCR = "CR"
-	CountryCodeCV = "CV"
-	CountryCodeCW = "CW"
-	CountryCodeCX = "CX"
-	CountryCodeCY = "CY"
-	CountryCodeCZ = "CZ"
-	CountryCodeDE = "DE"
-	CountryCodeDJ = "DJ"
-	CountryCodeDK = "DK"
-	CountryCodeDM = "DM"
-	CountryCodeDO = "DO"
-	CountryCodeDZ = "DZ"
-	CountryCodeEC = "EC"
-	CountryCodeEE = "EE"
-	CountryCodeEG = "EG"
-	CountryCodeEH = "EH"
-	CountryCodeER = "ER"
-	CountryCodeES = "ES"
-	CountryCodeET = "ET"
-	CountryCodeFI = "FI"
-	CountryCodeFJ = "FJ"
-	CountryCodeFK = "FK"
-	CountryCodeFM = "FM"
-	CountryCodeFO = "FO"
-	CountryCodeFR = "FR"
-	CountryCodeGA = "GA"
-	CountryCodeGB = "GB"
-	CountryCodeGD = "GD"
-	CountryCodeGE = "GE"
-	CountryCodeGF = "GF"
-	CountryCodeGG = "GG"
-	CountryCodeGH = "GH"
-	CountryCodeGI = "GI"
-	CountryCodeGL = "GL"
-	CountryCodeGM = "GM"
-	CountryCodeGN = "GN"
-	CountryCodeGP = "GP"
-	CountryCodeGQ = "GQ"
-	CountryCodeGR = "GR"
-	CountryCodeGS = "GS"
-	CountryCodeGT = "GT"
-	CountryCodeGU = "GU"
-	CountryCodeGW = "GW"
-	CountryCodeGY = "GY"
-	CountryCodeHK = "HK"
-	CountryCodeHM = "HM"
-	CountryCodeHN = "HN"
-	CountryCodeHR = "HR"
-	CountryCodeHU = "HU"
-	CountryCodeID = "ID"
-	CountryCodeIE = "IE"
-	CountryCodeIL = "IL"
-	CountryCodeIM = "IM"
-	CountryCodeIN = "IN"
-	CountryCodeIO = "IO"
-	CountryCodeIQ = "IQ"
-	CountryCodeIS = "IS"
-	CountryCodeIT = "IT"
-	CountryCodeJE = "JE"
-	CountryCodeJM = "JM"
-	CountryCodeJO = "JO"
-	CountryCodeJP = "JP"
-	CountryCodeKE = "KE"
-	CountryCodeKG = "KG"
-	CountryCodeKH = "KH"
-	CountryCodeKI = "KI"
-	CountryCodeKM = "KM"
-	CountryCodeKN = "KN"
-	CountryCodeKR = "KR"
-	CountryCodeKW = "KW"
-	CountryCodeKY = "KY"
-	CountryCodeKZ = "KZ"
-	CountryCodeLA = "LA"
-	CountryCodeLB = "LB"
-	CountryCodeLC = "LC"
-	CountryCodeLI = "LI"
-	CountryCodeLK = "LK"
-	CountryCodeLR = "LR"
-	CountryCodeLS = "LS"
-	CountryCodeLT = "LT"
-	CountryCodeLU = "LU"
-	CountryCodeLV = "LV"
-	CountryCodeMA = "MA"
-	CountryCodeMC = "MC"
-	CountryCodeMD = "MD"
-	CountryCodeME = "ME"
-	CountryCodeMF = "MF"
-	CountryCodeMG = "MG"
-	CountryCodeMH = "MH"
-	CountryCodeMK = "MK"
-	CountryCodeMN = "MN"
-	CountryCodeMO = "MO"
-	CountryCodeMP = "MP"
-	CountryCodeMQ = "MQ"
-	CountryCodeMR = "MR"
-	CountryCodeMS = "MS"
-	CountryCodeMT = "MT"
-	CountryCodeMU = "MU"
-	CountryCodeMV = "MV"
-	CountryCodeMW = "MW"
-	CountryCodeMX = "MX"
-	CountryCodeMY = "MY"
-	CountryCodeMZ = "MZ"
-	CountryCodeNA = "NA"
-	CountryCodeNC = "NC"
-	CountryCodeNE = "NE"
-	CountryCodeNF = "NF"
-	CountryCodeNG = "NG"
-	CountryCodeNL = "NL"
-	CountryCodeNO = "NO"
-	CountryCodeNP = "NP"
-	CountryCodeNR = "NR"
-	CountryCodeNU = "NU"
-	CountryCodeNZ = "NZ"
-	CountryCodeOM = "OM"
-	CountryCodePA = "PA"
-	CountryCodePE = "PE"
-	CountryCodePF = "PF"
-	CountryCodePG = "PG"
-	CountryCodePH = "PH"
-	CountryCodePK = "PK"
-	CountryCodePL = "PL"
-	CountryCodePM = "PM"
-	CountryCodePN = "PN"
-	CountryCodePR = "PR"
-	CountryCodePS = "PS"
-	CountryCodePT = "PT"
-	CountryCodePW = "PW"
-	CountryCodePY = "PY"
-	CountryCodeQA = "QA"
-	CountryCodeRE = "RE"
-	CountryCodeRO = "RO"
-	CountryCodeRS = "RS"
-	CountryCodeRW = "RW"
-	CountryCodeSA = "SA"
-	CountryCodeSB = "SB"
-	CountryCodeSC = "SC"
-	CountryCodeSE = "SE"
-	CountryCodeSG = "SG"
-	CountryCodeSH = "SH"
-	CountryCodeSI = "SI"
-	CountryCodeSJ = "SJ"
-	CountryCodeSK = "SK"
-	CountryCodeSL = "SL"
-	CountryCodeSM = "SM"
-	CountryCodeSN = "SN"
-	CountryCodeSR = "SR"
-	CountryCodeST = "ST"
-	CountryCodeSV = "SV"
-	CountryCodeSX = "SX"
-	CountryCodeSZ = "SZ"
-	CountryCodeTC = "TC"
-	CountryCodeTD = "TD"
-	CountryCodeTF = "TF"
-	CountryCodeTG = "TG"
-	CountryCodeTH = "TH"
-	CountryCodeTJ = "TJ"
-	CountryCodeTK = "TK"
-	CountryCodeTL = "TL"
-	CountryCodeTM = "TM"
-	CountryCodeTN = "TN"
-	CountryCodeTO = "TO"
-	CountryCodeTR = "TR"
-	CountryCodeTT = "TT"
-	CountryCodeTV = "TV"
-	CountryCodeTW = "TW"
-	CountryCodeTZ = "TZ"
-	CountryCodeUA = "UA"
-	CountryCodeUG = "UG"
-	CountryCodeUM = "UM"
-	CountryCodeUS = "US"
-	CountryCodeUY = "UY"
-	CountryCodeUZ = "UZ"
-	CountryCodeVA = "VA"
-	CountryCodeVC = "VC"
-	CountryCodeVG = "VG"
-	CountryCodeVI = "VI"
-	CountryCodeVN = "VN"
-	CountryCodeVU = "VU"
-	CountryCodeWF = "WF"
-	CountryCodeWS = "WS"
-	CountryCodeXK = "XK"
-	CountryCodeYT = "YT"
-	CountryCodeZA = "ZA"
-	CountryCodeZM = "ZM"
+	CountryCodeAD CountryCode = "AD"
+	CountryCodeAE CountryCode = "AE"
+	CountryCodeAG CountryCode = "AG"
+	CountryCodeAI CountryCode = "AI"
+	CountryCodeAL CountryCode = "AL"
+	CountryCodeAM CountryCode = "AM"
+	CountryCodeAO CountryCode = "AO"
+	CountryCodeAR CountryCode = "AR"
+	CountryCodeAS CountryCode = "AS"
+	CountryCodeAT CountryCode = "AT"
+	CountryCodeAU CountryCode = "AU"
+	CountryCodeAW CountryCode = "AW"
+	CountryCodeAX CountryCode = "AX"
+	CountryCodeAZ CountryCode = "AZ"
+	CountryCodeBA CountryCode = "BA"
+	CountryCodeBB CountryCode = "BB"
+	CountryCodeBD CountryCode = "BD"
+	CountryCodeBE CountryCode = "BE"
+	CountryCodeBF CountryCode = "BF"
+	CountryCodeBG CountryCode = "BG"
+	CountryCodeBH CountryCode = "BH"
+	CountryCodeBI CountryCode = "BI"
+	CountryCodeBJ CountryCode = "BJ"
+	CountryCodeBL CountryCode = "BL"
+	CountryCodeBM CountryCode = "BM"
+	CountryCodeBN CountryCode = "BN"
+	CountryCodeBO CountryCode = "BO"
+	CountryCodeBQ CountryCode = "BQ"
+	CountryCodeBR CountryCode = "BR"
+	CountryCodeBS CountryCode = "BS"
+	CountryCodeBT CountryCode = "BT"
+	CountryCodeBV CountryCode = "BV"
+	CountryCodeBW CountryCode = "BW"
+	CountryCodeBZ CountryCode = "BZ"
+	CountryCodeCA CountryCode = "CA"
+	CountryCodeCC CountryCode = "CC"
+	CountryCodeCG CountryCode = "CG"
+	CountryCodeCH CountryCode = "CH"
+	CountryCodeCI CountryCode = "CI"
+	CountryCodeCK CountryCode = "CK"
+	CountryCodeCL CountryCode = "CL"
+	CountryCodeCM CountryCode = "CM"
+	CountryCodeCN CountryCode = "CN"
+	CountryCodeCO CountryCode = "CO"
+	CountryCodeCR CountryCode = "CR"
+	CountryCodeCV CountryCode = "CV"
+	CountryCodeCW CountryCode = "CW"
+	CountryCodeCX CountryCode = "CX"
+	CountryCodeCY CountryCode = "CY"
+	CountryCodeCZ CountryCode = "CZ"
+	CountryCodeDE CountryCode = "DE"
+	CountryCodeDJ CountryCode = "DJ"
+	CountryCodeDK CountryCode = "DK"
+	CountryCodeDM CountryCode = "DM"
+	CountryCodeDO CountryCode = "DO"
+	CountryCodeDZ CountryCode = "DZ"
+	CountryCodeEC CountryCode = "EC"
+	CountryCodeEE CountryCode = "EE"
+	CountryCodeEG CountryCode = "EG"
+	CountryCodeEH CountryCode = "EH"
+	CountryCodeER CountryCode = "ER"
+	CountryCodeES CountryCode = "ES"
+	CountryCodeET CountryCode = "ET"
+	CountryCodeFI CountryCode = "FI"
+	CountryCodeFJ CountryCode = "FJ"
+	CountryCodeFK CountryCode = "FK"
+	CountryCodeFM CountryCode = "FM"
+	CountryCodeFO CountryCode = "FO"
+	CountryCodeFR CountryCode = "FR"
+	CountryCodeGA CountryCode = "GA"
+	CountryCodeGB CountryCode = "GB"
+	CountryCodeGD CountryCode = "GD"
+	CountryCodeGE CountryCode = "GE"
+	CountryCodeGF CountryCode = "GF"
+	CountryCodeGG CountryCode = "GG"
+	CountryCodeGH CountryCode = "GH"
+	CountryCodeGI CountryCode = "GI"
+	CountryCodeGL CountryCode = "GL"
+	CountryCodeGM CountryCode = "GM"
+	CountryCodeGN CountryCode = "GN"
+	CountryCodeGP CountryCode = "GP"
+	CountryCodeGQ CountryCode = "GQ"
+	CountryCodeGR CountryCode = "GR"
+	CountryCodeGS CountryCode = "GS"
+	CountryCodeGT CountryCode = "GT"
+	CountryCodeGU CountryCode = "GU"
+	CountryCodeGW CountryCode = "GW"
+	CountryCodeGY CountryCode = "GY"
+	CountryCodeHK CountryCode = "HK"
+	CountryCodeHM CountryCode = "HM"
+	CountryCodeHN CountryCode = "HN"
+	CountryCodeHR CountryCode = "HR"
+	CountryCodeHU CountryCode = "HU"
+	CountryCodeID CountryCode = "ID"
+	CountryCodeIE CountryCode = "IE"
+	CountryCodeIL CountryCode = "IL"
+	CountryCodeIM CountryCode = "IM"
+	CountryCodeIN CountryCode = "IN"
+	CountryCodeIO CountryCode = "IO"
+	CountryCodeIQ CountryCode = "IQ"
+	CountryCodeIS CountryCode = "IS"
+	CountryCodeIT CountryCode = "IT"
+	CountryCodeJE CountryCode = "JE"
+	CountryCodeJM CountryCode = "JM"
+	CountryCodeJO CountryCode = "JO"
+	CountryCodeJP CountryCode = "JP"
+	CountryCodeKE CountryCode = "KE"
+	CountryCodeKG CountryCode = "KG"
+	CountryCodeKH CountryCode = "KH"
+	CountryCodeKI CountryCode = "KI"
+	CountryCodeKM CountryCode = "KM"
+	CountryCodeKN CountryCode = "KN"
+	CountryCodeKR CountryCode = "KR"
+	CountryCodeKW CountryCode = "KW"
+	CountryCodeKY CountryCode = "KY"
+	CountryCodeKZ CountryCode = "KZ"
+	CountryCodeLA CountryCode = "LA"
+	CountryCodeLB CountryCode = "LB"
+	CountryCodeLC CountryCode = "LC"
+	CountryCodeLI CountryCode = "LI"
+	CountryCodeLK CountryCode = "LK"
+	CountryCodeLR CountryCode = "LR"
+	CountryCodeLS CountryCode = "LS"
+	CountryCodeLT CountryCode = "LT"
+	CountryCodeLU CountryCode = "LU"
+	CountryCodeLV CountryCode = "LV"
+	CountryCodeMA CountryCode = "MA"
+	CountryCodeMC CountryCode = "MC"
+	CountryCodeMD CountryCode = "MD"
+	CountryCodeME CountryCode = "ME"
+	CountryCodeMF CountryCode = "MF"
+	CountryCodeMG CountryCode = "MG"
+	CountryCodeMH CountryCode = "MH"
+	CountryCodeMK CountryCode = "MK"
+	CountryCodeMN CountryCode = "MN"
+	CountryCodeMO CountryCode = "MO"
+	CountryCodeMP CountryCode = "MP"
+	CountryCodeMQ CountryCode = "MQ"
+	CountryCodeMR CountryCode = "MR"
+	CountryCodeMS CountryCode = "MS"
+	CountryCodeMT CountryCode = "MT"
+	CountryCodeMU CountryCode = "MU"
+	CountryCodeMV CountryCode = "MV"
+	CountryCodeMW CountryCode = "MW"
+	CountryCodeMX CountryCode = "MX"
+	CountryCodeMY CountryCode = "MY"
+	CountryCodeMZ CountryCode = "MZ"
+	CountryCodeNA CountryCode = "NA"
+	CountryCodeNC CountryCode = "NC"
+	CountryCodeNE CountryCode = "NE"
+	CountryCodeNF CountryCode = "NF"
+	CountryCodeNG CountryCode = "NG"
+	CountryCodeNL CountryCode = "NL"
+	CountryCodeNO CountryCode = "NO"
+	CountryCodeNP CountryCode = "NP"
+	CountryCodeNR CountryCode = "NR"
+	CountryCodeNU CountryCode = "NU"
+	CountryCodeNZ CountryCode = "NZ"
+	CountryCodeOM CountryCode = "OM"
+	CountryCodePA CountryCode = "PA"
+	CountryCodePE CountryCode = "PE"
+	CountryCodePF CountryCode = "PF"
+	CountryCodePG CountryCode = "PG"
+	CountryCodePH CountryCode = "PH"
+	CountryCodePK CountryCode = "PK"
+	CountryCodePL CountryCode = "PL"
+	CountryCodePM CountryCode = "PM"
+	CountryCodePN CountryCode = "PN"
+	CountryCodePR CountryCode = "PR"
+	CountryCodePS CountryCode = "PS"
+	CountryCodePT CountryCode = "PT"
+	CountryCodePW CountryCode = "PW"
+	CountryCodePY CountryCode = "PY"
+	CountryCodeQA CountryCode = "QA"
+	CountryCodeRE CountryCode = "RE"
+	CountryCodeRO CountryCode = "RO"
+	CountryCodeRS CountryCode = "RS"
+	CountryCodeRW CountryCode = "RW"
+	CountryCodeSA CountryCode = "SA"
+	CountryCodeSB CountryCode = "SB"
+	CountryCodeSC CountryCode = "SC"
+	CountryCodeSE CountryCode = "SE"
+	CountryCodeSG CountryCode = "SG"
+	CountryCodeSH CountryCode = "SH"
+	CountryCodeSI CountryCode = "SI"
+	CountryCodeSJ CountryCode = "SJ"
+	CountryCodeSK CountryCode = "SK"
+	CountryCodeSL CountryCode = "SL"
+	CountryCodeSM CountryCode = "SM"
+	CountryCodeSN CountryCode = "SN"
+	CountryCodeSR CountryCode = "SR"
+	CountryCodeST CountryCode = "ST"
+	CountryCodeSV CountryCode = "SV"
+	CountryCodeSX CountryCode = "SX"
+	CountryCodeSZ CountryCode = "SZ"
+	CountryCodeTC CountryCode = "TC"
+	CountryCodeTD CountryCode = "TD"
+	CountryCodeTF CountryCode = "TF"
+	CountryCodeTG CountryCode = "TG"
+	CountryCodeTH CountryCode = "TH"
+	CountryCodeTJ CountryCode = "TJ"
+	CountryCodeTK CountryCode = "TK"
+	CountryCodeTL CountryCode = "TL"
+	CountryCodeTM CountryCode = "TM"
+	CountryCodeTN CountryCode = "TN"
+	CountryCodeTO CountryCode = "TO"
+	CountryCodeTR CountryCode = "TR"
+	CountryCodeTT CountryCode = "TT"
+	CountryCodeTV CountryCode = "TV"
+	CountryCodeTW CountryCode = "TW"
+	CountryCodeTZ CountryCode = "TZ"
+	CountryCodeUA CountryCode = "UA"
+	CountryCodeUG CountryCode = "UG"
+	CountryCodeUM CountryCode = "UM"
+	CountryCodeUS CountryCode = "US"
+	CountryCodeUY CountryCode = "UY"
+	CountryCodeUZ CountryCode = "UZ"
+	CountryCodeVA CountryCode = "VA"
+	CountryCodeVC CountryCode = "VC"
+	CountryCodeVG CountryCode = "VG"
+	CountryCodeVI CountryCode = "VI"
+	CountryCodeVN CountryCode = "VN"
+	CountryCodeVU CountryCode = "VU"
+	CountryCodeWF CountryCode = "WF"
+	CountryCodeWS CountryCode = "WS"
+	CountryCodeXK CountryCode = "XK"
+	CountryCodeYT CountryCode = "YT"
+	CountryCodeZA CountryCode = "ZA"
+	CountryCodeZM CountryCode = "ZM"
 )
 
 // Status: Whether this entity can be used in Paddle..
 type Status string
 
 const (
-	StatusActive   = "active"
-	StatusArchived = "archived"
+	StatusActive   Status = "active"
+	StatusArchived Status = "archived"
 )
 
 // ImportMeta: Import information for this entity. `null` if this entity is not imported.
@@ -257,36 +305,36 @@ type ImportMeta struct {
 type CurrencyCode string
 
 const (
-	CurrencyCodeUSD = "USD"
-	CurrencyCodeEUR = "EUR"
-	CurrencyCodeGBP = "GBP"
-	CurrencyCodeJPY = "JPY"
-	CurrencyCodeAUD = "AUD"
-	CurrencyCodeCAD = "CAD"
-	CurrencyCodeCHF = "CHF"
-	CurrencyCodeHKD = "HKD"
-	CurrencyCodeSGD = "SGD"
-	CurrencyCodeSEK = "SEK"
-	CurrencyCodeARS = "ARS"
-	CurrencyCodeBRL = "BRL"
-	CurrencyCodeCNY = "CNY"
-	CurrencyCodeCOP = "COP"
-	CurrencyCodeCZK = "CZK"
-	CurrencyCodeDKK = "DKK"
-	CurrencyCodeHUF = "HUF"
-	CurrencyCodeILS = "ILS"
-	CurrencyCodeINR = "INR"
-	CurrencyCodeKRW = "KRW"
-	CurrencyCodeMXN = "MXN"
-	CurrencyCodeNOK = "NOK"
-	CurrencyCodeNZD = "NZD"
-	CurrencyCodePLN = "PLN"
-	CurrencyCodeRUB = "RUB"
-	CurrencyCodeTHB = "THB"
-	CurrencyCodeTRY = "TRY"
-	CurrencyCodeTWD = "TWD"
-	CurrencyCodeUAH = "UAH"
-	CurrencyCodeZAR = "ZAR"
+	CurrencyCodeUSD CurrencyCode = "USD"
+	CurrencyCodeEUR CurrencyCode = "EUR"
+	CurrencyCodeGBP CurrencyCode = "GBP"
+	CurrencyCodeJPY CurrencyCode = "JPY"
+	CurrencyCodeAUD CurrencyCode = "AUD"
+	CurrencyCodeCAD CurrencyCode = "CAD"
+	CurrencyCodeCHF CurrencyCode = "CHF"
+	CurrencyCodeHKD CurrencyCode = "HKD"
+	CurrencyCodeSGD CurrencyCode = "SGD"
+	CurrencyCodeSEK CurrencyCode = "SEK"
+	CurrencyCodeARS CurrencyCode = "ARS"
+	CurrencyCodeBRL CurrencyCode = "BRL"
+	CurrencyCodeCNY CurrencyCode = "CNY"
+	CurrencyCodeCOP CurrencyCode = "COP"
+	CurrencyCodeCZK CurrencyCode = "CZK"
+	CurrencyCodeDKK CurrencyCode = "DKK"
+	CurrencyCodeHUF CurrencyCode = "HUF"
+	CurrencyCodeILS CurrencyCode = "ILS"
+	CurrencyCodeINR CurrencyCode = "INR"
+	CurrencyCodeKRW CurrencyCode = "KRW"
+	CurrencyCodeMXN CurrencyCode = "MXN"
+	CurrencyCodeNOK CurrencyCode = "NOK"
+	CurrencyCodeNZD CurrencyCode = "NZD"
+	CurrencyCodePLN CurrencyCode = "PLN"
+	CurrencyCodeRUB CurrencyCode = "RUB"
+	CurrencyCodeTHB CurrencyCode = "THB"
+	CurrencyCodeTRY CurrencyCode = "TRY"
+	CurrencyCodeTWD CurrencyCode = "TWD"
+	CurrencyCodeUAH CurrencyCode = "UAH"
+	CurrencyCodeZAR CurrencyCode = "ZAR"
 )
 
 // TimePeriod: Billing period that proration is based on.
@@ -297,10 +345,7 @@ type TimePeriod struct {
 	EndsAt string `json:"ends_at,omitempty"`
 }
 
-/*
-Proration: How proration was calculated for this adjustment item. Populated when an adjustment type is `proration`.
-Set automatically by Paddle.
-*/
+// Proration: How proration was calculated for this adjustment item.
 type Proration struct {
 	// Rate: Rate used to calculate proration.
 	Rate string `json:"rate,omitempty"`
@@ -312,11 +357,11 @@ type Proration struct {
 type CurrencyCodeChargebacks string
 
 const (
-	CurrencyCodeChargebacksAUD = "AUD"
-	CurrencyCodeChargebacksCAD = "CAD"
-	CurrencyCodeChargebacksEUR = "EUR"
-	CurrencyCodeChargebacksGBP = "GBP"
-	CurrencyCodeChargebacksUSD = "USD"
+	CurrencyCodeChargebacksAUD CurrencyCodeChargebacks = "AUD"
+	CurrencyCodeChargebacksCAD CurrencyCodeChargebacks = "CAD"
+	CurrencyCodeChargebacksEUR CurrencyCodeChargebacks = "EUR"
+	CurrencyCodeChargebacksGBP CurrencyCodeChargebacks = "GBP"
+	CurrencyCodeChargebacksUSD CurrencyCodeChargebacks = "USD"
 )
 
 // Original: Chargeback fee before conversion to the payout currency. `null` when the chargeback fee is the same as the payout currency.
@@ -324,7 +369,7 @@ type Original struct {
 	// Amount: Fee amount for this chargeback in the original currency.
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for the original chargeback fee.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodeChargebacks `json:"currency_code,omitempty"`
 }
 
 // ChargebackFee: Chargeback fees incurred for this adjustment. Only returned when the adjustment `action` is `chargeback` or `chargeback_warning`.
@@ -339,43 +384,43 @@ type ChargebackFee struct {
 type CurrencyCodePayouts string
 
 const (
-	CurrencyCodePayoutsAUD = "AUD"
-	CurrencyCodePayoutsCAD = "CAD"
-	CurrencyCodePayoutsCHF = "CHF"
-	CurrencyCodePayoutsCNY = "CNY"
-	CurrencyCodePayoutsCZK = "CZK"
-	CurrencyCodePayoutsDKK = "DKK"
-	CurrencyCodePayoutsEUR = "EUR"
-	CurrencyCodePayoutsGBP = "GBP"
-	CurrencyCodePayoutsHUF = "HUF"
-	CurrencyCodePayoutsPLN = "PLN"
-	CurrencyCodePayoutsSEK = "SEK"
-	CurrencyCodePayoutsUSD = "USD"
-	CurrencyCodePayoutsZAR = "ZAR"
+	CurrencyCodePayoutsAUD CurrencyCodePayouts = "AUD"
+	CurrencyCodePayoutsCAD CurrencyCodePayouts = "CAD"
+	CurrencyCodePayoutsCHF CurrencyCodePayouts = "CHF"
+	CurrencyCodePayoutsCNY CurrencyCodePayouts = "CNY"
+	CurrencyCodePayoutsCZK CurrencyCodePayouts = "CZK"
+	CurrencyCodePayoutsDKK CurrencyCodePayouts = "DKK"
+	CurrencyCodePayoutsEUR CurrencyCodePayouts = "EUR"
+	CurrencyCodePayoutsGBP CurrencyCodePayouts = "GBP"
+	CurrencyCodePayoutsHUF CurrencyCodePayouts = "HUF"
+	CurrencyCodePayoutsPLN CurrencyCodePayouts = "PLN"
+	CurrencyCodePayoutsSEK CurrencyCodePayouts = "SEK"
+	CurrencyCodePayoutsUSD CurrencyCodePayouts = "USD"
+	CurrencyCodePayoutsZAR CurrencyCodePayouts = "ZAR"
 )
 
 // CatalogType: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app..
 type CatalogType string
 
 const (
-	CatalogTypeCustom   = "custom"
-	CatalogTypeStandard = "standard"
+	CatalogTypeCustom   CatalogType = "custom"
+	CatalogTypeStandard CatalogType = "standard"
 )
 
 // Interval: Unit of time..
 type Interval string
 
 const (
-	IntervalDay   = "day"
-	IntervalWeek  = "week"
-	IntervalMonth = "month"
-	IntervalYear  = "year"
+	IntervalDay   Interval = "day"
+	IntervalWeek  Interval = "week"
+	IntervalMonth Interval = "month"
+	IntervalYear  Interval = "year"
 )
 
 // Duration: How often this price should be charged. `null` if price is non-recurring (one-time).
 type Duration struct {
 	// Interval: Unit of time.
-	Interval string `json:"interval,omitempty"`
+	Interval Interval `json:"interval,omitempty"`
 	// Frequency: Amount of time.
 	Frequency int `json:"frequency,omitempty"`
 }
@@ -384,9 +429,9 @@ type Duration struct {
 type TaxMode string
 
 const (
-	TaxModeAccountSetting = "account_setting"
-	TaxModeExternal       = "external"
-	TaxModeInternal       = "internal"
+	TaxModeAccountSetting TaxMode = "account_setting"
+	TaxModeExternal       TaxMode = "external"
+	TaxModeInternal       TaxMode = "internal"
 )
 
 // Money: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
@@ -394,7 +439,7 @@ type Money struct {
 	// Amount: Amount in the lowest denomination for the currency, e.g. 10 USD = 1000 (cents).
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // UnitPriceOverride: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
@@ -417,28 +462,28 @@ type PriceQuantity struct {
 type TaxCategory string
 
 const (
-	TaxCategoryDigitalGoods                = "digital-goods"
-	TaxCategoryEbooks                      = "ebooks"
-	TaxCategoryImplementationServices      = "implementation-services"
-	TaxCategoryProfessionalServices        = "professional-services"
-	TaxCategorySaas                        = "saas"
-	TaxCategorySoftwareProgrammingServices = "software-programming-services"
-	TaxCategoryStandard                    = "standard"
-	TaxCategoryTrainingServices            = "training-services"
-	TaxCategoryWebsiteHosting              = "website-hosting"
+	TaxCategoryDigitalGoods                TaxCategory = "digital-goods"
+	TaxCategoryEbooks                      TaxCategory = "ebooks"
+	TaxCategoryImplementationServices      TaxCategory = "implementation-services"
+	TaxCategoryProfessionalServices        TaxCategory = "professional-services"
+	TaxCategorySaas                        TaxCategory = "saas"
+	TaxCategorySoftwareProgrammingServices TaxCategory = "software-programming-services"
+	TaxCategoryStandard                    TaxCategory = "standard"
+	TaxCategoryTrainingServices            TaxCategory = "training-services"
+	TaxCategoryWebsiteHosting              TaxCategory = "website-hosting"
 )
 
 // CollectionMode: How payment is collected for transactions created for this subscription. `automatic` for checkout, `manual` for invoices..
 type CollectionMode string
 
 const (
-	CollectionModeAutomatic = "automatic"
-	CollectionModeManual    = "manual"
+	CollectionModeAutomatic CollectionMode = "automatic"
+	CollectionModeManual    CollectionMode = "manual"
 )
 
 // BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 type BillingDetails struct {
-	// EnableCheckout: Whether the related transaction may be paid using a Paddle Checkout.
+	// EnableCheckout: Whether the related transaction may be paid using a Paddle Checkout. If omitted when creating a transaction, defaults to `false`.
 	EnableCheckout bool `json:"enable_checkout,omitempty"`
 	// PurchaseOrderNumber: Customer purchase order number. Appears on invoice documents.
 	PurchaseOrderNumber string `json:"purchase_order_number,omitempty"`
@@ -457,7 +502,7 @@ type Price struct {
 	// Description: Internal description for this price, not shown to customers. Typically notes for your team.
 	Description string `json:"description,omitempty"`
 	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type string `json:"type,omitempty"`
+	Type CatalogType `json:"type,omitempty"`
 	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
 	Name *string `json:"name,omitempty"`
 	// BillingCycle: How often this price should be charged. `null` if price is non-recurring (one-time).
@@ -465,7 +510,7 @@ type Price struct {
 	// TrialPeriod: Trial period for the product related to this price. The billing cycle begins once the trial period is over. `null` for no trial period. Requires `billing_cycle`.
 	TrialPeriod *Duration `json:"trial_period,omitempty"`
 	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
+	TaxMode TaxMode `json:"tax_mode,omitempty"`
 	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
 	UnitPrice Money `json:"unit_price,omitempty"`
 	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
@@ -473,9 +518,35 @@ type Price struct {
 	// Quantity: Limits on how many times the related product can be purchased at this price. Useful for discount campaigns.
 	Quantity PriceQuantity `json:"quantity,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
+	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
+	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
+	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
+	CreatedAt string `json:"created_at,omitempty"`
+	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+// Product: Related product entity for this item. This reflects the product entity at the time it was added to the subscription.
+type Product struct {
+	// ID: Unique Paddle ID for this product, prefixed with `pro_`.
+	ID string `json:"id,omitempty"`
+	// Name: Name of this product.
+	Name string `json:"name,omitempty"`
+	// Description: Short description for this product.
+	Description *string `json:"description,omitempty"`
+	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
+	Type CatalogType `json:"type,omitempty"`
+	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
+	TaxCategory TaxCategory `json:"tax_category,omitempty"`
+	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
+	ImageURL *string `json:"image_url,omitempty"`
+	// CustomData: Your own structured key-value data.
+	CustomData CustomData `json:"custom_data,omitempty"`
+	// Status: Whether this entity can be used in Paddle.
+	Status Status `json:"status,omitempty"`
 	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.

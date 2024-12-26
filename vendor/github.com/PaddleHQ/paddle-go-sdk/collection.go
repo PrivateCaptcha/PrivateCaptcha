@@ -193,6 +193,10 @@ func (c *Collection[T]) UnmarshalJSON(b []byte) error {
 		}
 	}
 
+	if res.Meta.Pagination == nil {
+		return nil
+	}
+
 	nextURL, err := url.Parse(res.Meta.Pagination.Next)
 	if err != nil {
 		return err

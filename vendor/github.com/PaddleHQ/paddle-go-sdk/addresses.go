@@ -68,7 +68,7 @@ type CreateAddressRequest struct {
 	CustomerID string `in:"path=customer_id" json:"-"`
 
 	// CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code for this address.
-	CountryCode string `json:"country_code,omitempty"`
+	CountryCode CountryCode `json:"country_code,omitempty"`
 	// Description: Memorable description for this address.
 	Description *string `json:"description,omitempty"`
 	// FirstLine: First line of this address.
@@ -129,11 +129,11 @@ type UpdateAddressRequest struct {
 	// Region: State, county, or region of this address.
 	Region *PatchField[*string] `json:"region,omitempty"`
 	// CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code for this address.
-	CountryCode *PatchField[string] `json:"country_code,omitempty"`
+	CountryCode *PatchField[CountryCode] `json:"country_code,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData *PatchField[CustomData] `json:"custom_data,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status *PatchField[string] `json:"status,omitempty"`
+	Status *PatchField[Status] `json:"status,omitempty"`
 }
 
 // UpdateAddress performs the PATCH operation on a Addresses resource.

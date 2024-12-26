@@ -280,7 +280,7 @@ func UpdatePlansPrices(prices Prices, stage string) {
 }
 
 func IsSubscriptionActive(status string) bool {
-	switch status {
+	switch paddle.SubscriptionStatus(status) {
 	case paddle.SubscriptionStatusActive, paddle.SubscriptionStatusTrialing:
 		return true
 	default:

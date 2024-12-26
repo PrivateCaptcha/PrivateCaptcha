@@ -4,7 +4,7 @@ package paddle
 
 import "context"
 
-type IPAddressesData struct {
+type IPAddress struct {
 	// IPv4CIDRs: List of Paddle IPv4 CIDRs.
 	IPv4CIDRs []string `json:"ipv4_cidrs,omitempty"`
 }
@@ -18,7 +18,7 @@ type IPAddressesClient struct {
 type GetIPAddressesRequest struct{}
 
 // GetIPAddresses performs the GET operation on a IP addresses resource.
-func (c *IPAddressesClient) GetIPAddresses(ctx context.Context, req *GetIPAddressesRequest) (res *IPAddressesData, err error) {
+func (c *IPAddressesClient) GetIPAddresses(ctx context.Context, req *GetIPAddressesRequest) (res *IPAddress, err error) {
 	if err := c.doer.Do(ctx, "GET", "/ips", req, &res); err != nil {
 		return nil, err
 	}

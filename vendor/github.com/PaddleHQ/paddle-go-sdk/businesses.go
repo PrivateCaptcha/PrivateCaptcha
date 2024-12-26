@@ -15,8 +15,8 @@ var ErrBusinessContactEmailDomainNotAllowed = &paddleerr.Error{
 	Type: paddleerr.ErrorTypeRequestError,
 }
 
-// BusinessesContacts: List of contacts related to this business, typically used for sending invoices.
-type BusinessesContacts struct {
+// BusinessContacts: List of contacts related to this business, typically used for sending invoices.
+type BusinessContacts struct {
 	// Name: Full name of this contact.
 	Name string `json:"name,omitempty"`
 	// Email: Email address for this contact.
@@ -82,7 +82,7 @@ type CreateBusinessRequest struct {
 	// TaxIdentifier: Tax or VAT Number for this business.
 	TaxIdentifier *string `json:"tax_identifier,omitempty"`
 	// Contacts: List of contacts related to this business, typically used for sending invoices.
-	Contacts []BusinessesContacts `json:"contacts,omitempty"`
+	Contacts []BusinessContacts `json:"contacts,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
 }
@@ -125,9 +125,9 @@ type UpdateBusinessRequest struct {
 	// TaxIdentifier: Tax or VAT Number for this business.
 	TaxIdentifier *PatchField[*string] `json:"tax_identifier,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status *PatchField[string] `json:"status,omitempty"`
+	Status *PatchField[Status] `json:"status,omitempty"`
 	// Contacts: List of contacts related to this business, typically used for sending invoices.
-	Contacts *PatchField[[]BusinessesContacts] `json:"contacts,omitempty"`
+	Contacts *PatchField[[]BusinessContacts] `json:"contacts,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData *PatchField[CustomData] `json:"custom_data,omitempty"`
 }

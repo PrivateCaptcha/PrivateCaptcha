@@ -25,8 +25,8 @@ type ValidationError struct {
 }
 
 const (
-	ErrorTypeRequestError ErrorType = "request_error"
 	ErrorTypeAPIError     ErrorType = "api_error"
+	ErrorTypeRequestError ErrorType = "request_error"
 )
 
 // Error conforms to the errors interface.
