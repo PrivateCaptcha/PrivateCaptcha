@@ -27,7 +27,7 @@ var _ common.SessionStore = (*Store)(nil)
 
 func (p *Store) Init(ctx context.Context, sess *common.Session) error {
 	sid := sess.SessionID()
-	slog.DebugContext(ctx, "Registering new session", "sid", sid)
+	slog.DebugContext(ctx, "Registering new session", common.SessionIDAttr(sid))
 
 	p.lock.Lock()
 	defer p.lock.Unlock()

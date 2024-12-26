@@ -411,12 +411,11 @@ func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 }
 
 func catchAll(w http.ResponseWriter, r *http.Request) {
-	slog.Error("Inside catchall handler", "path", r.URL.Path, "method", r.Method)
+	ctx := r.Context()
+	slog.WarnContext(ctx, "Inside catchall handler", "path", r.URL.Path, "method", r.Method)
 
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-		slog.Error("Failed to handle the request", "path", r.URL.Path)
-
 		return
 	}
 }
