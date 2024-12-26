@@ -16,15 +16,16 @@ import (
 )
 
 var (
-	ErrInvalidInput     = errors.New("invalid input")
-	ErrRecordNotFound   = errors.New("record not found")
-	ErrSoftDeleted      = errors.New("record is marked as deleted")
-	ErrDuplicateAccount = errors.New("this subscrption already has an account")
-	ErrLocked           = errors.New("lock is already acquired")
-	ErrMaintenance      = errors.New("maintenance mode")
-	errInvalidCacheType = errors.New("cache record type does not match")
-	markerData          = []byte{'{', '}'}
-	PortalPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
+	ErrInvalidInput          = errors.New("invalid input")
+	ErrRecordNotFound        = errors.New("record not found")
+	ErrSoftDeleted           = errors.New("record is marked as deleted")
+	ErrDuplicateAccount      = errors.New("this subscrption already has an account")
+	ErrLocked                = errors.New("lock is already acquired")
+	ErrMaintenance           = errors.New("maintenance mode")
+	errInvalidCacheType      = errors.New("cache record type does not match")
+	markerData               = []byte{'{', '}'}
+	PortalLoginPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
+	PortalRegisterPropertyID = "8981be7a-3a71-414d-bb74-e7b4456603fd"
 )
 
 type BusinessStore struct {

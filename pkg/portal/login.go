@@ -21,7 +21,6 @@ const (
 	loginStepCompleted    = 3
 	loginFormTemplate     = "login/form.html"
 	loginTemplate         = "login/login.html"
-	loginSolutionField    = "plSolution"
 )
 
 var (
@@ -30,13 +29,10 @@ var (
 
 type loginRenderContext struct {
 	csrfRenderContext
-	LoginSitekey         string
-	EmailError           string
-	CaptchaError         string
-	CaptchaEndpoint      string
-	CaptchaSolutionField string
-	CaptchaDebug         bool
-	CanRegister          bool
+	captchaRenderContext
+	LoginSitekey string
+	EmailError   string
+	CanRegister  bool
 }
 
 type portalPropertyOwnerSource struct {
@@ -59,10 +55,8 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
-		CaptchaDebug:         s.Stage != common.StageProd,
-		CaptchaSolutionField: loginSolutionField,
+		LoginSitekey:         strings.ReplaceAll(db.PortalLoginPropertyID, "-", ""),
+		captchaRenderContext: s.createCaptchaRenderContext(),
 		CanRegister:          s.canRegister.Load(),
 	}, loginTemplate, nil
 }
@@ -81,16 +75,14 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		LoginSitekey:         strings.ReplaceAll(db.PortalPropertyID, "-", ""),
-		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
-		CaptchaDebug:         s.Stage != common.StageProd,
-		CaptchaSolutionField: loginSolutionField,
+		captchaRenderContext: s.createCaptchaRenderContext(),
+		LoginSitekey:         strings.ReplaceAll(db.PortalLoginPropertyID, "-", ""),
 		CanRegister:          s.canRegister.Load(),
 	}
 
 	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.LoginSitekey}
 
-	captchaSolution := r.FormValue(loginSolutionField)
+	captchaSolution := r.FormValue(captchaSolutionField)
 	verr, err := s.Verifier.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
 	if err != nil || verr != puzzle.VerifyNoError {
 		slog.ErrorContext(ctx, "Failed to verify captcha", "code", verr, common.ErrAttr(err))

@@ -180,6 +180,13 @@ type alertRenderContext struct {
 	InfoMessage    string
 }
 
+type captchaRenderContext struct {
+	CaptchaError         string
+	CaptchaEndpoint      string
+	CaptchaSolutionField string
+	CaptchaDebug         bool
+}
+
 func (ac *alertRenderContext) ClearAlerts() {
 	ac.ErrorMessage = ""
 	ac.SuccessMessage = ""

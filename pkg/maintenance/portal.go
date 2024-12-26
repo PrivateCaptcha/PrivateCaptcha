@@ -115,13 +115,25 @@ func (j *WarmupPortalAuth) InitialPause() time.Duration {
 }
 
 func (j *WarmupPortalAuth) RunOnce(ctx context.Context) error {
-	portalUUID := pgtype.UUID{}
-	if err := portalUUID.Scan(db.PortalPropertyID); err != nil {
+	sitekeys := make(map[string]struct{})
+
+	loginUUID := pgtype.UUID{}
+	if err := loginUUID.Scan(db.PortalLoginPropertyID); err == nil {
+		loginSitekey := db.UUIDToSiteKey(loginUUID)
+		sitekeys[loginSitekey] = struct{}{}
+	} else {
 		return err
 	}
-	sitekey := db.UUIDToSiteKey(portalUUID)
 
-	if _, err := j.Store.RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}}); err != nil {
+	registerUUID := pgtype.UUID{}
+	if err := registerUUID.Scan(db.PortalRegisterPropertyID); err == nil {
+		registerSitekey := db.UUIDToSiteKey(registerUUID)
+		sitekeys[registerSitekey] = struct{}{}
+	} else {
+		return err
+	}
+
+	if _, err := j.Store.RetrievePropertiesBySitekey(ctx, sitekeys); err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 	}
 

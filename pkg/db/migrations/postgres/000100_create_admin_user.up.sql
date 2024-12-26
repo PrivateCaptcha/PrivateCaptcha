@@ -20,13 +20,18 @@ WITH subscription_insert AS (
 )
 INSERT INTO backend.properties (name, external_id, org_id, creator_id, org_owner_id, domain, level, growth)
 SELECT
-    'Portal login',
-    '{{ .PortalPropertyID }}',
+    name,
+    external_id,
     org_id,
     user_id,
     user_id,
     '{{ .PortalDomain }}',
     'small',
     'fast'
-FROM org_insert;
+FROM org_insert
+CROSS JOIN (
+    VALUES 
+        ('Portal login', '{{ .PortalLoginPropertyID }}'::uuid),
+        ('Portal register', '{{ .PortalRegisterPropertyID }}'::uuid)
+) AS props(name, external_id);
 

@@ -1,7 +1,7 @@
 WITH admin_user AS (
     SELECT creator_id
     FROM backend.properties
-    WHERE external_id = '{{ .PortalPropertyID }}'
+    WHERE external_id = '{{ .PortalLoginPropertyID }}'
 ), delete_subscription AS (
     -- First, delete the subscription associated with the user
     DELETE FROM backend.subscriptions
