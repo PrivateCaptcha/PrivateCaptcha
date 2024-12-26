@@ -101,6 +101,11 @@ func (j *NotifyLimitsViolationsJob) RunOnce(ctx context.Context) error {
 		emails = append(emails, v.User.Email)
 	}
 
+	if len(emails) == 0 {
+		slog.DebugContext(ctx, "No usage violations found")
+		return nil
+	}
+
 	return j.Mailer.SendUsageViolations(ctx, emails)
 }
 
