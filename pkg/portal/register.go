@@ -6,10 +6,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
@@ -25,8 +28,10 @@ const (
 
 type registerRenderContext struct {
 	csrfRenderContext
-	NameError  string
-	EmailError string
+	captchaRenderContext
+	NameError       string
+	EmailError      string
+	RegisterSitekey string
 }
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -38,6 +43,8 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
+		captchaRenderContext: s.createCaptchaRenderContext(),
+		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
 	}, "register/register.html", nil
 }
 
@@ -61,6 +68,19 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
+		captchaRenderContext: s.createCaptchaRenderContext(),
+		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
+	}
+
+	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.RegisterSitekey}
+
+	captchaSolution := r.FormValue(captchaSolutionField)
+	verr, err := s.Verifier.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
+	if err != nil || verr != puzzle.VerifyNoError {
+		slog.ErrorContext(ctx, "Failed to verify captcha", "code", verr, common.ErrAttr(err))
+		data.CaptchaError = "Captcha verification failed"
+		s.render(w, r, registerFormTemplate, data)
+		return
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))

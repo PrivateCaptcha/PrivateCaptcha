@@ -88,10 +88,11 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 }
 
 type migrateContext struct {
-	Stage            string
-	PortalPropertyID string
-	PortalDomain     string
-	AdminEmail       string
+	Stage                    string
+	PortalLoginPropertyID    string
+	PortalRegisterPropertyID string
+	PortalDomain             string
+	AdminEmail               string
 }
 
 func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext, up bool) error {

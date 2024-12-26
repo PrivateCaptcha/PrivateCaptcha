@@ -77,10 +77,11 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 
 		if migrate {
 			migrateCtx := &migrateContext{
-				Stage:            cfg.Stage(),
-				PortalPropertyID: PortalPropertyID,
-				PortalDomain:     cfg.PortalDomain(),
-				AdminEmail:       cfg.AdminEmail(),
+				Stage:                    cfg.Stage(),
+				PortalLoginPropertyID:    PortalLoginPropertyID,
+				PortalRegisterPropertyID: PortalRegisterPropertyID,
+				PortalDomain:             cfg.PortalDomain(),
+				AdminEmail:               cfg.AdminEmail(),
 			}
 			return migratePostgres(ctx, pool, migrateCtx, up)
 		}

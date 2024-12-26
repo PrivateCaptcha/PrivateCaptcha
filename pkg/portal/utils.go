@@ -13,6 +13,10 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
+const (
+	captchaSolutionField = "plSolution"
+)
+
 // NOTE: this will eventually be replaced by proper OTP
 func twoFactorCode() int {
 	return rand.Intn(900000) + 100000
@@ -157,4 +161,12 @@ func (s *Server) static(tpl string) http.Handler {
 		renderCtx := &csrfRenderContext{}
 		s.render(w, r, tpl, renderCtx)
 	})
+}
+
+func (s *Server) createCaptchaRenderContext() captchaRenderContext {
+	return captchaRenderContext{
+		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
+		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaSolutionField: captchaSolutionField,
+	}
 }

@@ -26,3 +26,4 @@ web/static/js/bundle.js
 
 pc.env
 .aider*
+.env
