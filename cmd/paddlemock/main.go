@@ -90,7 +90,7 @@ func main() {
 			Data: paddlenotification.SubscriptionCreatedNotification{
 				ID:             subscriptionID,
 				TransactionID:  defaultTransactionID,
-				Status:         paddle.SubscriptionStatusTrialing,
+				Status:         paddlenotification.SubscriptionStatus(paddle.SubscriptionStatusTrialing),
 				CustomerID:     customerID,
 				BusinessID:     nil,
 				CurrencyCode:   "EUR",
@@ -103,7 +103,7 @@ func main() {
 					EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
 				},
 				Items: []paddlenotification.SubscriptionItem{{
-					Status:       paddle.SubscriptionStatusTrialing,
+					Status:       paddlenotification.SubscriptionItemStatus(paddle.SubscriptionStatusTrialing),
 					Quantity:     1,
 					Recurring:    true,
 					CreatedAt:    common.JSONTimeNow().String(),

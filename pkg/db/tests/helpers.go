@@ -42,7 +42,7 @@ func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
 		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
-		Status:               paddle.SubscriptionStatusTrialing,
+		Status:               string(paddle.SubscriptionStatusTrialing),
 		Source:               dbgen.SubscriptionSourceInternal,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
@@ -70,7 +70,7 @@ func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID
 	_, err = store.UpdateSubscription(ctx, &dbgen.UpdateSubscriptionParams{
 		PaddleSubscriptionID: subscr.Subscription.PaddleSubscriptionID,
 		PaddleProductID:      subscr.Subscription.PaddleProductID,
-		Status:               paddle.SubscriptionStatusCanceled,
+		Status:               string(paddle.SubscriptionStatusCanceled),
 		NextBilledAt:         pgtype.Timestamptz{},
 		CancelFrom:           db.Timestampz(time.Now().UTC()),
 	})
