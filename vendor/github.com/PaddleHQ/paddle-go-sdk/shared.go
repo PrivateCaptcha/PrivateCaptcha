@@ -162,31 +162,31 @@ var ErrReceiptDataNotEnabled = &paddleerr.Error{
 type CatalogType string
 
 const (
-	CatalogTypeCustom   = "custom"
-	CatalogTypeStandard = "standard"
+	CatalogTypeCustom   CatalogType = "custom"
+	CatalogTypeStandard CatalogType = "standard"
 )
 
 // TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account..
 type TaxCategory string
 
 const (
-	TaxCategoryDigitalGoods                = "digital-goods"
-	TaxCategoryEbooks                      = "ebooks"
-	TaxCategoryImplementationServices      = "implementation-services"
-	TaxCategoryProfessionalServices        = "professional-services"
-	TaxCategorySaas                        = "saas"
-	TaxCategorySoftwareProgrammingServices = "software-programming-services"
-	TaxCategoryStandard                    = "standard"
-	TaxCategoryTrainingServices            = "training-services"
-	TaxCategoryWebsiteHosting              = "website-hosting"
+	TaxCategoryDigitalGoods                TaxCategory = "digital-goods"
+	TaxCategoryEbooks                      TaxCategory = "ebooks"
+	TaxCategoryImplementationServices      TaxCategory = "implementation-services"
+	TaxCategoryProfessionalServices        TaxCategory = "professional-services"
+	TaxCategorySaas                        TaxCategory = "saas"
+	TaxCategorySoftwareProgrammingServices TaxCategory = "software-programming-services"
+	TaxCategoryStandard                    TaxCategory = "standard"
+	TaxCategoryTrainingServices            TaxCategory = "training-services"
+	TaxCategoryWebsiteHosting              TaxCategory = "website-hosting"
 )
 
 // Status: Whether this entity can be used in Paddle..
 type Status string
 
 const (
-	StatusActive   = "active"
-	StatusArchived = "archived"
+	StatusActive   Status = "active"
+	StatusArchived Status = "archived"
 )
 
 // ImportMeta: Import information for this entity. `null` if this entity is not imported.
@@ -201,16 +201,16 @@ type ImportMeta struct {
 type Interval string
 
 const (
-	IntervalDay   = "day"
-	IntervalWeek  = "week"
-	IntervalMonth = "month"
-	IntervalYear  = "year"
+	IntervalDay   Interval = "day"
+	IntervalWeek  Interval = "week"
+	IntervalMonth Interval = "month"
+	IntervalYear  Interval = "year"
 )
 
 // Duration: How often this price should be charged. `null` if price is non-recurring (one-time).
 type Duration struct {
 	// Interval: Unit of time.
-	Interval string `json:"interval,omitempty"`
+	Interval Interval `json:"interval,omitempty"`
 	// Frequency: Amount of time.
 	Frequency int `json:"frequency,omitempty"`
 }
@@ -219,45 +219,45 @@ type Duration struct {
 type TaxMode string
 
 const (
-	TaxModeAccountSetting = "account_setting"
-	TaxModeExternal       = "external"
-	TaxModeInternal       = "internal"
+	TaxModeAccountSetting TaxMode = "account_setting"
+	TaxModeExternal       TaxMode = "external"
+	TaxModeInternal       TaxMode = "internal"
 )
 
 // CurrencyCode: Supported three-letter ISO 4217 currency code..
 type CurrencyCode string
 
 const (
-	CurrencyCodeUSD = "USD"
-	CurrencyCodeEUR = "EUR"
-	CurrencyCodeGBP = "GBP"
-	CurrencyCodeJPY = "JPY"
-	CurrencyCodeAUD = "AUD"
-	CurrencyCodeCAD = "CAD"
-	CurrencyCodeCHF = "CHF"
-	CurrencyCodeHKD = "HKD"
-	CurrencyCodeSGD = "SGD"
-	CurrencyCodeSEK = "SEK"
-	CurrencyCodeARS = "ARS"
-	CurrencyCodeBRL = "BRL"
-	CurrencyCodeCNY = "CNY"
-	CurrencyCodeCOP = "COP"
-	CurrencyCodeCZK = "CZK"
-	CurrencyCodeDKK = "DKK"
-	CurrencyCodeHUF = "HUF"
-	CurrencyCodeILS = "ILS"
-	CurrencyCodeINR = "INR"
-	CurrencyCodeKRW = "KRW"
-	CurrencyCodeMXN = "MXN"
-	CurrencyCodeNOK = "NOK"
-	CurrencyCodeNZD = "NZD"
-	CurrencyCodePLN = "PLN"
-	CurrencyCodeRUB = "RUB"
-	CurrencyCodeTHB = "THB"
-	CurrencyCodeTRY = "TRY"
-	CurrencyCodeTWD = "TWD"
-	CurrencyCodeUAH = "UAH"
-	CurrencyCodeZAR = "ZAR"
+	CurrencyCodeUSD CurrencyCode = "USD"
+	CurrencyCodeEUR CurrencyCode = "EUR"
+	CurrencyCodeGBP CurrencyCode = "GBP"
+	CurrencyCodeJPY CurrencyCode = "JPY"
+	CurrencyCodeAUD CurrencyCode = "AUD"
+	CurrencyCodeCAD CurrencyCode = "CAD"
+	CurrencyCodeCHF CurrencyCode = "CHF"
+	CurrencyCodeHKD CurrencyCode = "HKD"
+	CurrencyCodeSGD CurrencyCode = "SGD"
+	CurrencyCodeSEK CurrencyCode = "SEK"
+	CurrencyCodeARS CurrencyCode = "ARS"
+	CurrencyCodeBRL CurrencyCode = "BRL"
+	CurrencyCodeCNY CurrencyCode = "CNY"
+	CurrencyCodeCOP CurrencyCode = "COP"
+	CurrencyCodeCZK CurrencyCode = "CZK"
+	CurrencyCodeDKK CurrencyCode = "DKK"
+	CurrencyCodeHUF CurrencyCode = "HUF"
+	CurrencyCodeILS CurrencyCode = "ILS"
+	CurrencyCodeINR CurrencyCode = "INR"
+	CurrencyCodeKRW CurrencyCode = "KRW"
+	CurrencyCodeMXN CurrencyCode = "MXN"
+	CurrencyCodeNOK CurrencyCode = "NOK"
+	CurrencyCodeNZD CurrencyCode = "NZD"
+	CurrencyCodePLN CurrencyCode = "PLN"
+	CurrencyCodeRUB CurrencyCode = "RUB"
+	CurrencyCodeTHB CurrencyCode = "THB"
+	CurrencyCodeTRY CurrencyCode = "TRY"
+	CurrencyCodeTWD CurrencyCode = "TWD"
+	CurrencyCodeUAH CurrencyCode = "UAH"
+	CurrencyCodeZAR CurrencyCode = "ZAR"
 )
 
 // Money: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
@@ -265,242 +265,242 @@ type Money struct {
 	// Amount: Amount in the lowest denomination for the currency, e.g. 10 USD = 1000 (cents).
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code..
 type CountryCode string
 
 const (
-	CountryCodeAD = "AD"
-	CountryCodeAE = "AE"
-	CountryCodeAG = "AG"
-	CountryCodeAI = "AI"
-	CountryCodeAL = "AL"
-	CountryCodeAM = "AM"
-	CountryCodeAO = "AO"
-	CountryCodeAR = "AR"
-	CountryCodeAS = "AS"
-	CountryCodeAT = "AT"
-	CountryCodeAU = "AU"
-	CountryCodeAW = "AW"
-	CountryCodeAX = "AX"
-	CountryCodeAZ = "AZ"
-	CountryCodeBA = "BA"
-	CountryCodeBB = "BB"
-	CountryCodeBD = "BD"
-	CountryCodeBE = "BE"
-	CountryCodeBF = "BF"
-	CountryCodeBG = "BG"
-	CountryCodeBH = "BH"
-	CountryCodeBI = "BI"
-	CountryCodeBJ = "BJ"
-	CountryCodeBL = "BL"
-	CountryCodeBM = "BM"
-	CountryCodeBN = "BN"
-	CountryCodeBO = "BO"
-	CountryCodeBQ = "BQ"
-	CountryCodeBR = "BR"
-	CountryCodeBS = "BS"
-	CountryCodeBT = "BT"
-	CountryCodeBV = "BV"
-	CountryCodeBW = "BW"
-	CountryCodeBZ = "BZ"
-	CountryCodeCA = "CA"
-	CountryCodeCC = "CC"
-	CountryCodeCG = "CG"
-	CountryCodeCH = "CH"
-	CountryCodeCI = "CI"
-	CountryCodeCK = "CK"
-	CountryCodeCL = "CL"
-	CountryCodeCM = "CM"
-	CountryCodeCN = "CN"
-	CountryCodeCO = "CO"
-	CountryCodeCR = "CR"
-	CountryCodeCV = "CV"
-	CountryCodeCW = "CW"
-	CountryCodeCX = "CX"
-	CountryCodeCY = "CY"
-	CountryCodeCZ = "CZ"
-	CountryCodeDE = "DE"
-	CountryCodeDJ = "DJ"
-	CountryCodeDK = "DK"
-	CountryCodeDM = "DM"
-	CountryCodeDO = "DO"
-	CountryCodeDZ = "DZ"
-	CountryCodeEC = "EC"
-	CountryCodeEE = "EE"
-	CountryCodeEG = "EG"
-	CountryCodeEH = "EH"
-	CountryCodeER = "ER"
-	CountryCodeES = "ES"
-	CountryCodeET = "ET"
-	CountryCodeFI = "FI"
-	CountryCodeFJ = "FJ"
-	CountryCodeFK = "FK"
-	CountryCodeFM = "FM"
-	CountryCodeFO = "FO"
-	CountryCodeFR = "FR"
-	CountryCodeGA = "GA"
-	CountryCodeGB = "GB"
-	CountryCodeGD = "GD"
-	CountryCodeGE = "GE"
-	CountryCodeGF = "GF"
-	CountryCodeGG = "GG"
-	CountryCodeGH = "GH"
-	CountryCodeGI = "GI"
-	CountryCodeGL = "GL"
-	CountryCodeGM = "GM"
-	CountryCodeGN = "GN"
-	CountryCodeGP = "GP"
-	CountryCodeGQ = "GQ"
-	CountryCodeGR = "GR"
-	CountryCodeGS = "GS"
-	CountryCodeGT = "GT"
-	CountryCodeGU = "GU"
-	CountryCodeGW = "GW"
-	CountryCodeGY = "GY"
-	CountryCodeHK = "HK"
-	CountryCodeHM = "HM"
-	CountryCodeHN = "HN"
-	CountryCodeHR = "HR"
-	CountryCodeHU = "HU"
-	CountryCodeID = "ID"
-	CountryCodeIE = "IE"
-	CountryCodeIL = "IL"
-	CountryCodeIM = "IM"
-	CountryCodeIN = "IN"
-	CountryCodeIO = "IO"
-	CountryCodeIQ = "IQ"
-	CountryCodeIS = "IS"
-	CountryCodeIT = "IT"
-	CountryCodeJE = "JE"
-	CountryCodeJM = "JM"
-	CountryCodeJO = "JO"
-	CountryCodeJP = "JP"
-	CountryCodeKE = "KE"
-	CountryCodeKG = "KG"
-	CountryCodeKH = "KH"
-	CountryCodeKI = "KI"
-	CountryCodeKM = "KM"
-	CountryCodeKN = "KN"
-	CountryCodeKR = "KR"
-	CountryCodeKW = "KW"
-	CountryCodeKY = "KY"
-	CountryCodeKZ = "KZ"
-	CountryCodeLA = "LA"
-	CountryCodeLB = "LB"
-	CountryCodeLC = "LC"
-	CountryCodeLI = "LI"
-	CountryCodeLK = "LK"
-	CountryCodeLR = "LR"
-	CountryCodeLS = "LS"
-	CountryCodeLT = "LT"
-	CountryCodeLU = "LU"
-	CountryCodeLV = "LV"
-	CountryCodeMA = "MA"
-	CountryCodeMC = "MC"
-	CountryCodeMD = "MD"
-	CountryCodeME = "ME"
-	CountryCodeMF = "MF"
-	CountryCodeMG = "MG"
-	CountryCodeMH = "MH"
-	CountryCodeMK = "MK"
-	CountryCodeMN = "MN"
-	CountryCodeMO = "MO"
-	CountryCodeMP = "MP"
-	CountryCodeMQ = "MQ"
-	CountryCodeMR = "MR"
-	CountryCodeMS = "MS"
-	CountryCodeMT = "MT"
-	CountryCodeMU = "MU"
-	CountryCodeMV = "MV"
-	CountryCodeMW = "MW"
-	CountryCodeMX = "MX"
-	CountryCodeMY = "MY"
-	CountryCodeMZ = "MZ"
-	CountryCodeNA = "NA"
-	CountryCodeNC = "NC"
-	CountryCodeNE = "NE"
-	CountryCodeNF = "NF"
-	CountryCodeNG = "NG"
-	CountryCodeNL = "NL"
-	CountryCodeNO = "NO"
-	CountryCodeNP = "NP"
-	CountryCodeNR = "NR"
-	CountryCodeNU = "NU"
-	CountryCodeNZ = "NZ"
-	CountryCodeOM = "OM"
-	CountryCodePA = "PA"
-	CountryCodePE = "PE"
-	CountryCodePF = "PF"
-	CountryCodePG = "PG"
-	CountryCodePH = "PH"
-	CountryCodePK = "PK"
-	CountryCodePL = "PL"
-	CountryCodePM = "PM"
-	CountryCodePN = "PN"
-	CountryCodePR = "PR"
-	CountryCodePS = "PS"
-	CountryCodePT = "PT"
-	CountryCodePW = "PW"
-	CountryCodePY = "PY"
-	CountryCodeQA = "QA"
-	CountryCodeRE = "RE"
-	CountryCodeRO = "RO"
-	CountryCodeRS = "RS"
-	CountryCodeRW = "RW"
-	CountryCodeSA = "SA"
-	CountryCodeSB = "SB"
-	CountryCodeSC = "SC"
-	CountryCodeSE = "SE"
-	CountryCodeSG = "SG"
-	CountryCodeSH = "SH"
-	CountryCodeSI = "SI"
-	CountryCodeSJ = "SJ"
-	CountryCodeSK = "SK"
-	CountryCodeSL = "SL"
-	CountryCodeSM = "SM"
-	CountryCodeSN = "SN"
-	CountryCodeSR = "SR"
-	CountryCodeST = "ST"
-	CountryCodeSV = "SV"
-	CountryCodeSX = "SX"
-	CountryCodeSZ = "SZ"
-	CountryCodeTC = "TC"
-	CountryCodeTD = "TD"
-	CountryCodeTF = "TF"
-	CountryCodeTG = "TG"
-	CountryCodeTH = "TH"
-	CountryCodeTJ = "TJ"
-	CountryCodeTK = "TK"
-	CountryCodeTL = "TL"
-	CountryCodeTM = "TM"
-	CountryCodeTN = "TN"
-	CountryCodeTO = "TO"
-	CountryCodeTR = "TR"
-	CountryCodeTT = "TT"
-	CountryCodeTV = "TV"
-	CountryCodeTW = "TW"
-	CountryCodeTZ = "TZ"
-	CountryCodeUA = "UA"
-	CountryCodeUG = "UG"
-	CountryCodeUM = "UM"
-	CountryCodeUS = "US"
-	CountryCodeUY = "UY"
-	CountryCodeUZ = "UZ"
-	CountryCodeVA = "VA"
-	CountryCodeVC = "VC"
-	CountryCodeVG = "VG"
-	CountryCodeVI = "VI"
-	CountryCodeVN = "VN"
-	CountryCodeVU = "VU"
-	CountryCodeWF = "WF"
-	CountryCodeWS = "WS"
-	CountryCodeXK = "XK"
-	CountryCodeYT = "YT"
-	CountryCodeZA = "ZA"
-	CountryCodeZM = "ZM"
+	CountryCodeAD CountryCode = "AD"
+	CountryCodeAE CountryCode = "AE"
+	CountryCodeAG CountryCode = "AG"
+	CountryCodeAI CountryCode = "AI"
+	CountryCodeAL CountryCode = "AL"
+	CountryCodeAM CountryCode = "AM"
+	CountryCodeAO CountryCode = "AO"
+	CountryCodeAR CountryCode = "AR"
+	CountryCodeAS CountryCode = "AS"
+	CountryCodeAT CountryCode = "AT"
+	CountryCodeAU CountryCode = "AU"
+	CountryCodeAW CountryCode = "AW"
+	CountryCodeAX CountryCode = "AX"
+	CountryCodeAZ CountryCode = "AZ"
+	CountryCodeBA CountryCode = "BA"
+	CountryCodeBB CountryCode = "BB"
+	CountryCodeBD CountryCode = "BD"
+	CountryCodeBE CountryCode = "BE"
+	CountryCodeBF CountryCode = "BF"
+	CountryCodeBG CountryCode = "BG"
+	CountryCodeBH CountryCode = "BH"
+	CountryCodeBI CountryCode = "BI"
+	CountryCodeBJ CountryCode = "BJ"
+	CountryCodeBL CountryCode = "BL"
+	CountryCodeBM CountryCode = "BM"
+	CountryCodeBN CountryCode = "BN"
+	CountryCodeBO CountryCode = "BO"
+	CountryCodeBQ CountryCode = "BQ"
+	CountryCodeBR CountryCode = "BR"
+	CountryCodeBS CountryCode = "BS"
+	CountryCodeBT CountryCode = "BT"
+	CountryCodeBV CountryCode = "BV"
+	CountryCodeBW CountryCode = "BW"
+	CountryCodeBZ CountryCode = "BZ"
+	CountryCodeCA CountryCode = "CA"
+	CountryCodeCC CountryCode = "CC"
+	CountryCodeCG CountryCode = "CG"
+	CountryCodeCH CountryCode = "CH"
+	CountryCodeCI CountryCode = "CI"
+	CountryCodeCK CountryCode = "CK"
+	CountryCodeCL CountryCode = "CL"
+	CountryCodeCM CountryCode = "CM"
+	CountryCodeCN CountryCode = "CN"
+	CountryCodeCO CountryCode = "CO"
+	CountryCodeCR CountryCode = "CR"
+	CountryCodeCV CountryCode = "CV"
+	CountryCodeCW CountryCode = "CW"
+	CountryCodeCX CountryCode = "CX"
+	CountryCodeCY CountryCode = "CY"
+	CountryCodeCZ CountryCode = "CZ"
+	CountryCodeDE CountryCode = "DE"
+	CountryCodeDJ CountryCode = "DJ"
+	CountryCodeDK CountryCode = "DK"
+	CountryCodeDM CountryCode = "DM"
+	CountryCodeDO CountryCode = "DO"
+	CountryCodeDZ CountryCode = "DZ"
+	CountryCodeEC CountryCode = "EC"
+	CountryCodeEE CountryCode = "EE"
+	CountryCodeEG CountryCode = "EG"
+	CountryCodeEH CountryCode = "EH"
+	CountryCodeER CountryCode = "ER"
+	CountryCodeES CountryCode = "ES"
+	CountryCodeET CountryCode = "ET"
+	CountryCodeFI CountryCode = "FI"
+	CountryCodeFJ CountryCode = "FJ"
+	CountryCodeFK CountryCode = "FK"
+	CountryCodeFM CountryCode = "FM"
+	CountryCodeFO CountryCode = "FO"
+	CountryCodeFR CountryCode = "FR"
+	CountryCodeGA CountryCode = "GA"
+	CountryCodeGB CountryCode = "GB"
+	CountryCodeGD CountryCode = "GD"
+	CountryCodeGE CountryCode = "GE"
+	CountryCodeGF CountryCode = "GF"
+	CountryCodeGG CountryCode = "GG"
+	CountryCodeGH CountryCode = "GH"
+	CountryCodeGI CountryCode = "GI"
+	CountryCodeGL CountryCode = "GL"
+	CountryCodeGM CountryCode = "GM"
+	CountryCodeGN CountryCode = "GN"
+	CountryCodeGP CountryCode = "GP"
+	CountryCodeGQ CountryCode = "GQ"
+	CountryCodeGR CountryCode = "GR"
+	CountryCodeGS CountryCode = "GS"
+	CountryCodeGT CountryCode = "GT"
+	CountryCodeGU CountryCode = "GU"
+	CountryCodeGW CountryCode = "GW"
+	CountryCodeGY CountryCode = "GY"
+	CountryCodeHK CountryCode = "HK"
+	CountryCodeHM CountryCode = "HM"
+	CountryCodeHN CountryCode = "HN"
+	CountryCodeHR CountryCode = "HR"
+	CountryCodeHU CountryCode = "HU"
+	CountryCodeID CountryCode = "ID"
+	CountryCodeIE CountryCode = "IE"
+	CountryCodeIL CountryCode = "IL"
+	CountryCodeIM CountryCode = "IM"
+	CountryCodeIN CountryCode = "IN"
+	CountryCodeIO CountryCode = "IO"
+	CountryCodeIQ CountryCode = "IQ"
+	CountryCodeIS CountryCode = "IS"
+	CountryCodeIT CountryCode = "IT"
+	CountryCodeJE CountryCode = "JE"
+	CountryCodeJM CountryCode = "JM"
+	CountryCodeJO CountryCode = "JO"
+	CountryCodeJP CountryCode = "JP"
+	CountryCodeKE CountryCode = "KE"
+	CountryCodeKG CountryCode = "KG"
+	CountryCodeKH CountryCode = "KH"
+	CountryCodeKI CountryCode = "KI"
+	CountryCodeKM CountryCode = "KM"
+	CountryCodeKN CountryCode = "KN"
+	CountryCodeKR CountryCode = "KR"
+	CountryCodeKW CountryCode = "KW"
+	CountryCodeKY CountryCode = "KY"
+	CountryCodeKZ CountryCode = "KZ"
+	CountryCodeLA CountryCode = "LA"
+	CountryCodeLB CountryCode = "LB"
+	CountryCodeLC CountryCode = "LC"
+	CountryCodeLI CountryCode = "LI"
+	CountryCodeLK CountryCode = "LK"
+	CountryCodeLR CountryCode = "LR"
+	CountryCodeLS CountryCode = "LS"
+	CountryCodeLT CountryCode = "LT"
+	CountryCodeLU CountryCode = "LU"
+	CountryCodeLV CountryCode = "LV"
+	CountryCodeMA CountryCode = "MA"
+	CountryCodeMC CountryCode = "MC"
+	CountryCodeMD CountryCode = "MD"
+	CountryCodeME CountryCode = "ME"
+	CountryCodeMF CountryCode = "MF"
+	CountryCodeMG CountryCode = "MG"
+	CountryCodeMH CountryCode = "MH"
+	CountryCodeMK CountryCode = "MK"
+	CountryCodeMN CountryCode = "MN"
+	CountryCodeMO CountryCode = "MO"
+	CountryCodeMP CountryCode = "MP"
+	CountryCodeMQ CountryCode = "MQ"
+	CountryCodeMR CountryCode = "MR"
+	CountryCodeMS CountryCode = "MS"
+	CountryCodeMT CountryCode = "MT"
+	CountryCodeMU CountryCode = "MU"
+	CountryCodeMV CountryCode = "MV"
+	CountryCodeMW CountryCode = "MW"
+	CountryCodeMX CountryCode = "MX"
+	CountryCodeMY CountryCode = "MY"
+	CountryCodeMZ CountryCode = "MZ"
+	CountryCodeNA CountryCode = "NA"
+	CountryCodeNC CountryCode = "NC"
+	CountryCodeNE CountryCode = "NE"
+	CountryCodeNF CountryCode = "NF"
+	CountryCodeNG CountryCode = "NG"
+	CountryCodeNL CountryCode = "NL"
+	CountryCodeNO CountryCode = "NO"
+	CountryCodeNP CountryCode = "NP"
+	CountryCodeNR CountryCode = "NR"
+	CountryCodeNU CountryCode = "NU"
+	CountryCodeNZ CountryCode = "NZ"
+	CountryCodeOM CountryCode = "OM"
+	CountryCodePA CountryCode = "PA"
+	CountryCodePE CountryCode = "PE"
+	CountryCodePF CountryCode = "PF"
+	CountryCodePG CountryCode = "PG"
+	CountryCodePH CountryCode = "PH"
+	CountryCodePK CountryCode = "PK"
+	CountryCodePL CountryCode = "PL"
+	CountryCodePM CountryCode = "PM"
+	CountryCodePN CountryCode = "PN"
+	CountryCodePR CountryCode = "PR"
+	CountryCodePS CountryCode = "PS"
+	CountryCodePT CountryCode = "PT"
+	CountryCodePW CountryCode = "PW"
+	CountryCodePY CountryCode = "PY"
+	CountryCodeQA CountryCode = "QA"
+	CountryCodeRE CountryCode = "RE"
+	CountryCodeRO CountryCode = "RO"
+	CountryCodeRS CountryCode = "RS"
+	CountryCodeRW CountryCode = "RW"
+	CountryCodeSA CountryCode = "SA"
+	CountryCodeSB CountryCode = "SB"
+	CountryCodeSC CountryCode = "SC"
+	CountryCodeSE CountryCode = "SE"
+	CountryCodeSG CountryCode = "SG"
+	CountryCodeSH CountryCode = "SH"
+	CountryCodeSI CountryCode = "SI"
+	CountryCodeSJ CountryCode = "SJ"
+	CountryCodeSK CountryCode = "SK"
+	CountryCodeSL CountryCode = "SL"
+	CountryCodeSM CountryCode = "SM"
+	CountryCodeSN CountryCode = "SN"
+	CountryCodeSR CountryCode = "SR"
+	CountryCodeST CountryCode = "ST"
+	CountryCodeSV CountryCode = "SV"
+	CountryCodeSX CountryCode = "SX"
+	CountryCodeSZ CountryCode = "SZ"
+	CountryCodeTC CountryCode = "TC"
+	CountryCodeTD CountryCode = "TD"
+	CountryCodeTF CountryCode = "TF"
+	CountryCodeTG CountryCode = "TG"
+	CountryCodeTH CountryCode = "TH"
+	CountryCodeTJ CountryCode = "TJ"
+	CountryCodeTK CountryCode = "TK"
+	CountryCodeTL CountryCode = "TL"
+	CountryCodeTM CountryCode = "TM"
+	CountryCodeTN CountryCode = "TN"
+	CountryCodeTO CountryCode = "TO"
+	CountryCodeTR CountryCode = "TR"
+	CountryCodeTT CountryCode = "TT"
+	CountryCodeTV CountryCode = "TV"
+	CountryCodeTW CountryCode = "TW"
+	CountryCodeTZ CountryCode = "TZ"
+	CountryCodeUA CountryCode = "UA"
+	CountryCodeUG CountryCode = "UG"
+	CountryCodeUM CountryCode = "UM"
+	CountryCodeUS CountryCode = "US"
+	CountryCodeUY CountryCode = "UY"
+	CountryCodeUZ CountryCode = "UZ"
+	CountryCodeVA CountryCode = "VA"
+	CountryCodeVC CountryCode = "VC"
+	CountryCodeVG CountryCode = "VG"
+	CountryCodeVI CountryCode = "VI"
+	CountryCodeVN CountryCode = "VN"
+	CountryCodeVU CountryCode = "VU"
+	CountryCodeWF CountryCode = "WF"
+	CountryCodeWS CountryCode = "WS"
+	CountryCodeXK CountryCode = "XK"
+	CountryCodeYT CountryCode = "YT"
+	CountryCodeZA CountryCode = "ZA"
+	CountryCodeZM CountryCode = "ZM"
 )
 
 // UnitPriceOverride: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
@@ -549,38 +549,38 @@ type Meta struct {
 type CollectionMode string
 
 const (
-	CollectionModeAutomatic = "automatic"
-	CollectionModeManual    = "manual"
+	CollectionModeAutomatic CollectionMode = "automatic"
+	CollectionModeManual    CollectionMode = "manual"
 )
 
 // TransactionStatus: Status of this transaction. You may set a transaction to `billed` or `canceled`, other statuses are set automatically by Paddle. Automatically-collected transactions may return `completed` if payment is captured successfully, or `past_due` if payment failed..
 type TransactionStatus string
 
 const (
-	TransactionStatusDraft     = "draft"
-	TransactionStatusReady     = "ready"
-	TransactionStatusBilled    = "billed"
-	TransactionStatusPaid      = "paid"
-	TransactionStatusCompleted = "completed"
-	TransactionStatusCanceled  = "canceled"
-	TransactionStatusPastDue   = "past_due"
+	TransactionStatusDraft     TransactionStatus = "draft"
+	TransactionStatusReady     TransactionStatus = "ready"
+	TransactionStatusBilled    TransactionStatus = "billed"
+	TransactionStatusPaid      TransactionStatus = "paid"
+	TransactionStatusCompleted TransactionStatus = "completed"
+	TransactionStatusCanceled  TransactionStatus = "canceled"
+	TransactionStatusPastDue   TransactionStatus = "past_due"
 )
 
 // TransactionOrigin: Describes how this transaction was created..
 type TransactionOrigin string
 
 const (
-	TransactionOriginAPI                             = "api"
-	TransactionOriginSubscriptionCharge              = "subscription_charge"
-	TransactionOriginSubscriptionPaymentMethodChange = "subscription_payment_method_change"
-	TransactionOriginSubscriptionRecurring           = "subscription_recurring"
-	TransactionOriginSubscriptionUpdate              = "subscription_update"
-	TransactionOriginWeb                             = "web"
+	TransactionOriginAPI                             TransactionOrigin = "api"
+	TransactionOriginSubscriptionCharge              TransactionOrigin = "subscription_charge"
+	TransactionOriginSubscriptionPaymentMethodChange TransactionOrigin = "subscription_payment_method_change"
+	TransactionOriginSubscriptionRecurring           TransactionOrigin = "subscription_recurring"
+	TransactionOriginSubscriptionUpdate              TransactionOrigin = "subscription_update"
+	TransactionOriginWeb                             TransactionOrigin = "web"
 )
 
 // BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 type BillingDetails struct {
-	// EnableCheckout: Whether the related transaction may be paid using a Paddle Checkout.
+	// EnableCheckout: Whether the related transaction may be paid using a Paddle Checkout. If omitted when creating a transaction, defaults to `false`.
 	EnableCheckout bool `json:"enable_checkout,omitempty"`
 	// PurchaseOrderNumber: Customer purchase order number. Appears on invoice documents.
 	PurchaseOrderNumber string `json:"purchase_order_number,omitempty"`
@@ -669,7 +669,7 @@ type TransactionTotals struct {
 	// Earnings: Total earnings for this transaction. This is the total minus the Paddle fee. `null` until the transaction is `completed` and the fee is processed.
 	Earnings *string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code of the currency used for this transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // TransactionTotalsAdjusted: Breakdown of the payout totals for a transaction after adjustments. `null` until the transaction is `completed`.
@@ -690,26 +690,26 @@ type TransactionTotalsAdjusted struct {
 	*/
 	Earnings *string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code of the currency used for this transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // CurrencyCodePayouts: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed..
 type CurrencyCodePayouts string
 
 const (
-	CurrencyCodePayoutsAUD = "AUD"
-	CurrencyCodePayoutsCAD = "CAD"
-	CurrencyCodePayoutsCHF = "CHF"
-	CurrencyCodePayoutsCNY = "CNY"
-	CurrencyCodePayoutsCZK = "CZK"
-	CurrencyCodePayoutsDKK = "DKK"
-	CurrencyCodePayoutsEUR = "EUR"
-	CurrencyCodePayoutsGBP = "GBP"
-	CurrencyCodePayoutsHUF = "HUF"
-	CurrencyCodePayoutsPLN = "PLN"
-	CurrencyCodePayoutsSEK = "SEK"
-	CurrencyCodePayoutsUSD = "USD"
-	CurrencyCodePayoutsZAR = "ZAR"
+	CurrencyCodePayoutsAUD CurrencyCodePayouts = "AUD"
+	CurrencyCodePayoutsCAD CurrencyCodePayouts = "CAD"
+	CurrencyCodePayoutsCHF CurrencyCodePayouts = "CHF"
+	CurrencyCodePayoutsCNY CurrencyCodePayouts = "CNY"
+	CurrencyCodePayoutsCZK CurrencyCodePayouts = "CZK"
+	CurrencyCodePayoutsDKK CurrencyCodePayouts = "DKK"
+	CurrencyCodePayoutsEUR CurrencyCodePayouts = "EUR"
+	CurrencyCodePayoutsGBP CurrencyCodePayouts = "GBP"
+	CurrencyCodePayoutsHUF CurrencyCodePayouts = "HUF"
+	CurrencyCodePayoutsPLN CurrencyCodePayouts = "PLN"
+	CurrencyCodePayoutsSEK CurrencyCodePayouts = "SEK"
+	CurrencyCodePayoutsUSD CurrencyCodePayouts = "USD"
+	CurrencyCodePayoutsZAR CurrencyCodePayouts = "ZAR"
 )
 
 // TransactionPayoutTotals: Breakdown of the payout total for a transaction. `null` until the transaction is `completed`. Returned in your payout currency.
@@ -738,18 +738,18 @@ type TransactionPayoutTotals struct {
 	// Earnings: Total earnings for this payout. This is the subtotal minus the Paddle fee.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
 }
 
 // CurrencyCodeChargebacks: Three-letter ISO 4217 currency code for the original chargeback fee..
 type CurrencyCodeChargebacks string
 
 const (
-	CurrencyCodeChargebacksAUD = "AUD"
-	CurrencyCodeChargebacksCAD = "CAD"
-	CurrencyCodeChargebacksEUR = "EUR"
-	CurrencyCodeChargebacksGBP = "GBP"
-	CurrencyCodeChargebacksUSD = "USD"
+	CurrencyCodeChargebacksAUD CurrencyCodeChargebacks = "AUD"
+	CurrencyCodeChargebacksCAD CurrencyCodeChargebacks = "CAD"
+	CurrencyCodeChargebacksEUR CurrencyCodeChargebacks = "EUR"
+	CurrencyCodeChargebacksGBP CurrencyCodeChargebacks = "GBP"
+	CurrencyCodeChargebacksUSD CurrencyCodeChargebacks = "USD"
 )
 
 // Original: Chargeback fee before conversion to the payout currency. `null` when the chargeback fee is the same as the payout currency.
@@ -757,7 +757,7 @@ type Original struct {
 	// Amount: Fee amount for this chargeback in the original currency.
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for the original chargeback fee.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodeChargebacks `json:"currency_code,omitempty"`
 }
 
 // ChargebackFee: Details of any chargeback fees incurred for this transaction.
@@ -783,22 +783,7 @@ type TransactionPayoutTotalsAdjusted struct {
 	// Earnings: Total earnings for this payout. This is the subtotal minus the Paddle fee, excluding chargeback fees.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
-}
-
-// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-type UnitTotals struct {
-	// Subtotal: Unit price.
-	Subtotal string `json:"subtotal,omitempty"`
-	/*
-	   Discount: Total discount as a result of any discounts applied.
-	   Except for percentage discounts, Paddle applies tax to discounts based on the line item `price.tax_mode`. If `price.tax_mode` for a line item is `internal`, Paddle removes tax from the discount applied.
-	*/
-	Discount string `json:"discount,omitempty"`
-	// Tax: Total tax on the subtotal.
-	Tax string `json:"tax,omitempty"`
-	// Total: Total after discount and tax.
-	Total string `json:"total,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
 }
 
 // TransactionLineItem: Information about line items for this transaction. Different from transaction `items` as they include totals calculated by Paddle. Considered the source of truth for line item totals.
@@ -814,7 +799,7 @@ type TransactionLineItem struct {
 	// TaxRate: Rate used to calculate tax for this transaction line item.
 	TaxRate string `json:"tax_rate,omitempty"`
 	// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-	UnitTotals UnitTotals `json:"unit_totals,omitempty"`
+	UnitTotals Totals `json:"unit_totals,omitempty"`
 	// Totals: Breakdown of a charge in the lowest denomination of a currency (e.g. cents for USD).
 	Totals Totals `json:"totals,omitempty"`
 	// Product: Related product entity for this transaction line item price.
@@ -841,83 +826,83 @@ type TransactionDetails struct {
 type PaymentAttemptStatus string
 
 const (
-	PaymentAttemptStatusAuthorized              = "authorized"
-	PaymentAttemptStatusAuthorizedFlagged       = "authorized_flagged"
-	PaymentAttemptStatusCanceled                = "canceled"
-	PaymentAttemptStatusCaptured                = "captured"
-	PaymentAttemptStatusError                   = "error"
-	PaymentAttemptStatusActionRequired          = "action_required"
-	PaymentAttemptStatusPendingNoActionRequired = "pending_no_action_required"
-	PaymentAttemptStatusCreated                 = "created"
-	PaymentAttemptStatusUnknown                 = "unknown"
-	PaymentAttemptStatusDropped                 = "dropped"
+	PaymentAttemptStatusAuthorized              PaymentAttemptStatus = "authorized"
+	PaymentAttemptStatusAuthorizedFlagged       PaymentAttemptStatus = "authorized_flagged"
+	PaymentAttemptStatusCanceled                PaymentAttemptStatus = "canceled"
+	PaymentAttemptStatusCaptured                PaymentAttemptStatus = "captured"
+	PaymentAttemptStatusError                   PaymentAttemptStatus = "error"
+	PaymentAttemptStatusActionRequired          PaymentAttemptStatus = "action_required"
+	PaymentAttemptStatusPendingNoActionRequired PaymentAttemptStatus = "pending_no_action_required"
+	PaymentAttemptStatusCreated                 PaymentAttemptStatus = "created"
+	PaymentAttemptStatusUnknown                 PaymentAttemptStatus = "unknown"
+	PaymentAttemptStatusDropped                 PaymentAttemptStatus = "dropped"
 )
 
 // ErrorCode: Reason why a payment attempt failed. Returns `null` if payment captured successfully..
-type ErrorCode *string
+type ErrorCode string
 
 const (
-	ErrorCodeAlreadyCanceled         = "already_canceled"
-	ErrorCodeAlreadyRefunded         = "already_refunded"
-	ErrorCodeAuthenticationFailed    = "authentication_failed"
-	ErrorCodeBlockedCard             = "blocked_card"
-	ErrorCodeCanceled                = "canceled"
-	ErrorCodeDeclined                = "declined"
-	ErrorCodeDeclinedNotRetryable    = "declined_not_retryable"
-	ErrorCodeExpiredCard             = "expired_card"
-	ErrorCodeFraud                   = "fraud"
-	ErrorCodeInvalidAmount           = "invalid_amount"
-	ErrorCodeInvalidPaymentDetails   = "invalid_payment_details"
-	ErrorCodeIssuerUnavailable       = "issuer_unavailable"
-	ErrorCodeNotEnoughBalance        = "not_enough_balance"
-	ErrorCodePspError                = "psp_error"
-	ErrorCodeRedactedPaymentMethod   = "redacted_payment_method"
-	ErrorCodeSystemError             = "system_error"
-	ErrorCodeTransactionNotPermitted = "transaction_not_permitted"
-	ErrorCodeUnknown                 = "unknown"
+	ErrorCodeAlreadyCanceled         ErrorCode = "already_canceled"
+	ErrorCodeAlreadyRefunded         ErrorCode = "already_refunded"
+	ErrorCodeAuthenticationFailed    ErrorCode = "authentication_failed"
+	ErrorCodeBlockedCard             ErrorCode = "blocked_card"
+	ErrorCodeCanceled                ErrorCode = "canceled"
+	ErrorCodeDeclined                ErrorCode = "declined"
+	ErrorCodeDeclinedNotRetryable    ErrorCode = "declined_not_retryable"
+	ErrorCodeExpiredCard             ErrorCode = "expired_card"
+	ErrorCodeFraud                   ErrorCode = "fraud"
+	ErrorCodeInvalidAmount           ErrorCode = "invalid_amount"
+	ErrorCodeInvalidPaymentDetails   ErrorCode = "invalid_payment_details"
+	ErrorCodeIssuerUnavailable       ErrorCode = "issuer_unavailable"
+	ErrorCodeNotEnoughBalance        ErrorCode = "not_enough_balance"
+	ErrorCodePspError                ErrorCode = "psp_error"
+	ErrorCodeRedactedPaymentMethod   ErrorCode = "redacted_payment_method"
+	ErrorCodeSystemError             ErrorCode = "system_error"
+	ErrorCodeTransactionNotPermitted ErrorCode = "transaction_not_permitted"
+	ErrorCodeUnknown                 ErrorCode = "unknown"
 )
 
 // PaymentMethodType: Type of payment method used for this payment attempt..
 type PaymentMethodType string
 
 const (
-	PaymentMethodTypeAlipay       = "alipay"
-	PaymentMethodTypeApplePay     = "apple_pay"
-	PaymentMethodTypeBancontact   = "bancontact"
-	PaymentMethodTypeCard         = "card"
-	PaymentMethodTypeGooglePay    = "google_pay"
-	PaymentMethodTypeIdeal        = "ideal"
-	PaymentMethodTypeOffline      = "offline"
-	PaymentMethodTypePaypal       = "paypal"
-	PaymentMethodTypeUnknown      = "unknown"
-	PaymentMethodTypeWireTransfer = "wire_transfer"
+	PaymentMethodTypeAlipay       PaymentMethodType = "alipay"
+	PaymentMethodTypeApplePay     PaymentMethodType = "apple_pay"
+	PaymentMethodTypeBancontact   PaymentMethodType = "bancontact"
+	PaymentMethodTypeCard         PaymentMethodType = "card"
+	PaymentMethodTypeGooglePay    PaymentMethodType = "google_pay"
+	PaymentMethodTypeIdeal        PaymentMethodType = "ideal"
+	PaymentMethodTypeOffline      PaymentMethodType = "offline"
+	PaymentMethodTypePaypal       PaymentMethodType = "paypal"
+	PaymentMethodTypeUnknown      PaymentMethodType = "unknown"
+	PaymentMethodTypeWireTransfer PaymentMethodType = "wire_transfer"
 )
 
 // CardType: Type of credit or debit card used to pay..
 type CardType string
 
 const (
-	CardTypeAmericanExpress = "american_express"
-	CardTypeDinersClub      = "diners_club"
-	CardTypeDiscover        = "discover"
-	CardTypeJcb             = "jcb"
-	CardTypeMada            = "mada"
-	CardTypeMaestro         = "maestro"
-	CardTypeMastercard      = "mastercard"
-	CardTypeUnionPay        = "union_pay"
-	CardTypeUnknown         = "unknown"
-	CardTypeVisa            = "visa"
+	CardTypeAmericanExpress CardType = "american_express"
+	CardTypeDinersClub      CardType = "diners_club"
+	CardTypeDiscover        CardType = "discover"
+	CardTypeJcb             CardType = "jcb"
+	CardTypeMada            CardType = "mada"
+	CardTypeMaestro         CardType = "maestro"
+	CardTypeMastercard      CardType = "mastercard"
+	CardTypeUnionPay        CardType = "union_pay"
+	CardTypeUnknown         CardType = "unknown"
+	CardTypeVisa            CardType = "visa"
 )
 
 // Card: Information about the credit or debit card used to pay. `null` unless `type` is `card`.
 type Card struct {
 	// Type: Type of credit or debit card used to pay.
-	Type string `json:"type,omitempty"`
+	Type CardType `json:"type,omitempty"`
 	// Last4: Last four digits of the card used to pay.
 	Last4 string `json:"last4,omitempty"`
 	// ExpiryMonth: Month of the expiry date of the card used to pay.
 	ExpiryMonth int `json:"expiry_month,omitempty"`
-	// ExpiryYear: Year of the expiry year of the card used to pay.
+	// ExpiryYear: Year of the expiry date of the card used to pay.
 	ExpiryYear int `json:"expiry_year,omitempty"`
 	// CardholderName: The name on the card used to pay.
 	CardholderName string `json:"cardholder_name,omitempty"`
@@ -926,7 +911,7 @@ type Card struct {
 // MethodDetails: Information about the payment method used for a payment attempt.
 type MethodDetails struct {
 	// Type: Type of payment method used for this payment attempt.
-	Type string `json:"type,omitempty"`
+	Type PaymentMethodType `json:"type,omitempty"`
 	// Card: Information about the credit or debit card used to pay. `null` unless `type` is `card`.
 	Card *Card `json:"card,omitempty"`
 }
@@ -942,9 +927,9 @@ type TransactionPaymentAttempt struct {
 	// Amount: Amount for collection in the lowest denomination of a currency (e.g. cents for USD).
 	Amount string `json:"amount,omitempty"`
 	// Status: Status of this payment attempt.
-	Status string `json:"status,omitempty"`
+	Status PaymentAttemptStatus `json:"status,omitempty"`
 	// ErrorCode: Reason why a payment attempt failed. Returns `null` if payment captured successfully.
-	ErrorCode *string `json:"error_code,omitempty"`
+	ErrorCode *ErrorCode `json:"error_code,omitempty"`
 	// MethodDetails: Information about the payment method used for a payment attempt.
 	MethodDetails MethodDetails `json:"method_details,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
@@ -953,8 +938,8 @@ type TransactionPaymentAttempt struct {
 	CapturedAt *string `json:"captured_at,omitempty"`
 }
 
-// Checkout: Paddle Checkout details for this transaction. Returned for automatically-collected transactions and where `billing_details.enable_checkout` is `true` for manually-collected transactions; `null` otherwise.
-type Checkout struct {
+// TransactionCheckout: Paddle Checkout details for this transaction. Returned for automatically-collected transactions and where `billing_details.enable_checkout` is `true` for manually-collected transactions; `null` otherwise.
+type TransactionCheckout struct {
 	// URL: Paddle Checkout URL for this transaction, composed of the URL passed in the request or your default payment URL + `_?txn=` and the Paddle ID for this transaction.
 	URL *string `json:"url,omitempty"`
 }
@@ -978,11 +963,11 @@ type Address struct {
 	// Region: State, county, or region of this address.
 	Region *string `json:"region,omitempty"`
 	// CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code for this address.
-	CountryCode string `json:"country_code,omitempty"`
+	CountryCode CountryCode `json:"country_code,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
 	CreatedAt string `json:"created_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
@@ -991,45 +976,45 @@ type Address struct {
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 }
 
-// Action: How this adjustment impacts the related transaction. `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`..
-type Action string
+// AdjustmentAction: How this adjustment impacts the related transaction..
+type AdjustmentAction string
 
 const (
-	ActionCredit            = "credit"
-	ActionRefund            = "refund"
-	ActionChargeback        = "chargeback"
-	ActionChargebackReverse = "chargeback_reverse"
-	ActionChargebackWarning = "chargeback_warning"
-	ActionCreditReverse     = "credit_reverse"
+	AdjustmentActionCredit            AdjustmentAction = "credit"
+	AdjustmentActionRefund            AdjustmentAction = "refund"
+	AdjustmentActionChargeback        AdjustmentAction = "chargeback"
+	AdjustmentActionChargebackReverse AdjustmentAction = "chargeback_reverse"
+	AdjustmentActionChargebackWarning AdjustmentAction = "chargeback_warning"
+	AdjustmentActionCreditReverse     AdjustmentAction = "credit_reverse"
 )
 
 /*
 AdjustmentStatus: Status of this adjustment. Set automatically by Paddle.
 
-`refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`
-until they move to `approved` or `rejected` on review. Other kinds of adjustment do not need approval,
-so are created with the status `approved`..
+Most refunds for live accounts are created with the status of `pending_approval` until reviewed by Paddle, but some are automatically approved. For sandbox accounts, Paddle automatically approves refunds every ten minutes.
+
+Credit adjustments don't require approval from Paddle, so they're created as `approved`..
 */
 type AdjustmentStatus string
 
 const (
-	AdjustmentStatusPendingApproval = "pending_approval"
-	AdjustmentStatusApproved        = "approved"
-	AdjustmentStatusRejected        = "rejected"
-	AdjustmentStatusReversed        = "reversed"
+	AdjustmentStatusPendingApproval AdjustmentStatus = "pending_approval"
+	AdjustmentStatusApproved        AdjustmentStatus = "approved"
+	AdjustmentStatusRejected        AdjustmentStatus = "rejected"
+	AdjustmentStatusReversed        AdjustmentStatus = "reversed"
 )
 
 /*
-AdjustmentType: Type of adjustment for this transaction item. `tax` and `proration` are automatically created by Paddle.
+AdjustmentType: Type of adjustment for this transaction item. `tax` adjustments are automatically created by Paddle.
 Include `amount` when creating a `partial` adjustment..
 */
 type AdjustmentType string
 
 const (
-	AdjustmentTypeFull      = "full"
-	AdjustmentTypePartial   = "partial"
-	AdjustmentTypeTax       = "tax"
-	AdjustmentTypeProration = "proration"
+	AdjustmentTypeFull      AdjustmentType = "full"
+	AdjustmentTypePartial   AdjustmentType = "partial"
+	AdjustmentTypeTax       AdjustmentType = "tax"
+	AdjustmentTypeProration AdjustmentType = "proration"
 )
 
 // AdjustmentItemTotals: Breakdown of the total for an adjustment item.
@@ -1049,16 +1034,13 @@ type AdjustmentItem struct {
 	// ItemID: Paddle ID for the transaction item that this adjustment item relates to, prefixed with `txnitm_`.
 	ItemID string `json:"item_id,omitempty"`
 	/*
-	   Type: Type of adjustment for this transaction item. `tax` and `proration` are automatically created by Paddle.
+	   Type: Type of adjustment for this transaction item. `tax` adjustments are automatically created by Paddle.
 	   Include `amount` when creating a `partial` adjustment.
 	*/
-	Type string `json:"type,omitempty"`
+	Type AdjustmentType `json:"type,omitempty"`
 	// Amount: Amount adjusted for this transaction item. Required when adjustment type is `partial`.
 	Amount *string `json:"amount,omitempty"`
-	/*
-	   Proration: How proration was calculated for this adjustment item. Populated when an adjustment type is `proration`.
-	   Set automatically by Paddle.
-	*/
+	// Proration: How proration was calculated for this adjustment item.
 	Proration *Proration `json:"proration,omitempty"`
 	// Totals: Breakdown of the total for an adjustment item.
 	Totals AdjustmentItemTotals `json:"totals,omitempty"`
@@ -1082,7 +1064,7 @@ type AdjustmentTotals struct {
 	*/
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for this adjustment.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // PayoutTotalsAdjustment: Breakdown of how this adjustment affects your payout balance.
@@ -1100,16 +1082,34 @@ type PayoutTotalsAdjustment struct {
 	// Earnings: Adjusted payout earnings. This is the adjustment total plus adjusted Paddle fees, excluding chargeback fees.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
+}
+
+// AdjustmentTaxRateUsedTotals: Calculated totals for the tax applied to this adjustment.
+type AdjustmentTaxRateUsedTotals struct {
+	// Subtotal: Total before tax. For tax adjustments, the value is 0.
+	Subtotal string `json:"subtotal,omitempty"`
+	// Tax: Total tax on the subtotal.
+	Tax string `json:"tax,omitempty"`
+	// Total: Total after tax.
+	Total string `json:"total,omitempty"`
+}
+
+// AdjustmentTaxRateUsed: List of tax rates applied for this adjustment.
+type AdjustmentTaxRateUsed struct {
+	// TaxRate: Rate used to calculate tax for this adjustment.
+	TaxRate string `json:"tax_rate,omitempty"`
+	// Totals: Calculated totals for the tax applied to this adjustment.
+	Totals AdjustmentTaxRateUsedTotals `json:"totals,omitempty"`
 }
 
 // Adjustment: Represents an adjustment entity.
 type Adjustment struct {
 	// ID: Unique Paddle ID for this adjustment entity, prefixed with `adj_`.
 	ID string `json:"id,omitempty"`
-	// Action: How this adjustment impacts the related transaction. `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`.
-	Action string `json:"action,omitempty"`
-	// TransactionID: Paddle ID for the transaction related to this adjustment, prefixed with `txn_`.
+	// Action: How this adjustment impacts the related transaction.
+	Action AdjustmentAction `json:"action,omitempty"`
+	// TransactionID: Paddle ID of the transaction that this adjustment is for, prefixed with `txn_`.
 	TransactionID string `json:"transaction_id,omitempty"`
 	/*
 	   SubscriptionID: Paddle ID for the subscription related to this adjustment, prefixed with `sub_`.
@@ -1121,33 +1121,34 @@ type Adjustment struct {
 	   Set automatically by Paddle based on the `customer_id` of the related transaction.
 	*/
 	CustomerID string `json:"customer_id,omitempty"`
-	// Reason: Why this adjustment was created. Appears in the Paddle Dashboard. Retained for record-keeping purposes.
+	// Reason: Why this adjustment was created. Appears in the Paddle dashboard. Retained for record-keeping purposes.
 	Reason string `json:"reason,omitempty"`
 	/*
 	   CreditAppliedToBalance: Whether this adjustment was applied to the related customer's credit balance. Only returned for `credit` adjustments.
 
-	   `false` when the related transaction `collection_mode` is `manual` and its `status` is `billed`. The adjustment is used
-	   to reduce the `balance` due on the transaction.
+	   `false` where the related transaction is `billed`. The adjustment reduces the amount due on the transaction.
 
-	   `true` for automatically-collected transactions and `completed` manually-collected transactions.
+	   `true` where the related transaction is `completed`. The amount is added the customer's credit balance and used to pay future transactions.
 	*/
 	CreditAppliedToBalance *bool `json:"credit_applied_to_balance,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for this adjustment. Set automatically by Paddle based on the `currency_code` of the related transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	/*
 	   Status: Status of this adjustment. Set automatically by Paddle.
 
-	   `refund` adjustments must be approved by Paddle, and are created with the status `pending_approval`
-	   until they move to `approved` or `rejected` on review. Other kinds of adjustment do not need approval,
-	   so are created with the status `approved`.
+	   Most refunds for live accounts are created with the status of `pending_approval` until reviewed by Paddle, but some are automatically approved. For sandbox accounts, Paddle automatically approves refunds every ten minutes.
+
+	   Credit adjustments don't require approval from Paddle, so they're created as `approved`.
 	*/
-	Status string `json:"status,omitempty"`
+	Status AdjustmentStatus `json:"status,omitempty"`
 	// Items: List of items on this adjustment.
 	Items []AdjustmentItem `json:"items,omitempty"`
 	// Totals: Breakdown of the total for an adjustment.
 	Totals AdjustmentTotals `json:"totals,omitempty"`
 	// PayoutTotals: Breakdown of how this adjustment affects your payout balance.
 	PayoutTotals *PayoutTotalsAdjustment `json:"payout_totals,omitempty"`
+	// TaxRatesUsed: List of tax rates applied for this adjustment.
+	TaxRatesUsed []AdjustmentTaxRateUsed `json:"tax_rates_used,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
 	CreatedAt string `json:"created_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
@@ -1175,7 +1176,7 @@ type Business struct {
 	// TaxIdentifier: Tax or VAT Number for this business.
 	TaxIdentifier *string `json:"tax_identifier,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// Contacts: List of contacts related to this business, typically used for sending invoices.
 	Contacts []Contacts `json:"contacts,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
@@ -1192,19 +1193,19 @@ type Business struct {
 type DiscountStatus string
 
 const (
-	DiscountStatusActive   = "active"
-	DiscountStatusArchived = "archived"
-	DiscountStatusExpired  = "expired"
-	DiscountStatusUsed     = "used"
+	DiscountStatusActive   DiscountStatus = "active"
+	DiscountStatusArchived DiscountStatus = "archived"
+	DiscountStatusExpired  DiscountStatus = "expired"
+	DiscountStatusUsed     DiscountStatus = "used"
 )
 
-// DiscountType: Type of discount..
+// DiscountType: Type of discount. Determines how this discount impacts the transaction total..
 type DiscountType string
 
 const (
-	DiscountTypeFlat        = "flat"
-	DiscountTypeFlatPerSeat = "flat_per_seat"
-	DiscountTypePercentage  = "percentage"
+	DiscountTypeFlat        DiscountType = "flat"
+	DiscountTypeFlatPerSeat DiscountType = "flat_per_seat"
+	DiscountTypePercentage  DiscountType = "percentage"
 )
 
 // Discount: Discount for this transaction. Returned when the `include` parameter is used with the `discount` value and the transaction has a `discount_id`.
@@ -1212,20 +1213,20 @@ type Discount struct {
 	// ID: Unique Paddle ID for this discount, prefixed with `dsc_`.
 	ID string `json:"id,omitempty"`
 	// Status: Whether this entity can be used in Paddle. `expired` and `used` are set automatically by Paddle.
-	Status string `json:"status,omitempty"`
+	Status DiscountStatus `json:"status,omitempty"`
 	// Description: Short description for this discount for your reference. Not shown to customers.
 	Description string `json:"description,omitempty"`
-	// EnabledForCheckout: Whether this discount can be applied by a customer at checkout.
+	// EnabledForCheckout: Whether this discount can be applied by customers at checkout.
 	EnabledForCheckout bool `json:"enabled_for_checkout,omitempty"`
-	// Code: Unique code that customers can use to apply this discount at checkout. Use letters and numbers only, up to 16 characters. Paddle generates a random 10-character code if a code is not provided and `enabled_for_checkout` is `true`.
+	// Code: Unique code that customers can use to apply this discount at checkout.
 	Code *string `json:"code,omitempty"`
-	// Type: Type of discount.
-	Type string `json:"type,omitempty"`
+	// Type: Type of discount. Determines how this discount impacts the transaction total.
+	Type DiscountType `json:"type,omitempty"`
 	// Amount: Amount to discount by. For `percentage` discounts, must be an amount between `0.01` and `100`. For `flat` and `flat_per_seat` discounts, amount in the lowest denomination for a currency.
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Required where discount type is `flat` or `flat_per_seat`.
-	CurrencyCode *string `json:"currency_code,omitempty"`
-	// Recur: Whether this discount applies for multiple billing periods.
+	CurrencyCode *CurrencyCode `json:"currency_code,omitempty"`
+	// Recur: Whether this discount applies for multiple subscription billing periods.
 	Recur bool `json:"recur,omitempty"`
 	// MaximumRecurringIntervals: Amount of subscription billing periods that this discount recurs for. Requires `recur`. `null` if this discount recurs forever.
 	MaximumRecurringIntervals *int `json:"maximum_recurring_intervals,omitempty"`
@@ -1254,7 +1255,7 @@ type TransactionSubscriptionProductCreate struct {
 	// Description: Short description for this product.
 	Description *string `json:"description,omitempty"`
 	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory string `json:"tax_category,omitempty"`
+	TaxCategory TaxCategory `json:"tax_category,omitempty"`
 	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
 	ImageURL *string `json:"image_url,omitempty"`
 	// CustomData: Your own structured key-value data.
@@ -1266,7 +1267,7 @@ type AddressPreview struct {
 	// PostalCode: ZIP or postal code of this address. Include for more accurate tax calculations.
 	PostalCode *string `json:"postal_code,omitempty"`
 	// CountryCode: Supported two-letter ISO 3166-1 alpha-2 country code for this address.
-	CountryCode string `json:"country_code,omitempty"`
+	CountryCode CountryCode `json:"country_code,omitempty"`
 }
 
 // BillingDetailsUpdate: Details for invoicing. Required if `collection_mode` is `manual`.
@@ -1281,10 +1282,58 @@ type BillingDetailsUpdate struct {
 	PaymentTerms Duration `json:"payment_terms,omitempty"`
 }
 
+// EventTypeName: Type of event sent by Paddle, in the format `entity.event_type`..
+type EventTypeName string
+
+const (
+	EventTypeNameAddressCreated           EventTypeName = "address.created"
+	EventTypeNameAddressImported          EventTypeName = "address.imported"
+	EventTypeNameAddressUpdated           EventTypeName = "address.updated"
+	EventTypeNameAdjustmentCreated        EventTypeName = "adjustment.created"
+	EventTypeNameAdjustmentUpdated        EventTypeName = "adjustment.updated"
+	EventTypeNameBusinessCreated          EventTypeName = "business.created"
+	EventTypeNameBusinessImported         EventTypeName = "business.imported"
+	EventTypeNameBusinessUpdated          EventTypeName = "business.updated"
+	EventTypeNameCustomerCreated          EventTypeName = "customer.created"
+	EventTypeNameCustomerImported         EventTypeName = "customer.imported"
+	EventTypeNameCustomerUpdated          EventTypeName = "customer.updated"
+	EventTypeNameDiscountCreated          EventTypeName = "discount.created"
+	EventTypeNameDiscountImported         EventTypeName = "discount.imported"
+	EventTypeNameDiscountUpdated          EventTypeName = "discount.updated"
+	EventTypeNamePayoutCreated            EventTypeName = "payout.created"
+	EventTypeNamePayoutPaid               EventTypeName = "payout.paid"
+	EventTypeNamePriceCreated             EventTypeName = "price.created"
+	EventTypeNamePriceImported            EventTypeName = "price.imported"
+	EventTypeNamePriceUpdated             EventTypeName = "price.updated"
+	EventTypeNameProductCreated           EventTypeName = "product.created"
+	EventTypeNameProductImported          EventTypeName = "product.imported"
+	EventTypeNameProductUpdated           EventTypeName = "product.updated"
+	EventTypeNameReportCreated            EventTypeName = "report.created"
+	EventTypeNameReportUpdated            EventTypeName = "report.updated"
+	EventTypeNameSubscriptionActivated    EventTypeName = "subscription.activated"
+	EventTypeNameSubscriptionCanceled     EventTypeName = "subscription.canceled"
+	EventTypeNameSubscriptionCreated      EventTypeName = "subscription.created"
+	EventTypeNameSubscriptionImported     EventTypeName = "subscription.imported"
+	EventTypeNameSubscriptionPastDue      EventTypeName = "subscription.past_due"
+	EventTypeNameSubscriptionPaused       EventTypeName = "subscription.paused"
+	EventTypeNameSubscriptionResumed      EventTypeName = "subscription.resumed"
+	EventTypeNameSubscriptionTrialing     EventTypeName = "subscription.trialing"
+	EventTypeNameSubscriptionUpdated      EventTypeName = "subscription.updated"
+	EventTypeNameTransactionBilled        EventTypeName = "transaction.billed"
+	EventTypeNameTransactionCanceled      EventTypeName = "transaction.canceled"
+	EventTypeNameTransactionCompleted     EventTypeName = "transaction.completed"
+	EventTypeNameTransactionCreated       EventTypeName = "transaction.created"
+	EventTypeNameTransactionPaid          EventTypeName = "transaction.paid"
+	EventTypeNameTransactionPastDue       EventTypeName = "transaction.past_due"
+	EventTypeNameTransactionPaymentFailed EventTypeName = "transaction.payment_failed"
+	EventTypeNameTransactionReady         EventTypeName = "transaction.ready"
+	EventTypeNameTransactionUpdated       EventTypeName = "transaction.updated"
+)
+
 // EventType: Represents an event type.
 type EventType struct {
 	// Name: Type of event sent by Paddle, in the format `entity.event_type`.
-	Name string `json:"name,omitempty"`
+	Name EventTypeName `json:"name,omitempty"`
 	// Description: Short description of this event type.
 	Description string `json:"description,omitempty"`
 	// Group: Group for this event type. Typically the entity that this event relates to.

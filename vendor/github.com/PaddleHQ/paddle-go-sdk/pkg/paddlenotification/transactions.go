@@ -5,63 +5,63 @@ package paddlenotification
 // TransactionBilled represents the transaction.billed event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionBilled struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionCanceled represents the transaction.canceled event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionCanceled struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionCompleted represents the transaction.completed event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionCompleted struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionCreated represents the transaction.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionCreated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionPaid represents the transaction.paid event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionPaid struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionPastDue represents the transaction.past_due event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionPastDue struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionPaymentFailed represents the transaction.payment_failed event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionPaymentFailed struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionReady represents the transaction.ready event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionReady struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
 // TransactionUpdated represents the transaction.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type TransactionUpdated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data TransactionNotification `json:"data"`
 }
 
@@ -69,25 +69,25 @@ type TransactionUpdated struct {
 type TransactionStatus string
 
 const (
-	TransactionStatusDraft     = "draft"
-	TransactionStatusReady     = "ready"
-	TransactionStatusBilled    = "billed"
-	TransactionStatusPaid      = "paid"
-	TransactionStatusCompleted = "completed"
-	TransactionStatusCanceled  = "canceled"
-	TransactionStatusPastDue   = "past_due"
+	TransactionStatusDraft     TransactionStatus = "draft"
+	TransactionStatusReady     TransactionStatus = "ready"
+	TransactionStatusBilled    TransactionStatus = "billed"
+	TransactionStatusPaid      TransactionStatus = "paid"
+	TransactionStatusCompleted TransactionStatus = "completed"
+	TransactionStatusCanceled  TransactionStatus = "canceled"
+	TransactionStatusPastDue   TransactionStatus = "past_due"
 )
 
 // TransactionOrigin: Describes how this transaction was created..
 type TransactionOrigin string
 
 const (
-	TransactionOriginAPI                             = "api"
-	TransactionOriginSubscriptionCharge              = "subscription_charge"
-	TransactionOriginSubscriptionPaymentMethodChange = "subscription_payment_method_change"
-	TransactionOriginSubscriptionRecurring           = "subscription_recurring"
-	TransactionOriginSubscriptionUpdate              = "subscription_update"
-	TransactionOriginWeb                             = "web"
+	TransactionOriginAPI                             TransactionOrigin = "api"
+	TransactionOriginSubscriptionCharge              TransactionOrigin = "subscription_charge"
+	TransactionOriginSubscriptionPaymentMethodChange TransactionOrigin = "subscription_payment_method_change"
+	TransactionOriginSubscriptionRecurring           TransactionOrigin = "subscription_recurring"
+	TransactionOriginSubscriptionUpdate              TransactionOrigin = "subscription_update"
+	TransactionOriginWeb                             TransactionOrigin = "web"
 )
 
 // TransactionItem: List of items on this transaction. For calculated totals, use `details.line_items`.
@@ -153,7 +153,7 @@ type TransactionTotals struct {
 	// Earnings: Total earnings for this transaction. This is the total minus the Paddle fee. `null` until the transaction is `completed` and the fee is processed.
 	Earnings *string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code of the currency used for this transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // TransactionTotalsAdjusted: Breakdown of the payout totals for a transaction after adjustments. `null` until the transaction is `completed`.
@@ -174,7 +174,7 @@ type TransactionTotalsAdjusted struct {
 	*/
 	Earnings *string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code of the currency used for this transaction.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
 // TransactionPayoutTotals: Breakdown of the payout total for a transaction. `null` until the transaction is `completed`. Returned in your payout currency.
@@ -203,7 +203,7 @@ type TransactionPayoutTotals struct {
 	// Earnings: Total earnings for this payout. This is the subtotal minus the Paddle fee.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
 }
 
 // TransactionPayoutTotalsAdjusted: Breakdown of the payout total for a transaction after adjustments. `null` until the transaction is `completed`.
@@ -221,48 +221,7 @@ type TransactionPayoutTotalsAdjusted struct {
 	// Earnings: Total earnings for this payout. This is the subtotal minus the Paddle fee, excluding chargeback fees.
 	Earnings string `json:"earnings,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code used for the payout for this transaction. If your primary currency has changed, this reflects the primary currency at the time the transaction was billed.
-	CurrencyCode string `json:"currency_code,omitempty"`
-}
-
-// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-type UnitTotals struct {
-	// Subtotal: Unit price.
-	Subtotal string `json:"subtotal,omitempty"`
-	/*
-	   Discount: Total discount as a result of any discounts applied.
-	   Except for percentage discounts, Paddle applies tax to discounts based on the line item `price.tax_mode`. If `price.tax_mode` for a line item is `internal`, Paddle removes tax from the discount applied.
-	*/
-	Discount string `json:"discount,omitempty"`
-	// Tax: Total tax on the subtotal.
-	Tax string `json:"tax,omitempty"`
-	// Total: Total after discount and tax.
-	Total string `json:"total,omitempty"`
-}
-
-// Product: Related product entity for this transaction line item price.
-type Product struct {
-	// ID: Unique Paddle ID for this product, prefixed with `pro_`.
-	ID string `json:"id,omitempty"`
-	// Name: Name of this product.
-	Name string `json:"name,omitempty"`
-	// Description: Short description for this product.
-	Description *string `json:"description,omitempty"`
-	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type string `json:"type,omitempty"`
-	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory string `json:"tax_category,omitempty"`
-	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
-	ImageURL *string `json:"image_url,omitempty"`
-	// CustomData: Your own structured key-value data.
-	CustomData CustomData `json:"custom_data,omitempty"`
-	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
-	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
-	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
-	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
-	CreatedAt string `json:"created_at,omitempty"`
-	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
-	UpdatedAt string `json:"updated_at,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
 }
 
 // TransactionLineItem: Information about line items for this transaction. Different from transaction `items` as they include totals calculated by Paddle. Considered the source of truth for line item totals.
@@ -278,7 +237,7 @@ type TransactionLineItem struct {
 	// TaxRate: Rate used to calculate tax for this transaction line item.
 	TaxRate string `json:"tax_rate,omitempty"`
 	// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-	UnitTotals UnitTotals `json:"unit_totals,omitempty"`
+	UnitTotals Totals `json:"unit_totals,omitempty"`
 	// Totals: Breakdown of a charge in the lowest denomination of a currency (e.g. cents for USD).
 	Totals Totals `json:"totals,omitempty"`
 	// Product: Related product entity for this transaction line item price.
@@ -305,83 +264,83 @@ type TransactionDetails struct {
 type PaymentAttemptStatus string
 
 const (
-	PaymentAttemptStatusAuthorized              = "authorized"
-	PaymentAttemptStatusAuthorizedFlagged       = "authorized_flagged"
-	PaymentAttemptStatusCanceled                = "canceled"
-	PaymentAttemptStatusCaptured                = "captured"
-	PaymentAttemptStatusError                   = "error"
-	PaymentAttemptStatusActionRequired          = "action_required"
-	PaymentAttemptStatusPendingNoActionRequired = "pending_no_action_required"
-	PaymentAttemptStatusCreated                 = "created"
-	PaymentAttemptStatusUnknown                 = "unknown"
-	PaymentAttemptStatusDropped                 = "dropped"
+	PaymentAttemptStatusAuthorized              PaymentAttemptStatus = "authorized"
+	PaymentAttemptStatusAuthorizedFlagged       PaymentAttemptStatus = "authorized_flagged"
+	PaymentAttemptStatusCanceled                PaymentAttemptStatus = "canceled"
+	PaymentAttemptStatusCaptured                PaymentAttemptStatus = "captured"
+	PaymentAttemptStatusError                   PaymentAttemptStatus = "error"
+	PaymentAttemptStatusActionRequired          PaymentAttemptStatus = "action_required"
+	PaymentAttemptStatusPendingNoActionRequired PaymentAttemptStatus = "pending_no_action_required"
+	PaymentAttemptStatusCreated                 PaymentAttemptStatus = "created"
+	PaymentAttemptStatusUnknown                 PaymentAttemptStatus = "unknown"
+	PaymentAttemptStatusDropped                 PaymentAttemptStatus = "dropped"
 )
 
 // ErrorCode: Reason why a payment attempt failed. Returns `null` if payment captured successfully..
-type ErrorCode *string
+type ErrorCode string
 
 const (
-	ErrorCodeAlreadyCanceled         = "already_canceled"
-	ErrorCodeAlreadyRefunded         = "already_refunded"
-	ErrorCodeAuthenticationFailed    = "authentication_failed"
-	ErrorCodeBlockedCard             = "blocked_card"
-	ErrorCodeCanceled                = "canceled"
-	ErrorCodeDeclined                = "declined"
-	ErrorCodeDeclinedNotRetryable    = "declined_not_retryable"
-	ErrorCodeExpiredCard             = "expired_card"
-	ErrorCodeFraud                   = "fraud"
-	ErrorCodeInvalidAmount           = "invalid_amount"
-	ErrorCodeInvalidPaymentDetails   = "invalid_payment_details"
-	ErrorCodeIssuerUnavailable       = "issuer_unavailable"
-	ErrorCodeNotEnoughBalance        = "not_enough_balance"
-	ErrorCodePspError                = "psp_error"
-	ErrorCodeRedactedPaymentMethod   = "redacted_payment_method"
-	ErrorCodeSystemError             = "system_error"
-	ErrorCodeTransactionNotPermitted = "transaction_not_permitted"
-	ErrorCodeUnknown                 = "unknown"
+	ErrorCodeAlreadyCanceled         ErrorCode = "already_canceled"
+	ErrorCodeAlreadyRefunded         ErrorCode = "already_refunded"
+	ErrorCodeAuthenticationFailed    ErrorCode = "authentication_failed"
+	ErrorCodeBlockedCard             ErrorCode = "blocked_card"
+	ErrorCodeCanceled                ErrorCode = "canceled"
+	ErrorCodeDeclined                ErrorCode = "declined"
+	ErrorCodeDeclinedNotRetryable    ErrorCode = "declined_not_retryable"
+	ErrorCodeExpiredCard             ErrorCode = "expired_card"
+	ErrorCodeFraud                   ErrorCode = "fraud"
+	ErrorCodeInvalidAmount           ErrorCode = "invalid_amount"
+	ErrorCodeInvalidPaymentDetails   ErrorCode = "invalid_payment_details"
+	ErrorCodeIssuerUnavailable       ErrorCode = "issuer_unavailable"
+	ErrorCodeNotEnoughBalance        ErrorCode = "not_enough_balance"
+	ErrorCodePspError                ErrorCode = "psp_error"
+	ErrorCodeRedactedPaymentMethod   ErrorCode = "redacted_payment_method"
+	ErrorCodeSystemError             ErrorCode = "system_error"
+	ErrorCodeTransactionNotPermitted ErrorCode = "transaction_not_permitted"
+	ErrorCodeUnknown                 ErrorCode = "unknown"
 )
 
 // PaymentMethodType: Type of payment method used for this payment attempt..
 type PaymentMethodType string
 
 const (
-	PaymentMethodTypeAlipay       = "alipay"
-	PaymentMethodTypeApplePay     = "apple_pay"
-	PaymentMethodTypeBancontact   = "bancontact"
-	PaymentMethodTypeCard         = "card"
-	PaymentMethodTypeGooglePay    = "google_pay"
-	PaymentMethodTypeIdeal        = "ideal"
-	PaymentMethodTypeOffline      = "offline"
-	PaymentMethodTypePaypal       = "paypal"
-	PaymentMethodTypeUnknown      = "unknown"
-	PaymentMethodTypeWireTransfer = "wire_transfer"
+	PaymentMethodTypeAlipay       PaymentMethodType = "alipay"
+	PaymentMethodTypeApplePay     PaymentMethodType = "apple_pay"
+	PaymentMethodTypeBancontact   PaymentMethodType = "bancontact"
+	PaymentMethodTypeCard         PaymentMethodType = "card"
+	PaymentMethodTypeGooglePay    PaymentMethodType = "google_pay"
+	PaymentMethodTypeIdeal        PaymentMethodType = "ideal"
+	PaymentMethodTypeOffline      PaymentMethodType = "offline"
+	PaymentMethodTypePaypal       PaymentMethodType = "paypal"
+	PaymentMethodTypeUnknown      PaymentMethodType = "unknown"
+	PaymentMethodTypeWireTransfer PaymentMethodType = "wire_transfer"
 )
 
 // CardType: Type of credit or debit card used to pay..
 type CardType string
 
 const (
-	CardTypeAmericanExpress = "american_express"
-	CardTypeDinersClub      = "diners_club"
-	CardTypeDiscover        = "discover"
-	CardTypeJcb             = "jcb"
-	CardTypeMada            = "mada"
-	CardTypeMaestro         = "maestro"
-	CardTypeMastercard      = "mastercard"
-	CardTypeUnionPay        = "union_pay"
-	CardTypeUnknown         = "unknown"
-	CardTypeVisa            = "visa"
+	CardTypeAmericanExpress CardType = "american_express"
+	CardTypeDinersClub      CardType = "diners_club"
+	CardTypeDiscover        CardType = "discover"
+	CardTypeJcb             CardType = "jcb"
+	CardTypeMada            CardType = "mada"
+	CardTypeMaestro         CardType = "maestro"
+	CardTypeMastercard      CardType = "mastercard"
+	CardTypeUnionPay        CardType = "union_pay"
+	CardTypeUnknown         CardType = "unknown"
+	CardTypeVisa            CardType = "visa"
 )
 
 // Card: Information about the credit or debit card used to pay. `null` unless `type` is `card`.
 type Card struct {
 	// Type: Type of credit or debit card used to pay.
-	Type string `json:"type,omitempty"`
+	Type CardType `json:"type,omitempty"`
 	// Last4: Last four digits of the card used to pay.
 	Last4 string `json:"last4,omitempty"`
 	// ExpiryMonth: Month of the expiry date of the card used to pay.
 	ExpiryMonth int `json:"expiry_month,omitempty"`
-	// ExpiryYear: Year of the expiry year of the card used to pay.
+	// ExpiryYear: Year of the expiry date of the card used to pay.
 	ExpiryYear int `json:"expiry_year,omitempty"`
 	// CardholderName: The name on the card used to pay.
 	CardholderName string `json:"cardholder_name,omitempty"`
@@ -390,7 +349,7 @@ type Card struct {
 // MethodDetails: Information about the payment method used for a payment attempt.
 type MethodDetails struct {
 	// Type: Type of payment method used for this payment attempt.
-	Type string `json:"type,omitempty"`
+	Type PaymentMethodType `json:"type,omitempty"`
 	// Card: Information about the credit or debit card used to pay. `null` unless `type` is `card`.
 	Card *Card `json:"card,omitempty"`
 }
@@ -406,9 +365,9 @@ type TransactionPaymentAttempt struct {
 	// Amount: Amount for collection in the lowest denomination of a currency (e.g. cents for USD).
 	Amount string `json:"amount,omitempty"`
 	// Status: Status of this payment attempt.
-	Status string `json:"status,omitempty"`
+	Status PaymentAttemptStatus `json:"status,omitempty"`
 	// ErrorCode: Reason why a payment attempt failed. Returns `null` if payment captured successfully.
-	ErrorCode *string `json:"error_code,omitempty"`
+	ErrorCode *ErrorCode `json:"error_code,omitempty"`
 	// MethodDetails: Information about the payment method used for a payment attempt.
 	MethodDetails MethodDetails `json:"method_details,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
@@ -428,7 +387,7 @@ type TransactionNotification struct {
 	// ID: Unique Paddle ID for this transaction entity, prefixed with `txn_`.
 	ID string `json:"id,omitempty"`
 	// Status: Status of this transaction. You may set a transaction to `billed` or `canceled`, other statuses are set automatically by Paddle. Automatically-collected transactions may return `completed` if payment is captured successfully, or `past_due` if payment failed.
-	Status string `json:"status,omitempty"`
+	Status TransactionStatus `json:"status,omitempty"`
 	// CustomerID: Paddle ID of the customer that this transaction is for, prefixed with `ctm_`.
 	CustomerID *string `json:"customer_id,omitempty"`
 	// AddressID: Paddle ID of the address that this transaction is for, prefixed with `add_`.
@@ -438,9 +397,9 @@ type TransactionNotification struct {
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	// Origin: Describes how this transaction was created.
-	Origin string `json:"origin,omitempty"`
+	Origin TransactionOrigin `json:"origin,omitempty"`
 	// SubscriptionID: Paddle ID of the subscription that this transaction is for, prefixed with `sub_`.
 	SubscriptionID *string `json:"subscription_id,omitempty"`
 	// InvoiceID: Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.
@@ -448,7 +407,7 @@ type TransactionNotification struct {
 	// InvoiceNumber: Invoice number for this transaction. Automatically generated by Paddle when you mark a transaction as `billed` where `collection_mode` is `manual`.
 	InvoiceNumber *string `json:"invoice_number,omitempty"`
 	// CollectionMode: How payment is collected for this transaction. `automatic` for checkout, `manual` for invoices.
-	CollectionMode string `json:"collection_mode,omitempty"`
+	CollectionMode CollectionMode `json:"collection_mode,omitempty"`
 	// DiscountID: Paddle ID of the discount applied to this transaction, prefixed with `dsc_`.
 	DiscountID *string `json:"discount_id,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.

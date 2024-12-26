@@ -363,15 +363,15 @@ var ErrSubscriptionManualCollectionModeActivationNotAllowed = &paddleerr.Error{
 type SubscriptionStatus string
 
 const (
-	SubscriptionStatusActive   = "active"
-	SubscriptionStatusCanceled = "canceled"
-	SubscriptionStatusPastDue  = "past_due"
-	SubscriptionStatusPaused   = "paused"
-	SubscriptionStatusTrialing = "trialing"
+	SubscriptionStatusActive   SubscriptionStatus = "active"
+	SubscriptionStatusCanceled SubscriptionStatus = "canceled"
+	SubscriptionStatusPastDue  SubscriptionStatus = "past_due"
+	SubscriptionStatusPaused   SubscriptionStatus = "paused"
+	SubscriptionStatusTrialing SubscriptionStatus = "trialing"
 )
 
-// SubscriptionDiscount: Details of the discount applied to this subscription.
-type SubscriptionDiscount struct {
+// SubscriptionDiscountTimePeriod: Details of the discount applied to this subscription.
+type SubscriptionDiscountTimePeriod struct {
 	// ID: Unique Paddle ID for this discount, prefixed with `dsc_`.
 	ID string `json:"id,omitempty"`
 	// StartsAt: RFC 3339 datetime string of when this discount was first applied.
@@ -384,15 +384,15 @@ type SubscriptionDiscount struct {
 type ScheduledChangeAction string
 
 const (
-	ScheduledChangeActionCancel = "cancel"
-	ScheduledChangeActionPause  = "pause"
-	ScheduledChangeActionResume = "resume"
+	ScheduledChangeActionCancel ScheduledChangeAction = "cancel"
+	ScheduledChangeActionPause  ScheduledChangeAction = "pause"
+	ScheduledChangeActionResume ScheduledChangeAction = "resume"
 )
 
 // SubscriptionScheduledChange: Change that's scheduled to be applied to a subscription. Use the pause subscription, cancel subscription, and resume subscription operations to create scheduled changes. `null` if no scheduled changes.
 type SubscriptionScheduledChange struct {
 	// Action: Kind of change that's scheduled to be applied to this subscription.
-	Action string `json:"action,omitempty"`
+	Action ScheduledChangeAction `json:"action,omitempty"`
 	// EffectiveAt: RFC 3339 datetime string of when this scheduled change takes effect.
 	EffectiveAt string `json:"effective_at,omitempty"`
 	// ResumeAt: RFC 3339 datetime string of when a paused subscription should resume. Only used for `pause` scheduled changes.
@@ -411,15 +411,15 @@ type SubscriptionManagementUrLs struct {
 type SubscriptionItemStatus string
 
 const (
-	SubscriptionItemStatusActive   = "active"
-	SubscriptionItemStatusInactive = "inactive"
-	SubscriptionItemStatusTrialing = "trialing"
+	SubscriptionItemStatusActive   SubscriptionItemStatus = "active"
+	SubscriptionItemStatusInactive SubscriptionItemStatus = "inactive"
+	SubscriptionItemStatusTrialing SubscriptionItemStatus = "trialing"
 )
 
 // SubscriptionItem: Represents a subscription item.
 type SubscriptionItem struct {
 	// Status: Status of this subscription item. Set automatically by Paddle.
-	Status string `json:"status,omitempty"`
+	Status SubscriptionItemStatus `json:"status,omitempty"`
 	// Quantity: Quantity of this item on the subscription.
 	Quantity int `json:"quantity,omitempty"`
 	// Recurring: Whether this is a recurring item. `false` if one-time.
@@ -436,18 +436,12 @@ type SubscriptionItem struct {
 	TrialDates *TimePeriod `json:"trial_dates,omitempty"`
 	// Price: Related price entity for this item. This reflects the price entity at the time it was added to the subscription.
 	Price Price `json:"price,omitempty"`
+	// Product: Related product entity for this item. This reflects the product entity at the time it was added to the subscription.
+	Product Product `json:"product,omitempty"`
 }
 
-// SubscriptionsTaxRatesUsed: List of tax rates applied to this transaction preview.
-type SubscriptionsTaxRatesUsed struct {
-	// TaxRate: Rate used to calculate tax for this transaction preview.
-	TaxRate string `json:"tax_rate,omitempty"`
-	// Totals: Calculated totals for the tax applied to this transaction preview.
-	Totals Totals `json:"totals,omitempty"`
-}
-
-// SubscriptionsTransactionLineItemPreview: Information about line items for this transaction preview. Different from transaction preview `items` as they include totals calculated by Paddle. Considered the source of truth for line item totals.
-type SubscriptionsTransactionLineItemPreview struct {
+// SubscriptionTransactionLineItemPreview: Information about line items for this transaction preview. Different from transaction preview `items` as they include totals calculated by Paddle. Considered the source of truth for line item totals.
+type SubscriptionTransactionLineItemPreview struct {
 	// PriceID: Paddle ID for the price related to this transaction line item, prefixed with `pri_`.
 	PriceID string `json:"price_id,omitempty"`
 	// Quantity: Quantity of this transaction line item.
@@ -455,7 +449,7 @@ type SubscriptionsTransactionLineItemPreview struct {
 	// TaxRate: Rate used to calculate tax for this transaction line item.
 	TaxRate string `json:"tax_rate,omitempty"`
 	// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-	UnitTotals UnitTotals `json:"unit_totals,omitempty"`
+	UnitTotals Totals `json:"unit_totals,omitempty"`
 	// Totals: Breakdown of a charge in the lowest denomination of a currency (e.g. cents for USD).
 	Totals Totals `json:"totals,omitempty"`
 	// Product: Related product entity for this transaction line item price.
@@ -467,28 +461,25 @@ type SubscriptionsTransactionLineItemPreview struct {
 // SubscriptionTransactionDetailsPreview: Calculated totals for a transaction preview, including discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction preview.
 type SubscriptionTransactionDetailsPreview struct {
 	// TaxRatesUsed: List of tax rates applied to this transaction preview.
-	TaxRatesUsed []SubscriptionsTaxRatesUsed `json:"tax_rates_used,omitempty"`
+	TaxRatesUsed []TaxRatesUsed `json:"tax_rates_used,omitempty"`
 	// Totals: Breakdown of the total for a transaction preview. `fee` and `earnings` always return `null` for transaction previews.
 	Totals TransactionTotals `json:"totals,omitempty"`
 	// LineItems: Information about line items for this transaction preview. Different from transaction preview `items` as they include totals calculated by Paddle. Considered the source of truth for line item totals.
-	LineItems []SubscriptionsTransactionLineItemPreview `json:"line_items,omitempty"`
+	LineItems []SubscriptionTransactionLineItemPreview `json:"line_items,omitempty"`
 }
 
-// SubscriptionsAdjustmentItem: List of transaction items that this adjustment is for.
-type SubscriptionsAdjustmentItem struct {
+// SubscriptionAdjustmentItem: List of transaction items that this adjustment is for.
+type SubscriptionAdjustmentItem struct {
 	// ItemID: Paddle ID for the transaction item that this adjustment item relates to, prefixed with `txnitm_`.
 	ItemID string `json:"item_id,omitempty"`
 	/*
-	   Type: Type of adjustment for this transaction item. `tax` and `proration` are automatically created by Paddle.
+	   Type: Type of adjustment for this transaction item. `tax` adjustments are automatically created by Paddle.
 	   Include `amount` when creating a `partial` adjustment.
 	*/
-	Type string `json:"type,omitempty"`
+	Type AdjustmentType `json:"type,omitempty"`
 	// Amount: Amount adjusted for this transaction item. Required when adjustment type is `partial`.
 	Amount *string `json:"amount,omitempty"`
-	/*
-	   Proration: How proration was calculated for this adjustment item. Populated when an adjustment type is `proration`.
-	   Set automatically by Paddle.
-	*/
+	// Proration: How proration was calculated for this adjustment item.
 	Proration *Proration `json:"proration,omitempty"`
 	// Totals: Breakdown of the total for an adjustment item.
 	Totals AdjustmentItemTotals `json:"totals,omitempty"`
@@ -499,7 +490,7 @@ type AdjustmentPreview struct {
 	// TransactionID: Paddle ID for this transaction entity that this adjustment relates to, prefixed with `txn_`.
 	TransactionID string `json:"transaction_id,omitempty"`
 	// Items: List of transaction items that this adjustment is for.
-	Items []SubscriptionsAdjustmentItem `json:"items,omitempty"`
+	Items []SubscriptionAdjustmentItem `json:"items,omitempty"`
 	// Totals: Calculated totals for this adjustment.
 	Totals AdjustmentTotals `json:"totals,omitempty"`
 }
@@ -519,7 +510,7 @@ type Subscription struct {
 	// ID: Unique Paddle ID for this subscription entity, prefixed with `sub_`.
 	ID string `json:"id,omitempty"`
 	// Status: Status of this subscription. Set automatically by Paddle. Use the pause subscription or cancel subscription operations to change.
-	Status string `json:"status,omitempty"`
+	Status SubscriptionStatus `json:"status,omitempty"`
 	// CustomerID: Paddle ID of the customer that this subscription is for, prefixed with `ctm_`.
 	CustomerID string `json:"customer_id,omitempty"`
 	// AddressID: Paddle ID of the address that this subscription is for, prefixed with `add_`.
@@ -527,7 +518,7 @@ type Subscription struct {
 	// BusinessID: Paddle ID of the business that this subscription is for, prefixed with `biz_`.
 	BusinessID *string `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Transactions for this subscription are created in this currency. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
 	CreatedAt string `json:"created_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
@@ -543,9 +534,9 @@ type Subscription struct {
 	// CanceledAt: RFC 3339 datetime string of when this subscription was canceled. Set automatically by Paddle when the cancel subscription operation is used. `null` if not canceled.
 	CanceledAt *string `json:"canceled_at,omitempty"`
 	// Discount: Details of the discount applied to this subscription.
-	Discount *SubscriptionDiscount `json:"discount,omitempty"`
+	Discount *SubscriptionDiscountTimePeriod `json:"discount,omitempty"`
 	// CollectionMode: How payment is collected for transactions created for this subscription. `automatic` for checkout, `manual` for invoices.
-	CollectionMode string `json:"collection_mode,omitempty"`
+	CollectionMode CollectionMode `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 	BillingDetails *BillingDetails `json:"billing_details,omitempty"`
 	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle. `null` for `paused` and `canceled` subscriptions.
@@ -572,20 +563,20 @@ type Subscription struct {
 type EffectiveFrom string
 
 const (
-	EffectiveFromNextBillingPeriod = "next_billing_period"
-	EffectiveFromImmediately       = "immediately"
+	EffectiveFromNextBillingPeriod EffectiveFrom = "next_billing_period"
+	EffectiveFromImmediately       EffectiveFrom = "immediately"
 )
 
-// SubscriptionsDiscount: Details of the discount applied to this subscription. Include to add a discount to a subscription. `null` to remove a discount.
-type SubscriptionsDiscount struct {
+// SubscriptionDiscountEffectiveFrom: Details of the discount applied to this subscription. Include to add a discount to a subscription. `null` to remove a discount.
+type SubscriptionDiscountEffectiveFrom struct {
 	// ID: Unique Paddle ID for this discount, prefixed with `dsc_`.
 	ID string `json:"id,omitempty"`
 	// EffectiveFrom: When this discount should take effect from.
-	EffectiveFrom string `json:"effective_from,omitempty"`
+	EffectiveFrom EffectiveFrom `json:"effective_from,omitempty"`
 }
 
-// SubscriptionsCatalogItem: Add or update a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
-type SubscriptionsCatalogItem struct {
+// SubscriptionUpdateCatalogItem: Add or update a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
+type SubscriptionUpdateCatalogItem struct {
 	// PriceID: Paddle ID for the price to add to this subscription, prefixed with `pri_`.
 	PriceID string `json:"price_id,omitempty"`
 	// Quantity: Quantity of this item to add to the subscription. If updating an existing item and not changing the quantity, you may omit `quantity`.
@@ -602,19 +593,19 @@ collects for payment immediately is used..
 type ProrationBillingMode string
 
 const (
-	ProrationBillingModeProratedImmediately       = "prorated_immediately"
-	ProrationBillingModeProratedNextBillingPeriod = "prorated_next_billing_period"
-	ProrationBillingModeFullImmediately           = "full_immediately"
-	ProrationBillingModeFullNextBillingPeriod     = "full_next_billing_period"
-	ProrationBillingModeDoNotBill                 = "do_not_bill"
+	ProrationBillingModeProratedImmediately       ProrationBillingMode = "prorated_immediately"
+	ProrationBillingModeProratedNextBillingPeriod ProrationBillingMode = "prorated_next_billing_period"
+	ProrationBillingModeFullImmediately           ProrationBillingMode = "full_immediately"
+	ProrationBillingModeFullNextBillingPeriod     ProrationBillingMode = "full_next_billing_period"
+	ProrationBillingModeDoNotBill                 ProrationBillingMode = "do_not_bill"
 )
 
 // SubscriptionOnPaymentFailure: How Paddle should handle changes made to a subscription or its items if the payment fails during update. If omitted, defaults to `prevent_change`..
 type SubscriptionOnPaymentFailure string
 
 const (
-	SubscriptionOnPaymentFailurePreventChange = "prevent_change"
-	SubscriptionOnPaymentFailureApplyChange   = "apply_change"
+	SubscriptionOnPaymentFailurePreventChange SubscriptionOnPaymentFailure = "prevent_change"
+	SubscriptionOnPaymentFailureApplyChange   SubscriptionOnPaymentFailure = "apply_change"
 )
 
 type ResumeOnASpecificDate struct {
@@ -634,57 +625,41 @@ type ResumeImmediately struct {
 
 	   Defaults to `immediately` if omitted.
 	*/
-	EffectiveFrom *string `json:"effective_from,omitempty"`
+	EffectiveFrom *EffectiveFrom `json:"effective_from,omitempty"`
 }
 
-// Credit: Details of any credit adjustments. Paddle creates adjustments against existing transactions when prorating.
-type Credit struct {
-	// Amount: Total of any credit adjustments created for this update.
-	Amount string `json:"amount,omitempty"`
-	// CurrencyCode: Three-letter ISO 4217 currency code for adjustments.
-	CurrencyCode string `json:"currency_code,omitempty"`
-}
-
-// Charge: Details of the transaction to be created for this update. Paddle creates a transaction to bill for new charges.
-type Charge struct {
-	// Amount: Total of the transaction to be created for this update.
-	Amount string `json:"amount,omitempty"`
-	// CurrencyCode: Three-letter ISO 4217 currency code for the transaction to be created.
-	CurrencyCode string `json:"currency_code,omitempty"`
-}
-
-// ResultAction: Whether the subscription change results in a prorated credit or a charge..
-type ResultAction string
+// UpdateSummaryResultAction: Whether the subscription change results in a prorated credit or a charge..
+type UpdateSummaryResultAction string
 
 const (
-	ResultActionCredit = "credit"
-	ResultActionCharge = "charge"
+	UpdateSummaryResultActionCredit UpdateSummaryResultAction = "credit"
+	UpdateSummaryResultActionCharge UpdateSummaryResultAction = "charge"
 )
 
-// Result: Details of the result of credits and charges. Where the total of any credit adjustments is greater than the total charge, the result is a prorated credit; otherwise, the result is a prorated charge.
-type Result struct {
+// UpdateSummaryResult: Details of the result of credits and charges. Where the total of any credit adjustments is greater than the total charge, the result is a prorated credit; otherwise, the result is a prorated charge.
+type UpdateSummaryResult struct {
 	// Action: Whether the subscription change results in a prorated credit or a charge.
-	Action string `json:"action,omitempty"`
+	Action UpdateSummaryResultAction `json:"action,omitempty"`
 	// Amount: Amount representing the result of this update, either a charge or a credit.
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for the transaction or adjustment.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 }
 
-// PreviewSubscriptionUpdateSummary: Impact of this subscription change. Includes whether the change results in a charge or credit, and totals for prorated amounts.
-type PreviewSubscriptionUpdateSummary struct {
-	// Credit: Details of any credit adjustments. Paddle creates adjustments against existing transactions when prorating.
-	Credit Credit `json:"credit,omitempty"`
+// SubscriptionPreviewUpdateSummary: Impact of this subscription change. Includes whether the change results in a charge or credit, and totals for prorated amounts.
+type SubscriptionPreviewUpdateSummary struct {
+	// Credit: Details of any credit adjustments created for this update. Paddle creates adjustments against existing transactions when prorating.
+	Credit Money `json:"credit,omitempty"`
 	// Charge: Details of the transaction to be created for this update. Paddle creates a transaction to bill for new charges.
-	Charge Charge `json:"charge,omitempty"`
+	Charge Money `json:"charge,omitempty"`
 	// Result: Details of the result of credits and charges. Where the total of any credit adjustments is greater than the total charge, the result is a prorated credit; otherwise, the result is a prorated charge.
-	Result Result `json:"result,omitempty"`
+	Result UpdateSummaryResult `json:"result,omitempty"`
 }
 
 // SubscriptionPreview: Represents a subscription preview when previewing a subscription.
 type SubscriptionPreview struct {
 	// Status: Status of this subscription. Set automatically by Paddle. Use the pause subscription or cancel subscription operations to change.
-	Status string `json:"status,omitempty"`
+	Status SubscriptionStatus `json:"status,omitempty"`
 	// CustomerID: Paddle ID of the customer that this subscription is for, prefixed with `ctm_`.
 	CustomerID string `json:"customer_id,omitempty"`
 	// AddressID: Paddle ID of the address that this subscription is for, prefixed with `add_`.
@@ -692,7 +667,7 @@ type SubscriptionPreview struct {
 	// BusinessID: Paddle ID of the business that this subscription is for, prefixed with `biz_`.
 	BusinessID *string `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Transactions for this subscription are created in this currency. Must be `USD`, `EUR`, or `GBP` if `collection_mode` is `manual`.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
 	CreatedAt string `json:"created_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.
@@ -708,9 +683,9 @@ type SubscriptionPreview struct {
 	// CanceledAt: RFC 3339 datetime string of when this subscription was canceled. Set automatically by Paddle when the cancel subscription operation is used. `null` if not canceled.
 	CanceledAt *string `json:"canceled_at,omitempty"`
 	// Discount: Details of the discount applied to this subscription.
-	Discount *SubscriptionDiscount `json:"discount,omitempty"`
+	Discount *SubscriptionDiscountTimePeriod `json:"discount,omitempty"`
 	// CollectionMode: How payment is collected for transactions created for this subscription. `automatic` for checkout, `manual` for invoices.
-	CollectionMode string `json:"collection_mode,omitempty"`
+	CollectionMode CollectionMode `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`.
 	BillingDetails *BillingDetails `json:"billing_details,omitempty"`
 	// CurrentBillingPeriod: Current billing period for this subscription. Set automatically by Paddle based on the billing cycle. `null` for `paused` and `canceled` subscriptions.
@@ -732,13 +707,13 @@ type SubscriptionPreview struct {
 	// RecurringTransactionDetails: Preview of the recurring transaction for this subscription. This is what the customer can expect to be billed when there are no prorated or one-time charges.
 	RecurringTransactionDetails SubscriptionTransactionDetailsPreview `json:"recurring_transaction_details,omitempty"`
 	// UpdateSummary: Impact of this subscription change. Includes whether the change results in a charge or credit, and totals for prorated amounts.
-	UpdateSummary *PreviewSubscriptionUpdateSummary `json:"update_summary,omitempty"`
+	UpdateSummary *SubscriptionPreviewUpdateSummary `json:"update_summary,omitempty"`
 	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 }
 
-// SubscriptionsSubscriptionsCatalogItem: Add a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
-type SubscriptionsSubscriptionsCatalogItem struct {
+// SubscriptionCatalogItem: Add a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
+type SubscriptionCatalogItem struct {
 	// Quantity: Quantity to bill for.
 	Quantity int `json:"quantity,omitempty"`
 	// PriceID: Paddle ID of an an existing catalog price to bill for.
@@ -754,7 +729,7 @@ type SubscriptionChargeCreateWithPrice struct {
 	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
 	Name *string `json:"name,omitempty"`
 	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
+	TaxMode TaxMode `json:"tax_mode,omitempty"`
 	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
 	UnitPrice Money `json:"unit_price,omitempty"`
 	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
@@ -765,8 +740,8 @@ type SubscriptionChargeCreateWithPrice struct {
 	CustomData CustomData `json:"custom_data,omitempty"`
 }
 
-// SubscriptionsNonCatalogPriceForAnExistingProduct: Add a non-catalog price for an existing product in your catalog to a subscription. In this case, the product you're billing for is a catalog product, but you charge a specific price for it.
-type SubscriptionsNonCatalogPriceForAnExistingProduct struct {
+// SubscriptionNonCatalogPriceForAnExistingProduct: Add a non-catalog price for an existing product in your catalog to a subscription. In this case, the product you're billing for is a catalog product, but you charge a specific price for it.
+type SubscriptionNonCatalogPriceForAnExistingProduct struct {
 	// Quantity: Quantity to bill for.
 	Quantity int `json:"quantity,omitempty"`
 	// Price: Price object for a non-catalog item to bill for. Include a `product_id` to relate this non-catalog price to an existing catalog price.
@@ -780,7 +755,7 @@ type SubscriptionChargeCreateWithProduct struct {
 	// Name: Name of this price, shown to customers at checkout and on invoices. Typically describes how often the related product bills.
 	Name *string `json:"name,omitempty"`
 	// TaxMode: How tax is calculated for this price.
-	TaxMode string `json:"tax_mode,omitempty"`
+	TaxMode TaxMode `json:"tax_mode,omitempty"`
 	// UnitPrice: Base price. This price applies to all customers, except for customers located in countries where you have `unit_price_overrides`.
 	UnitPrice Money `json:"unit_price,omitempty"`
 	// UnitPriceOverrides: List of unit price overrides. Use to override the base price with a custom price and currency for a country or group of countries.
@@ -793,8 +768,8 @@ type SubscriptionChargeCreateWithProduct struct {
 	Product TransactionSubscriptionProductCreate `json:"product,omitempty"`
 }
 
-// SubscriptionsNonCatalogPriceAndProduct: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
-type SubscriptionsNonCatalogPriceAndProduct struct {
+// SubscriptionNonCatalogPriceAndProduct: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
+type SubscriptionNonCatalogPriceAndProduct struct {
 	// Quantity: Quantity to bill for.
 	Quantity int `json:"quantity,omitempty"`
 	// Price: Price object for a non-catalog item to charge for. Include a `product` object to create a non-catalog product for this non-catalog price.
@@ -841,19 +816,19 @@ type UpdateSubscriptionRequest struct {
 	// BusinessID: Paddle ID of the business that this subscription is for, prefixed with `biz_`. Include to change the business for a subscription.
 	BusinessID *PatchField[*string] `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Include to change the currency that a subscription bills in. When changing `collection_mode` to `manual`, you may need to change currency code to `USD`, `EUR`, or `GBP`.
-	CurrencyCode *PatchField[string] `json:"currency_code,omitempty"`
+	CurrencyCode *PatchField[CurrencyCode] `json:"currency_code,omitempty"`
 	// NextBilledAt: RFC 3339 datetime string of when this subscription is next scheduled to be billed. Include to change the next billing date.
 	NextBilledAt *PatchField[string] `json:"next_billed_at,omitempty"`
 	// Discount: Details of the discount applied to this subscription. Include to add a discount to a subscription. `null` to remove a discount.
-	Discount *PatchField[*SubscriptionsDiscount] `json:"discount,omitempty"`
+	Discount *PatchField[*SubscriptionDiscountEffectiveFrom] `json:"discount,omitempty"`
 	// CollectionMode: How payment is collected for transactions created for this subscription. `automatic` for checkout, `manual` for invoices.
-	CollectionMode *PatchField[string] `json:"collection_mode,omitempty"`
+	CollectionMode *PatchField[CollectionMode] `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`. `null` if changing `collection_mode` to `automatic`.
 	BillingDetails *PatchField[*BillingDetailsUpdate] `json:"billing_details,omitempty"`
 	// ScheduledChange: Change that's scheduled to be applied to a subscription. When updating, you may only set to `null` to remove a scheduled change. Use the pause subscription, cancel subscription, and resume subscription operations to create scheduled changes.
 	ScheduledChange *PatchField[*SubscriptionScheduledChange] `json:"scheduled_change,omitempty"`
 	// Items: Add or update a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
-	Items *PatchField[[]SubscriptionsCatalogItem] `json:"items,omitempty"`
+	Items *PatchField[[]SubscriptionUpdateCatalogItem] `json:"items,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData *PatchField[CustomData] `json:"custom_data,omitempty"`
 	/*
@@ -863,9 +838,9 @@ type UpdateSubscriptionRequest struct {
 	   For automatically-collected subscriptions, responses may take longer than usual if a proration billing mode that
 	   collects for payment immediately is used.
 	*/
-	ProrationBillingMode *PatchField[string] `json:"proration_billing_mode,omitempty"`
+	ProrationBillingMode *PatchField[ProrationBillingMode] `json:"proration_billing_mode,omitempty"`
 	// OnPaymentFailure: How Paddle should handle changes made to a subscription or its items if the payment fails during update. If omitted, defaults to `prevent_change`.
-	OnPaymentFailure *PatchField[string] `json:"on_payment_failure,omitempty"`
+	OnPaymentFailure *PatchField[SubscriptionOnPaymentFailure] `json:"on_payment_failure,omitempty"`
 }
 
 // UpdateSubscription performs the PATCH operation on a Subscriptions resource.
@@ -937,7 +912,7 @@ type CancelSubscriptionRequest struct {
 	   EffectiveFrom: When this subscription change should take effect from. Defaults to `next_billing_period` for active subscriptions,
 	   which creates a `scheduled_change` to apply the subscription change at the end of the billing period.
 	*/
-	EffectiveFrom *string `json:"effective_from,omitempty"`
+	EffectiveFrom *EffectiveFrom `json:"effective_from,omitempty"`
 }
 
 // CancelSubscription performs the POST operation on a Subscriptions resource.
@@ -958,7 +933,7 @@ type PauseSubscriptionRequest struct {
 	   EffectiveFrom: When this subscription change should take effect from. Defaults to `next_billing_period` for active subscriptions,
 	   which creates a `scheduled_change` to apply the subscription change at the end of the billing period.
 	*/
-	EffectiveFrom *string `json:"effective_from,omitempty"`
+	EffectiveFrom *EffectiveFrom `json:"effective_from,omitempty"`
 	// ResumeAt: RFC 3339 datetime string of when the paused subscription should resume. Omit to pause indefinitely until resumed.
 	ResumeAt *string `json:"resume_at,omitempty"`
 }
@@ -1053,8 +1028,8 @@ func (c *SubscriptionsClient) GetSubscriptionUpdatePaymentMethodTransaction(ctx 
 	return res, nil
 }
 
-// PreviewSubscriptionRequest is given as an input to PreviewSubscription.
-type PreviewSubscriptionRequest struct {
+// PreviewSubscriptionUpdateRequest is given as an input to PreviewSubscriptionUpdate.
+type PreviewSubscriptionUpdateRequest struct {
 	// URL path parameters.
 	SubscriptionID string `in:"path=subscription_id" json:"-"`
 
@@ -1065,19 +1040,19 @@ type PreviewSubscriptionRequest struct {
 	// BusinessID: Paddle ID of the business that this subscription is for, prefixed with `biz_`. Include to change the business for a subscription.
 	BusinessID *PatchField[*string] `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code. Include to change the currency that a subscription bills in. When changing `collection_mode` to `manual`, you may need to change currency code to `USD`, `EUR`, or `GBP`.
-	CurrencyCode *PatchField[string] `json:"currency_code,omitempty"`
+	CurrencyCode *PatchField[CurrencyCode] `json:"currency_code,omitempty"`
 	// NextBilledAt: RFC 3339 datetime string of when this subscription is next scheduled to be billed. Include to change the next billing date.
 	NextBilledAt *PatchField[string] `json:"next_billed_at,omitempty"`
 	// Discount: Details of the discount applied to this subscription. Include to add a discount to a subscription. `null` to remove a discount.
-	Discount *PatchField[*SubscriptionsDiscount] `json:"discount,omitempty"`
+	Discount *PatchField[*SubscriptionDiscountEffectiveFrom] `json:"discount,omitempty"`
 	// CollectionMode: How payment is collected for transactions created for this subscription. `automatic` for checkout, `manual` for invoices.
-	CollectionMode *PatchField[string] `json:"collection_mode,omitempty"`
+	CollectionMode *PatchField[CollectionMode] `json:"collection_mode,omitempty"`
 	// BillingDetails: Details for invoicing. Required if `collection_mode` is `manual`. `null` if changing `collection_mode` to `automatic`.
 	BillingDetails *PatchField[*BillingDetailsUpdate] `json:"billing_details,omitempty"`
 	// ScheduledChange: Change that's scheduled to be applied to a subscription. When updating, you may only set to `null` to remove a scheduled change. Use the pause subscription, cancel subscription, and resume subscription operations to create scheduled changes.
 	ScheduledChange *PatchField[*SubscriptionScheduledChange] `json:"scheduled_change,omitempty"`
 	// Items: Add or update a catalog item to a subscription. In this case, the product and price that you're billing for exist in your product catalog in Paddle.
-	Items *PatchField[[]SubscriptionsCatalogItem] `json:"items,omitempty"`
+	Items *PatchField[[]SubscriptionUpdateCatalogItem] `json:"items,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData *PatchField[CustomData] `json:"custom_data,omitempty"`
 	/*
@@ -1087,13 +1062,13 @@ type PreviewSubscriptionRequest struct {
 	   For automatically-collected subscriptions, responses may take longer than usual if a proration billing mode that
 	   collects for payment immediately is used.
 	*/
-	ProrationBillingMode *PatchField[string] `json:"proration_billing_mode,omitempty"`
+	ProrationBillingMode *PatchField[ProrationBillingMode] `json:"proration_billing_mode,omitempty"`
 	// OnPaymentFailure: How Paddle should handle changes made to a subscription or its items if the payment fails during update. If omitted, defaults to `prevent_change`.
-	OnPaymentFailure *PatchField[string] `json:"on_payment_failure,omitempty"`
+	OnPaymentFailure *PatchField[SubscriptionOnPaymentFailure] `json:"on_payment_failure,omitempty"`
 }
 
-// PreviewSubscription performs the PATCH operation on a Subscriptions resource.
-func (c *SubscriptionsClient) PreviewSubscription(ctx context.Context, req *PreviewSubscriptionRequest) (res *SubscriptionPreview, err error) {
+// PreviewSubscriptionUpdate performs the PATCH operation on a Subscriptions resource.
+func (c *SubscriptionsClient) PreviewSubscriptionUpdate(ctx context.Context, req *PreviewSubscriptionUpdateRequest) (res *SubscriptionPreview, err error) {
 	if err := c.doer.Do(ctx, "PATCH", "/subscriptions/{subscription_id}/preview", req, &res); err != nil {
 		return nil, err
 	}
@@ -1101,54 +1076,54 @@ func (c *SubscriptionsClient) PreviewSubscription(ctx context.Context, req *Prev
 	return res, nil
 }
 
-// NewCreateSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem takes a SubscriptionsSubscriptionsCatalogItem type
+// NewCreateSubscriptionChargeItemsSubscriptionCatalogItem takes a SubscriptionCatalogItem type
 // and creates a CreateSubscriptionChargeItems for use in a request.
-func NewCreateSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem(r *SubscriptionsSubscriptionsCatalogItem) *CreateSubscriptionChargeItems {
-	return &CreateSubscriptionChargeItems{SubscriptionsSubscriptionsCatalogItem: r}
+func NewCreateSubscriptionChargeItemsSubscriptionCatalogItem(r *SubscriptionCatalogItem) *CreateSubscriptionChargeItems {
+	return &CreateSubscriptionChargeItems{SubscriptionCatalogItem: r}
 }
 
-// NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct takes a SubscriptionsNonCatalogPriceForAnExistingProduct type
+// NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct takes a SubscriptionNonCatalogPriceForAnExistingProduct type
 // and creates a CreateSubscriptionChargeItems for use in a request.
-func NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct(r *SubscriptionsNonCatalogPriceForAnExistingProduct) *CreateSubscriptionChargeItems {
-	return &CreateSubscriptionChargeItems{SubscriptionsNonCatalogPriceForAnExistingProduct: r}
+func NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct(r *SubscriptionNonCatalogPriceForAnExistingProduct) *CreateSubscriptionChargeItems {
+	return &CreateSubscriptionChargeItems{SubscriptionNonCatalogPriceForAnExistingProduct: r}
 }
 
-// NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct takes a SubscriptionsNonCatalogPriceAndProduct type
+// NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct takes a SubscriptionNonCatalogPriceAndProduct type
 // and creates a CreateSubscriptionChargeItems for use in a request.
-func NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct(r *SubscriptionsNonCatalogPriceAndProduct) *CreateSubscriptionChargeItems {
-	return &CreateSubscriptionChargeItems{SubscriptionsNonCatalogPriceAndProduct: r}
+func NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct(r *SubscriptionNonCatalogPriceAndProduct) *CreateSubscriptionChargeItems {
+	return &CreateSubscriptionChargeItems{SubscriptionNonCatalogPriceAndProduct: r}
 }
 
 // CreateSubscriptionChargeItems represents a union request type of the following types:
-//   - `SubscriptionsSubscriptionsCatalogItem`
-//   - `SubscriptionsNonCatalogPriceForAnExistingProduct`
-//   - `SubscriptionsNonCatalogPriceAndProduct`
+//   - `SubscriptionCatalogItem`
+//   - `SubscriptionNonCatalogPriceForAnExistingProduct`
+//   - `SubscriptionNonCatalogPriceAndProduct`
 //
 // The following constructor functions can be used to create a new instance of this type.
-//   - `NewCreateSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem()`
-//   - `NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct()`
-//   - `NewCreateSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct()`
+//   - `NewCreateSubscriptionChargeItemsSubscriptionCatalogItem()`
+//   - `NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct()`
+//   - `NewCreateSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct()`
 //
 // Only one of the values can be set at a time, the first non-nil value will be used in the request.
 // Items: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
 type CreateSubscriptionChargeItems struct {
-	*SubscriptionsSubscriptionsCatalogItem
-	*SubscriptionsNonCatalogPriceForAnExistingProduct
-	*SubscriptionsNonCatalogPriceAndProduct
+	*SubscriptionCatalogItem
+	*SubscriptionNonCatalogPriceForAnExistingProduct
+	*SubscriptionNonCatalogPriceAndProduct
 }
 
 // MarshalJSON implements the json.Marshaler interface.
 func (u CreateSubscriptionChargeItems) MarshalJSON() ([]byte, error) {
-	if u.SubscriptionsSubscriptionsCatalogItem != nil {
-		return json.Marshal(u.SubscriptionsSubscriptionsCatalogItem)
+	if u.SubscriptionCatalogItem != nil {
+		return json.Marshal(u.SubscriptionCatalogItem)
 	}
 
-	if u.SubscriptionsNonCatalogPriceForAnExistingProduct != nil {
-		return json.Marshal(u.SubscriptionsNonCatalogPriceForAnExistingProduct)
+	if u.SubscriptionNonCatalogPriceForAnExistingProduct != nil {
+		return json.Marshal(u.SubscriptionNonCatalogPriceForAnExistingProduct)
 	}
 
-	if u.SubscriptionsNonCatalogPriceAndProduct != nil {
-		return json.Marshal(u.SubscriptionsNonCatalogPriceAndProduct)
+	if u.SubscriptionNonCatalogPriceAndProduct != nil {
+		return json.Marshal(u.SubscriptionNonCatalogPriceAndProduct)
 	}
 
 	return nil, nil
@@ -1160,11 +1135,11 @@ type CreateSubscriptionChargeRequest struct {
 	SubscriptionID string `in:"path=subscription_id" json:"-"`
 
 	// EffectiveFrom: When one-time charges should be billed.
-	EffectiveFrom string `json:"effective_from,omitempty"`
+	EffectiveFrom EffectiveFrom `json:"effective_from,omitempty"`
 	// Items: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
 	Items []CreateSubscriptionChargeItems `json:"items,omitempty"`
 	// OnPaymentFailure: How Paddle should handle changes made to a subscription or its items if the payment fails during update. If omitted, defaults to `prevent_change`.
-	OnPaymentFailure *string `json:"on_payment_failure,omitempty"`
+	OnPaymentFailure *SubscriptionOnPaymentFailure `json:"on_payment_failure,omitempty"`
 }
 
 // CreateSubscriptionCharge performs the POST operation on a Subscriptions resource.
@@ -1176,54 +1151,54 @@ func (c *SubscriptionsClient) CreateSubscriptionCharge(ctx context.Context, req 
 	return res, nil
 }
 
-// NewPreviewSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem takes a SubscriptionsSubscriptionsCatalogItem type
+// NewPreviewSubscriptionChargeItemsSubscriptionCatalogItem takes a SubscriptionCatalogItem type
 // and creates a PreviewSubscriptionChargeItems for use in a request.
-func NewPreviewSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem(r *SubscriptionsSubscriptionsCatalogItem) *PreviewSubscriptionChargeItems {
-	return &PreviewSubscriptionChargeItems{SubscriptionsSubscriptionsCatalogItem: r}
+func NewPreviewSubscriptionChargeItemsSubscriptionCatalogItem(r *SubscriptionCatalogItem) *PreviewSubscriptionChargeItems {
+	return &PreviewSubscriptionChargeItems{SubscriptionCatalogItem: r}
 }
 
-// NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct takes a SubscriptionsNonCatalogPriceForAnExistingProduct type
+// NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct takes a SubscriptionNonCatalogPriceForAnExistingProduct type
 // and creates a PreviewSubscriptionChargeItems for use in a request.
-func NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct(r *SubscriptionsNonCatalogPriceForAnExistingProduct) *PreviewSubscriptionChargeItems {
-	return &PreviewSubscriptionChargeItems{SubscriptionsNonCatalogPriceForAnExistingProduct: r}
+func NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct(r *SubscriptionNonCatalogPriceForAnExistingProduct) *PreviewSubscriptionChargeItems {
+	return &PreviewSubscriptionChargeItems{SubscriptionNonCatalogPriceForAnExistingProduct: r}
 }
 
-// NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct takes a SubscriptionsNonCatalogPriceAndProduct type
+// NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct takes a SubscriptionNonCatalogPriceAndProduct type
 // and creates a PreviewSubscriptionChargeItems for use in a request.
-func NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct(r *SubscriptionsNonCatalogPriceAndProduct) *PreviewSubscriptionChargeItems {
-	return &PreviewSubscriptionChargeItems{SubscriptionsNonCatalogPriceAndProduct: r}
+func NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct(r *SubscriptionNonCatalogPriceAndProduct) *PreviewSubscriptionChargeItems {
+	return &PreviewSubscriptionChargeItems{SubscriptionNonCatalogPriceAndProduct: r}
 }
 
 // PreviewSubscriptionChargeItems represents a union request type of the following types:
-//   - `SubscriptionsSubscriptionsCatalogItem`
-//   - `SubscriptionsNonCatalogPriceForAnExistingProduct`
-//   - `SubscriptionsNonCatalogPriceAndProduct`
+//   - `SubscriptionCatalogItem`
+//   - `SubscriptionNonCatalogPriceForAnExistingProduct`
+//   - `SubscriptionNonCatalogPriceAndProduct`
 //
 // The following constructor functions can be used to create a new instance of this type.
-//   - `NewPreviewSubscriptionChargeItemsSubscriptionsSubscriptionsCatalogItem()`
-//   - `NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceForAnExistingProduct()`
-//   - `NewPreviewSubscriptionChargeItemsSubscriptionsNonCatalogPriceAndProduct()`
+//   - `NewPreviewSubscriptionChargeItemsSubscriptionCatalogItem()`
+//   - `NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceForAnExistingProduct()`
+//   - `NewPreviewSubscriptionChargeItemsSubscriptionNonCatalogPriceAndProduct()`
 //
 // Only one of the values can be set at a time, the first non-nil value will be used in the request.
 // Items: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
 type PreviewSubscriptionChargeItems struct {
-	*SubscriptionsSubscriptionsCatalogItem
-	*SubscriptionsNonCatalogPriceForAnExistingProduct
-	*SubscriptionsNonCatalogPriceAndProduct
+	*SubscriptionCatalogItem
+	*SubscriptionNonCatalogPriceForAnExistingProduct
+	*SubscriptionNonCatalogPriceAndProduct
 }
 
 // MarshalJSON implements the json.Marshaler interface.
 func (u PreviewSubscriptionChargeItems) MarshalJSON() ([]byte, error) {
-	if u.SubscriptionsSubscriptionsCatalogItem != nil {
-		return json.Marshal(u.SubscriptionsSubscriptionsCatalogItem)
+	if u.SubscriptionCatalogItem != nil {
+		return json.Marshal(u.SubscriptionCatalogItem)
 	}
 
-	if u.SubscriptionsNonCatalogPriceForAnExistingProduct != nil {
-		return json.Marshal(u.SubscriptionsNonCatalogPriceForAnExistingProduct)
+	if u.SubscriptionNonCatalogPriceForAnExistingProduct != nil {
+		return json.Marshal(u.SubscriptionNonCatalogPriceForAnExistingProduct)
 	}
 
-	if u.SubscriptionsNonCatalogPriceAndProduct != nil {
-		return json.Marshal(u.SubscriptionsNonCatalogPriceAndProduct)
+	if u.SubscriptionNonCatalogPriceAndProduct != nil {
+		return json.Marshal(u.SubscriptionNonCatalogPriceAndProduct)
 	}
 
 	return nil, nil
@@ -1235,11 +1210,11 @@ type PreviewSubscriptionChargeRequest struct {
 	SubscriptionID string `in:"path=subscription_id" json:"-"`
 
 	// EffectiveFrom: When one-time charges should be billed.
-	EffectiveFrom string `json:"effective_from,omitempty"`
+	EffectiveFrom EffectiveFrom `json:"effective_from,omitempty"`
 	// Items: Add a non-catalog price for a non-catalog product in your catalog to a subscription. In this case, the product and price that you're billing for are specific to this transaction.
 	Items []PreviewSubscriptionChargeItems `json:"items,omitempty"`
 	// OnPaymentFailure: How Paddle should handle changes made to a subscription or its items if the payment fails during update. If omitted, defaults to `prevent_change`.
-	OnPaymentFailure *string `json:"on_payment_failure,omitempty"`
+	OnPaymentFailure *SubscriptionOnPaymentFailure `json:"on_payment_failure,omitempty"`
 }
 
 // PreviewSubscriptionCharge performs the POST operation on a Subscriptions resource.

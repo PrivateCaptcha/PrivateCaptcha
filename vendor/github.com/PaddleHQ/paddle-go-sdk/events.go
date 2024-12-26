@@ -18,7 +18,7 @@ type GenericEvent struct {
 	// EventID: Unique Paddle ID for this event, prefixed with `evt_`.
 	EventID string `json:"event_id,omitempty"`
 	// EventType: Type of event sent by Paddle, in the format `entity.event_type`.
-	EventType string `json:"event_type,omitempty"`
+	EventType EventTypeName `json:"event_type,omitempty"`
 	// OccurredAt: RFC 3339 datetime string of when this event occurred.
 	OccurredAt string `json:"occurred_at,omitempty"`
 	// Data: New or changed entity.

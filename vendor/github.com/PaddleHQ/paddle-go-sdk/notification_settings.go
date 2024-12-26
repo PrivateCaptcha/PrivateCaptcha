@@ -8,8 +8,8 @@ import "context"
 type NotificationSettingType string
 
 const (
-	NotificationSettingTypeEmail = "email"
-	NotificationSettingTypeURL   = "url"
+	NotificationSettingTypeEmail NotificationSettingType = "email"
+	NotificationSettingTypeURL   NotificationSettingType = "url"
 )
 
 // NotificationSetting: Represents a notification destination.
@@ -19,12 +19,12 @@ type NotificationSetting struct {
 	// Description: Short description for this notification destination. Shown in the Paddle web app.
 	Description string `json:"description,omitempty"`
 	// Type: Where notifications should be sent for this destination.
-	Type string `json:"type,omitempty"`
+	Type NotificationSettingType `json:"type,omitempty"`
 	// Destination: Webhook endpoint URL or email address.
 	Destination string `json:"destination,omitempty"`
 	// Active: Whether Paddle should try to deliver events to this notification destination.
 	Active bool `json:"active,omitempty"`
-	// APIVersion: API version that returned objects for events should conform to. Must be a valid version of the Paddle API. Cannot be a version older than your account default. Defaults to your account default if not included.
+	// APIVersion: API version that returned objects for events should conform to. Must be a valid version of the Paddle API. Cannot be a version older than your account default.
 	APIVersion int `json:"api_version,omitempty"`
 	// IncludeSensitiveFields: Whether potentially sensitive fields should be sent to this notification destination.
 	IncludeSensitiveFields bool `json:"include_sensitive_fields,omitempty"`
@@ -75,13 +75,13 @@ type CreateNotificationSettingRequest struct {
 	Description string `json:"description,omitempty"`
 	// Destination: Webhook endpoint URL or email address.
 	Destination string `json:"destination,omitempty"`
-	// SubscribedEvents: Subscribed events for this notification destination. When creating or updating a notification destination, pass an array of event type names only. Paddle returns the complete event type object.
-	SubscribedEvents []Event `json:"subscribed_events,omitempty"`
+	// SubscribedEvents: Type of event sent by Paddle, in the format `entity.event_type`.
+	SubscribedEvents []EventTypeName `json:"subscribed_events,omitempty"`
 	// Type: Where notifications should be sent for this destination.
-	Type string `json:"type,omitempty"`
-	// APIVersion: API version that returned objects for events should conform to. Must be a valid version of the Paddle API. Cannot be a version older than your account default. Defaults to your account default if not included.
+	Type NotificationSettingType `json:"type,omitempty"`
+	// APIVersion: API version that returned objects for events should conform to. Must be a valid version of the Paddle API. Cannot be a version older than your account default. If omitted, defaults to your account default version.
 	APIVersion *int `json:"api_version,omitempty"`
-	// IncludeSensitiveFields: Whether potentially sensitive fields should be sent to this notification destination.
+	// IncludeSensitiveFields: Whether potentially sensitive fields should be sent to this notification destination. If omitted, defaults to `false`.
 	IncludeSensitiveFields *bool `json:"include_sensitive_fields,omitempty"`
 }
 
@@ -124,8 +124,8 @@ type UpdateNotificationSettingRequest struct {
 	APIVersion *PatchField[int] `json:"api_version,omitempty"`
 	// IncludeSensitiveFields: Whether potentially sensitive fields should be sent to this notification destination.
 	IncludeSensitiveFields *PatchField[bool] `json:"include_sensitive_fields,omitempty"`
-	// SubscribedEvents: Subscribed events for this notification destination. When creating or updating a notification destination, pass an array of event type names only. Paddle returns the complete event type object.
-	SubscribedEvents *PatchField[[]Event] `json:"subscribed_events,omitempty"`
+	// SubscribedEvents: Type of event sent by Paddle, in the format `entity.event_type`.
+	SubscribedEvents *PatchField[[]EventTypeName] `json:"subscribed_events,omitempty"`
 }
 
 // UpdateNotificationSetting performs the PATCH operation on a Notification settings resource.

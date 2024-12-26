@@ -24,15 +24,15 @@ type Product struct {
 	// Description: Short description for this product.
 	Description *string `json:"description,omitempty"`
 	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type string `json:"type,omitempty"`
+	Type CatalogType `json:"type,omitempty"`
 	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory string `json:"tax_category,omitempty"`
+	TaxCategory TaxCategory `json:"tax_category,omitempty"`
 	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
 	ImageURL *string `json:"image_url,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData CustomData `json:"custom_data,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// ImportMeta: Import information for this entity. `null` if this entity is not imported.
 	ImportMeta *ImportMeta `json:"import_meta,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
@@ -99,11 +99,11 @@ type CreateProductRequest struct {
 	// Name: Name of this product.
 	Name string `json:"name,omitempty"`
 	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory string `json:"tax_category,omitempty"`
+	TaxCategory TaxCategory `json:"tax_category,omitempty"`
 	// Description: Short description for this product.
 	Description *string `json:"description,omitempty"`
-	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type *string `json:"type,omitempty"`
+	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app. If omitted, defaults to `standard`.
+	Type *CatalogType `json:"type,omitempty"`
 	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
 	ImageURL *string `json:"image_url,omitempty"`
 	// CustomData: Your own structured key-value data.
@@ -148,15 +148,15 @@ type UpdateProductRequest struct {
 	// Description: Short description for this product.
 	Description *PatchField[*string] `json:"description,omitempty"`
 	// Type: Type of item. Standard items are considered part of your catalog and are shown on the Paddle web app.
-	Type *PatchField[string] `json:"type,omitempty"`
+	Type *PatchField[CatalogType] `json:"type,omitempty"`
 	// TaxCategory: Tax category for this product. Used for charging the correct rate of tax. Selected tax category must be enabled on your Paddle account.
-	TaxCategory *PatchField[string] `json:"tax_category,omitempty"`
+	TaxCategory *PatchField[TaxCategory] `json:"tax_category,omitempty"`
 	// ImageURL: Image for this product. Included in the checkout and on some customer documents.
 	ImageURL *PatchField[*string] `json:"image_url,omitempty"`
 	// CustomData: Your own structured key-value data.
 	CustomData *PatchField[CustomData] `json:"custom_data,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status *PatchField[string] `json:"status,omitempty"`
+	Status *PatchField[Status] `json:"status,omitempty"`
 }
 
 // UpdateProduct performs the PATCH operation on a Products resource.

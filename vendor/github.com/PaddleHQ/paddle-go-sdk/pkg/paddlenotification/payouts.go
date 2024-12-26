@@ -5,14 +5,14 @@ package paddlenotification
 // PayoutCreated represents the payout.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type PayoutCreated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data PayoutNotification `json:"data"`
 }
 
 // PayoutPaid represents the payout.paid event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type PayoutPaid struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data PayoutNotification `json:"data"`
 }
 
@@ -21,9 +21,9 @@ type PayoutNotification struct {
 	// ID: ID for this payout.
 	ID string `json:"id,omitempty"`
 	// Status: Status of this payout.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// Amount: Amount paid, or scheduled to be paid, for this payout.
 	Amount string `json:"amount,omitempty"`
 	// CurrencyCode: Three-letter ISO 4217 currency code for this payout.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCodePayouts `json:"currency_code,omitempty"`
 }

@@ -45,59 +45,59 @@ Reports are created as `pending` initially, then move to `ready` when they're av
 type ReportStatus string
 
 const (
-	ReportStatusPending = "pending"
-	ReportStatusReady   = "ready"
-	ReportStatusFailed  = "failed"
-	ReportStatusExpired = "expired"
+	ReportStatusPending ReportStatus = "pending"
+	ReportStatusReady   ReportStatus = "ready"
+	ReportStatusFailed  ReportStatus = "failed"
+	ReportStatusExpired ReportStatus = "expired"
 )
 
-// ReportTypeTransactions: Type of report..
-type ReportTypeTransactions string
+// ReportType: Type of report to create..
+type ReportType string
 
 const (
-	ReportTypeTransactionsAdjustments          = "adjustments"
-	ReportTypeTransactionsAdjustmentLineItems  = "adjustment_line_items"
-	ReportTypeTransactionsTransactions         = "transactions"
-	ReportTypeTransactionsTransactionLineItems = "transaction_line_items"
-	ReportTypeTransactionsProductsPrices       = "products_prices"
-	ReportTypeTransactionsDiscounts            = "discounts"
+	ReportTypeAdjustments          ReportType = "adjustments"
+	ReportTypeAdjustmentLineItems  ReportType = "adjustment_line_items"
+	ReportTypeTransactions         ReportType = "transactions"
+	ReportTypeTransactionLineItems ReportType = "transaction_line_items"
+	ReportTypeProductsPrices       ReportType = "products_prices"
+	ReportTypeDiscounts            ReportType = "discounts"
 )
 
-// Name: Field name to filter by..
-type ReportsName string
+// ReportFiltersName: Field name to filter by..
+type ReportFiltersName string
 
 const (
-	ReportsNameAction           = "action"
-	ReportsNameCurrencyCode     = "currency_code"
-	ReportsNameStatus           = "status"
-	ReportsNameUpdatedAt        = "updated_at"
-	ReportsNameCollectionMode   = "collection_mode"
-	ReportsNameOrigin           = "origin"
-	ReportsNameProductStatus    = "product_status"
-	ReportsNamePriceStatus      = "price_status"
-	ReportsNameProductType      = "product_type"
-	ReportsNamePriceType        = "price_type"
-	ReportsNameProductUpdatedAt = "product_updated_at"
-	ReportsNamePriceUpdatedAt   = "price_updated_at"
-	ReportsNameType             = "type"
+	ReportFiltersNameAction           ReportFiltersName = "action"
+	ReportFiltersNameCurrencyCode     ReportFiltersName = "currency_code"
+	ReportFiltersNameStatus           ReportFiltersName = "status"
+	ReportFiltersNameUpdatedAt        ReportFiltersName = "updated_at"
+	ReportFiltersNameCollectionMode   ReportFiltersName = "collection_mode"
+	ReportFiltersNameOrigin           ReportFiltersName = "origin"
+	ReportFiltersNameProductStatus    ReportFiltersName = "product_status"
+	ReportFiltersNamePriceStatus      ReportFiltersName = "price_status"
+	ReportFiltersNameProductType      ReportFiltersName = "product_type"
+	ReportFiltersNamePriceType        ReportFiltersName = "price_type"
+	ReportFiltersNameProductUpdatedAt ReportFiltersName = "product_updated_at"
+	ReportFiltersNamePriceUpdatedAt   ReportFiltersName = "price_updated_at"
+	ReportFiltersNameType             ReportFiltersName = "type"
 )
 
-// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise..
-type ReportsOperator *string
+// ReportFiltersOperator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise..
+type ReportFiltersOperator string
 
 const (
-	ReportsOperatorLt  = "lt"
-	ReportsOperatorGte = "gte"
+	ReportFiltersOperatorLt  ReportFiltersOperator = "lt"
+	ReportFiltersOperatorGte ReportFiltersOperator = "gte"
 )
 
-// ReportFilters: List of filters applied to this report.
+// ReportFilters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
 type ReportFilters struct {
 	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
+	Name ReportFiltersName `json:"name,omitempty"`
 	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
+	Operator *ReportFiltersOperator `json:"operator,omitempty"`
 	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
-	Value string `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
 // Report: Represents a report entity.
@@ -109,104 +109,167 @@ type Report struct {
 
 	   Reports are created as `pending` initially, then move to `ready` when they're available to download.
 	*/
-	Status string `json:"status,omitempty"`
+	Status ReportStatus `json:"status,omitempty"`
 	// Rows: Number of records in this report. `null` if the report is `pending`.
 	Rows *int `json:"rows,omitempty"`
-	// Type: Type of report.
-	Type string `json:"type,omitempty"`
-	// Filters: List of filters applied to this report.
-	Filters []ReportFilters `json:"filters,omitempty"`
 	// ExpiresAt: RFC 3339 datetime string of when this report expires. The report is no longer available to download after this date.
 	ExpiresAt *string `json:"expires_at,omitempty"`
 	// UpdatedAt: RFC 3339 datetime string of when this report was last updated.
 	UpdatedAt string `json:"updated_at,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this report was created.
 	CreatedAt string `json:"created_at,omitempty"`
+	// Type: Type of report to create.
+	Type ReportType `json:"type,omitempty"`
+	// Filters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+	Filters []ReportFilters `json:"filters,omitempty"`
 }
 
-// ReportTypeAdjustments: Type of report to create..
-type ReportTypeAdjustments string
+// AdjustmentsReportType: Type of report to create..
+type AdjustmentsReportType string
 
 const (
-	ReportTypeAdjustmentsAdjustments         = "adjustments"
-	ReportTypeAdjustmentsAdjustmentLineItems = "adjustment_line_items"
+	AdjustmentsReportTypeAdjustments         AdjustmentsReportType = "adjustments"
+	AdjustmentsReportTypeAdjustmentLineItems AdjustmentsReportType = "adjustment_line_items"
 )
 
-// ReportsReportFilters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-type ReportsReportFilters struct {
+// AdjustmentsReportFilterName: Field name to filter by..
+type AdjustmentsReportFilterName string
+
+const (
+	AdjustmentsReportFilterNameAction       AdjustmentsReportFilterName = "action"
+	AdjustmentsReportFilterNameCurrencyCode AdjustmentsReportFilterName = "currency_code"
+	AdjustmentsReportFilterNameStatus       AdjustmentsReportFilterName = "status"
+	AdjustmentsReportFilterNameUpdatedAt    AdjustmentsReportFilterName = "updated_at"
+)
+
+// FilterOperator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise..
+type FilterOperator string
+
+const (
+	FilterOperatorLt  FilterOperator = "lt"
+	FilterOperatorGte FilterOperator = "gte"
+)
+
+// AdjustmentsReportFilters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+type AdjustmentsReportFilters struct {
 	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
+	Name AdjustmentsReportFilterName `json:"name,omitempty"`
 	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
+	Operator *FilterOperator `json:"operator,omitempty"`
 	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
-	Value string `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
-// AdjustmentsReports: Request body when creating reports for adjustments or adjustment line items.
+// AdjustmentsReports: Entity when working with reports for adjustments or adjustment line items.
 type AdjustmentsReports struct {
 	// Type: Type of report to create.
-	Type string `json:"type,omitempty"`
-	// Filters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-	Filters []ReportsReportFilters `json:"filters,omitempty"`
+	Type AdjustmentsReportType `json:"type,omitempty"`
+	// Filters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+	Filters []AdjustmentsReportFilters `json:"filters,omitempty"`
 }
 
-// ReportsReportsReportFilters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-type ReportsReportsReportFilters struct {
+// TransactionsReportType: Type of report to create..
+type TransactionsReportType string
+
+const (
+	TransactionsReportTypeTransactions         TransactionsReportType = "transactions"
+	TransactionsReportTypeTransactionLineItems TransactionsReportType = "transaction_line_items"
+)
+
+// TransactionsReportFilterName: Field name to filter by..
+type TransactionsReportFilterName string
+
+const (
+	TransactionsReportFilterNameCollectionMode TransactionsReportFilterName = "collection_mode"
+	TransactionsReportFilterNameCurrencyCode   TransactionsReportFilterName = "currency_code"
+	TransactionsReportFilterNameOrigin         TransactionsReportFilterName = "origin"
+	TransactionsReportFilterNameStatus         TransactionsReportFilterName = "status"
+	TransactionsReportFilterNameUpdatedAt      TransactionsReportFilterName = "updated_at"
+)
+
+// TransactionsReportFilters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+type TransactionsReportFilters struct {
 	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
+	Name TransactionsReportFilterName `json:"name,omitempty"`
 	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
+	Operator *FilterOperator `json:"operator,omitempty"`
 	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
-	Value string `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
-// TransactionsReports: Request body when creating reports for transaction or transaction line items.
+// TransactionsReports: Entity when working with reports for transaction or transaction line items.
 type TransactionsReports struct {
 	// Type: Type of report to create.
-	Type string `json:"type,omitempty"`
-	// Filters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-	Filters []ReportsReportsReportFilters `json:"filters,omitempty"`
+	Type TransactionsReportType `json:"type,omitempty"`
+	// Filters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+	Filters []TransactionsReportFilters `json:"filters,omitempty"`
 }
 
-// Type: Type of report to create..
-type Type string
+// ProductsPricesReportType: Type of report to create..
+type ProductsPricesReportType string
 
-const TypeProductsPrices = "products_prices"
+const ProductsPricesReportTypeProductsPrices ProductsPricesReportType = "products_prices"
 
-// ReportsReportsReportsReportFilters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `product_updated_at` and `price_updated_at` are greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-type ReportsReportsReportsReportFilters struct {
+// ProductPricesReportFilterName: Field name to filter by..
+type ProductPricesReportFilterName string
+
+const (
+	ProductPricesReportFilterNameProductStatus    ProductPricesReportFilterName = "product_status"
+	ProductPricesReportFilterNamePriceStatus      ProductPricesReportFilterName = "price_status"
+	ProductPricesReportFilterNameProductType      ProductPricesReportFilterName = "product_type"
+	ProductPricesReportFilterNamePriceType        ProductPricesReportFilterName = "price_type"
+	ProductPricesReportFilterNameProductUpdatedAt ProductPricesReportFilterName = "product_updated_at"
+	ProductPricesReportFilterNamePriceUpdatedAt   ProductPricesReportFilterName = "price_updated_at"
+)
+
+// ProductPricesReportFilters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `product_updated_at` and `price_updated_at` are greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+type ProductPricesReportFilters struct {
 	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
-	// Operator: Operator to use when filtering. Valid when filtering by `product_updated_at` or `price_updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
+	Name ProductPricesReportFilterName `json:"name,omitempty"`
+	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
+	Operator *FilterOperator `json:"operator,omitempty"`
 	// Value: Value to filter by.
-	Value string `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
-// ProductsAndPricesReport: Request body when creating a products and prices report.
+// ProductsAndPricesReport: Entity when working with a products and prices report.
 type ProductsAndPricesReport struct {
 	// Type: Type of report to create.
-	Type string `json:"type,omitempty"`
-	// Filters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `product_updated_at` and `price_updated_at` are greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-	Filters []ReportsReportsReportsReportFilters `json:"filters,omitempty"`
+	Type ProductsPricesReportType `json:"type,omitempty"`
+	// Filters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `product_updated_at` and `price_updated_at` are greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+	Filters []ProductPricesReportFilters `json:"filters,omitempty"`
 }
 
-// ReportsReportsReportsReportsReportFilters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-type ReportsReportsReportsReportsReportFilters struct {
+// DiscountsReportType: Type of report to create..
+type DiscountsReportType string
+
+const DiscountsReportTypeDiscounts DiscountsReportType = "discounts"
+
+// DiscountsReportFilterName: Field name to filter by..
+type DiscountsReportFilterName string
+
+const (
+	DiscountsReportFilterNameType      DiscountsReportFilterName = "type"
+	DiscountsReportFilterNameStatus    DiscountsReportFilterName = "status"
+	DiscountsReportFilterNameUpdatedAt DiscountsReportFilterName = "updated_at"
+)
+
+// DiscountsReportFilters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+type DiscountsReportFilters struct {
 	// Name: Field name to filter by.
-	Name string `json:"name,omitempty"`
+	Name DiscountsReportFilterName `json:"name,omitempty"`
 	// Operator: Operator to use when filtering. Valid when filtering by `updated_at`, `null` otherwise.
-	Operator *string `json:"operator,omitempty"`
+	Operator *FilterOperator `json:"operator,omitempty"`
 	// Value: Value to filter by. Check the allowed values descriptions for the `name` field to see valid values for a field.
-	Value string `json:"value,omitempty"`
+	Value any `json:"value,omitempty"`
 }
 
-// DiscountsReport: Request body when creating a discounts report.
+// DiscountsReport: Entity when working with a discounts report.
 type DiscountsReport struct {
 	// Type: Type of report to create.
-	Type string `json:"type,omitempty"`
-	// Filters: Filter criteria for this report. If omitted, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
-	Filters []ReportsReportsReportsReportsReportFilters `json:"filters,omitempty"`
+	Type DiscountsReportType `json:"type,omitempty"`
+	// Filters: Filter criteria for this report. If omitted when creating, reports are filtered to include data updated in the last 30 days. This means `updated_at` is greater than or equal to (`gte`) the date 30 days ago from the time the report was generated.
+	Filters []DiscountsReportFilters `json:"filters,omitempty"`
 }
 
 type ReportCSV struct {

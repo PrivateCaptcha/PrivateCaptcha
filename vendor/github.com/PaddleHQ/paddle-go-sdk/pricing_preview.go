@@ -12,37 +12,6 @@ type PricePreviewItem struct {
 	Quantity int `json:"quantity,omitempty"`
 }
 
-// UnitTotalsFormatted: Breakdown of the charge for one unit in the format of a given currency.
-type UnitTotalsFormatted struct {
-	// Subtotal: Unit price.
-	Subtotal string `json:"subtotal,omitempty"`
-	/*
-	   Discount: Total discount as a result of any discounts applied.
-	   Except for percentage discounts, Paddle applies tax to discounts based on the line item `price.tax_mode`. If `price.tax_mode` for a line item is `internal`, Paddle removes tax from the discount applied.
-	*/
-	Discount string `json:"discount,omitempty"`
-	// Tax: Total tax on the subtotal.
-	Tax string `json:"tax,omitempty"`
-	// Total: Total after discount and tax.
-	Total string `json:"total,omitempty"`
-}
-
-// TotalsFormatted: The financial breakdown of a charge in the format of a given currency.
-type TotalsFormatted struct {
-	// Subtotal: The amount times the quantity.
-	Subtotal string `json:"subtotal,omitempty"`
-	/*
-	   Discount: The amount discounted due to a discount code or ID being applied.
-
-	   Except for percentage discounts, Paddle applies tax to discounts based on the line item `price.tax_mode`. If `price.tax_mode` for a line item is `internal`, Paddle removes tax from the discount applied.
-	*/
-	Discount string `json:"discount,omitempty"`
-	// Tax: The amount of tax due on the subtotal.
-	Tax string `json:"tax,omitempty"`
-	// Total: The subtotal - discount + tax.
-	Total string `json:"total,omitempty"`
-}
-
 // PricePreviewDiscounts: Array of discounts applied to this preview line item. Empty if no discounts applied.
 type PricePreviewDiscounts struct {
 	// Discount: Related discount entity for this preview line item.
@@ -62,13 +31,13 @@ type PricePreviewLineItem struct {
 	// TaxRate: Rate used to calculate tax for this preview line item.
 	TaxRate string `json:"tax_rate,omitempty"`
 	// UnitTotals: Breakdown of the charge for one unit in the lowest denomination of a currency (e.g. cents for USD).
-	UnitTotals UnitTotals `json:"unit_totals,omitempty"`
+	UnitTotals Totals `json:"unit_totals,omitempty"`
 	// FormattedUnitTotals: Breakdown of the charge for one unit in the format of a given currency.
-	FormattedUnitTotals UnitTotalsFormatted `json:"formatted_unit_totals,omitempty"`
+	FormattedUnitTotals Totals `json:"formatted_unit_totals,omitempty"`
 	// Totals: Breakdown of a charge in the lowest denomination of a currency (e.g. cents for USD).
 	Totals Totals `json:"totals,omitempty"`
 	// FormattedTotals: The financial breakdown of a charge in the format of a given currency.
-	FormattedTotals TotalsFormatted `json:"formatted_totals,omitempty"`
+	FormattedTotals Totals `json:"formatted_totals,omitempty"`
 	// Product: Related product entity for this preview line item price.
 	Product Product `json:"product,omitempty"`
 	// Discounts: Array of discounts applied to this preview line item. Empty if no discounts applied.
@@ -89,7 +58,7 @@ type PricePreview struct {
 	// BusinessID: Paddle ID of the business that this preview is for, prefixed with `biz_`.
 	BusinessID *string `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code.
-	CurrencyCode string `json:"currency_code,omitempty"`
+	CurrencyCode CurrencyCode `json:"currency_code,omitempty"`
 	// DiscountID: Paddle ID of the discount applied to this preview, prefixed with `dsc_`.
 	DiscountID *string `json:"discount_id,omitempty"`
 	// Address: Address for this preview. Send one of `address_id`, `customer_ip_address`, or the `address` object when previewing.
@@ -111,6 +80,8 @@ type PricingPreviewClient struct {
 
 // PricePreviewRequest is given as an input to PricePreview.
 type PricePreviewRequest struct {
+	// Items: List of items to preview price calculations for.
+	Items []PricePreviewItem `json:"items,omitempty"`
 	// CustomerID: Paddle ID of the customer that this preview is for, prefixed with `ctm_`.
 	CustomerID *string `json:"customer_id,omitempty"`
 	// AddressID: Paddle ID of the address that this preview is for, prefixed with `add_`. Send one of `address_id`, `customer_ip_address`, or the `address` object when previewing.
@@ -118,15 +89,13 @@ type PricePreviewRequest struct {
 	// BusinessID: Paddle ID of the business that this preview is for, prefixed with `biz_`.
 	BusinessID *string `json:"business_id,omitempty"`
 	// CurrencyCode: Supported three-letter ISO 4217 currency code.
-	CurrencyCode *string `json:"currency_code,omitempty"`
+	CurrencyCode *CurrencyCode `json:"currency_code,omitempty"`
 	// DiscountID: Paddle ID of the discount applied to this preview, prefixed with `dsc_`.
 	DiscountID *string `json:"discount_id,omitempty"`
 	// Address: Address for this preview. Send one of `address_id`, `customer_ip_address`, or the `address` object when previewing.
 	Address *AddressPreview `json:"address,omitempty"`
 	// CustomerIPAddress: IP address for this transaction preview. Send one of `address_id`, `customer_ip_address`, or the `address` object when previewing.
 	CustomerIPAddress *string `json:"customer_ip_address,omitempty"`
-	// Items: List of items to preview price calculations for.
-	Items []PricePreviewItem `json:"items,omitempty"`
 }
 
 // PricePreview performs the POST operation on a Pricing preview resource.

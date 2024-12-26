@@ -5,21 +5,21 @@ package paddlenotification
 // BusinessCreated represents the business.created event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessCreated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data BusinessNotification `json:"data"`
 }
 
 // BusinessImported represents the business.imported event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessImported struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data BusinessNotification `json:"data"`
 }
 
 // BusinessUpdated represents the business.updated event.
 // See https://developer.paddle.com/webhooks/overview for more information.
 type BusinessUpdated struct {
-	GenericNotificationsEvent
+	GenericNotificationEvent
 	Data BusinessNotification `json:"data"`
 }
 
@@ -44,7 +44,7 @@ type BusinessNotification struct {
 	// TaxIdentifier: Tax or VAT Number for this business.
 	TaxIdentifier *string `json:"tax_identifier,omitempty"`
 	// Status: Whether this entity can be used in Paddle.
-	Status string `json:"status,omitempty"`
+	Status Status `json:"status,omitempty"`
 	// Contacts: List of contacts related to this business, typically used for sending invoices.
 	Contacts []Contacts `json:"contacts,omitempty"`
 	// CreatedAt: RFC 3339 datetime string of when this entity was created. Set automatically by Paddle.
