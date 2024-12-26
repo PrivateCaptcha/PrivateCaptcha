@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/justinas/alice"
-	"github.com/rs/cors"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -200,7 +199,6 @@ type Server struct {
 	Mailer          common.Mailer
 	Stage           string
 	PaddleAPI       billing.PaddleAPI
-	cors            *cors.Cors
 	Verifier        puzzle.Verifier
 	Metrics         monitoring.Metrics
 	maintenanceMode atomic.Bool
@@ -219,29 +217,7 @@ func (s *Server) UpdateConfig(config *config.Config) {
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify, ratelimiter alice.Constructor) {
-	corsDomain := domain
-	if len(corsDomain) == 0 {
-		slog.Error("CORS portal server domain is empty")
-		corsDomain = "*"
-	}
-
-	corsOpts := cors.Options{
-		AllowedOrigins:   []string{corsDomain},
-		AllowCredentials: true,
-		// non-captcha headers were taken from rs/cors defaults
-		AllowedHeaders: []string{common.HeaderCSRFToken, "accept", "content-type", "x-requested-with"},
-		AllowedMethods: []string{http.MethodGet, http.MethodPost, http.MethodHead, http.MethodPut, http.MethodDelete},
-		Debug:          s.Stage != common.StageProd,
-		MaxAge:         60, /*seconds*/
-	}
-
-	if corsOpts.Debug {
-		corsOpts.Logger = &common.FmtLogger{Ctx: common.TraceContext(context.TODO(), "cors"), Level: common.LevelTrace}
-	}
-
-	s.cors = cors.New(corsOpts)
-	securityChain := alice.New(edgeVerify, s.cors.Handler, ratelimiter)
-
+	securityChain := alice.New(edgeVerify, ratelimiter)
 	s.setupWithPrefix(domain+s.relURL("/"), router, securityChain)
 }
 
