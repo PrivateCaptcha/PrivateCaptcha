@@ -3,6 +3,7 @@ package widget
 import (
 	"embed"
 	"io/fs"
+	"log/slog"
 	"net/http"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -16,6 +17,7 @@ func Static() http.HandlerFunc {
 	srv := http.FileServer(http.FS(sub))
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
 		common.WriteCached(w)
 		srv.ServeHTTP(w, r)
 	}

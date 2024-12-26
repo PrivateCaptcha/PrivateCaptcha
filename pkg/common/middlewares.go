@@ -71,6 +71,7 @@ func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(headerHtmxRedirect, url)
 		w.WriteHeader(code)
 	} else {
+		slog.Log(r.Context(), LevelTrace, "Redirecting using location header", "url", url)
 		w.Header().Set("Location", url)
 		http.Redirect(w, r, url, http.StatusSeeOther)
 	}
