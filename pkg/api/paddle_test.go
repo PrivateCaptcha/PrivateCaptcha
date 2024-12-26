@@ -36,7 +36,7 @@ func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
 			NextBilledAt:   new(string),
 			PausedAt:       new(string),
 			CanceledAt:     new(string),
-			Discount:       &paddlenotification.SubscriptionDiscount{},
+			Discount:       &paddlenotification.SubscriptionDiscountTimePeriod{},
 			CollectionMode: "automatic",
 			BillingDetails: &paddlenotification.BillingDetails{},
 			CurrentBillingPeriod: &paddlenotification.TimePeriod{
@@ -65,7 +65,7 @@ func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
 					TrialPeriod:  &paddlenotification.Duration{},
 					TaxMode:      "",
 					Quantity:     paddlenotification.PriceQuantity{},
-					Status:       paddle.SubscriptionStatusActive,
+					Status:       paddlenotification.Status(paddle.SubscriptionStatusActive),
 				},
 			}},
 			CustomData: paddlenotification.CustomData{},
@@ -180,7 +180,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 		GenericEvent: paddle.GenericEvent{},
 		Data: paddlenotification.SubscriptionNotification{
 			ID:             subscription.PaddleSubscriptionID,
-			Status:         paddle.SubscriptionStatusPaused,
+			Status:         paddlenotification.SubscriptionStatusPaused,
 			UpdatedAt:      common.JSONTimeNow().String(),
 			PausedAt:       &pausedAt,
 			CanceledAt:     new(string),
@@ -190,7 +190,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 				EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
 			},
 			Items: []paddlenotification.SubscriptionItem{{
-				Status:             paddle.SubscriptionStatusPaused,
+				Status:             paddlenotification.SubscriptionItemStatusInactive,
 				Quantity:           1,
 				Recurring:          true,
 				CreatedAt:          common.JSONTimeNow().String(),
@@ -209,7 +209,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 					TrialPeriod:  &paddlenotification.Duration{},
 					TaxMode:      "",
 					Quantity:     paddlenotification.PriceQuantity{},
-					Status:       paddle.SubscriptionStatusActive,
+					Status:       paddlenotification.StatusActive,
 				},
 			}},
 		},
@@ -228,7 +228,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if subscription.Status != paddle.SubscriptionStatusPaused {
+	if subscription.Status != string(paddle.SubscriptionStatusPaused) {
 		t.Errorf("Unexpected subscription status: %v", subscription.Status)
 	}
 }

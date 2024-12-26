@@ -439,14 +439,19 @@ func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle
 		return ErrMaintenance
 	}
 
-	key := puzzleCacheKey(p.PuzzleIDString())
+	puzzleID := p.PuzzleIDString()
+	key := puzzleCacheKey(puzzleID)
 	diff := p.Expiration.Sub(tnow)
 
-	return impl.queries.CreateCache(ctx, &dbgen.CreateCacheParams{
+	err := impl.queries.CreateCache(ctx, &dbgen.CreateCacheParams{
 		Key:     key,
 		Value:   markerData[:],
 		Column3: diff,
 	})
+
+	slog.Log(ctx, common.LevelTrace, "Cached puzzle", "puzzleID", puzzleID, common.ErrAttr(err))
+
+	return err
 }
 
 func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {

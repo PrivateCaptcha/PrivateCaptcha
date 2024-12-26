@@ -339,6 +339,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, expe
 	}
 
 	if s.businessDB.CheckPuzzleCached(ctx, p) {
+		slog.WarnContext(ctx, "Puzzle is already cached", "puzzleID", p.PuzzleIDString())
 		return p, nil, puzzle.VerifiedBeforeError
 	}
 
