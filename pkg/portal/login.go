@@ -93,6 +93,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	captchaSolution := r.FormValue(loginSolutionField)
 	verr, err := s.Verifier.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
 	if err != nil || verr != puzzle.VerifyNoError {
+		slog.ErrorContext(ctx, "Failed to verify captcha", "code", verr, common.ErrAttr(err))
 		data.CaptchaError = "Captcha verification failed"
 		s.render(w, r, loginFormTemplate, data)
 		return
