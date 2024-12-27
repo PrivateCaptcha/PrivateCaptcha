@@ -61,7 +61,8 @@ func categoryFromIndex(ctx context.Context, index string) dbgen.SupportCategory 
 func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	sess := s.session(w, r)
+	user, err := s.sessionUser(ctx, sess)
 	if err != nil {
 		return nil, "", err
 	}
@@ -91,7 +92,7 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 		Text:     message,
 	}
 
-	ticket, err := s.Store.CreateSupportTicket(ctx, category, message, user.ID)
+	ticket, err := s.Store.CreateSupportTicket(ctx, category, message, user.ID, sess.SessionID())
 	if err == nil {
 		if data, err := ticket.ExternalID.MarshalJSON(); err == nil {
 			req.TicketID = strings.Trim(string(data), "\"")

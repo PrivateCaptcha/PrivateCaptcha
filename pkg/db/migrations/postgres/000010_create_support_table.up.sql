@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS backend.support(
     category backend.support_category NOT NULL,
     external_id UUID DEFAULT gen_random_uuid(),
     message TEXT DEFAULT '',
+    session_id TEXT DEFAULT '',
     resolution TEXT DEFAULT '',
     user_id INTEGER REFERENCES backend.users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ DEFAULT current_timestamp
