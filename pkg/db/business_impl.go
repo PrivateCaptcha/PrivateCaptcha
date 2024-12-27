@@ -1217,15 +1217,16 @@ func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, 
 	return nil
 }
 
-func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32) (*dbgen.Support, error) {
+func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32, sessID string) (*dbgen.Support, error) {
 	if impl.queries == nil {
 		return nil, ErrMaintenance
 	}
 
 	ticket, err := impl.queries.CreateSupportTicket(ctx, &dbgen.CreateSupportTicketParams{
-		Category: category,
-		Message:  Text(message),
-		UserID:   Int(userID),
+		Category:  category,
+		Message:   Text(message),
+		UserID:    Int(userID),
+		SessionID: Text(sessID),
 	})
 
 	if err != nil {
