@@ -311,6 +311,7 @@ type Support struct {
 	ID         int32              `db:"id" json:"id"`
 	Category   SupportCategory    `db:"category" json:"category"`
 	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
+	Subject    pgtype.Text        `db:"subject" json:"subject"`
 	Message    pgtype.Text        `db:"message" json:"message"`
 	SessionID  pgtype.Text        `db:"session_id" json:"session_id"`
 	Resolution pgtype.Text        `db:"resolution" json:"resolution"`

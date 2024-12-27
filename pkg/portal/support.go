@@ -15,12 +15,15 @@ const (
 	maxSupportFormSizeBytes = 256 * 1024
 	supportFormTemplate     = "support/form.html"
 	supportTemplate         = "support/support.html"
+	maxSubjectLength        = 255
+	maxMessageLength        = 65536
 )
 
 type supportRenderContext struct {
 	alertRenderContext
 	csrfRenderContext
 	Message  string
+	Subject  string
 	Category string
 }
 
@@ -74,25 +77,34 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 	category := categoryFromIndex(ctx, r.FormValue(common.ParamCategory))
 	message := strings.TrimSpace(r.FormValue(common.ParamMessage))
+	subject := strings.TrimSpace(r.FormValue(common.ParamSubject))
 
 	renderCtx := &supportRenderContext{
 		csrfRenderContext: s.createCsrfContext(user),
 		Message:           message,
+		Subject:           subject,
 		Category:          r.FormValue(common.ParamCategory),
 	}
 
-	if len(message) < 10 {
-		slog.WarnContext(ctx, "Message is too short", "length", len(message))
+	if lenSubject := len(subject); (lenSubject < 10) || (lenSubject > maxSubjectLength) {
+		slog.WarnContext(ctx, "Subject's length is invalid", "length", lenSubject)
+		renderCtx.ErrorMessage = "Please enter a subject."
+		return renderCtx, supportFormTemplate, nil
+	}
+
+	if lenMessage := len(message); (lenMessage < 10) || (lenMessage > maxMessageLength) {
+		slog.WarnContext(ctx, "Message length is invalid", "length", lenMessage)
 		renderCtx.ErrorMessage = "Please enter more details."
 		return renderCtx, supportFormTemplate, nil
 	}
 
 	req := &common.SupportRequest{
 		Category: string(category),
+		Subject:  subject,
 		Text:     message,
 	}
 
-	ticket, err := s.Store.CreateSupportTicket(ctx, category, message, user.ID, sess.SessionID())
+	ticket, err := s.Store.CreateSupportTicket(ctx, category, subject, message, user.ID, sess.SessionID())
 	if err == nil {
 		if data, err := ticket.ExternalID.MarshalJSON(); err == nil {
 			req.TicketID = strings.Trim(string(data), "\"")
@@ -102,6 +114,7 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 	if err := s.Mailer.SendSupportRequest(ctx, user.Email, req); err == nil {
 		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you soon."
 		renderCtx.Message = ""
+		renderCtx.Subject = ""
 	} else {
 		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}

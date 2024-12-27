@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"time"
 )
 
@@ -11,6 +12,7 @@ type AdminMailer interface {
 
 type SupportRequest struct {
 	Category string
+	Subject  string
 	Text     string
 	TicketID string
 }
@@ -21,6 +23,19 @@ func (r *SupportRequest) ShortTicketID() string {
 	}
 
 	return time.Now().Format(time.DateOnly)
+}
+
+func (r *SupportRequest) EmailSubject() string {
+	if len(r.Subject) > 0 {
+		const maxSubjectLength = 100
+		subject := r.Subject[:maxSubjectLength]
+		if len(r.Subject) > maxSubjectLength {
+			subject += "..."
+		}
+		return fmt.Sprintf("[%s] %s", r.Category, subject)
+	}
+
+	return fmt.Sprintf("[%s] Support request %s", r.Category, r.ShortTicketID())
 }
 
 type Mailer interface {

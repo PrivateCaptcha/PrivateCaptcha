@@ -125,7 +125,7 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 	msg := &Message{
 		HTMLBody:  htmlBodyTpl.String(),
 		TextBody:  textBodyTpl.String(),
-		Subject:   fmt.Sprintf("[%s] Support request %s", req.Category, req.ShortTicketID()),
+		Subject:   req.EmailSubject(),
 		EmailTo:   pm.supportEmail,
 		EmailFrom: pm.emailFrom,
 		NameFrom:  common.PrivateCaptcha,

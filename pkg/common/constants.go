@@ -30,6 +30,7 @@ const (
 	ParamMonths                 = "months"
 	ParamCategory               = "category"
 	ParamMessage                = "message"
+	ParamSubject                = "subject"
 	ParamProduct                = "product"
 	ParamYearly                 = "yearly"
 	ParamPrice                  = "price"
