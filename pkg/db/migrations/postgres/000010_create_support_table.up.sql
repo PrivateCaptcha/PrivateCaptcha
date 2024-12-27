@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS backend.support(
     id SERIAL PRIMARY KEY,
     category backend.support_category NOT NULL,
     external_id UUID DEFAULT gen_random_uuid(),
+    subject TEXT DEFAULT '',
     message TEXT DEFAULT '',
     session_id TEXT DEFAULT '',
     resolution TEXT DEFAULT '',

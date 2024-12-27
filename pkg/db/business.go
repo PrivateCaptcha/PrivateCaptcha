@@ -331,8 +331,8 @@ func (s *BusinessStore) UpdateUserAPIKeysRateLimits(ctx context.Context, userID 
 	return s.impl().updateUserAPIKeysRateLimits(ctx, userID, requestsPerSecond)
 }
 
-func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, message string, userID int32, sessID string) (*dbgen.Support, error) {
-	return s.impl().createSupportTicket(ctx, category, message, userID, sessID)
+func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, subject, message string, userID int32, sessID string) (*dbgen.Support, error) {
+	return s.impl().createSupportTicket(ctx, category, subject, message, userID, sessID)
 }
 
 func (s *BusinessStore) CachePaddlePrices(ctx context.Context, prices map[string]int) error {

@@ -67,6 +67,7 @@ var (
 		Months               string
 		SupportEndpoint      string
 		Message              string
+		Subject              string
 		Category             string
 		BillingEndpoint      string
 		Product              string
@@ -116,6 +117,7 @@ var (
 		Months:               common.ParamMonths,
 		SupportEndpoint:      common.SupportEndpoint,
 		Message:              common.ParamMessage,
+		Subject:              common.ParamSubject,
 		Category:             common.ParamCategory,
 		BillingEndpoint:      common.BillingEndpoint,
 		Product:              common.ParamProduct,

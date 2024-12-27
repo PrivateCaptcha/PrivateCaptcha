@@ -12,11 +12,12 @@ import (
 )
 
 const createSupportTicket = `-- name: CreateSupportTicket :one
-INSERT INTO backend.support (category, message, user_id, session_id) VALUES ($1, $2, $3, $4) RETURNING id, category, external_id, message, session_id, resolution, user_id, created_at
+INSERT INTO backend.support (category, subject, message, user_id, session_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, category, external_id, subject, message, session_id, resolution, user_id, created_at
 `
 
 type CreateSupportTicketParams struct {
 	Category  SupportCategory `db:"category" json:"category"`
+	Subject   pgtype.Text     `db:"subject" json:"subject"`
 	Message   pgtype.Text     `db:"message" json:"message"`
 	UserID    pgtype.Int4     `db:"user_id" json:"user_id"`
 	SessionID pgtype.Text     `db:"session_id" json:"session_id"`
@@ -25,6 +26,7 @@ type CreateSupportTicketParams struct {
 func (q *Queries) CreateSupportTicket(ctx context.Context, arg *CreateSupportTicketParams) (*Support, error) {
 	row := q.db.QueryRow(ctx, createSupportTicket,
 		arg.Category,
+		arg.Subject,
 		arg.Message,
 		arg.UserID,
 		arg.SessionID,
@@ -34,6 +36,7 @@ func (q *Queries) CreateSupportTicket(ctx context.Context, arg *CreateSupportTic
 		&i.ID,
 		&i.Category,
 		&i.ExternalID,
+		&i.Subject,
 		&i.Message,
 		&i.SessionID,
 		&i.Resolution,
