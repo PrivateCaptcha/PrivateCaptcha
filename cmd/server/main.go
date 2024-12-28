@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -50,9 +51,53 @@ var (
 	envFileFlag     = flag.String("env", "", "Path to .env file")
 	versionFlag     = flag.Bool("version", false, "Print version and exit")
 	migrateHashFlag = flag.String("migrate-hash", "", "Target migration version (git commit)")
+	certFileFlag    = flag.String("certfile", "", "certificate PEM file (e.g. cert.pem)")
+	keyFileFlag     = flag.String("keyfile", "", "key PEM file (e.g. key.pem)")
 )
 
-func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListener bool) error {
+func createListener(ctx context.Context, cfg *config.Config) (net.Listener, bool, error) {
+	var listener net.Listener
+	systemdListener := (*flagMode == modeSystemd)
+	if systemdListener {
+		listeners, err := activation.Listeners()
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve systemd listeners", common.ErrAttr(err))
+			return nil, systemdListener, err
+		}
+
+		if len(listeners) != 1 {
+			slog.ErrorContext(ctx, "Unexpected number of systemd listeners available", "count", len(listeners))
+			return nil, systemdListener, errors.New("unexpected number of systemd listeners")
+		}
+
+		listener = listeners[0]
+	} else {
+		address := cfg.ListenAddress()
+		var err error
+		listener, err = net.Listen("tcp", address)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
+			return nil, systemdListener, err
+		}
+	}
+
+	if useTLS := (*certFileFlag != "") && (*keyFileFlag != ""); useTLS {
+		// Load certificates
+		cert, err := tls.LoadX509KeyPair(*certFileFlag, *keyFileFlag)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to load certificates", "cert", *certFileFlag, "key", *keyFileFlag, common.ErrAttr(err))
+			return nil, systemdListener, err
+		}
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+		listener = tls.NewListener(listener, tlsConfig)
+	}
+
+	return listener, systemdListener, nil
+}
+
+func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net.Listener, systemdListener bool) error {
 	common.SetupLogs(cfg.Stage(), cfg.Verbose())
 
 	var cache common.Cache[string, any]
@@ -152,28 +197,6 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	}
 	updateConfigFunc()
 
-	var listeners []net.Listener
-	if systemdListener {
-		listeners, err = activation.Listeners()
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve systemd listeners", common.ErrAttr(err))
-			return err
-		}
-
-		if len(listeners) != 1 {
-			slog.ErrorContext(ctx, "Unexpected number of systemd listeners available", "count", len(listeners))
-			return errors.New("unexpected number of systemd listeners")
-		}
-	} else {
-		address := cfg.ListenAddress()
-		listener, err := net.Listen("tcp", address)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
-			return err
-		}
-		listeners = append(listeners, listener)
-	}
-
 	quit := make(chan struct{})
 	go func() {
 		signals := make(chan os.Signal, 1)
@@ -204,8 +227,8 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, systemdListe
 	}()
 
 	go func() {
-		slog.InfoContext(ctx, "Listening", "address", listeners[0].Addr().String(), "version", GitCommit, "stage", cfg.Stage())
-		if err := httpServer.Serve(listeners[0]); err != nil && err != http.ErrServerClosed {
+		slog.InfoContext(ctx, "Listening", "address", listener.Addr().String(), "version", GitCommit, "stage", cfg.Stage())
+		if err := httpServer.Serve(listener); err != nil && err != http.ErrServerClosed {
 			slog.ErrorContext(ctx, "Error serving", common.ErrAttr(err))
 		}
 	}()
@@ -321,7 +344,11 @@ func main() {
 	switch *flagMode {
 	case modeServer, modeSystemd:
 		ctx := common.TraceContext(context.Background(), "main")
-		err = run(ctx, cfg, os.Stderr, (*flagMode == modeSystemd))
+		if listener, systemdListener, lerr := createListener(ctx, cfg); lerr == nil {
+			err = run(ctx, cfg, os.Stderr, listener, systemdListener)
+		} else {
+			err = lerr
+		}
 	case modeMigrate:
 		ctx := common.TraceContext(context.Background(), "migration")
 		err = migrate(ctx, cfg, true /*up*/)
