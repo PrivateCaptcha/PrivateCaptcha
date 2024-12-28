@@ -82,7 +82,6 @@ func createListener(ctx context.Context, cfg *config.Config) (net.Listener, bool
 	}
 
 	if useTLS := (*certFileFlag != "") && (*keyFileFlag != ""); useTLS {
-		// Load certificates
 		cert, err := tls.LoadX509KeyPair(*certFileFlag, *keyFileFlag)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to load certificates", "cert", *certFileFlag, "key", *keyFileFlag, common.ErrAttr(err))

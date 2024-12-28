@@ -15,7 +15,6 @@ import (
 
 var (
 	defaultRejectedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "path", r.URL.Path)
 		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 	})
 )
@@ -73,6 +72,9 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 			ctx := context.WithValue(r.Context(), common.RateLimitKeyContextKey, key)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
+			slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "path", r.URL.Path, "level", addResult.CurrLevel,
+				"capacity", addResult.Capacity, "resetAfter", addResult.ResetAfter.String(), "retryAfter", addResult.RetryAfter.String(),
+				"found", addResult.Found)
 			l.rejectedHandler.ServeHTTP(w, r)
 		}
 	})
