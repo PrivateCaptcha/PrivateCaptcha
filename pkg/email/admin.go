@@ -12,6 +12,7 @@ import (
 )
 
 type AdminMailer struct {
+	stage                  string
 	mailer                 *simpleMailer
 	emailFrom              string
 	emailTo                string
@@ -22,6 +23,7 @@ var _ common.AdminMailer = (*AdminMailer)(nil)
 
 func NewAdminMailer(mailer *simpleMailer, getenv func(string) string) *AdminMailer {
 	return &AdminMailer{
+		stage:                  getenv("STAGE"),
 		mailer:                 mailer,
 		emailFrom:              getenv("PC_EMAIL_FROM"),
 		emailTo:                getenv("PC_ADMIN_EMAIL"),
@@ -33,9 +35,11 @@ func (am *AdminMailer) SendUsageViolations(ctx context.Context, emails []string)
 	data := struct {
 		Emails      []string
 		CurrentYear int
+		Stage       string
 	}{
 		Emails:      emails,
 		CurrentYear: time.Now().Year(),
+		Stage:       am.stage,
 	}
 
 	var textBodyTpl bytes.Buffer
@@ -45,7 +49,7 @@ func (am *AdminMailer) SendUsageViolations(ctx context.Context, emails []string)
 
 	msg := &Message{
 		TextBody:  textBodyTpl.String(),
-		Subject:   fmt.Sprintf("[%s] Usage violations found", common.PrivateCaptcha),
+		Subject:   fmt.Sprintf("[%s] Usage violations found", am.stage),
 		EmailTo:   am.emailTo,
 		EmailFrom: am.emailFrom,
 		NameFrom:  common.PrivateCaptcha,
