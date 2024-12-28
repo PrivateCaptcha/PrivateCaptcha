@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -65,6 +66,7 @@ func TestMain(m *testing.M) {
 	store = db.NewBusiness(pool, cache)
 
 	ratelimiter := ratelimit.NewIPAddrRateLimiter(os.Getenv(common.ConfigRateLimitHeader))
+	ratelimiter.UpdaterByKey(netip.Addr{})(20 /*capacity*/, 100*time.Millisecond /*leak interval*/)
 
 	blockedUsers := db.NewStaticCache[int32, *common.UserLimitStatus](100 /*cap*/, nil /*missing data*/)
 	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, authBackfillDelay)

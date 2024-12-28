@@ -95,6 +95,11 @@ func (m *Manager[TKey, T, TBucket]) update(key TKey, capacity TLevel, leakInterv
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
+	if m.defaultBucket != nil && (m.defaultBucket.Key() == key) {
+		m.defaultBucket.Update(capacity, leakInterval)
+		return true
+	}
+
 	existing, ok := m.buckets[key]
 	if ok {
 		existing.Update(capacity, leakInterval)

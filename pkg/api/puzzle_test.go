@@ -173,7 +173,7 @@ func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
 	puzzleSuiteWithBackfillWait(t, sitekey, property.Domain)
 }
 
-func fetchPuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
+func parsePuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", err
@@ -228,7 +228,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 
-	p, _, err := fetchPuzzle(resp)
+	p, _, err := parsePuzzle(resp)
 	if err != nil {
 		t.Fatal(err)
 	}

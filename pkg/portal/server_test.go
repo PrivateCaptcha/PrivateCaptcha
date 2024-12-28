@@ -16,6 +16,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,10 +103,11 @@ func TestMain(m *testing.M) {
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer:    &email.StubMailer{},
-		PaddleAPI: paddleAPI,
-		Verifier:  &fakeCaptchaVerifier{result: puzzle.VerifyNoError},
-		Metrics:   monitoring.NewStub(),
+		Mailer:      &email.StubMailer{},
+		PaddleAPI:   paddleAPI,
+		RateLimiter: &ratelimit.StubRateLimiter{},
+		Verifier:    &fakeCaptchaVerifier{result: puzzle.VerifyNoError},
+		Metrics:     monitoring.NewStub(),
 	}
 
 	server.Init()
