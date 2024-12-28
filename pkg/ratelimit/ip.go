@@ -12,6 +12,18 @@ import (
 	realclientip "github.com/realclientip/realclientip-go"
 )
 
+const (
+	// we are allowing 1 request per 2 seconds from a single client IP address with a {leakyBucketCap} requests burst
+	// NOTE: this assumes correct configuration of the whole chain of reverse proxies
+	leakyBucketCap    = 5
+	leakRatePerSecond = 0.5
+	leakInterval      = (1.0 / leakRatePerSecond) * time.Second
+	// "authenticated" means when we "legitimize" IP address using business logic
+	AuthenticatedBucketCap = 8
+	// this effectively means leakRate = 0.75/second
+	AuthenticatedLeakInterval = 750 * time.Millisecond
+)
+
 func clientIPAddr(strategy realclientip.Strategy, r *http.Request) netip.Addr {
 	ipStr := clientIP(strategy, r)
 	if len(ipStr) == 0 {
@@ -28,23 +40,16 @@ func clientIPAddr(strategy realclientip.Strategy, r *http.Request) netip.Addr {
 	return addr
 }
 
-func NewIPAddrRateLimiter(header string) HTTPRateLimiter {
+func NewIPAddrRateLimiter(header string) *httpRateLimiter[netip.Addr] {
 	strategy := realclientip.Must(realclientip.NewSingleIPHeaderStrategy(header))
 
-	const (
-		maxBucketsToKeep = 1_000_000
-		// we are allowing 1 request per 2 seconds from a single client IP address with a {leakyBucketCap} requests burst
-		// NOTE: this assumes correct configuration of the whole chain of reverse proxies
-		leakyBucketCap    = 5
-		leakRatePerSecond = 0.5
-		leakInterval      = (1.0 / leakRatePerSecond) * time.Second
-	)
+	const maxBucketsToKeep = 1_000_000
 
 	buckets := leakybucket.NewManager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr]](maxBucketsToKeep, leakyBucketCap, leakInterval)
 
 	// we setup a separate bucket for "missing" IPs with empty key
-	// with a more generous burst, assuming a misconfiguration on our side
-	buckets.SetDefaultBucket(leakybucket.NewConstBucket(netip.Addr{}, 20 /*capacity*/, leakInterval, time.Now()))
+	// with a different burst, assuming a misconfiguration on our side
+	buckets.SetDefaultBucket(leakybucket.NewConstBucket(netip.Addr{}, 2 /*capacity*/, leakInterval, time.Now()))
 
 	limiter := &httpRateLimiter[netip.Addr]{
 		rejectedHandler: defaultRejectedHandler,

@@ -26,6 +26,8 @@ type LeakyBucket[TKey comparable] interface {
 	Init(key TKey, capacity TLevel, leakInterval time.Duration, t time.Time)
 }
 
+type LimitUpdaterFunc func(capacity TLevel, leakInterval time.Duration)
+
 type ConstLeakyBucket[TKey comparable] struct {
 	// key of the bucket in the hashmap
 	key            TKey

@@ -91,7 +91,7 @@ func (m *Manager[TKey, T, TBucket]) ensureUpperBoundUnsafe() {
 	}
 }
 
-func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterval time.Duration) bool {
+func (m *Manager[TKey, T, TBucket]) update(key TKey, capacity TLevel, leakInterval time.Duration) bool {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -101,6 +101,12 @@ func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterv
 	}
 
 	return ok
+}
+
+func (m *Manager[TKey, T, TBucket]) UpdaterFunc(key TKey) LimitUpdaterFunc {
+	return func(capacity TLevel, leakInterval time.Duration) {
+		m.update(key, capacity, leakInterval)
+	}
 }
 
 func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddResult {

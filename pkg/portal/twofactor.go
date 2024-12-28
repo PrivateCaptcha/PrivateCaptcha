@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
@@ -122,6 +123,9 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Delete(session.KeyTwoFactorCode)
 	sess.Delete(session.KeyUserEmail)
 	sess.Set(session.KeyPersistent, true)
+
+	s.RateLimiter.Updater(r)(ratelimit.AuthenticatedBucketCap, ratelimit.AuthenticatedLeakInterval)
+
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering
 	common.Redirect(s.relURL("/"), http.StatusOK, w, r)

@@ -153,12 +153,13 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		PaddleAPI: paddleAPI,
-		APIURL:    cfg.APIURL(),
-		CDNURL:    cfg.CDNURL(),
-		Verifier:  apiServer,
-		Metrics:   metrics,
-		Mailer:    portalMailer,
+		PaddleAPI:   paddleAPI,
+		APIURL:      cfg.APIURL(),
+		CDNURL:      cfg.CDNURL(),
+		Verifier:    apiServer,
+		Metrics:     metrics,
+		Mailer:      portalMailer,
+		RateLimiter: ratelimiter,
 	}
 	portalServer.Init()
 
@@ -171,7 +172,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	}
 
 	portalDomain := cfg.PortalDomain()
-	portalServer.Setup(router, portalDomain, apiAuth.EdgeVerify(portalDomain), ratelimiter.RateLimit)
+	portalServer.Setup(router, portalDomain, apiAuth.EdgeVerify(portalDomain))
 	defaultAPIChain := alice.New(common.Recovered)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
 	cdnDomain := cfg.CDNDomain()

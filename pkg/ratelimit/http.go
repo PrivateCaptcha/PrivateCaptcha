@@ -35,6 +35,7 @@ func clientIP(strategy realclientip.Strategy, r *http.Request) string {
 type HTTPRateLimiter interface {
 	Shutdown()
 	RateLimit(next http.Handler) http.Handler
+	Updater(r *http.Request) leakybucket.LimitUpdaterFunc
 }
 
 type httpRateLimiter[TKey comparable] struct {
@@ -78,6 +79,19 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 			l.rejectedHandler.ServeHTTP(w, r)
 		}
 	})
+}
+
+func (l *httpRateLimiter[TKey]) Updater(r *http.Request) leakybucket.LimitUpdaterFunc {
+	ctx := r.Context()
+	if key, ok := ctx.Value(common.RateLimitKeyContextKey).(TKey); ok {
+		return l.buckets.UpdaterFunc(key)
+	} else {
+		slog.WarnContext(ctx, "Rate limit key not found in request context")
+	}
+
+	return func(capacity leakybucket.TLevel, leakInterval time.Duration) {
+		// BUMP
+	}
 }
 
 func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {
