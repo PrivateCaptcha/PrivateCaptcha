@@ -452,7 +452,7 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 			derr = err
 		}
 	default:
-		if tabParam != "reports" {
+		if (tabParam != "reports") && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
 		if renderCtx, err := s.getOrgProperty(w, r); err == nil {
