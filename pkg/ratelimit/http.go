@@ -81,6 +81,10 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 	})
 }
 
+func (l *httpRateLimiter[TKey]) UpdaterByKey(key TKey) leakybucket.LimitUpdaterFunc {
+	return l.buckets.UpdaterFunc(key)
+}
+
 func (l *httpRateLimiter[TKey]) Updater(r *http.Request) leakybucket.LimitUpdaterFunc {
 	ctx := r.Context()
 	if key, ok := ctx.Value(common.RateLimitKeyContextKey).(TKey); ok {

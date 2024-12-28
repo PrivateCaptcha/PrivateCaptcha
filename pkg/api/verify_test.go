@@ -57,7 +57,7 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 		return "", "", fmt.Errorf("Unexpected puzzle status code %d", resp.StatusCode)
 	}
 
-	p, puzzleStr, err := fetchPuzzle(resp)
+	p, puzzleStr, err := parsePuzzle(resp)
 	if err != nil {
 		return puzzleStr, "", err
 	}
