@@ -67,7 +67,7 @@ func TestPostTwoFactor(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, cfg.PortalDomain(), common.NoopMiddleware, common.NoopMiddleware)
+	server.Setup(srv, cfg.PortalDomain(), common.NoopMiddleware)
 
 	ctx := context.TODO()
 

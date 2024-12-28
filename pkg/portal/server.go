@@ -23,6 +23,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
@@ -206,6 +207,7 @@ type Server struct {
 	XSRF            XSRFMiddleware
 	Session         session.Manager
 	Mailer          common.Mailer
+	RateLimiter     ratelimit.HTTPRateLimiter
 	Stage           string
 	PaddleAPI       billing.PaddleAPI
 	Verifier        puzzle.Verifier
@@ -225,8 +227,8 @@ func (s *Server) UpdateConfig(config *config.Config) {
 	s.canRegister.Store(config.RegistrationAllowed())
 }
 
-func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify, ratelimiter alice.Constructor) {
-	securityChain := alice.New(edgeVerify, ratelimiter)
+func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify alice.Constructor) {
+	securityChain := alice.New(edgeVerify, s.RateLimiter.RateLimit)
 	s.setupWithPrefix(domain+s.relURL("/"), router, securityChain)
 }
 
