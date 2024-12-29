@@ -8,13 +8,16 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 const (
 	twofactorFormTemplate = ""
 	twofactorTemplate     = "twofactor/twofactor.html"
+	// "authenticated" means when we "legitimize" IP address using business logic
+	authenticatedBucketCap = 20
+	// this effectively means RPS 1.5/second
+	authenticatedLeakInterval = 666 * time.Millisecond
 )
 
 type twoFactorRenderContext struct {
@@ -28,7 +31,7 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	sess := s.Session.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
-		slog.WarnContext(ctx, "User session is not valid", "step", step)
+		slog.WarnContext(ctx, "User session is not valid", "step", step, "found", ok)
 		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
 	}
@@ -124,7 +127,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Delete(session.KeyUserEmail)
 	sess.Set(session.KeyPersistent, true)
 
-	s.RateLimiter.Updater(r)(ratelimit.AuthenticatedBucketCap, ratelimit.AuthenticatedLeakInterval)
+	// TODO: Fix modified rate limit key being deleted on cleanup prematurely
+	s.RateLimiter.Updater(r)(authenticatedBucketCap, authenticatedLeakInterval)
 
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering

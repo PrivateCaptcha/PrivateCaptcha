@@ -3,8 +3,10 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"math/rand"
+	randv2 "math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -30,6 +32,17 @@ func makeOriginHeader(domain string) string {
 	return domain
 }
 
+func generateRandomIPv4() string {
+	// Generate a random 32-bit integer
+	ipInt := randv2.Uint32()
+	// Extract each byte and format as IP address
+	return fmt.Sprintf("%d.%d.%d.%d",
+		(ipInt>>24)&0xFF,
+		(ipInt>>16)&0xFF,
+		(ipInt>>8)&0xFF,
+		ipInt&0xFF)
+}
+
 func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "", true /*verbose*/)
@@ -42,6 +55,7 @@ func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	}
 
 	req.Header.Set("Origin", makeOriginHeader(domain))
+	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
 
 	q := req.URL.Query()
 	q.Add(common.ParamSiteKey, sitekey)

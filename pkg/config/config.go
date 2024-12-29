@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -169,4 +170,38 @@ func (c *Config) HealthCheckInterval() time.Duration {
 
 func (c *Config) AdminEmail() string {
 	return c.getenv("PC_ADMIN_EMAIL")
+}
+
+func (c *Config) PrivateAPIKey() string {
+	return c.getenv("PC_PRIVATE_API_KEY")
+}
+
+func (c *Config) PresharedSecretHeader() string {
+	return c.getenv(common.ConfigPresharedSecretHeader)
+}
+
+func (c *Config) PresharedSecret() string {
+	return c.getenv("PRESHARED_SECRET")
+}
+
+func (c *Config) LeakyBucketCap(area string, fallback uint32) uint32 {
+	value := c.getenv(strings.ToUpper(area) + "_LEAKY_BUCKET_BURST")
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return uint32(i)
+}
+
+func (c *Config) LeakyBucketInterval(area string, fallback time.Duration) time.Duration {
+	value := c.getenv(strings.ToUpper(area) + "_LEAKY_BUCKET_RPS")
+	rps, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+
+	interval := float64(time.Second) / rps
+
+	return time.Duration(interval)
 }

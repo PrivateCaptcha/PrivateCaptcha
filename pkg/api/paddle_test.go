@@ -149,6 +149,7 @@ func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {
 	req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
 	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(data)))
 	req.Header.Set(common.HeaderAuthorization, "Bearer "+token)
+	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

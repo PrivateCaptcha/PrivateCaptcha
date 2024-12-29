@@ -23,3 +23,6 @@ func (srl *StubRateLimiter) Updater(r *http.Request) leakybucket.LimitUpdaterFun
 		// BUMP
 	}
 }
+func (srl *StubRateLimiter) UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration) {
+	// BUMP
+}

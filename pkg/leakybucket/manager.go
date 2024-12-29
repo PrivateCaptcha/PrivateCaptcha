@@ -57,6 +57,13 @@ func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBu
 	return m
 }
 
+func (m *Manager[TKey, T, TBucket]) SetGlobalLimits(capacity TLevel, leakInterval time.Duration) {
+	m.lock.Lock()
+	m.capacity = capacity
+	m.leakInterval = leakInterval
+	m.lock.Unlock()
+}
+
 func (m *Manager[TKey, T, TBucket]) SetDefaultBucket(bucket TBucket) {
 	m.lock.Lock()
 	m.defaultBucket = bucket
