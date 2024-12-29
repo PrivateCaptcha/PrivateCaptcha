@@ -40,9 +40,7 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	return &registerRenderContext{
-		csrfRenderContext: csrfRenderContext{
-			Token: s.XSRF.Token(""),
-		},
+		csrfRenderContext:    csrfRenderContext{},
 		captchaRenderContext: s.createCaptchaRenderContext(),
 		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
 	}, "register/register.html", nil
@@ -78,7 +76,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	verr, err := s.Verifier.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
 	if err != nil || verr != puzzle.VerifyNoError {
 		slog.ErrorContext(ctx, "Failed to verify captcha", "code", verr, common.ErrAttr(err))
-		data.CaptchaError = "Captcha verification failed"
+		data.CaptchaError = "Captcha verification failed."
 		s.render(w, r, registerFormTemplate, data)
 		return
 	}
