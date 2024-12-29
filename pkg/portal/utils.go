@@ -149,13 +149,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.relURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
-func portalRobotsTXT(w http.ResponseWriter, r *http.Request) {
-	contents := "User-agent: *\nDisallow: /"
-	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	common.WriteCached(w)
-	fmt.Fprint(w, contents)
-}
-
 func (s *Server) static(tpl string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		renderCtx := &csrfRenderContext{}

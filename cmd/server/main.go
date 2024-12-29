@@ -179,6 +179,9 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	cdnChain := alice.New(common.Recovered, apiAuth.EdgeVerify(cdnDomain), ratelimiter.RateLimit)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
+	// "protection"
+	publicChain := alice.New(common.Recovered, apiAuth.EdgeVerify("" /*domain*/), ratelimiter.RateLimit, metrics.Handler)
+	common.SetupWellKnownPaths(router, publicChain)
 
 	httpServer := &http.Server{
 		Handler:           router,
