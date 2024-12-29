@@ -12,21 +12,12 @@ import (
 
 type StringBuckets = leakybucket.Manager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]]
 
-func NewAPIKeyBuckets() *StringBuckets {
-	const (
-		maxBucketsToKeep = 1_000
-		// we are allowing 1 request per 2 seconds from a single client IP address with a 5 requests burst
-		// NOTE: this assumes correct configuration of the whole chain of reverse proxies
-		leakyBucketCap    = 5
-		leakRatePerSecond = 0.5
-		leakInterval      = (1.0 / leakRatePerSecond) * time.Second
-	)
-
-	buckets := leakybucket.NewManager[string, leakybucket.ConstLeakyBucket[string], *leakybucket.ConstLeakyBucket[string]](maxBucketsToKeep, leakyBucketCap, leakInterval)
+func NewAPIKeyBuckets(maxBuckets int, bucketCap uint32, leakInterval time.Duration) *StringBuckets {
+	buckets := leakybucket.NewManager[string, leakybucket.ConstLeakyBucket[string]](maxBuckets, bucketCap, leakInterval)
 
 	// we setup a separate bucket for "missing" IPs with empty key
 	// with a more generous burst, assuming a misconfiguration on our side
-	buckets.SetDefaultBucket(leakybucket.NewConstBucket[string]("", 10 /*capacity*/, leakInterval, time.Now()))
+	buckets.SetDefaultBucket(leakybucket.NewConstBucket[string]("", 1 /*capacity*/, leakInterval, time.Now()))
 
 	return buckets
 }
@@ -34,7 +25,15 @@ func NewAPIKeyBuckets() *StringBuckets {
 func NewAPIKeyRateLimiter(header string,
 	buckets *StringBuckets,
 	keyFunc func(r *http.Request) string) HTTPRateLimiter {
-	strategy := realclientip.Must(realclientip.NewSingleIPHeaderStrategy(header))
+	var strategy realclientip.Strategy
+
+	if len(header) > 0 {
+		strategy = realclientip.Must(realclientip.NewSingleIPHeaderStrategy(header))
+	} else {
+		strategy = realclientip.NewChainStrategy(
+			realclientip.Must(realclientip.NewRightmostNonPrivateStrategy("X-Forwarded-For")),
+			realclientip.RemoteAddrStrategy{})
+	}
 
 	limiter := &httpRateLimiter[string]{
 		rejectedHandler: defaultRejectedHandler,
@@ -51,7 +50,7 @@ func NewAPIKeyRateLimiter(header string,
 
 	var cancelCtx context.Context
 	cancelCtx, limiter.cleanupCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_apikey_rate_limiter"))
+		context.WithValue(context.Background(), common.TraceIDContextKey, "apikey_rate_limiter_cleanup"))
 	go limiter.cleanup(cancelCtx)
 
 	return limiter

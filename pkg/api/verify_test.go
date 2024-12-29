@@ -39,6 +39,7 @@ func verifySuite(response, secret string) (*http.Response, error) {
 
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(encoded)))
+	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

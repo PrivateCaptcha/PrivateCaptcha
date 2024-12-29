@@ -5,23 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	realclientip "github.com/realclientip/realclientip-go"
-)
-
-const (
-	// we are allowing 1 request per 2 seconds from a single client IP address with a {leakyBucketCap} requests burst
-	// NOTE: this assumes correct configuration of the whole chain of reverse proxies
-	leakyBucketCap    = 5
-	leakRatePerSecond = 0.5
-	leakInterval      = (1.0 / leakRatePerSecond) * time.Second
-	// "authenticated" means when we "legitimize" IP address using business logic
-	AuthenticatedBucketCap = 8
-	// this effectively means leakRate = 0.75/second
-	AuthenticatedLeakInterval = 750 * time.Millisecond
 )
 
 func clientIPAddr(strategy realclientip.Strategy, r *http.Request) netip.Addr {
@@ -40,16 +29,28 @@ func clientIPAddr(strategy realclientip.Strategy, r *http.Request) netip.Addr {
 	return addr
 }
 
-func NewIPAddrRateLimiter(header string) *httpRateLimiter[netip.Addr] {
-	strategy := realclientip.Must(realclientip.NewSingleIPHeaderStrategy(header))
+type IPAddrBuckets = leakybucket.Manager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr], *leakybucket.ConstLeakyBucket[netip.Addr]]
 
-	const maxBucketsToKeep = 1_000_000
-
-	buckets := leakybucket.NewManager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr]](maxBucketsToKeep, leakyBucketCap, leakInterval)
+func NewIPAddrBuckets(maxBuckets int, bucketCap uint32, leakInterval time.Duration) *IPAddrBuckets {
+	buckets := leakybucket.NewManager[netip.Addr, leakybucket.ConstLeakyBucket[netip.Addr]](maxBuckets, bucketCap, leakInterval)
 
 	// we setup a separate bucket for "missing" IPs with empty key
 	// with a different burst, assuming a misconfiguration on our side
-	buckets.SetDefaultBucket(leakybucket.NewConstBucket(netip.Addr{}, 2 /*capacity*/, leakInterval, time.Now()))
+	buckets.SetDefaultBucket(leakybucket.NewConstBucket(netip.Addr{}, 1 /*capacity*/, leakInterval, time.Now()))
+
+	return buckets
+}
+
+func NewIPAddrRateLimiter(name, header string, buckets *IPAddrBuckets) *httpRateLimiter[netip.Addr] {
+	var strategy realclientip.Strategy
+
+	if len(header) > 0 {
+		strategy = realclientip.Must(realclientip.NewSingleIPHeaderStrategy(header))
+	} else {
+		strategy = realclientip.NewChainStrategy(
+			realclientip.Must(realclientip.NewRightmostNonPrivateStrategy("X-Forwarded-For")),
+			realclientip.RemoteAddrStrategy{})
+	}
 
 	limiter := &httpRateLimiter[netip.Addr]{
 		rejectedHandler: defaultRejectedHandler,
@@ -58,9 +59,11 @@ func NewIPAddrRateLimiter(header string) *httpRateLimiter[netip.Addr] {
 		keyFunc:         func(r *http.Request) netip.Addr { return clientIPAddr(strategy, r) },
 	}
 
+	name = strings.ToLower(name)
+
 	var cancelCtx context.Context
 	cancelCtx, limiter.cleanupCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_ip_rate_limiter"))
+		context.WithValue(context.Background(), common.TraceIDContextKey, name+"_ip_rate_limiter_cleanup"))
 	go limiter.cleanup(cancelCtx)
 
 	return limiter

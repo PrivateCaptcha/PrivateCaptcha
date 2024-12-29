@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"math"
+	randv2 "math/rand/v2"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,6 +37,7 @@ type HTTPRateLimiter interface {
 	Shutdown()
 	RateLimit(next http.Handler) http.Handler
 	Updater(r *http.Request) leakybucket.LimitUpdaterFunc
+	UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration)
 }
 
 type httpRateLimiter[TKey comparable] struct {
@@ -52,9 +54,14 @@ func (l *httpRateLimiter[TKey]) Shutdown() {
 	l.cleanupCancel()
 }
 
+func (l *httpRateLimiter[TKey]) UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration) {
+	l.buckets.SetGlobalLimits(capacity, leakInterval)
+}
+
 func (l *httpRateLimiter[TKey]) cleanup(ctx context.Context) {
-	// don't over load server on start
-	time.Sleep(10 * time.Second)
+	const jitter = 4 * time.Second
+	// don't overload server on start
+	time.Sleep(10*time.Second + time.Duration(randv2.Int64N(int64(jitter))))
 
 	common.ChunkedCleanup(ctx, 1*time.Second, 10*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
 		return l.buckets.Cleanup(ctx, t, size, nil)

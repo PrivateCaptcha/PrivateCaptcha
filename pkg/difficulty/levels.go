@@ -35,7 +35,7 @@ type Levels struct {
 func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration, cleanupCallback leakybucket.BucketCallback[int32]) *Levels {
 	levels := &Levels{
 		timeSeries:   timeSeries,
-		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, bucketSize),
+		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, bucketSize),
 		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,

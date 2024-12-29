@@ -26,7 +26,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
@@ -112,8 +111,6 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		return err
 	}
 
-	ratelimiter := ratelimit.NewIPAddrRateLimiter(cfg.RateLimiterHeader())
-
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
 		return dberr
@@ -131,9 +128,9 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
 		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
 	}
-	apiAuth := api.NewAuthMiddleware(cfg.Getenv, businessDB, ratelimiter, userLimits, 1*time.Second /*backfill duration*/)
+	auth := api.NewAuthMiddleware(cfg, businessDB, userLimits, 1*time.Second /*backfill duration*/)
 	metrics := monitoring.NewService(cfg.Getenv)
-	apiServer := api.NewServer(businessDB, timeSeriesDB, apiAuth, 30*time.Second /*flush interval*/, paddleAPI, metrics, cfg.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 30*time.Second /*flush interval*/, paddleAPI, metrics, cfg.Getenv)
 
 	router := http.NewServeMux()
 
@@ -159,7 +156,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		Verifier:    apiServer,
 		Metrics:     metrics,
 		Mailer:      portalMailer,
-		RateLimiter: ratelimiter,
+		RateLimiter: auth.DefaultRateLimiter(),
 	}
 	portalServer.Init()
 
@@ -172,15 +169,15 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	}
 
 	portalDomain := cfg.PortalDomain()
-	portalServer.Setup(router, portalDomain, apiAuth.EdgeVerify(portalDomain))
-	defaultAPIChain := alice.New(common.Recovered)
-	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.Then(ratelimiter.RateLimit(http.HandlerFunc(healthCheck.HandlerFunc))))
+	portalServer.Setup(router, portalDomain, auth.EdgeVerify(portalDomain))
+	defaultAPIChain := alice.New(common.Recovered, auth.DefaultRateLimiter().RateLimit)
+	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, defaultAPIChain.ThenFunc(healthCheck.HandlerFunc))
 	cdnDomain := cfg.CDNDomain()
-	cdnChain := alice.New(common.Recovered, apiAuth.EdgeVerify(cdnDomain), ratelimiter.RateLimit)
+	cdnChain := alice.New(common.Recovered, auth.EdgeVerify(cdnDomain))
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 	// "protection"
-	publicChain := alice.New(common.Recovered, apiAuth.EdgeVerify("" /*domain*/), ratelimiter.RateLimit, metrics.Handler)
+	publicChain := alice.New(common.Recovered, auth.EdgeVerify("" /*domain*/), metrics.Handler)
 	common.SetupWellKnownPaths(router, publicChain)
 
 	httpServer := &http.Server{
@@ -197,11 +194,12 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
 		portalServer.UpdateConfig(cfg)
+		auth.UpdateConfig(cfg)
 	}
 	updateConfigFunc()
 
 	quit := make(chan struct{})
-	go func() {
+	go func(ctx context.Context) {
 		signals := make(chan os.Signal, 1)
 		signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 		defer func() {
@@ -227,7 +225,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 				return
 			}
 		}
-	}()
+	}(common.TraceContext(context.Background(), "signal_handler"))
 
 	go func() {
 		slog.InfoContext(ctx, "Listening", "address", listener.Addr().String(), "version", GitCommit, "stage", cfg.Stage())
@@ -291,8 +289,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
-		apiAuth.Shutdown()
-		ratelimiter.Shutdown()
+		auth.Shutdown()
 		metrics.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

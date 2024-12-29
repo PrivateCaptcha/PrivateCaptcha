@@ -6,7 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"flag"
-	"net/netip"
 	"os"
 	"testing"
 	"time"
@@ -16,7 +15,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -33,6 +31,17 @@ const (
 	authBackfillDelay = 100 * time.Millisecond
 )
 
+func testsEnv(s string) string {
+	switch s {
+	case "PUZZLE_LEAKY_BUCKET_BURST", "DEFAULT_LEAKY_BUCKET_BURST":
+		return "20"
+	case "PUZZLE_LEAKY_BUCKET_RPS", "DEFAULT_LEAKY_BUCKET_RPS":
+		return "10"
+	default:
+		return os.Getenv(s)
+	}
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -43,7 +52,7 @@ func TestMain(m *testing.M) {
 	common.SetupLogs(common.StageTest, true)
 
 	var err error
-	cfg, err = config.New(os.Getenv)
+	cfg, err = config.New(testsEnv)
 	if err != nil {
 		panic(err)
 	}
@@ -65,11 +74,8 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusiness(pool, cache)
 
-	ratelimiter := ratelimit.NewIPAddrRateLimiter(os.Getenv(common.ConfigRateLimitHeader))
-	ratelimiter.UpdaterByKey(netip.Addr{})(20 /*capacity*/, 100*time.Millisecond /*leak interval*/)
-
 	blockedUsers := db.NewStaticCache[int32, *common.UserLimitStatus](100 /*cap*/, nil /*missing data*/)
-	auth = NewAuthMiddleware(os.Getenv, store, ratelimiter, blockedUsers, authBackfillDelay)
+	auth = NewAuthMiddleware(cfg, store, blockedUsers, authBackfillDelay)
 	defer auth.Shutdown()
 
 	s = NewServer(store, timeSeries, auth, 2*time.Second /*flush interval*/, &billing.StubPaddleClient{}, monitoring.NewStub(), os.Getenv)

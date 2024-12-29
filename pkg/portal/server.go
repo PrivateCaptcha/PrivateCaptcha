@@ -228,8 +228,7 @@ func (s *Server) UpdateConfig(config *config.Config) {
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify alice.Constructor) {
-	securityChain := alice.New(edgeVerify, s.RateLimiter.RateLimit)
-	s.setupWithPrefix(domain+s.relURL("/"), router, securityChain)
+	s.setupWithPrefix(domain+s.relURL("/"), router, edgeVerify)
 }
 
 func (s *Server) relURL(url string) string {
@@ -277,6 +276,7 @@ func (rg *routeGenerator) LastPath() string {
 }
 
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, securityChain alice.Chain) {
+func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security alice.Constructor) {
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
 
 	rg := &routeGenerator{prefix: prefix}
@@ -292,7 +292,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, securityC
 	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
-	public := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath)).Extend(securityChain).Append(monitoring.Logged)
+	public := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath), security, monitoring.Logged)
 	publicMaintenance := public.Append(s.maintenance)
 	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenance.Then(s.handler(s.getLogin)))
 	router.Handle(rg.Get(common.RegisterEndpoint), publicMaintenance.Then(s.handler(s.getRegister)))
@@ -301,7 +301,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, securityC
 	router.Handle(rg.Get(common.ExpiredEndpoint), public.ThenFunc(s.expired))
 	router.Handle(rg.Get(common.LogoutEndpoint), public.ThenFunc(s.logout))
 
-	// configured with middlewares
+	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
 	openWrite := publicMaintenance.Append(maxBytesHandler)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	privateWrite := openWrite.Append(s.csrf(s.csrfUserIDKeyFunc), s.private)
