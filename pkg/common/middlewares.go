@@ -2,11 +2,14 @@ package common
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strconv"
 	"time"
+
+	"github.com/justinas/alice"
 )
 
 const (
@@ -95,4 +98,35 @@ func StrPathArg(r *http.Request, name string) (string, error) {
 	}
 
 	return value, nil
+}
+
+func noContent(w http.ResponseWriter, r *http.Request) {
+	WriteCached(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func notFound(w http.ResponseWriter, r *http.Request) {
+	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+}
+
+func robotsTXT(w http.ResponseWriter, r *http.Request) {
+	contents := "User-agent: *\nDisallow: /"
+	w.Header().Set(HeaderContentType, ContentTypePlain)
+	WriteCached(w)
+	fmt.Fprint(w, contents)
+}
+
+// 2xx responses make them cached on CDN level
+func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
+	router.Handle("/robots.txt", chain.ThenFunc(robotsTXT))
+	router.Handle("/favicon.ico", chain.ThenFunc(noContent))
+	router.Handle("/.well-known/", chain.ThenFunc(noContent))
+	router.Handle("/.vscode/", chain.ThenFunc(noContent))
+	router.Handle("/wp-admin/", chain.ThenFunc(noContent))
+	router.Handle("/wp-login.php", chain.ThenFunc(noContent))
+	router.Handle("/wp-config.php", chain.ThenFunc(noContent))
+	router.Handle("/sitemap.xml", chain.ThenFunc(noContent))
+	router.Handle("/package.json", chain.ThenFunc(noContent))
+	router.Handle("/changelog.txt", chain.ThenFunc(noContent))
+	router.Handle("/", chain.ThenFunc(notFound))
 }

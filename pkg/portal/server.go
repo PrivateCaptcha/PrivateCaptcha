@@ -353,12 +353,15 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, securityC
 	router.Handle(rg.Get(common.SupportEndpoint), privateRead.Then(s.handler(s.getSupport)))
 	router.Handle(rg.Post(common.SupportEndpoint), privateWrite.Then(s.handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
-	router.Handle(rg.Get("robots.txt"), public.ThenFunc(portalRobotsTXT))
 	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
 	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
+	// {$} matches the end of the URL
 	router.Handle(http.MethodGet+" "+prefix+"{$}", privateRead.ThenFunc(s.getPortal))
-	// wildcard
-	router.Handle(http.MethodGet+" "+prefix+"{path...}", public.ThenFunc(s.notFound))
+	// wildcards (everything not matched will be handled in main())
+	router.Handle(rg.Get(common.OrgEndpoint)+"/", public.ThenFunc(s.notFound))
+	router.Handle(rg.Get(common.ErrorEndpoint)+"/", public.ThenFunc(s.notFound))
+	router.Handle(rg.Get(common.SettingsEndpoint)+"/", public.ThenFunc(s.notFound))
+	router.Handle(rg.Get(common.UserEndpoint)+"/", public.ThenFunc(s.notFound))
 }
 
 func (s *Server) isMaintenanceMode() bool {
