@@ -1123,10 +1123,10 @@ func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, n
 	}
 
 	// current logic is that initial values will be set per plan and adjusted manually in DB if requested by customer
-	const apiKeyRequestsBurst = 10
-	burst := int32(requestsPerSecond * 2)
-	if burst < apiKeyRequestsBurst {
-		burst = apiKeyRequestsBurst
+	const minAPIKeyRequestsBurst = 20
+	burst := int32(requestsPerSecond * 5)
+	if burst < minAPIKeyRequestsBurst {
+		burst = minAPIKeyRequestsBurst
 	}
 
 	key, err := impl.queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
