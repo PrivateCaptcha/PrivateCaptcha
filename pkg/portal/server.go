@@ -28,6 +28,13 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 )
 
+const (
+	// "authenticated" means when we "legitimize" IP address using business logic
+	authenticatedBucketCap = 20
+	// this effectively means RPS 1.5/second
+	authenticatedLeakInterval = 666 * time.Millisecond
+)
+
 var (
 	errInvalidPathArg    = errors.New("path argument is not valid")
 	errInvalidRequestArg = errors.New("request argument is not valid")
@@ -487,6 +494,9 @@ func (s *Server) private(next http.Handler) http.Handler {
 
 		if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 			if step == loginStepCompleted {
+				// update limits each time as rate limiting gets cleaned up frequently (impact shouldn't be much in portal)
+				s.RateLimiter.Updater(r)(authenticatedBucketCap, authenticatedLeakInterval)
+
 				ctx = context.WithValue(ctx, common.LoggedInContextKey, true)
 				ctx = context.WithValue(ctx, common.SessionContextKey, sess)
 

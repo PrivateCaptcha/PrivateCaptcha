@@ -14,10 +14,6 @@ import (
 const (
 	twofactorFormTemplate = ""
 	twofactorTemplate     = "twofactor/twofactor.html"
-	// "authenticated" means when we "legitimize" IP address using business logic
-	authenticatedBucketCap = 20
-	// this effectively means RPS 1.5/second
-	authenticatedLeakInterval = 666 * time.Millisecond
 )
 
 type twoFactorRenderContext struct {
@@ -126,9 +122,6 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Delete(session.KeyTwoFactorCode)
 	sess.Delete(session.KeyUserEmail)
 	sess.Set(session.KeyPersistent, true)
-
-	// TODO: Fix modified rate limit key being deleted on cleanup prematurely
-	s.RateLimiter.Updater(r)(authenticatedBucketCap, authenticatedLeakInterval)
 
 	// TODO: Redirect user to create the first property instead of dashboard
 	// in case we're registering

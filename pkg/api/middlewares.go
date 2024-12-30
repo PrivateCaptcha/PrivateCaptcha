@@ -50,7 +50,7 @@ func newAPIKeyBuckets() *ratelimit.StringBuckets {
 		maxBuckets = 1_000
 		// NOTE: these defaults will be adjusted per API key quota almost immediately after verifying API key
 		// requests burst
-		leakyBucketCap = 5
+		leakyBucketCap = 20
 		// effective 1 request/second
 		leakInterval = 1 * time.Second
 	)
@@ -515,6 +515,7 @@ func (am *authMiddleware) APIKey(next http.Handler) http.Handler {
 		} else {
 			// rate limiter key will be the {secret} itself _only_ when we are cached
 			// which means if it's not, then we have just fetched the record from DB
+			// when rate limiting is cleaned up (due to inactivity) we should still be able to access on defaults
 			if rateLimiterKey, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (rateLimiterKey != secret) {
 				interval := float64(time.Second) / apiKey.RequestsPerSecond
 				am.apiKeyRateLimiter.Updater(r)(uint32(apiKey.RequestsBurst), time.Duration(interval))
