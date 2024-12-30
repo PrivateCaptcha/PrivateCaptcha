@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/justinas/alice"
 )
 
@@ -120,7 +119,7 @@ func catchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (len(path) > 0) && (path[0] == '/') && strings.HasPrefix(path[1:], common.PuzzleEndpoint) {
+	if (len(path) > 0) && (path[0] == '/') && strings.HasPrefix(path[1:], PuzzleEndpoint) {
 		noContent(w, r)
 		return
 	}
