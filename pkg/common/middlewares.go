@@ -148,5 +148,6 @@ func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/.aws/", chain.ThenFunc(noContent))
 	router.Handle("/wp-admin/", chain.ThenFunc(noContent))
 	router.Handle("/changelog.txt", chain.ThenFunc(noContent))
+	router.Handle("/js/privatecaptcha.js.map", chain.ThenFunc(noContent))
 	router.Handle("/", chain.ThenFunc(catchAll))
 }
