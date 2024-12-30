@@ -305,7 +305,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	// NOTE: with regards to CORS, for portal server we want CORS to be before rate limiting
 
 	// separately configured "public" ones
-	public := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath), security, monitoring.Logged)
+	public := alice.New(common.Recovered, s.Metrics.HandlerFunc(rg.LastPath), security, s.RateLimiter.RateLimit, monitoring.Logged)
 	publicMaintenance := public.Append(s.maintenance)
 	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenance.Then(cached(s.handler(s.getLogin))))
 	router.Handle(rg.Get(common.RegisterEndpoint), publicMaintenance.Then(cached(s.handler(s.getRegister))))

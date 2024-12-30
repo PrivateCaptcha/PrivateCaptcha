@@ -36,6 +36,7 @@ func NewAPIKeyRateLimiter(header string,
 	}
 
 	limiter := &httpRateLimiter[string]{
+		name:            "apikey",
 		rejectedHandler: defaultRejectedHandler,
 		strategy:        strategy,
 		buckets:         buckets,
