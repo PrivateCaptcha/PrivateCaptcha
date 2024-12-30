@@ -40,7 +40,9 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	return &registerRenderContext{
-		csrfRenderContext:    csrfRenderContext{},
+		csrfRenderContext: csrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
 		captchaRenderContext: s.createCaptchaRenderContext(),
 		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
 	}, "register/register.html", nil
