@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/justinas/alice"
 )
 
@@ -106,12 +107,26 @@ func noContent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func notFound(w http.ResponseWriter, r *http.Request) {
-	if strings.HasSuffix(r.URL.Path, "/.git/config") {
+func catchAll(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	if strings.HasSuffix(path, "/.git/config") {
 		noContent(w, r)
 		return
 	}
 
+	if strings.HasSuffix(path, ".php") {
+		noContent(w, r)
+		return
+	}
+
+	if (len(path) > 0) && (path[0] == '/') && strings.HasPrefix(path[1:], common.PuzzleEndpoint) {
+		noContent(w, r)
+		return
+	}
+
+	ctx := r.Context()
+	slog.WarnContext(ctx, "CatchAll handler", "path", path, "host", r.Host, "method", r.Method)
 	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 }
 
@@ -126,26 +141,15 @@ func robotsTXT(w http.ResponseWriter, r *http.Request) {
 func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/robots.txt", chain.ThenFunc(robotsTXT))
 	router.Handle("/favicon.ico", chain.ThenFunc(noContent))
+	router.Handle("/sitemap.xml", chain.ThenFunc(noContent))
+	router.Handle("/s3cmd.ini", chain.ThenFunc(noContent))
+	router.Handle("/ads.txt", chain.ThenFunc(noContent))
+	router.Handle("/package.json", chain.ThenFunc(noContent))
+	router.Handle("/{path}/.git/config", chain.ThenFunc(noContent))
 	router.Handle("/.well-known/", chain.ThenFunc(noContent))
 	router.Handle("/.vscode/", chain.ThenFunc(noContent))
 	router.Handle("/.aws/", chain.ThenFunc(noContent))
-	router.Handle("/.git/", chain.ThenFunc(noContent))
-	router.Handle("/{path}/.git/config", chain.ThenFunc(noContent))
-	router.Handle("/wp-content/", chain.ThenFunc(noContent))
 	router.Handle("/wp-admin/", chain.ThenFunc(noContent))
-	router.Handle("/wp-includes/", chain.ThenFunc(noContent))
-	router.Handle("/wp-login.php", chain.ThenFunc(noContent))
-	router.Handle("/wp-config.php", chain.ThenFunc(noContent))
-	router.Handle("/app/", chain.ThenFunc(noContent))
-	router.Handle("/api/", chain.ThenFunc(noContent))
-	router.Handle("/admin/", chain.ThenFunc(noContent))
-	router.Handle("/plugins/", chain.ThenFunc(noContent))
-	router.Handle("/jobs/", chain.ThenFunc(noContent))
-	router.Handle("/config/", chain.ThenFunc(noContent))
-	router.Handle("/services/", chain.ThenFunc(noContent))
-	router.Handle("/__MACOSX/", chain.ThenFunc(noContent))
-	router.Handle("/sitemap.xml", chain.ThenFunc(noContent))
-	router.Handle("/package.json", chain.ThenFunc(noContent))
 	router.Handle("/changelog.txt", chain.ThenFunc(noContent))
-	router.Handle("/", chain.ThenFunc(notFound))
+	router.Handle("/", chain.ThenFunc(catchAll))
 }

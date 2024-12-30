@@ -159,10 +159,6 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
-
-	if s.stage != common.StageProd {
-		router.Handle(prefix+"{path...}", corsHandler(monitoring.Logged(http.HandlerFunc(catchAll))))
-	}
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
@@ -410,14 +406,4 @@ func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
 	}
 
 	slog.InfoContext(ctx, "Finished processing verify log")
-}
-
-func catchAll(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slog.WarnContext(ctx, "Inside catchall handler", "path", r.URL.Path, "method", r.Method)
-
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
 }
