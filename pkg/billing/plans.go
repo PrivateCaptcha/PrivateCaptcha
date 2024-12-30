@@ -157,7 +157,106 @@ var (
 		},
 	}
 
-	prodPlans = []*Plan{}
+	prodPlans = []*Plan{
+		{
+			Name:            "Private Captcha 1K",
+			PaddleProductID: "pro_01jgby7f4zvtn644canpryjs5e",
+			//PaddlePriceIDMonthly: "",
+			PaddlePriceIDYearly:  "pri_01jgby921qq2q3t12qnjdxz3dj",
+			PriceMonthly:         9,
+			PriceYearly:          59,
+			RequestsLimit:        1_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        5_000, // next plan's limit
+			APIRequestsPerSecond: 10,
+		},
+		{
+			Name:                 "Private Captcha 5K",
+			PaddleProductID:      "pro_01jgbyg4y3hamxqvpvjcfv40gz",
+			PaddlePriceIDMonthly: "pri_01jgbyk6sq3gkwjkem891azdd7",
+			PaddlePriceIDYearly:  "pri_01jgbyn4fs9rarwrjmrpx8k64s",
+			PriceMonthly:         15,
+			PriceYearly:          150,
+			RequestsLimit:        5_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        10_000, // next plan's limit
+			APIRequestsPerSecond: 15,
+		},
+		{
+			Name:                 "Private Captcha 10K",
+			PaddleProductID:      "pro_01jgbyr1yvtcezgmm2svf3yrkh",
+			PaddlePriceIDMonthly: "pri_01jgbysz696kqbvtwvz8vqh5x5",
+			PaddlePriceIDYearly:  "pri_01jgbz15bp8nx7qwb5932bed64",
+			PriceMonthly:         29,
+			PriceYearly:          290,
+			RequestsLimit:        10_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        25_000, // next plan's limit
+			APIRequestsPerSecond: 20,
+		},
+		{
+			Name:                 "Private Captcha 25K",
+			PaddleProductID:      "pro_01jgbz5gpastcsnyfyrwsftc4k",
+			PaddlePriceIDMonthly: "pri_01jgbz658cnmkrcq9zdyzbzbmt",
+			PaddlePriceIDYearly:  "pri_01jgbz6z4jbm1kadvck8yc2vgy",
+			PriceMonthly:         49,
+			PriceYearly:          490,
+			RequestsLimit:        25_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        50_000, // next plan's limit
+			APIRequestsPerSecond: 25,
+		},
+		{
+			Name:                 "Private Captcha 50K",
+			PaddleProductID:      "pro_01jgbzaw24w528ckgtyew5ev5m",
+			PaddlePriceIDMonthly: "pri_01jgbzbjd9ttp4kv02yjnab10k",
+			PaddlePriceIDYearly:  "pri_01jgbzc69a3q409529q1wxcprk",
+			PriceMonthly:         99,
+			PriceYearly:          990,
+			RequestsLimit:        50_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        100_000, // next plan's limit
+			APIRequestsPerSecond: 40,
+		},
+		{
+			Name:                 "Private Captcha 100K",
+			PaddleProductID:      "pro_01jgbzfyfwyx49ypp4tcth1d03",
+			PaddlePriceIDMonthly: "pri_01jgbzhwemg90t8c1r5w972ekt",
+			PaddlePriceIDYearly:  "pri_01jgbzjtrrw30t3m0t8pta1sap",
+			PriceMonthly:         199,
+			PriceYearly:          1990,
+			RequestsLimit:        100_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        200_000, // next plan's limit
+			APIRequestsPerSecond: 75,
+		},
+		{
+			Name:                 "Private Captcha 200K",
+			PaddleProductID:      "pro_01jgbzremf60a5404yc0538h46",
+			PaddlePriceIDMonthly: "pri_01jgbzs0rm49k9t8bq27qs5b8y",
+			PaddlePriceIDYearly:  "pri_01jgbzt1z45s1cdy83hszhb885",
+			PriceMonthly:         299,
+			PriceYearly:          2990,
+			RequestsLimit:        200_000,
+			Version:              version1,
+			OrgsLimit:            defaultOrgLimit,
+			PropertiesLimit:      defaultPropertiesLimit,
+			ThrottleLimit:        400_000, // next plan's limit
+			APIRequestsPerSecond: 100,
+		},
+	}
 
 	TestPlans = []*Plan{
 		{
