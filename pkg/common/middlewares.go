@@ -108,6 +108,7 @@ func noContent(w http.ResponseWriter, r *http.Request) {
 
 func catchAll(w http.ResponseWriter, r *http.Request) {
 	path := r.URL.Path
+	slog.WarnContext(r.Context(), "CatchAll handler", "path", path, "host", r.Host, "method", r.Method)
 
 	if strings.HasSuffix(path, "/.git/config") {
 		noContent(w, r)
@@ -124,8 +125,6 @@ func catchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := r.Context()
-	slog.WarnContext(ctx, "CatchAll handler", "path", path, "host", r.Host, "method", r.Method)
 	http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 }
 
@@ -144,7 +143,6 @@ func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/s3cmd.ini", chain.ThenFunc(noContent))
 	router.Handle("/ads.txt", chain.ThenFunc(noContent))
 	router.Handle("/package.json", chain.ThenFunc(noContent))
-	router.Handle("/{path}/.git/config", chain.ThenFunc(noContent))
 	router.Handle("/.well-known/", chain.ThenFunc(noContent))
 	router.Handle("/.vscode/", chain.ThenFunc(noContent))
 	router.Handle("/.aws/", chain.ThenFunc(noContent))

@@ -41,6 +41,7 @@ type HTTPRateLimiter interface {
 }
 
 type httpRateLimiter[TKey comparable] struct {
+	name            string
 	rejectedHandler http.HandlerFunc
 	buckets         *leakybucket.Manager[TKey, leakybucket.ConstLeakyBucket[TKey], *leakybucket.ConstLeakyBucket[TKey]]
 	strategy        realclientip.Strategy
@@ -77,10 +78,15 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 		setRateLimitHeaders(w, addResult)
 
 		if addResult.Added > 0 {
+			//slog.Log(r.Context(), common.LevelTrace, "Allowing request", "ratelimiter", l.name,
+			//	"key", key, "host", r.Host, "path", r.URL.Path, "method", r.Method,
+			//	"level", addResult.CurrLevel, "capacity", addResult.Capacity, "found", addResult.Found)
+
 			ctx := context.WithValue(r.Context(), common.RateLimitKeyContextKey, key)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
-			slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "key", key, "host", r.Host, "path", r.URL.Path,
+			slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "ratelimiter", l.name,
+				"key", key, "host", r.Host, "path", r.URL.Path, "method", r.Method,
 				"level", addResult.CurrLevel, "capacity", addResult.Capacity, "resetAfter", addResult.ResetAfter.String(),
 				"retryAfter", addResult.RetryAfter.String(), "found", addResult.Found)
 			l.rejectedHandler.ServeHTTP(w, r)

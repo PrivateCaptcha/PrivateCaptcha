@@ -53,6 +53,7 @@ func NewIPAddrRateLimiter(name, header string, buckets *IPAddrBuckets) *httpRate
 	}
 
 	limiter := &httpRateLimiter[netip.Addr]{
+		name:            name,
 		rejectedHandler: defaultRejectedHandler,
 		strategy:        strategy,
 		buckets:         buckets,

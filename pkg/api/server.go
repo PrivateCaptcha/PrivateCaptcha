@@ -146,10 +146,13 @@ func (s *server) Shutdown() {
 func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler alice.Constructor) {
 	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	puzzleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), corsHandler, s.auth.Sitekey)
-	verifyChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.APIKey, monitoring.Logged)
+	publicChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain))
+	puzzleBase := publicChain.Append(corsHandler)
+	puzzleChain := puzzleBase.Append(s.auth.Sitekey)
+	verifyChain := publicChain.Append(s.auth.APIKey, monitoring.Logged)
 	// NOTE: auth middleware provides rate limiting internally
 	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, puzzleChain.ThenFunc(s.puzzle))
+	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, puzzleBase.ThenFunc(s.puzzlePreFlight))
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
 	maxBytesHandler := func(next http.Handler) http.Handler {
@@ -207,6 +210,10 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
 
 	return puzzle, nil
+}
+
+func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {

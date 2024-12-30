@@ -24,7 +24,7 @@ const (
 	// for API we have a separate configuration altogether
 	// NOTE: this assumes correct configuration of the whole chain of reverse proxies
 	// the main problem are NATs/VPNs that make possible for lots of legitimate users to actually come from 1 public IP
-	defaultLeakyBucketCap = 8
+	defaultLeakyBucketCap = 10
 	defaultLeakInterval   = 2 * time.Second
 	// for puzzles the logic is that if something becomes popular, there will be a spike, but normal usage should be low
 	puzzleLeakyBucketCap = 20
@@ -284,6 +284,7 @@ func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Dur
 	slog.DebugContext(ctx, "Finished backfilling properties")
 }
 
+// NOTE: unlike other "auth" middlewares, EdgeVerify() does NOT add rate limiting
 func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http.Handler {
 	if (len(allowedHost) == 0) && (len(am.presharedSecret) == 0) {
 		return common.NoopMiddleware
@@ -325,8 +326,7 @@ func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http
 				}
 			}
 
-			rateLimited := am.defaultRateLimiter.RateLimit(h)
-			rateLimited.ServeHTTP(w, r)
+			h.ServeHTTP(w, r)
 		})
 	}
 }
