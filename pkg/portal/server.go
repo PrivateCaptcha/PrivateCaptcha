@@ -282,13 +282,6 @@ func (rg *routeGenerator) LastPath() string {
 	return result
 }
 
-func cached(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		common.WriteCached(w)
-		next.ServeHTTP(w, r)
-	})
-}
-
 func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security alice.Constructor) {
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
 
@@ -307,8 +300,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	// separately configured "public" ones
 	public := alice.New(common.Recovered, security, s.Metrics.HandlerFunc(rg.LastPath), s.RateLimiter.RateLimit, monitoring.Logged)
 	publicMaintenance := public.Append(s.maintenance)
-	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenance.Then(cached(s.handler(s.getLogin))))
-	router.Handle(rg.Get(common.RegisterEndpoint), publicMaintenance.Then(cached(s.handler(s.getRegister))))
+	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenance.Then(common.Cached(s.handler(s.getLogin))))
+	router.Handle(rg.Get(common.RegisterEndpoint), publicMaintenance.Then(common.Cached(s.handler(s.getRegister))))
 	router.Handle(rg.Get(common.TwoFactorEndpoint), publicMaintenance.ThenFunc(s.getTwoFactor))
 	router.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public.ThenFunc(s.error))
 	router.Handle(rg.Get(common.ExpiredEndpoint), public.ThenFunc(s.expired))
