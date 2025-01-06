@@ -10,17 +10,16 @@ import (
 	"testing"
 	"time"
 
-	paddle "github.com/PaddleHQ/paddle-go-sdk"
-	"github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/rs/xid"
 )
 
-func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
-	return &paddle.SubscriptionCreatedEvent{
-		GenericEvent: paddle.GenericEvent{},
+func stubSubscriptionCreatedEvent() *paddlenotification.SubscriptionCreated {
+	return &paddlenotification.SubscriptionCreated{
+		GenericNotificationEvent: paddlenotification.GenericNotificationEvent{},
 		Data: paddlenotification.SubscriptionCreatedNotification{
 			ID:             xid.New().String(),
 			TransactionID:  xid.New().String(),
@@ -65,7 +64,7 @@ func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
 					TrialPeriod:  &paddlenotification.Duration{},
 					TaxMode:      "",
 					Quantity:     paddlenotification.PriceQuantity{},
-					Status:       paddlenotification.Status(paddle.SubscriptionStatusActive),
+					Status:       paddlenotification.StatusActive,
 				},
 			}},
 			CustomData: paddlenotification.CustomData{},
@@ -73,7 +72,7 @@ func stubSubscriptionCreatedEvent() *paddle.SubscriptionCreatedEvent {
 	}
 }
 
-func subscriptionCreatedSuite(ctx context.Context, evt *paddle.SubscriptionCreatedEvent, email string, t *testing.T) {
+func subscriptionCreatedSuite(ctx context.Context, evt *paddlenotification.SubscriptionCreated, email string, t *testing.T) {
 	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey)
 	if err != nil {
 		t.Fatal(err)
@@ -177,8 +176,8 @@ func TestSubscriptionUpdated(t *testing.T) {
 
 	pausedAt := common.JSONTimeNow().String()
 
-	evt := &paddle.SubscriptionUpdatedEvent{
-		GenericEvent: paddle.GenericEvent{},
+	evt := &paddlenotification.SubscriptionUpdated{
+		GenericNotificationEvent: paddlenotification.GenericNotificationEvent{},
 		Data: paddlenotification.SubscriptionNotification{
 			ID:             subscription.PaddleSubscriptionID,
 			Status:         paddlenotification.SubscriptionStatusPaused,
@@ -229,7 +228,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if subscription.Status != string(paddle.SubscriptionStatusPaused) {
+	if subscription.Status != string(paddlenotification.SubscriptionStatusPaused) {
 		t.Errorf("Unexpected subscription status: %v", subscription.Status)
 	}
 }

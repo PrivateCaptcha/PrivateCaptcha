@@ -9,8 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	paddle "github.com/PaddleHQ/paddle-go-sdk"
-	"github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -45,20 +44,20 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	return j
 }
 
-func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.SubscriptionCreatedEvent) (*dbgen.CreateSubscriptionParams, int32, error) {
-	j := findProductID(ctx, evt.Data.Items, s.stage)
+func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddlenotification.SubscriptionCreatedNotification) (*dbgen.CreateSubscriptionParams, int32, error) {
+	j := findProductID(ctx, evt.Items, s.stage)
 	if j == -1 {
 		return nil, -1, errProductNotFound
 	}
 
-	subscr := evt.Data.Items[j]
+	subscr := evt.Items[j]
 
 	params := &dbgen.CreateSubscriptionParams{
 		PaddlePriceID:        subscr.Price.ID,
 		PaddleProductID:      subscr.Price.ProductID,
-		PaddleSubscriptionID: evt.Data.ID,
-		PaddleCustomerID:     evt.Data.CustomerID,
-		Status:               string(evt.Data.Status),
+		PaddleSubscriptionID: evt.ID,
+		PaddleCustomerID:     evt.CustomerID,
+		Status:               string(evt.Status),
 		Source:               dbgen.SubscriptionSourcePaddle,
 	}
 
@@ -80,7 +79,7 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddle.Su
 
 	userID := -1
 
-	if data, ok := evt.Data.CustomData[pcUserPaddlePassthroughKey]; ok {
+	if data, ok := evt.CustomData[pcUserPaddlePassthroughKey]; ok {
 		if userIDStr, ok := data.(string); ok {
 			if value, err := strconv.Atoi(userIDStr); err == nil {
 				userID = value
@@ -106,7 +105,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	evt := &paddle.SubscriptionCreatedEvent{}
+	evt := &paddlenotification.SubscriptionCreated{}
 	if err := json.Unmarshal(body, evt); err != nil {
 		slog.ErrorContext(ctx, "Failed to parse subscription created event", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -123,7 +122,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subscrParams, existingUserID, err := s.newCreateSubscriptionParams(ctx, evt)
+	subscrParams, existingUserID, err := s.newCreateSubscriptionParams(ctx, &evt.Data)
 	if err != nil {
 		elog.ErrorContext(ctx, "Failed to process paddle event", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -195,7 +194,7 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	evt := &paddle.SubscriptionUpdatedEvent{}
+	evt := &paddlenotification.SubscriptionUpdated{}
 	if err := json.Unmarshal(body, evt); err != nil {
 		slog.ErrorContext(ctx, "Failed to parse subscription updated request", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -243,7 +242,7 @@ func (s *server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	evt := &paddle.SubscriptionCanceledEvent{}
+	evt := &paddlenotification.SubscriptionCanceled{}
 	if err := json.Unmarshal(body, evt); err != nil {
 		slog.ErrorContext(ctx, "Failed to parse subscription cancelled request", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	"github.com/PaddleHQ/paddle-go-sdk"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
@@ -379,8 +379,8 @@ func UpdatePlansPrices(prices Prices, stage string) {
 }
 
 func IsSubscriptionActive(status string) bool {
-	switch paddle.SubscriptionStatus(status) {
-	case paddle.SubscriptionStatusActive, paddle.SubscriptionStatusTrialing:
+	switch paddlenotification.SubscriptionStatus(status) {
+	case paddlenotification.SubscriptionStatusActive, paddlenotification.SubscriptionStatusTrialing:
 		return true
 	default:
 		return false

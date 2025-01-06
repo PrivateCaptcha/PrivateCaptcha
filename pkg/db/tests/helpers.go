@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/PaddleHQ/paddle-go-sdk"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -42,7 +42,7 @@ func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
 		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
-		Status:               string(paddle.SubscriptionStatusTrialing),
+		Status:               string(paddlenotification.SubscriptionStatusTrialing),
 		Source:               dbgen.SubscriptionSourceInternal,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
@@ -70,7 +70,7 @@ func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID
 	_, err = store.UpdateSubscription(ctx, &dbgen.UpdateSubscriptionParams{
 		PaddleSubscriptionID: subscr.Subscription.PaddleSubscriptionID,
 		PaddleProductID:      subscr.Subscription.PaddleProductID,
-		Status:               string(paddle.SubscriptionStatusCanceled),
+		Status:               string(paddlenotification.SubscriptionStatusCanceled),
 		NextBilledAt:         pgtype.Timestamptz{},
 		CancelFrom:           db.Timestampz(time.Now().UTC()),
 	})

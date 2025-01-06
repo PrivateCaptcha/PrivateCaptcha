@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.17.1
-	github.com/PaddleHQ/paddle-go-sdk v1.0.0
+	github.com/PaddleHQ/paddle-go-sdk/v3 v3.0.0
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/badoux/checkmail v1.2.4
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf
