@@ -8,7 +8,7 @@ import (
 	randv2 "math/rand/v2"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
@@ -85,7 +85,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 		PaddleSubscriptionID: xid.New().String(),
 		PaddleCustomerID:     xid.New().String(),
 		Source:               dbgen.SubscriptionSourceInternal,
-		Status:               string(paddle.SubscriptionStatusTrialing),
+		Status:               string(paddlenotification.SubscriptionStatusTrialing),
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}, email, name, orgName, -1 /*existingUserID*/)

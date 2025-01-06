@@ -13,8 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk"
-	"github.com/PaddleHQ/paddle-go-sdk/pkg/paddlenotification"
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/rs/xid"
 )
@@ -81,8 +80,8 @@ func main() {
 
 		nextBilledAt := common.JSONTimeNowAdd(7 * 24 * time.Hour).String()
 
-		payload := &paddle.SubscriptionCreatedEvent{
-			GenericEvent: paddle.GenericEvent{
+		payload := &paddlenotification.SubscriptionCreated{
+			GenericNotificationEvent: paddlenotification.GenericNotificationEvent{
 				EventID:    xid.New().String(),
 				EventType:  "subscription.created",
 				OccurredAt: common.JSONTimeNow().String(),
@@ -90,7 +89,7 @@ func main() {
 			Data: paddlenotification.SubscriptionCreatedNotification{
 				ID:             subscriptionID,
 				TransactionID:  defaultTransactionID,
-				Status:         paddlenotification.SubscriptionStatus(paddle.SubscriptionStatusTrialing),
+				Status:         paddlenotification.SubscriptionStatusTrialing,
 				CustomerID:     customerID,
 				BusinessID:     nil,
 				CurrencyCode:   "EUR",
@@ -103,7 +102,7 @@ func main() {
 					EndsAt:   common.JSONTimeNowAdd(30 * 24 * time.Hour).String(),
 				},
 				Items: []paddlenotification.SubscriptionItem{{
-					Status:       paddlenotification.SubscriptionItemStatus(paddle.SubscriptionStatusTrialing),
+					Status:       paddlenotification.SubscriptionItemStatusTrialing,
 					Quantity:     1,
 					Recurring:    true,
 					CreatedAt:    common.JSONTimeNow().String(),

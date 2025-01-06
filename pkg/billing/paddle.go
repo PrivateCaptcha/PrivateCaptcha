@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	paddle "github.com/PaddleHQ/paddle-go-sdk"
+	paddle "github.com/PaddleHQ/paddle-go-sdk/v3"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/jpillora/backoff"
 )
