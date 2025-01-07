@@ -295,6 +295,8 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 				slog.ErrorContext(ctx, "Error serving local API", common.ErrAttr(err))
 			}
 		}()
+	} else {
+		slog.DebugContext(ctx, "Skipping serving local API")
 	}
 
 	var wg sync.WaitGroup
