@@ -149,5 +149,11 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
 	}
 
+	go func(bctx context.Context, email string) {
+		if err := s.Mailer.SendWelcome(ctx, email); err != nil {
+			slog.ErrorContext(ctx, "Failed to send welcome email", common.ErrAttr(err))
+		}
+	}(common.CopyTraceID(ctx, context.Background()), user.Email)
+
 	return user, nil
 }

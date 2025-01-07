@@ -130,14 +130,15 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	}
 	auth := api.NewAuthMiddleware(cfg, businessDB, userLimits, 1*time.Second /*backfill duration*/)
 	metrics := monitoring.NewService(cfg.Getenv)
-	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 30*time.Second /*flush interval*/, paddleAPI, metrics, cfg.Getenv)
+
+	mailer := email.NewMailer(cfg.Getenv)
+	portalMailer := email.NewPortalMailer("https:"+cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
+
+	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 30*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg.Getenv)
 
 	router := http.NewServeMux()
 
 	apiServer.Setup(router, cfg.APIDomain(), cfg.Verbose())
-
-	mailer := email.NewMailer(cfg.Getenv)
-	portalMailer := email.NewPortalMailer("https:"+cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{

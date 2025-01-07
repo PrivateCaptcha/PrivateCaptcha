@@ -56,6 +56,7 @@ type server struct {
 	paddleAPI       billing.PaddleAPI
 	cors            *cors.Cors
 	metrics         monitoring.Metrics
+	mailer          common.Mailer
 }
 
 var _ puzzle.Verifier = (*server)(nil)
@@ -66,6 +67,7 @@ func NewServer(store *db.BusinessStore,
 	verifyFlushInterval time.Duration,
 	paddleAPI billing.PaddleAPI,
 	metrics monitoring.Metrics,
+	mailer common.Mailer,
 	getenv func(string) string) *server {
 	srv := &server{
 		stage:         getenv("STAGE"),
@@ -76,6 +78,7 @@ func NewServer(store *db.BusinessStore,
 		salt:          []byte(getenv("API_SALT")),
 		paddleAPI:     paddleAPI,
 		metrics:       metrics,
+		mailer:        mailer,
 	}
 
 	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,

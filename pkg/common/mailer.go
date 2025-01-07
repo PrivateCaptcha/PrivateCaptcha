@@ -41,4 +41,5 @@ func (r *SupportRequest) EmailSubject() string {
 type Mailer interface {
 	SendTwoFactor(ctx context.Context, email string, code int) error
 	SendSupportRequest(ctx context.Context, email string, req *SupportRequest) error
+	SendWelcome(ctx context.Context, email string) error
 }
