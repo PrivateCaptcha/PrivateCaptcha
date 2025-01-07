@@ -145,6 +145,12 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
 	}
 
+	go func(bctx context.Context, email string) {
+		if err := s.mailer.SendWelcome(ctx, email); err != nil {
+			elog.ErrorContext(ctx, "Failed to send welcome email", common.ErrAttr(err))
+		}
+	}(common.CopyTraceID(ctx, context.Background()), customer.Email)
+
 	w.WriteHeader(http.StatusOK)
 }
 

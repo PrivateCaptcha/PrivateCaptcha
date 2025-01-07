@@ -25,3 +25,8 @@ func (sm *StubMailer) SendSupportRequest(ctx context.Context, email string, req 
 	slog.InfoContext(ctx, "Sent support request", "category", req.Category, "email", email)
 	return nil
 }
+
+func (sm *StubMailer) SendWelcome(ctx context.Context, email string) error {
+	slog.InfoContext(ctx, "Sent welcome email", "email", email)
+	return nil
+}
