@@ -59,10 +59,11 @@ func (j *jobs) Run() {
 }
 
 func (j *jobs) Setup(mux *http.ServeMux) {
-	mux.HandleFunc(http.MethodPost+" /maintenance/{job}", j.handleJob)
+	mux.HandleFunc(http.MethodPost+" /maintenance/periodic/{job}", j.handlePeriodicJob)
+	mux.HandleFunc(http.MethodPost+" /maintenance/oneoff/{job}", j.handleOneoffJob)
 }
 
-func (j *jobs) handleJob(w http.ResponseWriter, r *http.Request) {
+func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 	jobName, err := common.StrPathArg(r, "job")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -70,7 +71,7 @@ func (j *jobs) handleJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	slog.DebugContext(ctx, "Handling on-demand job launch", "job", jobName)
+	slog.DebugContext(ctx, "Handling on-demand periodic job launch", "job", jobName)
 	found := false
 
 	for _, job := range j.periodicJobs {
@@ -86,7 +87,34 @@ func (j *jobs) handleJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("started"))
+}
+
+func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
+	jobName, err := common.StrPathArg(r, "job")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	slog.DebugContext(ctx, "Handling on-demand one-off job launch", "job", jobName)
+	found := false
+
+	for _, job := range j.oneOffJobs {
+		if job.Name() == jobName {
+			go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		http.Error(w, fmt.Sprintf("job %v not found", jobName), http.StatusBadRequest)
+		return
+	}
+
+	w.Write([]byte("started"))
 }
 
 func (j *jobs) Shutdown() {
