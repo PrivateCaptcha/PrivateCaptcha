@@ -150,8 +150,8 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 	}
 
 	go func(bctx context.Context, email string) {
-		if err := s.Mailer.SendWelcome(ctx, email); err != nil {
-			slog.ErrorContext(ctx, "Failed to send welcome email", common.ErrAttr(err))
+		if err := s.Mailer.SendWelcome(bctx, email); err != nil {
+			slog.ErrorContext(bctx, "Failed to send welcome email", common.ErrAttr(err))
 		}
 	}(common.CopyTraceID(ctx, context.Background()), user.Email)
 
