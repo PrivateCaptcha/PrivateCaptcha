@@ -136,6 +136,10 @@ func (c *Config) ListenAddress() string {
 	return address
 }
 
+func (c *Config) LocalAddress() string {
+	return c.getenv("PC_LOCAL_ADDRESS")
+}
+
 func (c *Config) APIURL() string {
 	return fmt.Sprintf("//%s", c.apiBaseURL)
 }

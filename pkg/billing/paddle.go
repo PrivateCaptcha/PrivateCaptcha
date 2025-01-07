@@ -95,6 +95,7 @@ func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) 
 		return nil, errInvalidArgument
 	}
 
+	slog.DebugContext(ctx, "About to query customer info", "customerID", customerID)
 	if customer, err := pc.sdk.GetCustomer(ctx, &paddle.GetCustomerRequest{CustomerID: customerID}); err == nil {
 		return &CustomerInfo{
 			Name:  *customer.Name,
@@ -110,6 +111,7 @@ func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID st
 		return nil, errInvalidArgument
 	}
 
+	slog.DebugContext(ctx, "About to fetch management URLs", "subscriptionID", subscriptionID)
 	// NOTE: we should NOT cache URL responses per Paddle doc
 	if subscription, err := pc.sdk.GetSubscription(ctx, &paddle.GetSubscriptionRequest{
 		SubscriptionID: subscriptionID,
@@ -127,6 +129,11 @@ func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID st
 }
 
 func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Prices, error) {
+	if len(productIDs) == 0 {
+		return nil, errInvalidArgument
+	}
+
+	slog.DebugContext(ctx, "About to fetch product prices", "products", len(productIDs))
 	prices, err := pc.sdk.ListPrices(ctx, &paddle.ListPricesRequest{
 		ProductID: productIDs,
 	})
@@ -160,6 +167,7 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 
 	prorationMode := paddle.ProrationBillingModeProratedImmediately
 
+	slog.DebugContext(ctx, "About to preview change subscription", "subscriptionID", subscriptionID)
 	response, err := pc.sdk.PreviewSubscriptionUpdate(ctx, &paddle.PreviewSubscriptionUpdateRequest{
 		SubscriptionID: subscriptionID,
 		Items: paddle.NewPatchField([]paddle.PreviewSubscriptionUpdateItems{
@@ -191,6 +199,7 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 		return errInvalidArgument
 	}
 
+	slog.DebugContext(ctx, "About to change subscription", "subscriptionID", subscriptionID, "priceID", priceID)
 	// NOTE: we currently prefer subscription_updated handler to be a single point to update subscription data
 	_, err := pc.sdk.UpdateSubscription(ctx, &paddle.UpdateSubscriptionRequest{
 		SubscriptionID: subscriptionID,
@@ -217,6 +226,7 @@ func (pc *paddleClient) CancelSubscription(ctx context.Context, subscriptionID s
 		return errInvalidArgument
 	}
 
+	slog.DebugContext(ctx, "About to cancel subscription", "subscriptionID", subscriptionID)
 	_, err := pc.sdk.CancelSubscription(ctx, &paddle.CancelSubscriptionRequest{
 		SubscriptionID: subscriptionID,
 	})

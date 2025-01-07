@@ -280,7 +280,22 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	})
 	jobs.Run()
 
-	metrics.StartServing(ctx)
+	var localServer *http.Server
+	if localAddress := cfg.LocalAddress(); len(localAddress) > 0 {
+		localRouter := http.NewServeMux()
+		metrics.Setup(localRouter)
+		jobs.Setup(localRouter)
+		localServer = &http.Server{
+			Addr:    localAddress,
+			Handler: localRouter,
+		}
+		go func() {
+			slog.InfoContext(ctx, "Serving local API", "address", localServer.Addr)
+			if err := localServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.ErrorContext(ctx, "Error serving local API", common.ErrAttr(err))
+			}
+		}()
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -292,12 +307,14 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
 		auth.Shutdown()
-		metrics.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
+		}
+		if localServer != nil {
+			localServer.Close()
 		}
 		slog.DebugContext(ctx, "Shutdown finished")
 	}()
