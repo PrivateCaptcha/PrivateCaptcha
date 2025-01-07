@@ -162,10 +162,12 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 
 	response, err := pc.sdk.PreviewSubscriptionUpdate(ctx, &paddle.PreviewSubscriptionUpdateRequest{
 		SubscriptionID: subscriptionID,
-		Items: paddle.NewPatchField([]paddle.SubscriptionUpdateCatalogItem{{
-			PriceID:  priceID,
-			Quantity: quantity,
-		}}),
+		Items: paddle.NewPatchField([]paddle.PreviewSubscriptionUpdateItems{
+			*paddle.NewPreviewSubscriptionUpdateItemsSubscriptionUpdateItemFromCatalog(&paddle.SubscriptionUpdateItemFromCatalog{
+				PriceID:  priceID,
+				Quantity: quantity,
+			}),
+		}),
 		ProrationBillingMode: paddle.NewPatchField(prorationMode),
 	})
 
@@ -192,10 +194,12 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 	// NOTE: we currently prefer subscription_updated handler to be a single point to update subscription data
 	_, err := pc.sdk.UpdateSubscription(ctx, &paddle.UpdateSubscriptionRequest{
 		SubscriptionID: subscriptionID,
-		Items: paddle.NewPatchField([]paddle.SubscriptionUpdateCatalogItem{{
-			PriceID:  priceID,
-			Quantity: quantity,
-		}}),
+		Items: paddle.NewPatchField([]paddle.UpdateSubscriptionItems{
+			*paddle.NewUpdateSubscriptionItemsSubscriptionUpdateItemFromCatalog(&paddle.SubscriptionUpdateItemFromCatalog{
+				PriceID:  priceID,
+				Quantity: quantity,
+			}),
+		}),
 		ProrationBillingMode: paddle.NewPatchField(paddle.ProrationBillingModeProratedImmediately),
 	})
 
