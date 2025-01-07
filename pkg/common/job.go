@@ -72,3 +72,16 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 
 	jlog.DebugContext(ctx, "Periodic job finished")
 }
+
+func RunOncePeriodicJob(ctx context.Context, j PeriodicJob) {
+	jlog := slog.With("name", j.Name())
+
+	defer func() {
+		if rvr := recover(); rvr != nil {
+			jlog.ErrorContext(ctx, "Periodic job crashed", "panic", rvr, "stack", string(debug.Stack()))
+		}
+	}()
+
+	jlog.Log(ctx, LevelTrace, "Running periodic job once")
+	_ = j.RunOnce(ctx)
+}

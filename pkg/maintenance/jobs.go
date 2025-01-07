@@ -2,7 +2,9 @@ package maintenance
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -54,6 +56,37 @@ func (j *jobs) Run() {
 	for _, job := range j.oneOffJobs {
 		go common.RunOneOffJob(j.maintenanceCtx, job)
 	}
+}
+
+func (j *jobs) Setup(mux *http.ServeMux) {
+	mux.HandleFunc(http.MethodPost+" /maintenance/{job}", j.handleJob)
+}
+
+func (j *jobs) handleJob(w http.ResponseWriter, r *http.Request) {
+	jobName, err := common.StrPathArg(r, "job")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	ctx := r.Context()
+	slog.DebugContext(ctx, "Handling on-demand job launch", "job", jobName)
+	found := false
+
+	for _, job := range j.periodicJobs {
+		if job.Name() == jobName {
+			go common.RunOncePeriodicJob(common.CopyTraceID(ctx, context.Background()), job)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		http.Error(w, fmt.Sprintf("job %v not found", jobName), http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (j *jobs) Shutdown() {

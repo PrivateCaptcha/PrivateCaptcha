@@ -22,9 +22,7 @@ type Metrics interface {
 }
 
 type service struct {
-	address    string
 	registry   *prometheus.Registry
-	server     *http.Server
 	middleware middleware.Middleware
 }
 
@@ -58,7 +56,6 @@ func NewService(getenv func(string) string) *service {
 
 	return &service{
 		registry: reg,
-		address:  getenv("PC_METRICS_ADDRESS"),
 		middleware: middleware.New(middleware.Config{
 			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
 				Registry: reg,
@@ -79,32 +76,7 @@ func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) ht
 	}
 }
 
-func (s *service) StartServing(ctx context.Context) {
-	if len(s.address) == 0 {
-		slog.WarnContext(ctx, "Metrics serving address is empty")
-		return
-	}
-
-	metricsRouter := http.NewServeMux()
-	metricsRouter.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{Registry: s.registry}))
-
-	s.setupProfiling(ctx, metricsRouter)
-
-	s.server = &http.Server{
-		Addr:    s.address,
-		Handler: metricsRouter,
-	}
-
-	go func() {
-		slog.InfoContext(ctx, "Serving metrics", "address", s.server.Addr)
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.ErrorContext(ctx, "Error serving metrics", common.ErrAttr(err))
-		}
-	}()
-}
-
-func (s *service) Shutdown() {
-	if s.server != nil {
-		s.server.Close()
-	}
+func (s *service) Setup(mux *http.ServeMux) {
+	mux.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{Registry: s.registry}))
+	s.setupProfiling(context.TODO(), mux)
 }

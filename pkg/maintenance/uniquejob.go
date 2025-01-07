@@ -41,7 +41,7 @@ func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
 	if _, err := j.Store.AcquireLock(ctx, lockName, nil /*data*/, expiration); err == nil {
 		jerr = j.Job.RunOnce(ctx)
 		if jerr != nil {
-			// NOTE: in usual circumstances we do not release the lock, letting it expire by TTL, thus effectively
+			// NOTE: in usual circumstances we do NOT release the lock, letting it expire by TTL, thus effectively
 			// preventing other possible maintenance jobs during the interval. The only use-case is when the job
 			// itself fails, then we want somebody to retry "sooner"
 			j.Store.ReleaseLock(ctx, lockName)

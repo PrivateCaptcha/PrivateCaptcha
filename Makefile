@@ -31,6 +31,9 @@ build-server:
 build-loadtest:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/loadtest cmd/loadtest/*.go
 
+build-playground:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/playground cmd/playground/*.go
+
 deploy:
 	echo "Nothing here"
 
@@ -97,3 +100,6 @@ run-view-widget:
 	reflex -r '^(widget|web|cmd\/viewwidget)/' \
 		-R '^(web/static/js|widget/static/js|widget/node_modules|web/node_modules)' \
 		-s -- sh -c 'make view-widget'
+
+playground: build-playground
+	bin/playground -env docker/pc.env
