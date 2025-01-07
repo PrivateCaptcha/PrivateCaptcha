@@ -172,7 +172,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	portalDomain := cfg.PortalDomain()
 	portalServer.Setup(router, portalDomain, auth.EdgeVerify(portalDomain))
 	rateLimiter := auth.DefaultRateLimiter().RateLimit
-	internalAPIChain := alice.New(common.Recovered, rateLimiter)
+	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, internalAPIChain.ThenFunc(healthCheck.HandlerFunc))
 	cdnDomain := cfg.CDNDomain()
 	cdnChain := alice.New(common.Recovered, auth.EdgeVerify(cdnDomain), metrics.Handler, rateLimiter)
