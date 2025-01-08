@@ -1,3 +1,12 @@
 <script defer src="{{$.Ctx.CDN}}/portal/js/htmx.min.js"></script>
 <script defer src="{{$.Ctx.CDN}}/portal/js/alpine.min.js"></script>
 <script src="{{$.Ctx.CDN}}/portal/js/bundle.js"></script>
+{{ if $.Ctx.LoggedIn }}
+<script type="text/javascript">
+ErrorTracker.init({
+    endpoint: '{{$.Const.ErrorEndpoint}}',
+    maxErrors: 10,
+    timeWindow: 60000,
+});
+</script>
+{{ end }}

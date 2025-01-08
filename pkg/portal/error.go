@@ -3,6 +3,7 @@ package portal
 import (
 	"bytes"
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -10,7 +11,8 @@ import (
 )
 
 const (
-	errorTemplate = "errors/error.html"
+	errorTemplate    = "errors/error.html"
+	maxErrorBodySize = 512 * 1024
 )
 
 type errorRenderContext struct {
@@ -83,4 +85,22 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 	common.WriteCached(w)
 
 	s.render(w, r, errorTemplate, data)
+}
+
+func (s *Server) postClientSideError(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	r.Body = http.MaxBytesReader(w, r.Body, maxErrorBodySize)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// the point of logging here is that we will have a connection to user's session
+	slog.ErrorContext(ctx, "Client-side error occurred", "error", string(body))
+
+	w.WriteHeader(http.StatusOK)
 }
