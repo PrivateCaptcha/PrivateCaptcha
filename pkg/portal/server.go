@@ -89,6 +89,7 @@ var (
 		NotificationEndpoint string
 		LegalEndpoint        string
 		PrivacyEndpoint      string
+		ErrorEndpoint        string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -139,6 +140,7 @@ var (
 		NotificationEndpoint: common.NotificationEndpoint,
 		LegalEndpoint:        common.LegalEndpoint,
 		PrivacyEndpoint:      common.PrivacyEndpoint,
+		ErrorEndpoint:        common.ErrorEndpoint,
 	}
 )
 
@@ -359,6 +361,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	router.Handle(rg.Get(common.SupportEndpoint), privateRead.Then(s.handler(s.getSupport)))
 	router.Handle(rg.Post(common.SupportEndpoint), privateWrite.Then(s.handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
+	router.Handle(rg.Post(common.ErrorEndpoint), privateRead.ThenFunc(s.postClientSideError))
+	// TODO: Remove this after landing page is published
 	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
 	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
 	// {$} matches the end of the URL
