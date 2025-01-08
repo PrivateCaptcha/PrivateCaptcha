@@ -92,7 +92,7 @@ func NewAuthMiddleware(cfg *config.Config,
 		puzzleRateLimiter:  ratelimit.NewIPAddrRateLimiter("puzzle", rateLimitHeader, newPuzzleIPAddrBuckets(cfg)),
 		defaultRateLimiter: ratelimit.NewIPAddrRateLimiter("default", rateLimitHeader, newDefaultIPAddrBuckets(cfg)),
 		store:              store,
-		sitekeyChan:        make(chan string, 3*batchSize),
+		sitekeyChan:        make(chan string, 10*batchSize),
 		batchSize:          batchSize,
 		privateAPIKey:      cfg.PrivateAPIKey(),
 		userLimits:         userLimits,
@@ -152,16 +152,6 @@ func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32,
 func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64, status string) {
 	am.userLimits.Set(ctx, userID, &common.UserLimitStatus{Status: status, Limit: limit}, db.UserLimitTTL)
 	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
-}
-
-func (am *authMiddleware) retrieveSiteKey(r *http.Request) string {
-	if r.Method == http.MethodGet {
-		return r.URL.Query().Get(common.ParamSiteKey)
-	} else if r.Method == http.MethodPost {
-		return r.FormValue(common.ParamSiteKey)
-	}
-
-	return ""
 }
 
 func (am *authMiddleware) retrieveSecret(r *http.Request) string {
@@ -389,7 +379,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 			return
 		}
 
-		sitekey := am.retrieveSiteKey(r)
+		sitekey := r.URL.Query().Get(common.ParamSiteKey)
 		if !isSiteKeyValid(sitekey) {
 			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid")
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
