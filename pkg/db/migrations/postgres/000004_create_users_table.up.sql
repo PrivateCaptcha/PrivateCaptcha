@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS backend.users(
 
 CREATE UNIQUE INDEX IF NOT EXISTS index_user_email ON backend.users(email);
 
- CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON backend.users
+CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON backend.users
     FOR EACH ROW EXECUTE FUNCTION backend.deleted_record_insert();
