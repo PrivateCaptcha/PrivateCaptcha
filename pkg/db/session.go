@@ -106,7 +106,7 @@ func (ss *SessionStore) GC(ctx context.Context, d time.Duration) {
 }
 
 func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Duration) {
-	pendingSIDUpdates := make(map[string]bool)
+	pendingSIDUpdates := make(map[string]struct{})
 	slog.DebugContext(ctx, "Processing session updates")
 
 	for running := true; running; {
@@ -120,11 +120,11 @@ func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Durati
 				break
 			}
 
-			pendingSIDUpdates[sid] = true
+			pendingSIDUpdates[sid] = struct{}{}
 
 			if len(pendingSIDUpdates) >= ss.batchSize {
 				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
-					pendingSIDUpdates = make(map[string]bool)
+					pendingSIDUpdates = make(map[string]struct{})
 				} else {
 					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
 				}
@@ -133,7 +133,7 @@ func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Durati
 		case <-time.After(delay):
 			if len(pendingSIDUpdates) > 0 {
 				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
-					pendingSIDUpdates = make(map[string]bool)
+					pendingSIDUpdates = make(map[string]struct{})
 				} else {
 					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
 				}
@@ -144,7 +144,7 @@ func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Durati
 	slog.InfoContext(ctx, "Finished processing session updates")
 }
 
-func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]bool) error {
+func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]struct{}) error {
 	slog.DebugContext(ctx, "Persisting sessions to DB", "count", len(batch))
 
 	for sid := range batch {
