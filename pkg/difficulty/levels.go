@@ -36,7 +36,7 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 	levels := &Levels{
 		timeSeries:   timeSeries,
 		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, bucketSize),
-		accessChan:   make(chan *common.AccessRecord, 3*batchSize/2),
+		accessChan:   make(chan *common.AccessRecord, 10*batchSize),
 		backfillChan: make(chan *common.BackfillRequest, batchSize),
 		batchSize:    batchSize,
 	}
