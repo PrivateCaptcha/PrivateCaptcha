@@ -83,5 +83,7 @@ func RunOncePeriodicJob(ctx context.Context, j PeriodicJob) {
 	}()
 
 	jlog.Log(ctx, LevelTrace, "Running periodic job once")
-	_ = j.RunOnce(ctx)
+	if err := j.RunOnce(ctx); err != nil {
+		jlog.ErrorContext(ctx, "Periodic job failed", ErrAttr(err))
+	}
 }
