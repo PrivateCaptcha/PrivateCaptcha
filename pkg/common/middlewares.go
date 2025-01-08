@@ -83,6 +83,12 @@ func NoCache(next http.Handler) http.Handler {
 	})
 }
 
+func HttpStatus(code int) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(code)
+	})
+}
+
 func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.Header[headerHtmxRequest]; ok {
 		slog.Log(r.Context(), LevelTrace, "Redirecting using htmx header", "url", url)
