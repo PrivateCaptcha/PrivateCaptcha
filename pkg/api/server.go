@@ -163,6 +163,8 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
+	// "root" access
+	router.Handle(http.MethodGet+" "+prefix+"{$}", publicChain.Then(common.HttpStatus(http.StatusForbidden)))
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
