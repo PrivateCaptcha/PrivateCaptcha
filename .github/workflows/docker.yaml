@@ -41,8 +41,9 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
-        env:
-          GIT_COMMIT: ${{ github.sha }}
+        build-args: |
+          GIT_COMMIT=${{ github.sha }}
+          STAGE=prod
         with:
           context: .
           file: docker/Dockerfile

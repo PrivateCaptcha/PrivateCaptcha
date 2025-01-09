@@ -30,6 +30,8 @@ RUN --mount=type=cache,target=/cache/widget npm install --verbose
 # copy the rest
 COPY ./widget /app/widget
 
+ARG STAGE
+ENV STAGE=${STAGE}
 RUN --mount=type=cache,target=/cache/widget,sharing=locked npm run build
 
 ################################################
