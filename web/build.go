@@ -21,6 +21,10 @@ var errTemplateNotFound = errors.New("template with such name does not exist")
 //go:embed static
 var staticFiles embed.FS
 
+const (
+	cdnTagPortal = "portal"
+)
+
 func Static() http.HandlerFunc {
 	sub, _ := fs.Sub(staticFiles, "static")
 	srv := http.FileServer(http.FS(sub))
@@ -28,6 +32,7 @@ func Static() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
 		common.WriteCached(w)
+		w.Header().Set(common.HeaderCDNTag, cdnTagPortal)
 		srv.ServeHTTP(w, r)
 	}
 }
