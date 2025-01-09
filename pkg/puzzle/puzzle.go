@@ -16,6 +16,7 @@ import (
 const (
 	PropertyIDSize = 16
 	UserDataSize   = 16
+	ValidityPeriod = 6 * time.Hour
 )
 
 type Puzzle struct {
@@ -31,7 +32,7 @@ type Puzzle struct {
 func NewPuzzle() (*Puzzle, error) {
 	p := &Puzzle{
 		UserData:       make([]byte, UserDataSize),
-		Expiration:     time.Now().UTC().Add(6 * time.Hour),
+		Expiration:     time.Now().UTC().Add(ValidityPeriod),
 		Difficulty:     65,
 		SolutionsCount: 16,
 		Version:        1,

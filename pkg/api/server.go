@@ -112,9 +112,18 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
 type verifyResponse struct {
 	Success    bool                 `json:"success"`
 	ErrorCodes []puzzle.VerifyError `json:"error-codes,omitempty"`
-	// other fields from Recaptcha - unclear if we need them
-	// ChallengeTS common.JSONTime       `json:"challenge_ts"`
-	// Hostname    string                `json:"hostname"`
+}
+
+type verifyResponseRecaptchaV2 struct {
+	verifyResponse
+	ChallengeTS common.JSONTime `json:"challenge_ts"`
+	Hostname    string          `json:"hostname"`
+}
+
+type verifyResponseRecaptchaV3 struct {
+	verifyResponseRecaptchaV2
+	Score  float64 `json:"score"`
+	Action string  `json:"action"`
 }
 
 func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
@@ -231,15 +240,6 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	s.Write(ctx, puzzle, w)
 }
 
-func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...puzzle.VerifyError) {
-	response := &verifyResponse{
-		Success:    false,
-		ErrorCodes: errors,
-	}
-
-	common.SendJSONResponse(ctx, w, response, map[string]string{})
-}
-
 func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
 	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
@@ -268,21 +268,21 @@ func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWri
 	return nil
 }
 
-func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {
+func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
 	solutionsData, puzzleBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse puzzle", common.ErrAttr(err))
-		return puzzle.ParseResponseError, nil
+		return nil, puzzle.ParseResponseError, nil
 	}
 
 	puzzleObject, property, verr := s.verifyPuzzleValid(ctx, puzzleBytes, expectedOwner, tnow)
 	if verr != puzzle.VerifyNoError && verr != puzzle.MaintenanceModeError {
-		return verr, nil
+		return puzzleObject, verr, nil
 	}
 
 	if serr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); serr != puzzle.VerifyNoError {
 		s.addVerifyRecord(ctx, puzzleObject, property, serr)
-		return serr, nil
+		return puzzleObject, serr, nil
 	}
 
 	if puzzleObject != nil {
@@ -293,7 +293,7 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 
 	s.addVerifyRecord(ctx, puzzleObject, property, puzzle.VerifyNoError)
 
-	return verr, nil
+	return puzzleObject, verr, nil
 }
 
 func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
@@ -301,23 +301,47 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	data := r.FormValue(common.ParamResponse)
 
-	verr, err := s.Verify(ctx, data, &apiKeyOwnerSource{}, time.Now().UTC())
+	p, verr, err := s.Verify(ctx, data, &apiKeyOwnerSource{}, time.Now().UTC())
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if (verr != puzzle.VerifyNoError) && (verr != puzzle.MaintenanceModeError) {
-		s.sendVerifyErrors(ctx, w, verr)
-		return
+	errorCodes := []puzzle.VerifyError{}
+	if verr != puzzle.VerifyNoError {
+		errorCodes = append(errorCodes, verr)
 	}
 
-	response := &verifyResponse{Success: true}
-	if verr == puzzle.MaintenanceModeError {
-		response.ErrorCodes = []puzzle.VerifyError{puzzle.MaintenanceModeError}
+	vr2 := &verifyResponseRecaptchaV2{
+		verifyResponse: verifyResponse{
+			Success:    (verr == puzzle.VerifyNoError) || (verr == puzzle.MaintenanceModeError),
+			ErrorCodes: errorCodes,
+		},
 	}
 
-	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
+	if p != nil {
+		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.ValidityPeriod))
+
+		sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
+		if property, err := s.businessDB.GetCachedPropertyBySitekey(ctx, sitekey); err == nil {
+			vr2.Hostname = property.Domain
+		}
+	}
+
+	var result interface{}
+
+	recaptchaCompatVersion := r.Header.Get(common.HeaderRecaptchaVersion)
+	if recaptchaCompatVersion == "3" {
+		result = &verifyResponseRecaptchaV3{
+			verifyResponseRecaptchaV2: *vr2,
+			Action:                    "",
+			Score:                     0.5,
+		}
+	} else {
+		result = vr2
+	}
+
+	common.SendJSONResponse(ctx, w, result, common.NoCacheHeaders)
 }
 
 func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {

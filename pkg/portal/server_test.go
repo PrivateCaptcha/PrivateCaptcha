@@ -39,8 +39,8 @@ func (f *fakePuzzleEngine) Write(ctx context.Context, p *puzzle.Puzzle, w http.R
 	return nil
 }
 
-func (f *fakePuzzleEngine) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {
-	return f.result, nil
+func (f *fakePuzzleEngine) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
+	return nil, f.result, nil
 }
 
 func TestMain(m *testing.M) {
