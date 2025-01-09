@@ -40,4 +40,5 @@ const (
 	UsageEndpoint               = "usage"
 	HealthEndpoint              = "health"
 	NotificationEndpoint        = "notification"
+	AboutEndpoint               = "about"
 )
