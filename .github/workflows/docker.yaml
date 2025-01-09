@@ -41,13 +41,13 @@ jobs:
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
-        build-args: |
-          GIT_COMMIT=${{ github.sha }}
-          STAGE=prod
         with:
           context: .
           file: docker/Dockerfile
           push: true
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            STAGE=prod
           tags: |
             ghcr.io/${{ env.REPO_LOWER }}:latest
             ghcr.io/${{ env.REPO_LOWER }}:${{ github.sha }}
