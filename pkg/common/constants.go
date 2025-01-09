@@ -6,6 +6,7 @@ const (
 	StageDev                    = "dev"
 	StageStaging                = "staging"
 	StageTest                   = "test"
+	HeaderCDNTag                = "CDN-Tag"
 	HeaderContentType           = "Content-Type"
 	HeaderContentLength         = "Content-Length"
 	HeaderAuthorization         = "Authorization"
