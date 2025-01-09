@@ -242,6 +242,7 @@
       if (this._debug) {
         console.debug("[privatecaptcha][pool] starting solving");
       }
+      this._solutions = [];
       this._solutionsCount = puzzle.solutionsCount;
       this._puzzleID = puzzle.ID;
       for (let i = 0; i < puzzle.solutionsCount; i++) {
@@ -375,7 +376,7 @@
   };
 
   // js/styles.css
-  var styles_default = ':host {\n    --dark-color: #070113;\n    --accent-color: #0080A0;\n    --gray-color: #E0E0E0;\n    --light-color: #F2F2F2;\n    --lighter-color: #FFF;\n    --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */\n    --label-spacing: 10px;\n    --border-radius: 2px;\n}\n\n.pc-captcha-widget {\n    display: inline-flex;\n    align-items: center;\n    max-width: 360px;\n    padding: 12px 16px;\n    border: 1px solid var(--gray-color);\n    border-radius: var(--border-radius);\n    gap: 64px;\n}\n\n.pc-captcha-widget.hidden {\n    display: none;\n}\n\n.pc-captcha-widget.floating {\n    position: absolute;\n    left: 0;\n    top: 0;\n    transform: translate(0, -100%);\n    background-color: #FFF;\n}\n\n.pc-interactive-area {\n    display: flex;\n    align-items: center;\n    position: relative;\n    min-width: 160px;\n    font-size: 1em;\n}\n\n.pc-interactive-area label {\n    padding-left: var(--label-spacing);\n    color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"] {\n    width: 32px;\n    height: 32px;\n    margin: 0 0 0 var(--extra-spacing);\n    appearance: none;\n    background-color: var(--lighter-color);\n    border: 2px solid var(--dark-color);\n    border-radius: 4px;\n    cursor: pointer;\n}\n\n.pc-interactive-area input[type="checkbox"]+label {\n    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));\n}\n\n@keyframes colorChange {\n    0%, 100% { border-color: var(--dark-color); }\n    50% { border-color: var(--gray-color); }\n}\n\n.pc-interactive-area input[type="checkbox"].loading {\n    animation: colorChange 2s infinite;\n    animation-timing-function: ease-in-out;\n    background-color: var(--light-color);\n}\n\n.pc-interactive-area input[type="checkbox"].ready {\n    background-color: var(--lighter-color);\n    border-color: var(--dark-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover {\n    background-color: var(--lighter-color);\n    border-color: var(--accent-color);\n}\n\n.pc-interactive-area input[type="checkbox"]:hover + label {\n    cursor: pointer;\n    /* color: var(--dark-color); /* Highlight the text */\n}\n\n@keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n@-webkit-keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }\n@-webkit-keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }\n@-webkit-keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }\n\n.pc-interactive-area .dots span {\n    animation: dots-1 2s infinite steps(1);\n    -webkit-animation: dots-1 2s infinite steps(1);\n}\n\n.pc-interactive-area .dots span:first-child + span {\n    animation-name: dots-2;\n    -webkit-animation-name: dots-2;\n}\n\n .pc-interactive-area .dots span:first-child + span + span {\n    animation-name: dots-3;\n    -webkit-animation-name: dots-3;\n}\n\n#pc-progress {\n    display: flex;\n    justify-content: center;\n}\n\n.pc-info {\n    display: flex;\n    flex-direction: column;\n    align-items: center;\n    margin-right: var(--extra-spacing);\n    color: var(--dark-color);\n}\n\n.company-logo {\n    max-width: 100px;\n    height: auto;\n}\n\na.pc-link {\n    margin-top: 5px;\n    text-decoration: none;\n    color: currentcolor;\n    text-align: center;\n    font-size: 0.55em;\n    text-transform: uppercase;\n    font-weight: 700;\n    line-height: 1.1em;\n}\n\na.pc-link:hover {\n    text-decoration: underline;\n}\n\n@keyframes checkmark {\n    0% {\n        stroke-dashoffset: 100px\n    }\n    100% {\n        stroke-dashoffset: 0px\n    }\n}\n\nsvg.verified polyline {\n    animation: checkmark 0.35s ease-in-out 0.1s backwards;\n}\n\n#pc-debug {\n    font-size: 12px;\n    color: var(--gray-color);\n    position: absolute;\n    top: 100%;\n    left: 50px; /*30px checkbox + 2*10 margins*/\n}\n';
+  var styles_default = ":host{--dark-color: #070113;--accent-color: #0080A0;--gray-color: #E0E0E0;--light-color: #F2F2F2;--lighter-color: #FFF;--extra-spacing: 2px;--label-spacing: 10px;--border-radius: 2px}.pc-captcha-widget{display:inline-flex;align-items:center;max-width:360px;padding:12px 16px;border:1px solid var(--gray-color);border-radius:var(--border-radius);gap:64px}.pc-captcha-widget.hidden{display:none}.pc-captcha-widget.floating{position:absolute;left:0;top:0;transform:translateY(-100%);background-color:#fff}.pc-interactive-area{display:flex;align-items:center;position:relative;min-width:160px;font-size:1em}.pc-interactive-area label{padding-left:var(--label-spacing);color:var(--dark-color)}.pc-interactive-area input[type=checkbox]{width:32px;height:32px;margin:0 0 0 var(--extra-spacing);appearance:none;background-color:var(--lighter-color);border:2px solid var(--dark-color);border-radius:4px;cursor:pointer}.pc-interactive-area input[type=checkbox]+label{padding:0 0 0 calc(var(--extra-spacing) + var(--label-spacing))}@keyframes colorChange{0%,to{border-color:var(--dark-color)}50%{border-color:var(--gray-color)}}.pc-interactive-area input[type=checkbox].loading{animation:colorChange 2s infinite;animation-timing-function:ease-in-out;background-color:var(--light-color)}.pc-interactive-area input[type=checkbox].ready{background-color:var(--lighter-color);border-color:var(--dark-color)}.pc-interactive-area input[type=checkbox]:hover{background-color:var(--lighter-color);border-color:var(--accent-color)}.pc-interactive-area input[type=checkbox]:hover+label{cursor:pointer}@keyframes dots-1{0%{opacity:0}25%{opacity:1}}@keyframes dots-2{0%{opacity:0}50%{opacity:1}}@keyframes dots-3{0%{opacity:0}75%{opacity:1}}@-webkit-keyframes dots-1{0%{opacity:0}25%{opacity:1}}@-webkit-keyframes dots-2{0%{opacity:0}50%{opacity:1}}@-webkit-keyframes dots-3{0%{opacity:0}75%{opacity:1}}.pc-interactive-area .dots span{animation:dots-1 2s infinite steps(1);-webkit-animation:dots-1 2s infinite steps(1)}.pc-interactive-area .dots span:first-child+span{animation-name:dots-2;-webkit-animation-name:dots-2}.pc-interactive-area .dots span:first-child+span+span{animation-name:dots-3;-webkit-animation-name:dots-3}#pc-progress{display:flex;justify-content:center}.pc-info{display:flex;flex-direction:column;align-items:center;margin-right:var(--extra-spacing);color:var(--dark-color)}.company-logo{max-width:100px;height:auto}a.pc-link{margin-top:5px;text-decoration:none;color:currentcolor;text-align:center;font-size:.55em;text-transform:uppercase;font-weight:700;line-height:1.1em}a.pc-link:hover{text-decoration:underline}@keyframes checkmark{0%{stroke-dashoffset:100px}to{stroke-dashoffset:0px}}svg.verified polyline{animation:checkmark .35s ease-in-out .1s backwards}#pc-debug{font-size:12px;color:var(--gray-color);position:absolute;top:100%;left:50px}\n";
 
   // js/strings.js
   var CLICK_TO_VERIFY = "click_to_verify";
@@ -574,16 +575,8 @@
       this._state = STATE_EMPTY;
       this._lastProgress = null;
       this._userStarted = false;
-      this._options = Object.assign({
-        startMode: element.dataset["startMode"] || "click",
-        debug: element.dataset["debug"],
-        fieldName: element.dataset["solutionField"] || "private-captcha-solution",
-        puzzleEndpoint: element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
-        sitekey: element.dataset["sitekey"] || "",
-        displayMode: element.dataset["displayMode"] || "widget",
-        lang: element.dataset["lang"] || "en",
-        styles: element.dataset["styles"] || ""
-      }, options);
+      this._options = {};
+      this.setOptions(options);
       this._workersPool = new WorkersPool({
         workersReady: this.onWorkersReady.bind(this),
         workerError: this.onWorkerError.bind(this),
@@ -606,6 +599,18 @@
       } else {
         console.warn("[privatecaptcha] cannot find form element");
       }
+    }
+    setOptions(options) {
+      this._options = Object.assign({
+        startMode: this._element.dataset["startMode"] || "click",
+        debug: this._element.dataset["debug"],
+        fieldName: this._element.dataset["solutionField"] || "private-captcha-solution",
+        puzzleEndpoint: this._element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
+        sitekey: this._element.dataset["sitekey"] || "",
+        displayMode: this._element.dataset["displayMode"] || "widget",
+        lang: this._element.dataset["lang"] || "en",
+        styles: this._element.dataset["styles"] || ""
+      }, options);
     }
     // fetches puzzle from the server and setup workers
     async init(autoStart) {
@@ -689,15 +694,19 @@
         }
       }
     }
-    reset() {
+    reset(options = {}) {
       this.trace("reset captcha");
-      this.setState(STATE_EMPTY);
-      this.setProgressState(STATE_EMPTY);
+      if (this._workersPool) {
+        this._workersPool.stop();
+      }
       if (this._expiryTimeout) {
         clearTimeout(this._expiryTimeout);
       }
+      this.setState(STATE_EMPTY);
+      this.setProgressState(STATE_EMPTY);
       this.ensureNoSolutionField();
       this._userStarted = false;
+      this.setOptions(options);
       this.init(
         false
         /*start*/
@@ -789,6 +798,10 @@
       }
     }
     onWorkProgress(percent) {
+      if (this._state !== STATE_IN_PROGRESS) {
+        console.warn(`[privatecaptcha] skipping progress update. state=${this._state}`);
+        return;
+      }
       this.trace(`progress changed. percent=${percent}`);
       this.setProgress(percent);
     }
@@ -860,3 +873,4 @@
     document.addEventListener("DOMContentLoaded", setupPrivateCaptcha);
   }
 })();
+//# sourceMappingURL=privatecaptcha.js.map
