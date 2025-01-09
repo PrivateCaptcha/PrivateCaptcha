@@ -11,6 +11,7 @@ const (
 	HeaderAuthorization         = "Authorization"
 	HeaderCSRFToken             = "X-CSRF-Token"
 	HeaderCaptchaVersion        = "X-PC-Captcha-Version"
+	HeaderRecaptchaVersion      = "X-Recaptcha-Compat-Version"
 	ContentTypePlain            = "text/plain"
 	ContentTypeHTML             = "text/html; charset=utf-8"
 	ContentTypeJSON             = "application/json"

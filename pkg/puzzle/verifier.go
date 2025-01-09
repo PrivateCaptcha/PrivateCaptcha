@@ -8,9 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -37,11 +35,6 @@ const (
 
 type OwnerIDSource interface {
 	OwnerID(ctx context.Context) (int32, error)
-}
-
-type Engine interface {
-	Write(ctx context.Context, p *Puzzle, w http.ResponseWriter) error
-	Verify(ctx context.Context, payload string, expectedOwner OwnerIDSource, tnow time.Time) (VerifyError, error)
 }
 
 func ParseSolutions(ctx context.Context, payload string, salt []byte) (string, []byte, error) {

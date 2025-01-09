@@ -20,6 +20,26 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
+func TestSerializeResponse(t *testing.T) {
+	v := verifyResponseRecaptchaV3{
+		verifyResponseRecaptchaV2: verifyResponseRecaptchaV2{
+			verifyResponse: verifyResponse{
+				Success:    false,
+				ErrorCodes: []puzzle.VerifyError{puzzle.VerifyErrorOther},
+			},
+			ChallengeTS: common.JSONTimeNow(),
+			Hostname:    "hostname.com",
+		},
+		Score:  0.5,
+		Action: "action",
+	}
+
+	_, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "", true /*verbose*/)
