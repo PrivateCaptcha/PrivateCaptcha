@@ -10,7 +10,7 @@ const config = {
   },
   prod: {
     minify: true,
-    sourcemap: false,
+    sourcemap: true,
   }
 };
 
