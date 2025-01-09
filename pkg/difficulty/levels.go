@@ -61,7 +61,7 @@ func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Du
 	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize, nil)
 }
 
-func minDifficultyForLevel(level dbgen.DifficultyLevel) uint8 {
+func MinDifficultyForLevel(level dbgen.DifficultyLevel) uint8 {
 	switch level {
 	case dbgen.DifficultyLevelSmall:
 		return LevelSmall
@@ -123,7 +123,7 @@ func (l *Levels) Shutdown() {
 func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, leakybucket.TLevel) {
 	l.recordAccess(fingerprint, p, tnow)
 
-	minDifficulty := minDifficultyForLevel(p.Level)
+	minDifficulty := MinDifficultyForLevel(p.Level)
 
 	addResult := l.buckets.Add(p.ID, 1, tnow)
 	if !addResult.Found {

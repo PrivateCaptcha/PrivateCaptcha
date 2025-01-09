@@ -2,6 +2,7 @@ package common
 
 const (
 	PuzzleEndpoint              = "puzzle"
+	EchoPuzzleEndpoint          = "echopuzzle"
 	VerifyEndpoint              = "verify"
 	LoginEndpoint               = "login"
 	TwoFactorEndpoint           = "2fa"

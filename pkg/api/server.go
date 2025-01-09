@@ -59,7 +59,7 @@ type server struct {
 	mailer          common.Mailer
 }
 
-var _ puzzle.Verifier = (*server)(nil)
+var _ puzzle.Engine = (*server)(nil)
 
 func NewServer(store *db.BusinessStore,
 	timeSeries *db.TimeSeriesStore,
@@ -228,11 +228,24 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	puzzleBytes, err := puzzle.MarshalBinary()
+	s.Write(ctx, puzzle, w)
+}
+
+func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...puzzle.VerifyError) {
+	response := &verifyResponse{
+		Success:    false,
+		ErrorCodes: errors,
+	}
+
+	common.SendJSONResponse(ctx, w, response, map[string]string{})
+}
+
+func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
+	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return
+		return err
 	}
 
 	hasher := hmac.New(sha1.New, s.salt)
@@ -247,19 +260,12 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 
 	common.WriteNoCache(w)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	w.WriteHeader(http.StatusOK)
 	if _, werr := w.Write(response); werr != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
-	}
-}
-
-func (s *server) sendVerifyErrors(ctx context.Context, w http.ResponseWriter, errors ...puzzle.VerifyError) {
-	response := &verifyResponse{
-		Success:    false,
-		ErrorCodes: errors,
+		return werr
 	}
 
-	common.SendJSONResponse(ctx, w, response, map[string]string{})
+	return nil
 }
 
 func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {

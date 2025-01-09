@@ -32,9 +32,9 @@
     <div>
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
         <div class="mt-2">
-            <select name="{{ .Const.Difficulty }}" class="pc-internal-form-select">
-                <option value="0">Easy</option>
-                <option value="1" selected="selected">Normal</option>
+            <select name="{{ .Const.Difficulty }}" class="pc-internal-form-select" onchange="onDifficultyChange(this);">
+                <option value="0" selected="selected">Easy</option>
+                <option value="1">Normal</option>
                 <option value="2">Hard</option>
             </select>
         </div>
@@ -48,6 +48,19 @@
                 <option value="1" selected="selected">Normal</option>
                 <option value="2">Fast</option>
             </select>
+        </div>
+    </div>
+
+    <div>
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="Preview selected difficulty settings"> Demo widget </label>
+        <div class="private-captcha mt-2"
+            data-sitekey="{{.Params.Sitekey}}"
+            data-solution-field="{{.Params.CaptchaSolutionField}}"
+            data-start-mode="click"
+            data-finished-callback="onCaptchaReset"
+            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/0"
+            data-styles=":host { --border-radius: .375rem; --max-width: 100%; }"
+            {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
         </div>
     </div>
 </div>

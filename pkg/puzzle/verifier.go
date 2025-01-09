@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"net/http"
 	"strings"
 	"time"
 
@@ -38,7 +39,8 @@ type OwnerIDSource interface {
 	OwnerID(ctx context.Context) (int32, error)
 }
 
-type Verifier interface {
+type Engine interface {
+	Write(ctx context.Context, p *Puzzle, w http.ResponseWriter) error
 	Verify(ctx context.Context, payload string, expectedOwner OwnerIDSource, tnow time.Time) (VerifyError, error)
 }
 

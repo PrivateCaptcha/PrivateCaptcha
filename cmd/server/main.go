@@ -151,13 +151,13 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		PaddleAPI:   paddleAPI,
-		APIURL:      cfg.APIURL(),
-		CDNURL:      cfg.CDNURL(),
-		Verifier:    apiServer,
-		Metrics:     metrics,
-		Mailer:      portalMailer,
-		RateLimiter: auth.DefaultRateLimiter(),
+		PaddleAPI:    paddleAPI,
+		APIURL:       cfg.APIURL(),
+		CDNURL:       cfg.CDNURL(),
+		PuzzleEngine: apiServer,
+		Metrics:      metrics,
+		Mailer:       portalMailer,
+		RateLimiter:  auth.DefaultRateLimiter(),
 	}
 	portalServer.Init()
 
