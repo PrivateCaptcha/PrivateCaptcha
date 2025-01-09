@@ -1,0 +1,21 @@
+{{define "scripts"}}
+{{template "default-scripts.html" .}}
+<script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
+<script>
+    function onDifficultyChange(selectElement) {
+        let autoWidget = window.privateCaptcha.autoWidget;
+        if (autoWidget) {
+            autoWidget.reset(options={
+                puzzleEndpoint: '{{.Params.CaptchaEndpoint}}/' + selectElement.value,
+            });
+        }
+    }
+
+    function onCaptchaReset() {
+        let autoWidget = window.privateCaptcha.autoWidget;
+        if (autoWidget) {
+            setTimeout(() => autoWidget.reset(), 2000 /*millis*/);
+        }
+    }
+</script>
+{{end}}

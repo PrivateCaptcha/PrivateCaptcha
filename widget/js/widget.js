@@ -23,17 +23,9 @@ export class CaptchaWidget {
         this._state = STATE_EMPTY;
         this._lastProgress = null;
         this._userStarted = false; // aka 'user started while we were initializing'
+        this._options = {};
 
-        this._options = Object.assign({
-            startMode: element.dataset["startMode"] || "click",
-            debug: element.dataset["debug"],
-            fieldName: element.dataset["solutionField"] || "private-captcha-solution",
-            puzzleEndpoint: element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
-            sitekey: element.dataset["sitekey"] || "",
-            displayMode: element.dataset["displayMode"] || "widget",
-            lang: element.dataset["lang"] || "en",
-            styles: element.dataset["styles"] || "",
-        }, options);
+        this.setOptions(options);
 
         this._workersPool = new WorkersPool({
             workersReady: this.onWorkersReady.bind(this),
@@ -61,6 +53,19 @@ export class CaptchaWidget {
         } else {
             console.warn('[privatecaptcha] cannot find form element');
         }
+    }
+
+    setOptions(options) {
+        this._options = Object.assign({
+            startMode: this._element.dataset["startMode"] || "click",
+            debug: this._element.dataset["debug"],
+            fieldName: this._element.dataset["solutionField"] || "private-captcha-solution",
+            puzzleEndpoint: this._element.dataset["puzzleEndpoint"] || PUZZLE_ENDPOINT_URL,
+            sitekey: this._element.dataset["sitekey"] || "",
+            displayMode: this._element.dataset["displayMode"] || "widget",
+            lang: this._element.dataset["lang"] || "en",
+            styles: this._element.dataset["styles"] || "",
+        }, options);
     }
 
     // fetches puzzle from the server and setup workers
@@ -154,13 +159,17 @@ export class CaptchaWidget {
         }
     }
 
-    reset() {
+    reset(options = {}) {
         this.trace('reset captcha')
+
+        if (this._workersPool) { this._workersPool.stop(); }
+        if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+
         this.setState(STATE_EMPTY);
         this.setProgressState(STATE_EMPTY);
-        if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
         this.ensureNoSolutionField();
         this._userStarted = false;
+        this.setOptions(options);
         this.init(false /*start*/);
     }
 
@@ -260,6 +269,11 @@ export class CaptchaWidget {
     }
 
     onWorkProgress(percent) {
+        if (this._state !== STATE_IN_PROGRESS) {
+            console.warn(`[privatecaptcha] skipping progress update. state=${this._state}`);
+            return;
+        }
+
         this.trace(`progress changed. percent=${percent}`);
         this.setProgress(percent);
     }

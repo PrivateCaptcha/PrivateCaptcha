@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 const (
@@ -25,6 +28,7 @@ const (
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	maxPropertyNameLength                 = 255
+	propertyWizardPropertyID              = "385f7acc-142a-4286-b85b-d94e29545ffd"
 )
 
 var (
@@ -34,6 +38,8 @@ var (
 type propertyWizardRenderContext struct {
 	csrfRenderContext
 	alertRenderContext
+	captchaRenderContext
+	Sitekey     string
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -174,7 +180,9 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 	}
 
 	data := &propertyWizardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		csrfRenderContext:    s.createCsrfContext(user),
+		captchaRenderContext: s.createDemoCaptchaRenderContext(),
+		Sitekey:              strings.ReplaceAll(propertyWizardPropertyID, "-", ""),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -250,6 +258,31 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, user *dbgen.User) 
 	return ""
 }
 
+func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	puzzle, err := puzzle.NewPuzzle()
+	if err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+
+	var level dbgen.DifficultyLevel
+	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
+		level = difficultyLevelFromIndex(ctx, difficultyParam)
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
+		level = dbgen.DifficultyLevelSmall
+	}
+	puzzle.Difficulty = difficulty.MinDifficultyForLevel(level)
+
+	sitekey := r.URL.Query().Get(common.ParamSiteKey)
+	uuid := db.UUIDFromSiteKey(sitekey)
+	puzzle.PropertyID = uuid.Bytes
+
+	_ = s.PuzzleEngine.Write(ctx, puzzle, w)
+}
+
 // This one cannot be "MVC" function because it redirects in case of success
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -273,9 +306,11 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		csrfRenderContext:  s.createCsrfContext(user),
-		alertRenderContext: alertRenderContext{},
-		CurrentOrg:         orgToUserOrg(org, user.ID),
+		csrfRenderContext:    s.createCsrfContext(user),
+		alertRenderContext:   alertRenderContext{},
+		captchaRenderContext: s.createDemoCaptchaRenderContext(),
+		CurrentOrg:           orgToUserOrg(org, user.ID),
+		Sitekey:              strings.ReplaceAll(propertyWizardPropertyID, "-", ""),
 	}
 
 	name := r.FormValue(common.ParamName)

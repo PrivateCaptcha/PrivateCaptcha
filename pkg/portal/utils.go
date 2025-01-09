@@ -163,3 +163,11 @@ func (s *Server) createCaptchaRenderContext() captchaRenderContext {
 		CaptchaSolutionField: captchaSolutionField,
 	}
 }
+
+func (s *Server) createDemoCaptchaRenderContext() captchaRenderContext {
+	return captchaRenderContext{
+		CaptchaEndpoint:      "/" + common.EchoPuzzleEndpoint,
+		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaSolutionField: captchaSolutionField,
+	}
+}

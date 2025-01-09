@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -30,11 +31,15 @@ var (
 	store      *db.BusinessStore
 )
 
-type fakeCaptchaVerifier struct {
+type fakePuzzleEngine struct {
 	result puzzle.VerifyError
 }
 
-func (f *fakeCaptchaVerifier) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {
+func (f *fakePuzzleEngine) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
+	return nil
+}
+
+func (f *fakePuzzleEngine) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (puzzle.VerifyError, error) {
 	return f.result, nil
 }
 
@@ -52,8 +57,8 @@ func TestMain(m *testing.M) {
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
-			PaddleAPI: paddleAPI,
-			Verifier:  &fakeCaptchaVerifier{result: puzzle.VerifyNoError},
+			PaddleAPI:    paddleAPI,
+			PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
 		}
 
 		server.Init()
@@ -103,11 +108,11 @@ func TestMain(m *testing.M) {
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		Mailer:      &email.StubMailer{},
-		PaddleAPI:   paddleAPI,
-		RateLimiter: &ratelimit.StubRateLimiter{},
-		Verifier:    &fakeCaptchaVerifier{result: puzzle.VerifyNoError},
-		Metrics:     monitoring.NewStub(),
+		Mailer:       &email.StubMailer{},
+		PaddleAPI:    paddleAPI,
+		RateLimiter:  &ratelimit.StubRateLimiter{},
+		PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
+		Metrics:      monitoring.NewStub(),
 	}
 
 	server.Init()

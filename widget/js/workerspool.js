@@ -71,6 +71,7 @@ export class WorkersPool {
     solve(puzzle) {
         if (!puzzle) { return; }
         if (this._debug) { console.debug('[privatecaptcha][pool] starting solving'); }
+        this._solutions = [];
         this._solutionsCount = puzzle.solutionsCount;
         this._puzzleID = puzzle.ID;
 

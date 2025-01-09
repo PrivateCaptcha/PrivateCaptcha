@@ -219,7 +219,7 @@ type Server struct {
 	RateLimiter     ratelimit.HTTPRateLimiter
 	Stage           string
 	PaddleAPI       billing.PaddleAPI
-	Verifier        puzzle.Verifier
+	PuzzleEngine    puzzle.Engine
 	Metrics         monitoring.Metrics
 	maintenanceMode atomic.Bool
 	canRegister     atomic.Bool
@@ -362,6 +362,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	router.Handle(rg.Post(common.SupportEndpoint), privateWrite.Then(s.handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
 	router.Handle(rg.Post(common.ErrorEndpoint), privateRead.ThenFunc(s.postClientSideError))
+	router.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead.ThenFunc(s.echoPuzzle))
 	// TODO: Remove this after landing page is published
 	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
 	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
