@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -50,8 +51,10 @@ func (t JSONTime) Time() time.Time {
 }
 
 // MarshalJSON will marshal using 2006-01-02T15:04:05+07:00 layout
-func (t *JSONTime) MarshalJSON() ([]byte, error) {
-	return []byte(t.String()), nil
+func (t JSONTime) MarshalJSON() ([]byte, error) {
+	ct := time.Time(t)
+	str := fmt.Sprintf("%q", ct.Format(jsonTimeLayout))
+	return []byte(str), nil
 }
 
 // String returns the time in the custom format
