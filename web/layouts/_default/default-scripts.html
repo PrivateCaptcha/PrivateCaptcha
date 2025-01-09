@@ -4,7 +4,7 @@
 {{ if $.Ctx.LoggedIn }}
 <script type="text/javascript">
 ErrorTracker.init({
-    endpoint: '{{$.Const.ErrorEndpoint}}',
+    endpoint: '/{{$.Const.ErrorEndpoint}}',
     maxErrors: 10,
     timeWindow: 60000,
 });
