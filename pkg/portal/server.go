@@ -90,6 +90,7 @@ var (
 		LegalEndpoint        string
 		PrivacyEndpoint      string
 		ErrorEndpoint        string
+		AboutEndpoint        string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -141,6 +142,7 @@ var (
 		LegalEndpoint:        common.LegalEndpoint,
 		PrivacyEndpoint:      common.PrivacyEndpoint,
 		ErrorEndpoint:        common.ErrorEndpoint,
+		AboutEndpoint:        common.AboutEndpoint,
 	}
 )
 
@@ -366,6 +368,7 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	// TODO: Remove this after landing page is published
 	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
 	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
+	router.Handle(rg.Get(common.AboutEndpoint), public.Then(s.static("about/about.html")))
 	// {$} matches the end of the URL
 	router.Handle(http.MethodGet+" "+prefix+"{$}", privateRead.ThenFunc(s.getPortal))
 	// wildcards (everything not matched will be handled in main())
