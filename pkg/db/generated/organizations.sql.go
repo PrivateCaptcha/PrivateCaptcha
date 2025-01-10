@@ -173,7 +173,7 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 }
 
 const softDeleteOrganization = `-- name: SoftDeleteOrganization :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1
 `
 
 func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
@@ -182,7 +182,7 @@ func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
 }
 
 const softDeleteUserOrganizations = `-- name: SoftDeleteUserOrganizations :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE user_id = $1
 `
 
 func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error {

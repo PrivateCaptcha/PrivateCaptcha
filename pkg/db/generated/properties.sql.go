@@ -283,7 +283,7 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at
 `
 
 func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {

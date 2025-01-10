@@ -21,10 +21,10 @@ JOIN backend.organization_users ou ON o.id = ou.org_id
 WHERE ou.user_id = $1 AND o.deleted_at IS NULL;
 
 -- name: SoftDeleteOrganization :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1;
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1;
 
 -- name: SoftDeleteUserOrganizations :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW() WHERE user_id = $1;
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE user_id = $1;
 
 -- name: GetSoftDeletedOrganizations :many
 SELECT sqlc.embed(o)
