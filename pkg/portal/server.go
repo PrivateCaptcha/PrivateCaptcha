@@ -161,6 +161,9 @@ func funcMap(prefix string) template.FuncMap {
 		"plus1": func(x int) int {
 			return x + 1
 		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
 	}
 }
 
@@ -198,6 +201,7 @@ type captchaRenderContext struct {
 	CaptchaError         string
 	CaptchaEndpoint      string
 	CaptchaSolutionField string
+	CaptchaSitekey       string
 	CaptchaDebug         bool
 }
 

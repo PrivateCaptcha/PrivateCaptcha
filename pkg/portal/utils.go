@@ -156,18 +156,20 @@ func (s *Server) static(tpl string) http.Handler {
 	})
 }
 
-func (s *Server) createCaptchaRenderContext() captchaRenderContext {
+func (s *Server) createCaptchaRenderContext(sitekey string) captchaRenderContext {
 	return captchaRenderContext{
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: captchaSolutionField,
+		CaptchaSitekey:       sitekey,
 	}
 }
 
-func (s *Server) createDemoCaptchaRenderContext() captchaRenderContext {
+func (s *Server) createDemoCaptchaRenderContext(sitekey string) captchaRenderContext {
 	return captchaRenderContext{
 		CaptchaEndpoint:      "/" + common.EchoPuzzleEndpoint,
 		CaptchaDebug:         s.Stage != common.StageProd,
 		CaptchaSolutionField: captchaSolutionField,
+		CaptchaSitekey:       sitekey,
 	}
 }

@@ -29,9 +29,8 @@ const (
 type registerRenderContext struct {
 	csrfRenderContext
 	captchaRenderContext
-	NameError       string
-	EmailError      string
-	RegisterSitekey string
+	NameError  string
+	EmailError string
 }
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -43,8 +42,7 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(),
-		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
+		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalRegisterPropertyID, "-", "")),
 	}, "register/register.html", nil
 }
 
@@ -68,11 +66,10 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(),
-		RegisterSitekey:      strings.ReplaceAll(db.PortalRegisterPropertyID, "-", ""),
+		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalRegisterPropertyID, "-", "")),
 	}
 
-	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.RegisterSitekey}
+	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.CaptchaSitekey}
 
 	captchaSolution := r.FormValue(captchaSolutionField)
 	_, verr, err := s.PuzzleEngine.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())

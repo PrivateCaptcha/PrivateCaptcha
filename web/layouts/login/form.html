@@ -15,7 +15,7 @@
 <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
 
 <div class="private-captcha mt-8"
-    data-sitekey="{{.Params.LoginSitekey}}"
+    data-sitekey="{{.Params.CaptchaSitekey}}"
     data-solution-field="{{.Params.CaptchaSolutionField}}"
     data-start-mode="auto"
     data-finished-callback="onCaptchaSolved"

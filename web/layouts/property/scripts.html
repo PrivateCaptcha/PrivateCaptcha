@@ -1,8 +1,18 @@
 {{define "scripts"}}
 <script defer src="{{$.Ctx.CDN}}/portal/js/d3.v7.min.js" type="text/javascript" charset="utf-8"></script>
+<script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
 {{template "default-scripts.html" .}}
 
 <script>
+    function onDifficultyChange(rangeElement) {
+        const endpoint = '{{.Params.CaptchaEndpoint}}/' + rangeElement.value
+        demoWidget.onDifficultyChange(endpoint);
+    }
+
+    function onCaptchaReset() {
+        demoWidget.onCaptchaReset();
+    }
+
     function chartComponent() {
         // Declare 'chart' with 'let' to prevent it from being reactive in Alpine.js. 
         let chart;

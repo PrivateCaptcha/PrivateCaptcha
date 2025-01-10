@@ -30,18 +30,7 @@
     </div>
 
     <div class="col-span-full">
-        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label"> Base difficulty </label>
-        <div class="mt-2">
-            <select name="{{ .Const.Difficulty }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
-                <option value="0" {{ if eq $.Params.Property.Level 0 }}selected="selected"{{end}}>Easy</option>
-                <option value="1" {{ if eq $.Params.Property.Level 1 }}selected="selected"{{end}}>Normal</option>
-                <option value="2" {{ if eq $.Params.Property.Level 2 }}selected="selected"{{end}}>Hard</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="col-span-full">
-        <label for="{{ .Const.Growth }}" class="pc-internal-form-label"> Difficulty growth </label>
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Slow</option>
@@ -50,6 +39,34 @@
             </select>
         </div>
     </div>
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
+        <div class="mt-2">
+            <div class="flex flex-col space-y-2 py-2">
+                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-indigo-600" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" {{ if not .Params.CanEdit }}disabled{{ end }}/>
+                <datalist id="steplist" class="flex justify-evenly w-full">
+                    <option value="{{$.Params.EasyLevel}}" label="Easy" class="translate-x-1/2"></option>
+                    <option value="{{$.Params.NormalLevel}}" label="Normal"></option>
+                    <option value="{{$.Params.HardLevel}}" label="Hard" class="-translate-x-1/2"></option>
+                </datalist>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-span-full">
+        <label class="pc-internal-form-label tooltip" data-tooltip="Test selected difficulty settings"> Widget preview </label>
+        <div class="private-captcha mt-2"
+            data-sitekey="{{.Params.CaptchaSitekey}}"
+            data-solution-field="{{.Params.CaptchaSolutionField}}"
+            data-start-mode="click"
+            data-finished-callback="onCaptchaReset"
+            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/{{$.Params.Property.Level}}"
+            data-styles=":host { --border-radius: .375rem; }"
+            {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
+        </div>
+    </div>
+
 </div>
 
 <div class="mt-8 flex">

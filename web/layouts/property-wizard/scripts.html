@@ -2,32 +2,9 @@
 {{template "default-scripts.html" .}}
 <script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
 <script>
-    const demoWidget = {
-        _clearTimeout: null,
-
-        resetCaptcha() {
-            let autoWidget = window.privateCaptcha.autoWidget;
-            if (autoWidget) {
-                autoWidget.reset();
-            }
-        },
-
-        onDifficultyChange(selectElement) {
-            if (this._clearTimeout) { clearTimeout(this._clearTimeout); }
-
-            let autoWidget = window.privateCaptcha.autoWidget;
-            if (autoWidget) {
-                autoWidget.reset({ puzzleEndpoint: '{{.Params.CaptchaEndpoint}}/' + selectElement.value});
-            }
-        },
-
-        onCaptchaReset() {
-            this._clearTimeout = setTimeout(this.resetCaptcha, 2000 /*millis*/);
-        },
-    };
-
     function onDifficultyChange(selectElement) {
-        demoWidget.onDifficultyChange(selectElement);
+        const endpoint = '{{.Params.CaptchaEndpoint}}/' + selectElement.value
+        demoWidget.onDifficultyChange(endpoint);
     }
 
     function onCaptchaReset() {

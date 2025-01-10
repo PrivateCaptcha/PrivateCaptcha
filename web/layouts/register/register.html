@@ -20,7 +20,7 @@
                         <p class="pc-form-text">Already joined? <a href="{{ relURL .Const.LoginEndpoint }}" title="" class="pc-form-link">Login now</a></p>
                     </div>
 
-                    <form hx-post='{{ relURL .Const.RegisterEndpoint }}' hx-indicator="#spinner" hx-disabled-elt="input, button" hx-target="this" hx-swap="innerHTML" class="mt-12">
+                    <form hx-post='{{ relURL .Const.RegisterEndpoint }}' hx-indicator="#spinner" hx-disabled-elt="input, button" hx-target="this" hx-swap="innerHTML" class="mt-12" hx-on::after-swap="window.privateCaptcha.setup()">
                         {{template "form.html" .}}
                     </form>
 
