@@ -26,12 +26,12 @@ SELECT
     user_id,
     user_id,
     '{{ .PortalDomain }}',
-    'small',
+    difficulty,
     'fast'
 FROM org_insert
 CROSS JOIN (
-    VALUES 
-        ('Portal login', '{{ .PortalLoginPropertyID }}'::uuid),
-        ('Portal register', '{{ .PortalRegisterPropertyID }}'::uuid)
-) AS props(name, external_id);
+    VALUES
+        ('Portal login', '{{ .PortalLoginPropertyID }}'::uuid, '{{.PortalLoginDifficulty}}'::smallint),
+        ('Portal register', '{{ .PortalRegisterPropertyID }}'::uuid, '{{.PortalRegisterDifficulty}}'::smallint)
+) AS props(name, external_id, difficulty);
 

@@ -23,7 +23,7 @@ type CreatePropertyParams struct {
 	CreatorID  pgtype.Int4      `db:"creator_id" json:"creator_id"`
 	OrgOwnerID pgtype.Int4      `db:"org_owner_id" json:"org_owner_id"`
 	Domain     string           `db:"domain" json:"domain"`
-	Level      DifficultyLevel  `db:"level" json:"level"`
+	Level      pgtype.Int2      `db:"level" json:"level"`
 	Growth     DifficultyGrowth `db:"growth" json:"growth"`
 }
 
@@ -314,7 +314,7 @@ RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level
 
 type UpdatePropertyParams struct {
 	Name   string           `db:"name" json:"name"`
-	Level  DifficultyLevel  `db:"level" json:"level"`
+	Level  pgtype.Int2      `db:"level" json:"level"`
 	Growth DifficultyGrowth `db:"growth" json:"growth"`
 	ID     int32            `db:"id" json:"id"`
 }

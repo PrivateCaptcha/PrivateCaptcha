@@ -9,6 +9,7 @@ import (
 
 	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -91,7 +92,7 @@ func CreatePropertyForOrg(ctx context.Context, store *db.BusinessStore, org *dbg
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(org.UserID.Int32),
 		OrgOwnerID: db.Int(org.UserID.Int32),
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 }

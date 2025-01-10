@@ -133,7 +133,7 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
@@ -168,7 +168,7 @@ func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
@@ -226,7 +226,7 @@ func TestGetPuzzle(t *testing.T) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
@@ -271,7 +271,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {

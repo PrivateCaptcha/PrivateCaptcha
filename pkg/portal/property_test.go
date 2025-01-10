@@ -35,7 +35,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 		CreatorID:  org1.UserID,
 		OrgOwnerID: org1.UserID,
 		Domain:     "example.com",
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {

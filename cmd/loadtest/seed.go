@@ -24,7 +24,7 @@ const (
 )
 
 var (
-	difficultyLevels = []dbgen.DifficultyLevel{dbgen.DifficultyLevelSmall, dbgen.DifficultyLevelMedium, dbgen.DifficultyLevelHigh}
+	difficultyLevels = []common.DifficultyLevel{common.DifficultyLevelSmall, common.DifficultyLevelMedium, common.DifficultyLevelHigh}
 	growthLevels     = []dbgen.DifficultyGrowth{dbgen.DifficultyGrowthSlow, dbgen.DifficultyGrowthMedium, dbgen.DifficultyGrowthFast}
 )
 
@@ -114,7 +114,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 				CreatorID:  db.Int(user.ID),
 				OrgOwnerID: org.UserID,
 				Domain:     fmt.Sprintf("test%v.privatecaptcha.com", (u+1)*(o+1)*(p+1)),
-				Level:      difficultyLevels[randv2.IntN(len(difficultyLevels))],
+				Level:      db.Int2(int16(difficultyLevels[randv2.IntN(len(difficultyLevels))])),
 				Growth:     growthLevels[randv2.IntN(len(growthLevels))],
 			})
 

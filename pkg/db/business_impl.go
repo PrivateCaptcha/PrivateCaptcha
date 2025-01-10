@@ -761,14 +761,14 @@ func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *db
 	return property, nil
 }
 
-func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32, name string, level uint8, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	if impl.queries == nil {
 		return nil, ErrMaintenance
 	}
 
 	property, err := impl.queries.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
 		Name:   name,
-		Level:  level,
+		Level:  Int2(int16(level)),
 		Growth: growth,
 		ID:     propID,
 	})
