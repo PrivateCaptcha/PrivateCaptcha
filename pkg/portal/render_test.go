@@ -229,14 +229,17 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardSettingsTemplate,
-			model: &propertyDashboardRenderContext{
-				alertRenderContext: alertRenderContext{
-					SuccessMessage: "Test",
+			model: &propertySettingsRenderContext{
+				difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					alertRenderContext: alertRenderContext{
+						SuccessMessage: "Test",
+					},
+					csrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
 				},
-				csrfRenderContext: stubToken(),
-				Property:          stubProperty("Foo", "123"),
-				Org:               stubOrg("123"),
-				CanEdit:           true,
 			},
 		},
 		{

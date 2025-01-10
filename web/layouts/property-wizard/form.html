@@ -30,17 +30,6 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
-        <div class="mt-2">
-            <select name="{{ .Const.Difficulty }}" class="pc-internal-form-select" onchange="onDifficultyChange(this);">
-                <option value="0" selected="selected">Easy</option>
-                <option value="1">Normal</option>
-                <option value="2">Hard</option>
-            </select>
-        </div>
-    </div>
-
-    <div>
         <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" class="pc-internal-form-select">
@@ -52,14 +41,25 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="Test selected difficulty settings"> Widget preview </label>
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
+        <div class="mt-2">
+            <select name="{{ .Const.Difficulty }}" class="pc-internal-form-select" onchange="onDifficultyChange(this);">
+                <option value="{{$.Params.EasyLevel}}" selected="selected">Easy</option>
+                <option value="{{$.Params.NormalLevel}}">Normal</option>
+                <option value="{{$.Params.HardLevel}}">Hard</option>
+            </select>
+        </div>
+    </div>
+
+    <div>
+        <label class="pc-internal-form-label tooltip" data-tooltip="Test selected difficulty settings"> Widget preview </label>
         <div class="private-captcha mt-2"
-            data-sitekey="{{.Params.Sitekey}}"
+            data-sitekey="{{.Params.CaptchaSitekey}}"
             data-solution-field="{{.Params.CaptchaSolutionField}}"
             data-start-mode="click"
             data-finished-callback="onCaptchaReset"
-            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/0"
-            data-styles=":host { --border-radius: .375rem; --max-width: 100%; }"
+            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/{{$.Params.EasyLevel}}"
+            data-styles=":host { --border-radius: .375rem; }"
             {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
         </div>
     </div>

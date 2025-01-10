@@ -28,17 +28,26 @@ const (
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	maxPropertyNameLength                 = 255
 	propertyWizardPropertyID              = "385f7acc-142a-4286-b85b-d94e29545ffd"
+	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
+	propertySettingsTabIndex              = 2
+	propertyIntegrationsTabIndex          = 1
 )
 
 var (
 	domainRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$`)
 )
 
+type difficultyLevelsRenderContext struct {
+	EasyLevel   int
+	NormalLevel int
+	HardLevel   int
+}
+
 type propertyWizardRenderContext struct {
 	csrfRenderContext
 	alertRenderContext
 	captchaRenderContext
-	Sitekey     string
+	difficultyLevelsRenderContext
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -62,6 +71,8 @@ type orgPropertiesRenderContext struct {
 type propertyDashboardRenderContext struct {
 	alertRenderContext
 	csrfRenderContext
+	// scripts.html is shared so captcha context has to be shared too
+	captchaRenderContext
 	Property  *userProperty
 	Org       *userOrg
 	NameError string
@@ -69,9 +80,31 @@ type propertyDashboardRenderContext struct {
 	CanEdit   bool
 }
 
+type propertySettingsRenderContext struct {
+	propertyDashboardRenderContext
+	difficultyLevelsRenderContext
+	MinLevel int
+	MaxLevel int
+}
+
+func (pc *propertySettingsRenderContext) UpdateLevels() {
+	const epsilon = 15
+
+	pc.MinLevel = max(1, min(pc.EasyLevel-epsilon, int(pc.Property.Level)-epsilon))
+	pc.MaxLevel = min(int(common.MaxDifficultyLevel), max(pc.HardLevel+epsilon, int(pc.Property.Level)+epsilon))
+}
+
 type propertyIntegrationsRenderContext struct {
 	propertyDashboardRenderContext
 	Sitekey string
+}
+
+func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
+	return difficultyLevelsRenderContext{
+		EasyLevel:   int(common.DifficultyLevelSmall),
+		NormalLevel: int(common.DifficultyLevelMedium),
+		HardLevel:   int(common.DifficultyLevelHigh),
+	}
 }
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
@@ -80,7 +113,7 @@ func propertyToUserProperty(p *dbgen.Property) *userProperty {
 		OrgID:  strconv.Itoa(int(p.OrgID.Int32)),
 		Name:   p.Name,
 		Domain: p.Domain,
-		Level:  difficultyLevelToIndex(common.DifficultyLevel(p.Level.Int16)),
+		Level:  int(p.Level.Int16),
 		Growth: growthLevelToIndex(p.Growth),
 	}
 }
@@ -133,37 +166,18 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	}
 }
 
-func difficultyLevelToIndex(level common.DifficultyLevel) int {
-	switch {
-	case level <= common.DifficultyLevelSmall:
-		return 0
-	case (common.DifficultyLevelSmall < level) && (level < common.DifficultyLevelHigh):
-		return 1
-	case level >= common.DifficultyLevelHigh:
-		return 2
-	default:
-		return 1
-	}
-}
-
-func difficultyLevelFromIndex(ctx context.Context, index string) common.DifficultyLevel {
-	i, err := strconv.Atoi(index)
+func difficultyLevelFromValue(ctx context.Context, value string) common.DifficultyLevel {
+	i, err := strconv.Atoi(value)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to convert difficulty level", "value", index, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to convert difficulty level", "value", value, common.ErrAttr(err))
 		return common.DifficultyLevelMedium
 	}
 
-	switch i {
-	case 0:
-		return common.DifficultyLevelSmall
-	case 1:
-		return common.DifficultyLevelMedium
-	case 2:
-		return common.DifficultyLevelHigh
-	default:
-		slog.WarnContext(ctx, "Invalid difficulty level index", "index", i)
+	if (i <= 0) || (i > int(common.MaxDifficultyLevel)) {
 		return common.DifficultyLevelMedium
 	}
+
+	return common.DifficultyLevel(i)
 }
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -179,9 +193,9 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 	}
 
 	data := &propertyWizardRenderContext{
-		csrfRenderContext:    s.createCsrfContext(user),
-		captchaRenderContext: s.createDemoCaptchaRenderContext(),
-		Sitekey:              strings.ReplaceAll(propertyWizardPropertyID, "-", ""),
+		csrfRenderContext:             s.createCsrfContext(user),
+		captchaRenderContext:          s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertyWizardPropertyID, "-", "")),
+		difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -268,7 +282,7 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 
 	var level common.DifficultyLevel
 	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
-		level = difficultyLevelFromIndex(ctx, difficultyParam)
+		level = difficultyLevelFromValue(ctx, difficultyParam)
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
 		level = common.DifficultyLevelSmall
@@ -307,9 +321,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	renderCtx := &propertyWizardRenderContext{
 		csrfRenderContext:    s.createCsrfContext(user),
 		alertRenderContext:   alertRenderContext{},
-		captchaRenderContext: s.createDemoCaptchaRenderContext(),
+		captchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertyWizardPropertyID, "-", "")),
 		CurrentOrg:           orgToUserOrg(org, user.ID),
-		Sitekey:              strings.ReplaceAll(propertyWizardPropertyID, "-", ""),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -339,7 +352,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
+	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
 	property, err := s.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
@@ -442,7 +455,6 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 
 	property, err := s.property(r)
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
 		return nil, err
 	}
 
@@ -457,11 +469,30 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
-		Property:          propertyToUserProperty(property),
-		Org:               orgToUserOrg(org, user.ID),
-		CanEdit:           (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		csrfRenderContext:    s.createCsrfContext(user),
+		captchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
+		Property:             propertyToUserProperty(property),
+		Org:                  orgToUserOrg(org, user.ID),
+		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
+	return renderCtx, nil
+}
+
+func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) (*propertySettingsRenderContext, error) {
+	propertyRenderCtx, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := &propertySettingsRenderContext{
+		propertyDashboardRenderContext: *propertyRenderCtx,
+		difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+	}
+
+	renderCtx.Tab = propertySettingsTabIndex
+
+	renderCtx.UpdateLevels()
+
 	return renderCtx, nil
 }
 
@@ -473,14 +504,12 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 	switch tabParam {
 	case "integrations":
 		if integrationsCtx, err := s.getPropertyIntegrations(w, r); err == nil {
-			integrationsCtx.propertyDashboardRenderContext.Tab = 1
 			model = integrationsCtx
 		} else {
 			derr = err
 		}
 	case "settings":
-		if renderCtx, err := s.getOrgProperty(w, r); err == nil {
-			renderCtx.Tab = 2
+		if renderCtx, err := s.getOrgPropertySettings(w, r); err == nil {
 			model = renderCtx
 		} else {
 			derr = err
@@ -514,7 +543,7 @@ func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (
 }
 
 func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	renderCtx, err := s.getOrgProperty(w, r)
+	renderCtx, err := s.getOrgPropertySettings(w, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -538,6 +567,8 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 		propertyDashboardRenderContext: *dashboardCtx,
 		Sitekey:                        db.UUIDToSiteKey(property.ExternalID),
 	}
+
+	renderCtx.Tab = propertyIntegrationsTabIndex
 
 	return renderCtx, nil
 }
@@ -564,6 +595,12 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		return nil, "", errInvalidRequestArg
 	}
 
+	renderCtx, err := s.getOrgPropertySettings(w, r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	// should hit cache right away
 	org, err := s.org(r)
 	if err != nil {
 		return nil, "", err
@@ -572,19 +609,6 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	property, err := s.property(r)
 	if err != nil {
 		return nil, "", err
-	}
-
-	if property.OrgID.Int32 != org.ID {
-		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
-		return nil, "", errInvalidRequestArg
-	}
-
-	renderCtx := &propertyDashboardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
-		Property:          propertyToUserProperty(property),
-		Org:               orgToUserOrg(org, user.ID),
-		Tab:               2, // settings
-		CanEdit:           (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
 
 	if !renderCtx.CanEdit {
@@ -603,7 +627,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		}
 	}
 
-	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
+	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
 	if (name != property.Name) || (int16(difficulty) != property.Level.Int16) || (growth != property.Growth) {

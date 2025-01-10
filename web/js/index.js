@@ -57,3 +57,27 @@ const ErrorTracker = {
         }).catch(console.error);
     }
 };
+
+const demoWidget = {
+    _clearTimeout: null,
+
+    resetCaptcha() {
+        let autoWidget = window.privateCaptcha.autoWidget;
+        if (autoWidget) {
+            autoWidget.reset();
+        }
+    },
+
+    onDifficultyChange(endpoint) {
+        if (this._clearTimeout) { clearTimeout(this._clearTimeout); }
+
+        let autoWidget = window.privateCaptcha.autoWidget;
+        if (autoWidget) {
+            autoWidget.reset({ puzzleEndpoint: endpoint });
+        }
+    },
+
+    onCaptchaReset() {
+        this._clearTimeout = setTimeout(this.resetCaptcha, 2000 /*millis*/);
+    },
+};

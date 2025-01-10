@@ -30,9 +30,8 @@ var (
 type loginRenderContext struct {
 	csrfRenderContext
 	captchaRenderContext
-	LoginSitekey string
-	EmailError   string
-	CanRegister  bool
+	EmailError  string
+	CanRegister bool
 }
 
 type portalPropertyOwnerSource struct {
@@ -55,8 +54,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		LoginSitekey:         strings.ReplaceAll(db.PortalLoginPropertyID, "-", ""),
-		captchaRenderContext: s.createCaptchaRenderContext(),
+		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalLoginPropertyID, "-", "")),
 		CanRegister:          s.canRegister.Load(),
 	}, loginTemplate, nil
 }
@@ -75,12 +73,11 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(),
-		LoginSitekey:         strings.ReplaceAll(db.PortalLoginPropertyID, "-", ""),
+		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalLoginPropertyID, "-", "")),
 		CanRegister:          s.canRegister.Load(),
 	}
 
-	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.LoginSitekey}
+	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.CaptchaSitekey}
 
 	captchaSolution := r.FormValue(captchaSolutionField)
 	_, verr, err := s.PuzzleEngine.Verify(ctx, captchaSolution, ownerSource, time.Now().UTC())
