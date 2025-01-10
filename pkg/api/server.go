@@ -191,7 +191,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		uuid := db.UUIDFromSiteKey(sitekey)
 		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
 		puzzle.PropertyID = uuid.Bytes
-		puzzle.Difficulty = difficulty.LevelMedium
+		puzzle.Difficulty = uint8(common.DifficultyLevelMedium)
 		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey,
 			"difficulty", puzzle.Difficulty)
 		return puzzle, nil

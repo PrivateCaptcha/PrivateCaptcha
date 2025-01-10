@@ -27,8 +27,8 @@ var (
 )
 
 const (
-	PortalLoginPropertyID        = "1ca8041a-5761-40a4-addf-f715a991bfea"
-	PortalRegisterPropertyID     = "8981be7a-3a71-414d-bb74-e7b4456603fd"
+	PortalLoginPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
+	PortalRegisterPropertyID = "8981be7a-3a71-414d-bb74-e7b4456603fd"
 )
 
 type BusinessStore struct {
@@ -241,7 +241,7 @@ func (s *BusinessStore) CreateNewProperty(ctx context.Context, params *dbgen.Cre
 	return s.impl().createNewProperty(ctx, params)
 }
 
-func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level dbgen.DifficultyLevel, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
+func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level uint8, growth dbgen.DifficultyGrowth) (*dbgen.Property, error) {
 	return s.impl().updateProperty(ctx, propID, name, level, growth)
 }
 

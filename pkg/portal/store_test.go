@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -65,7 +66,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 		CreatorID:  org.UserID,
 		OrgOwnerID: org.UserID,
 		Domain:     "example.com",
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	//propName, org.ID, org.UserID.Int32, domain, level, growth)

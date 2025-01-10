@@ -1,4 +1,3 @@
-CREATE TYPE backend.difficulty_level AS ENUM ('small', 'medium', 'high');
 CREATE TYPE backend.difficulty_growth AS ENUM ('slow', 'medium', 'fast');
 
 CREATE TABLE IF NOT EXISTS backend.properties(
@@ -9,7 +8,7 @@ CREATE TABLE IF NOT EXISTS backend.properties(
     creator_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
     org_owner_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL,
-    level backend.difficulty_level NOT NULL DEFAULT 'medium',
+    level SMALLINT CHECK (level >= 0 AND level < 256),
     growth backend.difficulty_growth NOT NULL DEFAULT 'medium',
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ DEFAULT current_timestamp,

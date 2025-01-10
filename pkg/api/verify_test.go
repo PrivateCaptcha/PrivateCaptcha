@@ -106,7 +106,7 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
@@ -229,7 +229,7 @@ func TestVerifyCachePriority(t *testing.T) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: db.Int(user.ID),
 		Domain:     testPropertyDomain,
-		Level:      dbgen.DifficultyLevelMedium,
+		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {

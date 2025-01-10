@@ -15,7 +15,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -81,7 +80,7 @@ func propertyToUserProperty(p *dbgen.Property) *userProperty {
 		OrgID:  strconv.Itoa(int(p.OrgID.Int32)),
 		Name:   p.Name,
 		Domain: p.Domain,
-		Level:  difficultyLevelToIndex(p.Level),
+		Level:  difficultyLevelToIndex(common.DifficultyLevel(p.Level.Int16)),
 		Growth: growthLevelToIndex(p.Growth),
 	}
 }
@@ -134,36 +133,36 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	}
 }
 
-func difficultyLevelToIndex(level dbgen.DifficultyLevel) int {
-	switch level {
-	case dbgen.DifficultyLevelSmall:
+func difficultyLevelToIndex(level common.DifficultyLevel) int {
+	switch {
+	case level <= common.DifficultyLevelSmall:
 		return 0
-	case dbgen.DifficultyLevelMedium:
+	case (common.DifficultyLevelSmall < level) && (level < common.DifficultyLevelHigh):
 		return 1
-	case dbgen.DifficultyLevelHigh:
+	case level >= common.DifficultyLevelHigh:
 		return 2
 	default:
 		return 1
 	}
 }
 
-func difficultyLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyLevel {
+func difficultyLevelFromIndex(ctx context.Context, index string) common.DifficultyLevel {
 	i, err := strconv.Atoi(index)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to convert difficulty level", "value", index, common.ErrAttr(err))
-		return dbgen.DifficultyLevelMedium
+		return common.DifficultyLevelMedium
 	}
 
 	switch i {
 	case 0:
-		return dbgen.DifficultyLevelSmall
+		return common.DifficultyLevelSmall
 	case 1:
-		return dbgen.DifficultyLevelMedium
+		return common.DifficultyLevelMedium
 	case 2:
-		return dbgen.DifficultyLevelHigh
+		return common.DifficultyLevelHigh
 	default:
 		slog.WarnContext(ctx, "Invalid difficulty level index", "index", i)
-		return dbgen.DifficultyLevelMedium
+		return common.DifficultyLevelMedium
 	}
 }
 
@@ -267,14 +266,14 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var level dbgen.DifficultyLevel
+	var level common.DifficultyLevel
 	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
 		level = difficultyLevelFromIndex(ctx, difficultyParam)
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
-		level = dbgen.DifficultyLevelSmall
+		level = common.DifficultyLevelSmall
 	}
-	puzzle.Difficulty = difficulty.MinDifficultyForLevel(level)
+	puzzle.Difficulty = uint8(level)
 
 	sitekey := r.URL.Query().Get(common.ParamSiteKey)
 	uuid := db.UUIDFromSiteKey(sitekey)
@@ -349,7 +348,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: org.UserID,
 		Domain:     domain,
-		Level:      difficulty,
+		Level:      db.Int2(int16(difficulty)),
 		Growth:     growth,
 	})
 	if err != nil {
@@ -607,8 +606,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	difficulty := difficultyLevelFromIndex(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 
-	if (name != property.Name) || (difficulty != property.Level) || (growth != property.Growth) {
-		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, difficulty, growth); err != nil {
+	if (name != property.Name) || (int16(difficulty) != property.Level.Int16) || (growth != property.Growth) {
+		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, uint8(difficulty), growth); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.DebugContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)

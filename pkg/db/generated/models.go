@@ -97,49 +97,6 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 	return string(ns.DifficultyGrowth), nil
 }
 
-type DifficultyLevel string
-
-const (
-	DifficultyLevelSmall  DifficultyLevel = "small"
-	DifficultyLevelMedium DifficultyLevel = "medium"
-	DifficultyLevelHigh   DifficultyLevel = "high"
-)
-
-func (e *DifficultyLevel) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = DifficultyLevel(s)
-	case string:
-		*e = DifficultyLevel(s)
-	default:
-		return fmt.Errorf("unsupported scan type for DifficultyLevel: %T", src)
-	}
-	return nil
-}
-
-type NullDifficultyLevel struct {
-	DifficultyLevel DifficultyLevel `json:"backend_difficulty_level"`
-	Valid           bool            `json:"valid"` // Valid is true if DifficultyLevel is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullDifficultyLevel) Scan(value interface{}) error {
-	if value == nil {
-		ns.DifficultyLevel, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.DifficultyLevel.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullDifficultyLevel) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.DifficultyLevel), nil
-}
-
 type SubscriptionSource string
 
 const (
@@ -285,7 +242,7 @@ type Property struct {
 	CreatorID  pgtype.Int4        `db:"creator_id" json:"creator_id"`
 	OrgOwnerID pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
 	Domain     string             `db:"domain" json:"domain"`
-	Level      DifficultyLevel    `db:"level" json:"level"`
+	Level      pgtype.Int2        `db:"level" json:"level"`
 	Growth     DifficultyGrowth   `db:"growth" json:"growth"`
 	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt  pgtype.Timestamptz `db:"updated_at" json:"updated_at"`

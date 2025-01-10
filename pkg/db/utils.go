@@ -39,6 +39,10 @@ func Int(i int32) pgtype.Int4 {
 	return pgtype.Int4{Int32: i, Valid: true}
 }
 
+func Int2(i int16) pgtype.Int2 {
+	return pgtype.Int2{Int16: i, Valid: true}
+}
+
 func Bool(b bool) pgtype.Bool {
 	return pgtype.Bool{
 		Bool:  b,

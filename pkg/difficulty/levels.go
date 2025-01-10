@@ -13,9 +13,6 @@ import (
 )
 
 const (
-	LevelSmall     = 80
-	LevelMedium    = 95
-	LevelHigh      = 110
 	leakyBucketCap = math.MaxUint32
 	// this one is arbitrary as we can support "many"
 	maxBucketsToKeep    = 1_000_000
@@ -59,19 +56,6 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 
 func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
 	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize, nil)
-}
-
-func MinDifficultyForLevel(level dbgen.DifficultyLevel) uint8 {
-	switch level {
-	case dbgen.DifficultyLevelSmall:
-		return LevelSmall
-	case dbgen.DifficultyLevelMedium:
-		return LevelMedium
-	case dbgen.DifficultyLevelHigh:
-		return LevelHigh
-	default:
-		return LevelMedium
-	}
 }
 
 func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.DifficultyGrowth) uint8 {
@@ -123,7 +107,7 @@ func (l *Levels) Shutdown() {
 func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, leakybucket.TLevel) {
 	l.recordAccess(fingerprint, p, tnow)
 
-	minDifficulty := MinDifficultyForLevel(p.Level)
+	minDifficulty := uint8(p.Level.Int16)
 
 	addResult := l.buckets.Add(p.ID, 1, tnow)
 	if !addResult.Found {

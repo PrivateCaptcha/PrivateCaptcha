@@ -39,7 +39,7 @@ func TestBackfillLevels(t *testing.T) {
 		ExternalID: *randomUUID(),
 		OrgOwnerID: db.Int(userID),
 		OrgID:      db.Int(678),
-		Level:      dbgen.DifficultyLevelSmall,
+		Level:      db.Int2(int16(common.DifficultyLevelSmall)),
 		Growth:     dbgen.DifficultyGrowthFast,
 		CreatedAt:  db.Timestampz(tnow),
 		UpdatedAt:  db.Timestampz(tnow),
@@ -68,7 +68,7 @@ func TestBackfillLevels(t *testing.T) {
 		}
 	}
 
-	if diff == difficulty.LevelSmall {
+	if diff == uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Difficulty did not grow: %v", diff)
 	}
 
@@ -79,7 +79,7 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d, l := levels.DifficultyEx(fingerprints[0], prop, tnow); d != difficulty.LevelSmall {
+	if d, l := levels.DifficultyEx(fingerprints[0], prop, tnow); d != uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Unexpected difficulty after stats reset: %v (level %v)", d, l)
 	}
 

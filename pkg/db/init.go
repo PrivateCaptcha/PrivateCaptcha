@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"sync"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
@@ -82,6 +83,8 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 				PortalRegisterPropertyID: PortalRegisterPropertyID,
 				PortalDomain:             cfg.PortalDomain(),
 				AdminEmail:               cfg.AdminEmail(),
+				PortalLoginDifficulty:    common.DifficultyLevelSmall,
+				PortalRegisterDifficulty: common.DifficultyLevelSmall,
 			}
 			return migratePostgres(ctx, pool, migrateCtx, up)
 		}

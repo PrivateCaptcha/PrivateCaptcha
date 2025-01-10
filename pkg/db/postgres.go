@@ -93,6 +93,8 @@ type migrateContext struct {
 	PortalRegisterPropertyID string
 	PortalDomain             string
 	AdminEmail               string
+	PortalLoginDifficulty    common.DifficultyLevel
+	PortalRegisterDifficulty common.DifficultyLevel
 }
 
 func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext, up bool) error {

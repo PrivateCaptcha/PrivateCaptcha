@@ -28,7 +28,6 @@ sql:
           backend_organization: Organization
           backend_access_level: AccessLevel
           backend_organization_user: OrganizationUser
-          backend_difficulty_level: DifficultyLevel
           backend_difficulty_growth: DifficultyGrowth
           backend_property: Property
           backend_cache: Cache
@@ -36,9 +35,6 @@ sql:
           backend_support: Support
           backend_usage_limit_violation: UsageLimitViolation
           backend_lock: Lock
-          backend_difficulty_level_small: DifficultyLevelSmall
-          backend_difficulty_level_medium: DifficultyLevelMedium
-          backend_difficulty_level_high: DifficultyLevelHigh
           backend_difficulty_growth_slow: DifficultyGrowthSlow
           backend_difficulty_growth_medium: DifficultyGrowthMedium
           backend_difficulty_growth_fast: DifficultyGrowthFast
