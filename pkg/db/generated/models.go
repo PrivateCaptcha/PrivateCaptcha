@@ -253,8 +253,8 @@ type Subscription struct {
 	ID                   int32              `db:"id" json:"id"`
 	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
 	PaddlePriceID        string             `db:"paddle_price_id" json:"paddle_price_id"`
-	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
-	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
+	PaddleSubscriptionID pgtype.Text        `db:"paddle_subscription_id" json:"paddle_subscription_id"`
+	PaddleCustomerID     pgtype.Text        `db:"paddle_customer_id" json:"paddle_customer_id"`
 	Status               string             `db:"status" json:"status"`
 	Source               SubscriptionSource `db:"source" json:"source"`
 	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`

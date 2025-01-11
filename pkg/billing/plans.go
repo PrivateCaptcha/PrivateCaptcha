@@ -13,6 +13,7 @@ type Plan struct {
 	PaddleProductID      string
 	PaddlePriceIDMonthly string
 	PaddlePriceIDYearly  string
+	TrialDays            int
 	PriceMonthly         int
 	PriceYearly          int
 	Version              int
@@ -61,6 +62,7 @@ func (p *Plan) ShouldBeThrottled(requestsCount int64) bool {
 const (
 	defaultOrgLimit        = 10
 	defaultPropertiesLimit = 50
+	defaultTrialDays       = 14
 	defaultAPIKeyRequests  = 1.0
 	version1               = 1
 )
@@ -76,6 +78,7 @@ var (
 			PaddleProductID: "pro_01j0379m2fed2nrf4hb2gmb6gh",
 			//PaddlePriceIDMonthly: "pri_01j037bk2bwtpryzqzafg1kyxk",
 			PaddlePriceIDYearly:  "pri_01j037cm0ny17tk8t9d7qksntq",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         9,
 			PriceYearly:          9 * 11,
 			RequestsLimit:        1_000,
@@ -90,6 +93,7 @@ var (
 			PaddleProductID:      "pro_01j03v1tmp3gm1mmvhg357cg8v",
 			PaddlePriceIDMonthly: "pri_01j03v3ne7q50zfndesjrp74k8",
 			PaddlePriceIDYearly:  "pri_01j03v4vkw4jhe3a4ahpcp888c",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         19,
 			PriceYearly:          19 * 11,
 			RequestsLimit:        5_000,
@@ -104,6 +108,7 @@ var (
 			PaddleProductID:      "pro_01j03v5bpwqfk5gs09wm6cqgxp",
 			PaddlePriceIDMonthly: "pri_01j03v5xqapmx8srxw3a7tz2ny",
 			PaddlePriceIDYearly:  "pri_01j03v6jb4mzkdtxp2xrgb1vdt",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         29,
 			PriceYearly:          29 * 11,
 			RequestsLimit:        10_000,
@@ -118,6 +123,7 @@ var (
 			PaddleProductID:      "pro_01j03v84qgmc3qe61v3302k6wz",
 			PaddlePriceIDMonthly: "pri_01j03v8m86qtfdhcy6hap60xe8",
 			PaddlePriceIDYearly:  "pri_01j03v9b410k9pd09xkev1yw28",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         49,
 			PriceYearly:          49 * 11,
 			RequestsLimit:        25_000,
@@ -132,6 +138,7 @@ var (
 			PaddleProductID:      "pro_01j03v9zzanph7e0f0j89p1bqz",
 			PaddlePriceIDMonthly: "pri_01j03vagbx7ew49yz8ybgjch78",
 			PaddlePriceIDYearly:  "pri_01j03vb735t6j3z619ae2ar2n3",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         79,
 			PriceYearly:          79 * 11,
 			RequestsLimit:        50_000,
@@ -146,6 +153,7 @@ var (
 			PaddleProductID:      "pro_01j03vcaxkcf55s5n34dz41nrr",
 			PaddlePriceIDMonthly: "pri_01j03vyfv2nx04s31dcs3bd54z",
 			PaddlePriceIDYearly:  "pri_01j03vz7gkxb755c31sacg78gr",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         129,
 			PriceYearly:          129 * 11,
 			RequestsLimit:        100_000,
@@ -163,6 +171,7 @@ var (
 			PaddleProductID: "pro_01jgby7f4zvtn644canpryjs5e",
 			//PaddlePriceIDMonthly: "",
 			PaddlePriceIDYearly:  "pri_01jgby921qq2q3t12qnjdxz3dj",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         9,
 			PriceYearly:          59,
 			RequestsLimit:        1_000,
@@ -177,6 +186,7 @@ var (
 			PaddleProductID:      "pro_01jgbyg4y3hamxqvpvjcfv40gz",
 			PaddlePriceIDMonthly: "pri_01jgbyk6sq3gkwjkem891azdd7",
 			PaddlePriceIDYearly:  "pri_01jgbyn4fs9rarwrjmrpx8k64s",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         15,
 			PriceYearly:          150,
 			RequestsLimit:        5_000,
@@ -191,6 +201,7 @@ var (
 			PaddleProductID:      "pro_01jgbyr1yvtcezgmm2svf3yrkh",
 			PaddlePriceIDMonthly: "pri_01jgbysz696kqbvtwvz8vqh5x5",
 			PaddlePriceIDYearly:  "pri_01jgbz15bp8nx7qwb5932bed64",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         29,
 			PriceYearly:          290,
 			RequestsLimit:        10_000,
@@ -205,6 +216,7 @@ var (
 			PaddleProductID:      "pro_01jgbz5gpastcsnyfyrwsftc4k",
 			PaddlePriceIDMonthly: "pri_01jgbz658cnmkrcq9zdyzbzbmt",
 			PaddlePriceIDYearly:  "pri_01jgbz6z4jbm1kadvck8yc2vgy",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         49,
 			PriceYearly:          490,
 			RequestsLimit:        25_000,
@@ -219,6 +231,7 @@ var (
 			PaddleProductID:      "pro_01jgbzaw24w528ckgtyew5ev5m",
 			PaddlePriceIDMonthly: "pri_01jgbzbjd9ttp4kv02yjnab10k",
 			PaddlePriceIDYearly:  "pri_01jgbzc69a3q409529q1wxcprk",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         99,
 			PriceYearly:          990,
 			RequestsLimit:        50_000,
@@ -233,6 +246,7 @@ var (
 			PaddleProductID:      "pro_01jgbzfyfwyx49ypp4tcth1d03",
 			PaddlePriceIDMonthly: "pri_01jgbzhwemg90t8c1r5w972ekt",
 			PaddlePriceIDYearly:  "pri_01jgbzjtrrw30t3m0t8pta1sap",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         199,
 			PriceYearly:          1990,
 			RequestsLimit:        100_000,
@@ -247,6 +261,7 @@ var (
 			PaddleProductID:      "pro_01jgbzremf60a5404yc0538h46",
 			PaddlePriceIDMonthly: "pri_01jgbzs0rm49k9t8bq27qs5b8y",
 			PaddlePriceIDYearly:  "pri_01jgbzt1z45s1cdy83hszhb885",
+			TrialDays:            defaultTrialDays,
 			PriceMonthly:         299,
 			PriceYearly:          2990,
 			RequestsLimit:        200_000,
@@ -264,6 +279,7 @@ var (
 			PaddleProductID:      "123456",
 			PaddlePriceIDYearly:  "",
 			PaddlePriceIDMonthly: "",
+			TrialDays:            defaultTrialDays,
 			RequestsLimit:        10_000,
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
@@ -381,6 +397,15 @@ func UpdatePlansPrices(prices Prices, stage string) {
 func IsSubscriptionActive(status string) bool {
 	switch paddlenotification.SubscriptionStatus(status) {
 	case paddlenotification.SubscriptionStatusActive, paddlenotification.SubscriptionStatusTrialing:
+		return true
+	default:
+		return false
+	}
+}
+
+func IsSubscriptionTrialing(status string) bool {
+	switch paddlenotification.SubscriptionStatus(status) {
+	case paddlenotification.SubscriptionStatusTrialing:
 		return true
 	default:
 		return false

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -15,6 +16,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 var (
@@ -119,6 +121,19 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }
 
+func createInternalTrial(plan *billing.Plan) *dbgen.CreateSubscriptionParams {
+	return &dbgen.CreateSubscriptionParams{
+		PaddleProductID:      plan.PaddleProductID,
+		PaddlePriceID:        plan.PaddlePriceIDMonthly,
+		PaddleSubscriptionID: pgtype.Text{},
+		PaddleCustomerID:     pgtype.Text{},
+		Status:               string(paddlenotification.SubscriptionStatusTrialing),
+		Source:               dbgen.SubscriptionSourceInternal,
+		TrialEndsAt:          db.Timestampz(time.Now().AddDate(0, 0, plan.TrialDays)),
+		NextBilledAt:         db.Timestampz(time.Time{}),
+	}
+}
+
 func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
@@ -134,15 +149,22 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 
 	orgName := common.OrgNameFromName(name)
 
-	user, _, err := s.Store.CreateNewAccount(ctx, nil /*subscription*/, email, name, orgName, -1 /*existing user ID*/)
+	var plan *billing.Plan
+	var subscrParams *dbgen.CreateSubscriptionParams
+
+	if plans, ok := billing.GetPlansForStage(s.Stage); ok && len(plans) > 0 {
+		// seed internal-subscription user with the smallest plan's limits
+		plan = plans[0]
+		subscrParams = createInternalTrial(plan)
+	}
+
+	user, _, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existing user ID*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return nil, err
 	}
 
-	if plans, ok := billing.GetPlansForStage(s.Stage); ok && len(plans) > 0 {
-		// seed no-subscription user with the smallest plan's limits
-		plan := plans[0]
+	if plan != nil {
 		_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
 	}
 
