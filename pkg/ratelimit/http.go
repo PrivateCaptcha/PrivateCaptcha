@@ -83,6 +83,7 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 			//	"level", addResult.CurrLevel, "capacity", addResult.Capacity, "found", addResult.Found)
 
 			ctx := context.WithValue(r.Context(), common.RateLimitKeyContextKey, key)
+			ctx = context.WithValue(ctx, common.RateLimitLevelContextKey, addResult.CurrLevel)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
 			slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "ratelimiter", l.name,
