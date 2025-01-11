@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -216,8 +217,13 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
+	var userLevel leakybucket.TLevel = 0
 	tnow := time.Now()
-	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, tnow)
+	if ipLevel, ok := ctx.Value(common.RateLimitLevelContextKey).(leakybucket.TLevel); ok {
+		// this will account for case when users from single IP are accessing multiple properties
+		userLevel = ipLevel
+	}
+	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, userLevel, tnow)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
 
