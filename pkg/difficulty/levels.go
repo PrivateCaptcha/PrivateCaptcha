@@ -104,7 +104,7 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, userLevel leakybucket.TLevel, tnow time.Time) (uint8, leakybucket.TLevel) {
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, baseLevel leakybucket.TLevel, tnow time.Time) (uint8, leakybucket.TLevel) {
 	l.recordAccess(fingerprint, p, tnow)
 
 	minDifficulty := uint8(p.Level.Int16)
@@ -116,11 +116,13 @@ func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(addResult.CurrLevel)+float64(userLevel), minDifficulty, p.Growth), addResult.CurrLevel
+	level := int64(baseLevel)
+	level += int64(addResult.CurrLevel)
+	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), addResult.CurrLevel
 }
 
-func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, userLevel leakybucket.TLevel, tnow time.Time) uint8 {
-	diff, _ := l.DifficultyEx(fingerprint, p, userLevel, tnow)
+func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, baseLevel leakybucket.TLevel, tnow time.Time) uint8 {
+	diff, _ := l.DifficultyEx(fingerprint, p, baseLevel, tnow)
 	return diff
 }
 
