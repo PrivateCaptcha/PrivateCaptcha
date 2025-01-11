@@ -96,7 +96,7 @@ func subscriptionCreatedSuite(ctx context.Context, evt *paddlenotification.Subsc
 		t.Errorf("Subscription was not found in the DB: %v", err)
 	}
 
-	if subscription.PaddleSubscriptionID != evt.Data.ID {
+	if subscription.PaddleSubscriptionID.String != evt.Data.ID {
 		t.Errorf("Unexpected Paddle subscription ID in the DB: %v (expected %v", subscription.PaddleSubscriptionID, evt.Data.ID)
 	}
 }
@@ -179,7 +179,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 	evt := &paddlenotification.SubscriptionUpdated{
 		GenericNotificationEvent: paddlenotification.GenericNotificationEvent{},
 		Data: paddlenotification.SubscriptionNotification{
-			ID:             subscription.PaddleSubscriptionID,
+			ID:             subscription.PaddleSubscriptionID.String,
 			Status:         paddlenotification.SubscriptionStatusPaused,
 			UpdatedAt:      common.JSONTimeNow().String(),
 			PausedAt:       &pausedAt,

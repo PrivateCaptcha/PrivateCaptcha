@@ -55,8 +55,8 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddlenot
 	params := &dbgen.CreateSubscriptionParams{
 		PaddlePriceID:        subscr.Price.ID,
 		PaddleProductID:      subscr.Price.ProductID,
-		PaddleSubscriptionID: evt.ID,
-		PaddleCustomerID:     evt.CustomerID,
+		PaddleSubscriptionID: db.Text(evt.ID),
+		PaddleCustomerID:     db.Text(evt.CustomerID),
 		Status:               string(evt.Status),
 		Source:               dbgen.SubscriptionSourcePaddle,
 	}
@@ -164,7 +164,7 @@ func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddleno
 
 	params := &dbgen.UpdateSubscriptionParams{
 		PaddleProductID:      subscr.Price.ProductID,
-		PaddleSubscriptionID: data.ID,
+		PaddleSubscriptionID: db.Text(data.ID),
 		Status:               string(data.Status),
 	}
 

@@ -31,6 +31,7 @@ const (
 var (
 	errMissingSubscription  = errors.New("user does not have a subscription")
 	errInternalSubscription = errors.New("internal subscription")
+	errInvalidSubscription  = errors.New("invalid subscription")
 )
 
 type settingsCommonRenderContext struct {
@@ -287,8 +288,8 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if billing.IsSubscriptionActive(subscription.Status) {
-			if err := s.PaddleAPI.CancelSubscription(ctx, subscription.PaddleSubscriptionID); err != nil {
+		if billing.IsSubscriptionActive(subscription.Status) && subscription.PaddleSubscriptionID.Valid {
+			if err := s.PaddleAPI.CancelSubscription(ctx, subscription.PaddleSubscriptionID.String); err != nil {
 				slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "userID", user.ID, common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)
 				return
@@ -427,17 +428,21 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 	renderCtx := &settingsBillingRenderContext{
 		csrfRenderContext:           s.createCsrfContext(user),
 		settingsCommonRenderContext: s.createSettingsCommonRenderContext(2 /*tab*/, user),
+		CurrentPlan:                 &billing.Plan{},
 	}
 
+	isSubscribed := false
 	if user.SubscriptionID.Valid {
 		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			return nil, err
 		}
 
-		renderCtx.IsSubscribed = billing.IsSubscriptionActive(subscription.Status)
+		isInternalSubscription := db.IsInternalSubscription(subscription.Source)
+		isInternalTrial := isInternalSubscription && billing.IsSubscriptionTrialing(subscription.Status)
+		renderCtx.IsSubscribed = !isInternalTrial && billing.IsSubscriptionActive(subscription.Status)
 		if renderCtx.IsSubscribed {
-			renderCtx.CanManage = !db.IsInternalSubscription(subscription.Source)
+			renderCtx.CanManage = !isInternalSubscription
 
 			if subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now()) {
 				renderCtx.InfoMessage = fmt.Sprintf("Your subscription ends on %s.", subscription.CancelFrom.Time.Format("02 Jan 2006"))
@@ -448,15 +453,18 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 			if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
 				renderCtx.CurrentPlan = plan
 				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
+				isSubscribed = true
 			} else {
 				slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
 			}
+		} else if isInternalTrial && subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
+			renderCtx.InfoMessage = fmt.Sprintf("Your free evaluation on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
+			isSubscribed = true
 		}
 	}
 
-	if !renderCtx.IsSubscribed {
+	if !isSubscribed {
 		renderCtx.WarningMessage = "You don't have an active subscription."
-		renderCtx.CurrentPlan = &billing.Plan{}
 	}
 
 	if plans, ok := billing.GetPlansForStage(s.Stage); ok {
@@ -512,7 +520,13 @@ func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Reque
 		return nil, errInternalSubscription
 	}
 
-	urls, err := s.PaddleAPI.GetManagementURLs(ctx, subscription.PaddleSubscriptionID)
+	if !subscription.PaddleSubscriptionID.Valid {
+		slog.ErrorContext(ctx, "Paddle Subscription ID is NULL", "userID", user.ID, "subscriptionID", subscription.ID)
+		http.Error(w, "", http.StatusInternalServerError)
+		return nil, errInvalidSubscription
+	}
+
+	urls, err := s.PaddleAPI.GetManagementURLs(ctx, subscription.PaddleSubscriptionID.String)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to fetch Paddle URLs", common.ErrAttr(err))
 		http.Error(w, "", http.StatusInternalServerError)
@@ -600,7 +614,12 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
-	changePreview, err := s.PaddleAPI.PreviewChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/)
+	if !subscription.PaddleSubscriptionID.Valid {
+		renderCtx.WarningMessage = "Invalid subscription. Please contact support for assistance."
+		return renderCtx, settingsBillingTemplate, nil
+	}
+
+	changePreview, err := s.PaddleAPI.PreviewChangeSubscription(ctx, subscription.PaddleSubscriptionID.String, priceID, 1 /*quantity*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to change your subscription. Please contact support for assistance."
@@ -685,7 +704,12 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
-	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID, priceID, 1 /*quantity*/); err == nil {
+	if !subscription.PaddleSubscriptionID.Valid {
+		renderCtx.WarningMessage = "Invalid subscription. Please contact support for assistance."
+		return renderCtx, settingsBillingTemplate, nil
+	}
+
+	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID.String, priceID, 1 /*quantity*/); err == nil {
 		renderCtx.SuccessMessage = "Subscription was updated successfully."
 	} else {
 		renderCtx.ErrorMessage = "Failed to update subscription. Please contact support for assistance."

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"sync"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -77,8 +78,10 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 		}
 
 		if migrate {
+			stage := cfg.Stage()
+
 			migrateCtx := &migrateContext{
-				Stage:                    cfg.Stage(),
+				Stage:                    stage,
 				PortalLoginPropertyID:    PortalLoginPropertyID,
 				PortalRegisterPropertyID: PortalRegisterPropertyID,
 				PortalDomain:             cfg.PortalDomain(),
@@ -86,6 +89,13 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 				PortalLoginDifficulty:    common.DifficultyLevelSmall,
 				PortalRegisterDifficulty: common.DifficultyLevelSmall,
 			}
+
+			if plans, ok := billing.GetPlansForStage(stage); ok && len(plans) > 0 {
+				plan := plans[len(plans)-1]
+				migrateCtx.PaddleProductID = plan.PaddleProductID
+				migrateCtx.PaddlePriceID = plan.PaddlePriceIDYearly
+			}
+
 			return migratePostgres(ctx, pool, migrateCtx, up)
 		}
 

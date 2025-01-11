@@ -1,7 +1,7 @@
 -- Create a subscription with a 100-year trial
 WITH subscription_insert AS (
     INSERT INTO backend.subscriptions (paddle_product_id, paddle_price_id, paddle_subscription_id, paddle_customer_id, status, source, trial_ends_at)
-    VALUES ('pro_01j03vcaxkcf55s5n34dz41nrr', 'pri_01j03vz7gkxb755c31sacg78gr', '', '', 'trialing', 'internal', CURRENT_TIMESTAMP + INTERVAL '100 years')
+    VALUES ('{{.PaddleProductID}}', '{{.PaddlePriceID}}', NULL, NULL, 'trialing', 'internal', CURRENT_TIMESTAMP + INTERVAL '100 years')
     RETURNING id
 ), user_insert AS (
     -- Create an admin user

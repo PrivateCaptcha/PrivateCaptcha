@@ -82,8 +82,8 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 	user, org, err := store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
 		PaddleProductID:      plan.PaddleProductID,
 		PaddlePriceID:        plan.PaddlePriceIDMonthly,
-		PaddleSubscriptionID: xid.New().String(),
-		PaddleCustomerID:     xid.New().String(),
+		PaddleSubscriptionID: db.Text(xid.New().String()),
+		PaddleCustomerID:     db.Text(xid.New().String()),
 		Source:               dbgen.SubscriptionSourceInternal,
 		Status:               string(paddlenotification.SubscriptionStatusTrialing),
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),

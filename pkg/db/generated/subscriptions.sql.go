@@ -18,8 +18,8 @@ INSERT INTO backend.subscriptions (paddle_product_id, paddle_price_id, paddle_su
 type CreateSubscriptionParams struct {
 	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
 	PaddlePriceID        string             `db:"paddle_price_id" json:"paddle_price_id"`
-	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
-	PaddleCustomerID     string             `db:"paddle_customer_id" json:"paddle_customer_id"`
+	PaddleSubscriptionID pgtype.Text        `db:"paddle_subscription_id" json:"paddle_subscription_id"`
+	PaddleCustomerID     pgtype.Text        `db:"paddle_customer_id" json:"paddle_customer_id"`
 	Status               string             `db:"status" json:"status"`
 	Source               SubscriptionSource `db:"source" json:"source"`
 	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
@@ -130,7 +130,7 @@ UPDATE backend.subscriptions SET paddle_product_id = $2, status = $3, next_bille
 `
 
 type UpdateSubscriptionParams struct {
-	PaddleSubscriptionID string             `db:"paddle_subscription_id" json:"paddle_subscription_id"`
+	PaddleSubscriptionID pgtype.Text        `db:"paddle_subscription_id" json:"paddle_subscription_id"`
 	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
 	Status               string             `db:"status" json:"status"`
 	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
