@@ -458,7 +458,7 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 				slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
 			}
 		} else if isInternalTrial && subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
-			renderCtx.InfoMessage = fmt.Sprintf("Your free evaluation on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
+			renderCtx.InfoMessage = fmt.Sprintf("Your free evaluation ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
 			isSubscribed = true
 		}
 	}
