@@ -154,14 +154,6 @@ func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int
 	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
 }
 
-func (am *authMiddleware) retrieveSecret(r *http.Request) string {
-	if r.Method == http.MethodPost {
-		return r.FormValue(common.ParamSecret)
-	}
-
-	return ""
-}
-
 func isSiteKeyValid(sitekey string) bool {
 	if len(sitekey) != db.SitekeyLen {
 		return false
@@ -324,11 +316,6 @@ func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http
 func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
 	authHeader := r.Header.Get(common.HeaderAuthorization)
 	if len(authHeader) == 0 {
-		slog.Log(ctx, common.LevelTrace, "Auth header is empty. Falling back to query string")
-		if secret := r.URL.Query().Get(common.ParamSecret); len(secret) > 0 {
-			return secret
-		}
-
 		slog.WarnContext(ctx, "Authorization header missing")
 		return ""
 	}
@@ -459,7 +446,7 @@ func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, 
 
 func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
 	ctx := r.Context()
-	secret := am.retrieveSecret(r)
+	secret := r.Header.Get(common.HeaderAPIKey)
 
 	if len(secret) == db.SecretLen {
 		if apiKey, err := am.store.GetCachedAPIKey(ctx, secret); err == nil {
@@ -477,7 +464,7 @@ func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
 func (am *authMiddleware) APIKey(next http.Handler) http.Handler {
 	return am.apiKeyRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		secret := am.retrieveSecret(r)
+		secret := r.Header.Get(common.HeaderAPIKey)
 		if len(secret) != db.SecretLen {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return

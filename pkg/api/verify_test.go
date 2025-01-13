@@ -47,7 +47,6 @@ func verifySuite(response, secret string) (*http.Response, error) {
 	//srv.HandleFunc("/", catchAll)
 
 	data := url.Values{}
-	data.Set(common.ParamSecret, secret)
 	data.Set(common.ParamResponse, response)
 
 	encoded := data.Encode()
@@ -59,6 +58,7 @@ func verifySuite(response, secret string) (*http.Response, error) {
 
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(encoded)))
+	req.Header.Set(common.HeaderAPIKey, secret)
 	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
 
 	w := httptest.NewRecorder()
