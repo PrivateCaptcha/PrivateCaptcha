@@ -148,15 +148,8 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 	}
 
 	orgName := common.OrgNameFromName(name)
-
-	var plan *billing.Plan
-	var subscrParams *dbgen.CreateSubscriptionParams
-
-	if plans, ok := billing.GetPlansForStage(s.Stage); ok && len(plans) > 0 {
-		// seed internal-subscription user with the smallest plan's limits
-		plan = plans[0]
-		subscrParams = createInternalTrial(plan)
-	}
+	plan := billing.GetInternalTrialPlan()
+	subscrParams := createInternalTrial(plan)
 
 	user, _, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existing user ID*/)
 	if err != nil {
@@ -164,9 +157,7 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, err
 	}
 
-	if plan != nil {
-		_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
-	}
+	_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
 
 	go func(bctx context.Context, email string) {
 		if err := s.Mailer.SendWelcome(bctx, email); err != nil {

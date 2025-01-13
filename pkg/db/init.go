@@ -79,6 +79,7 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 
 		if migrate {
 			stage := cfg.Stage()
+			adminPlan := billing.GetInternalAdminPlan()
 
 			migrateCtx := &migrateContext{
 				Stage:                    stage,
@@ -86,14 +87,10 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 				PortalRegisterPropertyID: PortalRegisterPropertyID,
 				PortalDomain:             cfg.PortalDomain(),
 				AdminEmail:               cfg.AdminEmail(),
+				PaddleProductID:          adminPlan.PaddleProductID,
+				PaddlePriceID:            adminPlan.PaddlePriceIDYearly,
 				PortalLoginDifficulty:    common.DifficultyLevelSmall,
 				PortalRegisterDifficulty: common.DifficultyLevelSmall,
-			}
-
-			if plans, ok := billing.GetPlansForStage(stage); ok && len(plans) > 0 {
-				plan := plans[len(plans)-1]
-				migrateCtx.PaddleProductID = plan.PaddleProductID
-				migrateCtx.PaddlePriceID = plan.PaddlePriceIDYearly
 			}
 
 			return migratePostgres(ctx, pool, migrateCtx, up)

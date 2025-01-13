@@ -25,7 +25,7 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	}
 	j := -1
 	for i, subscr := range items {
-		if _, err := billing.FindPlanByPriceAndProduct(subscr.Price.ProductID, subscr.Price.ID, stage); err == nil {
+		if _, err := billing.FindPlanEx(subscr.Price.ProductID, subscr.Price.ID, stage, false /*internal*/); err == nil {
 			j = i
 			break
 		}

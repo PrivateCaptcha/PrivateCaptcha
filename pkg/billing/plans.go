@@ -72,6 +72,38 @@ var (
 	ErrUnknownProductID = errors.New("unknown product ID")
 	ErrUnknownPriceID   = errors.New("unknown price ID")
 
+	internalTrialPlan = &Plan{
+		Name:                 "Internal Trial",
+		PaddleProductID:      "pctrial_CGK710ObXUu3hnErY87KMx4gnt3",
+		PaddlePriceIDMonthly: "",
+		PaddlePriceIDYearly:  "pctrial_qD6rwF1UomfdkgbOjaepoDn0RxX",
+		TrialDays:            14,
+		PriceMonthly:         0,
+		PriceYearly:          0,
+		Version:              version1,
+		RequestsLimit:        1_000,
+		OrgsLimit:            1,
+		PropertiesLimit:      10,
+		ThrottleLimit:        2_000,
+		APIRequestsPerSecond: 10,
+	}
+
+	internalAdminPlan = &Plan{
+		Name:                 "Internal Admin",
+		PaddleProductID:      "pcadmin_zgEsl1kNmYmk55XDkAsbgOflGQFU2NBN",
+		PaddlePriceIDMonthly: "",
+		PaddlePriceIDYearly:  "pcadmin_pQ9DX6GHn1iik3BqsLQJbnHLw1dU91J1",
+		TrialDays:            100 * 365,
+		PriceMonthly:         0,
+		PriceYearly:          0,
+		Version:              version1,
+		RequestsLimit:        1_000_000,
+		OrgsLimit:            1_00,
+		PropertiesLimit:      1_000,
+		ThrottleLimit:        2_000_000,
+		APIRequestsPerSecond: 100,
+	}
+
 	devPlans = []*Plan{
 		{
 			Name:            "Private Captcha 1K",
@@ -273,32 +305,28 @@ var (
 		},
 	}
 
-	TestPlans = []*Plan{
-		{
-			Name:                 "Private Captcha Test",
-			PaddleProductID:      "123456",
-			PaddlePriceIDYearly:  "",
-			PaddlePriceIDMonthly: "",
-			TrialDays:            defaultTrialDays,
-			RequestsLimit:        10_000,
-			Version:              version1,
-			OrgsLimit:            defaultOrgLimit,
-			PropertiesLimit:      defaultPropertiesLimit,
-			ThrottleLimit:        20_000,
-			APIRequestsPerSecond: 1.0,
-		},
-	}
-
 	stagePlans = map[string][]*Plan{
 		common.StageProd:    prodPlans,
 		common.StageStaging: devPlans,
 		common.StageDev:     devPlans,
-		common.StageTest:    TestPlans,
+	}
+
+	internalPlans = []*Plan{
+		internalTrialPlan,
+		internalAdminPlan,
 	}
 )
 
 func (plan *Plan) IsYearly(priceID string) bool {
 	return plan.PaddlePriceIDYearly == priceID
+}
+
+func GetInternalAdminPlan() *Plan {
+	return internalAdminPlan
+}
+
+func GetInternalTrialPlan() *Plan {
+	return internalTrialPlan
 }
 
 func GetProductsForStage(stage string) []string {
@@ -361,7 +389,7 @@ func FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error) {
 	return nil, ErrUnknownPriceID
 }
 
-func FindPlanByPriceAndProduct(paddleProductID string, paddlePriceID string, stage string) (*Plan, error) {
+func FindPlanEx(paddleProductID string, paddlePriceID string, stage string, internal bool) (*Plan, error) {
 	if (stage == "") || (paddleProductID == "") || (paddlePriceID == "") {
 		return nil, errInvalidArgument
 	}
@@ -369,7 +397,14 @@ func FindPlanByPriceAndProduct(paddleProductID string, paddlePriceID string, sta
 	lock.RLock()
 	defer lock.RUnlock()
 
-	for _, p := range stagePlans[stage] {
+	var plans []*Plan
+	if internal {
+		plans = internalPlans
+	} else {
+		plans = stagePlans[stage]
+	}
+
+	for _, p := range plans {
 		if (p.PaddleProductID == paddleProductID) &&
 			((p.PaddlePriceIDMonthly == paddlePriceID) || (p.PaddlePriceIDYearly == paddlePriceID)) {
 			return p, nil
