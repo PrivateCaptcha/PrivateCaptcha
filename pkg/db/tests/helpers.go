@@ -35,7 +35,7 @@ func createUserAndOrgName(testName string) (string, string) {
 }
 
 func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
-	testPlan := billing.TestPlans[0]
+	testPlan := billing.GetInternalTrialPlan()
 	tnow := time.Now()
 
 	return &dbgen.CreateSubscriptionParams{

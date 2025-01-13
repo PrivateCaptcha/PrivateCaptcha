@@ -43,12 +43,12 @@
         <button type="button"
             class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
             :class="(priceIDs.length === 1) ? 'bg-indigo-50' : (annual ? 'bg-indigo-600' : 'bg-gray-200')"
-            role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual" x-bind:disabled="priceIDs.length && (priceIDs.length === 1)">
+            role="switch" aria-checked="false" aria-labelledby="annual-billing-label" @click="annual = !annual" x-bind:disabled="!productID || (priceIDs.length === 1)">
             <span aria-hidden="true" :class="(annual || (priceIDs.length === 1)) ? 'translate-x-5' : 'translate-x-0'" class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"></span>
         </button>
         <span class="ml-3 text-sm" id="annual-billing-label">
-            <span class="font-medium text-gray-900">Annual billing</span>
-            <span class="text-gray-500">(1 month free)</span>
+            <span class="font-medium" :class="productID ? 'text-gray-900' : 'text-gray-500'">Annual billing</span>
+            <span :class="productID ? 'text-gray-500' : 'text-gray-300'">(1 month free)</span>
         </span>
     </div>
     <button type="submit" class="pc-internal-form-button" x-bind:disabled="(productID == '{{.Params.CurrentPlan.PaddleProductID}}') && (annual == {{.Params.YearlyBilling}})"

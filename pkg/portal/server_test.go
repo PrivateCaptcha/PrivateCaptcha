@@ -66,7 +66,7 @@ func TestMain(m *testing.M) {
 		os.Exit(m.Run())
 	}
 
-	common.SetupLogs("test", true)
+	common.SetupLogs(common.StageTest, true)
 
 	var cerr error
 	cfg, cerr = config.New(os.Getenv)

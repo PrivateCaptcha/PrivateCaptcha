@@ -378,7 +378,8 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	apiKeyRequestsPerSecond := 1.0
 	if user.SubscriptionID.Valid {
 		if subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
-			if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+			if plan, err := billing.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage,
+				db.IsInternalSubscription(subscription.Source)); err == nil {
 				apiKeyRequestsPerSecond = plan.APIRequestsPerSecond
 			}
 		}
@@ -450,7 +451,7 @@ func (s *Server) createBillingRenderContext(ctx context.Context, user *dbgen.Use
 				renderCtx.InfoMessage = fmt.Sprintf("Your trial ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
 			}
 
-			if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+			if plan, err := billing.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage, isInternalSubscription); err == nil {
 				renderCtx.CurrentPlan = plan
 				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
 				isSubscribed = true
@@ -649,7 +650,8 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		return nil, "", err
 	}
 	priceID := r.FormValue(common.ParamPrice)
-	if _, err := billing.FindPlanByPriceID(priceID, s.Stage); err != nil {
+	newPlan, err := billing.FindPlanByPriceID(priceID, s.Stage)
+	if err != nil {
 		slog.ErrorContext(ctx, "PriceID is not valid", "priceID", priceID, common.ErrAttr(err))
 		return nil, "", err
 	}
@@ -676,7 +678,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 		return renderCtx, settingsBillingTemplate, nil
 	}
 
-	if newPlan, err := billing.FindPlanByPriceID(priceID, s.Stage); (err == nil) && newPlan.IsDowngradeFor(renderCtx.CurrentPlan) {
+	if newPlan.IsDowngradeFor(renderCtx.CurrentPlan) {
 		slog.DebugContext(ctx, "Downgrade attempt detected", "oldPlan", renderCtx.CurrentPlan.Name, "newPlan", newPlan.Name)
 		timeFrom := time.Now().UTC().AddDate(0 /*years*/, -3 /*months*/, 0 /*days*/)
 		if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID, timeFrom); err == nil {
@@ -780,7 +782,8 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model
 			return renderCtx, settingsUsageTemplate, nil
 		}
 
-		if plan, err := billing.FindPlanByPriceAndProduct(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage); err == nil {
+		if plan, err := billing.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage,
+			db.IsInternalSubscription(subscription.Source)); err == nil {
 			renderCtx.Limit = int(plan.RequestsLimit)
 		} else {
 			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
