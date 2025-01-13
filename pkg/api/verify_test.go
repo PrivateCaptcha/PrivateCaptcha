@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -46,18 +44,11 @@ func verifySuite(response, secret string) (*http.Response, error) {
 
 	//srv.HandleFunc("/", catchAll)
 
-	data := url.Values{}
-	data.Set(common.ParamResponse, response)
-
-	encoded := data.Encode()
-
-	req, err := http.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(encoded))
+	req, err := http.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(response))
 	if err != nil {
 		return nil, err
 	}
 
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(encoded)))
 	req.Header.Set(common.HeaderAPIKey, secret)
 	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
 

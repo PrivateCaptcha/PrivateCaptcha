@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"time"
@@ -305,9 +306,14 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	data := r.FormValue(common.ParamResponse)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
 
-	p, verr, err := s.Verify(ctx, data, &apiKeyOwnerSource{}, time.Now().UTC())
+	p, verr, err := s.Verify(ctx, string(data), &apiKeyOwnerSource{}, time.Now().UTC())
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -336,8 +342,8 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	var result interface{}
 
-	recaptchaCompatVersion := r.Header.Get(common.HeaderRecaptchaVersion)
-	if recaptchaCompatVersion == "3" {
+	recaptchaCompatVersion := r.Header.Get(common.HeaderCaptchaCompat)
+	if recaptchaCompatVersion == "rcV3" {
 		result = &verifyResponseRecaptchaV3{
 			verifyResponseRecaptchaV2: *vr2,
 			Action:                    "",
