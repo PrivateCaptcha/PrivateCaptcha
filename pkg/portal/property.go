@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -16,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"golang.org/x/net/idna"
 )
 
 const (
@@ -31,10 +31,6 @@ const (
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	propertySettingsTabIndex              = 2
 	propertyIntegrationsTabIndex          = 1
-)
-
-var (
-	domainRegexp = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9](?:\.[a-zA-Z]{2,})+$`)
 )
 
 type difficultyLevelsRenderContext struct {
@@ -230,8 +226,9 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 		return "Domain name cannot be empty."
 	}
 
-	if !domainRegexp.MatchString(domain) {
-		slog.WarnContext(ctx, "Failed to validate domain name", "domain", domain)
+	_, err := idna.Lookup.ToASCII("example.com")
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to validate domain name", "domain", domain, common.ErrAttr(err))
 		return "Domain name is not valid."
 	}
 
