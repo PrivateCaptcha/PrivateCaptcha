@@ -20,7 +20,10 @@ const (
 )
 
 var (
-	ErrInvalidPuzzleBytes = errors.New("invalid puzzle bytes")
+	ErrInvalidPuzzleBytes    = errors.New("invalid puzzle bytes")
+	errEmptyEncodedSolutions = errors.New("encoded solutions buffer is empty")
+	errEmptyDecodedSolutions = errors.New("decoded solutions buffer is empty")
+	errInvalidSolutionLength = errors.New("solutions are not SolutionLength multiple")
 )
 
 type Solutions struct {
@@ -29,7 +32,7 @@ type Solutions struct {
 
 func NewSolutions(data string) (*Solutions, error) {
 	if len(data) == 0 {
-		return nil, errors.New("encoded solutions buffer is empty")
+		return nil, errEmptyEncodedSolutions
 	}
 
 	solutionsBytes, err := base64.StdEncoding.DecodeString(data)
@@ -38,11 +41,11 @@ func NewSolutions(data string) (*Solutions, error) {
 	}
 
 	if len(solutionsBytes) == 0 {
-		return nil, errors.New("decoded solutions buffer is empty")
+		return nil, errEmptyDecodedSolutions
 	}
 
 	if len(solutionsBytes)%SolutionLength != 0 {
-		return nil, errors.New("solutions are not SolutionLength multiple")
+		return nil, errInvalidSolutionLength
 	}
 
 	return &Solutions{

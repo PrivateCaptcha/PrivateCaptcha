@@ -8,6 +8,8 @@ export class WorkersPool {
         this._puzzleID = null;
         this._workers = [];
         this._debug = debug;
+        this._timeStarted = null;
+        this._timeFinished = null;
 
         this._callbacks = Object.assign({
             workersReady: () => 0,
@@ -74,6 +76,8 @@ export class WorkersPool {
         this._solutions = [];
         this._solutionsCount = puzzle.solutionsCount;
         this._puzzleID = puzzle.ID;
+        this._timeStarted = Date.now();
+        this._timeFinished = null;
 
         for (let i = 0; i < puzzle.solutionsCount; i++) {
             this._workers[i % this._workers.length].postMessage({
@@ -109,6 +113,7 @@ export class WorkersPool {
         this._callbacks.progress(count * 100.0 / this._solutionsCount);
 
         if (count == this._solutionsCount) {
+            this._timeFinished = Date.now();
             this._callbacks.workCompleted();
         }
     }
@@ -124,5 +129,13 @@ export class WorkersPool {
         }
 
         return encode(resultArray);
+    }
+
+    elapsedMillis() {
+        if (this._timeStarted && this._timeFinished) {
+            return this._timeFinished - this._timeStarted;
+        }
+
+        return 0;
     }
 }

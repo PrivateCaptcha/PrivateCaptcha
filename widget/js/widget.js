@@ -1,12 +1,16 @@
 'use strict';
 
 import { getPuzzle, Puzzle } from './puzzle.js'
+import { encode } from 'base64-arraybuffer';
 import { WorkersPool } from './workerspool.js'
 import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP } from './html.js';
 
 window.customElements.define('private-captcha', CaptchaElement);
 
 const PUZZLE_ENDPOINT_URL = 'https://api.privatecaptcha.com/puzzle';
+const ERROR_NO_ERROR = 0;
+const ERROR_FETCH_PUZZLE = 1;
+const ERROR_SOLVE_PUZZLE = 2;
 
 function findParentFormElement(element) {
     while (element && element.tagName !== 'FORM') {
@@ -24,6 +28,7 @@ export class CaptchaWidget {
         this._lastProgress = null;
         this._userStarted = false; // aka 'user started while we were initializing'
         this._options = {};
+        this._errorCode = ERROR_NO_ERROR;
 
         this.setOptions(options);
 
@@ -90,6 +95,7 @@ export class CaptchaWidget {
         const startWorkers = (this._options.startMode == "auto") || autoStart;
 
         try {
+            this._errorCode = ERROR_NO_ERROR;
             this.setState(STATE_LOADING);
             this.trace('fetching puzzle');
             const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
@@ -102,8 +108,10 @@ export class CaptchaWidget {
         } catch (e) {
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+            this._errorCode = ERROR_FETCH_PUZZLE;
             this.setState(STATE_ERROR);
             this.setProgressState(this._userStarted ? STATE_VERIFIED : STATE_EMPTY);
+            this.saveSolutions('');
             if (this._userStarted) {
                 this.signalErrored();
             }
@@ -243,6 +251,7 @@ export class CaptchaWidget {
 
     onWorkerError(error) {
         console.error('[privatecaptcha] error in worker:', error)
+        this._errorCode = ERROR_SOLVE_PUZZLE;
     }
 
     onWorkCompleted() {
@@ -257,11 +266,7 @@ export class CaptchaWidget {
         }
 
         const solutions = this._workersPool.serializeSolutions();
-        const payload = `${solutions}.${this._puzzle.rawData}`;
-        this.trace(`work completed. payload=${payload}`);
-
-        this.ensureNoSolutionField();
-        this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
+        this.saveSolutions(solutions);
 
         if (this._userStarted) {
             this.signalFinished();
@@ -276,6 +281,35 @@ export class CaptchaWidget {
 
         this.trace(`progress changed. percent=${percent}`);
         this.setProgress(percent);
+    }
+
+    saveSolutions(solutions) {
+        const diagnostics = this.getDiagnosticsPayload();
+        const payload = `${solutions}|${this._puzzle.rawData}|${diagnostics}`;
+        this.setSolutionField(payload);
+
+        this.trace(`saved work result. payload=${payload}`);
+    }
+
+    getDiagnosticsPayload() {
+        let binaryData = new Uint8Array(1 + 4);
+        let currentIndex = 0;
+
+        binaryData[currentIndex++] = this._errorCode & 0xFF;
+
+        const elapsedMillis = this._workersPool.elapsedMillis();
+        // Little-Endian
+        binaryData[currentIndex++] = elapsedMillis & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 8) & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 16) & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 24) & 0xFF;
+
+        return encode(binaryData);
+    }
+
+    setSolutionField(payload) {
+        this.ensureNoSolutionField();
+        this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
     }
 
     // this updates the "UI" state of the widget

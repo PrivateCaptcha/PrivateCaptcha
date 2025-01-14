@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -115,7 +116,11 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		return "", "", "", err
 	}
 
-	return fmt.Sprintf("%s.%s", solutionsStr, puzzleStr), db.UUIDToSecret(apikey.ExternalID), sitekey, nil
+	d := &puzzle.Diagnostics{}
+	diagnosticsData, _ := d.MarshalBinary()
+	diagnostics := base64.StdEncoding.EncodeToString(diagnosticsData)
+
+	return fmt.Sprintf("%s|%s|%s", solutionsStr, puzzleStr, diagnostics), db.UUIDToSecret(apikey.ExternalID), sitekey, nil
 }
 
 func TestVerifyPuzzle(t *testing.T) {
