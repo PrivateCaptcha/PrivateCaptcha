@@ -13,7 +13,7 @@
                             <div class="ml-10 flex items-baseline space-x-4">
                                 <!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
                                 <a href="{{ relURL "/" }}" class="pc-dashboard-menu-button {{ if eq .Ctx.Path (relURL "/") }}pc-dashboard-menu-button-current{{end}}" aria-current="page">Dashboard</a>
-                                <a href="https://docs.privatecaptcha.com/" class="pc-dashboard-menu-button">Docs</a>
+                                <a href="https://docs.privatecaptcha.com/" target="_blank" class="pc-dashboard-menu-button">Docs</a>
                             </div>
                         </div>
                     </div>
@@ -74,7 +74,7 @@
             <div class="space-y-1 px-2 py-3 sm:px-3">
                 <!-- Current: "bg-gray-900 text-white", Default: "text-gray-300 hover:bg-gray-700 hover:text-white" -->
                 <a href="{{ relURL "/" }}" class="bg-gray-900 text-white block rounded-md px-3 py-2 text-base font-medium" aria-current="page">Dashboard</a>
-                <a href="https://docs.privatecaptcha.com/" class="text-gray-300 hover:bg-gray-700 hover:text-white block rounded-md px-3 py-2 text-base font-medium">Docs</a>
+                <a href="https://docs.privatecaptcha.com/" target="_blank" class="text-gray-300 hover:bg-gray-700 hover:text-white block rounded-md px-3 py-2 text-base font-medium">Docs</a>
             </div>
             <div class="border-t border-gray-700 pb-3 pt-4">
                 <div class="flex items-center px-5">
