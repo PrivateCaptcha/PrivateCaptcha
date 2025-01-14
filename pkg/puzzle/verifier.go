@@ -37,43 +37,55 @@ type OwnerIDSource interface {
 	OwnerID(ctx context.Context) (int32, error)
 }
 
-func ParseSolutions(ctx context.Context, payload string, salt []byte) (string, []byte, error) {
+func ParseSolutions(ctx context.Context, payload string, salt []byte) (string, []byte, []byte, error) {
 	if len(payload) == 0 {
-		return "", nil, errPayloadEmpty
+		return "", nil, nil, errPayloadEmpty
 	}
 
-	parts := strings.Split(payload, ".")
+	parts := strings.Split(payload, "|")
 	if len(parts) != 3 {
-		return "", nil, errWrongPartsNumber
+		return "", nil, nil, errWrongPartsNumber
 	}
 
-	solutionsData, puzzleData, signature := parts[0], parts[1], parts[2]
+	solutionsData, puzzleData, diagnosticsData := parts[0], parts[1], parts[2]
 
-	puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleData)
+	//puzzleData, signature
+	puzzleParts := strings.Split(puzzleData, ".")
+	if len(puzzleParts) != 2 {
+		return "", nil, nil, errWrongPartsNumber
+	}
+
+	puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleParts[0])
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	hasher := hmac.New(sha1.New, salt)
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
 		slog.WarnContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(err))
-		return "", nil, werr
+		return "", nil, nil, werr
 	}
 
 	hash := hasher.Sum(nil)
 
-	requestHash, err := base64.StdEncoding.DecodeString(signature)
+	requestHash, err := base64.StdEncoding.DecodeString(puzzleParts[1])
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to decode signature bytes", common.ErrAttr(err))
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	if !bytes.Equal(hash, requestHash) {
 		slog.WarnContext(ctx, "Puzzle hash is not equal")
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
-	return solutionsData, puzzleBytes, nil
+	diagnosticsBytes, err := base64.StdEncoding.DecodeString(diagnosticsData)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to decode diagnostics data")
+		// this is non-lethal
+	}
+
+	return solutionsData, puzzleBytes, diagnosticsBytes, nil
 }
 
 func VerifySolutions(ctx context.Context, p *Puzzle, puzzleBytes []byte, solutionsData string) VerifyError {

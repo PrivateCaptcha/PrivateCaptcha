@@ -105,7 +105,7 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	payload := r.FormValue("private-captcha-solution")
 
-	solutionsData, puzzleBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
+	solutionsData, puzzleBytes, _, err := puzzle.ParseSolutions(ctx, payload, s.salt)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse puzzle", common.ErrAttr(err))
 		fmt.Fprintln(w, redPage)
