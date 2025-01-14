@@ -6,7 +6,7 @@ import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRES
 
 window.customElements.define('private-captcha', CaptchaElement);
 
-const PUZZLE_ENDPOINT_URL = '/api/puzzle';
+const PUZZLE_ENDPOINT_URL = 'https://api.privatecaptcha.com/puzzle';
 
 function findParentFormElement(element) {
     while (element && element.tagName !== 'FORM') {
