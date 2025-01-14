@@ -4,7 +4,7 @@ const (
 	WelcomeHTMLTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html dir="ltr" lang="en">
   <head>
-    <link rel="preload" as="image" href="{{.CDN}}/portal/img/pc-logo-dark.svg" />
+    <link rel="preload" as="image" href="{{.CDN}}/portal/img/pc-logo-dark.png" />
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
     <meta name="x-apple-disable-message-reformatting" />
   </head>
@@ -23,7 +23,7 @@ const (
       <tbody>
         <tr style="width:100%">
           <td>
-            <img alt="Private Captcha" height="50" src="{{.CDN}}/portal/img/pc-logo-dark.svg" style="display:block;outline:none;border:none;text-decoration:none" />
+            <img alt="Private Captcha" height="50" src="{{.CDN}}/portal/img/pc-logo-dark.png" style="display:block;outline:none;border:none;text-decoration:none" />
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Hello,
             </p>

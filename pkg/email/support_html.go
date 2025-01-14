@@ -4,7 +4,7 @@ const (
 	SupportHTMLTemplate = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html dir="ltr" lang="en">
   <head>
-    <link rel="preload" as="image" href="{{.CDN}}/portal/img/pc-logo-dark.svg" />
+    <link rel="preload" as="image" href="{{.CDN}}/portal/img/pc-logo-dark.png" />
     <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
     <meta name="x-apple-disable-message-reformatting" />
   </head>
@@ -34,7 +34,7 @@ const (
               <tbody>
                 <tr>
                   <td>
-                    <img alt="Private Captcha" height="30" src="{{.CDN}}/portal/img/pc-logo-dark.svg" style="display:block;outline:none;border:none;text-decoration:none" />
+                    <img alt="Private Captcha" height="30" src="{{.CDN}}/portal/img/pc-logo-dark.png" style="display:block;outline:none;border:none;text-decoration:none" />
                   </td>
                 </tr>
               </tbody>
