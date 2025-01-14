@@ -226,7 +226,7 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 		return "Domain name cannot be empty."
 	}
 
-	_, err := idna.Lookup.ToASCII("example.com")
+	_, err := idna.Lookup.ToASCII(domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to validate domain name", "domain", domain, common.ErrAttr(err))
 		return "Domain name is not valid."
