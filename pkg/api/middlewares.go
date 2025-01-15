@@ -351,8 +351,8 @@ func (am *authMiddleware) Private(next http.Handler) http.Handler {
 	})
 }
 
-func (am *authMiddleware) originAllowed(origin string) bool {
-	return len(origin) > 0
+func (am *authMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
+	return len(origin) > 0, nil
 }
 
 func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
@@ -396,7 +396,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		if property != nil {
 			if originHost, err := common.ParseDomainName(origin); err == nil {
-				if originHost != property.Domain {
+				if !common.IsSubDomainOrDomain(originHost, property.Domain) {
 					slog.WarnContext(ctx, "Origin header to domain mismatch", "origin", originHost, "domain", property.Domain)
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 					return

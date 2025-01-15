@@ -171,6 +171,27 @@ func ParseDomainName(input string) (string, error) {
 	return domain, nil
 }
 
+func IsSubDomainOrDomain(subDomain, domain string) bool {
+	if len(subDomain) == 0 || len(domain) == 0 {
+		return false
+	}
+
+	if len(subDomain) < len(domain) {
+		return false
+	}
+
+	if strings.HasSuffix(subDomain, domain) {
+		if lenDiff := len(subDomain) - len(domain); lenDiff > 0 {
+			prefix := subDomain[:lenDiff]
+			return strings.HasSuffix(prefix, ".") && lenDiff > 1
+		}
+
+		return true
+	}
+
+	return false
+}
+
 func EnvToBool(value string) bool {
 	switch value {
 	case "1", "Y", "y", "yes", "true", "YES", "TRUE":

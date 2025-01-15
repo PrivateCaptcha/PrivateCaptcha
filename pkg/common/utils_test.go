@@ -93,3 +93,33 @@ func TestCleanupDomain(t *testing.T) {
 		})
 	}
 }
+
+func TestSubDomain(t *testing.T) {
+	testCases := []struct {
+		subDomain string
+		domain    string
+		expected  bool
+	}{
+		{"", "", false},
+		{"domain.com", "domain.com", true},
+		{"a.com", "b.com", false},
+		{"app.domain.com", "domain.com", true},
+		{".domain.com", "domain.com", false},
+		// NOTE: despite incorrect, this function is not used in such context
+		// {"...domain.com", "domain.com", false},
+		{"a.domain.com", "domain.com", true},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("subdomain_%v", i), func(t *testing.T) {
+			actual := IsSubDomainOrDomain(tc.subDomain, tc.domain)
+			if actual != tc.expected {
+				if actual {
+					t.Errorf("%v should not be subdomain of %v", tc.subDomain, tc.domain)
+				} else {
+					t.Errorf("%v should be subdomain of %v", tc.subDomain, tc.domain)
+				}
+			}
+		})
+	}
+}
