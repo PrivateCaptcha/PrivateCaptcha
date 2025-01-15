@@ -33,6 +33,47 @@ const (
 	MaintenanceModeError    VerifyError = 9
 )
 
+func (verr VerifyError) String() string {
+	switch verr {
+	case VerifyNoError:
+		return "no-error"
+	case VerifyErrorOther:
+		return "error-other"
+	case DuplicateSolutionsError:
+		return "solution-duplicates"
+	case InvalidSolutionError:
+		return "solution-invalid"
+	case ParseResponseError:
+		return "solution-bad-format"
+	case PuzzleExpiredError:
+		return "puzzle-expired"
+	case InvalidPropertyError:
+		return "property-invalid"
+	case WrongOwnerError:
+		return "property-owner-mismatch"
+	case VerifiedBeforeError:
+		return "solution-verified-before"
+	case MaintenanceModeError:
+		return "maintenance-mode"
+	default:
+		return "error"
+	}
+}
+
+func ErrorCodesToStrings(verr []VerifyError) []string {
+	if len(verr) == 0 {
+		return nil
+	}
+
+	result := make([]string, 0, len(verr))
+
+	for _, err := range verr {
+		result = append(result, err.String())
+	}
+
+	return result
+}
+
 type OwnerIDSource interface {
 	OwnerID(ctx context.Context) (int32, error)
 }
