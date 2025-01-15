@@ -127,7 +127,7 @@ export class WorkersPool {
         if (this._debug) { console.debug('[privatecaptcha][pool] serializing solutions. count=' + this._solutions.length); }
         const solutionsLength = this._solutions.reduce((total, arr) => total + arr.length, 0);
 
-        const metadataArray = this.writeMetadata(resultArray, errorCode);
+        const metadataArray = this.writeMetadata(errorCode);
         const metadataSize = metadataArray.length;
 
         const resultArray = new Uint8Array(metadataSize + solutionsLength);
