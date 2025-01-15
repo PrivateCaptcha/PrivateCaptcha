@@ -780,8 +780,12 @@ func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32,
 
 	slog.DebugContext(ctx, "Updated property", "name", name, "propID", propID)
 
-	cacheKey := propertyByIDCacheKey(property.ID)
-	_ = impl.cache.Set(ctx, cacheKey, property, impl.ttl)
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	cacheBySitekeyKey := PropertyBySitekeyCacheKey(sitekey)
+	_ = impl.cache.Set(ctx, cacheBySitekeyKey, property, propertyTTL)
+
+	cacheByIDKey := propertyByIDCacheKey(property.ID)
+	_ = impl.cache.Set(ctx, cacheByIDKey, property, impl.ttl)
 	// invalidate org properties in cache as we just created a new property
 	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32))
 
