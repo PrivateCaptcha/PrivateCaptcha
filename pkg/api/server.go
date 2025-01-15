@@ -112,8 +112,8 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
 }
 
 type verifyResponse struct {
-	Success    bool                 `json:"success"`
-	ErrorCodes []puzzle.VerifyError `json:"error-codes,omitempty"`
+	Success    bool     `json:"success"`
+	ErrorCodes []string `json:"error-codes,omitempty"`
 }
 
 type verifyResponseRecaptchaV2 struct {
@@ -327,7 +327,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	vr2 := &verifyResponseRecaptchaV2{
 		verifyResponse: verifyResponse{
 			Success:    (verr == puzzle.VerifyNoError) || (verr == puzzle.MaintenanceModeError),
-			ErrorCodes: errorCodes,
+			ErrorCodes: puzzle.ErrorCodesToStrings(errorCodes),
 		},
 	}
 

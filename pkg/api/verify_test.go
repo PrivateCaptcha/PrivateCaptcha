@@ -23,7 +23,7 @@ func TestSerializeResponse(t *testing.T) {
 		verifyResponseRecaptchaV2: verifyResponseRecaptchaV2{
 			verifyResponse: verifyResponse{
 				Success:    false,
-				ErrorCodes: []puzzle.VerifyError{puzzle.VerifyErrorOther},
+				ErrorCodes: []string{puzzle.VerifyErrorOther.String()},
 			},
 			ChallengeTS: common.JSONTimeNow(),
 			Hostname:    "hostname.com",
@@ -163,7 +163,7 @@ func checkVerifyError(resp *http.Response, expected puzzle.VerifyError) error {
 			return fmt.Errorf("No error codes in response")
 		}
 
-		if response.ErrorCodes[0] != expected {
+		if response.ErrorCodes[0] != expected.String() {
 			return fmt.Errorf("Unexpected error code: %v", response.ErrorCodes[0])
 		}
 	}
