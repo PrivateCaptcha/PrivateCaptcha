@@ -18,8 +18,9 @@ import (
 
 const (
 	paddlePricesKey = "paddle_prices"
-	propertyTTL     = 1 * time.Hour
-	apiKeyTTL       = 30 * time.Minute
+	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
+	propertyTTL = 30 * time.Minute
+	apiKeyTTL   = 30 * time.Minute
 )
 
 var (
