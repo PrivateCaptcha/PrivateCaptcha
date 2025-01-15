@@ -5,16 +5,20 @@ let blake2b = blake2bModule.impl;
 let blake2bInitialized = false;
 let puzzleBuffer = null;
 let puzzleID = null;
+let useWasm = false;
 
 if (blake2bModule.ready) {
     blake2bModule.ready(() => {
-        console.debug('[privatecaptcha][worker] Blake2b loaded. Wasm: ' + blake2bModule.WASM_LOADED);
+        useWasm = blake2bModule.WASM_LOADED;
+        console.debug('[privatecaptcha][worker] Hasher loaded. wasm=' + useWasm);
         blake2b = blake2bModule.impl;
         blake2bInitialized = true;
         if (puzzleBuffer) {
             self.postMessage({ command: "init" });
         }
     });
+} else {
+    console.warn('[privatecaptcha][worker] Blake2b ready() is not defined');
 }
 
 function readUInt32LE(buffer, offset) {
@@ -88,7 +92,7 @@ self.onmessage = (event) => {
             const { difficulty, puzzleIndex, debug } = argument;
             const threshold = thresholdFromDifficulty(difficulty);
             const solution = findSolution(threshold, puzzleIndex, debug);
-            self.postMessage({ command: command, argument: { id: puzzleID, solution: solution } });
+            self.postMessage({ command: command, argument: { id: puzzleID, solution: solution, wasm: useWasm } });
             break;
         default:
             break;

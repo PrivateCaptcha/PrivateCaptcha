@@ -111,7 +111,7 @@ export class CaptchaWidget {
             this._errorCode = ERROR_FETCH_PUZZLE;
             this.setState(STATE_ERROR);
             this.setProgressState(this._userStarted ? STATE_VERIFIED : STATE_EMPTY);
-            this.saveSolutions('');
+            this.saveSolutions();
             if (this._userStarted) {
                 this.signalErrored();
             }
@@ -265,8 +265,7 @@ export class CaptchaWidget {
             this.setProgressState(STATE_VERIFIED);
         }
 
-        const solutions = this._workersPool.serializeSolutions();
-        this.saveSolutions(solutions);
+        this.saveSolutions();
 
         if (this._userStarted) {
             this.signalFinished();
@@ -283,33 +282,14 @@ export class CaptchaWidget {
         this.setProgress(percent);
     }
 
-    saveSolutions(solutions) {
-        const diagnostics = this.getDiagnosticsPayload();
-        const payload = `${solutions}|${this._puzzle.rawData}|${diagnostics}`;
-        this.setSolutionField(payload);
+    saveSolutions() {
+        const solutions = this._workersPool.serializeSolutions(this._errorCode);
+        const payload = `${solutions}.${this._puzzle.rawData}`;
 
-        this.trace(`saved work result. payload=${payload}`);
-    }
-
-    getDiagnosticsPayload() {
-        let binaryData = new Uint8Array(1 + 4);
-        let currentIndex = 0;
-
-        binaryData[currentIndex++] = this._errorCode & 0xFF;
-
-        const elapsedMillis = this._workersPool.elapsedMillis();
-        // Little-Endian
-        binaryData[currentIndex++] = elapsedMillis & 0xFF;
-        binaryData[currentIndex++] = (elapsedMillis >> 8) & 0xFF;
-        binaryData[currentIndex++] = (elapsedMillis >> 16) & 0xFF;
-        binaryData[currentIndex++] = (elapsedMillis >> 24) & 0xFF;
-
-        return encode(binaryData);
-    }
-
-    setSolutionField(payload) {
         this.ensureNoSolutionField();
         this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
+
+        this.trace(`saved solutions. payload=${payload}`);
     }
 
     // this updates the "UI" state of the widget
