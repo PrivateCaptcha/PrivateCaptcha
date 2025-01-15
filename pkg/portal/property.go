@@ -84,7 +84,7 @@ type propertySettingsRenderContext struct {
 }
 
 func (pc *propertySettingsRenderContext) UpdateLevels() {
-	const epsilon = 15
+	const epsilon = common.DifficultyDelta
 
 	pc.MinLevel = max(1, min(pc.EasyLevel-epsilon, int(pc.Property.Level)-epsilon))
 	pc.MaxLevel = min(int(common.MaxDifficultyLevel), max(pc.HardLevel+epsilon, int(pc.Property.Level)+epsilon))
