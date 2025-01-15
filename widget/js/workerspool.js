@@ -1,6 +1,8 @@
 import { encode } from 'base64-arraybuffer';
 import PuzzleWorker from './puzzle.worker.js';
 
+const METADATA_VERSION = 1;
+
 export class WorkersPool {
     constructor(callbacks = {}, debug = false) {
         this._solutions = [];
@@ -10,6 +12,7 @@ export class WorkersPool {
         this._debug = debug;
         this._timeStarted = null;
         this._timeFinished = null;
+        this._anyWasm = false;
 
         this._callbacks = Object.assign({
             workersReady: () => 0,
@@ -40,8 +43,8 @@ export class WorkersPool {
                         }
                         break;
                     case "solve":
-                        const { id, solution } = event.data.argument;
-                        pool.onSolutionFound(id, solution);
+                        const { id, solution, wasm } = event.data.argument;
+                        pool.onSolutionFound(id, solution, wasm);
                         break;
                     case "error":
                         if (event.data.error) {
@@ -100,13 +103,15 @@ export class WorkersPool {
         if (this._debug) { console.debug('[privatecaptcha][pool] terminated the workers. count=' + count); }
     }
 
-    onSolutionFound(id, solution) {
+    onSolutionFound(id, solution, wasm) {
         if (this._debug) { console.debug('[privatecaptcha][pool] solution found. length=' + solution.length); }
         if (id != this._puzzleID) {
             console.warn(`[privatecaptcha][pool] Discarding solution with invalid ID. actual=${id} expected=${this._puzzleID}`);
             return;
         }
         this._solutions.push(solution);
+
+        if (wasm) { this._anyWasm = true; }
 
         const count = this._solutions.length;
 
@@ -118,17 +123,46 @@ export class WorkersPool {
         }
     }
 
-    serializeSolutions() {
-        if (this._debug) { console.debug('[privatecaptcha][pool] solutions found. count=' + this._solutions.length); }
-        const totalLength = this._solutions.reduce((total, arr) => total + arr.length, 0);
-        const resultArray = new Uint8Array(totalLength);
+    serializeSolutions(errorCode) {
+        if (this._debug) { console.debug('[privatecaptcha][pool] serializing solutions. count=' + this._solutions.length); }
+        const solutionsLength = this._solutions.reduce((total, arr) => total + arr.length, 0);
+
+        const metadataArray = this.writeMetadata(resultArray, errorCode);
+        const metadataSize = metadataArray.length;
+
+        const resultArray = new Uint8Array(metadataSize + solutionsLength);
         let offset = 0;
+
+        resultArray.set(metadataArray, offset);
+        offset += metadataArray.length;
+
         for (let i = 0; i < this._solutions.length; i++) {
             resultArray.set(this._solutions[i], offset);
             offset += this._solutions[i].length;
         }
 
         return encode(resultArray);
+    }
+
+    writeMetadata(errorCode) {
+        const metadataSize = 1 + 1 + 1 + 4;
+        const binaryData = new Uint8Array(metadataSize);
+        let currentIndex = 0;
+
+        binaryData[currentIndex++] = METADATA_VERSION & 0xFF;
+        binaryData[currentIndex++] = errorCode & 0xFF;
+
+        const wasmFlag = this._anyWasm ? 1 : 0;
+        binaryData[currentIndex++] = wasmFlag & 0xFF;
+
+        const elapsedMillis = this.elapsedMillis();
+        // Little-Endian
+        binaryData[currentIndex++] = elapsedMillis & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 8) & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 16) & 0xFF;
+        binaryData[currentIndex++] = (elapsedMillis >> 24) & 0xFF;
+
+        return binaryData;
     }
 
     elapsedMillis() {

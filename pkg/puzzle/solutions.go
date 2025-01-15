@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math"
 
@@ -17,6 +18,8 @@ import (
 const (
 	PuzzleBytesLength = 128
 	SolutionLength    = 8
+	metadataVersion   = 1
+	metadataLength    = 1 + 1 + 1 + 4
 )
 
 var (
@@ -24,10 +27,60 @@ var (
 	errEmptyEncodedSolutions = errors.New("encoded solutions buffer is empty")
 	errEmptyDecodedSolutions = errors.New("decoded solutions buffer is empty")
 	errInvalidSolutionLength = errors.New("solutions are not SolutionLength multiple")
+	errInvalidVersion        = errors.New("invalid serialization version")
 )
 
+type Metadata struct {
+	ErrorCode     uint8
+	WasmFlag      bool
+	ElapsedMillis uint32
+}
+
+func (m *Metadata) MarshalBinary() ([]byte, error) {
+	var buf bytes.Buffer
+
+	binary.Write(&buf, binary.LittleEndian, byte(metadataVersion))
+	binary.Write(&buf, binary.LittleEndian, m.ErrorCode)
+
+	var wasmFlag byte = 0
+	if m.WasmFlag {
+		wasmFlag = 1
+	}
+	binary.Write(&buf, binary.LittleEndian, wasmFlag)
+
+	binary.Write(&buf, binary.LittleEndian, m.ElapsedMillis)
+
+	return buf.Bytes(), nil
+}
+
+func (m *Metadata) UnmarshalBinary(data []byte) error {
+	if len(data) < metadataLength {
+		return io.ErrShortBuffer
+	}
+
+	var offset int = 0
+
+	version := data[offset]
+	if version != 1 {
+		return errInvalidVersion
+	}
+	offset += 1
+
+	m.ErrorCode = data[offset]
+	offset += 1
+
+	m.WasmFlag = data[offset] == 1
+	offset += 1
+
+	m.ElapsedMillis = binary.LittleEndian.Uint32(data[offset : offset+4])
+	offset += 4
+
+	return nil
+}
+
 type Solutions struct {
-	Buffer []byte
+	Buffer   []byte
+	Metadata *Metadata
 }
 
 func NewSolutions(data string) (*Solutions, error) {
@@ -35,26 +88,39 @@ func NewSolutions(data string) (*Solutions, error) {
 		return nil, errEmptyEncodedSolutions
 	}
 
-	solutionsBytes, err := base64.StdEncoding.DecodeString(data)
+	decodedBytes, err := base64.StdEncoding.DecodeString(data)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(solutionsBytes) == 0 {
+	if len(decodedBytes) == 0 {
 		return nil, errEmptyDecodedSolutions
 	}
+
+	metadata := &Metadata{}
+	if err := metadata.UnmarshalBinary(decodedBytes[:metadataLength]); err != nil {
+		return nil, err
+	}
+
+	solutionsBytes := decodedBytes[metadataLength:]
 
 	if len(solutionsBytes)%SolutionLength != 0 {
 		return nil, errInvalidSolutionLength
 	}
 
 	return &Solutions{
-		Buffer: solutionsBytes,
+		Buffer:   solutionsBytes,
+		Metadata: metadata,
 	}, nil
 }
 
 func (s *Solutions) String() string {
-	return base64.StdEncoding.EncodeToString(s.Buffer)
+	var buf bytes.Buffer
+	if metadataBytes, err := s.Metadata.MarshalBinary(); err == nil {
+		_, _ = buf.Write(metadataBytes)
+	}
+	_, _ = buf.Write(s.Buffer)
+	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
 // map difficulty [0, 256) -> threshold [0, 2^32)

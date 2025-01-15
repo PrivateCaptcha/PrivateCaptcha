@@ -276,7 +276,7 @@ func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWri
 }
 
 func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
-	solutionsData, puzzleBytes, diagnosticsBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
+	solutionsData, puzzleBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse puzzle", common.ErrAttr(err))
 		return nil, puzzle.ParseResponseError, nil
@@ -288,12 +288,6 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 	}
 
 	if serr := puzzle.VerifySolutions(ctx, puzzleObject, puzzleBytes, solutionsData); serr != puzzle.VerifyNoError {
-		d := &puzzle.Diagnostics{}
-		// NOTE: unlike solutions/puzzle, diagnostics bytes can be totally tampered
-		if derr := d.UnmarshalBinary(diagnosticsBytes); derr != nil {
-			slog.WarnContext(ctx, "Invalid captcha solutions", "solutionsError", serr, "clientError", d.ErrorCode,
-				"elapsedMillis", d.ElapsedMillis, "propertyID", property.ID, "puzzleID", puzzleObject.PuzzleID)
-		}
 		s.addVerifyRecord(ctx, puzzleObject, property, serr)
 		return puzzleObject, serr, nil
 	}

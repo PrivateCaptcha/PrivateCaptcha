@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log/slog"
 	"sync"
+	"time"
 
 	"golang.org/x/crypto/blake2b"
 )
@@ -70,6 +71,7 @@ func (s *Solver) Solve(p *Puzzle) (*Solutions, error) {
 	var mux sync.Mutex
 
 	threshold := thresholdFromDifficulty(p.Difficulty)
+	startTime := time.Now()
 
 	for i := 0; i < int(p.SolutionsCount); i++ {
 		wg.Add(1)
@@ -97,7 +99,14 @@ func (s *Solver) Solve(p *Puzzle) (*Solutions, error) {
 		offset += copy(buffer[offset:], s)
 	}
 
+	elapsed := time.Since(startTime)
+
 	return &Solutions{
 		Buffer: buffer,
+		Metadata: &Metadata{
+			ErrorCode:     0,
+			ElapsedMillis: uint32(elapsed.Milliseconds()),
+			WasmFlag:      false,
+		},
 	}, nil
 }
