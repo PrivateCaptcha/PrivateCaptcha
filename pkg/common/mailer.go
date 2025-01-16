@@ -28,7 +28,8 @@ func (r *SupportRequest) ShortTicketID() string {
 func (r *SupportRequest) EmailSubject() string {
 	if len(r.Subject) > 0 {
 		const maxSubjectLength = 100
-		subject := r.Subject[:maxSubjectLength]
+		length := min(len(r.Subject), maxSubjectLength)
+		subject := r.Subject[:length]
 		if len(r.Subject) > maxSubjectLength {
 			subject += "..."
 		}
