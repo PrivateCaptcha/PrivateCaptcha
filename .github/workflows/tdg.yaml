@@ -22,6 +22,7 @@ jobs:
       with:
         TOKEN: ${{ secrets.GITHUB_TOKEN }}
         REPO: ${{ github.repository }}
+        ISSUE_REPO: "PrivateCaptcha/issues"
         SHA: ${{ github.sha }}
         REF: ${{ github.ref }}
         INCLUDE_PATTERN: "\\.(go|js|css)$"
