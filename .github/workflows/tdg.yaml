@@ -20,7 +20,7 @@ jobs:
     - name: Run tdg github action
       uses: ribtoks/tdg-github-action@master
       with:
-        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TOKEN: ${{ secrets.TDG_TOKEN }}
         REPO: ${{ github.repository }}
         ISSUE_REPO: "PrivateCaptcha/issues"
         SHA: ${{ github.sha }}
