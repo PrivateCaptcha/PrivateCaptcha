@@ -30,7 +30,7 @@
     </div>
 
     <div class="col-span-full">
-        <label for="{{ .Const.Growth }}" class="pc-internal-form-label" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Slow</option>
@@ -41,7 +41,7 @@
     </div>
 
     <div class="col-span-full">
-        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
         <div class="mt-2">
             <div class="flex flex-col space-y-2 py-2">
                 <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-indigo-600" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" {{ if not .Params.CanEdit }}disabled{{ end }}/>
@@ -55,7 +55,7 @@
     </div>
 
     <div class="col-span-full">
-        <div class="bg-gray-50 sm:rounded-lg">
+        <div class="bg-indigo-50 sm:rounded-lg">
             <div class="px-4 py-5 sm:p-6">
                 <h3 class="text-base font-semibold text-gray-900">Test widget here</h3>
                 <div class="mt-2 max-w-xl text-sm text-gray-500">
