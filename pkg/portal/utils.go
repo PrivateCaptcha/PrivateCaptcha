@@ -9,6 +9,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
@@ -33,6 +34,10 @@ func (s *Server) org(r *http.Request) (*dbgen.Organization, error) {
 
 	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
 	if err != nil {
+		if err == db.ErrSoftDeleted {
+			return nil, errOrgSoftDeleted
+		}
+
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
 		return nil, err
 	}
@@ -63,6 +68,10 @@ func (s *Server) property(r *http.Request) (*dbgen.Property, error) {
 
 	property, err := s.Store.RetrieveProperty(ctx, int32(propertyID))
 	if err != nil {
+		if err == db.ErrSoftDeleted {
+			return nil, errPropertySoftDeleted
+		}
+
 		slog.ErrorContext(ctx, "Failed to find property by ID", common.ErrAttr(err))
 		return nil, err
 	}

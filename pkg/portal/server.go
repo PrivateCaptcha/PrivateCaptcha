@@ -36,8 +36,10 @@ const (
 )
 
 var (
-	errInvalidPathArg    = errors.New("path argument is not valid")
-	errInvalidRequestArg = errors.New("request argument is not valid")
+	errInvalidPathArg      = errors.New("path argument is not valid")
+	errInvalidRequestArg   = errors.New("request argument is not valid")
+	errOrgSoftDeleted      = errors.New("organization is deleted")
+	errPropertySoftDeleted = errors.New("property is deleted")
 
 	renderConstants = struct {
 		LoginEndpoint        string
@@ -397,6 +399,17 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 				common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 			case errInvalidPathArg, errInvalidRequestArg:
 				s.redirectError(http.StatusBadRequest, w, r)
+			case errOrgSoftDeleted:
+				common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
+			case errPropertySoftDeleted:
+				if orgID, err := s.orgID(r); err == nil {
+					url := s.relURL(fmt.Sprintf("/%s/%v", common.OrgEndpoint, orgID))
+					common.Redirect(url, http.StatusBadRequest, w, r)
+				} else {
+					common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
+				}
+			case db.ErrSoftDeleted:
+				s.redirectError(http.StatusNotAcceptable, w, r)
 			case db.ErrMaintenance:
 				s.redirectError(http.StatusServiceUnavailable, w, r)
 			case errRegistrationDisabled:

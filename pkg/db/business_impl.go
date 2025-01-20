@@ -602,6 +602,11 @@ func (impl *businessStoreImpl) retrieveOrganization(ctx context.Context, orgID i
 		_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
 	}
 
+	if org.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
+		return org, ErrSoftDeleted
+	}
+
 	return org, nil
 }
 
@@ -632,6 +637,11 @@ func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int3
 		_ = impl.cache.Set(ctx, cacheKey, property, impl.ttl)
 		sitekey := UUIDToSiteKey(property.ExternalID)
 		_ = impl.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
+	}
+
+	if property.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Property is soft-deleted", "propID", propID, "deletedAt", property.DeletedAt.Time)
+		return property, ErrSoftDeleted
 	}
 
 	return property, nil
