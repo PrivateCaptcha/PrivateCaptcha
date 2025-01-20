@@ -22,7 +22,9 @@ bin
 secrets.yml
 node_modules
 
-web/static/js/bundle.js
+web/static/
+widget/static/css
+widget/static/js
 
 pc.env
 .aider*
