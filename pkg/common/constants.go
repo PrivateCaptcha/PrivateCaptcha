@@ -1,6 +1,7 @@
 package common
 
 const (
+	DefaultOrgName              = "My Organization"
 	PrivateCaptcha              = "Private Captcha"
 	StageProd                   = "prod"
 	StageDev                    = "dev"

@@ -147,11 +147,10 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, errIncompleteSession
 	}
 
-	orgName := common.OrgNameFromName(name)
 	plan := billing.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan)
 
-	user, _, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existing user ID*/)
+	user, _, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return nil, err

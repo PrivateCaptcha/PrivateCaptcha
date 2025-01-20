@@ -48,6 +48,7 @@
 }
 
 .pc-internal-form-button {
+    @apply min-w-24;
     @apply inline-flex;
     @apply items-center;
     @apply justify-center;

@@ -129,9 +129,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgName := common.OrgNameFromName(customer.Name)
-
-	user, _, err := s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, orgName, existingUserID)
+	user, _, err := s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, common.DefaultOrgName, existingUserID)
 	if (err != nil) && (err != db.ErrDuplicateAccount) {
 		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
