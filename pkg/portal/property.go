@@ -27,7 +27,6 @@ const (
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	maxPropertyNameLength                 = 255
-	propertyWizardPropertyID              = "385f7acc-142a-4286-b85b-d94e29545ffd"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	propertySettingsTabIndex              = 2
 	propertyIntegrationsTabIndex          = 1
@@ -42,8 +41,6 @@ type difficultyLevelsRenderContext struct {
 type propertyWizardRenderContext struct {
 	csrfRenderContext
 	alertRenderContext
-	captchaRenderContext
-	difficultyLevelsRenderContext
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -189,9 +186,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 	}
 
 	data := &propertyWizardRenderContext{
-		csrfRenderContext:             s.createCsrfContext(user),
-		captchaRenderContext:          s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertyWizardPropertyID, "-", "")),
-		difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
+		csrfRenderContext: s.createCsrfContext(user),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -316,10 +311,9 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		csrfRenderContext:    s.createCsrfContext(user),
-		alertRenderContext:   alertRenderContext{},
-		captchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertyWizardPropertyID, "-", "")),
-		CurrentOrg:           orgToUserOrg(org, user.ID),
+		csrfRenderContext:  s.createCsrfContext(user),
+		alertRenderContext: alertRenderContext{},
+		CurrentOrg:         orgToUserOrg(org, user.ID),
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -349,17 +343,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
-	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
-
 	property, err := s.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       name,
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: org.UserID,
 		Domain:     domain,
-		Level:      db.Int2(int16(difficulty)),
-		Growth:     growth,
+		Level:      db.Int2(int16(common.DifficultyLevelSmall)),
+		Growth:     dbgen.DifficultyGrowthMedium,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
