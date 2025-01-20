@@ -7,8 +7,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateProperty :one
-UPDATE backend.properties SET name = $1, level = $2, growth = $3, updated_at = NOW()
-WHERE id = $4
+UPDATE backend.properties SET name = $2, level = $3, growth = $4, allow_subdomains = $5, updated_at = NOW()
+WHERE id = $1
 RETURNING *;
 
 -- name: GetOrgPropertyByName :one

@@ -355,6 +355,14 @@ func (am *authMiddleware) originAllowed(r *http.Request, origin string) (bool, [
 	return len(origin) > 0, nil
 }
 
+func isOriginAllowed(origin string, property *dbgen.Property) bool {
+	if property.AllowSubdomains {
+		return common.IsSubDomainOrDomain(origin, property.Domain)
+	}
+
+	return origin == property.Domain
+}
+
 func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 	return am.puzzleRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -396,8 +404,8 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		if property != nil {
 			if originHost, err := common.ParseDomainName(origin); err == nil {
-				if !common.IsSubDomainOrDomain(originHost, property.Domain) {
-					slog.WarnContext(ctx, "Origin header to domain mismatch", "origin", originHost, "domain", property.Domain)
+				if !isOriginAllowed(originHost, property) {
+					slog.WarnContext(ctx, "Origin is not allowed", "origin", originHost, "domain", property.Domain, "subdomains", property.AllowSubdomains)
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 					return
 				}

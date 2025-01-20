@@ -96,6 +96,26 @@
     @apply disabled:text-gray-500;
 }
 
+.pc-internal-form-checkbox {
+    @apply appearance-none;
+    @apply rounded;
+    @apply border;
+    @apply border-gray-300;
+    @apply bg-white;
+    @apply checked:border-indigo-600;
+    @apply checked:bg-indigo-600;
+    @apply indeterminate:border-indigo-600;
+    @apply indeterminate:bg-indigo-600;
+    @apply focus-visible:outline;
+    @apply focus-visible:outline-2;
+    @apply focus-visible:outline-offset-2;
+    @apply focus-visible:outline-indigo-600;
+    @apply disabled:border-gray-300;
+    @apply disabled:bg-gray-100;
+    @apply disabled:checked:bg-gray-100;
+    @apply forced-colors:appearance-auto;
+}
+
 .pc-form-input-base {
     @apply block;
     @apply w-full;

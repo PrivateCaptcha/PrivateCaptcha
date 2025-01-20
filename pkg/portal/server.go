@@ -93,6 +93,7 @@ var (
 		PrivacyEndpoint      string
 		ErrorEndpoint        string
 		AboutEndpoint        string
+		AllowSubdomains      string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -145,6 +146,7 @@ var (
 		PrivacyEndpoint:      common.PrivacyEndpoint,
 		ErrorEndpoint:        common.ErrorEndpoint,
 		AboutEndpoint:        common.AboutEndpoint,
+		AllowSubdomains:      common.ParamAllowSubdomains,
 	}
 )
 

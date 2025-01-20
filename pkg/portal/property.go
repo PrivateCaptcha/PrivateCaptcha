@@ -47,12 +47,13 @@ type propertyWizardRenderContext struct {
 }
 
 type userProperty struct {
-	ID     string
-	OrgID  string
-	Name   string
-	Domain string
-	Level  int
-	Growth int
+	ID              string
+	OrgID           string
+	Name            string
+	Domain          string
+	Level           int
+	Growth          int
+	AllowSubdomains bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -102,12 +103,13 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
 	return &userProperty{
-		ID:     strconv.Itoa(int(p.ID)),
-		OrgID:  strconv.Itoa(int(p.OrgID.Int32)),
-		Name:   p.Name,
-		Domain: p.Domain,
-		Level:  int(p.Level.Int16),
-		Growth: growthLevelToIndex(p.Growth),
+		ID:              strconv.Itoa(int(p.ID)),
+		OrgID:           strconv.Itoa(int(p.OrgID.Int32)),
+		Name:            p.Name,
+		Domain:          p.Domain,
+		Level:           int(p.Level.Int16),
+		Growth:          growthLevelToIndex(p.Growth),
+		AllowSubdomains: p.AllowSubdomains,
 	}
 }
 
@@ -617,9 +619,10 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
+	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 
-	if (name != property.Name) || (int16(difficulty) != property.Level.Int16) || (growth != property.Growth) {
-		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, uint8(difficulty), growth); err != nil {
+	if (name != property.Name) || (int16(difficulty) != property.Level.Int16) || (growth != property.Growth) || (allowSubdomains != property.AllowSubdomains) {
+		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, uint8(difficulty), growth, allowSubdomains); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.DebugContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)
