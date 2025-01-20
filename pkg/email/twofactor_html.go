@@ -24,8 +24,7 @@ const (
                         <tr>
                           <td>
                             <img alt="PrivateCaptcha's Logo" height="50" src="{{.CDN}}/portal/img/pc-logo-light.png"
-                              style="display:block;outline:none;border:none;text-decoration:none;color:#fff"
-                              width="100%"/>
+                              style="display:block;outline:none;border:none;text-decoration:none;color:#fff" />
                           </td>
                         </tr>
                       </tbody>
