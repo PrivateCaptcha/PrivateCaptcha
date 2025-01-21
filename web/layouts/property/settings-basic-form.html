@@ -43,6 +43,26 @@
                 <span id="{{ .Const.AllowSubdomains }}-description" class="text-gray-500"><span class="sr-only">Allow subdomains </span>to access captcha widget</span>
             </div>
         </div>
+
+        <div class="mt-2 flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input id="{{ .Const.AllowLocalhost }}" aria-describedby="{{ .Const.AllowLocalhost }}-description" name="{{ .Const.AllowLocalhost }}" type="checkbox" {{ if $.Params.Property.AllowLocalhost }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.AllowLocalhost }}" class="font-medium text-gray-900">Allow localhost</label>
+                {{ if $.Params.Property.AllowLocalhost -}}
+                <span class="ml-3 inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Testing</span>
+                {{- else -}}
+                <span id="{{ .Const.AllowLocalhost }}-description" class="text-gray-500"><span class="sr-only">Allow localhost</span>for testing</span>
+                {{- end }}
+            </div>
+        </div>
     </div>
 
     <div class="col-span-full">

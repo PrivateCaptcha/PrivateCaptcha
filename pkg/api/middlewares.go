@@ -356,6 +356,10 @@ func (am *authMiddleware) originAllowed(r *http.Request, origin string) (bool, [
 }
 
 func isOriginAllowed(origin string, property *dbgen.Property) bool {
+	if common.IsLocalhost(origin) {
+		return property.AllowLocalhost
+	}
+
 	if property.AllowSubdomains {
 		return common.IsSubDomainOrDomain(origin, property.Domain)
 	}

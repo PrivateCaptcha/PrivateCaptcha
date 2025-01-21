@@ -45,6 +45,7 @@ const (
 	ParamCode                   = "code"
 	ParamID                     = "id"
 	ParamAllowSubdomains        = "allow_subdomains"
+	ParamAllowLocalhost         = "allow_localhost"
 	ConfigRateLimitHeader       = "RATE_LIMIT_HEADER"
 	ConfigPresharedSecretHeader = "PRESHARED_SECRET_HEADER"
 	AreaPuzzle                  = "PUZZLE"

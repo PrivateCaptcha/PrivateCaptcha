@@ -66,6 +66,7 @@ var (
 		ErrorEndpoint        string
 		AboutEndpoint        string
 		AllowSubdomains      string
+		AllowLocalhost       string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -119,6 +120,7 @@ var (
 		ErrorEndpoint:        common.ErrorEndpoint,
 		AboutEndpoint:        common.AboutEndpoint,
 		AllowSubdomains:      common.ParamAllowSubdomains,
+		AllowLocalhost:       common.ParamAllowLocalhost,
 	}
 )
 

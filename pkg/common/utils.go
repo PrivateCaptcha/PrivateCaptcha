@@ -159,6 +159,13 @@ func ParseDomainName(input string) (string, error) {
 	return domain, nil
 }
 
+func IsLocalhost(address string) bool {
+	return (address == "localhost") ||
+		(address == "127.0.0.1") ||
+		(address == "::1") ||
+		(address == "0:0:0:0:0:0:0:1")
+}
+
 func IsSubDomainOrDomain(subDomain, domain string) bool {
 	if len(subDomain) == 0 || len(domain) == 0 {
 		return false

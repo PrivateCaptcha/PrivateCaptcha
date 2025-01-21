@@ -248,6 +248,7 @@ type Property struct {
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt       pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	AllowSubdomains bool               `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost  bool               `db:"allow_localhost" json:"allow_localhost"`
 }
 
 type Subscription struct {

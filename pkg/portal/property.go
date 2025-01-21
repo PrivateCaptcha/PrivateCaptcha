@@ -54,6 +54,7 @@ type userProperty struct {
 	Level           int
 	Growth          int
 	AllowSubdomains bool
+	AllowLocalhost  bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -110,6 +111,7 @@ func propertyToUserProperty(p *dbgen.Property) *userProperty {
 		Level:           int(p.Level.Int16),
 		Growth:          growthLevelToIndex(p.Growth),
 		AllowSubdomains: p.AllowSubdomains,
+		AllowLocalhost:  p.AllowLocalhost,
 	}
 }
 
@@ -223,6 +225,12 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 		return "Domain name cannot be empty."
 	}
 
+	const localhostError = "Localhost is not allowed as a domain"
+
+	if common.IsLocalhost(domain) {
+		return localhostError
+	}
+
 	_, err := idna.Lookup.ToASCII(domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to validate domain name", "domain", domain, common.ErrAttr(err))
@@ -235,6 +243,19 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 	var r net.Resolver
 	names, err := r.LookupIPAddr(rctx, domain)
 	if err == nil && len(names) > 0 {
+		anyNonLocal := false
+		for _, n := range names {
+			if !n.IP.IsLoopback() {
+				anyNonLocal = true
+				break
+			}
+		}
+
+		if !anyNonLocal {
+			slog.WarnContext(ctx, "Only loopback IPs are resolved", "domain", domain, "first", names[0])
+			return localhostError
+		}
+
 		slog.DebugContext(ctx, "Resolved domain name", "domain", domain, "ips", len(names), "first", names[0])
 		return ""
 	}
@@ -325,7 +346,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	paramDomain := r.FormValue(common.ParamDomain)
+	paramDomain := strings.TrimSpace(r.FormValue(common.ParamDomain))
 	domain, err := common.ParseDomainName(paramDomain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", paramDomain, common.ErrAttr(err))
@@ -620,17 +641,20 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
+	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]
 
 	if (name != property.Name) ||
 		(int16(difficulty) != property.Level.Int16) ||
 		(growth != property.Growth) ||
-		(allowSubdomains != property.AllowSubdomains) {
+		(allowSubdomains != property.AllowSubdomains) ||
+		(allowLocalhost != property.AllowLocalhost) {
 		if updatedProperty, err := s.Store.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
 			ID:              property.ID,
 			Name:            name,
 			Level:           db.Int2(int16(difficulty)),
 			Growth:          growth,
 			AllowSubdomains: allowSubdomains,
+			AllowLocalhost:  allowLocalhost,
 		}); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {

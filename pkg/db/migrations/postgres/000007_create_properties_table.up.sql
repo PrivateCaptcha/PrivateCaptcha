@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS backend.properties(
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ DEFAULT current_timestamp,
     deleted_at TIMESTAMPTZ NULL DEFAULT NULL,
-    allow_subdomains BOOL NOT NULL DEFAULT FALSE
+    allow_subdomains BOOL NOT NULL DEFAULT FALSE,
+    allow_localhost BOOL NOT NULL DEFAULT FALSE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS index_property_external_id ON backend.properties(external_id);
