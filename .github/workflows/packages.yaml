@@ -19,5 +19,4 @@ jobs:
         with: 
           package-name: 'privatecaptcha'
           package-type: 'container'
-          token: ${{ secrets.GITHUB_PAT }}
           min-versions-to-keep: 10
