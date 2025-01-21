@@ -26,6 +26,7 @@ export class CaptchaWidget {
         this._expiryTimeout = null;
         this._state = STATE_EMPTY;
         this._lastProgress = null;
+        this._solution = null;
         this._userStarted = false; // aka 'user started while we were initializing'
         this._options = {};
         this._errorCode = ERROR_NO_ERROR;
@@ -95,6 +96,7 @@ export class CaptchaWidget {
         const startWorkers = (this._options.startMode == "auto") || autoStart;
 
         try {
+            this._solution = null;
             this._errorCode = ERROR_NO_ERROR;
             this.setState(STATE_LOADING);
             this.trace('fetching puzzle');
@@ -145,7 +147,7 @@ export class CaptchaWidget {
     signalFinished() {
         const callback = this._element.dataset['finishedCallback'];
         if (callback) {
-            window[callback]();
+            window[callback](this._solution);
         }
     }
 
@@ -288,6 +290,8 @@ export class CaptchaWidget {
 
         this.ensureNoSolutionField();
         this._element.insertAdjacentHTML('beforeend', `<input name="${this._options.fieldName}" type="hidden" value="${payload}">`);
+
+        this._solution = payload;
 
         this.trace(`saved solutions. payload=${payload}`);
     }
