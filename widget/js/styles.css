@@ -1,13 +1,30 @@
-:host {
-    --dark-color: #070113;
-    --accent-color: #0080A0;
-    --gray-color: #E0E0E0;
-    --light-color: #F2F2F2;
-    --lighter-color: #FFF;
-    --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
-    --label-spacing: 10px;
-    --border-radius: 2px;
-    --background-color: #fff;
+@layer base, theme, custom;
+
+@layer base {
+    :host {
+        --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
+        --label-spacing: 10px;
+        --border-radius: 2px;
+        --accent-color: #0080A0;
+    }
+}
+
+@layer theme {
+    :host([theme="light"]) {
+        --dark-color: #070113;
+        --gray-color: #E0E0E0;
+        --light-color: #F2F2F2;
+        --lighter-color: #FFF;
+        --background-color: #fff;
+    }
+
+    :host([theme="dark"]) {
+        --background-color: #111827;
+        --dark-color: #fff;
+        --gray-color: #656C7B;
+        --lighter-color: #3C4353;
+        --light-color: #6B778E;
+    }
 }
 
 .pc-captcha-widget {

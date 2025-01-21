@@ -69,7 +69,8 @@ export class CaptchaElement extends HTMLElement {
         const extraStyles = this.getAttribute('extra-styles');
         if (extraStyles) {
             const overridesSheet = new CSSStyleSheet();
-            overridesSheet.replace(extraStyles);
+            const cssText = `@layer custom { :host { ${extraStyles} } }`;
+            overridesSheet.replace(cssText);
             this._root.adoptedStyleSheets.push(overridesSheet);
         }
         // init

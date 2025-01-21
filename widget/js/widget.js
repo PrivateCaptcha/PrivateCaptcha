@@ -45,7 +45,7 @@ export class CaptchaWidget {
             // NOTE: this does not work on Safari by (Apple) design if we click a button
             // "once" means listener will be removed after being called, "passive" - cannot use preventDefault()
             form.addEventListener('focusin', this.onFocusIn.bind(this), { once: true, passive: true });
-            this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ''}></private-captcha>`;
+            this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" theme="${this._options.theme}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ''}></private-captcha>`;
             this._element.addEventListener('check', this.onChecked.bind(this));
 
             if (DISPLAY_POPUP === this._options.displayMode) {
@@ -70,6 +70,7 @@ export class CaptchaWidget {
             sitekey: this._element.dataset["sitekey"] || "",
             displayMode: this._element.dataset["displayMode"] || "widget",
             lang: this._element.dataset["lang"] || "en",
+            theme: this._element.dataset["theme"] || "light",
             styles: this._element.dataset["styles"] || "",
         }, options);
     }

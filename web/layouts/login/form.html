@@ -20,7 +20,7 @@
     data-start-mode="auto"
     data-finished-callback="onCaptchaSolved"
     data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
-    data-styles=":host { --border-radius: .75rem; }"
+    data-styles="--border-radius: .75rem;"
     {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
 </div>
 {{- if .Params.CaptchaError -}}

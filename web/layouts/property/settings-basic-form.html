@@ -101,7 +101,7 @@
                         data-start-mode="click"
                         data-finished-callback="onCaptchaReset"
                         data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/{{$.Params.Property.Level}}"
-                        data-styles=":host { --border-radius: .375rem; }"
+                        data-styles="--border-radius: .375rem;"
                         {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
                     </div>
                 </div>
