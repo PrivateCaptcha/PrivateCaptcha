@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -72,6 +73,25 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		slog.ErrorContext(ctx, "Failed to render error template", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) error(w http.ResponseWriter, r *http.Request) {
+	code, _ := strconv.Atoi(r.PathValue(common.ParamCode))
+	if (code < 100) || (code > 600) {
+		slog.ErrorContext(r.Context(), "Invalid error code", "code", code)
+		code = http.StatusInternalServerError
+	}
+
+	s.renderError(r.Context(), w, code)
+}
+
+func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request) {
+	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
+	common.Redirect(url, code, w, r)
+}
+
+func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
+	s.renderError(r.Context(), w, http.StatusNotFound)
 }
 
 func (s *Server) expired(w http.ResponseWriter, r *http.Request) {

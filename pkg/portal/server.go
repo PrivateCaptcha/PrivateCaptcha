@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -20,7 +18,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
@@ -40,114 +37,6 @@ var (
 	errInvalidRequestArg   = errors.New("request argument is not valid")
 	errOrgSoftDeleted      = errors.New("organization is deleted")
 	errPropertySoftDeleted = errors.New("property is deleted")
-
-	renderConstants = struct {
-		LoginEndpoint        string
-		TwoFactorEndpoint    string
-		ResendEndpoint       string
-		RegisterEndpoint     string
-		SettingsEndpoint     string
-		LogoutEndpoint       string
-		NewEndpoint          string
-		OrgEndpoint          string
-		PropertyEndpoint     string
-		DashboardEndpoint    string
-		TabEndpoint          string
-		ReportsEndpoint      string
-		IntegrationsEndpoint string
-		EditEndpoint         string
-		Token                string
-		Email                string
-		Name                 string
-		Tab                  string
-		VerificationCode     string
-		Domain               string
-		Difficulty           string
-		Growth               string
-		Stats                string
-		DeleteEndpoint       string
-		MembersEndpoint      string
-		OrgLevelInvited      string
-		OrgLevelMember       string
-		OrgLevelOwner        string
-		GeneralEndpoint      string
-		EmailEndpoint        string
-		UserEndpoint         string
-		APIKeysEndpoint      string
-		Months               string
-		SupportEndpoint      string
-		Message              string
-		Subject              string
-		Category             string
-		BillingEndpoint      string
-		Product              string
-		CancelEndpoint       string
-		UpdateEndpoint       string
-		PreviewEndpoint      string
-		Yearly               string
-		Price                string
-		HeaderCSRFToken      string
-		UsageEndpoint        string
-		NotificationEndpoint string
-		LegalEndpoint        string
-		PrivacyEndpoint      string
-		ErrorEndpoint        string
-		AboutEndpoint        string
-		AllowSubdomains      string
-	}{
-		LoginEndpoint:        common.LoginEndpoint,
-		TwoFactorEndpoint:    common.TwoFactorEndpoint,
-		ResendEndpoint:       common.ResendEndpoint,
-		RegisterEndpoint:     common.RegisterEndpoint,
-		SettingsEndpoint:     common.SettingsEndpoint,
-		LogoutEndpoint:       common.LogoutEndpoint,
-		OrgEndpoint:          common.OrgEndpoint,
-		PropertyEndpoint:     common.PropertyEndpoint,
-		DashboardEndpoint:    common.DashboardEndpoint,
-		NewEndpoint:          common.NewEndpoint,
-		Token:                common.ParamCSRFToken,
-		Email:                common.ParamEmail,
-		Name:                 common.ParamName,
-		Tab:                  common.ParamTab,
-		VerificationCode:     common.ParamVerificationCode,
-		Domain:               common.ParamDomain,
-		Difficulty:           common.ParamDifficulty,
-		Growth:               common.ParamGrowth,
-		Stats:                common.StatsEndpoint,
-		TabEndpoint:          common.TabEndpoint,
-		ReportsEndpoint:      common.ReportsEndpoint,
-		IntegrationsEndpoint: common.IntegrationsEndpoint,
-		EditEndpoint:         common.EditEndpoint,
-		DeleteEndpoint:       common.DeleteEndpoint,
-		MembersEndpoint:      common.MembersEndpoint,
-		OrgLevelInvited:      string(dbgen.AccessLevelInvited),
-		OrgLevelMember:       string(dbgen.AccessLevelMember),
-		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
-		GeneralEndpoint:      common.GeneralEndpoint,
-		EmailEndpoint:        common.EmailEndpoint,
-		UserEndpoint:         common.UserEndpoint,
-		APIKeysEndpoint:      common.APIKeysEndpoint,
-		Months:               common.ParamMonths,
-		SupportEndpoint:      common.SupportEndpoint,
-		Message:              common.ParamMessage,
-		Subject:              common.ParamSubject,
-		Category:             common.ParamCategory,
-		BillingEndpoint:      common.BillingEndpoint,
-		Product:              common.ParamProduct,
-		CancelEndpoint:       common.CancelEndpoint,
-		UpdateEndpoint:       common.UpdateEndpoint,
-		PreviewEndpoint:      common.PreviewEndpoint,
-		Yearly:               common.ParamYearly,
-		Price:                common.ParamPrice,
-		HeaderCSRFToken:      common.HeaderCSRFToken,
-		UsageEndpoint:        common.UsageEndpoint,
-		NotificationEndpoint: common.NotificationEndpoint,
-		LegalEndpoint:        common.LegalEndpoint,
-		PrivacyEndpoint:      common.PrivacyEndpoint,
-		ErrorEndpoint:        common.ErrorEndpoint,
-		AboutEndpoint:        common.AboutEndpoint,
-		AllowSubdomains:      common.ParamAllowSubdomains,
-	}
 )
 
 func funcMap(prefix string) template.FuncMap {
@@ -425,72 +314,6 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 
 		s.render(w, r, tpl, renderCtx)
 	})
-}
-
-func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *requestContext) (bytes.Buffer, error) {
-	actualData := struct {
-		Params interface{}
-		Const  interface{}
-		Ctx    interface{}
-	}{
-		Params: data,
-		Const:  renderConstants,
-		Ctx:    reqCtx,
-	}
-
-	var out bytes.Buffer
-	err := s.template.Render(ctx, &out, name, actualData)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to render template", "name", name, common.ErrAttr(err))
-	}
-
-	return out, err
-}
-
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
-	ctx := r.Context()
-
-	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
-
-	reqCtx := &requestContext{
-		Path:        r.URL.Path,
-		LoggedIn:    ok && loggedIn,
-		CurrentYear: time.Now().Year(),
-		CDN:         s.CDNURL,
-	}
-
-	sess := s.Session.SessionStart(w, r)
-	if username, ok := sess.Get(session.KeyUserName).(string); ok {
-		reqCtx.UserName = username
-	}
-
-	out, err := s.renderResponse(ctx, name, data, reqCtx)
-	if err == nil {
-		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-		w.WriteHeader(http.StatusOK)
-		out.WriteTo(w)
-	} else {
-		s.renderError(ctx, w, http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) error(w http.ResponseWriter, r *http.Request) {
-	code, _ := strconv.Atoi(r.PathValue(common.ParamCode))
-	if (code < 100) || (code > 600) {
-		slog.ErrorContext(r.Context(), "Invalid error code", "code", code)
-		code = http.StatusInternalServerError
-	}
-
-	s.renderError(r.Context(), w, code)
-}
-
-func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request) {
-	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
-	common.Redirect(url, code, w, r)
-}
-
-func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.renderError(r.Context(), w, http.StatusNotFound)
 }
 
 func (s *Server) maintenance(next http.Handler) http.Handler {
