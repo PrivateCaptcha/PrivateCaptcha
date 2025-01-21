@@ -772,25 +772,18 @@ func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *db
 	return property, nil
 }
 
-func (impl *businessStoreImpl) updateProperty(ctx context.Context, propID int32, name string, level uint8, growth dbgen.DifficultyGrowth, allowSubdomains bool) (*dbgen.Property, error) {
+func (impl *businessStoreImpl) updateProperty(ctx context.Context, params *dbgen.UpdatePropertyParams) (*dbgen.Property, error) {
 	if impl.queries == nil {
 		return nil, ErrMaintenance
 	}
 
-	property, err := impl.queries.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
-		Name:            name,
-		Level:           Int2(int16(level)),
-		Growth:          growth,
-		ID:              propID,
-		AllowSubdomains: allowSubdomains,
-	})
-
+	property, err := impl.queries.UpdateProperty(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update property in DB", "name", name, "propID", propID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to update property in DB", "name", params.Name, "propID", params.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Updated property", "name", name, "propID", propID)
+	slog.DebugContext(ctx, "Updated property", "name", params.Name, "propID", params.ID)
 
 	sitekey := UUIDToSiteKey(property.ExternalID)
 	cacheBySitekeyKey := PropertyBySitekeyCacheKey(sitekey)

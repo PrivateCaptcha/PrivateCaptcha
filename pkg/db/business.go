@@ -241,8 +241,8 @@ func (s *BusinessStore) CreateNewProperty(ctx context.Context, params *dbgen.Cre
 	return s.impl().createNewProperty(ctx, params)
 }
 
-func (s *BusinessStore) UpdateProperty(ctx context.Context, propID int32, name string, level uint8, growth dbgen.DifficultyGrowth, allowSubdomains bool) (*dbgen.Property, error) {
-	return s.impl().updateProperty(ctx, propID, name, level, growth, allowSubdomains)
+func (s *BusinessStore) UpdateProperty(ctx context.Context, params *dbgen.UpdatePropertyParams) (*dbgen.Property, error) {
+	return s.impl().updateProperty(ctx, params)
 }
 
 func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32, orgID int32) error {

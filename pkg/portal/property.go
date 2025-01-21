@@ -621,8 +621,17 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 
-	if (name != property.Name) || (int16(difficulty) != property.Level.Int16) || (growth != property.Growth) || (allowSubdomains != property.AllowSubdomains) {
-		if updatedProperty, err := s.Store.UpdateProperty(ctx, property.ID, name, uint8(difficulty), growth, allowSubdomains); err != nil {
+	if (name != property.Name) ||
+		(int16(difficulty) != property.Level.Int16) ||
+		(growth != property.Growth) ||
+		(allowSubdomains != property.AllowSubdomains) {
+		if updatedProperty, err := s.Store.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
+			ID:              property.ID,
+			Name:            name,
+			Level:           db.Int2(int16(difficulty)),
+			Growth:          growth,
+			AllowSubdomains: allowSubdomains,
+		}); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.DebugContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)
