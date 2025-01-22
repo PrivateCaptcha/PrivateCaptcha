@@ -191,14 +191,14 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		MaxHeaderBytes:    1024 * 1024,
 	}
 
-	updateConfigFunc := func() {
+	updateConfigFunc := func(ctx context.Context) {
 		maintenanceMode := cfg.MaintenanceMode()
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
-		portalServer.UpdateConfig(cfg)
+		portalServer.UpdateConfig(ctx, cfg)
 		auth.UpdateConfig(cfg)
 	}
-	updateConfigFunc()
+	updateConfigFunc(ctx)
 
 	quit := make(chan struct{})
 	go func(ctx context.Context) {
@@ -220,7 +220,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 				if len(*envFileFlag) > 0 {
 					_ = godotenv.Load(*envFileFlag)
 				}
-				updateConfigFunc()
+				updateConfigFunc(ctx)
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
 				close(quit)

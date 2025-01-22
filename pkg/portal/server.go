@@ -130,9 +130,15 @@ func (s *Server) Init() {
 	s.Session.Path = prefix
 }
 
-func (s *Server) UpdateConfig(config *config.Config) {
-	s.maintenanceMode.Store(config.MaintenanceMode())
+func (s *Server) UpdateConfig(ctx context.Context, config *config.Config) {
+	maintenanceMode := config.MaintenanceMode()
+	oldMaintenanceMode := s.maintenanceMode.Swap(maintenanceMode)
+
 	s.canRegister.Store(config.RegistrationAllowed())
+
+	if oldMaintenanceMode != maintenanceMode {
+		slog.InfoContext(ctx, "Maintenance mode change", "old", oldMaintenanceMode, "new", maintenanceMode)
+	}
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify alice.Constructor) {
