@@ -595,7 +595,7 @@ func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Mod
 	}
 
 	if !renderCtx.IsSubscribed {
-		slog.ErrorContext(ctx, "Attemp to preview subscription change while not subscribed", "userID", user.ID)
+		slog.ErrorContext(ctx, "Attempt to preview subscription change while not subscribed", "userID", user.ID)
 		return nil, "", errMissingSubscription
 	}
 
@@ -663,7 +663,7 @@ func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, stri
 	renderCtx.ClearAlerts()
 
 	if !renderCtx.IsSubscribed {
-		slog.ErrorContext(ctx, "Attemp to update subscription while not subscribed", "userID", user.ID)
+		slog.ErrorContext(ctx, "Attempt to update subscription while not subscribed", "userID", user.ID)
 		return nil, "", errMissingSubscription
 	}
 
