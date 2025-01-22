@@ -1,0 +1,56 @@
+name: Code style
+
+on:
+  workflow_dispatch:  # Manual trigger
+  schedule:
+    - cron: '0 2 26 * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Configure Git
+      run: |
+        git config --global user.name 'GitHub Action'
+        git config --global user.email 'action@github.com'
+
+    - name: Create branch
+      run: |
+        branch_name="cron/code-style-$(date +%Y%m%d-%H%M%S)"
+        git checkout -b $branch_name
+        echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
+
+    - uses: sobolevn/misspell-fixer-action@master
+      with:
+        options: '-rsvnRVD ./pkg/ ./cmd/ ./web/ ./widget/'
+
+    #- name: Add missing headers
+    #  run: |
+    #    find ./pkg ./cmd -type f \( -name '*.go' \) -exec ./scripts/add_c_license_header.sh {} \;
+    #    find ./pkg/db/migrations -type f \( -name '*.sql' \) -exec ./scripts/add_sql_license_header.sh {} \;
+
+    - name: Cleanup code changes
+      run: |
+        git status -s | grep ' M ' | cut -f3 -d' ' | grep -v "\.\(go\|js\|css\|sh\|html\)$" | xargs git checkout
+        git checkout -- pkg/db/generated
+
+    - name: Commit changes
+      run: |
+        git add -u .
+        git commit -m "Fix code style issues"
+
+    - name: Push changes
+      run: |
+        git push origin $BRANCH_NAME
+
+    - name: Create pull request
+      run: gh pr create -B main -H $BRANCH_NAME --title 'Fix formatting, spellcheck and missing headers code issues' --body 'Created by Github action'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
