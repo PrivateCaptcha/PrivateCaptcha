@@ -63,11 +63,12 @@ type settingsGeneralRenderContext struct {
 }
 
 type userAPIKey struct {
-	ID          string
-	Name        string
-	ExpiresAt   string
-	Secret      string
-	ExpiresSoon bool
+	ID                string
+	Name              string
+	ExpiresAt         string
+	Secret            string
+	RequestsPerMinute int
+	ExpiresSoon       bool
 }
 
 type settingsAPIKeysRenderContext struct {
@@ -97,11 +98,20 @@ type settingsBillingRenderContext struct {
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
+	// in terms of "leaky bucket" logic
+	capacity := float64(key.RequestsBurst)
+	leakInterval := float64(time.Second) / key.RequestsPerSecond
+	// {period} during which we can consume (or restore) {capacity}
+	period := capacity * leakInterval
+	periodsPerMinute := float64(time.Minute) / period
+	requestsPerMinute := capacity * periodsPerMinute
+
 	return &userAPIKey{
-		ID:          strconv.Itoa(int(key.ID)),
-		Name:        key.Name,
-		ExpiresAt:   key.ExpiresAt.Time.Format("02 Jan 2006"),
-		ExpiresSoon: key.ExpiresAt.Time.Sub(tnow) < 31*24*time.Hour,
+		ID:                strconv.Itoa(int(key.ID)),
+		Name:              key.Name,
+		ExpiresAt:         key.ExpiresAt.Time.Format("02 Jan 2006"),
+		ExpiresSoon:       key.ExpiresAt.Time.Sub(tnow) < 31*24*time.Hour,
+		RequestsPerMinute: int(requestsPerMinute),
 	}
 }
 

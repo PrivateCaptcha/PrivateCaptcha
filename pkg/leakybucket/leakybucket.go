@@ -99,6 +99,7 @@ func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel)
 	var nextLevel int64 = min(int64(lb.capacity), currLevel+int64(n))
 	lb.level = TLevel(nextLevel)
 
+	// {current level}, {how much added}
 	return TLevel(nextLevel), TLevel(nextLevel - currLevel)
 }
 

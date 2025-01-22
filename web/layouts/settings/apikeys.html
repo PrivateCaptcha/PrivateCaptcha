@@ -131,7 +131,7 @@
                         {{ if $key.Secret }}
                         <p>Make sure you save it - you won't be able to access it again.</p>
                         {{ else }}
-                        <p class="whitespace-nowrap">Expires on <time>{{ $key.ExpiresAt}}</time></p>
+                        <p class="whitespace-nowrap">Expires on <time>{{ $key.ExpiresAt}}</time><span class="mx-2">/</span>{{$key.RequestsPerMinute}} requests per minute</p>
                         {{ end }}
                     </div>
                 </div>
