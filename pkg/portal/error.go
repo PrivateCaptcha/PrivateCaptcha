@@ -95,7 +95,6 @@ func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
-	// TODO: Cache expired and error responses
 	data := &errorRenderContext{
 		ErrorCode:    http.StatusForbidden,
 		ErrorMessage: "Session expired",
