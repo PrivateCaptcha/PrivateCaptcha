@@ -26,9 +26,10 @@ const (
 
 var (
 	templates = map[string]string{
-		"two-factor": email.TwoFactorHTMLTemplate,
-		"support":    email.SupportHTMLTemplate,
-		"welcome":    email.WelcomeHTMLTemplate,
+		"two-factor":          email.TwoFactorHTMLTemplate,
+		"support":             email.SupportHTMLTemplate,
+		"welcome":             email.WelcomeHTMLTemplate,
+		"support-acknowledge": email.SupportAcknowledgeHTMLTemplate,
 	}
 )
 

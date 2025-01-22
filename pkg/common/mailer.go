@@ -33,14 +33,15 @@ func (r *SupportRequest) EmailSubject() string {
 		if len(r.Subject) > maxSubjectLength {
 			subject += "..."
 		}
-		return fmt.Sprintf("[%s] %s", r.Category, subject)
+		return fmt.Sprintf("[%s] %s", PrivateCaptcha, subject)
 	}
 
-	return fmt.Sprintf("[%s] Support request %s", r.Category, r.ShortTicketID())
+	return fmt.Sprintf("[%s] Support request %s", PrivateCaptcha, r.ShortTicketID())
 }
 
 type Mailer interface {
 	SendTwoFactor(ctx context.Context, email string, code int) error
 	SendSupportRequest(ctx context.Context, email string, req *SupportRequest) error
+	SendSupportAck(ctx context.Context, email string, req *SupportRequest) error
 	SendWelcome(ctx context.Context, email string) error
 }

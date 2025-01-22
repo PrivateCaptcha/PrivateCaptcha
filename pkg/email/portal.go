@@ -12,34 +12,38 @@ import (
 )
 
 type PortalMailer struct {
-	mailer                *simpleMailer
-	cdn                   string
-	domain                string
-	emailFrom             string
-	supportEmail          string
-	adminEmail            string
-	twofactorHTMLTemplate *template.Template
-	twofactorTextTemplate *template.Template
-	supportHTMLTemplate   *template.Template
-	supportTextTemplate   *template.Template
-	welcomeHTMLTemplate   *template.Template
-	welcomeTextTemplate   *template.Template
+	mailer                         *simpleMailer
+	cdn                            string
+	domain                         string
+	emailFrom                      string
+	supportEmail                   string
+	adminEmail                     string
+	twofactorHTMLTemplate          *template.Template
+	twofactorTextTemplate          *template.Template
+	supportHTMLTemplate            *template.Template
+	supportTextTemplate            *template.Template
+	welcomeHTMLTemplate            *template.Template
+	welcomeTextTemplate            *template.Template
+	supportAcknowledgeHTMLTemplate *template.Template
+	supportAcknowledgeTextTemplate *template.Template
 }
 
 func NewPortalMailer(cdn, domain string, mailer *simpleMailer, getenv func(string) string) *PortalMailer {
 	return &PortalMailer{
-		mailer:                mailer,
-		emailFrom:             getenv("PC_EMAIL_FROM"),
-		supportEmail:          getenv("PC_SUPPORT_EMAIL"),
-		adminEmail:            getenv("PC_ADMIN_EMAIL"),
-		cdn:                   cdn,
-		domain:                domain,
-		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
-		twofactorTextTemplate: template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
-		supportHTMLTemplate:   template.Must(template.New("HtmlBody").Parse(SupportHTMLTemplate)),
-		supportTextTemplate:   template.Must(template.New("TextBody").Parse(supportTextTemplate)),
-		welcomeHTMLTemplate:   template.Must(template.New("HtmlBody").Parse(WelcomeHTMLTemplate)),
-		welcomeTextTemplate:   template.Must(template.New("TextBody").Parse(welcomeTextTemplate)),
+		mailer:                         mailer,
+		emailFrom:                      getenv("PC_EMAIL_FROM"),
+		supportEmail:                   getenv("PC_SUPPORT_EMAIL"),
+		adminEmail:                     getenv("PC_ADMIN_EMAIL"),
+		cdn:                            cdn,
+		domain:                         domain,
+		twofactorHTMLTemplate:          template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
+		twofactorTextTemplate:          template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
+		supportHTMLTemplate:            template.Must(template.New("HtmlBody").Parse(SupportHTMLTemplate)),
+		supportTextTemplate:            template.Must(template.New("TextBody").Parse(supportTextTemplate)),
+		welcomeHTMLTemplate:            template.Must(template.New("HtmlBody").Parse(WelcomeHTMLTemplate)),
+		welcomeTextTemplate:            template.Must(template.New("TextBody").Parse(welcomeTextTemplate)),
+		supportAcknowledgeHTMLTemplate: template.Must(template.New("HtmlBody").Parse(SupportAcknowledgeHTMLTemplate)),
+		supportAcknowledgeTextTemplate: template.Must(template.New("TextBody").Parse(supportAcknowledgeTextTemplate)),
 	}
 }
 
@@ -126,6 +130,8 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 		return err
 	}
 
+	tlog := slog.With("ticketID", req.TicketID)
+
 	msg := &Message{
 		HTMLBody:  htmlBodyTpl.String(),
 		TextBody:  textBodyTpl.String(),
@@ -137,12 +143,12 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 	}
 
 	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
-		slog.ErrorContext(ctx, "Failed to send support request", common.ErrAttr(err))
+		tlog.ErrorContext(ctx, "Failed to send support request", common.ErrAttr(err))
 
 		return err
 	}
 
-	slog.InfoContext(ctx, "Sent support email", "email", email)
+	tlog.InfoContext(ctx, "Sent support email", "email", email)
 
 	return nil
 }
@@ -185,6 +191,52 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email string) error {
 	}
 
 	slog.InfoContext(ctx, "Sent welcome email", "email", email)
+
+	return nil
+}
+
+func (pm *PortalMailer) SendSupportAck(ctx context.Context, email string, req *common.SupportRequest) error {
+	data := struct {
+		Domain      string
+		CurrentYear int
+		TicketID    string
+		CDN         string
+	}{
+		CDN:         pm.cdn,
+		Domain:      pm.domain,
+		CurrentYear: time.Now().Year(),
+		TicketID:    req.TicketID,
+	}
+
+	var htmlBodyTpl bytes.Buffer
+	if err := pm.supportAcknowledgeHTMLTemplate.Execute(&htmlBodyTpl, data); err != nil {
+		return err
+	}
+
+	var textBodyTpl bytes.Buffer
+	if err := pm.supportAcknowledgeHTMLTemplate.Execute(&textBodyTpl, data); err != nil {
+		return err
+	}
+
+	tlog := slog.With("ticketID", req.TicketID)
+
+	msg := &Message{
+		HTMLBody:  htmlBodyTpl.String(),
+		TextBody:  textBodyTpl.String(),
+		Subject:   req.EmailSubject(),
+		EmailTo:   email,
+		EmailFrom: pm.emailFrom,
+		NameFrom:  common.PrivateCaptcha,
+		ReplyTo:   email,
+	}
+
+	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
+		tlog.ErrorContext(ctx, "Failed to send support acknowledgement", common.ErrAttr(err))
+
+		return err
+	}
+
+	tlog.InfoContext(ctx, "Sent support acknowledgement", "email", email)
 
 	return nil
 }

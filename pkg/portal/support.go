@@ -115,6 +115,13 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you soon."
 		renderCtx.Message = ""
 		renderCtx.Subject = ""
+
+		go func(bctx context.Context, email string, req *common.SupportRequest) {
+			if err := s.Mailer.SendSupportAck(bctx, email, req); err != nil {
+				slog.ErrorContext(bctx, "Failed to send support acknowledgement", common.ErrAttr(err))
+			}
+		}(common.CopyTraceID(ctx, context.Background()), user.Email, req)
+
 	} else {
 		renderCtx.ErrorMessage = "Failed to send the message. Please try again."
 	}
