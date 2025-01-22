@@ -123,9 +123,15 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	sess.Delete(session.KeyUserEmail)
 	sess.Set(session.KeyPersistent, true)
 
-	// TODO: Redirect user to create the first property instead of dashboard
-	// in case we're registering
-	common.Redirect(s.relURL("/"), http.StatusOK, w, r)
+	if returnURL, ok := sess.Get(session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
+		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
+		sess.Delete(session.KeyReturnURL)
+		common.Redirect(s.relURL(returnURL), http.StatusOK, w, r)
+	} else {
+		// TODO: Redirect user to create the first property instead of dashboard
+		// in case we're registering
+		common.Redirect(s.relURL("/"), http.StatusOK, w, r)
+	}
 }
 
 func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
