@@ -17,6 +17,7 @@ export class WorkersPool {
         this._callbacks = Object.assign({
             workersReady: () => 0,
             workerError: () => 0,
+            workStarted: () => 0,
             workCompleted: () => 0,
             progress: () => 0,
         }, callbacks);
@@ -82,15 +83,28 @@ export class WorkersPool {
         this._timeStarted = Date.now();
         this._timeFinished = null;
 
+        const requiresSolving = (puzzle.difficulty > 0);
+        const stubSolution = requiresSolving ? null : new Uint8Array(8);
+
         for (let i = 0; i < puzzle.solutionsCount; i++) {
-            this._workers[i % this._workers.length].postMessage({
-                command: "solve",
-                argument: {
-                    difficulty: puzzle.difficulty,
-                    puzzleIndex: i,
-                    debug: this._debug,
-                },
-            });
+            if (requiresSolving) {
+                this._workers[i % this._workers.length].postMessage({
+                    command: "solve",
+                    argument: {
+                        difficulty: puzzle.difficulty,
+                        puzzleIndex: i,
+                        debug: this._debug,
+                    },
+                });
+            } else {
+                this._solutions.push(stubSolution);
+            }
+        }
+
+        this._callbacks.workStarted();
+
+        if (!requiresSolving) {
+            this.onWorkCompleted();
         }
     }
 
@@ -118,9 +132,13 @@ export class WorkersPool {
         this._callbacks.progress(count * 100.0 / this._solutionsCount);
 
         if (count == this._solutionsCount) {
-            this._timeFinished = Date.now();
-            this._callbacks.workCompleted();
+            this.onWorkCompleted();
         }
+    }
+
+    onWorkCompleted() {
+        this._timeFinished = Date.now();
+        this._callbacks.workCompleted();
     }
 
     serializeSolutions(errorCode) {

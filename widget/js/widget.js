@@ -36,6 +36,7 @@ export class CaptchaWidget {
         this._workersPool = new WorkersPool({
             workersReady: this.onWorkersReady.bind(this),
             workerError: this.onWorkerError.bind(this),
+            workStarted: this.onWorkStarted.bind(this),
             workCompleted: this.onWorkCompleted.bind(this),
             progress: this.onWorkProgress.bind(this),
         }, this._options.debug);
@@ -132,7 +133,6 @@ export class CaptchaWidget {
         try {
             this.setState(STATE_IN_PROGRESS);
             this._workersPool.solve(this._puzzle);
-            this.signalStarted();
         } catch (e) {
             console.error('[privatecaptcha]', e);
         }
@@ -255,6 +255,10 @@ export class CaptchaWidget {
     onWorkerError(error) {
         console.error('[privatecaptcha] error in worker:', error)
         this._errorCode = ERROR_SOLVE_PUZZLE;
+    }
+
+    onWorkStarted() {
+        this.signalStarted();
     }
 
     onWorkCompleted() {
