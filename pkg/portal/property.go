@@ -289,8 +289,8 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, user *dbgen.User) 
 func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	puzzle, err := puzzle.NewPuzzle()
-	if err != nil {
+	puzzle := puzzle.NewPuzzle()
+	if err := puzzle.Init(); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}

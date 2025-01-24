@@ -68,8 +68,8 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	puzzle, err := puzzle.NewPuzzle()
-	if err != nil {
+	puzzle := puzzle.NewPuzzle()
+	if err := puzzle.Init(); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

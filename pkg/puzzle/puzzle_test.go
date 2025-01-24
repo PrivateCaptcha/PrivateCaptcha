@@ -16,7 +16,7 @@ func randInit(data []byte) {
 func TestPuzzleUnmarshalFail(t *testing.T) {
 	t.Parallel()
 
-	puzzle, _ := NewPuzzle()
+	puzzle := NewPuzzle()
 
 	randInit(puzzle.PropertyID[:])
 
@@ -34,7 +34,7 @@ func TestPuzzleUnmarshalFail(t *testing.T) {
 func TestPuzzleMarshalling(t *testing.T) {
 	t.Parallel()
 	// Create a sample Puzzle
-	puzzle, _ := NewPuzzle()
+	puzzle := NewPuzzle()
 
 	randInit(puzzle.PropertyID[:])
 

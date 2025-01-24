@@ -179,8 +179,9 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
-	puzzle, err := puzzle.NewPuzzle()
-	if err != nil {
+	puzzle := puzzle.NewPuzzle()
+
+	if err := puzzle.Init(); err != nil {
 		return nil, err
 	}
 

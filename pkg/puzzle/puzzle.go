@@ -29,7 +29,7 @@ type Puzzle struct {
 	UserData       []byte
 }
 
-func NewPuzzle() (*Puzzle, error) {
+func NewPuzzle() *Puzzle {
 	p := &Puzzle{
 		UserData:       make([]byte, UserDataSize),
 		Expiration:     time.Now().UTC().Add(ValidityPeriod),
@@ -40,12 +40,16 @@ func NewPuzzle() (*Puzzle, error) {
 
 	p.PuzzleID = randv2.Uint64()
 
+	return p
+}
+
+func (p *Puzzle) Init() error {
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
 		slog.Error("Failed to read random user data", common.ErrAttr(err))
-		return nil, err
+		return err
 	}
 
-	return p, nil
+	return nil
 }
 
 func (p *Puzzle) Valid() bool {
