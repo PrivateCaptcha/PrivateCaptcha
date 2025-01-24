@@ -219,13 +219,13 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
-	var userLevel leakybucket.TLevel = 0
+	var baseLevel leakybucket.TLevel = 0
 	tnow := time.Now()
 	if ipLevel, ok := ctx.Value(common.RateLimitLevelContextKey).(leakybucket.TLevel); ok {
 		// this will account for case when users from single IP are accessing multiple properties
-		userLevel = ipLevel
+		baseLevel = ipLevel
 	}
-	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, userLevel, tnow)
+	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, baseLevel, tnow)
 
 	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
 

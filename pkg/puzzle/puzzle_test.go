@@ -13,6 +13,14 @@ func randInit(data []byte) {
 	}
 }
 
+func TestNewPuzzleIsZero(t *testing.T) {
+	t.Parallel()
+
+	if !NewPuzzle().IsZero() {
+		t.Error("new puzzle is not zero!")
+	}
+}
+
 func TestPuzzleUnmarshalFail(t *testing.T) {
 	t.Parallel()
 

@@ -14,9 +14,11 @@ import (
 )
 
 const (
-	PropertyIDSize = 16
-	UserDataSize   = 16
-	ValidityPeriod = 6 * time.Hour
+	PropertyIDSize    = 16
+	UserDataSize      = 16
+	ValidityPeriod    = 6 * time.Hour
+	defaultDifficulty = 65
+	puzzleVersion     = 1
 )
 
 type Puzzle struct {
@@ -30,26 +32,32 @@ type Puzzle struct {
 }
 
 func NewPuzzle() *Puzzle {
-	p := &Puzzle{
-		UserData:       make([]byte, UserDataSize),
-		Expiration:     time.Now().UTC().Add(ValidityPeriod),
-		Difficulty:     65,
+	return &Puzzle{
+		Version:        puzzleVersion,
+		Difficulty:     0,
 		SolutionsCount: 16,
-		Version:        1,
+		PropertyID:     [16]byte{},
+		PuzzleID:       0,
+		UserData:       make([]byte, UserDataSize),
+		Expiration:     time.Time{},
 	}
-
-	p.PuzzleID = randv2.Uint64()
-
-	return p
 }
 
 func (p *Puzzle) Init() error {
+	p.PuzzleID = randv2.Uint64()
+	p.Difficulty = defaultDifficulty
+	p.Expiration = time.Now().UTC().Add(ValidityPeriod)
+
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
 		slog.Error("Failed to read random user data", common.ErrAttr(err))
 		return err
 	}
 
 	return nil
+}
+
+func (p *Puzzle) IsZero() bool {
+	return (p.Difficulty == 0) && (p.PuzzleID == 0) && p.Expiration.IsZero()
 }
 
 func (p *Puzzle) Valid() bool {
