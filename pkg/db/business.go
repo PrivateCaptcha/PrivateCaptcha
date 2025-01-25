@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -16,19 +17,25 @@ import (
 )
 
 var (
-	ErrInvalidInput     = errors.New("invalid input")
-	ErrRecordNotFound   = errors.New("record not found")
-	ErrSoftDeleted      = errors.New("record is marked as deleted")
-	ErrDuplicateAccount = errors.New("this subscrption already has an account")
-	ErrLocked           = errors.New("lock is already acquired")
-	ErrMaintenance      = errors.New("maintenance mode")
-	errInvalidCacheType = errors.New("cache record type does not match")
-	markerData          = []byte{'{', '}'}
+	ErrInvalidInput       = errors.New("invalid input")
+	ErrRecordNotFound     = errors.New("record not found")
+	ErrSoftDeleted        = errors.New("record is marked as deleted")
+	ErrDuplicateAccount   = errors.New("this subscrption already has an account")
+	ErrLocked             = errors.New("lock is already acquired")
+	ErrMaintenance        = errors.New("maintenance mode")
+	ErrTestProperty       = errors.New("test property")
+	errInvalidCacheType   = errors.New("cache record type does not match")
+	markerData            = []byte{'{', '}'}
+	TestPropertySitekey   = strings.ReplaceAll(TestPropertyID, "-", "")
+	PortalLoginSitekey    = strings.ReplaceAll(PortalLoginPropertyID, "-", "")
+	PortalRegisterSitekey = strings.ReplaceAll(PortalRegisterPropertyID, "-", "")
+	TestPropertyUUID      = UUIDFromSiteKey(TestPropertySitekey)
 )
 
 const (
 	PortalLoginPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
 	PortalRegisterPropertyID = "8981be7a-3a71-414d-bb74-e7b4456603fd"
+	TestPropertyID           = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 )
 
 type BusinessStore struct {
@@ -87,6 +94,10 @@ func (s *BusinessStore) DeleteExpiredCache(ctx context.Context) error {
 }
 
 func (s *BusinessStore) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
+	if sitekey == TestPropertySitekey {
+		return nil, ErrTestProperty
+	}
+
 	return s.impl().getCachedPropertyBySitekey(ctx, sitekey)
 }
 

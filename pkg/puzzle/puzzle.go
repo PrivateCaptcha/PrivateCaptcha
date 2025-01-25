@@ -5,20 +5,17 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"io"
-	"log/slog"
 	randv2 "math/rand/v2"
 	"strconv"
 	"time"
-
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 const (
-	PropertyIDSize    = 16
-	UserDataSize      = 16
-	ValidityPeriod    = 6 * time.Hour
-	defaultDifficulty = 65
-	puzzleVersion     = 1
+	PropertyIDSize = 16
+	UserDataSize   = 16
+	ValidityPeriod = 6 * time.Hour
+	puzzleVersion  = 1
+	solutionsCount = 16
 )
 
 type Puzzle struct {
@@ -35,7 +32,7 @@ func NewPuzzle() *Puzzle {
 	return &Puzzle{
 		Version:        puzzleVersion,
 		Difficulty:     0,
-		SolutionsCount: 16,
+		SolutionsCount: solutionsCount,
 		PropertyID:     [16]byte{},
 		PuzzleID:       0,
 		UserData:       make([]byte, UserDataSize),
@@ -43,13 +40,20 @@ func NewPuzzle() *Puzzle {
 	}
 }
 
-func (p *Puzzle) Init() error {
-	p.PuzzleID = randv2.Uint64()
-	p.Difficulty = defaultDifficulty
+func (p *Puzzle) Init(propertyID [16]byte, difficulty uint8) error {
+	const maxTries = 10
+	var puzzleID uint64
+
+	for i := 0; (i < maxTries) && (puzzleID == 0); i++ {
+		puzzleID = randv2.Uint64()
+	}
+
+	p.PropertyID = propertyID
+	p.PuzzleID = puzzleID
+	p.Difficulty = difficulty
 	p.Expiration = time.Now().UTC().Add(ValidityPeriod)
 
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
-		slog.Error("Failed to read random user data", common.ErrAttr(err))
 		return err
 	}
 
@@ -58,15 +62,6 @@ func (p *Puzzle) Init() error {
 
 func (p *Puzzle) IsZero() bool {
 	return (p.Difficulty == 0) && (p.PuzzleID == 0) && p.Expiration.IsZero()
-}
-
-func (p *Puzzle) Valid() bool {
-	return (p.Version > 0) &&
-		(p.Difficulty > 0) &&
-		(p.SolutionsCount > 0) &&
-		//(len(p.Nonce) == NonceSize) &&
-		(!p.Expiration.IsZero()) &&
-		(len(p.UserData) == UserDataSize)
 }
 
 func (p *Puzzle) PuzzleIDString() string {
@@ -81,7 +76,13 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 	binary.Write(&buf, binary.LittleEndian, p.PuzzleID)
 	binary.Write(&buf, binary.LittleEndian, p.Difficulty)
 	binary.Write(&buf, binary.LittleEndian, p.SolutionsCount)
-	binary.Write(&buf, binary.LittleEndian, uint32(p.Expiration.Unix()))
+
+	var expiration uint32
+	if !p.Expiration.IsZero() {
+		expiration = uint32(p.Expiration.Unix())
+	}
+	binary.Write(&buf, binary.LittleEndian, expiration)
+
 	binary.Write(&buf, binary.LittleEndian, p.UserData)
 
 	return buf.Bytes(), nil
@@ -110,7 +111,9 @@ func (p *Puzzle) UnmarshalBinary(data []byte) error {
 	offset += 1
 
 	unixExpiration := int64(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	p.Expiration = time.Unix(unixExpiration, 0)
+	if unixExpiration != 0 {
+		p.Expiration = time.Unix(unixExpiration, 0)
+	}
 	offset += 4
 
 	p.UserData = make([]byte, UserDataSize)

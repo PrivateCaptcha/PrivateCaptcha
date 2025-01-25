@@ -330,3 +330,42 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestVerifyTestProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.TestPropertySitekey, "localhost")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := db.UUIDToSecret(apikey.ExternalID)
+
+	resp, err := verifySuite(payload, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected verify status code %d", resp.StatusCode)
+	}
+
+	if err := checkVerifyError(resp, puzzle.TestPropertyError); err != nil {
+		t.Fatal(err)
+	}
+}

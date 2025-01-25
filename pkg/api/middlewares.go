@@ -397,6 +397,8 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 			case db.ErrInvalidInput:
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 				return
+			case db.ErrTestProperty:
+				// BUMP
 			case db.ErrCacheMiss:
 				// backfill in the background
 				am.sitekeyChan <- sitekey

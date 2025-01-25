@@ -49,6 +49,7 @@ export class CaptchaElement extends HTMLElement {
         // create shadow dom root
         this._root = this.attachShadow({ mode: 'open' });
         this._debug = this.getAttribute('debug');
+        this._error = null;
         this._displayMode = this.getAttribute('display-mode');
         this._lang = this.getAttribute('lang');
         if (!(this._lang in i18n.STRINGS)) {
@@ -118,8 +119,9 @@ export class CaptchaElement extends HTMLElement {
                 break;
         }
 
-        if (this._debug) {
-            activeArea += `<span id="${DEBUG_ID}">[${state}]</span>`;
+        if (this._debug || this._error) {
+            const debugText = this._error ? this._error : state;
+            activeArea += `<span id="${DEBUG_ID}"${this._error ? ' class="warn"' : ''}>[${debugText}]</span>`;
         }
 
         let displayClass = '';
@@ -178,10 +180,15 @@ export class CaptchaElement extends HTMLElement {
         }
     }
 
+    setError(value) {
+        this._error = value;
+    }
+
     setDebugState(state) {
         const debugElement = this._root.getElementById(DEBUG_ID);
         if (debugElement) {
-            debugElement.innerHTML = `[${state}]`;
+            const debugText = this._error ? this._error : state;
+            debugElement.innerHTML = `[${debugText}]`;
         }
     }
 

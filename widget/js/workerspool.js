@@ -23,11 +23,20 @@ export class WorkersPool {
         }, callbacks);
     }
 
-    init(puzzleID, puzzleData, autoStart) {
+    init(puzzle, autoStart) {
+        if (!puzzle) { return; }
+        if (puzzle.isZero()) {
+            if (this._debug) { console.debug('[privatecaptcha][pool] skipping initializing workers'); }
+            setTimeout(() => this._callbacks.workersReady(autoStart), 0);
+            return;
+        }
+
         const workersCount = 4;
         let readyWorkers = 0;
         const workers = [];
-        const pool = this;
+
+        const puzzleID = puzzle.ID;
+        const puzzleData = puzzle.puzzleBuffer;
 
         for (let i = 0; i < workersCount; i++) {
             const worker = new PuzzleWorker();
@@ -40,16 +49,16 @@ export class WorkersPool {
                     case "init":
                         readyWorkers++;
                         if (readyWorkers === workersCount) {
-                            pool._callbacks.workersReady(autoStart);
+                            this._callbacks.workersReady(autoStart);
                         }
                         break;
                     case "solve":
                         const { id, solution, wasm } = event.data.argument;
-                        pool.onSolutionFound(id, solution, wasm);
+                        this.onSolutionFound(id, solution, wasm);
                         break;
                     case "error":
                         if (event.data.error) {
-                            pool._callbacks.workerError(event.data.error);
+                            this._callbacks.workerError(event.data.error);
                         }
                         break;
                     default:
@@ -60,7 +69,6 @@ export class WorkersPool {
         }
 
         this._workers = workers;
-        this._puzzleID = puzzleID;
 
         if (this._debug) { console.debug(`[privatecaptcha][pool] initializing workers. count=${this._workers.length}`); }
         for (let i = 0; i < this._workers.length; i++) {
@@ -76,6 +84,7 @@ export class WorkersPool {
 
     solve(puzzle) {
         if (!puzzle) { return; }
+
         if (this._debug) { console.debug('[privatecaptcha][pool] starting solving'); }
         this._solutions = [];
         this._solutionsCount = puzzle.solutionsCount;
@@ -83,11 +92,11 @@ export class WorkersPool {
         this._timeStarted = Date.now();
         this._timeFinished = null;
 
-        const requiresSolving = (puzzle.difficulty > 0);
-        const stubSolution = requiresSolving ? null : new Uint8Array(8);
+        const skipSolving = puzzle.isZero() || (puzzle.solutionsCount === 0);
+        let stubSolution = null;
 
         for (let i = 0; i < puzzle.solutionsCount; i++) {
-            if (requiresSolving) {
+            if (!skipSolving) {
                 this._workers[i % this._workers.length].postMessage({
                     command: "solve",
                     argument: {
@@ -97,14 +106,15 @@ export class WorkersPool {
                     },
                 });
             } else {
+                if (!stubSolution) { stubSolution = new Uint8Array(8); }
                 this._solutions.push(stubSolution);
             }
         }
 
         this._callbacks.workStarted();
 
-        if (!requiresSolving) {
-            this.onWorkCompleted();
+        if (skipSolving) {
+            setTimeout(() => this.onWorkCompleted(), 0);
         }
     }
 

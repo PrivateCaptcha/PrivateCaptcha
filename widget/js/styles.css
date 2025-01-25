@@ -5,6 +5,7 @@
         --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
         --label-spacing: 10px;
         --border-radius: 2px;
+        --warn-color: #DD1C1A;
         --accent-color: #0080A0;
     }
 }
@@ -178,4 +179,8 @@ svg.verified polyline {
     position: absolute;
     top: 100%;
     left: 50px; /*30px checkbox + 2*10 margins*/
+}
+
+#pc-debug.warn {
+    color: var(--warn-color);
 }

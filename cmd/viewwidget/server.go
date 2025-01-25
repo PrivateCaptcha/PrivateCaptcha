@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha1"
 	"encoding/base64"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
@@ -39,6 +41,7 @@ func (s *server) Setup(router *http.ServeMux) {
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.Handle(prefix+common.PuzzleEndpoint, monitoring.Logged(http.HandlerFunc(s.chaos(s.puzzle))))
+	router.Handle(prefix+common.EchoPuzzleEndpoint, monitoring.Logged(http.HandlerFunc(s.chaos(s.zeroPuzzle))))
 	router.Handle(http.MethodPost+" "+prefix+"submit", monitoring.Logged(http.HandlerFunc(s.submit)))
 }
 
@@ -47,6 +50,7 @@ func (s *server) chaos(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		nowCount := atomic.AddInt32(&s.count, 1)
 		if nowCount%2 == 1 {
+			slog.WarnContext(r.Context(), "Chaos")
 			http.Error(w, "chaos", http.StatusInternalServerError)
 		} else {
 			next.ServeHTTP(w, r)
@@ -54,7 +58,6 @@ func (s *server) chaos(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// mostly copy-paste from api/server.go
 func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -69,15 +72,37 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init(); err != nil {
+	if err := puzzle.Init([16]byte{}, 90); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	puzzle.Difficulty = 90
+	s.writePuzzle(ctx, puzzle, w)
+}
 
-	puzzleBytes, err := puzzle.MarshalBinary()
+func (s *server) zeroPuzzle(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	if (r.Method != http.MethodGet) && (r.Method != http.MethodOptions) {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	p := puzzle.NewPuzzle()
+	p.PropertyID = db.TestPropertyUUID.Bytes
+
+	s.writePuzzle(ctx, p, w)
+}
+
+// mostly copy-paste from api/server.go
+func (s *server) writePuzzle(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) {
+	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

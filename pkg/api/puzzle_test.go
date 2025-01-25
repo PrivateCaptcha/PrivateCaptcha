@@ -247,8 +247,32 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !p.Valid() {
-		t.Errorf("Response puzzle is not valid")
+	if p.IsZero() {
+		t.Errorf("Response puzzle is zero")
+	}
+}
+
+func TestGetTestPuzzle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	resp, err := puzzleSuite(db.TestPropertySitekey, "localhost" /*domain*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	p, _, err := parsePuzzle(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !p.IsZero() {
+		t.Errorf("Test puzzle respons is not zero puzzle")
 	}
 }
 

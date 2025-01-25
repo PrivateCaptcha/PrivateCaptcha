@@ -120,8 +120,7 @@ export class Puzzle {
         this.solutionsCount = data[offset];
         offset += 1;
 
-        const timestamp = readUInt32LE(data, offset);
-        this.expiration = new Date(timestamp * 1000);
+        this.expirationTimestamp = readUInt32LE(data, offset);
         offset += 4;
 
         offset += 4; // AccountID
@@ -140,9 +139,16 @@ export class Puzzle {
         }
     }
 
+    isZero() {
+        return (this.ID === 0n) && (this.difficulty === 0) && (this.expirationTimestamp === 0);
+    }
+
     expirationMillis() {
+        if (!this.expirationTimestamp) { return 0; }
+
+        const expiration = new Date(this.expirationTimestamp * 1000);
         const currentDate = new Date();
-        const diff = this.expiration - currentDate;
+        const diff = expiration - currentDate;
         return diff;
     }
 };

@@ -54,7 +54,7 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalLoginPropertyID, "-", "")),
+		captchaRenderContext: s.createCaptchaRenderContext(db.PortalLoginSitekey),
 		CanRegister:          s.canRegister.Load(),
 	}, loginTemplate, nil
 }
@@ -73,7 +73,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalLoginPropertyID, "-", "")),
+		captchaRenderContext: s.createCaptchaRenderContext(db.PortalLoginSitekey),
 		CanRegister:          s.canRegister.Load(),
 	}
 

@@ -31,6 +31,7 @@ const (
 	WrongOwnerError         VerifyError = 7
 	VerifiedBeforeError     VerifyError = 8
 	MaintenanceModeError    VerifyError = 9
+	TestPropertyError       VerifyError = 10
 )
 
 func (verr VerifyError) String() string {
@@ -55,6 +56,8 @@ func (verr VerifyError) String() string {
 		return "solution-verified-before"
 	case MaintenanceModeError:
 		return "maintenance-mode"
+	case TestPropertyError:
+		return "property-test"
 	default:
 		return "error"
 	}

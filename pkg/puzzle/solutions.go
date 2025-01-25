@@ -83,6 +83,17 @@ type Solutions struct {
 	Metadata *Metadata
 }
 
+func emptySolutions(count int) *Solutions {
+	return &Solutions{
+		Buffer: make([]byte, count*SolutionLength),
+		Metadata: &Metadata{
+			ErrorCode:     0,
+			WasmFlag:      false,
+			ElapsedMillis: 0,
+		},
+	}
+}
+
 func NewSolutions(data string) (*Solutions, error) {
 	if len(data) == 0 {
 		return nil, errEmptyEncodedSolutions

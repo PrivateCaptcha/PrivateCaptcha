@@ -98,6 +98,7 @@ export class CaptchaWidget {
         const startWorkers = (this._options.startMode == "auto") || autoStart;
 
         try {
+            this._puzzle = null;
             this._solution = null;
             this._errorCode = ERROR_NO_ERROR;
             this.setState(STATE_LOADING);
@@ -105,10 +106,10 @@ export class CaptchaWidget {
             const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
             this._puzzle = new Puzzle(puzzleData);
             const expirationMillis = this._puzzle.expirationMillis();
-            this.trace(`parsed puzzle buffer. ttl=${expirationMillis / 1000}`);
+            this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
-            this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis);
-            this._workersPool.init(this._puzzle.ID, this._puzzle.puzzleBuffer, startWorkers);
+            if (expirationMillis) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
+            this._workersPool.init(this._puzzle, startWorkers);
         } catch (e) {
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
@@ -214,6 +215,7 @@ export class CaptchaWidget {
 
         switch (this._state) {
             case STATE_READY:
+                // NOTE: in case of short-circuit (zero/test puzzle), start() can call all callbacks before exit
                 this.start();
                 break;
             case STATE_EMPTY:
@@ -262,6 +264,8 @@ export class CaptchaWidget {
     }
 
     onWorkCompleted() {
+        this.trace('[privatecaptcha] work completed');
+
         if (this._state !== STATE_IN_PROGRESS) {
             console.warn(`[privatecaptcha] solving has not been started. state=${this._state}`);
             return;
@@ -312,9 +316,21 @@ export class CaptchaWidget {
     setState(state) {
         this.trace(`change state. old=${this._state} new=${state}`);
         this._state = state;
-        if (this._options.debug) {
+        if (this._options.debug ||
+            !this._puzzle ||
+            this._puzzle.isZero()) {
             const pcElement = this._element.querySelector('private-captcha');
-            if (pcElement) { pcElement.setDebugState(state); }
+            if (pcElement) {
+                if (STATE_ERROR == state) {
+                    pcElement.setError('error');
+                } else if (this._puzzle && this._puzzle.isZero()) {
+                    pcElement.setError('testing');
+                } else if (!this._puzzle) {
+                    pcElement.setError(null);
+                }
+
+                pcElement.setDebugState(state);
+            }
         }
     }
 

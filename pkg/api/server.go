@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
@@ -59,6 +60,7 @@ type server struct {
 	cors            *cors.Cors
 	metrics         monitoring.Metrics
 	mailer          common.Mailer
+	testPuzzleData  []byte
 }
 
 var _ puzzle.Engine = (*server)(nil)
@@ -71,6 +73,7 @@ func NewServer(store *db.BusinessStore,
 	metrics monitoring.Metrics,
 	mailer common.Mailer,
 	getenv func(string) string) *server {
+
 	srv := &server{
 		stage:         getenv("STAGE"),
 		businessDB:    store,
@@ -82,6 +85,10 @@ func NewServer(store *db.BusinessStore,
 		metrics:       metrics,
 		mailer:        mailer,
 	}
+
+	testPuzzle := puzzle.NewPuzzle()
+	testPuzzle.PropertyID = db.TestPropertyUUID.Bytes
+	srv.testPuzzleData, _ = srv.serializePuzzle(context.TODO(), testPuzzle)
 
 	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
 		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/, nil /*cleanup callback*/)
@@ -179,28 +186,27 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 }
 
 func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
-	puzzle := puzzle.NewPuzzle()
-
-	if err := puzzle.Init(); err != nil {
-		return nil, err
-	}
-
 	ctx := r.Context()
 	property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	// property will not be cached for auth.backfillDelay and we return an "average" puzzle instead
 	// this is done in order to not check the DB on the hot path (decrease attack surface)
 	if !ok {
 		sitekey := ctx.Value(common.SitekeyContextKey).(string)
-		uuid := db.UUIDFromSiteKey(sitekey)
-		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
-		puzzle.PropertyID = uuid.Bytes
-		puzzle.Difficulty = uint8(common.DifficultyLevelMedium)
-		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "sitekey", sitekey,
-			"difficulty", puzzle.Difficulty)
-		return puzzle, nil
-	}
+		if sitekey == db.TestPropertySitekey {
+			return nil, db.ErrTestProperty
+		}
 
-	puzzle.PropertyID = property.ExternalID.Bytes
+		uuid := db.UUIDFromSiteKey(sitekey)
+		stubPuzzle := puzzle.NewPuzzle()
+		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
+		if err := stubPuzzle.Init(uuid.Bytes, uint8(common.DifficultyLevelMedium)); err != nil {
+			slog.ErrorContext(ctx, "Failed to init stub puzzle", common.ErrAttr(err))
+		}
+
+		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "puzzleID", stubPuzzle.PuzzleID, "sitekey", sitekey,
+			"difficulty", stubPuzzle.Difficulty)
+		return stubPuzzle, nil
+	}
 
 	var fingerprint common.TFingerprint
 	hash, err := blake2b.New256(s.uaKey[:])
@@ -225,11 +231,17 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		// this will account for case when users from single IP are accessing multiple properties
 		baseLevel = ipLevel
 	}
-	puzzle.Difficulty = s.levels.Difficulty(fingerprint, property, baseLevel, tnow)
 
-	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", puzzle.Difficulty)
+	puzzleDifficulty := s.levels.Difficulty(fingerprint, property, baseLevel, tnow)
 
-	return puzzle, nil
+	result := puzzle.NewPuzzle()
+	if err := result.Init(property.ExternalID.Bytes, puzzleDifficulty); err != nil {
+		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
+	}
+
+	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty, "puzzleID", result.PuzzleID)
+
+	return result, nil
 }
 
 func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
@@ -240,6 +252,11 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
+		if err == db.ErrTestProperty {
+			s.writePuzzleData(ctx, s.testPuzzleData, w)
+			return
+		}
+
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -248,12 +265,11 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	s.Write(ctx, puzzle, w)
 }
 
-func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
+func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) ([]byte, error) {
 	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
-		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-		return err
+		return nil, err
 	}
 
 	hasher := hmac.New(sha1.New, s.salt)
@@ -266,14 +282,28 @@ func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWri
 	encodedHash := base64.StdEncoding.EncodeToString(hash)
 	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
 
+	return response, nil
+}
+
+func (s *server) writePuzzleData(ctx context.Context, data []byte, w http.ResponseWriter) error {
 	common.WriteNoCache(w)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	if _, werr := w.Write(response); werr != nil {
+	if _, werr := w.Write(data); werr != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
 		return werr
 	}
 
 	return nil
+}
+
+func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
+	response, err := s.serializePuzzle(ctx, p)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return err
+	}
+
+	return s.writePuzzleData(ctx, response, w)
 }
 
 func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
@@ -327,12 +357,14 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	vr2 := &verifyResponseRecaptchaV2{
 		verifyResponse: verifyResponse{
-			Success:    (verr == puzzle.VerifyNoError) || (verr == puzzle.MaintenanceModeError),
+			Success: (verr == puzzle.VerifyNoError) ||
+				(verr == puzzle.MaintenanceModeError) ||
+				(verr == puzzle.TestPropertyError),
 			ErrorCodes: puzzle.ErrorCodesToStrings(errorCodes),
 		},
 	}
 
-	if p != nil {
+	if p != nil && !p.IsZero() {
 		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.ValidityPeriod))
 
 		sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
@@ -381,6 +413,11 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, expe
 	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
 		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
 		return nil, nil, puzzle.ParseResponseError
+	}
+
+	if p.IsZero() && bytes.Equal(p.PropertyID[:], db.TestPropertyUUID.Bytes[:]) {
+		slog.DebugContext(ctx, "Verifying test puzzle")
+		return p, nil, puzzle.TestPropertyError
 	}
 
 	if !tnow.Before(p.Expiration) {

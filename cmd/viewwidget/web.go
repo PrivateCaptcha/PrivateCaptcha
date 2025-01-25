@@ -40,9 +40,11 @@ func staticHandler() http.Handler {
 			}
 
 			data := struct {
+				Echo  bool
 				Debug bool
 				Mode  string
 			}{
+				Echo:  r.URL.Query().Get("echo") == "true",
 				Debug: r.URL.Query().Get("debug") == "true",
 				Mode:  r.URL.Query().Get("mode"),
 			}

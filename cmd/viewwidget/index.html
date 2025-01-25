@@ -42,7 +42,7 @@
                             </div>
                             <div class="private-captcha mt-8"
                                 data-sitekey="your-sitekey"
-                                data-puzzle-endpoint="/puzzle"
+                                data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle"
                                 data-started-callback="onCaptchaStarted" 
                                 data-finished-callback="onCaptchaSolved"
                                 data-errored-callback="onCaptchaErrored"

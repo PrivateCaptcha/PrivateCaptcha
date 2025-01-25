@@ -57,6 +57,10 @@ func normalizePuzzleBuffer(buf []byte) []byte {
 }
 
 func (s *Solver) Solve(p *Puzzle) (*Solutions, error) {
+	if p.IsZero() {
+		return emptySolutions(max(int(p.SolutionsCount), solutionsCount)), nil
+	}
+
 	var wg sync.WaitGroup
 
 	buf, err := p.MarshalBinary()

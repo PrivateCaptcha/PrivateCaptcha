@@ -289,12 +289,6 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, user *dbgen.User) 
 func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init(); err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
-		return
-	}
-
 	var level common.DifficultyLevel
 	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
 		level = difficultyLevelFromValue(ctx, difficultyParam)
@@ -302,11 +296,15 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
 		level = common.DifficultyLevelSmall
 	}
-	puzzle.Difficulty = uint8(level)
 
 	sitekey := r.URL.Query().Get(common.ParamSiteKey)
 	uuid := db.UUIDFromSiteKey(sitekey)
-	puzzle.PropertyID = uuid.Bytes
+
+	puzzle := puzzle.NewPuzzle()
+	if err := puzzle.Init(uuid.Bytes, uint8(level)); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
 
 	_ = s.PuzzleEngine.Write(ctx, puzzle, w)
 }

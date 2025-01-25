@@ -44,7 +44,7 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalRegisterPropertyID, "-", "")),
+		captchaRenderContext: s.createCaptchaRenderContext(db.PortalRegisterSitekey),
 	}, "register/register.html", nil
 }
 
@@ -68,7 +68,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		csrfRenderContext: csrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(strings.ReplaceAll(db.PortalRegisterPropertyID, "-", "")),
+		captchaRenderContext: s.createCaptchaRenderContext(db.PortalRegisterSitekey),
 	}
 
 	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.CaptchaSitekey}

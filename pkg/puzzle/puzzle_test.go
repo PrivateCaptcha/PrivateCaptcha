@@ -39,12 +39,45 @@ func TestPuzzleUnmarshalFail(t *testing.T) {
 	}
 }
 
+func checkPuzzles(oldPuzzle, newPuzzle *Puzzle, t *testing.T) {
+	if !bytes.Equal(oldPuzzle.PropertyID[:], newPuzzle.PropertyID[:]) {
+		t.Errorf("PropertyID does not match")
+	}
+
+	if oldPuzzle.PuzzleID != newPuzzle.PuzzleID {
+		t.Errorf("PuzzleID does not match")
+	}
+
+	if oldPuzzle.Expiration.Unix() != newPuzzle.Expiration.Unix() {
+		t.Errorf("Expiration does not match: old (%v), new (%v)", oldPuzzle.Expiration, newPuzzle.Expiration)
+	}
+
+	if oldPuzzle.Difficulty != newPuzzle.Difficulty {
+		t.Errorf("Difficulty does not match")
+	}
+
+	if oldPuzzle.SolutionsCount != newPuzzle.SolutionsCount {
+		t.Errorf("SolutionsCount does not match")
+	}
+
+	if oldPuzzle.Version != newPuzzle.Version {
+		t.Errorf("Version does not match")
+	}
+
+	if !bytes.Equal(oldPuzzle.UserData, newPuzzle.UserData) {
+		t.Errorf("UserData does not match")
+	}
+}
+
 func TestPuzzleMarshalling(t *testing.T) {
 	t.Parallel()
 	// Create a sample Puzzle
 	puzzle := NewPuzzle()
 
-	randInit(puzzle.PropertyID[:])
+	propertyID := [16]byte{}
+	randInit(propertyID[:])
+
+	puzzle.Init(propertyID, 123)
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()
@@ -58,31 +91,27 @@ func TestPuzzleMarshalling(t *testing.T) {
 		t.Fatalf("Error unmarshalling: %v", err)
 	}
 
-	if !bytes.Equal(puzzle.PropertyID[:], newPuzzle.PropertyID[:]) {
-		t.Errorf("PropertyID does not match")
+	checkPuzzles(puzzle, &newPuzzle, t)
+}
+
+func TestZeroPuzzleMarshalling(t *testing.T) {
+	t.Parallel()
+	// Create a sample Puzzle
+	puzzle := NewPuzzle()
+
+	//puzzle.Init(propertyID, 123)
+
+	// Marshal the Puzzle to a byte slice
+	data, err := puzzle.MarshalBinary()
+	if err != nil {
+		t.Fatalf("Error marshalling: %v", err)
 	}
 
-	if puzzle.PuzzleID != newPuzzle.PuzzleID {
-		t.Errorf("PuzzleID does not match")
+	// Unmarshal the byte slice into a new Puzzle
+	var newPuzzle Puzzle
+	if err := newPuzzle.UnmarshalBinary(data); err != nil {
+		t.Fatalf("Error unmarshalling: %v", err)
 	}
 
-	if puzzle.Expiration.Unix() != newPuzzle.Expiration.Unix() {
-		t.Errorf("Expiration does not match")
-	}
-
-	if puzzle.Difficulty != newPuzzle.Difficulty {
-		t.Errorf("Difficulty does not match")
-	}
-
-	if puzzle.SolutionsCount != newPuzzle.SolutionsCount {
-		t.Errorf("SolutionsCount does not match")
-	}
-
-	if puzzle.Version != newPuzzle.Version {
-		t.Errorf("Version does not match")
-	}
-
-	if !bytes.Equal(puzzle.UserData, newPuzzle.UserData) {
-		t.Errorf("UserData does not match")
-	}
+	checkPuzzles(puzzle, &newPuzzle, t)
 }
