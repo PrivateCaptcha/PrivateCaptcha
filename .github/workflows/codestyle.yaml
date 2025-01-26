@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: 'write'
 
 jobs:
   build:
@@ -40,6 +41,16 @@ jobs:
       run: |
         git status -s | grep ' M ' | cut -f3 -d' ' | grep -v "\.\(go\|js\|css\|sh\|html\)$" | xargs git checkout
         git checkout -- pkg/db/generated
+
+    - name: Check for changes
+      env:
+        GH_TOKEN: ${{ secrets. GITHUB_TOKEN }}
+      run: |
+        if [ -z "$(git status --porcelain)" ]; then
+          echo "No changes to commit"
+          gh run cancel ${{ github.run_id }}
+          gh run watch ${{ github.run_id }}
+        fi
 
     - name: Commit changes
       run: |
