@@ -253,6 +253,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
 		if err == db.ErrTestProperty {
+			common.WriteCached(w)
 			s.writePuzzleData(ctx, s.testPuzzleData, w)
 			return
 		}
@@ -286,7 +287,6 @@ func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) ([]byte,
 }
 
 func (s *server) writePuzzleData(ctx context.Context, data []byte, w http.ResponseWriter) error {
-	common.WriteNoCache(w)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
 	if _, werr := w.Write(data); werr != nil {
 		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
@@ -303,6 +303,7 @@ func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWri
 		return err
 	}
 
+	common.WriteNoCache(w)
 	return s.writePuzzleData(ctx, response, w)
 }
 
