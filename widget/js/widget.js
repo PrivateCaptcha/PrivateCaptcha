@@ -49,6 +49,10 @@ export class CaptchaWidget {
             this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" theme="${this._options.theme}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ''}></private-captcha>`;
             this._element.addEventListener('check', this.onChecked.bind(this));
 
+            if (this._options.storeVariable) {
+                this._element.dataset[this._options.storeVariable] = this;
+            }
+
             if (DISPLAY_POPUP === this._options.displayMode) {
                 const anchor = form.querySelector(".private-captcha-anchor");
                 if (anchor) {
@@ -73,6 +77,7 @@ export class CaptchaWidget {
             lang: this._element.dataset["lang"] || "en",
             theme: this._element.dataset["theme"] || "light",
             styles: this._element.dataset["styles"] || "",
+            storeVariable: this._element.dataset["storeVariable"] || null,
         }, options);
     }
 
