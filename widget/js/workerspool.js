@@ -34,7 +34,7 @@ export class WorkersPool {
         const workersCount = 4;
         let readyWorkers = 0;
         const workers = [];
-
+        const pool = this;
         const puzzleID = puzzle.ID;
         const puzzleData = puzzle.puzzleBuffer;
 
@@ -49,16 +49,16 @@ export class WorkersPool {
                     case "init":
                         readyWorkers++;
                         if (readyWorkers === workersCount) {
-                            this._callbacks.workersReady(autoStart);
+                            pool._callbacks.workersReady(autoStart);
                         }
                         break;
                     case "solve":
                         const { id, solution, wasm } = event.data.argument;
-                        this.onSolutionFound(id, solution, wasm);
+                        pool.onSolutionFound(id, solution, wasm);
                         break;
                     case "error":
                         if (event.data.error) {
-                            this._callbacks.workerError(event.data.error);
+                            pool._callbacks.workerError(event.data.error);
                         }
                         break;
                     default:

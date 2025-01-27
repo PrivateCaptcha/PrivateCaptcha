@@ -142,21 +142,21 @@ export class CaptchaWidget {
     signalStarted() {
         const callback = this._element.dataset['startedCallback'];
         if (callback) {
-            window[callback]();
+            window[callback](this);
         }
     }
 
     signalFinished() {
         const callback = this._element.dataset['finishedCallback'];
         if (callback) {
-            window[callback](this._solution);
+            window[callback](this);
         }
     }
 
     signalErrored() {
         const callback = this._element.dataset['erroredCallback'];
         if (callback) {
-            window[callback]();
+            window[callback](this);
         }
     }
 
@@ -193,6 +193,10 @@ export class CaptchaWidget {
         this.init(this._userStarted);
     }
 
+    solution() {
+        return this._solution;
+    }
+
     onFocusIn(event) {
         this.trace('onFocusIn event handler');
         const pcElement = this._element.querySelector('private-captcha');
@@ -203,6 +207,12 @@ export class CaptchaWidget {
         this.init(false /*start*/);
         // this handles both STATE_LOADING and STATE_EMPTY (reset)
         this.setProgressState(this._state);
+    }
+
+    execute() {
+        this.onChecked();
+        // this promise intentionally does not resolve so that the form can be submitted via the callbacks
+        return new Promise(() => { });
     }
 
     onChecked() {
@@ -307,6 +317,11 @@ export class CaptchaWidget {
 
     // this updates the "UI" state of the widget
     setProgressState(state) {
+        if ((DISPLAY_POPUP === this._options.displayMode) && !this._userStarted) {
+            this.trace(`skipping updating progress state when hidden. state=${state}`);
+            return;
+        }
+
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) { pcElement.setState(state); }
         else { console.error('[privatecaptcha] component not found when changing state'); }
