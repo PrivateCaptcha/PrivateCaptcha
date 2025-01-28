@@ -10,6 +10,7 @@
     <script src="/widget/js/privatecaptcha.js"></script>
     <script type="text/javascript">
         function onCaptchaSolved() {
+            // setTimeout(() => document.getElementById('pcWidget')._privateCaptcha.reset(), 2000);
             document.getElementById("my-form").submit();
         }
         function onCaptchaStarted() {
@@ -41,6 +42,7 @@
                             </div>
                             <div class="private-captcha-anchor">
                                 <div class="private-captcha mt-8"
+                                    id="pcWidget"
                                     data-display-mode="popup"
                                     data-sitekey="your-sitekey"
                                     data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle"
@@ -48,10 +50,11 @@
                                     data-finished-callback="onCaptchaSolved"
                                     data-errored-callback="onCaptchaErrored"
                                     data-styles="--border-radius: .75rem;"
+                                    data-store-variable="_privateCaptcha"
                                     {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
                                     {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>
                                 </div>
-                                <button id="formSubmit" type="button" class="pc-form-button" onclick="this.disabled=true; window.privateCaptcha.autoWidget.execute()">
+                                <button id="formSubmit" type="button" class="pc-form-button" onclick="this.disabled=true; document.getElementById('pcWidget')._privateCaptcha.execute()">
                                     Submit
                                 </button>
                             </div>

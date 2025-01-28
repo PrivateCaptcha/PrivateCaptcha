@@ -15,7 +15,7 @@ export const STATE_VERIFIED = 'verified';
 
 export const DISPLAY_POPUP = 'popup';
 const DISPLAY_HIDDEN = 'hidden';
-const DISPLAY_WIDGET = 'widget';
+export const DISPLAY_WIDGET = 'widget';
 
 const RING_SIZE = 36;
 const CHECKBOX_ID = 'pc-checkbox';
@@ -75,16 +75,16 @@ export class CaptchaElement extends HTMLElement {
             this._root.adoptedStyleSheets.push(overridesSheet);
         }
         // init
-        this.setState(STATE_EMPTY);
+        this.setState(STATE_EMPTY, (this._displayMode == DISPLAY_WIDGET) /*can show*/);
     }
 
-    setState(state) {
+    setState(state, canShow) {
         if (state == this._state) {
             console.debug('[privatecaptcha][progress] already in this state: ' + state);
             return;
         }
 
-        if (this._debug) { console.debug(`[privatecaptcha][progress] change state old=${this._state} new=${state}`); }
+        if (this._debug) { console.debug(`[privatecaptcha][progress] change state. old=${this._state} new=${state}`); }
 
         let activeArea = '';
         let bindCheckEvent = false;
@@ -103,16 +103,16 @@ export class CaptchaElement extends HTMLElement {
             case STATE_READY:
                 bindCheckEvent = true;
                 activeArea = checkbox('ready') + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
-                showPopupIfNeeded = true;
+                showPopupIfNeeded = canShow;
                 break;
             case STATE_IN_PROGRESS:
                 const text = strings[i18n.VERIFYING];
                 activeArea = `<progress-ring id="${PROGRESS_ID}" stroke="12" size="${RING_SIZE}" progress="0"></progress-ring><label for="${PROGRESS_ID}">${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span></label>`;
-                showPopupIfNeeded = true;
+                showPopupIfNeeded = canShow;
                 break;
             case STATE_VERIFIED:
                 activeArea = verifiedSVG + label(strings[i18n.SUCCESS], PROGRESS_ID);
-                showPopupIfNeeded = true;
+                showPopupIfNeeded = canShow;
                 break;
             default:
                 console.error(`[privatecaptcha][progress] unknown state: ${state}`);
@@ -176,6 +176,10 @@ export class CaptchaElement extends HTMLElement {
                 progressBar.setProgress(percent);
             } else {
                 console.warn('[privatecaptcha][progress] progress element not found');
+            }
+        } else {
+            if (this._debug) {
+                console.debug("[privatecaptcha][progress] skipping updating progress when not in progress");
             }
         }
     }

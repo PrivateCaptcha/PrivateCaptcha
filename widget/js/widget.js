@@ -3,7 +3,7 @@
 import { getPuzzle, Puzzle } from './puzzle.js'
 import { encode } from 'base64-arraybuffer';
 import { WorkersPool } from './workerspool.js'
-import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP } from './html.js';
+import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
 
 window.customElements.define('private-captcha', CaptchaElement);
 
@@ -50,7 +50,7 @@ export class CaptchaWidget {
             this._element.addEventListener('check', this.onChecked.bind(this));
 
             if (this._options.storeVariable) {
-                this._element.dataset[this._options.storeVariable] = this;
+                this._element[this._options.storeVariable] = this;
             }
 
             if (DISPLAY_POPUP === this._options.displayMode) {
@@ -322,13 +322,10 @@ export class CaptchaWidget {
 
     // this updates the "UI" state of the widget
     setProgressState(state) {
-        if ((DISPLAY_POPUP === this._options.displayMode) && !this._userStarted) {
-            this.trace(`skipping updating progress state when hidden. state=${state}`);
-            return;
-        }
-
+        // NOTE: hidden display mode is taken care of inside setState() even when (_userStarted == true)
+        const canShow = this._userStarted || (DISPLAY_WIDGET === this._options.displayMode);
         const pcElement = this._element.querySelector('private-captcha');
-        if (pcElement) { pcElement.setState(state); }
+        if (pcElement) { pcElement.setState(state, canShow); }
         else { console.error('[privatecaptcha] component not found when changing state'); }
     }
 
