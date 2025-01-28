@@ -37,6 +37,7 @@ const (
 	levelsBatchSize       = 100
 	updateLimitsBatchSize = 100
 	maxVerifyBatchSize    = 100_000
+	oneDaySecondsString   = "86400"
 )
 
 var (
@@ -145,7 +146,7 @@ func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
 		AllowPrivateNetwork:        true,
 		OptionsPassthrough:         true,
 		Debug:                      verbose,
-		MaxAge:                     60, /*seconds*/
+		MaxAge:                     60 * 60, /*seconds*/
 	}
 
 	if corsOpts.Debug {
@@ -250,7 +251,9 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 	// the reason for this is that we cache test property responses
 	if sitekey, ok := ctx.Value(common.SitekeyContextKey).(string); ok && (sitekey == db.TestPropertySitekey) {
-		w.Header().Set(common.HeaderAccessControlOrigin, "*")
+		headers := w.Header()
+		headers.Set(common.HeaderAccessControlOrigin, "*")
+		headers.Set(common.HeaderAccessControlAge, oneDaySecondsString)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -263,7 +266,9 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		if err == db.ErrTestProperty {
 			common.WriteCached(w)
 			// we cache test property responses, can as well allow them anywhere
-			w.Header().Set(common.HeaderAccessControlOrigin, "*")
+			headers := w.Header()
+			headers.Set(common.HeaderAccessControlOrigin, "*")
+			headers.Set(common.HeaderAccessControlAge, oneDaySecondsString)
 			s.writePuzzleData(ctx, s.testPuzzleData, w)
 			return
 		}

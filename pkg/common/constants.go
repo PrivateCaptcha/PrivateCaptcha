@@ -16,6 +16,7 @@ const (
 	HeaderCaptchaCompat         = "X-Captcha-Compat-Version"
 	HeaderAPIKey                = "X-API-Key"
 	HeaderAccessControlOrigin   = "Access-Control-Allow-Origin"
+	HeaderAccessControlAge      = "Access-Control-Max-Age"
 	ContentTypePlain            = "text/plain"
 	ContentTypeHTML             = "text/html; charset=utf-8"
 	ContentTypeJSON             = "application/json"

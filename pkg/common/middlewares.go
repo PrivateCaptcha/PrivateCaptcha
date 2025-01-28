@@ -58,14 +58,16 @@ func Recovered(next http.Handler) http.Handler {
 }
 
 func WriteNoCache(w http.ResponseWriter) {
+	headers := w.Header()
 	for k, v := range NoCacheHeaders {
-		w.Header().Set(k, v)
+		headers.Set(k, v)
 	}
 }
 
 func WriteCached(w http.ResponseWriter) {
+	headers := w.Header()
 	for k, v := range CachedHeaders {
-		w.Header().Set(k, v)
+		headers.Set(k, v)
 	}
 }
 
