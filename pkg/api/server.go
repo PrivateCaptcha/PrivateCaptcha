@@ -143,6 +143,7 @@ func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
 		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
 		AllowedMethods:             []string{http.MethodGet},
 		AllowPrivateNetwork:        true,
+		OptionsPassthrough:         true,
 		Debug:                      verbose,
 		MaxAge:                     60, /*seconds*/
 	}
