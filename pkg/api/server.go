@@ -262,7 +262,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		if err == db.ErrTestProperty {
 			common.WriteCached(w)
 			// we cache test property responses, can as well allow them anywhere
-			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set(common.HeaderAccessControlOrigin, "*")
 			s.writePuzzleData(ctx, s.testPuzzleData, w)
 			return
 		}
