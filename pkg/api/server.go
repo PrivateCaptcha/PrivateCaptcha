@@ -250,7 +250,7 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 	// the reason for this is that we cache test property responses
 	if sitekey, ok := ctx.Value(common.SitekeyContextKey).(string); ok && (sitekey == db.TestPropertySitekey) {
-		r.Header.Set(common.HeaderAccessControlOrigin, "*")
+		w.Header().Set(common.HeaderAccessControlOrigin, "*")
 	}
 
 	w.WriteHeader(http.StatusNoContent)
