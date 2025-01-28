@@ -367,6 +367,23 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 	return origin == property.Domain
 }
 
+func (am *authMiddleware) SitekeyOptions(next http.Handler) http.Handler {
+	return am.puzzleRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		sitekey := r.URL.Query().Get(common.ParamSiteKey)
+		if !isSiteKeyValid(sitekey) {
+			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid", "method", r.Method)
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		ctx = context.WithValue(ctx, common.SitekeyContextKey, sitekey)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	}))
+}
+
 func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 	return am.puzzleRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -380,7 +397,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
 		if !isSiteKeyValid(sitekey) {
-			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid")
+			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid", "method", r.Method)
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}

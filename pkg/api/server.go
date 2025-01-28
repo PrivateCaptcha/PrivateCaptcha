@@ -171,7 +171,7 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	verifyChain := publicChain.Append(s.auth.APIKey)
 	// NOTE: auth middleware provides rate limiting internally
 	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, s.auth.Sitekey).ThenFunc(s.puzzle))
-	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler).ThenFunc(s.puzzlePreFlight))
+	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler, s.auth.SitekeyOptions).ThenFunc(s.puzzlePreFlight))
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
 	maxBytesHandler := func(next http.Handler) http.Handler {
@@ -245,6 +245,13 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 }
 
 func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// the reason for this is that we cache test property responses
+	if sitekey, ok := ctx.Value(common.SitekeyContextKey).(string); ok && (sitekey == db.TestPropertySitekey) {
+		r.Header.Set(common.HeaderAccessControlOrigin, "*")
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -254,6 +261,8 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == db.ErrTestProperty {
 			common.WriteCached(w)
+			// we cache test property responses, can as well allow them anywhere
+			w.Header().Set("Access-Control-Allow-Origin", "*")
 			s.writePuzzleData(ctx, s.testPuzzleData, w)
 			return
 		}
