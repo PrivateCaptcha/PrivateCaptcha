@@ -169,6 +169,9 @@ jobs:
       - name: Display downloaded files
         run: ls -R bin
 
+      - name: Install s3cmd
+        run: sudo apt-get update && sudo apt-get install -y s3cmd
+
       - name: Extract branch name
         shell: bash
         run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
@@ -181,6 +184,14 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           AWS_REQUEST_CHECKSUM_CALCULATION: when_required
           AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          HOST_BUCKET: "%(bucket).${{ secrets.AWS_ENDPOINT_URL }}"
         run: |
-          aws --version
-          aws s3 cp --endpoint-url=${{ secrets.AWS_ENDPOINT_URL }} bin/server s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server
+          # https://s3tools.org/usage
+          s3cmd \
+            --ssl --acl-private --no-guess-mime-type --verbose \
+            --access_key=${AWS_ACCESS_KEY_ID} \
+            --secret_key=${AWS_SECRET_ACCESS_KEY} \
+            --bucket-location=${AWS_DEFAULT_REGION} \
+            --host=${{ secrets.AWS_ENDPOINT_URL }} \
+            --host-bucket=${HOST_BUCKET} \
+            put bin/server "s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server"
