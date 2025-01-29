@@ -67,16 +67,16 @@ run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
 
 run-docker:
-	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.local.yml up --build
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.dev.yml -f docker/docker-compose.local.yml up --build
 
 profile-docker:
-	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.local.yml -f docker/docker-compose.monitoring.yml up --build
+	@env GIT_COMMIT="$(GIT_COMMIT)" docker compose -f docker/docker-compose.dev.yml -f docker/docker-compose.monitoring.yml up --build
 
 watch-docker:
-	@docker compose -f docker/docker-compose.local.yml watch
+	@docker compose -f docker/docker-compose.dev.yml watch
 
 clean-docker:
-	@docker compose -f docker/docker-compose.local.yml down -v --remove-orphans
+	@docker compose -f docker/docker-compose.dev.yml down -v --remove-orphans
 
 sqlc:
 	cd pkg/db && sqlc generate --no-remote

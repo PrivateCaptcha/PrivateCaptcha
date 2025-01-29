@@ -88,7 +88,7 @@ func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg *confi
 			sitekey = randomSiteKey()
 		}
 
-		tgt.URL = fmt.Sprintf("%s/%s?%s=%s", cfg.APIURL(), common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
+		tgt.URL = fmt.Sprintf("http:%s/%s?%s=%s", cfg.APIURL(), common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
 
 		header := http.Header{}
 		header.Add("Origin", property.Domain)

@@ -3,7 +3,7 @@ scrape_configs:
   scrape_interval: 2s
   static_configs:
   - targets:
-    - server:9090
+    - server:6060
 - job_name: docker
   static_configs:
     - targets: ["host.docker.internal:9323"]

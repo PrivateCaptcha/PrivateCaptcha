@@ -1,8 +1,12 @@
 services:
   server:
     ports:
-      # this is the default Golang endpoint for pprof which we are currently not using, but it's here for explicit use
+      # this is the default Golang endpoint for pprof. In case of profiling, port 9090 conflicts with prometheus below
       - 6060:6060
+    environment:
+      PC_LOCAL_ADDRESS: "0.0.0.0:6060"
+      VERBOSE: ''
+      RATE_LIMIT_HEADER: 'X-REAL-IP'
     build:
       args:
         EXTRA_BUILD_FLAGS: '-tags profile -gcflags=all=-N'
