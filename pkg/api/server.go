@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -296,7 +295,14 @@ func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) ([]byte,
 	hash := hasher.Sum(nil)
 	encodedPuzzle := base64.StdEncoding.EncodeToString(puzzleBytes)
 	encodedHash := base64.StdEncoding.EncodeToString(hash)
-	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
+
+	// response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
+	puzzleLen := len(encodedPuzzle)
+	hashLen := len(encodedHash)
+	response := make([]byte, puzzleLen+1+hashLen)
+	copy(response, encodedPuzzle)
+	response[puzzleLen] = '.'
+	copy(response[puzzleLen+1:], encodedHash)
 
 	return response, nil
 }
