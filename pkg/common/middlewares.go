@@ -57,30 +57,23 @@ func Recovered(next http.Handler) http.Handler {
 	})
 }
 
-func WriteNoCache(w http.ResponseWriter) {
-	headers := w.Header()
-	for k, v := range NoCacheHeaders {
-		headers[k] = v
-	}
-}
-
-func WriteCached(w http.ResponseWriter) {
-	headers := w.Header()
-	for k, v := range CachedHeaders {
-		headers[k] = v
+func WriteHeaders(w http.ResponseWriter, headers map[string][]string) {
+	wHeader := w.Header()
+	for k, v := range headers {
+		wHeader[k] = v
 	}
 }
 
 func Cached(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteCached(w)
+		WriteHeaders(w, CachedHeaders)
 		next.ServeHTTP(w, r)
 	})
 }
 
 func NoCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteNoCache(w)
+		WriteHeaders(w, NoCacheHeaders)
 		next.ServeHTTP(w, r)
 	})
 }
@@ -123,8 +116,8 @@ func StrPathArg(r *http.Request, name string) (string, error) {
 	return value, nil
 }
 
-func noContent(w http.ResponseWriter, r *http.Request) {
-	WriteCached(w)
+func noContentCached(w http.ResponseWriter, r *http.Request) {
+	WriteHeaders(w, CachedHeaders)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -133,17 +126,17 @@ func catchAll(w http.ResponseWriter, r *http.Request) {
 	slog.WarnContext(r.Context(), "CatchAll handler", "path", path, "host", r.Host, "method", r.Method)
 
 	if strings.HasSuffix(path, "/.git/config") {
-		noContent(w, r)
+		noContentCached(w, r)
 		return
 	}
 
 	if strings.HasSuffix(path, ".php") {
-		noContent(w, r)
+		noContentCached(w, r)
 		return
 	}
 
 	if (len(path) > 0) && (path[0] == '/') && strings.HasPrefix(path[1:], PuzzleEndpoint) {
-		noContent(w, r)
+		noContentCached(w, r)
 		return
 	}
 
@@ -153,22 +146,22 @@ func catchAll(w http.ResponseWriter, r *http.Request) {
 func robotsTXT(w http.ResponseWriter, r *http.Request) {
 	contents := "User-agent: *\nDisallow: /"
 	w.Header().Set(HeaderContentType, ContentTypePlain)
-	WriteCached(w)
+	WriteHeaders(w, CachedHeaders)
 	fmt.Fprint(w, contents)
 }
 
 // 2xx responses make them cached on CDN level
 func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/robots.txt", chain.ThenFunc(robotsTXT))
-	router.Handle("/favicon.ico", chain.ThenFunc(noContent))
-	router.Handle("/sitemap.xml", chain.ThenFunc(noContent))
-	router.Handle("/s3cmd.ini", chain.ThenFunc(noContent))
-	router.Handle("/ads.txt", chain.ThenFunc(noContent))
-	router.Handle("/package.json", chain.ThenFunc(noContent))
-	router.Handle("/.well-known/", chain.ThenFunc(noContent))
-	router.Handle("/.vscode/", chain.ThenFunc(noContent))
-	router.Handle("/.aws/", chain.ThenFunc(noContent))
-	router.Handle("/wp-admin/", chain.ThenFunc(noContent))
-	router.Handle("/changelog.txt", chain.ThenFunc(noContent))
+	router.Handle("/favicon.ico", chain.ThenFunc(noContentCached))
+	router.Handle("/sitemap.xml", chain.ThenFunc(noContentCached))
+	router.Handle("/s3cmd.ini", chain.ThenFunc(noContentCached))
+	router.Handle("/ads.txt", chain.ThenFunc(noContentCached))
+	router.Handle("/package.json", chain.ThenFunc(noContentCached))
+	router.Handle("/.well-known/", chain.ThenFunc(noContentCached))
+	router.Handle("/.vscode/", chain.ThenFunc(noContentCached))
+	router.Handle("/.aws/", chain.ThenFunc(noContentCached))
+	router.Handle("/wp-admin/", chain.ThenFunc(noContentCached))
+	router.Handle("/changelog.txt", chain.ThenFunc(noContentCached))
 	router.Handle("/", chain.ThenFunc(catchAll))
 }

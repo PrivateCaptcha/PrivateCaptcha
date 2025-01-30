@@ -31,7 +31,7 @@ func Static() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
-		common.WriteCached(w)
+		common.WriteHeaders(w, common.CachedHeaders)
 		w.Header().Set(common.HeaderCDNTag, cdnTagPortal)
 		srv.ServeHTTP(w, r)
 	}

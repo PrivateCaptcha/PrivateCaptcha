@@ -66,7 +66,7 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	err := s.template.Render(ctx, &out, errorTemplate, actualData)
 	if err == nil {
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-		common.WriteCached(w)
+		common.WriteHeaders(w, common.CachedHeaders)
 		w.WriteHeader(code)
 		out.WriteTo(w)
 	} else {
@@ -101,7 +101,7 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 		Detail:       "Please begin again.",
 	}
 
-	common.WriteCached(w)
+	common.WriteHeaders(w, common.CachedHeaders)
 
 	s.render(w, r, errorTemplate, data)
 }

@@ -1,5 +1,7 @@
 package common
 
+import "net/http"
+
 const (
 	DefaultOrgName              = "My Organization"
 	PrivateCaptcha              = "Private Captcha"
@@ -7,16 +9,6 @@ const (
 	StageDev                    = "dev"
 	StageStaging                = "staging"
 	StageTest                   = "test"
-	HeaderCDNTag                = "CDN-Tag"
-	HeaderContentType           = "Content-Type"
-	HeaderContentLength         = "Content-Length"
-	HeaderAuthorization         = "Authorization"
-	HeaderCSRFToken             = "X-CSRF-Token"
-	HeaderCaptchaVersion        = "X-PC-Captcha-Version"
-	HeaderCaptchaCompat         = "X-Captcha-Compat-Version"
-	HeaderAPIKey                = "X-API-Key"
-	HeaderAccessControlOrigin   = "Access-Control-Allow-Origin"
-	HeaderAccessControlAge      = "Access-Control-Max-Age"
 	ContentTypePlain            = "text/plain"
 	ContentTypeHTML             = "text/html; charset=utf-8"
 	ContentTypeJSON             = "application/json"
@@ -52,4 +44,17 @@ const (
 	ConfigPresharedSecretHeader = "PRESHARED_SECRET_HEADER"
 	AreaPuzzle                  = "PUZZLE"
 	AreaDefault                 = "DEFAULT"
+)
+
+var (
+	HeaderCDNTag              = http.CanonicalHeaderKey("CDN-Tag")
+	HeaderContentType         = http.CanonicalHeaderKey("Content-Type")
+	HeaderContentLength       = http.CanonicalHeaderKey("Content-Length")
+	HeaderAuthorization       = http.CanonicalHeaderKey("Authorization")
+	HeaderCSRFToken           = http.CanonicalHeaderKey("X-CSRF-Token")
+	HeaderCaptchaVersion      = http.CanonicalHeaderKey("X-PC-Captcha-Version")
+	HeaderCaptchaCompat       = http.CanonicalHeaderKey("X-Captcha-Compat-Version")
+	HeaderAPIKey              = http.CanonicalHeaderKey("X-API-Key")
+	HeaderAccessControlOrigin = http.CanonicalHeaderKey("Access-Control-Allow-Origin")
+	HeaderAccessControlAge    = http.CanonicalHeaderKey("Access-Control-Max-Age")
 )
