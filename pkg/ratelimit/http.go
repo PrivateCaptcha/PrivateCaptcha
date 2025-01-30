@@ -113,21 +113,23 @@ func (l *httpRateLimiter[TKey]) Updater(r *http.Request) leakybucket.LimitUpdate
 }
 
 func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {
+	headers := w.Header()
+
 	if v := addResult.Capacity; v > 0 {
-		w.Header().Add("X-RateLimit-Limit", strconv.Itoa(int(v)))
+		headers.Set("X-RateLimit-Limit", strconv.Itoa(int(v)))
 	}
 
 	if v := addResult.Remaining(); v > 0 {
-		w.Header().Add("X-RateLimit-Remaining", strconv.Itoa(int(v)))
+		headers.Set("X-RateLimit-Remaining", strconv.Itoa(int(v)))
 	}
 
 	if v := addResult.ResetAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
-		w.Header().Add("X-RateLimit-Reset", strconv.Itoa(vi))
+		headers.Set("X-RateLimit-Reset", strconv.Itoa(vi))
 	}
 
 	if v := addResult.RetryAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
-		w.Header().Add("Retry-After", strconv.Itoa(vi))
+		headers.Set("Retry-After", strconv.Itoa(vi))
 	}
 }
