@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"slices"
 	"sort"
 	"time"
 
@@ -535,11 +536,31 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 	return orgs, nil
 }
 
-func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, userID pgtype.Int4, orgID int32) (*dbgen.Organization, error) {
+func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
 	cacheKey := orgCacheKey(orgID)
 
 	if org, err := fetchCachedOne[dbgen.Organization](ctx, impl.cache, cacheKey); err == nil {
-		return org, nil
+		if org.UserID.Int32 == userID {
+			return org, nil
+		}
+
+		// NOTE: for security reasons, we want to verify that this user has rights to get this org
+
+		// this value should be in cache for "normal" use-cases (e.g. user logs in to the portal)
+		if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey(userID)); err == nil {
+			hasOrg := slices.ContainsFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
+			if hasOrg {
+				return org, nil
+			}
+		}
+
+		// this value should be in cache if user opens "Members" tab in the org
+		if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, impl.cache, orgUsersCacheKey(orgID)); err == nil {
+			hasUser := slices.ContainsFunc(users, func(u *dbgen.GetOrganizationUsersRow) bool { return u.User.ID == userID })
+			if hasUser {
+				return org, nil
+			}
+		}
 	}
 
 	if impl.queries == nil {
@@ -548,7 +569,7 @@ func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, use
 
 	org, err := impl.queries.GetUserOrganizationByID(ctx, &dbgen.GetUserOrganizationByIDParams{
 		ID:     orgID,
-		UserID: userID,
+		UserID: Int(userID),
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -563,11 +584,6 @@ func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, use
 
 	if org != nil {
 		_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
-	}
-
-	if org.DeletedAt.Valid {
-		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
-		return org, ErrSoftDeleted
 	}
 
 	return org, nil
@@ -600,11 +616,6 @@ func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int3
 		_ = impl.cache.Set(ctx, cacheKey, property, impl.ttl)
 		sitekey := UUIDToSiteKey(property.ExternalID)
 		_ = impl.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
-	}
-
-	if property.DeletedAt.Valid {
-		slog.WarnContext(ctx, "Property is soft-deleted", "propID", propID, "deletedAt", property.DeletedAt.Time)
-		return property, ErrSoftDeleted
 	}
 
 	return property, nil

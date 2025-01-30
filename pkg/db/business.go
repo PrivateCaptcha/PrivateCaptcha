@@ -137,7 +137,17 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 }
 
 func (s *BusinessStore) RetrieveUser(ctx context.Context, id int32) (*dbgen.User, error) {
-	return s.impl().retrieveUser(ctx, id)
+	user, err := s.impl().retrieveUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.DeletedAt.Valid {
+		slog.WarnContext(ctx, "User is soft-deleted", "userID", id, "deletedAt", user.DeletedAt.Time)
+		return user, ErrSoftDeleted
+	}
+
+	return user, nil
 }
 
 func (s *BusinessStore) FindUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
@@ -153,11 +163,31 @@ func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID in
 }
 
 func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
-	return s.impl().retrieveUserOrganization(ctx, Int(userID), orgID)
+	org, err := s.impl().retrieveUserOrganization(ctx, userID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if org.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
+		return org, ErrSoftDeleted
+	}
+
+	return org, nil
 }
 
 func (s *BusinessStore) RetrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
-	return s.impl().retrieveProperty(ctx, propID)
+	property, err := s.impl().retrieveProperty(ctx, propID)
+	if err != nil {
+		return nil, err
+	}
+
+	if property.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Property is soft-deleted", "propID", propID, "deletedAt", property.DeletedAt.Time)
+		return property, ErrSoftDeleted
+	}
+
+	return property, nil
 }
 
 func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
