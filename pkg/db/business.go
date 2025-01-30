@@ -38,23 +38,44 @@ const (
 )
 
 type BusinessStore struct {
-	pool            *pgxpool.Pool
-	defaultImpl     *businessStoreImpl
-	cacheOnlyImpl   *businessStoreImpl
-	cache           common.Cache[CacheKey, any]
+	pool          *pgxpool.Pool
+	defaultImpl   *businessStoreImpl
+	cacheOnlyImpl *businessStoreImpl
+	cache         common.Cache[CacheKey, any]
+	// this could have been a bloom/cuckoo filter with expiration, if they existed
+	puzzleCache     common.Cache[uint64, bool]
 	maintenanceMode atomic.Bool
 }
 
-type puzzleCacheMarker struct {
-	Data [4]byte
+func NewBusiness(pool *pgxpool.Pool) *BusinessStore {
+	const maxCacheSize = 1_000_000
+	var cache common.Cache[CacheKey, any]
+	var err error
+	cache, err = NewMemoryCache[CacheKey, any](maxCacheSize, nil /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create memory cache", common.ErrAttr(err))
+		cache = NewStaticCache[CacheKey, any](maxCacheSize, nil /*missing value*/)
+	}
+
+	return NewBusinessEx(pool, cache)
 }
 
-func NewBusiness(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *BusinessStore {
+func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *BusinessStore {
+	const maxPuzzleCacheSize = 100_000
+	var puzzleCache common.Cache[uint64, bool]
+	var err error
+	puzzleCache, err = NewMemoryCache[uint64, bool](maxPuzzleCacheSize, false /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create puzzle memory cache", common.ErrAttr(err))
+		puzzleCache = NewStaticCache[uint64, bool](maxPuzzleCacheSize, false /*missing value*/)
+	}
+
 	return &BusinessStore{
 		pool:          pool,
 		defaultImpl:   &businessStoreImpl{cache: cache, queries: dbgen.New(pool), ttl: DefaultCacheTTL},
 		cacheOnlyImpl: &businessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
 		cache:         cache,
+		puzzleCache:   puzzleCache,
 	}
 }
 
@@ -101,17 +122,18 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 }
 
 func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
-	return s.impl().checkPuzzleCached(ctx, p.PuzzleIDString())
+	ok, err := s.puzzleCache.Get(ctx, p.PuzzleID)
+	return (err == nil) && ok
 }
 
 func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
-	// this check should have been done before in the pipeline. Here the check only to safeguard storing in Redis
+	// this check should have been done before in the pipeline. Here the check only to safeguard storing in cache
 	if !tnow.Before(p.Expiration) {
 		slog.WarnContext(ctx, "Skipping caching expired puzzle", "now", tnow, "expiration", p.Expiration)
 		return nil
 	}
 
-	return s.impl().cachePuzzle(ctx, p, tnow)
+	return s.puzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
 }
 
 func (s *BusinessStore) RetrieveUser(ctx context.Context, id int32) (*dbgen.User, error) {

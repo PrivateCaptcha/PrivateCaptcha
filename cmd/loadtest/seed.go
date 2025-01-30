@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	maxCacheSize = 1_000_000
-	maxParallel  = 4
+	maxParallel = 4
 )
 
 var (
@@ -31,14 +30,6 @@ var (
 func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error {
 	ctx := context.TODO()
 
-	var cache common.Cache[db.CacheKey, any]
-	var err error
-	cache, err = db.NewMemoryCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
-		cache = db.NewStaticCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	}
-
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
 		return dberr
@@ -47,7 +38,7 @@ func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error 
 	defer pool.Close()
 	/*defer*/ clickhouse.Close()
 
-	businessDB := db.NewBusiness(pool, cache)
+	businessDB := db.NewBusiness(pool)
 
 	plans, ok := billing.GetPlansForStage(cfg.Stage())
 	if !ok || (len(plans) == 0) {

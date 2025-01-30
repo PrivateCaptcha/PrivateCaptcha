@@ -82,8 +82,15 @@ func newDefaultIPAddrBuckets(cfg *config.Config) *ratelimit.IPAddrBuckets {
 
 func NewAuthMiddleware(cfg *config.Config,
 	store *db.BusinessStore,
-	userLimits common.Cache[int32, *common.UserLimitStatus],
 	backfillDelay time.Duration) *authMiddleware {
+	const maxLimitedUsers = 10_000
+	var userLimits common.Cache[int32, *common.UserLimitStatus]
+	var err error
+	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create memory cache for user limits", common.ErrAttr(err))
+		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
+	}
 
 	const batchSize = 10
 	rateLimitHeader := cfg.RateLimiterHeader()
@@ -109,6 +116,10 @@ func NewAuthMiddleware(cfg *config.Config,
 	go common.ProcessBatchMap(backfillCtx, am.sitekeyChan, backfillDelay, am.batchSize, am.batchSize*100, am.backfillImpl)
 
 	return am
+}
+
+func (am *authMiddleware) UserLimits() common.Cache[int32, *common.UserLimitStatus] {
+	return am.userLimits
 }
 
 func (am *authMiddleware) DefaultRateLimiter() ratelimit.HTTPRateLimiter {

@@ -131,7 +131,6 @@ func stringCacheKey(prefix cacheKeyPrefix, value string) CacheKey {
 
 func userCacheKey(id int32) CacheKey     { return int32CacheKey(userCacheKeyPrefix, id) }
 func APIKeyCacheKey(str string) CacheKey { return stringCacheKey(apiKeyCacheKeyPrefix, str) }
-func puzzleCacheKey(str string) string   { return "puzzle/" + str }
 func orgCacheKey(orgID int32) CacheKey   { return int32CacheKey(orgCacheKeyPrefix, orgID) }
 func orgPropertiesCacheKey(orgID int32) CacheKey {
 	return int32CacheKey(orgPropertiesCacheKeyPrefix, orgID)

@@ -19,13 +19,6 @@ import (
 
 func loadProperties(count int, cfg *config.Config) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
-	var cache common.Cache[db.CacheKey, any]
-	var err error
-	cache, err = db.NewMemoryCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
-		cache = db.NewStaticCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	}
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
@@ -35,7 +28,7 @@ func loadProperties(count int, cfg *config.Config) ([]*dbgen.Property, error) {
 	defer pool.Close()
 	/*defer*/ clickhouse.Close()
 
-	businessDB := db.NewBusiness(pool, cache)
+	businessDB := db.NewBusiness(pool)
 
 	properties, err := businessDB.RetrieveProperties(ctx, count)
 	if err != nil {

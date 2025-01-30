@@ -1,7 +1,6 @@
 package db
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -373,24 +371,6 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 	return apiKey, nil
 }
 
-func (impl *businessStoreImpl) checkPuzzleCached(ctx context.Context, puzzleID string) bool {
-	if impl.queries == nil {
-		return false
-	}
-
-	key := puzzleCacheKey(puzzleID)
-
-	data, err := impl.queries.GetCachedByKey(ctx, key)
-	if err == pgx.ErrNoRows {
-		return false
-	} else if err != nil {
-		slog.ErrorContext(ctx, "Failed to check if puzzle is cached", common.ErrAttr(err))
-		return false
-	}
-
-	return bytes.Equal(data[:], markerData[:])
-}
-
 func (impl *businessStoreImpl) cachePaddlePrices(ctx context.Context, prices map[string]int) error {
 	if len(prices) == 0 {
 		return ErrInvalidInput
@@ -433,26 +413,6 @@ func (impl *businessStoreImpl) retrievePaddlePrices(ctx context.Context) (map[st
 	}
 
 	return prices, nil
-}
-
-func (impl *businessStoreImpl) cachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
-	if impl.queries == nil {
-		return ErrMaintenance
-	}
-
-	puzzleID := p.PuzzleIDString()
-	key := puzzleCacheKey(puzzleID)
-	diff := p.Expiration.Sub(tnow)
-
-	err := impl.queries.CreateCache(ctx, &dbgen.CreateCacheParams{
-		Key:     key,
-		Value:   markerData[:],
-		Column3: diff,
-	})
-
-	slog.Log(ctx, common.LevelTrace, "Cached puzzle", "puzzleID", puzzleID, common.ErrAttr(err))
-
-	return err
 }
 
 func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {

@@ -29,7 +29,8 @@ var (
 )
 
 const (
-	authBackfillDelay = 100 * time.Millisecond
+	authBackfillDelay   = 100 * time.Millisecond
+	verifyFlushInterval = 1 * time.Second
 )
 
 func testsEnv(s string) string {
@@ -73,13 +74,12 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
-	store = db.NewBusiness(pool, cache)
+	store = db.NewBusinessEx(pool, cache)
 
-	blockedUsers := db.NewStaticCache[int32, *common.UserLimitStatus](100 /*cap*/, nil /*missing data*/)
-	auth = NewAuthMiddleware(cfg, store, blockedUsers, authBackfillDelay)
+	auth = NewAuthMiddleware(cfg, store, authBackfillDelay)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, auth, 2*time.Second /*flush interval*/, &billing.StubPaddleClient{}, monitoring.NewStub(), &email.StubMailer{}, os.Getenv)
+	s = NewServer(store, timeSeries, auth, verifyFlushInterval, &billing.StubPaddleClient{}, monitoring.NewStub(), &email.StubMailer{}, os.Getenv)
 	defer s.Shutdown()
 
 	// TODO: seed data

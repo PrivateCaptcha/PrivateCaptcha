@@ -36,12 +36,10 @@ import (
 )
 
 const (
-	maxCacheSize    = 1_000_000
-	maxLimitedUsers = 10_000
-	modeMigrate     = "migrate"
-	modeRollback    = "rollback"
-	modeSystemd     = "systemd"
-	modeServer      = "server"
+	modeMigrate  = "migrate"
+	modeRollback = "rollback"
+	modeSystemd  = "systemd"
+	modeServer   = "server"
 )
 
 var (
@@ -98,14 +96,6 @@ func createListener(ctx context.Context, cfg *config.Config) (net.Listener, bool
 func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net.Listener, systemdListener bool) error {
 	common.SetupLogs(cfg.Stage(), cfg.Verbose())
 
-	var cache common.Cache[db.CacheKey, any]
-	var err error
-	cache, err = db.NewMemoryCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
-		cache = db.NewStaticCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
-	}
-
 	paddleAPI, err := billing.NewPaddleAPI(cfg.Getenv)
 	if err != nil {
 		return err
@@ -119,22 +109,16 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	businessDB := db.NewBusiness(pool, cache)
+	businessDB := db.NewBusiness(pool)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
-	var userLimits common.Cache[int32, *common.UserLimitStatus]
-	userLimits, err = db.NewMemoryCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing value*/)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create memory cache for user limits", common.ErrAttr(err))
-		userLimits = db.NewStaticCache[int32, *common.UserLimitStatus](maxLimitedUsers, nil /*missing data*/)
-	}
-	auth := api.NewAuthMiddleware(cfg, businessDB, userLimits, 1*time.Second /*backfill duration*/)
+	auth := api.NewAuthMiddleware(cfg, businessDB, 1*time.Second /*backfill duration*/)
 	metrics := monitoring.NewService(cfg.Getenv)
 
 	mailer := email.NewMailer(cfg.Getenv)
 	portalMailer := email.NewPortalMailer("https:"+cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 30*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg.Getenv)
+	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 10*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg.Getenv)
 
 	router := http.NewServeMux()
 
@@ -260,7 +244,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
 	jobs.Add(&maintenance.ThrottleViolationsJob{
 		Stage:      cfg.Stage(),
-		UserLimits: userLimits,
+		UserLimits: auth.UserLimits(),
 		Store:      businessDB,
 		From:       common.StartOfMonth(),
 	})

@@ -26,7 +26,6 @@ import (
 var (
 	server     *Server
 	cfg        *config.Config
-	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
 )
@@ -87,13 +86,7 @@ func TestMain(m *testing.M) {
 	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
 	defer levels.Shutdown()
 
-	var err error
-	cache, err = db.NewMemoryCache[db.CacheKey, any](100, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	store = db.NewBusiness(pool, cache)
+	store = db.NewBusiness(pool)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 
