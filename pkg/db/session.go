@@ -38,7 +38,7 @@ func NewSessionStore(pool *pgxpool.Pool, fallback common.SessionStore, interval 
 	var cancelCtx context.Context
 	cancelCtx, store.processCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "persist_session"))
-	go store.ProcessPersistent(cancelCtx, interval)
+	go common.ProcessBatchMap(cancelCtx, store.persistChan, interval, store.batchSize, store.batchSize*100, store.persistSessions)
 
 	return store
 }
@@ -103,45 +103,6 @@ func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 
 func (ss *SessionStore) GC(ctx context.Context, d time.Duration) {
 	ss.fallback.GC(ctx, d)
-}
-
-func (ss *SessionStore) ProcessPersistent(ctx context.Context, delay time.Duration) {
-	pendingSIDUpdates := make(map[string]struct{})
-	slog.DebugContext(ctx, "Processing session updates")
-
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-
-		case sid, ok := <-ss.persistChan:
-			if !ok {
-				running = false
-				break
-			}
-
-			pendingSIDUpdates[sid] = struct{}{}
-
-			if len(pendingSIDUpdates) >= ss.batchSize {
-				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
-					pendingSIDUpdates = make(map[string]struct{})
-				} else {
-					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
-				}
-			}
-
-		case <-time.After(delay):
-			if len(pendingSIDUpdates) > 0 {
-				if err := ss.persistSessions(ctx, pendingSIDUpdates); err == nil {
-					pendingSIDUpdates = make(map[string]struct{})
-				} else {
-					slog.ErrorContext(ctx, "Failed to process sessions batch", common.ErrAttr(err))
-				}
-			}
-		}
-	}
-
-	slog.InfoContext(ctx, "Finished processing session updates")
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]struct{}) error {

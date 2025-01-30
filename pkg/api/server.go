@@ -37,7 +37,6 @@ const (
 	levelsBatchSize       = 100
 	updateLimitsBatchSize = 100
 	maxVerifyBatchSize    = 100_000
-	oneDaySecondsString   = "86400"
 )
 
 var (
@@ -48,7 +47,7 @@ var (
 	dotBytes           = []byte(".")
 	headersAnyOrigin   = map[string][]string{
 		http.CanonicalHeaderKey(common.HeaderAccessControlOrigin): []string{"*"},
-		http.CanonicalHeaderKey(common.HeaderAccessControlAge):    []string{oneDaySecondsString},
+		http.CanonicalHeaderKey(common.HeaderAccessControlAge):    []string{"86400"},
 	}
 	headersContentPlain = map[string][]string{
 		http.CanonicalHeaderKey(common.HeaderContentType): []string{common.ContentTypePlain},
@@ -116,7 +115,8 @@ func NewServer(store *db.BusinessStore,
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, srv.verifyLogCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "flush_verify_log"))
-	go srv.flushVerifyLog(cancelVerifyCtx, verifyFlushInterval)
+
+	go common.ProcessBatchArray(cancelVerifyCtx, srv.verifyLogChan, verifyFlushInterval, verifyBatchSize, maxVerifyBatchSize, srv.timeSeries.WriteVerifyLogBatch)
 
 	return srv
 }
@@ -489,43 +489,4 @@ func (s *server) verifyPuzzleValid(ctx context.Context, puzzleBytes []byte, expe
 	}
 
 	return p, property, puzzle.VerifyNoError
-}
-
-func (s *server) flushVerifyLog(ctx context.Context, delay time.Duration) {
-	var batch []*common.VerifyRecord
-	slog.DebugContext(ctx, "Processing verify log", "interval", delay.String())
-
-	for running := true; running; {
-		if len(batch) > maxVerifyBatchSize {
-			slog.ErrorContext(ctx, "Dropping pending verify log due to errors", "count", len(batch))
-			batch = []*common.VerifyRecord{}
-		}
-
-		select {
-		case <-ctx.Done():
-			running = false
-
-		case vr, ok := <-s.verifyLogChan:
-			if !ok {
-				running = false
-				break
-			}
-
-			batch = append(batch, vr)
-
-			if len(batch) >= verifyBatchSize {
-				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
-					batch = []*common.VerifyRecord{}
-				}
-			}
-		case <-time.After(delay):
-			if len(batch) > 0 {
-				if err := s.timeSeries.WriteVerifyLogBatch(ctx, batch); err == nil {
-					batch = []*common.VerifyRecord{}
-				}
-			}
-		}
-	}
-
-	slog.InfoContext(ctx, "Finished processing verify log")
 }

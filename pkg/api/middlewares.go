@@ -106,7 +106,7 @@ func NewAuthMiddleware(cfg *config.Config,
 	var backfillCtx context.Context
 	backfillCtx, am.backfillCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "auth_backfill"))
-	go am.backfillProperties(backfillCtx, backfillDelay)
+	go common.ProcessBatchMap(backfillCtx, am.sitekeyChan, backfillDelay, am.batchSize, am.batchSize*100, am.backfillImpl)
 
 	return am
 }
@@ -224,46 +224,16 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 }
 
 // the only purpose of this routine is to cache properties and block users without a subscription
-func (am *authMiddleware) backfillProperties(ctx context.Context, delay time.Duration) {
-	batch := map[string]struct{}{}
-	slog.DebugContext(ctx, "Backfilling properties", "interval", delay.String())
+func (am *authMiddleware) backfillImpl(ctx context.Context, batch map[string]struct{}) error {
+	properties, err := am.store.RetrievePropertiesBySitekey(ctx, batch)
 
-	for running := true; running; {
-		select {
-		case <-ctx.Done():
-			running = false
-
-		case sitekey, ok := <-am.sitekeyChan:
-			if !ok {
-				running = false
-				break
-			}
-
-			batch[sitekey] = struct{}{}
-
-			if len(batch) >= am.batchSize {
-				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "batch")
-				if properties, err := am.store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
-					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
-				} else {
-					batch = make(map[string]struct{})
-					am.checkPropertyOwners(ctx, properties)
-				}
-			}
-		case <-time.After(delay):
-			if len(batch) > 0 {
-				slog.Log(ctx, common.LevelTrace, "Backfilling sitekeys", "count", len(batch), "reason", "timeout")
-				if properties, err := am.store.RetrievePropertiesBySitekey(ctx, batch); (err != nil) && (err != db.ErrMaintenance) {
-					slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
-				} else {
-					batch = make(map[string]struct{})
-					am.checkPropertyOwners(ctx, properties)
-				}
-			}
-		}
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
+	} else {
+		am.checkPropertyOwners(ctx, properties)
 	}
 
-	slog.DebugContext(ctx, "Finished backfilling properties")
+	return err
 }
 
 // NOTE: unlike other "auth" middlewares, EdgeVerify() does NOT add rate limiting

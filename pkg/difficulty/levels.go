@@ -41,7 +41,7 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 	var accessCtx context.Context
 	accessCtx, levels.accessLogCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "access_log"))
-	go levels.processAccessLog(accessCtx, accessLogInterval)
+	go common.ProcessBatchArray(accessCtx, levels.accessChan, accessLogInterval, levels.batchSize, maxPendingBatchSize, levels.timeSeries.WriteAccessLogBatch)
 
 	go levels.backfillDifficulty(context.WithValue(context.Background(), common.TraceIDContextKey, "backfill_difficulty"),
 		backfillInterval)
@@ -213,45 +213,4 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 	}
 
 	slog.DebugContext(ctx, "Finished backfilling difficulty")
-}
-
-func (l *Levels) processAccessLog(ctx context.Context, delay time.Duration) {
-	var batch []*common.AccessRecord
-	slog.DebugContext(ctx, "Processing access log", "interval", delay.String())
-
-	for running := true; running; {
-		if len(batch) > maxPendingBatchSize {
-			slog.ErrorContext(ctx, "Dropping pending access log due to errors", "count", len(batch))
-			batch = []*common.AccessRecord{}
-		}
-
-		select {
-		case <-ctx.Done():
-			running = false
-
-		case ar, ok := <-l.accessChan:
-			if !ok {
-				running = false
-				break
-			}
-
-			batch = append(batch, ar)
-
-			if len(batch) >= l.batchSize {
-				slog.Log(ctx, common.LevelTrace, "Saving access log", "count", len(batch), "reason", "batch")
-				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
-					batch = []*common.AccessRecord{}
-				}
-			}
-		case <-time.After(delay):
-			if len(batch) > 0 {
-				slog.Log(ctx, common.LevelTrace, "Saving access log", "count", len(batch), "reason", "timeout")
-				if err := l.timeSeries.WriteAccessLogBatch(ctx, batch); err == nil {
-					batch = []*common.AccessRecord{}
-				}
-			}
-		}
-	}
-
-	slog.InfoContext(ctx, "Finished processing access log")
 }
