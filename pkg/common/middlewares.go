@@ -22,14 +22,14 @@ var (
 	errPathArgEmpty   = errors.New("path argument is empty")
 	epoch             = time.Unix(0, 0).UTC().Format(http.TimeFormat)
 	// taken from chi, which took it fron nginx
-	NoCacheHeaders = map[string]string{
-		"Expires":         epoch,
-		"Cache-Control":   "no-cache, no-store, no-transform, must-revalidate, private, max-age=0",
-		"Pragma":          "no-cache",
-		"X-Accel-Expires": "0",
+	NoCacheHeaders = map[string][]string{
+		http.CanonicalHeaderKey("Expires"):         []string{epoch},
+		http.CanonicalHeaderKey("Cache-Control"):   []string{"no-cache, no-store, no-transform, must-revalidate, private, max-age=0"},
+		http.CanonicalHeaderKey("Pragma"):          []string{"no-cache"},
+		http.CanonicalHeaderKey("X-Accel-Expires"): []string{"0"},
 	}
-	CachedHeaders = map[string]string{
-		"Cache-Control": "public, max-age=86400",
+	CachedHeaders = map[string][]string{
+		http.CanonicalHeaderKey("Cache-Control"): []string{"public, max-age=86400"},
 	}
 )
 
@@ -60,14 +60,14 @@ func Recovered(next http.Handler) http.Handler {
 func WriteNoCache(w http.ResponseWriter) {
 	headers := w.Header()
 	for k, v := range NoCacheHeaders {
-		headers.Set(k, v)
+		headers[k] = v
 	}
 }
 
 func WriteCached(w http.ResponseWriter) {
 	headers := w.Header()
 	for k, v := range CachedHeaders {
-		headers.Set(k, v)
+		headers[k] = v
 	}
 }
 

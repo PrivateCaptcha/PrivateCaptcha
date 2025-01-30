@@ -18,6 +18,11 @@ var (
 	defaultRejectedHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 	})
+
+	rateLimitHeader          = http.CanonicalHeaderKey("X-RateLimit-Limit")
+	rateLimitRemainingHeader = http.CanonicalHeaderKey("X-RateLimit-Remaining")
+	rateLimitResetHeader     = http.CanonicalHeaderKey("X-RateLimit-Reset")
+	retryAfterHeader         = http.CanonicalHeaderKey("Retry-After")
 )
 
 func clientIP(strategy realclientip.Strategy, r *http.Request) string {
@@ -116,20 +121,20 @@ func setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult)
 	headers := w.Header()
 
 	if v := addResult.Capacity; v > 0 {
-		headers.Set("X-RateLimit-Limit", strconv.Itoa(int(v)))
+		headers[rateLimitHeader] = []string{strconv.Itoa(int(v))}
 	}
 
 	if v := addResult.Remaining(); v > 0 {
-		headers.Set("X-RateLimit-Remaining", strconv.Itoa(int(v)))
+		headers[rateLimitRemainingHeader] = []string{strconv.Itoa(int(v))}
 	}
 
 	if v := addResult.ResetAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
-		headers.Set("X-RateLimit-Reset", strconv.Itoa(vi))
+		headers[rateLimitResetHeader] = []string{strconv.Itoa(vi)}
 	}
 
 	if v := addResult.RetryAfter; v > 0 {
 		vi := int(math.Max(1.0, v.Seconds()+0.5))
-		headers.Set("Retry-After", strconv.Itoa(vi))
+		headers[retryAfterHeader] = []string{strconv.Itoa(vi)}
 	}
 }
