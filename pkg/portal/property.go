@@ -394,7 +394,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	property, err := s.property(r)
+	property, err := s.property(org.ID, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -462,14 +462,9 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		return nil, err
 	}
 
-	property, err := s.property(r)
+	property, err := s.property(org.ID, r)
 	if err != nil {
 		return nil, err
-	}
-
-	if property.OrgID.Int32 != org.ID {
-		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
-		return nil, errInvalidPathArg
 	}
 
 	user, err := s.sessionUser(ctx, s.session(w, r))
@@ -567,7 +562,7 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 	}
 
 	// should just hit cache right away
-	property, err := s.property(r)
+	property, err := s.property(-1 /*orgID*/, r)
 	if err != nil {
 		return nil, err
 	}
@@ -615,7 +610,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		return nil, "", err
 	}
 
-	property, err := s.property(r)
+	property, err := s.property(org.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -674,14 +669,8 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	property, err := s.property(r)
+	property, err := s.property(org.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	if property.OrgID.Int32 != int32(org.ID) {
-		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", org.ID)
 		s.redirectError(http.StatusBadRequest, w, r)
 		return
 	}

@@ -57,7 +57,7 @@ func (s *Server) orgID(r *http.Request) (int32, error) {
 	return int32(orgID), nil
 }
 
-func (s *Server) property(r *http.Request) (*dbgen.Property, error) {
+func (s *Server) property(orgID int32, r *http.Request) (*dbgen.Property, error) {
 	ctx := r.Context()
 
 	propertyID, value, err := common.IntPathArg(r, common.ParamProperty)
@@ -74,6 +74,11 @@ func (s *Server) property(r *http.Request) (*dbgen.Property, error) {
 
 		slog.ErrorContext(ctx, "Failed to find property by ID", common.ErrAttr(err))
 		return nil, err
+	}
+
+	if (orgID != -1) && (property.OrgID.Int32 != orgID) {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", orgID)
+		return nil, errInvalidPathArg
 	}
 
 	return property, nil
