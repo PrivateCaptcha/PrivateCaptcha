@@ -45,7 +45,20 @@ var (
 	errNoop            = errors.New("nothing to do")
 	errIPNotFound      = errors.New("no valid IP address found")
 	errAPIKeyNotSet    = errors.New("API key is not set in context")
+	dotBytes           = []byte(".")
+	headersAnyOrigin   = map[string][]string{
+		http.CanonicalHeaderKey(common.HeaderAccessControlOrigin): []string{"*"},
+		http.CanonicalHeaderKey(common.HeaderAccessControlAge):    []string{oneDaySecondsString},
+	}
+	headersContentPlain = map[string][]string{
+		http.CanonicalHeaderKey(common.HeaderContentType): []string{common.ContentTypePlain},
+	}
 )
+
+type puzzleData struct {
+	puzzleBase64 string
+	hashBase64   string
+}
 
 type server struct {
 	stage           string
@@ -61,7 +74,7 @@ type server struct {
 	cors            *cors.Cors
 	metrics         monitoring.Metrics
 	mailer          common.Mailer
-	testPuzzleData  []byte
+	testPuzzleData  *puzzleData
 }
 
 var _ puzzle.Engine = (*server)(nil)
@@ -250,9 +263,7 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 	// the reason for this is that we cache test property responses
 	if sitekey, ok := ctx.Value(common.SitekeyContextKey).(string); ok && (sitekey == db.TestPropertySitekey) {
-		headers := w.Header()
-		headers.Set(common.HeaderAccessControlOrigin, "*")
-		headers.Set(common.HeaderAccessControlAge, oneDaySecondsString)
+		common.WriteHeaders(w, headersAnyOrigin)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -263,11 +274,9 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
 		if err == db.ErrTestProperty {
-			common.WriteCached(w)
+			common.WriteHeaders(w, common.CachedHeaders)
 			// we cache test property responses, can as well allow them anywhere
-			headers := w.Header()
-			headers.Set(common.HeaderAccessControlOrigin, "*")
-			headers.Set(common.HeaderAccessControlAge, oneDaySecondsString)
+			common.WriteHeaders(w, headersAnyOrigin)
 			s.writePuzzleData(ctx, s.testPuzzleData, w)
 			return
 		}
@@ -280,7 +289,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	s.Write(ctx, puzzle, w)
 }
 
-func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) ([]byte, error) {
+func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) (*puzzleData, error) {
 	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
@@ -293,24 +302,25 @@ func (s *server) serializePuzzle(ctx context.Context, p *puzzle.Puzzle) ([]byte,
 	}
 
 	hash := hasher.Sum(nil)
-	encodedPuzzle := base64.StdEncoding.EncodeToString(puzzleBytes)
-	encodedHash := base64.StdEncoding.EncodeToString(hash)
 
-	// response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
-	puzzleLen := len(encodedPuzzle)
-	hashLen := len(encodedHash)
-	response := make([]byte, puzzleLen+1+hashLen)
-	copy(response, encodedPuzzle)
-	response[puzzleLen] = '.'
-	copy(response[puzzleLen+1:], encodedHash)
-
-	return response, nil
+	return &puzzleData{
+		puzzleBase64: base64.StdEncoding.EncodeToString(puzzleBytes),
+		hashBase64:   base64.StdEncoding.EncodeToString(hash),
+	}, nil
 }
 
-func (s *server) writePuzzleData(ctx context.Context, data []byte, w http.ResponseWriter) error {
-	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	if _, werr := w.Write(data); werr != nil {
-		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
+func (s *server) writePuzzleData(ctx context.Context, data *puzzleData, w http.ResponseWriter) error {
+	common.WriteHeaders(w, headersContentPlain)
+
+	if _, werr := w.Write([]byte(data.puzzleBase64)); werr != nil {
+		slog.ErrorContext(ctx, "Failed to write puzzle data response", common.ErrAttr(werr))
+		return werr
+	}
+
+	_, _ = w.Write(dotBytes)
+
+	if _, werr := w.Write([]byte(data.hashBase64)); werr != nil {
+		slog.ErrorContext(ctx, "Failed to write puzzle hash response", common.ErrAttr(werr))
 		return werr
 	}
 
@@ -318,14 +328,14 @@ func (s *server) writePuzzleData(ctx context.Context, data []byte, w http.Respon
 }
 
 func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
-	response, err := s.serializePuzzle(ctx, p)
+	data, err := s.serializePuzzle(ctx, p)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
 	}
 
-	common.WriteNoCache(w)
-	return s.writePuzzleData(ctx, response, w)
+	common.WriteHeaders(w, common.NoCacheHeaders)
+	return s.writePuzzleData(ctx, data, w)
 }
 
 func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
