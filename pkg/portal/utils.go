@@ -23,7 +23,7 @@ func twoFactorCode() int {
 	return rand.Intn(900000) + 100000
 }
 
-func (s *Server) org(r *http.Request) (*dbgen.Organization, error) {
+func (s *Server) org(userID int32, r *http.Request) (*dbgen.Organization, error) {
 	ctx := r.Context()
 
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg)
@@ -32,7 +32,7 @@ func (s *Server) org(r *http.Request) (*dbgen.Organization, error) {
 		return nil, errInvalidPathArg
 	}
 
-	org, err := s.Store.RetrieveOrganization(ctx, int32(orgID))
+	org, err := s.Store.RetrieveUserOrganization(ctx, userID, int32(orgID))
 	if err != nil {
 		if err == db.ErrSoftDeleted {
 			return nil, errOrgSoftDeleted

@@ -312,7 +312,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 		return nil, "", err
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -338,7 +338,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 		return nil, "", err
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -378,7 +378,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		return nil, "", errInvalidRequestArg
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -452,15 +452,9 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		s.redirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	if org.UserID.Int32 != user.ID {
-		slog.ErrorContext(ctx, "Remove member request from not the org owner", "orgUserID", org.UserID.Int32, "userID", user.ID)
-		http.Error(w, "", http.StatusUnauthorized)
 		return
 	}
 
@@ -523,7 +517,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, 
 		return nil, "", err
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -549,7 +543,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, "", errInvalidRequestArg
 	}
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -592,7 +586,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return

@@ -1,8 +1,15 @@
 -- name: CreateOrganization :one
 INSERT INTO backend.organizations (name, user_id) VALUES ($1, $2) RETURNING *;
 
--- name: GetOrganizationByID :one
-SELECT * from backend.organizations WHERE id = $1;
+-- name: GetUserOrganizationByID :one
+SELECT * FROM backend.organizations o
+WHERE o.id = $1 AND (
+    o.user_id = $2
+    OR EXISTS (
+        SELECT 1 FROM backend.organization_users ou
+        WHERE ou.org_id = o.id AND ou.user_id = $2
+    )
+);
 
 -- name: FindUserOrgByName :one
 SELECT * from backend.organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL;
@@ -20,8 +27,8 @@ FROM backend.organizations o
 JOIN backend.organization_users ou ON o.id = ou.org_id
 WHERE ou.user_id = $1 AND o.deleted_at IS NULL;
 
--- name: SoftDeleteOrganization :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1;
+-- name: SoftDeleteUserOrganization :exec
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 AND user_id = $2;
 
 -- name: SoftDeleteUserOrganizations :exec
 UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE user_id = $1;

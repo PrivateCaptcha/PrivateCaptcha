@@ -144,8 +144,8 @@ func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID in
 	return s.impl().retrieveUserOrganizations(ctx, userID)
 }
 
-func (s *BusinessStore) RetrieveOrganization(ctx context.Context, orgID int32) (*dbgen.Organization, error) {
-	return s.impl().retrieveOrganization(ctx, orgID)
+func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
+	return s.impl().retrieveUserOrganization(ctx, Int(userID), orgID)
 }
 
 func (s *BusinessStore) RetrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
@@ -269,7 +269,7 @@ func (s *BusinessStore) UpdateOrganization(ctx context.Context, orgID int32, nam
 }
 
 func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().softDeleteOrganization(ctx, orgID, userID)
+	return s.impl().softDeleteOrganization(ctx, orgID, Int(userID))
 }
 
 func (s *BusinessStore) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {

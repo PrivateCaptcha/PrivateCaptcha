@@ -575,7 +575,7 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 	return orgs, nil
 }
 
-func (impl *businessStoreImpl) retrieveOrganization(ctx context.Context, orgID int32) (*dbgen.Organization, error) {
+func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, userID pgtype.Int4, orgID int32) (*dbgen.Organization, error) {
 	cacheKey := orgCacheKey(orgID)
 
 	if org, err := fetchCachedOne[dbgen.Organization](ctx, impl.cache, cacheKey); err == nil {
@@ -586,7 +586,10 @@ func (impl *businessStoreImpl) retrieveOrganization(ctx context.Context, orgID i
 		return nil, ErrMaintenance
 	}
 
-	org, err := impl.queries.GetOrganizationByID(ctx, orgID)
+	org, err := impl.queries.GetUserOrganizationByID(ctx, &dbgen.GetUserOrganizationByIDParams{
+		ID:     orgID,
+		UserID: userID,
+	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -875,12 +878,15 @@ func (impl *businessStoreImpl) updateOrganization(ctx context.Context, orgID int
 	return org, nil
 }
 
-func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
+func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID int32, userID pgtype.Int4) error {
 	if impl.queries == nil {
 		return ErrMaintenance
 	}
 
-	if err := impl.queries.SoftDeleteOrganization(ctx, orgID); err != nil {
+	if err := impl.queries.SoftDeleteUserOrganization(ctx, &dbgen.SoftDeleteUserOrganizationParams{
+		ID:     orgID,
+		UserID: userID,
+	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark organization as deleted in DB", "orgID", orgID, common.ErrAttr(err))
 		return err
 	}
@@ -890,7 +896,7 @@ func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID
 	// update caches
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(orgID), impl.ttl)
 	// invalidate user orgs in cache as we just deleted one
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID))
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID.Int32))
 
 	return nil
 }

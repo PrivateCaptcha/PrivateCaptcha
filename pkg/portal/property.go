@@ -184,7 +184,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 		return nil, "", err
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -325,7 +325,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
@@ -387,8 +387,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	user, err := s.sessionUser(ctx, s.session(w, r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -457,17 +463,17 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, error) {
 	ctx := r.Context()
 
-	org, err := s.org(r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, err
 	}
 
 	property, err := s.property(org.ID, r)
-	if err != nil {
-		return nil, err
-	}
-
-	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +611,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	// should hit cache right away
-	org, err := s.org(r)
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -663,7 +669,13 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	org, err := s.org(r)
+	user, err := s.sessionUser(ctx, s.session(w, r))
+	if err != nil {
+		s.redirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, err := s.org(user.ID, r)
 	if err != nil {
 		s.redirectError(http.StatusInternalServerError, w, r)
 		return
@@ -672,12 +684,6 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	property, err := s.property(org.ID, r)
 	if err != nil {
 		s.redirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	user, err := s.sessionUser(ctx, s.session(w, r))
-	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 

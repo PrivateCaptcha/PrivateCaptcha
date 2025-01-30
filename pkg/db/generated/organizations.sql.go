@@ -66,24 +66,6 @@ func (q *Queries) FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameP
 	return &i, err
 }
 
-const getOrganizationByID = `-- name: GetOrganizationByID :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at from backend.organizations WHERE id = $1
-`
-
-func (q *Queries) GetOrganizationByID(ctx context.Context, id int32) (*Organization, error) {
-	row := q.db.QueryRow(ctx, getOrganizationByID, id)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.UserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return &i, err
-}
-
 const getSoftDeletedOrganizations = `-- name: GetSoftDeletedOrganizations :many
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at
 FROM backend.organizations o
@@ -130,6 +112,36 @@ func (q *Queries) GetSoftDeletedOrganizations(ctx context.Context, arg *GetSoftD
 	return items, nil
 }
 
+const getUserOrganizationByID = `-- name: GetUserOrganizationByID :one
+SELECT id, name, user_id, created_at, updated_at, deleted_at FROM backend.organizations o
+WHERE o.id = $1 AND (
+    o.user_id = $2
+    OR EXISTS (
+        SELECT 1 FROM backend.organization_users ou
+        WHERE ou.org_id = o.id AND ou.user_id = $2
+    )
+)
+`
+
+type GetUserOrganizationByIDParams struct {
+	ID     int32       `db:"id" json:"id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) GetUserOrganizationByID(ctx context.Context, arg *GetUserOrganizationByIDParams) (*Organization, error) {
+	row := q.db.QueryRow(ctx, getUserOrganizationByID, arg.ID, arg.UserID)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return &i, err
+}
+
 const getUserOrganizations = `-- name: GetUserOrganizations :many
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
 UNION ALL
@@ -172,12 +184,17 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 	return items, nil
 }
 
-const softDeleteOrganization = `-- name: SoftDeleteOrganization :exec
-UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1
+const softDeleteUserOrganization = `-- name: SoftDeleteUserOrganization :exec
+UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 AND user_id = $2
 `
 
-func (q *Queries) SoftDeleteOrganization(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, softDeleteOrganization, id)
+type SoftDeleteUserOrganizationParams struct {
+	ID     int32       `db:"id" json:"id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error {
+	_, err := q.db.Exec(ctx, softDeleteUserOrganization, arg.ID, arg.UserID)
 	return err
 }
 
