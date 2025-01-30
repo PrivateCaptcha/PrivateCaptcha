@@ -23,7 +23,11 @@ const (
 )
 
 var (
-	errUnsupported = errors.New("not supported")
+	errUnsupported  = errors.New("not supported")
+	emptyOrgUsers   = []*dbgen.GetOrganizationUsersRow{}
+	emptyAPIKeys    = []*dbgen.APIKey{}
+	emptyUserOrgs   = []*dbgen.GetUserOrganizationsRow{}
+	emptyProperties = []*dbgen.Property{}
 )
 
 func fetchCachedOne[T any](ctx context.Context, cache common.Cache[CacheKey, any], key CacheKey) (*T, error) {
@@ -279,6 +283,8 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 		if property, err := fetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 			result = append(result, property)
 			continue
+		} else if err == ErrNegativeCacheHit {
+			continue
 		}
 
 		keys = append(keys, eid)
@@ -296,7 +302,7 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 	}
 
 	if impl.queries == nil {
-		return nil, ErrMaintenance
+		return result, ErrMaintenance
 	}
 
 	properties, err := impl.queries.GetPropertiesByExternalID(ctx, keys)
@@ -513,7 +519,8 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 	orgs, err := impl.queries.GetUserOrganizations(ctx, Int(userID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, ErrRecordNotFound
+			_ = impl.cache.Set(ctx, cacheKey, emptyUserOrgs, impl.ttl)
+			return emptyUserOrgs, nil
 		}
 
 		slog.ErrorContext(ctx, "Failed to retrieve orgs by user ID", "userID", userID, common.ErrAttr(err))
@@ -561,6 +568,8 @@ func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, use
 				return org, nil
 			}
 		}
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
@@ -594,6 +603,8 @@ func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int3
 
 	if prop, err := fetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 		return prop, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
@@ -625,6 +636,8 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 	cacheKey := subscriptionCacheKey(sID)
 	if subscription, err := fetchCachedOne[dbgen.Subscription](ctx, impl.cache, cacheKey); err == nil {
 		return subscription, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
@@ -809,7 +822,8 @@ func (impl *businessStoreImpl) retrieveOrgProperties(ctx context.Context, orgID 
 	properties, err := impl.queries.GetOrgProperties(ctx, Int(orgID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return []*dbgen.Property{}, nil
+			_ = impl.cache.Set(ctx, cacheKey, emptyProperties, impl.ttl)
+			return emptyProperties, nil
 		}
 
 		slog.ErrorContext(ctx, "Failed to retrieve org properties", "org", orgID, common.ErrAttr(err))
@@ -886,6 +900,10 @@ func (impl *businessStoreImpl) retrieveOrganizationUsers(ctx context.Context, or
 
 	users, err := impl.queries.GetOrganizationUsers(ctx, orgID)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			_ = impl.cache.Set(ctx, cacheKey, emptyOrgUsers, impl.ttl)
+			return emptyOrgUsers, nil
+		}
 		slog.ErrorContext(ctx, "Failed to fetch organization users", "orgID", orgID, common.ErrAttr(err))
 		return nil, err
 	}
@@ -1052,6 +1070,8 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 
 	if keys, err := fetchCachedMany[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
 		return keys, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
@@ -1060,6 +1080,10 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 
 	keys, err := impl.queries.GetUserAPIKeys(ctx, Int(userID))
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			_ = impl.cache.Set(ctx, cacheKey, emptyAPIKeys, impl.ttl)
+			return emptyAPIKeys, nil
+		}
 		slog.ErrorContext(ctx, "Failed to retrieve user API keys", "userID", userID, common.ErrAttr(err))
 		return nil, err
 	}
@@ -1553,6 +1577,8 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 
 	if notif, err := fetchCachedOne[dbgen.SystemNotification](ctx, impl.cache, cacheKey); err == nil {
 		return notif, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
