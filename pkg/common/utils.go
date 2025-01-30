@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -67,7 +66,7 @@ func MaskEmail(email string, mask rune) string {
 	return prefix + xxx + suffix + "@" + parts[1]
 }
 
-func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface{}, headers map[string]string) {
+func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface{}, headers map[string][]string) {
 	response, err := json.Marshal(data)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialise response", ErrAttr(err))
@@ -75,12 +74,11 @@ func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface
 		return
 	}
 
-	w.Header().Set(HeaderContentType, ContentTypeJSON)
-	w.Header().Set(HeaderContentLength, strconv.Itoa(len(response)))
+	wHeader := w.Header()
+	wHeader.Set(HeaderContentType, ContentTypeJSON)
 	for key, value := range headers {
-		w.Header().Set(key, value)
+		wHeader[key] = value
 	}
-	w.WriteHeader(http.StatusOK)
 
 	n, err := w.Write(response)
 	if err != nil {
