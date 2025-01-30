@@ -31,12 +31,12 @@ var (
 func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error {
 	ctx := context.TODO()
 
-	var cache common.Cache[string, any]
+	var cache common.Cache[db.CacheKey, any]
 	var err error
-	cache, err = db.NewMemoryCache[string, any](maxCacheSize, nil /*missing value*/)
+	cache, err = db.NewMemoryCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
-		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
+		cache = db.NewStaticCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
 	}
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)

@@ -26,7 +26,7 @@ import (
 var (
 	server     *Server
 	cfg        *config.Config
-	cache      common.Cache[string, any]
+	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
 )
@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 	defer levels.Shutdown()
 
 	var err error
-	cache, err = db.NewMemoryCache[string, any](100, nil)
+	cache, err = db.NewMemoryCache[db.CacheKey, any](100, nil)
 	if err != nil {
 		panic(err)
 	}

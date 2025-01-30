@@ -89,3 +89,63 @@ func (c *memcache[TKey, TValue]) Delete(ctx context.Context, key TKey) error {
 
 	return nil
 }
+
+type cacheKeyPrefix byte
+
+const (
+	userCacheKeyPrefix cacheKeyPrefix = iota
+	apiKeyCacheKeyPrefix
+	orgCacheKeyPrefix
+	orgPropertiesCacheKeyPrefix
+	propertyByIDCacheKeyPrefix
+	propertyBySitekeyCacheKeyPrefix
+	userOrgsCacheKeyPrefix
+	orgUsersCacheKeyPrefix
+	userAPIKeysCacheKeyPrefix
+	subscriptionCacheKeyPrefix
+	notificationCacheKeyPrefix
+)
+
+// it's a "union" type which is better than doing string concatenation as before
+type CacheKey struct {
+	Prefix   cacheKeyPrefix
+	IntValue int
+	StrValue string
+}
+
+func int32CacheKey(prefix cacheKeyPrefix, value int32) CacheKey {
+	return CacheKey{
+		Prefix:   prefix,
+		IntValue: int(value),
+		StrValue: "",
+	}
+}
+
+func stringCacheKey(prefix cacheKeyPrefix, value string) CacheKey {
+	return CacheKey{
+		Prefix:   prefix,
+		IntValue: 0,
+		StrValue: value,
+	}
+}
+
+func userCacheKey(id int32) CacheKey     { return int32CacheKey(userCacheKeyPrefix, id) }
+func APIKeyCacheKey(str string) CacheKey { return stringCacheKey(apiKeyCacheKeyPrefix, str) }
+func puzzleCacheKey(str string) string   { return "puzzle/" + str }
+func orgCacheKey(orgID int32) CacheKey   { return int32CacheKey(orgCacheKeyPrefix, orgID) }
+func orgPropertiesCacheKey(orgID int32) CacheKey {
+	return int32CacheKey(orgPropertiesCacheKeyPrefix, orgID)
+}
+func propertyByIDCacheKey(propID int32) CacheKey {
+	return int32CacheKey(propertyByIDCacheKeyPrefix, propID)
+}
+func PropertyBySitekeyCacheKey(sitekey string) CacheKey {
+	return stringCacheKey(propertyBySitekeyCacheKeyPrefix, sitekey)
+}
+func userOrgsCacheKey(userID int32) CacheKey { return int32CacheKey(userOrgsCacheKeyPrefix, userID) }
+func orgUsersCacheKey(orgID int32) CacheKey  { return int32CacheKey(orgUsersCacheKeyPrefix, orgID) }
+func userAPIKeysCacheKey(userID int32) CacheKey {
+	return int32CacheKey(userAPIKeysCacheKeyPrefix, userID)
+}
+func subscriptionCacheKey(sID int32) CacheKey { return int32CacheKey(subscriptionCacheKeyPrefix, sID) }
+func notificationCacheKey(ID int32) CacheKey  { return int32CacheKey(notificationCacheKeyPrefix, ID) }

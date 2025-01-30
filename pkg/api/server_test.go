@@ -22,7 +22,7 @@ import (
 var (
 	s          *server
 	cfg        *config.Config
-	cache      common.Cache[string, any]
+	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
 	auth       *authMiddleware
 	store      *db.BusinessStore
@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 
 	timeSeries = db.NewTimeSeries(clickhouse)
 
-	cache, err = db.NewMemoryCache[string, any](100, nil)
+	cache, err = db.NewMemoryCache[db.CacheKey, any](100, nil)
 	if err != nil {
 		panic(err)
 	}

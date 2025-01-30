@@ -98,12 +98,12 @@ func createListener(ctx context.Context, cfg *config.Config) (net.Listener, bool
 func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net.Listener, systemdListener bool) error {
 	common.SetupLogs(cfg.Stage(), cfg.Verbose())
 
-	var cache common.Cache[string, any]
+	var cache common.Cache[db.CacheKey, any]
 	var err error
-	cache, err = db.NewMemoryCache[string, any](maxCacheSize, nil /*missing value*/)
+	cache, err = db.NewMemoryCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create memory cache for server", common.ErrAttr(err))
-		cache = db.NewStaticCache[string, any](maxCacheSize, nil /*missing value*/)
+		cache = db.NewStaticCache[db.CacheKey, any](maxCacheSize, nil /*missing value*/)
 	}
 
 	paddleAPI, err := billing.NewPaddleAPI(cfg.Getenv)

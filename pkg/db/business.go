@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -42,7 +41,7 @@ type BusinessStore struct {
 	pool            *pgxpool.Pool
 	defaultImpl     *businessStoreImpl
 	cacheOnlyImpl   *businessStoreImpl
-	cache           common.Cache[string, any]
+	cache           common.Cache[CacheKey, any]
 	maintenanceMode atomic.Bool
 }
 
@@ -50,20 +49,7 @@ type puzzleCacheMarker struct {
 	Data [4]byte
 }
 
-func userCacheKey(id int32) string                    { return "user/" + strconv.Itoa(int(id)) }
-func APIKeyCacheKey(str string) string                { return "apikey/" + str }
-func puzzleCacheKey(str string) string                { return "puzzle/" + str }
-func orgCacheKey(orgID int32) string                  { return "org/" + strconv.Itoa(int(orgID)) }
-func orgPropertiesCacheKey(orgID int32) string        { return "orgprops/" + strconv.Itoa(int(orgID)) }
-func propertyByIDCacheKey(propID int32) string        { return "prop/" + strconv.Itoa(int(propID)) }
-func PropertyBySitekeyCacheKey(sitekey string) string { return "propeid/" + sitekey }
-func userOrgsCacheKey(userID int32) string            { return "userorgs/" + strconv.Itoa(int(userID)) }
-func orgUsersCacheKey(orgID int32) string             { return "orgusers/" + strconv.Itoa(int(orgID)) }
-func userAPIKeysCacheKey(userID int32) string         { return "userapikeys/" + strconv.Itoa(int(userID)) }
-func subscriptionCacheKey(sID int32) string           { return "subscr/" + strconv.Itoa(int(sID)) }
-func notificationCacheKey(ID int32) string            { return "notif/" + strconv.Itoa(int(ID)) }
-
-func NewBusiness(pool *pgxpool.Pool, cache common.Cache[string, any]) *BusinessStore {
+func NewBusiness(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *BusinessStore {
 	return &BusinessStore{
 		pool:          pool,
 		defaultImpl:   &businessStoreImpl{cache: cache, queries: dbgen.New(pool), ttl: DefaultCacheTTL},

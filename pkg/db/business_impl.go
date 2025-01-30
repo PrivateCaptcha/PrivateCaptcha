@@ -27,7 +27,7 @@ var (
 	errUnsupported = errors.New("not supported")
 )
 
-func fetchCachedOne[T any](ctx context.Context, cache common.Cache[string, any], key string) (*T, error) {
+func fetchCachedOne[T any](ctx context.Context, cache common.Cache[CacheKey, any], key CacheKey) (*T, error) {
 	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func fetchCachedOne[T any](ctx context.Context, cache common.Cache[string, any],
 	return nil, errInvalidCacheType
 }
 
-func fetchCachedMany[T any](ctx context.Context, cache common.Cache[string, any], key string) ([]*T, error) {
+func fetchCachedMany[T any](ctx context.Context, cache common.Cache[CacheKey, any], key CacheKey) ([]*T, error) {
 	data, err := cache.Get(ctx, key)
 	if err != nil {
 		return nil, err
@@ -59,34 +59,34 @@ type txCacheArg struct {
 }
 
 type txCache struct {
-	set     map[string]*txCacheArg
-	del     map[string]struct{}
-	missing map[string]time.Duration
+	set     map[CacheKey]*txCacheArg
+	del     map[CacheKey]struct{}
+	missing map[CacheKey]time.Duration
 }
 
 func NewTxCache() *txCache {
 	return &txCache{
-		set:     make(map[string]*txCacheArg),
-		del:     make(map[string]struct{}),
-		missing: make(map[string]time.Duration),
+		set:     make(map[CacheKey]*txCacheArg),
+		del:     make(map[CacheKey]struct{}),
+		missing: make(map[CacheKey]time.Duration),
 	}
 }
 
-func (c *txCache) Get(ctx context.Context, key string) (any, error) { return nil, errUnsupported }
-func (c *txCache) SetMissing(ctx context.Context, key string, ttl time.Duration) error {
+func (c *txCache) Get(ctx context.Context, key CacheKey) (any, error) { return nil, errUnsupported }
+func (c *txCache) SetMissing(ctx context.Context, key CacheKey, ttl time.Duration) error {
 	c.missing[key] = ttl
 	return nil
 }
-func (c *txCache) Set(ctx context.Context, key string, t any, ttl time.Duration) error {
+func (c *txCache) Set(ctx context.Context, key CacheKey, t any, ttl time.Duration) error {
 	c.set[key] = &txCacheArg{item: t, ttl: ttl}
 	return nil
 }
-func (c *txCache) Delete(ctx context.Context, key string) error {
+func (c *txCache) Delete(ctx context.Context, key CacheKey) error {
 	c.del[key] = struct{}{}
 	return nil
 }
 
-func (c *txCache) Commit(ctx context.Context, cache common.Cache[string, any]) {
+func (c *txCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any]) {
 	for key := range c.del {
 		cache.Delete(ctx, key)
 	}
@@ -102,7 +102,7 @@ func (c *txCache) Commit(ctx context.Context, cache common.Cache[string, any]) {
 
 type businessStoreImpl struct {
 	queries *dbgen.Queries
-	cache   common.Cache[string, any]
+	cache   common.Cache[CacheKey, any]
 	ttl     time.Duration
 }
 
