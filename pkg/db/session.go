@@ -108,6 +108,10 @@ func (ss *SessionStore) GC(ctx context.Context, d time.Duration) {
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]struct{}) error {
 	slog.DebugContext(ctx, "Persisting sessions to DB", "count", len(batch))
 
+	keys := make([]string, 0, len(batch))
+	values := make([][]byte, 0, len(batch))
+	intervals := make([]time.Duration, 0, len(batch))
+
 	for sid := range batch {
 		sess, err := ss.fallback.Read(ctx, sid)
 		if err != nil {
@@ -126,15 +130,22 @@ func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]st
 			continue
 		}
 
-		err = ss.db.CreateCache(ctx, &dbgen.CreateCacheParams{
-			Key:     sessionPrefix + sid,
-			Value:   data,
-			Column3: sessionCacheDuration,
-		})
+		keys = append(keys, sessionPrefix+sid)
+		values = append(values, data)
+		intervals = append(intervals, sessionCacheDuration)
+	}
 
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to cache session", common.ErrAttr(err))
-		}
+	if len(keys) == 0 {
+		slog.WarnContext(ctx, "No sessions to save")
+		return nil
+	}
+
+	if err := ss.db.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
+		Keys:      keys,
+		Values:    values,
+		Intervals: intervals,
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to cache sessions", "count", len(keys), common.ErrAttr(err))
 	}
 
 	// we actually do not care if we failed to save sessions to cache

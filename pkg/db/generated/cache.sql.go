@@ -28,6 +28,28 @@ func (q *Queries) CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	return err
 }
 
+const createCacheMany = `-- name: CreateCacheMany :exec
+INSERT INTO backend.cache (key, value, expires_at)
+SELECT unnest($1::TEXT[]) as key,
+       unnest($2::BYTEA[]) as value,
+       NOW() + unnest($3::INTERVAL[]) as expires_at
+ON CONFLICT (key)
+DO UPDATE SET
+    value = EXCLUDED.value,
+    expires_at = EXCLUDED.expires_at
+`
+
+type CreateCacheManyParams struct {
+	Keys      []string        `db:"keys" json:"keys"`
+	Values    [][]byte        `db:"values" json:"values"`
+	Intervals []time.Duration `db:"intervals" json:"intervals"`
+}
+
+func (q *Queries) CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error {
+	_, err := q.db.Exec(ctx, createCacheMany, arg.Keys, arg.Values, arg.Intervals)
+	return err
+}
+
 const deleteCachedByKey = `-- name: DeleteCachedByKey :exec
 DELETE FROM backend.cache WHERE key = $1
 `
