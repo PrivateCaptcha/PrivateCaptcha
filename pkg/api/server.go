@@ -241,7 +241,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
 
-	slog.DebugContext(ctx, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty, "puzzleID", result.PuzzleID)
+	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty, "puzzleID", result.PuzzleID)
 
 	return result, nil
 }
