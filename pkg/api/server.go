@@ -206,7 +206,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 			slog.ErrorContext(ctx, "Failed to init stub puzzle", common.ErrAttr(err))
 		}
 
-		slog.WarnContext(ctx, "Returning stub puzzle before auth is backfilled", "puzzleID", stubPuzzle.PuzzleID, "sitekey", sitekey,
+		slog.Log(ctx, common.LevelTrace, "Returning stub puzzle before auth is backfilled", "puzzleID", stubPuzzle.PuzzleID, "sitekey", sitekey,
 			"difficulty", stubPuzzle.Difficulty)
 		return stubPuzzle, nil
 	}
