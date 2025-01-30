@@ -13,6 +13,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -218,10 +219,9 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = common.RandomFingerprint()
 	} else {
 		hash.Write([]byte(r.UserAgent()))
-		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok && (len(ip) > 0) {
-			hash.Write([]byte(ip))
+		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
+			hash.Write(ip.AsSlice())
 		}
-		hash.Write([]byte(property.Domain))
 		hmac := hash.Sum(nil)
 		truncatedHmac := hmac[:8]
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
