@@ -66,6 +66,41 @@ func (q *Queries) FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameP
 	return &i, err
 }
 
+const getOrganizationWithAccess = `-- name: GetOrganizationWithAccess :one
+ SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
+ FROM backend.organizations o
+ LEFT JOIN backend.organization_users ou ON
+     o.id = ou.org_id
+     AND ou.user_id = $2
+     AND o.user_id != $2  -- Only do the join if user isn't the owner
+ WHERE o.id = $1
+`
+
+type GetOrganizationWithAccessParams struct {
+	ID     int32 `db:"id" json:"id"`
+	UserID int32 `db:"user_id" json:"user_id"`
+}
+
+type GetOrganizationWithAccessRow struct {
+	Organization Organization    `db:"organization" json:"organization"`
+	Level        NullAccessLevel `db:"level" json:"level"`
+}
+
+func (q *Queries) GetOrganizationWithAccess(ctx context.Context, arg *GetOrganizationWithAccessParams) (*GetOrganizationWithAccessRow, error) {
+	row := q.db.QueryRow(ctx, getOrganizationWithAccess, arg.ID, arg.UserID)
+	var i GetOrganizationWithAccessRow
+	err := row.Scan(
+		&i.Organization.ID,
+		&i.Organization.Name,
+		&i.Organization.UserID,
+		&i.Organization.CreatedAt,
+		&i.Organization.UpdatedAt,
+		&i.Organization.DeletedAt,
+		&i.Level,
+	)
+	return &i, err
+}
+
 const getSoftDeletedOrganizations = `-- name: GetSoftDeletedOrganizations :many
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at
 FROM backend.organizations o
@@ -112,38 +147,8 @@ func (q *Queries) GetSoftDeletedOrganizations(ctx context.Context, arg *GetSoftD
 	return items, nil
 }
 
-const getUserOrganizationByID = `-- name: GetUserOrganizationByID :one
-SELECT id, name, user_id, created_at, updated_at, deleted_at FROM backend.organizations o
-WHERE o.id = $1 AND (
-    o.user_id = $2
-    OR EXISTS (
-        SELECT 1 FROM backend.organization_users ou
-        WHERE ou.org_id = o.id AND ou.user_id = $2
-    )
-)
-`
-
-type GetUserOrganizationByIDParams struct {
-	ID     int32       `db:"id" json:"id"`
-	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
-}
-
-func (q *Queries) GetUserOrganizationByID(ctx context.Context, arg *GetUserOrganizationByIDParams) (*Organization, error) {
-	row := q.db.QueryRow(ctx, getUserOrganizationByID, arg.ID, arg.UserID)
-	var i Organization
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.UserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-	)
-	return &i, err
-}
-
 const getUserOrganizations = `-- name: GetUserOrganizations :many
-SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner' as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
+SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, 'owner'::backend.access_level as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
 UNION ALL
 SELECT o.id, o.name, o.user_id, o.created_at, o.updated_at, o.deleted_at, ou.level
 FROM backend.organizations o
@@ -153,7 +158,7 @@ WHERE ou.user_id = $1 AND o.deleted_at IS NULL
 
 type GetUserOrganizationsRow struct {
 	Organization Organization `db:"organization" json:"organization"`
-	Level        string       `db:"level" json:"level"`
+	Level        AccessLevel  `db:"level" json:"level"`
 }
 
 func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error) {

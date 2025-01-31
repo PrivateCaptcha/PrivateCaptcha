@@ -23,6 +23,7 @@ var (
 	ErrLocked             = errors.New("lock is already acquired")
 	ErrMaintenance        = errors.New("maintenance mode")
 	ErrTestProperty       = errors.New("test property")
+	ErrPermissions        = errors.New("insufficient permissions")
 	errInvalidCacheType   = errors.New("cache record type does not match")
 	markerData            = []byte{'{', '}'}
 	TestPropertySitekey   = strings.ReplaceAll(TestPropertyID, "-", "")
@@ -163,7 +164,7 @@ func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID in
 }
 
 func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
-	org, err := s.impl().retrieveUserOrganization(ctx, userID, orgID)
+	org, level, err := s.impl().retrieveOrganizationWithAccess(ctx, userID, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +172,11 @@ func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, or
 	if org.DeletedAt.Valid {
 		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
 		return org, ErrSoftDeleted
+	}
+
+	if !level.Valid {
+		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", userID)
+		return nil, ErrPermissions
 	}
 
 	return org, nil

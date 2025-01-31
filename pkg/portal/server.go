@@ -305,6 +305,8 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 				} else {
 					common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
 				}
+			case db.ErrPermissions:
+				s.redirectError(http.StatusForbidden, w, r)
 			case db.ErrSoftDeleted:
 				s.redirectError(http.StatusNotAcceptable, w, r)
 			case db.ErrMaintenance:

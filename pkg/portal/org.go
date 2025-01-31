@@ -22,6 +22,7 @@ var (
 	errInvalidSession = errors.New("session contains invalid data")
 	maxOrgNameLength  = 255
 	errNoOrgs         = errors.New("user has no organizations")
+	stubUserOrg       = &userOrg{ID: "-1"}
 )
 
 const (
@@ -114,7 +115,7 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 		result = append(result, &userOrg{
 			Name:  org.Organization.Name,
 			ID:    strconv.Itoa(int(org.Organization.ID)),
-			Level: org.Level,
+			Level: string(org.Level),
 		})
 	}
 	return result
@@ -224,7 +225,6 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve user orgs", common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -233,16 +233,21 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		return nil, errNoOrgs
 	}
 
+	idx := -1
+	if orgID != -1 {
+		idx = slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
+		if idx == -1 {
+			slog.WarnContext(ctx, "Org is not found in user orgs", "orgID", orgID, "userID", user.ID)
+			return nil, errInvalidPathArg
+		}
+	}
+
 	renderCtx := &orgDashboardRenderContext{
 		csrfRenderContext:         s.createCsrfContext(user),
 		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs),
-	}
-
-	idx := -1
-	if orgID >= 0 {
-		idx = slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
-		slog.Log(ctx, common.LevelTrace, "Searched in user organizations", "index", idx, "orgID", orgID)
+		Properties:                []*userProperty{},
+		CurrentOrg:                stubUserOrg,
 	}
 
 	if idx >= 0 {
@@ -253,7 +258,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		earliestDate := time.Now()
 
 		for i, o := range orgs {
-			if (o.Level == string(dbgen.AccessLevelOwner)) && o.Organization.CreatedAt.Time.Before(earliestDate) {
+			if (o.Level == dbgen.AccessLevelOwner) && o.Organization.CreatedAt.Time.Before(earliestDate) {
 				earliestIdx = i
 				earliestDate = o.Organization.CreatedAt.Time
 			}
@@ -262,14 +267,13 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		idx = earliestIdx
 		renderCtx.CurrentOrg = renderCtx.Orgs[earliestIdx]
 		slog.DebugContext(ctx, "Selected current org as earliest owned", "index", idx)
-	} else {
-		renderCtx.CurrentOrg = &userOrg{ID: "-1"}
 	}
 
 	if (0 <= idx) && (idx < len(orgs)) {
-		properties, err := s.Store.RetrieveOrgProperties(ctx, orgs[idx].Organization.ID)
-		if err == nil {
-			renderCtx.Properties = propertiesToUserProperties(ctx, properties)
+		if orgs[idx].Level != dbgen.AccessLevelInvited {
+			if properties, err := s.Store.RetrieveOrgProperties(ctx, orgs[idx].Organization.ID); err == nil {
+				renderCtx.Properties = propertiesToUserProperties(ctx, properties)
+			}
 		}
 	}
 
@@ -296,6 +300,8 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			slog.WarnContext(ctx, "Inconsistent user session found")
 			s.Session.SessionDestroy(w, r)
 			common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		} else if err == errInvalidPathArg {
+			s.redirectError(http.StatusBadRequest, w, r)
 		} else {
 			s.redirectError(http.StatusInternalServerError, w, r)
 		}

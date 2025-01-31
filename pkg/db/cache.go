@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -111,6 +112,14 @@ type CacheKey struct {
 	Prefix   cacheKeyPrefix
 	IntValue int
 	StrValue string
+}
+
+func (ck CacheKey) String() string {
+	if len(ck.StrValue) != 0 {
+		return fmt.Sprintf("%v/%s", ck.Prefix, ck.StrValue)
+	}
+
+	return fmt.Sprintf("%v/%v", ck.Prefix, ck.IntValue)
 }
 
 func int32CacheKey(prefix cacheKeyPrefix, value int32) CacheKey {

@@ -38,6 +38,10 @@ func (s *Server) org(userID int32, r *http.Request) (*dbgen.Organization, error)
 			return nil, errOrgSoftDeleted
 		}
 
+		if err == db.ErrPermissions {
+			return nil, db.ErrPermissions
+		}
+
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
 		return nil, err
 	}

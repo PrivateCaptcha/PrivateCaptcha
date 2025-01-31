@@ -1,15 +1,14 @@
 -- name: CreateOrganization :one
 INSERT INTO backend.organizations (name, user_id) VALUES ($1, $2) RETURNING *;
 
--- name: GetUserOrganizationByID :one
-SELECT * FROM backend.organizations o
-WHERE o.id = $1 AND (
-    o.user_id = $2
-    OR EXISTS (
-        SELECT 1 FROM backend.organization_users ou
-        WHERE ou.org_id = o.id AND ou.user_id = $2
-    )
-);
+-- name: GetOrganizationWithAccess :one
+ SELECT sqlc.embed(o), ou.level
+ FROM backend.organizations o
+ LEFT JOIN backend.organization_users ou ON
+     o.id = ou.org_id
+     AND ou.user_id = $2
+     AND o.user_id != $2  -- Only do the join if user isn't the owner
+ WHERE o.id = $1;
 
 -- name: FindUserOrgByName :one
 SELECT * from backend.organizations WHERE user_id = $1 AND name = $2 AND deleted_at IS NULL;
@@ -20,7 +19,7 @@ WHERE id = $2
 RETURNING *;
 
 -- name: GetUserOrganizations :many
-SELECT sqlc.embed(o), 'owner' as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
+SELECT sqlc.embed(o), 'owner'::backend.access_level as level FROM backend.organizations o WHERE o.user_id = $1 AND o.deleted_at IS NULL
 UNION ALL
 SELECT sqlc.embed(o), ou.level
 FROM backend.organizations o

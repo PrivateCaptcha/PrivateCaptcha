@@ -28,6 +28,10 @@ var (
 	emptyAPIKeys    = []*dbgen.APIKey{}
 	emptyUserOrgs   = []*dbgen.GetUserOrganizationsRow{}
 	emptyProperties = []*dbgen.Property{}
+	// shortcuts for nullable access levels
+	nullAccessLevelNull   = dbgen.NullAccessLevel{Valid: false}
+	nullAccessLevelOwner  = dbgen.NullAccessLevel{Valid: true, AccessLevel: dbgen.AccessLevelOwner}
+	nullAccessLevelMember = dbgen.NullAccessLevel{Valid: true, AccessLevel: dbgen.AccessLevelMember}
 )
 
 func fetchCachedOne[T any](ctx context.Context, cache common.Cache[CacheKey, any], key CacheKey) (*T, error) {
@@ -543,12 +547,12 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 	return orgs, nil
 }
 
-func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
+func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Context, userID, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	cacheKey := orgCacheKey(orgID)
 
 	if org, err := fetchCachedOne[dbgen.Organization](ctx, impl.cache, cacheKey); err == nil {
 		if org.UserID.Int32 == userID {
-			return org, nil
+			return org, nullAccessLevelOwner, nil
 		}
 
 		// NOTE: for security reasons, we want to verify that this user has rights to get this org
@@ -557,7 +561,7 @@ func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, use
 		if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey(userID)); err == nil {
 			hasOrg := slices.ContainsFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
 			if hasOrg {
-				return org, nil
+				return org, nullAccessLevelMember, nil
 			}
 		}
 
@@ -565,37 +569,41 @@ func (impl *businessStoreImpl) retrieveUserOrganization(ctx context.Context, use
 		if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, impl.cache, orgUsersCacheKey(orgID)); err == nil {
 			hasUser := slices.ContainsFunc(users, func(u *dbgen.GetOrganizationUsersRow) bool { return u.User.ID == userID })
 			if hasUser {
-				return org, nil
+				return org, nullAccessLevelMember, nil
 			}
 		}
 	} else if err == ErrNegativeCacheHit {
-		return nil, ErrNegativeCacheHit
+		return nil, nullAccessLevelNull, ErrNegativeCacheHit
 	}
 
 	if impl.queries == nil {
-		return nil, ErrMaintenance
+		return nil, nullAccessLevelNull, ErrMaintenance
 	}
 
-	org, err := impl.queries.GetUserOrganizationByID(ctx, &dbgen.GetUserOrganizationByIDParams{
+	// NOTE: we don't return the whole row from org_users in query and instead we only get the level back
+	// left join and embed() do not work together in sqlc (https://github.com/sqlc-dev/sqlc/issues/2348)
+	orgAndAccess, err := impl.queries.GetOrganizationWithAccess(ctx, &dbgen.GetOrganizationWithAccessParams{
 		ID:     orgID,
-		UserID: Int(userID),
+		UserID: userID,
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
-			return nil, ErrRecordNotFound
+			return nil, nullAccessLevelNull, ErrRecordNotFound
 		}
 
 		slog.ErrorContext(ctx, "Failed to retrieve organization by ID", "orgID", orgID, common.ErrAttr(err))
 
-		return nil, err
+		return nil, nullAccessLevelNull, err
 	}
 
-	if org != nil {
-		_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
-	}
+	// when sqlc will be able to do embed() as a pointer, we can remove this copying
+	org := &dbgen.Organization{}
+	*org = orgAndAccess.Organization
 
-	return org, nil
+	_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
+
+	return org, orgAndAccess.Level, nil
 }
 
 func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {

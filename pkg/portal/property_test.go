@@ -3,7 +3,6 @@ package portal
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -72,13 +71,12 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to read response body: %v", err)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	expectedError := "Insufficient permissions to update settings."
-	if !strings.Contains(string(body), expectedError) {
-		t.Error("Expected response body to contain permissions error")
+	url, _ := resp.Location()
+	if path := url.String(); !strings.HasPrefix(path, "/"+common.ErrorEndpoint) {
+		t.Errorf("Unexpected redirect: %s", path)
 	}
 }
