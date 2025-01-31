@@ -169,23 +169,28 @@ func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, or
 		return nil, err
 	}
 
-	if org.DeletedAt.Valid {
-		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
-		return org, ErrSoftDeleted
-	}
-
 	if !level.Valid {
 		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", userID)
 		return nil, ErrPermissions
 	}
 
+	if org.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
+		return org, ErrSoftDeleted
+	}
+
 	return org, nil
 }
 
-func (s *BusinessStore) RetrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
-	property, err := s.impl().retrieveProperty(ctx, propID)
+func (s *BusinessStore) RetrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
+	property, err := s.impl().retrieveOrgProperty(ctx, orgID, propID)
 	if err != nil {
 		return nil, err
+	}
+
+	if !property.OrgID.Valid || (property.OrgID.Int32 != orgID) {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", orgID)
+		return nil, ErrPermissions
 	}
 
 	if property.DeletedAt.Valid {

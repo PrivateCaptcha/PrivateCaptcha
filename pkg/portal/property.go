@@ -460,22 +460,22 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
-func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, error) {
+func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, *dbgen.Property, error) {
 	ctx := r.Context()
 
 	user, err := s.sessionUser(ctx, s.session(w, r))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	org, err := s.org(user.ID, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	property, err := s.property(org.ID, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
@@ -485,11 +485,12 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		Org:                  orgToUserOrg(org, user.ID),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
 	}
-	return renderCtx, nil
+
+	return renderCtx, property, nil
 }
 
 func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) (*propertySettingsRenderContext, error) {
-	propertyRenderCtx, err := s.getOrgProperty(w, r)
+	propertyRenderCtx, _, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, err
 	}
@@ -528,7 +529,7 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 		if (tabParam != "reports") && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
-		if renderCtx, err := s.getOrgProperty(w, r); err == nil {
+		if renderCtx, _, err := s.getOrgProperty(w, r); err == nil {
 			renderCtx.Tab = 0
 			model = renderCtx
 		} else {
@@ -544,7 +545,7 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 }
 
 func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	renderCtx, err := s.getOrgProperty(w, r)
+	renderCtx, _, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -562,13 +563,7 @@ func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (*propertyIntegrationsRenderContext, error) {
-	dashboardCtx, err := s.getOrgProperty(w, r)
-	if err != nil {
-		return nil, err
-	}
-
-	// should just hit cache right away
-	property, err := s.property(-1 /*orgID*/, r)
+	dashboardCtx, property, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, err
 	}

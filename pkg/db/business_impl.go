@@ -606,13 +606,32 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	return org, orgAndAccess.Level, nil
 }
 
-func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int32) (*dbgen.Property, error) {
+func (impl *businessStoreImpl) cacheProperty(ctx context.Context, property *dbgen.Property) {
+	if property == nil {
+		return
+	}
+
+	key := propertyByIDCacheKey(property.ID)
+	_ = impl.cache.Set(ctx, key, property, impl.ttl)
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	_ = impl.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
+}
+
+func (impl *businessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
 	cacheKey := propertyByIDCacheKey(propID)
 
 	if prop, err := fetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 		return prop, nil
 	} else if err == ErrNegativeCacheHit {
 		return nil, ErrNegativeCacheHit
+	}
+
+	if properties, err := fetchCachedMany[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID)); err == nil {
+		if index := slices.IndexFunc(properties, func(p *dbgen.Property) bool { return p.ID == propID }); index != -1 {
+			property := properties[index]
+			impl.cacheProperty(ctx, property)
+			return property, nil
+		}
 	}
 
 	if impl.queries == nil {
@@ -631,11 +650,7 @@ func (impl *businessStoreImpl) retrieveProperty(ctx context.Context, propID int3
 		return nil, err
 	}
 
-	if property != nil {
-		_ = impl.cache.Set(ctx, cacheKey, property, impl.ttl)
-		sitekey := UUIDToSiteKey(property.ExternalID)
-		_ = impl.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
-	}
+	impl.cacheProperty(ctx, property)
 
 	return property, nil
 }
