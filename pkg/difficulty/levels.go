@@ -12,16 +12,10 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 )
 
-const (
-	leakyBucketCap = math.MaxUint32
-	// this one is arbitrary as we can support "many"
-	maxBucketsToKeep    = 1_000_000
-	maxPendingBatchSize = 100_000
-)
-
 type Levels struct {
 	timeSeries      *db.TimeSeriesStore
-	buckets         *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
+	propertyBuckets *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
+	userBuckets     *leakybucket.Manager[common.TFingerprint, leakybucket.VarLeakyBucket[common.TFingerprint], *leakybucket.VarLeakyBucket[common.TFingerprint]]
 	accessChan      chan *common.AccessRecord
 	backfillChan    chan *common.BackfillRequest
 	batchSize       int
@@ -29,13 +23,25 @@ type Levels struct {
 	cleanupCancel   context.CancelFunc
 }
 
-func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration, cleanupCallback leakybucket.BucketCallback[int32]) *Levels {
+func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
+
+	const (
+		leakyBucketCap      = math.MaxUint32
+		maxPendingBatchSize = 100_000
+		// below numbers are rather arbitrary as we can support "many"
+		// as for users, we want to keep only the "most active" ones as "not active enough" activity
+		// does not affect difficulty much, if at all
+		maxUserBuckets     = 1_000_000
+		maxPropertyBuckets = 100_000
+	)
+
 	levels := &Levels{
-		timeSeries:   timeSeries,
-		buckets:      leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxBucketsToKeep, leakyBucketCap, bucketSize),
-		accessChan:   make(chan *common.AccessRecord, 10*batchSize),
-		backfillChan: make(chan *common.BackfillRequest, batchSize),
-		batchSize:    batchSize,
+		timeSeries:      timeSeries,
+		propertyBuckets: leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, leakyBucketCap, bucketSize),
+		userBuckets:     leakybucket.NewManager[common.TFingerprint, leakybucket.VarLeakyBucket[common.TFingerprint]](maxUserBuckets, leakyBucketCap, bucketSize),
+		accessChan:      make(chan *common.AccessRecord, 10*batchSize),
+		backfillChan:    make(chan *common.BackfillRequest, batchSize),
+		batchSize:       batchSize,
 	}
 
 	var accessCtx context.Context
@@ -49,13 +55,20 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 	var cancelCtx context.Context
 	cancelCtx, levels.cleanupCancel = context.WithCancel(
 		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_stats"))
-	go levels.cleanupStats(cancelCtx, cleanupCallback)
+	// bucket window is currently 5 minutes so it may change at a minute step
+	// here we have 30 seconds since 1 minute sounds like way too long
+	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
+		return levels.propertyBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
+	})
+	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
+		return levels.userBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
+	})
 
 	return levels
 }
 
 func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
-	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize, nil)
+	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize)
 }
 
 func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.DifficultyGrowth) uint8 {
@@ -104,25 +117,28 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, baseLevel leakybucket.TLevel, tnow time.Time) (uint8, leakybucket.TLevel) {
+func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) (uint8, leakybucket.TLevel) {
 	l.recordAccess(fingerprint, p, tnow)
 
 	minDifficulty := uint8(p.Level.Int16)
 
-	addResult := l.buckets.Add(p.ID, 1, tnow)
-	if !addResult.Found {
+	propertyAddResult := l.propertyBuckets.Add(p.ID, 1, tnow)
+	if !propertyAddResult.Found {
 		l.backfillProperty(p)
 	}
 
+	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
+
+	level := int64(userAddResult.CurrLevel)
+	level += int64(propertyAddResult.CurrLevel)
+
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	level := int64(baseLevel)
-	level += int64(addResult.CurrLevel)
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), addResult.CurrLevel
+	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), propertyAddResult.CurrLevel
 }
 
-func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, baseLevel leakybucket.TLevel, tnow time.Time) uint8 {
-	diff, _ := l.DifficultyEx(fingerprint, p, baseLevel, tnow)
+func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
+	diff, _ := l.DifficultyEx(fingerprint, p, tnow)
 	return diff
 }
 
@@ -153,16 +169,9 @@ func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property
 	l.accessChan <- ar
 }
 
-func (l *Levels) cleanupStats(ctx context.Context, cleanupCallback leakybucket.BucketCallback[int32]) {
-	// bucket window is currently 5 minutes so it may change at a minute step
-	// here we have 30 seconds since 1 minute sounds like way too long
-	common.ChunkedCleanup(ctx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.buckets.Cleanup(ctx, t, size, cleanupCallback)
-	})
-}
-
 func (l *Levels) Reset() {
-	l.buckets.Clear()
+	l.propertyBuckets.Clear()
+	l.userBuckets.Clear()
 }
 
 func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Duration) {
@@ -182,7 +191,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		}
 
 		// 12 because we keep last hour of 5-minute intervals in Clickhouse, so we grab all of them
-		timeFrom := time.Now().UTC().Add(-time.Duration(12) * l.buckets.LeakInterval())
+		timeFrom := time.Now().UTC().Add(-time.Duration(12) * l.propertyBuckets.LeakInterval())
 		counts, err := l.timeSeries.ReadPropertyStats(ctx, r, timeFrom)
 
 		if err != nil {
@@ -195,7 +204,7 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 		if len(counts) > 0 {
 			var addResult leakybucket.AddResult
 			for _, count := range counts {
-				addResult = l.buckets.Add(r.PropertyID, count.Count, count.Timestamp)
+				addResult = l.propertyBuckets.Add(r.PropertyID, count.Count, count.Timestamp)
 			}
 			blog.InfoContext(ctx, "Backfilled requests counts", "counts", len(counts), "level", addResult.CurrLevel)
 		}

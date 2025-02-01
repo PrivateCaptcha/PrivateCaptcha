@@ -69,8 +69,8 @@ func (l *httpRateLimiter[TKey]) cleanup(ctx context.Context) {
 	// don't overload server on start
 	time.Sleep(10*time.Second + time.Duration(randv2.Int64N(int64(jitter))))
 
-	common.ChunkedCleanup(ctx, 1*time.Second, 10*time.Second, 100 /*chunkSize*/, func(t time.Time, size int) int {
-		return l.buckets.Cleanup(ctx, t, size, nil)
+	common.ChunkedCleanup(ctx, 1*time.Second, 10*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
+		return l.buckets.Cleanup(ctx, t, size, nil /*callback*/)
 	})
 }
 
@@ -88,7 +88,6 @@ func (l *httpRateLimiter[TKey]) RateLimit(next http.Handler) http.Handler {
 			//	"level", addResult.CurrLevel, "capacity", addResult.Capacity, "found", addResult.Found)
 
 			ctx := context.WithValue(r.Context(), common.RateLimitKeyContextKey, key)
-			ctx = context.WithValue(ctx, common.RateLimitLevelContextKey, addResult.CurrLevel)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		} else {
 			slog.Log(r.Context(), common.LevelTrace, "Rate limiting request", "ratelimiter", l.name,

@@ -20,7 +20,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -104,7 +103,7 @@ func NewServer(store *db.BusinessStore,
 	srv.testPuzzleData, _ = srv.serializePuzzle(context.TODO(), testPuzzle)
 
 	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
-		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/, nil /*cleanup callback*/)
+		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/)
 
 	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
 		copy(srv.uaKey[:], byteArray[:])
@@ -230,7 +229,9 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		// TODO: handle calculating hash with error
 		fingerprint = common.RandomFingerprint()
 	} else {
-		hash.Write([]byte(r.UserAgent()))
+		// TODO: Check if we really need to take user agent into account here
+		// or it should be accounted on the anomaly detection side (user-agent is trivial to spoof)
+		// hash.Write([]byte(r.UserAgent()))
 		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
 			hash.Write(ip.AsSlice())
 		}
@@ -239,14 +240,8 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		fingerprint = binary.BigEndian.Uint64(truncatedHmac)
 	}
 
-	var baseLevel leakybucket.TLevel = 0
 	tnow := time.Now()
-	if ipLevel, ok := ctx.Value(common.RateLimitLevelContextKey).(leakybucket.TLevel); ok {
-		// this will account for case when users from single IP are accessing multiple properties
-		baseLevel = ipLevel
-	}
-
-	puzzleDifficulty := s.levels.Difficulty(fingerprint, property, baseLevel, tnow)
+	puzzleDifficulty := s.levels.Difficulty(fingerprint, property, tnow)
 
 	result := puzzle.NewPuzzle()
 	if err := result.Init(property.ExternalID.Bytes, puzzleDifficulty); err != nil {

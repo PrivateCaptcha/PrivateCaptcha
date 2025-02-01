@@ -16,7 +16,7 @@ func gcDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func
 	tnow := time.Now()
 
 	for i := 0; i < requests; i++ {
-		s.levels.Difficulty(common.RandomFingerprint(), property, 0 /*user level*/, tnow.Add(time.Duration(i)*10*time.Second))
+		s.levels.Difficulty(common.RandomFingerprint(), property, tnow.Add(time.Duration(i)*10*time.Second))
 	}
 
 	// we need to wait for the timeout in the ProcessAccessLog()

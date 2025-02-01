@@ -41,7 +41,7 @@ func TestDetectUsageViolations(t *testing.T) {
 	}
 
 	for i := 0; i < requests+1; i++ {
-		s.levels.Difficulty(common.RandomFingerprint(), property, 0 /*user level*/, tnow.Add(time.Duration(i)*time.Microsecond))
+		s.levels.Difficulty(common.RandomFingerprint(), property, tnow.Add(time.Duration(i)*time.Microsecond))
 	}
 
 	if err := timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: requests}); err != nil {

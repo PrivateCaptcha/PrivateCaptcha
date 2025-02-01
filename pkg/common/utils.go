@@ -97,7 +97,7 @@ func ParseBoolean(value string) bool {
 	}
 }
 
-func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration, defaultChunkSize int, deleter func(t time.Time, size int) int) {
+func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration, defaultChunkSize int, deleter func(context.Context, time.Time, int) int) {
 	b := &backoff.Backoff{
 		Min:    minInterval,
 		Max:    maxInterval,
@@ -114,7 +114,7 @@ func ChunkedCleanup(ctx context.Context, minInterval, maxInterval time.Duration,
 		case <-ctx.Done():
 			running = false
 		case <-time.After(b.Duration()):
-			deleted := deleter(time.Now(), deleteChunk)
+			deleted := deleter(ctx, time.Now(), deleteChunk)
 			if deleted == 0 {
 				deleteChunk = defaultChunkSize
 				continue
