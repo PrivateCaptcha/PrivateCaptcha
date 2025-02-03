@@ -57,9 +57,10 @@ func (ns NullAccessLevel) Value() (driver.Value, error) {
 type DifficultyGrowth string
 
 const (
-	DifficultyGrowthSlow   DifficultyGrowth = "slow"
-	DifficultyGrowthMedium DifficultyGrowth = "medium"
-	DifficultyGrowthFast   DifficultyGrowth = "fast"
+	DifficultyGrowthConstant DifficultyGrowth = "constant"
+	DifficultyGrowthSlow     DifficultyGrowth = "slow"
+	DifficultyGrowthMedium   DifficultyGrowth = "medium"
+	DifficultyGrowthFast     DifficultyGrowth = "fast"
 )
 
 func (e *DifficultyGrowth) Scan(src interface{}) error {

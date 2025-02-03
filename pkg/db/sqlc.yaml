@@ -35,6 +35,7 @@ sql:
           backend_support: Support
           backend_usage_limit_violation: UsageLimitViolation
           backend_lock: Lock
+          backend_difficulty_growth_constant: DifficultyGrowthConstant
           backend_difficulty_growth_slow: DifficultyGrowthSlow
           backend_difficulty_growth_medium: DifficultyGrowthMedium
           backend_difficulty_growth_fast: DifficultyGrowthFast

@@ -69,9 +69,10 @@
         <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
             <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
-                <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Slow</option>
-                <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Normal</option>
-                <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Fast</option>
+                <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Constant (no growth)</option>
+                <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Slow</option>
+                <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Normal</option>
+                <option value="3" {{ if eq $.Params.Property.Growth 3 }}selected="selected"{{end}}>Fast</option>
             </select>
         </div>
     </div>

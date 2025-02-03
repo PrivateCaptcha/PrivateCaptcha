@@ -1,4 +1,4 @@
-CREATE TYPE backend.difficulty_growth AS ENUM ('slow', 'medium', 'fast');
+CREATE TYPE backend.difficulty_growth AS ENUM ('constant', 'slow', 'medium', 'fast');
 
 CREATE TABLE IF NOT EXISTS backend.properties(
     id SERIAL PRIMARY KEY,

@@ -72,7 +72,7 @@ func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Du
 }
 
 func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.DifficultyGrowth) uint8 {
-	if requests < 1.0 {
+	if (requests < 1.0) || (level == dbgen.DifficultyGrowthConstant) {
 		return minDifficulty
 	}
 

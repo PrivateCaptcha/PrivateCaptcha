@@ -132,14 +132,16 @@ func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Propert
 
 func growthLevelToIndex(level dbgen.DifficultyGrowth) int {
 	switch level {
-	case dbgen.DifficultyGrowthSlow:
+	case dbgen.DifficultyGrowthConstant:
 		return 0
+	case dbgen.DifficultyGrowthSlow:
+		return 1
 	case dbgen.DifficultyGrowthMedium:
-		return 1
-	case dbgen.DifficultyGrowthFast:
 		return 2
+	case dbgen.DifficultyGrowthFast:
+		return 3
 	default:
-		return 1
+		return 2
 	}
 }
 
@@ -152,10 +154,12 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 
 	switch i {
 	case 0:
-		return dbgen.DifficultyGrowthSlow
+		return dbgen.DifficultyGrowthConstant
 	case 1:
-		return dbgen.DifficultyGrowthMedium
+		return dbgen.DifficultyGrowthSlow
 	case 2:
+		return dbgen.DifficultyGrowthMedium
+	case 3:
 		return dbgen.DifficultyGrowthFast
 	default:
 		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
