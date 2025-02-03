@@ -3,8 +3,8 @@ package db
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -115,11 +115,41 @@ type CacheKey struct {
 }
 
 func (ck CacheKey) String() string {
-	if len(ck.StrValue) != 0 {
-		return fmt.Sprintf("%v/%s", ck.Prefix, ck.StrValue)
+	var prefix string
+	switch ck.Prefix {
+	case userCacheKeyPrefix:
+		prefix = "user/"
+	case apiKeyCacheKeyPrefix:
+		prefix = "apikey/"
+	case orgCacheKeyPrefix:
+		prefix = "org/"
+	case orgPropertiesCacheKeyPrefix:
+		prefix = "orgProperties/"
+	case propertyByIDCacheKeyPrefix:
+		prefix = "propID/"
+	case propertyBySitekeyCacheKeyPrefix:
+		prefix = "propSitekey/"
+	case userOrgsCacheKeyPrefix:
+		prefix = "userOrgs/"
+	case orgUsersCacheKeyPrefix:
+		prefix = "orgUsers/"
+	case userAPIKeysCacheKeyPrefix:
+		prefix = "userApiKeys/"
+	case subscriptionCacheKeyPrefix:
+		prefix = "subscr/"
+	case notificationCacheKeyPrefix:
+		prefix = "notif/"
 	}
 
-	return fmt.Sprintf("%v/%v", ck.Prefix, ck.IntValue)
+	if len(ck.StrValue) != 0 {
+		return prefix + ck.StrValue
+	}
+
+	return prefix + strconv.Itoa(ck.IntValue)
+}
+
+func (ck CacheKey) LogValue() slog.Value {
+	return slog.StringValue(ck.String())
 }
 
 func int32CacheKey(prefix cacheKeyPrefix, value int32) CacheKey {
