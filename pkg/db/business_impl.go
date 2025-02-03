@@ -554,26 +554,29 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 		if org.UserID.Int32 == userID {
 			return org, nullAccessLevelOwner, nil
 		}
-
 		// NOTE: for security reasons, we want to verify that this user has rights to get this org
-
-		// this value should be in cache for "normal" use-cases (e.g. user logs in to the portal)
-		if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey(userID)); err == nil {
-			hasOrg := slices.ContainsFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
-			if hasOrg {
-				return org, nullAccessLevelMember, nil
-			}
-		}
 
 		// this value should be in cache if user opens "Members" tab in the org
 		if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, impl.cache, orgUsersCacheKey(orgID)); err == nil {
-			hasUser := slices.ContainsFunc(users, func(u *dbgen.GetOrganizationUsersRow) bool { return u.User.ID == userID })
-			if hasUser {
+			if hasUser := slices.ContainsFunc(users, func(u *dbgen.GetOrganizationUsersRow) bool { return u.User.ID == userID }); hasUser {
+				slog.Log(ctx, common.LevelTrace, "Found cached org from organization users", "orgID", orgID, "userID", userID)
 				return org, nullAccessLevelMember, nil
 			}
 		}
 	} else if err == ErrNegativeCacheHit {
 		return nil, nullAccessLevelNull, ErrNegativeCacheHit
+	}
+
+	// this value should be in cache for "normal" use-cases (e.g. user logs in to the portal)
+	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey(userID)); err == nil {
+		if index := slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID }); index != -1 {
+			slog.Log(ctx, common.LevelTrace, "Found cached org from user organizations", "orgID", orgID, "userID", userID)
+			org := &dbgen.Organization{}
+			*org = orgs[index].Organization
+			_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
+
+			return org, dbgen.NullAccessLevel{Valid: true, AccessLevel: orgs[index].Level}, nil
+		}
 	}
 
 	if impl.queries == nil {
@@ -602,6 +605,10 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	*org = orgAndAccess.Organization
 
 	_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
+
+	if org.UserID.Int32 == userID {
+		return org, nullAccessLevelOwner, nil
+	}
 
 	return org, orgAndAccess.Level, nil
 }
