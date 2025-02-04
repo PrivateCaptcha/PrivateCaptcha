@@ -75,7 +75,7 @@ func TestBackfillLevels(t *testing.T) {
 	// and also for cache to expire in BackfillDifficulty()
 	time.Sleep(1 * time.Second)
 
-	levels.Reset()
+	levels.ResetProperties()
 
 	// now this should cause the backfill request to be fired
 	if d, l := levels.DifficultyEx(fingerprints[0], prop, tnow); d != uint8(common.DifficultyLevelSmall) {
@@ -89,7 +89,8 @@ func TestBackfillLevels(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
-		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprints[0], prop, tnow)
+		fingerprint := fingerprints[rand.Intn(len(fingerprints))]
+		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprint, prop, tnow)
 		if (actualDifficulty >= diff) && (actualDifficulty-diff < 5) {
 			backfilled = true
 			break
