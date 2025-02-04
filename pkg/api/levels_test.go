@@ -77,8 +77,9 @@ func TestBackfillLevels(t *testing.T) {
 
 	levels.ResetProperties()
 
+	fingerprint := common.RandomFingerprint()
 	// now this should cause the backfill request to be fired
-	if d, l := levels.DifficultyEx(fingerprints[0], prop, tnow); d != uint8(common.DifficultyLevelSmall) {
+	if d, l := levels.DifficultyEx(fingerprint, prop, tnow); d != uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Unexpected difficulty after stats reset: %v (level %v)", d, l)
 	}
 
@@ -89,7 +90,6 @@ func TestBackfillLevels(t *testing.T) {
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
-		fingerprint := fingerprints[rand.Intn(len(fingerprints))]
 		actualDifficulty, actualLevel = levels.DifficultyEx(fingerprint, prop, tnow)
 		if (actualDifficulty >= diff) && (actualDifficulty-diff < 5) {
 			backfilled = true
