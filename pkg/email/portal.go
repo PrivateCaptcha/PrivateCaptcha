@@ -55,12 +55,12 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	}
 
 	data := struct {
-		Code        int
+		Code        string
 		Domain      string
 		CurrentYear int
 		CDN         string
 	}{
-		Code:        code,
+		Code:        fmt.Sprintf("%06d", code),
 		CDN:         pm.cdn,
 		Domain:      pm.domain,
 		CurrentYear: time.Now().Year(),
@@ -79,13 +79,13 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	msg := &Message{
 		HTMLBody:  htmlBodyTpl.String(),
 		TextBody:  textBodyTpl.String(),
-		Subject:   fmt.Sprintf("[%s] Your verification code", common.PrivateCaptcha),
+		Subject:   fmt.Sprintf("[%s] Your verification code is %v", common.PrivateCaptcha, data.Code),
 		EmailTo:   email,
 		EmailFrom: pm.emailFrom,
 		NameFrom:  common.PrivateCaptcha,
 	}
 
-	clog := slog.With("email", email, "code", code)
+	clog := slog.With("email", email, "code", data.Code)
 
 	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
 		level := slog.LevelError
