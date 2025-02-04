@@ -14,7 +14,7 @@ import (
 const createProperty = `-- name: CreateProperty :one
 INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
 `
 
 type CreatePropertyParams struct {
@@ -47,6 +47,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 		&i.OrgOwnerID,
 		&i.Domain,
 		&i.Level,
+		&i.Salt,
 		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -67,7 +68,7 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error 
 }
 
 const getOrgProperties = `-- name: GetOrgProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
 `
 
 func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*Property, error) {
@@ -88,6 +89,7 @@ func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*P
 			&i.OrgOwnerID,
 			&i.Domain,
 			&i.Level,
+			&i.Salt,
 			&i.Growth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -106,7 +108,7 @@ func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*P
 }
 
 const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgPropertyByNameParams struct {
@@ -126,6 +128,7 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 		&i.OrgOwnerID,
 		&i.Domain,
 		&i.Level,
+		&i.Salt,
 		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -137,7 +140,7 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 }
 
 const getProperties = `-- name: GetProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost FROM backend.properties LIMIT $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost FROM backend.properties LIMIT $1
 `
 
 func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, error) {
@@ -158,6 +161,7 @@ func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, 
 			&i.OrgOwnerID,
 			&i.Domain,
 			&i.Level,
+			&i.Salt,
 			&i.Growth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -176,7 +180,7 @@ func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, 
 }
 
 const getPropertiesByExternalID = `-- name: GetPropertiesByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error) {
@@ -197,6 +201,7 @@ func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgty
 			&i.OrgOwnerID,
 			&i.Domain,
 			&i.Level,
+			&i.Salt,
 			&i.Growth,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -215,7 +220,7 @@ func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgty
 }
 
 const getPropertyByID = `-- name: GetPropertyByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost from backend.properties WHERE id = $1
 `
 
 func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, error) {
@@ -230,6 +235,7 @@ func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, err
 		&i.OrgOwnerID,
 		&i.Domain,
 		&i.Level,
+		&i.Salt,
 		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -241,7 +247,7 @@ func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, err
 }
 
 const getSoftDeletedProperties = `-- name: GetSoftDeletedProperties :many
-SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.growth, p.created_at, p.updated_at, p.deleted_at, p.allow_subdomains, p.allow_localhost
+SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.salt, p.growth, p.created_at, p.updated_at, p.deleted_at, p.allow_subdomains, p.allow_localhost
 FROM backend.properties p
 JOIN backend.organizations o ON p.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
@@ -279,6 +285,7 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 			&i.Property.OrgOwnerID,
 			&i.Property.Domain,
 			&i.Property.Level,
+			&i.Property.Salt,
 			&i.Property.Growth,
 			&i.Property.CreatedAt,
 			&i.Property.UpdatedAt,
@@ -297,7 +304,7 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
 `
 
 func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {
@@ -312,6 +319,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 		&i.OrgOwnerID,
 		&i.Domain,
 		&i.Level,
+		&i.Salt,
 		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -325,7 +333,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 const updateProperty = `-- name: UpdateProperty :one
 UPDATE backend.properties SET name = $2, level = $3, growth = $4, allow_subdomains = $5, allow_localhost = $6, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, allow_subdomains, allow_localhost
 `
 
 type UpdatePropertyParams struct {
@@ -356,6 +364,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		&i.OrgOwnerID,
 		&i.Domain,
 		&i.Level,
+		&i.Salt,
 		&i.Growth,
 		&i.CreatedAt,
 		&i.UpdatedAt,

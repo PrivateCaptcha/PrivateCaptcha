@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS backend.properties(
     org_owner_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
     domain VARCHAR(255) NOT NULL,
     level SMALLINT CHECK (level >= 0 AND level < 256),
+    salt BYTEA NOT NULL DEFAULT gen_random_bytes(8),
     growth backend.difficulty_growth NOT NULL DEFAULT 'medium',
     created_at TIMESTAMPTZ DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ DEFAULT current_timestamp,

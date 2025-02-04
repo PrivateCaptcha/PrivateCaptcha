@@ -305,7 +305,7 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	uuid := db.UUIDFromSiteKey(sitekey)
 
 	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init(uuid.Bytes, uint8(level)); err != nil {
+	if err := puzzle.Init(uuid.Bytes, uint8(level), nil /*salt*/); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}

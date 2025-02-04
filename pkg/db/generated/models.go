@@ -244,6 +244,7 @@ type Property struct {
 	OrgOwnerID      pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
 	Domain          string             `db:"domain" json:"domain"`
 	Level           pgtype.Int2        `db:"level" json:"level"`
+	Salt            []byte             `db:"salt" json:"salt"`
 	Growth          DifficultyGrowth   `db:"growth" json:"growth"`
 	CreatedAt       pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `db:"updated_at" json:"updated_at"`

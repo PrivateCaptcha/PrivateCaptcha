@@ -64,6 +64,10 @@ func checkPuzzles(oldPuzzle, newPuzzle *Puzzle, t *testing.T) {
 		t.Errorf("Version does not match")
 	}
 
+	if oldPuzzle.IsStub() != newPuzzle.IsStub() {
+		t.Errorf("Stub flag does not match")
+	}
+
 	if !bytes.Equal(oldPuzzle.UserData, newPuzzle.UserData) {
 		t.Errorf("UserData does not match")
 	}
@@ -77,7 +81,7 @@ func TestPuzzleMarshalling(t *testing.T) {
 	propertyID := [16]byte{}
 	randInit(propertyID[:])
 
-	puzzle.Init(propertyID, 123)
+	puzzle.Init(propertyID, 123, nil /*salt*/)
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()

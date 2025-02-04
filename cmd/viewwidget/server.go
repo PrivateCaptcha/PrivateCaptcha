@@ -2,9 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha1"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -21,6 +18,10 @@ import (
 const (
 	greenPage = `<!DOCTYPE html><html><body style="background-color: green;"></body></html>`
 	redPage   = `<!DOCTYPE html><html><body style="background-color: red;"></body></html>`
+)
+
+var (
+	propertySalt = []byte("pepper")
 )
 
 type server struct {
@@ -72,7 +73,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init([16]byte{}, 90); err != nil {
+	if err := puzzle.Init([16]byte{}, 90, propertySalt); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -102,48 +103,29 @@ func (s *server) zeroPuzzle(w http.ResponseWriter, r *http.Request) {
 
 // mostly copy-paste from api/server.go
 func (s *server) writePuzzle(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) {
-	puzzleBytes, err := p.MarshalBinary()
+	payload, err := p.Serialize(ctx, s.salt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	hasher := hmac.New(sha1.New, s.salt)
-	if _, werr := hasher.Write(puzzleBytes); werr != nil {
-		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(werr))
-	}
-
-	hash := hasher.Sum(nil)
-	encodedPuzzle := base64.StdEncoding.EncodeToString(puzzleBytes)
-	encodedHash := base64.StdEncoding.EncodeToString(hash)
-	response := []byte(fmt.Sprintf("%s.%s", encodedPuzzle, encodedHash))
-
-	w.WriteHeader(http.StatusOK)
 	w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
-	if _, werr := w.Write(response); werr != nil {
-		slog.ErrorContext(ctx, "Failed to write puzzle response", common.ErrAttr(werr))
-	}
+	payload.Write(w)
 }
 
 func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	payload := r.FormValue("private-captcha-solution")
 
-	solutionsData, puzzleBytes, err := puzzle.ParseSolutions(ctx, payload, s.salt)
+	verifyPayload, err := puzzle.ParseVerifyPayload(ctx, payload)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to parse puzzle", common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to parse verify payload", common.ErrAttr(err))
 		fmt.Fprintln(w, redPage)
 		return
 	}
 
-	p := new(puzzle.Puzzle)
-
-	if uerr := p.UnmarshalBinary(puzzleBytes); uerr != nil {
-		slog.ErrorContext(ctx, "Failed to unmarshal binary puzzle", common.ErrAttr(uerr))
-		fmt.Fprintln(w, redPage)
-		return
-	}
+	p := verifyPayload.Puzzle()
 
 	tnow := time.Now().UTC()
 	if !tnow.Before(p.Expiration) {
@@ -151,7 +133,12 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if serr := puzzle.VerifySolutions(ctx, p, puzzleBytes, solutionsData); serr != puzzle.VerifyNoError {
+	if serr := verifyPayload.VerifySignature(ctx, s.salt, propertySalt); serr != nil {
+		fmt.Fprintln(w, redPage)
+		return
+	}
+
+	if verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
 		fmt.Fprintln(w, redPage)
 		return
 	}

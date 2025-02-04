@@ -109,6 +109,7 @@ export class Puzzle {
         let offset = 0;
 
         offset += 1; // version
+        offset += 1; // flags
         offset += 16; // propertyID
 
         this.ID = readUInt64LE(data, offset);
