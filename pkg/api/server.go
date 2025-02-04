@@ -190,7 +190,7 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	router.Handle(http.MethodGet+" "+prefix+"{$}", publicChain.Then(common.HttpStatus(http.StatusForbidden)))
 }
 
-func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
+func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Property, error) {
 	ctx := r.Context()
 	property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	// property will not be cached for auth.backfillDelay and we return an "average" puzzle instead
@@ -198,7 +198,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 	if !ok {
 		sitekey := ctx.Value(common.SitekeyContextKey).(string)
 		if sitekey == db.TestPropertySitekey {
-			return nil, db.ErrTestProperty
+			return nil, nil, db.ErrTestProperty
 		}
 
 		uuid := db.UUIDFromSiteKey(sitekey)
@@ -210,7 +210,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 
 		slog.Log(ctx, common.LevelTrace, "Returning stub puzzle before auth is backfilled", "puzzleID", stubPuzzle.PuzzleID,
 			"sitekey", sitekey, "difficulty", stubPuzzle.Difficulty)
-		return stubPuzzle, nil
+		return stubPuzzle, nil, nil
 	}
 
 	var fingerprint common.TFingerprint
@@ -244,7 +244,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 
 	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty, "puzzleID", result.PuzzleID)
 
-	return result, nil
+	return result, property, nil
 }
 
 func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +260,7 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	puzzle, err := s.puzzleForRequest(r)
+	puzzle, property, err := s.puzzleForRequest(r)
 	if err != nil {
 		if err == db.ErrTestProperty {
 			common.WriteHeaders(w, common.CachedHeaders)
@@ -277,6 +277,12 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.Write(ctx, puzzle, w)
+
+	var userID int32 = -1
+	if property != nil {
+		userID = property.OrgOwnerID.Int32
+	}
+	s.metrics.ObservePuzzleCreated(userID, puzzle.IsStub())
 }
 
 func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
@@ -390,6 +396,8 @@ func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 	}
 
 	s.verifyLogChan <- vr
+
+	s.metrics.ObservePuzzleVerified(vr.UserID, verr, p.IsStub())
 }
 
 func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {

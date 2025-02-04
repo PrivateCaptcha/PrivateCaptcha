@@ -4,9 +4,11 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -16,14 +18,26 @@ import (
 	"github.com/slok/go-http-metrics/middleware/std"
 )
 
+const (
+	metricsNamespace = "server"
+	metricsSubsystem = "puzzle"
+	userIDLabel      = "user_id"
+	stubLabel        = "stub"
+	resultLabel      = "result"
+)
+
 type Metrics interface {
 	Handler(h http.Handler) http.Handler
 	HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
+	ObservePuzzleCreated(userID int32, isStub bool)
+	ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool)
 }
 
 type service struct {
-	registry   *prometheus.Registry
-	middleware middleware.Middleware
+	registry    *prometheus.Registry
+	middleware  middleware.Middleware
+	puzzleCount *prometheus.CounterVec
+	verifyCount *prometheus.CounterVec
 }
 
 var _ Metrics = (*service)(nil)
@@ -54,6 +68,28 @@ func NewService(getenv func(string) string) *service {
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
 	)
 
+	puzzleCount := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      "create_total",
+			Help:      "Total number of puzzles created",
+		},
+		[]string{stubLabel, userIDLabel},
+	)
+	reg.MustRegister(puzzleCount)
+
+	verifyCount := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metricsNamespace,
+			Subsystem: metricsSubsystem,
+			Name:      "verify_total",
+			Help:      "Total number of puzzle verifications",
+		},
+		[]string{stubLabel, userIDLabel, resultLabel},
+	)
+	reg.MustRegister(verifyCount)
+
 	return &service{
 		registry: reg,
 		middleware: middleware.New(middleware.Config{
@@ -61,6 +97,8 @@ func NewService(getenv func(string) string) *service {
 				Registry: reg,
 			}),
 		}),
+		puzzleCount: puzzleCount,
+		verifyCount: verifyCount,
 	}
 }
 
@@ -74,6 +112,21 @@ func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) ht
 		handlerID := handlerIDFunc()
 		return std.Handler(handlerID, s.middleware, h)
 	}
+}
+
+func (s *service) ObservePuzzleCreated(userID int32, isStub bool) {
+	s.puzzleCount.With(prometheus.Labels{
+		userIDLabel: strconv.Itoa(int(userID)),
+		stubLabel:   strconv.FormatBool(isStub),
+	}).Inc()
+}
+
+func (s *service) ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool) {
+	s.verifyCount.With(prometheus.Labels{
+		stubLabel:   strconv.FormatBool(isStub),
+		resultLabel: result.String(),
+		userIDLabel: strconv.Itoa(int(userID)),
+	}).Inc()
 }
 
 func (s *service) Setup(mux *http.ServeMux) {
