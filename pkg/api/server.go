@@ -225,6 +225,9 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, error) {
 		// hash.Write([]byte(r.UserAgent()))
 		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
 			hash.Write(ip.AsSlice())
+		} else {
+			slog.ErrorContext(ctx, "Rate limit context key type mismatch")
+			hash.Write([]byte(r.RemoteAddr))
 		}
 		hmac := hash.Sum(nil)
 		truncatedHmac := hmac[:8]
