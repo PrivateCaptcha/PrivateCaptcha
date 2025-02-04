@@ -175,7 +175,7 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	publicChain := alice.New(common.Recovered, s.auth.EdgeVerify(domain), s.metrics.Handler)
 	verifyChain := publicChain.Append(s.auth.APIKey)
 	// NOTE: auth middleware provides rate limiting internally
-	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, s.auth.Sitekey).ThenFunc(s.puzzle))
+	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, s.auth.Sitekey).ThenFunc(s.puzzleHandler))
 	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler, s.auth.SitekeyOptions).ThenFunc(s.puzzlePreFlight))
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
@@ -258,7 +258,7 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
+func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	puzzle, err := s.puzzleForRequest(r)
 	if err != nil {
