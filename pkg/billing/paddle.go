@@ -48,6 +48,7 @@ type PaddleAPI interface {
 
 type paddleClient struct {
 	sdk         *paddle.SDK
+	timeout     time.Duration
 	environment string
 	clientToken string
 }
@@ -75,6 +76,7 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 			sdk:         pc,
 			environment: getenv("PADDLE_ENVIRONMENT"),
 			clientToken: getenv("PADDLE_CLIENT_TOKEN"),
+			timeout:     10 * time.Second,
 		},
 		attempts:   5,
 		minBackoff: 500 * time.Millisecond,
@@ -90,10 +92,17 @@ func (pc *paddleClient) ClientToken() string {
 	return pc.clientToken
 }
 
+func (pc *paddleClient) paddleContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, pc.timeout)
+}
+
 func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
 	if len(customerID) == 0 {
 		return nil, errInvalidArgument
 	}
+
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
 
 	slog.DebugContext(ctx, "About to query customer info", "customerID", customerID)
 	if customer, err := pc.sdk.GetCustomer(ctx, &paddle.GetCustomerRequest{CustomerID: customerID}); err == nil {
@@ -110,6 +119,9 @@ func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID st
 	if len(subscriptionID) == 0 {
 		return nil, errInvalidArgument
 	}
+
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
 
 	slog.DebugContext(ctx, "About to fetch management URLs", "subscriptionID", subscriptionID)
 	// NOTE: we should NOT cache URL responses per Paddle doc
@@ -132,6 +144,9 @@ func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Pri
 	if len(productIDs) == 0 {
 		return nil, errInvalidArgument
 	}
+
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
 
 	slog.DebugContext(ctx, "About to fetch product prices", "products", len(productIDs))
 	prices, err := pc.sdk.ListPrices(ctx, &paddle.ListPricesRequest{
@@ -164,6 +179,9 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 	if (len(subscriptionID) == 0) || (len(priceID) == 0) {
 		return nil, errInvalidArgument
 	}
+
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
 
 	prorationMode := paddle.ProrationBillingModeProratedImmediately
 
@@ -199,6 +217,9 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 		return errInvalidArgument
 	}
 
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
+
 	slog.DebugContext(ctx, "About to change subscription", "subscriptionID", subscriptionID, "priceID", priceID)
 	// NOTE: we currently prefer subscription_updated handler to be a single point to update subscription data
 	_, err := pc.sdk.UpdateSubscription(ctx, &paddle.UpdateSubscriptionRequest{
@@ -225,6 +246,9 @@ func (pc *paddleClient) CancelSubscription(ctx context.Context, subscriptionID s
 	if len(subscriptionID) == 0 {
 		return errInvalidArgument
 	}
+
+	ctx, cancel := pc.paddleContext(ctx)
+	defer cancel()
 
 	slog.DebugContext(ctx, "About to cancel subscription", "subscriptionID", subscriptionID)
 	_, err := pc.sdk.CancelSubscription(ctx, &paddle.CancelSubscriptionRequest{
