@@ -96,11 +96,12 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.4.0-79146",
+      "pluginVersion": "11.5.0-81938",
       "targets": [
         {
           "datasource": {
@@ -108,7 +109,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(http_request_duration_seconds_count[30s])) by (handler)",
+          "expr": "sum(rate(http_request_duration_seconds_count{handler=~\"$handler\", instance=~\"$instance\"}[$__rate_interval])) by (handler)",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -192,15 +193,16 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.4.0-79146",
+      "pluginVersion": "11.5.0-81938",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "rate(http_request_duration_seconds_count{code=~\"5..\"}[30s])",
+          "expr": "rate(http_request_duration_seconds_count{code=~\"5..\", handler=~\"$handler\", instance=~\"$instance\"}[$__rate_interval])",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -284,15 +286,16 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.4.0-79146",
+      "pluginVersion": "11.5.0-81938",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+          "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{handler=~\"$handler\", instance=~\"$instance\"}[$__rate_interval]))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -376,15 +379,16 @@
           "showLegend": true
         },
         "tooltip": {
+          "hideZeros": false,
           "mode": "single",
           "sort": "none"
         }
       },
-      "pluginVersion": "11.4.0-79146",
+      "pluginVersion": "11.5.0-81938",
       "targets": [
         {
           "editorMode": "code",
-          "expr": "histogram_quantile(0.9, sum(rate(http_request_duration_seconds_bucket[10m])) by (handler, le))",
+          "expr": "histogram_quantile(0.9, sum(rate(http_request_duration_seconds_bucket{handler=~\"$handler\", instance=~\"$instance\"}[$__rate_interval])) by (handler, le))",
           "legendFormat": "__auto",
           "range": true,
           "refId": "A"
@@ -398,7 +402,53 @@
   "schemaVersion": 40,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allowCustomValue": true,
+        "current": {
+          "text": "All",
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "label_values(handler)",
+        "includeAll": true,
+        "label": "Handler",
+        "multi": true,
+        "name": "handler",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(handler)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "allowCustomValue": true,
+        "current": {
+          "text": "All",
+          "value": [
+              "$__all"
+          ]
+        },
+        "definition": "label_values(instance)",
+        "includeAll": true,
+        "label": "Instance",
+        "name": "instance",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(instance)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
@@ -408,6 +458,6 @@
   "timezone": "Europe/Tallinn",
   "title": "HTTP metrics",
   "uid": "ae4igxu3fp1q8b",
-  "version": 7,
+  "version": 15,
   "weekStart": ""
 }
