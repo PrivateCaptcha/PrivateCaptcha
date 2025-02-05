@@ -160,16 +160,16 @@ func (vp *VerifyPayload) Puzzle() *Puzzle {
 	return vp.puzzle
 }
 
-func (vp *VerifyPayload) VerifySolutions(ctx context.Context) VerifyError {
+func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, VerifyError) {
 	solutions, err := NewSolutions(vp.solutionsData)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
-		return ParseResponseError
+		slog.WarnContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
+		return nil, ParseResponseError
 	}
 
-	if uerr := solutions.CheckUnique(ctx); uerr != nil {
-		slog.ErrorContext(ctx, "Solutions are not unique", common.ErrAttr(uerr))
-		return DuplicateSolutionsError
+	if uerr := solutions.CheckUnique(); uerr != nil {
+		slog.WarnContext(ctx, "Solutions are not unique", common.ErrAttr(uerr))
+		return solutions.Metadata, DuplicateSolutionsError
 	}
 
 	puzzleBytes := vp.puzzleData
@@ -181,19 +181,14 @@ func (vp *VerifyPayload) VerifySolutions(ctx context.Context) VerifyError {
 
 	solutionsCount, err := solutions.Verify(ctx, puzzleBytes, vp.puzzle.Difficulty)
 	if err != nil {
-		m := solutions.Metadata
-
-		// NOTE: unlike solutions/puzzle, diagnostics bytes can be totally tampered
-		slog.WarnContext(ctx, "Failed to verify solutions", "clientError", m.ErrorCode,
-			"elapsedMillis", m.ElapsedMillis, "puzzleID", vp.puzzle.PuzzleID, common.ErrAttr(err))
-
-		return InvalidSolutionError
+		slog.WarnContext(ctx, "Failed to verify solutions", common.ErrAttr(err))
+		return solutions.Metadata, InvalidSolutionError
 	}
 
 	if solutionsCount != int(vp.puzzle.SolutionsCount) {
 		slog.WarnContext(ctx, "Invalid solutions count", "expected", vp.puzzle.SolutionsCount, "actual", solutionsCount)
-		return InvalidSolutionError
+		return solutions.Metadata, InvalidSolutionError
 	}
 
-	return VerifyNoError
+	return solutions.Metadata, VerifyNoError
 }

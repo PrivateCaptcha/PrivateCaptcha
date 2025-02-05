@@ -51,12 +51,20 @@ func Logged(h http.Handler) http.Handler {
 		t := time.Now()
 		ctx := common.TraceContextFunc(r.Context(), traceID)
 
-		slog.DebugContext(ctx, "Started request", "path", r.URL.Path, "method", r.Method)
+		// NOTE: these data (path, method, time) are now available as prometheus metrics
+		slog.Log(ctx, common.LevelTrace, "Started request", "path", r.URL.Path, "method", r.Method)
 		defer func() {
-			slog.DebugContext(ctx, "Finished request", "path", r.URL.Path, "method", r.Method,
+			slog.Log(ctx, common.LevelTrace, "Finished request", "path", r.URL.Path, "method", r.Method,
 				"duration", time.Since(t).Milliseconds())
 		}()
 
+		h.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func Traced(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := common.TraceContextFunc(r.Context(), traceID)
 		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

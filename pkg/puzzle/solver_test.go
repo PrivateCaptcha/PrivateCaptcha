@@ -51,7 +51,7 @@ func TestSolver(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if err := solutions.CheckUnique(context.TODO()); err != nil {
+			if err := solutions.CheckUnique(); err != nil {
 				t.Fatal(err)
 			}
 

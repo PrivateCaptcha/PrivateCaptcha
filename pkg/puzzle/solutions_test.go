@@ -1,7 +1,6 @@
 package puzzle
 
 import (
-	"context"
 	"testing"
 )
 
@@ -13,10 +12,8 @@ func TestUniqueSolutions(t *testing.T) {
 		solution[i] = byte(i)
 	}
 
-	ctx := context.TODO()
-
 	solutions := &Solutions{Buffer: solution}
-	if err := solutions.CheckUnique(ctx); err != nil {
+	if err := solutions.CheckUnique(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -25,7 +22,7 @@ func TestUniqueSolutions(t *testing.T) {
 	copy(buffer[SolutionLength:], solution)
 
 	solutions = &Solutions{Buffer: buffer}
-	if err := solutions.CheckUnique(ctx); err == nil {
+	if err := solutions.CheckUnique(); err == nil {
 		t.Error("Duplicate was not detected")
 	}
 }

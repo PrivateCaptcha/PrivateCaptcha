@@ -172,7 +172,7 @@ func (s *server) Shutdown() {
 func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler alice.Constructor) {
 	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	publicChain := alice.New(common.Recovered, s.auth.EdgeVerify(domain), s.metrics.Handler)
+	publicChain := alice.New(common.Recovered, monitoring.Traced, s.auth.EdgeVerify(domain), s.metrics.Handler)
 	verifyChain := publicChain.Append(s.auth.APIKey)
 	// NOTE: auth middleware provides rate limiting internally
 	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, s.auth.Sitekey).ThenFunc(s.puzzleHandler))
@@ -242,7 +242,8 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty, "puzzleID", result.PuzzleID)
+	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propertyID", property.ID, "difficulty", result.Difficulty,
+		"puzzleID", result.PuzzleID, "userID", property.OrgOwnerID.Int32)
 
 	return result, property, nil
 }
@@ -309,7 +310,12 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 		return puzzleObject, perr, nil
 	}
 
-	if verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
+	if metadata, verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
+		// NOTE: unlike solutions/puzzle, diagnostics bytes can be totally tampered
+		slog.WarnContext(ctx, "Failed to verify solutions", "result", verr.String(), "clientError", metadata.ErrorCode(),
+			"elapsedMillis", metadata.ElapsedMillis(), "puzzleID", puzzleObject.PuzzleID, "userID", property.OrgOwnerID.Int32,
+			"propertyID", property.ID)
+
 		s.addVerifyRecord(ctx, puzzleObject, property, verr)
 		return puzzleObject, verr, nil
 	}
@@ -402,14 +408,15 @@ func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 
 func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {
 	p := payload.Puzzle()
+	plog := slog.With("puzzleID", p.PuzzleID)
 
 	if p.IsZero() && bytes.Equal(p.PropertyID[:], db.TestPropertyUUID.Bytes[:]) {
-		slog.DebugContext(ctx, "Verifying test puzzle")
+		plog.DebugContext(ctx, "Verifying test puzzle")
 		return p, nil, puzzle.TestPropertyError
 	}
 
 	if !tnow.Before(p.Expiration) {
-		slog.WarnContext(ctx, "Puzzle is expired", "expiration", p.Expiration, "now", tnow)
+		plog.WarnContext(ctx, "Puzzle is expired", "expiration", p.Expiration, "now", tnow)
 		return p, nil, puzzle.PuzzleExpiredError
 	}
 
@@ -420,7 +427,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 	}
 
 	if s.businessDB.CheckPuzzleCached(ctx, p) {
-		slog.WarnContext(ctx, "Puzzle is already cached", "puzzleID", p.PuzzleID)
+		plog.WarnContext(ctx, "Puzzle is already cached")
 		return p, nil, puzzle.VerifiedBeforeError
 	}
 
@@ -433,7 +440,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 		case db.ErrMaintenance:
 			return p, nil, puzzle.MaintenanceModeError
 		default:
-			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
+			plog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
 			return p, nil, puzzle.VerifyErrorOther
 		}
 	}
@@ -447,12 +454,12 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 
 	if ownerID, err := expectedOwner.OwnerID(ctx); err == nil {
 		if property.OrgOwnerID.Int32 != ownerID {
-			slog.WarnContext(ctx, "Org owner does not match expected owner", "expected_owner", ownerID,
-				"org_owner", property.OrgOwnerID.Int32)
+			plog.WarnContext(ctx, "Org owner does not match expected owner", "expectedOwner", ownerID,
+				"orgOwner", property.OrgOwnerID.Int32)
 			return p, property, puzzle.WrongOwnerError
 		}
 	} else {
-		slog.ErrorContext(ctx, "Failed to fetch owner ID", common.ErrAttr(err))
+		plog.ErrorContext(ctx, "Failed to fetch owner ID", common.ErrAttr(err))
 	}
 
 	return p, property, puzzle.VerifyNoError

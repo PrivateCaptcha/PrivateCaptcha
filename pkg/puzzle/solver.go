@@ -108,9 +108,9 @@ func (s *Solver) Solve(p *Puzzle) (*Solutions, error) {
 	return &Solutions{
 		Buffer: buffer,
 		Metadata: &Metadata{
-			ErrorCode:     0,
-			ElapsedMillis: uint32(elapsed.Milliseconds()),
-			WasmFlag:      false,
+			errorCode:     0,
+			elapsedMillis: uint32(elapsed.Milliseconds()),
+			wasmFlag:      false,
 		},
 	}, nil
 }

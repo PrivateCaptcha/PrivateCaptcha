@@ -138,7 +138,7 @@ func (s *server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
+	if _, verr := verifyPayload.VerifySolutions(ctx); verr != puzzle.VerifyNoError {
 		fmt.Fprintln(w, redPage)
 		return
 	}

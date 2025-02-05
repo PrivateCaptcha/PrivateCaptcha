@@ -31,24 +31,24 @@ var (
 )
 
 type Metadata struct {
-	ErrorCode     uint8
-	WasmFlag      bool
-	ElapsedMillis uint32
+	errorCode     uint8
+	wasmFlag      bool
+	elapsedMillis uint32
 }
 
 func (m *Metadata) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 
 	binary.Write(&buf, binary.LittleEndian, byte(metadataVersion))
-	binary.Write(&buf, binary.LittleEndian, m.ErrorCode)
+	binary.Write(&buf, binary.LittleEndian, m.errorCode)
 
 	var wasmFlag byte = 0
-	if m.WasmFlag {
+	if m.wasmFlag {
 		wasmFlag = 1
 	}
 	binary.Write(&buf, binary.LittleEndian, wasmFlag)
 
-	binary.Write(&buf, binary.LittleEndian, m.ElapsedMillis)
+	binary.Write(&buf, binary.LittleEndian, m.elapsedMillis)
 
 	return buf.Bytes(), nil
 }
@@ -66,16 +66,40 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 	}
 	offset += 1
 
-	m.ErrorCode = data[offset]
+	m.errorCode = data[offset]
 	offset += 1
 
-	m.WasmFlag = data[offset] == 1
+	m.wasmFlag = data[offset] == 1
 	offset += 1
 
-	m.ElapsedMillis = binary.LittleEndian.Uint32(data[offset : offset+4])
+	m.elapsedMillis = binary.LittleEndian.Uint32(data[offset : offset+4])
 	offset += 4
 
 	return nil
+}
+
+func (m *Metadata) ErrorCode() uint8 {
+	if m == nil {
+		return 0
+	}
+
+	return m.errorCode
+}
+
+func (m *Metadata) WasmFlag() bool {
+	if m == nil {
+		return false
+	}
+
+	return m.wasmFlag
+}
+
+func (m *Metadata) ElapsedMillis() uint32 {
+	if m == nil {
+		return 0
+	}
+
+	return m.elapsedMillis
 }
 
 type Solutions struct {
@@ -87,9 +111,9 @@ func emptySolutions(count int) *Solutions {
 	return &Solutions{
 		Buffer: make([]byte, count*SolutionLength),
 		Metadata: &Metadata{
-			ErrorCode:     0,
-			WasmFlag:      false,
-			ElapsedMillis: 0,
+			errorCode:     0,
+			wasmFlag:      false,
+			elapsedMillis: 0,
 		},
 	}
 }
@@ -141,7 +165,7 @@ func thresholdFromDifficulty(difficulty uint8) uint32 {
 	return uint32(math.Pow(2, (255.999999999-float64(difficulty))/8.0))
 }
 
-func (s *Solutions) CheckUnique(ctx context.Context) error {
+func (s *Solutions) CheckUnique() error {
 	uniqueSolutions := make(map[uint64]bool)
 
 	for start := 0; start < len(s.Buffer); start += SolutionLength {
@@ -161,7 +185,7 @@ func (s *Solutions) CheckUnique(ctx context.Context) error {
 
 func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty uint8) (int, error) {
 	if len(puzzleBytes) != PuzzleBytesLength {
-		slog.ErrorContext(ctx, "Puzzle bytes buffer invalid", "size", len(puzzleBytes))
+		slog.WarnContext(ctx, "Puzzle bytes buffer invalid", "size", len(puzzleBytes))
 		return 0, ErrInvalidPuzzleBytes
 	}
 
@@ -177,12 +201,12 @@ func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty u
 		var resultInt uint32
 		err := binary.Read(bytes.NewReader(hash[:4]), binary.LittleEndian, &resultInt)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to read hash prefix", "error", err, "solution", sIndex)
+			slog.WarnContext(ctx, "Failed to read hash prefix", "solution", sIndex, "size", 4, common.ErrAttr(err))
 			continue
 		}
 
 		if resultInt > threshold {
-			slog.ErrorContext(ctx, "Solution prefix is larger than threshold", "solution", sIndex, "prefix", resultInt,
+			slog.WarnContext(ctx, "Solution prefix is larger than threshold", "solution", sIndex, "prefix", resultInt,
 				"threshold", threshold)
 			continue
 		}
