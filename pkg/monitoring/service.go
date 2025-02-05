@@ -93,7 +93,10 @@ func NewService(getenv func(string) string) *service {
 	return &service{
 		registry: reg,
 		middleware: middleware.New(middleware.Config{
+			Service: metricsNamespace,
 			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
+				// this is added as Service label
+				// Prefix:   metricsNamespace,
 				Registry: reg,
 			}),
 		}),
