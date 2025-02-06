@@ -169,8 +169,9 @@ func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property
 	l.accessChan <- ar
 }
 
-func (l *Levels) ResetProperties() {
+func (l *Levels) Reset() {
 	l.propertyBuckets.Clear()
+	l.userBuckets.Clear()
 }
 
 func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Duration) {

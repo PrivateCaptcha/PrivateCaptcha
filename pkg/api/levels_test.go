@@ -67,8 +67,9 @@ func TestBackfillLevels(t *testing.T) {
 		}
 	}
 
+	fingerprint := common.RandomFingerprint()
 	// reinit diff to neglect effect of other properties
-	diff, level = levels.DifficultyEx(common.RandomFingerprint(), prop, tnow)
+	diff, level = levels.DifficultyEx(fingerprint, prop, tnow)
 
 	if diff == uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Difficulty did not grow: %v", diff)
@@ -78,9 +79,8 @@ func TestBackfillLevels(t *testing.T) {
 	// and also for cache to expire in BackfillDifficulty()
 	time.Sleep(1 * time.Second)
 
-	levels.ResetProperties()
+	levels.Reset()
 
-	fingerprint := common.RandomFingerprint()
 	// now this should cause the backfill request to be fired
 	if d, l := levels.DifficultyEx(fingerprint, prop, tnow); d != uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Unexpected difficulty after stats reset: %v (level %v)", d, l)
