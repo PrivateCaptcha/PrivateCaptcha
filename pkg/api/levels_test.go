@@ -67,6 +67,9 @@ func TestBackfillLevels(t *testing.T) {
 		}
 	}
 
+	// reinit diff to neglect effect of other properties
+	diff, level = levels.DifficultyEx(common.RandomFingerprint(), prop, tnow)
+
 	if diff == uint8(common.DifficultyLevelSmall) {
 		t.Errorf("Difficulty did not grow: %v", diff)
 	}
