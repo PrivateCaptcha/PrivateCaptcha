@@ -31,7 +31,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 	"github.com/coreos/go-systemd/v22/activation"
-	"github.com/joho/godotenv"
 	"github.com/justinas/alice"
 )
 
@@ -45,11 +44,12 @@ const (
 var (
 	GitCommit       string
 	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
-	envFileFlag     = flag.String("env", "", "Path to .env file")
+	envFileFlag     = flag.String("env", "", "Path to .env file, 'stdin' or empty")
 	versionFlag     = flag.Bool("version", false, "Print version and exit")
 	migrateHashFlag = flag.String("migrate-hash", "", "Target migration version (git commit)")
 	certFileFlag    = flag.String("certfile", "", "certificate PEM file (e.g. cert.pem)")
 	keyFileFlag     = flag.String("keyfile", "", "key PEM file (e.g. key.pem)")
+	env             *common.EnvMap
 )
 
 func createListener(ctx context.Context, cfg *config.Config) (net.Listener, bool, error) {
@@ -201,9 +201,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 			slog.DebugContext(ctx, "Received signal", "signal", sig)
 			switch sig {
 			case syscall.SIGHUP:
-				if len(*envFileFlag) > 0 {
-					_ = godotenv.Load(*envFileFlag)
-				}
+				env.Update()
 				updateConfigFunc(ctx)
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
@@ -333,15 +331,12 @@ func main() {
 	}
 
 	var err error
-
-	if len(*envFileFlag) > 0 {
-		err = godotenv.Load(*envFileFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
-		}
+	env, err = common.NewEnvMap(*envFileFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
-	cfg, err := config.New(os.Getenv)
+	cfg, err := config.New(env.Get)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}

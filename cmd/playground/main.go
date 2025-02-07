@@ -7,23 +7,26 @@ import (
 	"os"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
-	"github.com/joho/godotenv"
 )
 
 var (
 	GitCommit   string
-	envFileFlag = flag.String("env", "", "Path to .env file")
+	envFileFlag = flag.String("env", "", "Path to .env file, 'stdin' or empty")
+	env         *common.EnvMap
 )
 
 func main() {
 	flag.Parse()
 
-	if len(*envFileFlag) > 0 {
-		_ = godotenv.Load(*envFileFlag)
+	var err error
+	env, err = common.NewEnvMap(*envFileFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
-	cfg, err := config.New(os.Getenv)
+	cfg, err := config.New(env.Get)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}

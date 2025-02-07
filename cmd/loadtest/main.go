@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
-	"github.com/joho/godotenv"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 )
 
 var (
-	envFileFlag         = flag.String("env", "", "Path to .env file")
+	envFileFlag         = flag.String("env", "", "Path to .env file, 'stdin' or empty")
 	flagMode            = flag.String("mode", "", strings.Join([]string{modeSeed, modeTest}, " | "))
 	flagUsersCount      = flag.Int("user-count", 100, "number of users to seed")
 	flagOrgsCount       = flag.Int("org-count", 10, "number of orgs to seed")
@@ -25,6 +25,7 @@ var (
 	flagRatePerSecond   = flag.Int("rps", 100, "Requests per second")
 	flagDuration        = flag.Int("duration", 10, "Duration of the load test (seconds)")
 	flagSitekeyPercent  = flag.Int("sitekey-percent", 100, "Percent of valid sitekey requests")
+	env                 *common.EnvMap
 )
 
 func main() {
@@ -32,11 +33,9 @@ func main() {
 
 	var err error
 
-	if len(*envFileFlag) > 0 {
-		err = godotenv.Load(*envFileFlag)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s\n", err)
-		}
+	env, err = common.NewEnvMap(*envFileFlag)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
 	opts := &slog.HandlerOptions{
@@ -45,7 +44,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	cfg, err := config.New(os.Getenv)
+	cfg, err := config.New(env.Get)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
