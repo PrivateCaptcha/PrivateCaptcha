@@ -2,7 +2,7 @@
 
 CREATE USER captchasrv WITH ENCRYPTED PASSWORD 'QMS0fJmTHS8Gzq';
 
-CREATE SCHEMA backend AUTHORIZATION captchasrv;
+CREATE SCHEMA backend;
 
 REVOKE ALL ON SCHEMA backend FROM public;
 
