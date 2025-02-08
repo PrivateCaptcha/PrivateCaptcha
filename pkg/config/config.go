@@ -209,3 +209,43 @@ func (c *Config) LeakyBucketInterval(area string, fallback time.Duration) time.D
 
 	return time.Duration(interval)
 }
+
+func (c *Config) PostgresUser(admin bool) string {
+	if admin {
+		if user := c.getenv("PC_POSTGRES_ADMIN"); len(user) > 0 {
+			return user
+		}
+	}
+
+	return c.getenv("PC_POSTGRES_USER")
+}
+
+func (c *Config) PostgresPassword(admin bool) string {
+	if admin {
+		if user := c.getenv("PC_POSTGRES_ADMIN_PASSWORD"); len(user) > 0 {
+			return user
+		}
+	}
+
+	return c.getenv("PC_POSTGRES_PASSWORD")
+}
+
+func (c *Config) ClickHouseUser(admin bool) string {
+	if admin {
+		if user := c.getenv("PC_CLICKHOUSE_ADMIN"); len(user) > 0 {
+			return user
+		}
+	}
+
+	return c.getenv("PC_CLICKHOUSE_USER")
+}
+
+func (c *Config) ClickHousePassword(admin bool) string {
+	if admin {
+		if user := c.getenv("PC_CLICKHOUSE_ADMIN_PASSWORD"); len(user) > 0 {
+			return user
+		}
+	}
+
+	return c.getenv("PC_CLICKHOUSE_PASSWORD")
+}

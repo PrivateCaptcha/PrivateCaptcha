@@ -1,7 +1,5 @@
-CREATE SCHEMA IF NOT EXISTS backend;
-
 SET search_path TO backend;
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA backend;
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto" SCHEMA backend;

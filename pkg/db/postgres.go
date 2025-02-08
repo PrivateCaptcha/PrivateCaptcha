@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -48,8 +49,8 @@ func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, 
 	}
 }
 
-func createPgxConfig(ctx context.Context, getenv func(string) string) (config *pgxpool.Config, err error) {
-	dbURL := getenv("PC_POSTGRES")
+func createPgxConfig(ctx context.Context, cfg *config.Config, migrate bool) (config *pgxpool.Config, err error) {
+	dbURL := cfg.Getenv("PC_POSTGRES")
 	config, err = pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse Postgres URL", "url", dbURL, common.ErrAttr(err))
@@ -57,11 +58,11 @@ func createPgxConfig(ctx context.Context, getenv func(string) string) (config *p
 	}
 
 	if len(dbURL) == 0 {
-		config.ConnConfig.Host = getenv("PC_POSTGRES_HOST")
+		config.ConnConfig.Host = cfg.Getenv("PC_POSTGRES_HOST")
 		config.ConnConfig.Port = 5432 // Default PostgreSQL port
-		config.ConnConfig.Database = getenv("PC_POSTGRES_DB")
-		config.ConnConfig.User = getenv("PC_POSTGRES_USER")
-		config.ConnConfig.Password = getenv("PC_POSTGRES_PASSWORD")
+		config.ConnConfig.Database = cfg.Getenv("PC_POSTGRES_DB")
+		config.ConnConfig.User = cfg.PostgresUser(migrate)
+		config.ConnConfig.Password = cfg.PostgresPassword(migrate)
 		config.ConnConfig.TLSConfig = nil // not using SSL
 	}
 

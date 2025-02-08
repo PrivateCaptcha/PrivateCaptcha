@@ -45,8 +45,8 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 		opts := ClickHouseConnectOpts{
 			Host:     cfg.Getenv("PC_CLICKHOUSE_HOST"),
 			Database: cfg.Getenv("PC_CLICKHOUSE_DB"),
-			User:     cfg.Getenv("PC_CLICKHOUSE_USER"),
-			Password: cfg.Getenv("PC_CLICKHOUSE_PASSWORD"),
+			User:     cfg.ClickHouseUser(migrate),
+			Password: cfg.ClickHousePassword(migrate),
 			Port:     9000,
 			Verbose:  cfg.Verbose(),
 		}
@@ -56,14 +56,14 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 		}
 
 		if migrate {
-			return migrateClickhouse(ctx, clickhouse, opts.Database)
+			return migrateClickhouse(common.TraceContext(ctx, "clickhouse"), clickhouse, opts.Database)
 		}
 
 		return nil
 	})
 
 	errs.Go(func() error {
-		config, cerr := createPgxConfig(ctx, cfg.Getenv)
+		config, cerr := createPgxConfig(ctx, cfg, migrate)
 		if cerr != nil {
 			return cerr
 		}
@@ -93,7 +93,7 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 				PortalRegisterDifficulty: common.DifficultyLevelSmall,
 			}
 
-			return migratePostgres(ctx, pool, migrateCtx, up)
+			return migratePostgres(common.TraceContext(ctx, "postgres"), pool, migrateCtx, up)
 		}
 
 		return nil
