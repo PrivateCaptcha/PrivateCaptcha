@@ -121,11 +121,8 @@ jobs:
     - name: Vet Postgres queries
       env:
         PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
-        SQLC_MIGRATION_FIX: pkg/db/migrations/postgres/000000_sqlc_fix.sql
       run: |
-        echo "CREATE SCHEMA IF NOT EXISTS backend;" > $SQLC_MIGRATION_FIX
         make vet-sqlc
-        rm -v $SQLC_MIGRATION_FIX
 
     - name: Integration Tests
       env:

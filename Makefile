@@ -3,6 +3,7 @@
 STAGE ?= dev
 GIT_COMMIT ?= $(shell git rev-list -1 HEAD)
 DOCKER_IMAGE ?= private-captcha
+SQLC_MIGRATION_FIX = pkg/db/migrations/postgres/000000_sqlc_fix.sql
 
 test-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -short ./...
@@ -79,10 +80,16 @@ clean-docker:
 	@docker compose -f docker/docker-compose.dev.yml down -v --remove-orphans
 
 sqlc:
+	# https://github.com/sqlc-dev/sqlc/issues/3571
+	echo "CREATE SCHEMA backend;" > $(SQLC_MIGRATION_FIX)
 	cd pkg/db && sqlc generate --no-remote
+	rm -v $(SQLC_MIGRATION_FIX)
 
 vet-sqlc:
+	# https://github.com/sqlc-dev/sqlc/issues/3571
+	echo "CREATE SCHEMA backend;" > $(SQLC_MIGRATION_FIX)
 	cd pkg/db && sqlc vet
+	rm -v $(SQLC_MIGRATION_FIX)
 
 vet-docker:
 	@docker compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm vetsqlc
