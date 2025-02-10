@@ -134,6 +134,10 @@ func (am *authMiddleware) UpdateConfig(cfg *config.Config) {
 	am.defaultRateLimiter.UpdateLimits(
 		cfg.LeakyBucketCap(common.AreaDefault, defaultLeakyBucketCap),
 		cfg.LeakyBucketInterval(common.AreaDefault, defaultLeakInterval))
+
+	am.presharedHeader = cfg.PresharedSecretHeader()
+	am.presharedSecret = cfg.PresharedSecret()
+	am.privateAPIKey = cfg.PrivateAPIKey()
 }
 
 func (am *authMiddleware) Shutdown() {
