@@ -115,7 +115,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 	auth := api.NewAuthMiddleware(cfg, businessDB, 1*time.Second /*backfill duration*/)
 	metrics := monitoring.NewService(cfg.Getenv)
 
-	mailer := email.NewMailer(cfg.Getenv)
+	mailer := email.NewMailer()
 	portalMailer := email.NewPortalMailer("https:"+cfg.CDNURL(), cfg.PortalURL(), mailer, cfg.Getenv)
 
 	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 10*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg.Getenv)
@@ -181,6 +181,7 @@ func run(ctx context.Context, cfg *config.Config, stderr io.Writer, listener net
 		timeSeriesDB.UpdateConfig(maintenanceMode)
 		portalServer.UpdateConfig(ctx, cfg)
 		auth.UpdateConfig(cfg)
+		mailer.UpdateConfig(cfg.Getenv)
 	}
 	updateConfigFunc(ctx)
 
