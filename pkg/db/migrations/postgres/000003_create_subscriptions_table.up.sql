@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS backend.subscriptions(
     trial_ends_at TIMESTAMPTZ,
     next_billed_at TIMESTAMPTZ,
     cancel_from TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT current_timestamp,
-    updated_at TIMESTAMPTZ DEFAULT current_timestamp
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS index_subscription_paddle ON backend.subscriptions(paddle_subscription_id);

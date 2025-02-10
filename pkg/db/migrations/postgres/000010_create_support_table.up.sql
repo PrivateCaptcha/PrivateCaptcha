@@ -9,5 +9,5 @@ CREATE TABLE IF NOT EXISTS backend.support(
     session_id TEXT DEFAULT '',
     resolution TEXT DEFAULT '',
     user_id INTEGER REFERENCES backend.users(id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ DEFAULT current_timestamp
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp
 );

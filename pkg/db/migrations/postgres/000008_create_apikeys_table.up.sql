@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS backend.apikeys(
     enabled BOOLEAN DEFAULT TRUE,
     requests_per_second FLOAT NOT NULL,
     requests_burst INTEGER NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT current_timestamp,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     expires_at TIMESTAMPTZ DEFAULT current_timestamp + INTERVAL '2 year',
     notes TEXT DEFAULT ''
 );

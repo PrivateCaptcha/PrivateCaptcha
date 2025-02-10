@@ -3,8 +3,8 @@ CREATE TABLE IF NOT EXISTS backend.users(
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL,
     subscription_id INTEGER DEFAULT NULL,
-    created_at TIMESTAMPTZ DEFAULT current_timestamp,
-    updated_at TIMESTAMPTZ DEFAULT current_timestamp,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     deleted_at TIMESTAMPTZ NULL DEFAULT NULL,
     FOREIGN KEY(subscription_id) REFERENCES backend.subscriptions(id) ON DELETE SET NULL
 );

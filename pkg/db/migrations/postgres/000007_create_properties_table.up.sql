@@ -11,8 +11,8 @@ CREATE TABLE IF NOT EXISTS backend.properties(
     level SMALLINT CHECK (level >= 0 AND level < 256),
     salt BYTEA NOT NULL DEFAULT gen_random_bytes(8),
     growth backend.difficulty_growth NOT NULL DEFAULT 'medium',
-    created_at TIMESTAMPTZ DEFAULT current_timestamp,
-    updated_at TIMESTAMPTZ DEFAULT current_timestamp,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     deleted_at TIMESTAMPTZ NULL DEFAULT NULL,
     allow_subdomains BOOL NOT NULL DEFAULT FALSE,
     allow_localhost BOOL NOT NULL DEFAULT FALSE
