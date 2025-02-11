@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
@@ -39,10 +39,10 @@ type authMiddleware struct {
 	sitekeyChan        chan string
 	batchSize          int
 	backfillCancel     context.CancelFunc
-	privateAPIKey      string
 	userLimits         common.Cache[int32, *common.UserLimitStatus]
-	presharedHeader    string
-	presharedSecret    string
+	privateAPIKey      common.ConfigItem
+	presharedHeader    common.ConfigItem
+	presharedSecret    common.ConfigItem
 }
 
 func newAPIKeyBuckets() *ratelimit.StringBuckets {
@@ -58,29 +58,55 @@ func newAPIKeyBuckets() *ratelimit.StringBuckets {
 	return ratelimit.NewAPIKeyBuckets(maxBuckets, leakyBucketCap, leakInterval)
 }
 
-func newPuzzleIPAddrBuckets(cfg *config.Config) *ratelimit.IPAddrBuckets {
+func leakyBucketCap(value string, fallback uint32) uint32 {
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return uint32(i)
+}
+
+func leakyBucketInterval(value string, fallback time.Duration) time.Duration {
+	rps, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return fallback
+	}
+
+	interval := float64(time.Second) / rps
+
+	return time.Duration(interval)
+}
+
+func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 	const (
 		// number of simultaneous different users for /puzzle
 		maxBuckets = 1_000_000
 	)
 
+	puzzleBucketRate := cfg.Get(common.PuzzleLeakyBucketRateKey)
+	puzzleBucketBurst := cfg.Get(common.PuzzleLeakyBucketBurstKey)
+
 	return ratelimit.NewIPAddrBuckets(maxBuckets,
-		cfg.LeakyBucketCap(common.AreaPuzzle, puzzleLeakyBucketCap),
-		cfg.LeakyBucketInterval(common.AreaPuzzle, puzzleLeakInterval))
+		leakyBucketCap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
+		leakyBucketInterval(puzzleBucketRate.Value(), puzzleLeakInterval))
 }
 
-func newDefaultIPAddrBuckets(cfg *config.Config) *ratelimit.IPAddrBuckets {
+func newDefaultIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 	const (
 		// this is a number of simultaneous users of the portal with different IPs
 		maxBuckets = 1_000
 	)
 
+	defaultBucketRate := cfg.Get(common.DefaultLeakyBucketRateKey)
+	defaultBucketBurst := cfg.Get(common.DefaultLeakyBucketBurstKey)
+
 	return ratelimit.NewIPAddrBuckets(maxBuckets,
-		cfg.LeakyBucketCap(common.AreaDefault, defaultLeakyBucketCap),
-		cfg.LeakyBucketInterval(common.AreaDefault, defaultLeakInterval))
+		leakyBucketCap(defaultBucketBurst.Value(), defaultLeakyBucketCap),
+		leakyBucketInterval(defaultBucketRate.Value(), defaultLeakInterval))
 }
 
-func NewAuthMiddleware(cfg *config.Config,
+func NewAuthMiddleware(cfg common.ConfigStore,
 	store *db.BusinessStore,
 	backfillDelay time.Duration) *authMiddleware {
 	const maxLimitedUsers = 10_000
@@ -93,7 +119,7 @@ func NewAuthMiddleware(cfg *config.Config,
 	}
 
 	const batchSize = 10
-	rateLimitHeader := cfg.RateLimiterHeader()
+	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 
 	am := &authMiddleware{
 		puzzleRateLimiter:  ratelimit.NewIPAddrRateLimiter("puzzle", rateLimitHeader, newPuzzleIPAddrBuckets(cfg)),
@@ -101,10 +127,10 @@ func NewAuthMiddleware(cfg *config.Config,
 		store:              store,
 		sitekeyChan:        make(chan string, 10*batchSize),
 		batchSize:          batchSize,
-		privateAPIKey:      cfg.PrivateAPIKey(),
 		userLimits:         userLimits,
-		presharedHeader:    cfg.PresharedSecretHeader(),
-		presharedSecret:    cfg.PresharedSecret(),
+		privateAPIKey:      cfg.Get(common.PrivateAPIKeyKey),
+		presharedHeader:    cfg.Get(common.PresharedSecretHeaderKey),
+		presharedSecret:    cfg.Get(common.PresharedSecretKey),
 	}
 
 	am.apiKeyRateLimiter = ratelimit.NewAPIKeyRateLimiter(
@@ -126,18 +152,18 @@ func (am *authMiddleware) DefaultRateLimiter() ratelimit.HTTPRateLimiter {
 	return am.defaultRateLimiter
 }
 
-func (am *authMiddleware) UpdateConfig(cfg *config.Config) {
+func (am *authMiddleware) UpdateConfig(cfg common.ConfigStore) {
+	puzzleBucketRate := cfg.Get(common.PuzzleLeakyBucketRateKey)
+	puzzleBucketBurst := cfg.Get(common.PuzzleLeakyBucketBurstKey)
 	am.puzzleRateLimiter.UpdateLimits(
-		cfg.LeakyBucketCap(common.AreaPuzzle, puzzleLeakyBucketCap),
-		cfg.LeakyBucketInterval(common.AreaPuzzle, puzzleLeakInterval))
+		leakyBucketCap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
+		leakyBucketInterval(puzzleBucketRate.Value(), puzzleLeakInterval))
 
+	defaultBucketRate := cfg.Get(common.DefaultLeakyBucketRateKey)
+	defaultBucketBurst := cfg.Get(common.DefaultLeakyBucketBurstKey)
 	am.defaultRateLimiter.UpdateLimits(
-		cfg.LeakyBucketCap(common.AreaDefault, defaultLeakyBucketCap),
-		cfg.LeakyBucketInterval(common.AreaDefault, defaultLeakInterval))
-
-	am.presharedHeader = cfg.PresharedSecretHeader()
-	am.presharedSecret = cfg.PresharedSecret()
-	am.privateAPIKey = cfg.PrivateAPIKey()
+		leakyBucketCap(defaultBucketBurst.Value(), defaultLeakyBucketCap),
+		leakyBucketInterval(defaultBucketRate.Value(), defaultLeakInterval))
 }
 
 func (am *authMiddleware) Shutdown() {
@@ -253,10 +279,6 @@ func (am *authMiddleware) backfillImpl(ctx context.Context, batch map[string]str
 
 // NOTE: unlike other "auth" middlewares, EdgeVerify() does NOT add rate limiting
 func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http.Handler {
-	if (len(allowedHost) == 0) && (len(am.presharedSecret) == 0) {
-		return common.NoopMiddleware
-	}
-
 	return func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if len(allowedHost) > 0 {
@@ -278,15 +300,15 @@ func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http
 				}
 			}
 
-			if len(am.presharedSecret) > 0 {
-				secretHeader := r.Header.Get(am.presharedHeader)
+			if presharedSecret := am.presharedSecret.Value(); len(presharedSecret) > 0 {
+				secretHeader := r.Header.Get(am.presharedHeader.Value())
 				if len(secretHeader) == 0 {
 					slog.Log(r.Context(), common.LevelTrace, "Preshared secret missing")
 					http.Error(w, "", http.StatusUnauthorized)
 					return
 				}
 
-				if secretHeader != am.presharedSecret {
+				if secretHeader != presharedSecret {
 					slog.Log(r.Context(), common.LevelTrace, "Preshared secret mismatch", "actual", secretHeader[:maxHeaderLen])
 					http.Error(w, "", http.StatusForbidden)
 					return
@@ -324,7 +346,7 @@ func (am *authMiddleware) Private(next http.Handler) http.Handler {
 			return
 		}
 
-		if token != am.privateAPIKey {
+		if token != am.privateAPIKey.Value() {
 			slog.WarnContext(ctx, "Invalid authorization token", "token", token[:maxTokenLen])
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return

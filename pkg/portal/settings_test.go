@@ -25,7 +25,7 @@ func TestCancelURL(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, cfg.PortalDomain(), common.NoopMiddleware)
+	server.Setup(srv, portalDomain(), common.NoopMiddleware)
 
 	cancelURL := "http://localhost/my/test"
 

@@ -14,19 +14,19 @@ import (
 type AdminMailer struct {
 	stage                  string
 	mailer                 *simpleMailer
-	emailFrom              string
-	emailTo                string
+	emailFrom              common.ConfigItem
+	adminEmail             common.ConfigItem
 	violationsTextTemplate *template.Template
 }
 
 var _ common.AdminMailer = (*AdminMailer)(nil)
 
-func NewAdminMailer(mailer *simpleMailer, getenv func(string) string) *AdminMailer {
+func NewAdminMailer(mailer *simpleMailer, cfg common.ConfigStore) *AdminMailer {
 	return &AdminMailer{
-		stage:                  getenv("STAGE"),
+		stage:                  cfg.Get(common.StageKey).Value(),
 		mailer:                 mailer,
-		emailFrom:              getenv("PC_EMAIL_FROM"),
-		emailTo:                getenv("PC_ADMIN_EMAIL"),
+		emailFrom:              cfg.Get(common.EmailFromKey),
+		adminEmail:             cfg.Get(common.AdminEmailKey),
 		violationsTextTemplate: template.Must(template.New("TextBody").Parse(violationsTextTemplate)),
 	}
 }
@@ -50,8 +50,8 @@ func (am *AdminMailer) SendUsageViolations(ctx context.Context, emails []string)
 	msg := &Message{
 		TextBody:  textBodyTpl.String(),
 		Subject:   fmt.Sprintf("[%s] Usage violations found", am.stage),
-		EmailTo:   am.emailTo,
-		EmailFrom: am.emailFrom,
+		EmailTo:   am.adminEmail.Value(),
+		EmailFrom: am.emailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 	}
 	err := am.mailer.SendEmail(ctx, msg)

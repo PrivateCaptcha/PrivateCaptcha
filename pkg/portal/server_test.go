@@ -25,10 +25,14 @@ import (
 
 var (
 	server     *Server
-	cfg        *config.Config
+	cfg        common.ConfigStore
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
 )
+
+func portalDomain() string {
+	return config.AsURL(context.TODO(), cfg.Get(common.PortalBaseURLKey)).Domain()
+}
 
 type fakePuzzleEngine struct {
 	result puzzle.VerifyError
@@ -60,18 +64,16 @@ func TestMain(m *testing.M) {
 			PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
 		}
 
-		server.Init()
+		if err := server.Init(context.TODO()); err != nil {
+			panic(err)
+		}
 
 		os.Exit(m.Run())
 	}
 
 	common.SetupLogs(common.StageTest, true)
 
-	var cerr error
-	cfg, cerr = config.New(os.Getenv)
-	if cerr != nil {
-		panic(cerr)
-	}
+	cfg = config.NewEnvConfig(os.Getenv)
 
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
@@ -108,7 +110,9 @@ func TestMain(m *testing.M) {
 		Metrics:      monitoring.NewStub(),
 	}
 
-	server.Init()
+	if err := server.Init(context.TODO()); err != nil {
+		panic(err)
+	}
 
 	// TODO: seed data
 

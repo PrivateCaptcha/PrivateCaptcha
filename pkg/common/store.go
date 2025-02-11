@@ -19,3 +19,13 @@ type SessionStore interface {
 	Destroy(ctx context.Context, sid string) error
 	GC(ctx context.Context, d time.Duration)
 }
+
+type ConfigItem interface {
+	Key() ConfigKey
+	Value() string
+}
+
+type ConfigStore interface {
+	Get(key ConfigKey) ConfigItem
+	Update(ctx context.Context)
+}

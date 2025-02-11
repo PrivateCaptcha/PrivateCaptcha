@@ -124,17 +124,24 @@ type Server struct {
 	canRegister     atomic.Bool
 }
 
-func (s *Server) Init() {
+func (s *Server) Init(ctx context.Context) error {
 	prefix := common.RelURL(s.Prefix, "/")
-	s.template = web.NewTemplates(funcMap(prefix))
+	var err error
+	s.template, err = web.NewTemplates(ctx, funcMap(prefix))
+	if err != nil {
+		return err
+	}
 	s.Session.Path = prefix
+
+	return nil
 }
 
-func (s *Server) UpdateConfig(ctx context.Context, config *config.Config) {
-	maintenanceMode := config.MaintenanceMode()
+func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
+	maintenanceMode := config.AsBool(cfg.Get(common.MaintenanceModeKey))
 	oldMaintenanceMode := s.maintenanceMode.Swap(maintenanceMode)
 
-	s.canRegister.Store(config.RegistrationAllowed())
+	registrationAllowed := config.AsBool(cfg.Get(common.RegistrationAllowedKey))
+	s.canRegister.Store(registrationAllowed)
 
 	if oldMaintenanceMode != maintenanceMode {
 		slog.InfoContext(ctx, "Maintenance mode change", "old", oldMaintenanceMode, "new", maintenanceMode)

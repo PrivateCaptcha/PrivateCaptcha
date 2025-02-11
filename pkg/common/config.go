@@ -1,0 +1,50 @@
+package common
+
+type ConfigKey int
+
+const (
+	StageKey ConfigKey = iota
+	VerboseKey
+	APIBaseURLKey
+	PortalBaseURLKey
+	CDNBaseURLKey
+	LocalAddressKey
+	RateLimitHeaderKey
+	MaintenanceModeKey
+	RegistrationAllowedKey
+	HealthCheckIntervalKey
+	AdminEmailKey
+	PrivateAPIKeyKey
+	PresharedSecretHeaderKey
+	PresharedSecretKey
+	PostgresKey
+	PostgresHostKey
+	PostgresDBKey
+	PostgresUserKey
+	PostgresPasswordKey
+	PostgresAdminKey
+	PostgresAdminPasswordKey
+	ClickHouseHostKey
+	ClickHouseDBKey
+	ClickHouseUserKey
+	ClickHousePasswordKey
+	ClickHouseAdminKey
+	ClickHouseAdminPasswordKey
+	PuzzleLeakyBucketRateKey
+	PuzzleLeakyBucketBurstKey
+	DefaultLeakyBucketRateKey
+	DefaultLeakyBucketBurstKey
+	SmtpEndpointKey
+	SmtpUsernameKey
+	SmtpPasswordKey
+	PaddleBaseURLKey
+	PaddleAPIKeyKey
+	PaddleEnvironmentKey
+	PaddleClientTokenKey
+	EmailFromKey
+	SupportEmailKey
+	HostKey
+	PortKey
+	UserFingerprintIVKey
+	APISaltKey
+)

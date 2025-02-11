@@ -21,7 +21,7 @@ import (
 
 var (
 	s          *server
-	cfg        *config.Config
+	cfg        common.ConfigStore
 	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
 	auth       *authMiddleware
@@ -33,15 +33,13 @@ const (
 	verifyFlushInterval = 1 * time.Second
 )
 
-func testsEnv(s string) string {
-	switch s {
-	case "PUZZLE_LEAKY_BUCKET_BURST", "DEFAULT_LEAKY_BUCKET_BURST":
-		return "20"
-	case "PUZZLE_LEAKY_BUCKET_RPS", "DEFAULT_LEAKY_BUCKET_RPS":
-		return "10"
-	default:
-		return os.Getenv(s)
-	}
+func testsConfigStore() common.ConfigStore {
+	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
+	baseCfg.Add(config.NewStaticValue(common.PuzzleLeakyBucketBurstKey, "20"))
+	baseCfg.Add(config.NewStaticValue(common.DefaultLeakyBucketBurstKey, "20"))
+	baseCfg.Add(config.NewStaticValue(common.PuzzleLeakyBucketRateKey, "10"))
+	baseCfg.Add(config.NewStaticValue(common.DefaultLeakyBucketRateKey, "10"))
+	return baseCfg
 }
 
 func TestMain(m *testing.M) {
@@ -53,11 +51,7 @@ func TestMain(m *testing.M) {
 
 	common.SetupLogs(common.StageTest, true)
 
-	var err error
-	cfg, err = config.New(testsEnv)
-	if err != nil {
-		panic(err)
-	}
+	cfg = testsConfigStore()
 
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
@@ -69,6 +63,7 @@ func TestMain(m *testing.M) {
 
 	timeSeries = db.NewTimeSeries(clickhouse)
 
+	var err error
 	cache, err = db.NewMemoryCache[db.CacheKey, any](100, nil)
 	if err != nil {
 		panic(err)
@@ -79,7 +74,10 @@ func TestMain(m *testing.M) {
 	auth = NewAuthMiddleware(cfg, store, authBackfillDelay)
 	defer auth.Shutdown()
 
-	s = NewServer(store, timeSeries, auth, verifyFlushInterval, &billing.StubPaddleClient{}, monitoring.NewStub(), &email.StubMailer{}, os.Getenv)
+	s = NewServer(store, timeSeries, auth, verifyFlushInterval, &billing.StubPaddleClient{}, monitoring.NewStub(), &email.StubMailer{}, cfg)
+	if err := s.Init(context.TODO()); err != nil {
+		panic(err)
+	}
 	defer s.Shutdown()
 
 	// TODO: seed data

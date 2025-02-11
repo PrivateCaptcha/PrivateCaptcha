@@ -49,16 +49,16 @@ type PaddleAPI interface {
 type paddleClient struct {
 	sdk         *paddle.SDK
 	timeout     time.Duration
-	environment string
-	clientToken string
+	environment common.ConfigItem
+	clientToken common.ConfigItem
 }
 
 var _ PaddleAPI = (*paddleClient)(nil)
 
-func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
-	paddleURL := getenv("PADDLE_BASE_URL")
+func NewPaddleAPI(cfg common.ConfigStore) (PaddleAPI, error) {
+	paddleURL := cfg.Get(common.PaddleBaseURLKey).Value()
 	if len(paddleURL) == 0 {
-		stage := getenv("STAGE")
+		stage := cfg.Get(common.StageKey).Value()
 
 		paddleURL = paddle.SandboxBaseURL
 		if stage == common.StageProd {
@@ -66,7 +66,8 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 		}
 	}
 
-	pc, err := paddle.New(getenv("PADDLE_API_KEY"), paddle.WithBaseURL(paddleURL))
+	apiKey := cfg.Get(common.PaddleAPIKeyKey)
+	pc, err := paddle.New(apiKey.Value(), paddle.WithBaseURL(paddleURL))
 	if err != nil {
 		return nil, err
 	}
@@ -74,8 +75,8 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 	return &retryPaddleClient{
 		paddleAPI: &paddleClient{
 			sdk:         pc,
-			environment: getenv("PADDLE_ENVIRONMENT"),
-			clientToken: getenv("PADDLE_CLIENT_TOKEN"),
+			environment: cfg.Get(common.PaddleEnvironmentKey),
+			clientToken: cfg.Get(common.PaddleClientTokenKey),
 			timeout:     10 * time.Second,
 		},
 		attempts:   5,
@@ -85,11 +86,11 @@ func NewPaddleAPI(getenv func(string) string) (PaddleAPI, error) {
 }
 
 func (pc *paddleClient) Environment() string {
-	return pc.environment
+	return pc.environment.Value()
 }
 
 func (pc *paddleClient) ClientToken() string {
-	return pc.clientToken
+	return pc.clientToken.Value()
 }
 
 func (pc *paddleClient) paddleContext(ctx context.Context) (context.Context, context.CancelFunc) {

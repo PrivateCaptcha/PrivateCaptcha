@@ -26,7 +26,7 @@ func TestContactSupport(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, cfg.PortalDomain(), common.NoopMiddleware)
+	server.Setup(srv, portalDomain(), common.NoopMiddleware)
 
 	cookie, err := authenticateSuite(ctx, user.Email, srv)
 	if err != nil {

@@ -21,7 +21,7 @@ type HealthCheckJob struct {
 	postgresFlag     atomic.Int32
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
-	CheckInterval    time.Duration
+	CheckInterval    common.ConfigItem
 	WithSystemd      bool
 }
 
@@ -35,8 +35,9 @@ const (
 var _ common.PeriodicJob = (*HealthCheckJob)(nil)
 
 func (j *HealthCheckJob) Interval() time.Duration {
-	if j.CheckInterval > 0 {
-		return j.CheckInterval
+	intervalType := j.CheckInterval.Value()
+	if intervalType == "slow" {
+		return 1 * time.Minute
 	}
 
 	return 5 * time.Second

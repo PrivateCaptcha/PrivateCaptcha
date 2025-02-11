@@ -15,9 +15,9 @@ type PortalMailer struct {
 	mailer                         *simpleMailer
 	cdn                            string
 	domain                         string
-	emailFrom                      string
-	supportEmail                   string
-	adminEmail                     string
+	emailFrom                      common.ConfigItem
+	supportEmail                   common.ConfigItem
+	adminEmail                     common.ConfigItem
 	twofactorHTMLTemplate          *template.Template
 	twofactorTextTemplate          *template.Template
 	supportHTMLTemplate            *template.Template
@@ -28,12 +28,12 @@ type PortalMailer struct {
 	supportAcknowledgeTextTemplate *template.Template
 }
 
-func NewPortalMailer(cdn, domain string, mailer *simpleMailer, getenv func(string) string) *PortalMailer {
+func NewPortalMailer(cdn, domain string, mailer *simpleMailer, cfg common.ConfigStore) *PortalMailer {
 	return &PortalMailer{
 		mailer:                         mailer,
-		emailFrom:                      getenv("PC_EMAIL_FROM"),
-		supportEmail:                   getenv("PC_SUPPORT_EMAIL"),
-		adminEmail:                     getenv("PC_ADMIN_EMAIL"),
+		emailFrom:                      cfg.Get(common.EmailFromKey),
+		supportEmail:                   cfg.Get(common.SupportEmailKey),
+		adminEmail:                     cfg.Get(common.AdminEmailKey),
 		cdn:                            cdn,
 		domain:                         domain,
 		twofactorHTMLTemplate:          template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
@@ -81,7 +81,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		TextBody:  textBodyTpl.String(),
 		Subject:   fmt.Sprintf("[%s] Your verification code is %v", common.PrivateCaptcha, data.Code),
 		EmailTo:   email,
-		EmailFrom: pm.emailFrom,
+		EmailFrom: pm.emailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 	}
 
@@ -90,7 +90,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
 		level := slog.LevelError
 
-		if email == pm.adminEmail {
+		if email == pm.adminEmail.Value() {
 			level = slog.LevelWarn
 			err = nil
 		}
@@ -136,8 +136,8 @@ func (pm *PortalMailer) SendSupportRequest(ctx context.Context, email string, re
 		HTMLBody:  htmlBodyTpl.String(),
 		TextBody:  textBodyTpl.String(),
 		Subject:   req.EmailSubject(),
-		EmailTo:   pm.supportEmail,
-		EmailFrom: pm.emailFrom,
+		EmailTo:   pm.supportEmail.Value(),
+		EmailFrom: pm.emailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 		ReplyTo:   email,
 	}
@@ -179,7 +179,7 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email string) error {
 		TextBody:  textBodyTpl.String(),
 		Subject:   "Welcome to Private Captcha",
 		EmailTo:   email,
-		EmailFrom: pm.emailFrom,
+		EmailFrom: pm.emailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 		ReplyTo:   email,
 	}
@@ -225,7 +225,7 @@ func (pm *PortalMailer) SendSupportAck(ctx context.Context, email string, req *c
 		TextBody:  textBodyTpl.String(),
 		Subject:   req.EmailSubject(),
 		EmailTo:   email,
-		EmailFrom: pm.emailFrom,
+		EmailFrom: pm.emailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 		ReplyTo:   email,
 	}

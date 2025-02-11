@@ -8,6 +8,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
+	config_pkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
 )
@@ -19,14 +20,14 @@ var (
 	globalDBErr      error
 )
 
-func Connect(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, cfg common.ConfigStore) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
 		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, false /*migrate*/, false)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func Migrate(ctx context.Context, cfg *config.Config, up bool) error {
+func Migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 	pool, clickhouse, err := connectEx(ctx, cfg, true /*migrate*/, up)
 	if err != nil {
 		return err
@@ -38,17 +39,37 @@ func Migrate(ctx context.Context, cfg *config.Config, up bool) error {
 	return err
 }
 
-func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func clickHouseUser(cfg common.ConfigStore, admin bool) string {
+	if admin {
+		if user := cfg.Get(common.ClickHouseAdminKey).Value(); len(user) > 0 {
+			return user
+		}
+	}
+
+	return cfg.Get(common.ClickHouseUserKey).Value()
+}
+
+func clickHousePassword(cfg common.ConfigStore, admin bool) string {
+	if admin {
+		if pwd := cfg.Get(common.ClickHouseAdminPasswordKey).Value(); len(pwd) > 0 {
+			return pwd
+		}
+	}
+
+	return cfg.Get(common.ClickHousePasswordKey).Value()
+}
+
+func connectEx(ctx context.Context, cfg common.ConfigStore, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
 		opts := ClickHouseConnectOpts{
-			Host:     cfg.Getenv("PC_CLICKHOUSE_HOST"),
-			Database: cfg.Getenv("PC_CLICKHOUSE_DB"),
-			User:     cfg.ClickHouseUser(migrate),
-			Password: cfg.ClickHousePassword(migrate),
+			Host:     cfg.Get(common.ClickHouseHostKey).Value(),
+			Database: cfg.Get(common.ClickHouseDBKey).Value(),
+			User:     clickHouseUser(cfg, migrate),
+			Password: clickHousePassword(cfg, migrate),
 			Port:     9000,
-			Verbose:  cfg.Verbose(),
+			Verbose:  config.AsBool(cfg.Get(common.VerboseKey)),
 		}
 		clickhouse = connectClickhouse(ctx, opts)
 		if perr := clickhouse.Ping(); perr != nil {
@@ -78,15 +99,16 @@ func connectEx(ctx context.Context, cfg *config.Config, migrate, up bool) (pool 
 		}
 
 		if migrate {
-			stage := cfg.Stage()
+			stage := cfg.Get(common.StageKey).Value()
 			adminPlan := billing.GetInternalAdminPlan()
+			portalDomain := config_pkg.AsURL(ctx, cfg.Get(common.PortalBaseURLKey)).Domain()
 
 			migrateCtx := &migrateContext{
 				Stage:                    stage,
 				PortalLoginPropertyID:    PortalLoginPropertyID,
 				PortalRegisterPropertyID: PortalRegisterPropertyID,
-				PortalDomain:             cfg.PortalDomain(),
-				AdminEmail:               cfg.AdminEmail(),
+				PortalDomain:             portalDomain,
+				AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
 				PaddleProductID:          adminPlan.PaddleProductID,
 				PaddlePriceID:            adminPlan.PaddlePriceIDYearly,
 				PortalLoginDifficulty:    common.DifficultyLevelSmall,

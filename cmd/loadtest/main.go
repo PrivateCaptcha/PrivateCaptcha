@@ -44,10 +44,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	cfg, err := config.New(env.Get)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-	}
+	cfg := config.NewEnvConfig(env.Get)
 
 	switch *flagMode {
 	case modeSeed:

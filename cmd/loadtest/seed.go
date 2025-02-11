@@ -11,7 +11,6 @@ import (
 	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/rs/xid"
@@ -27,7 +26,7 @@ var (
 	growthLevels     = []dbgen.DifficultyGrowth{dbgen.DifficultyGrowthSlow, dbgen.DifficultyGrowthMedium, dbgen.DifficultyGrowthFast}
 )
 
-func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error {
+func seed(usersCount, orgsCount, propertiesCount int, cfg common.ConfigStore) error {
 	ctx := context.TODO()
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
@@ -40,7 +39,7 @@ func seed(usersCount, orgsCount, propertiesCount int, cfg *config.Config) error 
 
 	businessDB := db.NewBusiness(pool)
 
-	plans, ok := billing.GetPlansForStage(cfg.Stage())
+	plans, ok := billing.GetPlansForStage(cfg.Get(common.StageKey).Value())
 	if !ok || (len(plans) == 0) {
 		return errors.New("no billing plans available for current stage")
 	}

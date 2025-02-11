@@ -55,7 +55,7 @@ func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	}
 
 	req.Header.Set("Origin", makeOriginHeader(domain))
-	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), generateRandomIPv4())
 
 	q := req.URL.Query()
 	q.Add(common.ParamSiteKey, sitekey)

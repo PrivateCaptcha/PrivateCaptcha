@@ -2,6 +2,7 @@ package common
 
 import (
 	"os"
+	"sync"
 
 	"github.com/joho/godotenv"
 )
@@ -13,9 +14,13 @@ const (
 type EnvMap struct {
 	path   string
 	envMap map[string]string
+	lock   sync.Mutex
 }
 
 func (em *EnvMap) GetEx(key string) (string, bool) {
+	em.lock.Lock()
+	defer em.lock.Unlock()
+
 	if em.envMap == nil {
 		value := os.Getenv(key)
 		return value, len(value) > 0
@@ -37,7 +42,9 @@ func (em *EnvMap) Update() error {
 			return err
 		}
 
+		em.lock.Lock()
 		em.envMap = envMap
+		em.lock.Unlock()
 	}
 
 	return nil

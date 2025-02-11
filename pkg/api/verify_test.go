@@ -50,7 +50,7 @@ func verifySuite(response, secret string) (*http.Response, error) {
 	}
 
 	req.Header.Set(common.HeaderAPIKey, secret)
-	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), generateRandomIPv4())
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

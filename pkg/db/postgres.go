@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -49,8 +48,28 @@ func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, 
 	}
 }
 
-func createPgxConfig(ctx context.Context, cfg *config.Config, migrate bool) (config *pgxpool.Config, err error) {
-	dbURL := cfg.Getenv("PC_POSTGRES")
+func postgresUser(cfg common.ConfigStore, admin bool) string {
+	if admin {
+		if user := cfg.Get(common.PostgresAdminKey).Value(); len(user) > 0 {
+			return user
+		}
+	}
+
+	return cfg.Get(common.PostgresUserKey).Value()
+}
+
+func postgresPassword(cfg common.ConfigStore, admin bool) string {
+	if admin {
+		if pwd := cfg.Get(common.PostgresAdminPasswordKey).Value(); len(pwd) > 0 {
+			return pwd
+		}
+	}
+
+	return cfg.Get(common.PostgresPasswordKey).Value()
+}
+
+func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool) (config *pgxpool.Config, err error) {
+	dbURL := cfg.Get(common.PostgresKey).Value()
 	config, err = pgxpool.ParseConfig(dbURL)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse Postgres URL", "url", dbURL, common.ErrAttr(err))
@@ -58,11 +77,11 @@ func createPgxConfig(ctx context.Context, cfg *config.Config, migrate bool) (con
 	}
 
 	if len(dbURL) == 0 {
-		config.ConnConfig.Host = cfg.Getenv("PC_POSTGRES_HOST")
+		config.ConnConfig.Host = cfg.Get(common.PostgresHostKey).Value()
 		config.ConnConfig.Port = 5432 // Default PostgreSQL port
-		config.ConnConfig.Database = cfg.Getenv("PC_POSTGRES_DB")
-		config.ConnConfig.User = cfg.PostgresUser(migrate)
-		config.ConnConfig.Password = cfg.PostgresPassword(migrate)
+		config.ConnConfig.Database = cfg.Get(common.PostgresDBKey).Value()
+		config.ConnConfig.User = postgresUser(cfg, migrate)
+		config.ConnConfig.Password = postgresPassword(cfg, migrate)
 		config.ConnConfig.TLSConfig = nil // not using SSL
 	}
 

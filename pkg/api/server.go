@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"io"
 	"log/slog"
@@ -55,8 +54,8 @@ type server struct {
 	timeSeries      *db.TimeSeriesStore
 	levels          *difficulty.Levels
 	auth            *authMiddleware
-	uaKey           [64]byte
-	salt            []byte
+	uaKey           *userFingerprintKey
+	salt            *puzzleSalt
 	verifyLogChan   chan *common.VerifyRecord
 	verifyLogCancel context.CancelFunc
 	paddleAPI       billing.PaddleAPI
@@ -75,32 +74,23 @@ func NewServer(store *db.BusinessStore,
 	paddleAPI billing.PaddleAPI,
 	metrics monitoring.Metrics,
 	mailer common.Mailer,
-	getenv func(string) string) *server {
+	cfg common.ConfigStore) *server {
 
 	srv := &server{
-		stage:         getenv("STAGE"),
+		stage:         cfg.Get(common.StageKey).Value(),
 		businessDB:    store,
 		timeSeries:    timeSeries,
 		auth:          auth,
 		verifyLogChan: make(chan *common.VerifyRecord, 10*verifyBatchSize),
-		salt:          []byte(getenv("API_SALT")),
+		salt:          newPuzzleSalt(cfg.Get(common.APISaltKey)),
+		uaKey:         newUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
 		paddleAPI:     paddleAPI,
 		metrics:       metrics,
 		mailer:        mailer,
 	}
 
-	testPuzzle := puzzle.NewPuzzle()
-	testPuzzle.PropertyID = db.TestPropertyUUID.Bytes
-	srv.testPuzzleData, _ = testPuzzle.Serialize(context.TODO(), srv.salt)
-
 	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
 		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/)
-
-	if byteArray, err := hex.DecodeString(getenv("UA_KEY")); (err == nil) && (len(byteArray) == 64) {
-		copy(srv.uaKey[:], byteArray[:])
-	} else {
-		slog.Error("Error initializing UA key for server", common.ErrAttr(err), "size", len(byteArray))
-	}
 
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, srv.verifyLogCancel = context.WithCancel(
@@ -137,6 +127,29 @@ type verifyResponseRecaptchaV3 struct {
 	verifyResponseRecaptchaV2
 	Score  float64 `json:"score"`
 	Action string  `json:"action"`
+}
+
+func (s *server) Init(ctx context.Context) error {
+	if err := s.salt.Update(); err != nil {
+		slog.ErrorContext(ctx, "Failed to update puzzle salt", common.ErrAttr(err))
+		return err
+	}
+
+	if err := s.uaKey.Update(); err != nil {
+		slog.ErrorContext(ctx, "Failed to update user fingerprint key", common.ErrAttr(err))
+		return err
+	}
+
+	testPuzzle := puzzle.NewPuzzle()
+	testPuzzle.PropertyID = db.TestPropertyUUID.Bytes
+	var err error
+	s.testPuzzleData, err = testPuzzle.Serialize(ctx, s.salt.Value())
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to serialize test puzzle", common.ErrAttr(err))
+		return err
+	}
+
+	return nil
 }
 
 func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
@@ -214,7 +227,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	}
 
 	var fingerprint common.TFingerprint
-	hash, err := blake2b.New256(s.uaKey[:])
+	hash, err := blake2b.New256(s.uaKey.Value())
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
 		// TODO: handle calculating hash with error
@@ -287,7 +300,7 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
-	payload, err := p.Serialize(ctx, s.salt)
+	payload, err := p.Serialize(ctx, s.salt.Value())
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
@@ -421,7 +434,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 	}
 
 	if p.IsStub() {
-		if serr := payload.VerifySignature(ctx, s.salt, nil /*puzzle salt*/); serr != nil {
+		if serr := payload.VerifySignature(ctx, s.salt.Value(), nil /*puzzle salt*/); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
 	}
@@ -447,7 +460,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 
 	property := properties[0]
 	if !p.IsStub() {
-		if serr := payload.VerifySignature(ctx, s.salt, property.Salt); serr != nil {
+		if serr := payload.VerifySignature(ctx, s.salt.Value(), property.Salt); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
 	}

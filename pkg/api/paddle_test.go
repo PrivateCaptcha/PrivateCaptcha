@@ -73,7 +73,7 @@ func stubSubscriptionCreatedEvent() *paddlenotification.SubscriptionCreated {
 }
 
 func subscriptionCreatedSuite(ctx context.Context, evt *paddlenotification.SubscriptionCreated, email string, t *testing.T) {
-	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey)
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey.Value())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {
 	req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
 	req.Header.Add(common.HeaderContentLength, strconv.Itoa(len(data)))
 	req.Header.Set(common.HeaderAuthorization, "Bearer "+token)
-	req.Header.Set(cfg.RateLimiterHeader(), generateRandomIPv4())
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), generateRandomIPv4())
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -215,7 +215,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 		},
 	}
 
-	resp, err := paddleSuite(evt, common.PaddleSubscriptionUpdated, auth.privateAPIKey)
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionUpdated, auth.privateAPIKey.Value())
 	if err != nil {
 		t.Fatal(err)
 	}

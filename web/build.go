@@ -44,7 +44,7 @@ type Template struct {
 	templates map[string]*template.Template
 }
 
-func NewTemplates(funcs template.FuncMap) *Template {
+func NewTemplates(ctx context.Context, funcs template.FuncMap) (*Template, error) {
 	root := "layouts"
 	defaultLayouts := root + "/_default"
 
@@ -69,12 +69,12 @@ func NewTemplates(funcs template.FuncMap) *Template {
 		return nil
 	})
 	if err != nil {
-		panic(err)
+		slog.ErrorContext(ctx, "Failed to traverse template files", common.ErrAttr(err))
+		return nil, err
 	}
 
 	baseFiles := filesMap[defaultLayouts]
 	templates := make(map[string]*template.Template)
-	ctx := context.TODO()
 
 	for dir, files := range filesMap {
 		if dir == defaultLayouts {
@@ -91,7 +91,7 @@ func NewTemplates(funcs template.FuncMap) *Template {
 
 	return &Template{
 		templates: templates,
-	}
+	}, nil
 }
 
 // we will render templates from a single directory + "_default/" bundle every time

@@ -1,0 +1,180 @@
+package config
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"sync"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+)
+
+var (
+	errEmptyEnvVar = errors.New("environment variable is empty")
+)
+
+type envConfigValue struct {
+	key   common.ConfigKey
+	value string
+}
+
+var _ common.ConfigItem = (*envConfigValue)(nil)
+
+func envVar(c common.ConfigKey) string {
+	switch c {
+	case common.APIBaseURLKey:
+		return "PC_API_BASE_URL"
+	case common.PortalBaseURLKey:
+		return "PC_PORTAL_BASE_URL"
+	case common.CDNBaseURLKey:
+		return "PC_CDN_BASE_URL"
+	case common.StageKey:
+		return "STAGE"
+	case common.VerboseKey:
+		return "VERBOSE"
+	case common.SmtpEndpointKey:
+		return "SMTP_ENDPOINT"
+	case common.SmtpUsernameKey:
+		return "SMTP_USERNAME"
+	case common.SmtpPasswordKey:
+		return "SMTP_PASSWORD"
+	case common.PaddleBaseURLKey:
+		return "PADDLE_BASE_URL"
+	case common.PaddleAPIKeyKey:
+		return "PADDLE_API_KEY"
+	case common.PaddleEnvironmentKey:
+		return "PADDLE_ENVIRONMENT"
+	case common.PaddleClientTokenKey:
+		return "PADDLE_CLIENT_TOKEN"
+	case common.ClickHouseHostKey:
+		return "PC_CLICKHOUSE_HOST"
+	case common.ClickHouseDBKey:
+		return "PC_CLICKHOUSE_DB"
+	case common.ClickHouseAdminKey:
+		return "PC_CLICKHOUSE_ADMIN"
+	case common.ClickHouseUserKey:
+		return "PC_CLICKHOUSE_USER"
+	case common.ClickHouseAdminPasswordKey:
+		return "PC_CLICKHOUSE_ADMIN_PASSWORD"
+	case common.ClickHousePasswordKey:
+		return "PC_CLICKHOUSE_PASSWORD"
+	case common.PostgresKey:
+		return "PC_POSTGRES"
+	case common.PostgresHostKey:
+		return "PC_POSTGRES_HOST"
+	case common.PostgresDBKey:
+		return "PC_POSTGRES_DB"
+	case common.PostgresUserKey:
+		return "PC_POSTGRES_USER"
+	case common.PostgresAdminKey:
+		return "PC_POSTGRES_ADMIN"
+	case common.PostgresAdminPasswordKey:
+		return "PC_POSTGRES_ADMIN_PASSWORD"
+	case common.PostgresPasswordKey:
+		return "PC_POSTGRES_PASSWORD"
+	case common.AdminEmailKey:
+		return "PC_ADMIN_EMAIL"
+	case common.EmailFromKey:
+		return "PC_EMAIL_FROM"
+	case common.SupportEmailKey:
+		return "PC_SUPPORT_EMAIL"
+	case common.LocalAddressKey:
+		return "PC_LOCAL_ADDRESS"
+	case common.MaintenanceModeKey:
+		return "PC_MAINTENANCE_MODE"
+	case common.RegistrationAllowedKey:
+		return "PC_REGISTRATION_ALLOWED"
+	case common.HealthCheckIntervalKey:
+		return "HEALTHCHECK"
+	case common.PrivateAPIKeyKey:
+		return "PC_PRIVATE_API_KEY"
+	case common.PresharedSecretKey:
+		return "PRESHARED_SECRET"
+	case common.PuzzleLeakyBucketRateKey:
+		return "PUZZLE_LEAKY_BUCKET_RPS"
+	case common.PuzzleLeakyBucketBurstKey:
+		return "PUZZLE_LEAKY_BUCKET_BURST"
+	case common.DefaultLeakyBucketRateKey:
+		return "DEFAULT_LEAKY_BUCKET_RPS"
+	case common.DefaultLeakyBucketBurstKey:
+		return "DEFAULT_LEAKY_BUCKET_BURST"
+	case common.RateLimitHeaderKey:
+		return "RATE_LIMIT_HEADER"
+	case common.PresharedSecretHeaderKey:
+		return "PRESHARED_SECRET_HEADER"
+	case common.HostKey:
+		return "PC_HOST"
+	case common.PortKey:
+		return "PC_PORT"
+	case common.UserFingerprintIVKey:
+		return "UA_KEY"
+	case common.APISaltKey:
+		return "API_SALT"
+	default:
+		return ""
+	}
+}
+
+func (v *envConfigValue) Key() common.ConfigKey {
+	return v.key
+}
+
+func (v *envConfigValue) Value() string {
+	return v.value
+}
+
+func (v *envConfigValue) Update(getenv func(string) string) error {
+	// NOTE: there's still a kind of a race condition here as we don't protect access
+	value := getenv(envVar(v.key))
+	v.value = value
+	if len(value) == 0 {
+		return errEmptyEnvVar
+	}
+
+	return nil
+}
+
+type envConfig struct {
+	lock   sync.Mutex
+	items  map[common.ConfigKey]*envConfigValue
+	getenv func(string) string
+}
+
+var _ common.ConfigStore = (*envConfig)(nil)
+
+func NewEnvConfig(getenv func(string) string) *envConfig {
+	return &envConfig{
+		items:  make(map[common.ConfigKey]*envConfigValue),
+		getenv: getenv,
+	}
+}
+
+func (c *envConfig) Get(key common.ConfigKey) common.ConfigItem {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	item, ok := c.items[key]
+	if ok {
+		return item
+	}
+
+	// NOTE: not optimal to read under the lock, but it's not too bad here
+	item = &envConfigValue{
+		key:   key,
+		value: c.getenv(envVar(key)),
+	}
+	c.items[key] = item
+
+	return item
+}
+
+func (c *envConfig) Update(ctx context.Context) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for key, cfg := range c.items {
+		if err := cfg.Update(c.getenv); err != nil {
+			slog.WarnContext(ctx, "Cannot update environment config", "key", envVar(key), common.ErrAttr(err))
+		}
+	}
+}

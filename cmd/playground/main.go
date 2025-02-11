@@ -26,18 +26,15 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
-	cfg, err := config.New(env.Get)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
-	}
+	cfg := config.NewEnvConfig(env.Get)
 
-	paddleAPI, err := billing.NewPaddleAPI(cfg.Getenv)
+	paddleAPI, err := billing.NewPaddleAPI(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		return
 	}
 
-	products := billing.GetProductsForStage(cfg.Stage())
+	products := billing.GetProductsForStage(cfg.Get(common.StageKey).Value())
 	prices, err := paddleAPI.GetPrices(context.TODO(), products)
 	if err == nil {
 		fmt.Printf("Fetched prices: %v", prices)

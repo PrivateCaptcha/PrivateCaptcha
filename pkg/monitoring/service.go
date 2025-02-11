@@ -69,7 +69,7 @@ func Traced(h http.Handler) http.Handler {
 	})
 }
 
-func NewService(getenv func(string) string) *service {
+func NewService() *service {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
 		collectors.NewGoCollector(),

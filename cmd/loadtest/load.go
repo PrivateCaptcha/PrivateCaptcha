@@ -17,7 +17,7 @@ import (
 	vegeta "github.com/tsenart/vegeta/v12/lib"
 )
 
-func loadProperties(count int, cfg *config.Config) ([]*dbgen.Property, error) {
+func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
@@ -61,7 +61,9 @@ func randomSiteKey() string {
 	return hex.EncodeToString(array[:])
 }
 
-func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg *config.Config) vegeta.Targeter {
+func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg common.ConfigStore) vegeta.Targeter {
+	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
+
 	return func(tgt *vegeta.Target) error {
 		if tgt == nil {
 			return vegeta.ErrNilTarget
@@ -81,18 +83,19 @@ func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg *confi
 			sitekey = randomSiteKey()
 		}
 
-		tgt.URL = fmt.Sprintf("http:%s/%s?%s=%s", cfg.APIURL(), common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
+		apiURLConfig := config.AsURL(context.TODO(), cfg.Get(common.APIBaseURLKey))
+		tgt.URL = fmt.Sprintf("http:%s/%s?%s=%s", apiURLConfig.URL(), common.PuzzleEndpoint, common.ParamSiteKey, sitekey)
 
 		header := http.Header{}
 		header.Add("Origin", property.Domain)
-		header.Add(cfg.RateLimiterHeader(), generateRandomIPv4())
+		header.Add(rateLimitHeader, generateRandomIPv4())
 		tgt.Header = header
 
 		return nil
 	}
 }
 
-func load(usersCount int, cfg *config.Config, freq int, durationSeconds int, sitekeyPercent int) error {
+func load(usersCount int, cfg common.ConfigStore, freq int, durationSeconds int, sitekeyPercent int) error {
 	properties, err := loadProperties(usersCount, cfg)
 	if err != nil {
 		return err
