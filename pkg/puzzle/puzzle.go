@@ -85,25 +85,55 @@ func (p *Puzzle) PuzzleIDString() string {
 	return strconv.FormatUint(p.PuzzleID, 16)
 }
 
-func (p *Puzzle) MarshalBinary() ([]byte, error) {
-	var buf bytes.Buffer
+func (p *Puzzle) WriteTo(w io.Writer) (int64, error) {
+	var n int64
+	if err := binary.Write(w, binary.LittleEndian, p.Version); err != nil {
+		return n, err
+	}
+	n++
 
-	binary.Write(&buf, binary.LittleEndian, p.Version)
-	binary.Write(&buf, binary.LittleEndian, p.PropertyID)
-	binary.Write(&buf, binary.LittleEndian, p.PuzzleID)
-	binary.Write(&buf, binary.LittleEndian, p.Difficulty)
-	binary.Write(&buf, binary.LittleEndian, p.SolutionsCount)
+	if nn, err := w.Write(p.PropertyID[:]); err != nil {
+		return n + int64(nn), err
+	}
+	n += int64(len(p.PropertyID))
+
+	if err := binary.Write(w, binary.LittleEndian, p.PuzzleID); err != nil {
+		return n, err
+	}
+	n += 8
+
+	if err := binary.Write(w, binary.LittleEndian, p.Difficulty); err != nil {
+		return n, err
+	}
+	n++
+
+	if err := binary.Write(w, binary.LittleEndian, p.SolutionsCount); err != nil {
+		return n, err
+	}
+	n++
 
 	var expiration uint32
 	if !p.Expiration.IsZero() {
 		expiration = uint32(p.Expiration.Unix())
 	}
-	binary.Write(&buf, binary.LittleEndian, expiration)
+	if err := binary.Write(w, binary.LittleEndian, expiration); err != nil {
+		return n, err
+	}
+	n += 4
 
-	binary.Write(&buf, binary.LittleEndian, p.UserData)
+	if nn, err := w.Write(p.UserData); err != nil {
+		return n + int64(nn), err
+	}
+	n += int64(len(p.UserData))
 
-	// NOTE: we do NOT serialize salt
+	return n, nil
+}
 
+func (p *Puzzle) MarshalBinary() ([]byte, error) {
+	var buf bytes.Buffer
+	if _, err := p.WriteTo(&buf); err != nil {
+		return nil, err
+	}
 	return buf.Bytes(), nil
 }
 
@@ -148,43 +178,52 @@ type PuzzlePayload struct {
 }
 
 func (p *Puzzle) Serialize(ctx context.Context, salt *Salt, extraSalt []byte) (*PuzzlePayload, error) {
-	puzzleBytes, err := p.MarshalBinary()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
-		return nil, err
-	}
-
+	// First write to hasher
 	hasher := hmac.New(sha1.New, salt.Data())
-	if _, werr := hasher.Write(puzzleBytes); werr != nil {
-		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(werr))
-		return nil, werr
+	puzzleSize, err := p.WriteTo(hasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to write puzzle to hasher", common.ErrAttr(err))
+		return nil, err
 	}
 
 	if len(extraSalt) > 0 {
 		if _, werr := hasher.Write(extraSalt); werr != nil {
 			slog.ErrorContext(ctx, "Failed to hash puzzle salt", "size", len(extraSalt), common.ErrAttr(werr))
+			return nil, werr
 		}
 	}
 
 	hash := hasher.Sum(nil)
-
 	sign := newSignature(hash, salt, extraSalt)
-	signatureBytes, err := sign.MarshalBinary()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to serialize signature", common.ErrAttr(err))
+
+	puzzleBase64Len := base64.StdEncoding.EncodedLen(int(puzzleSize))
+	signatureBase64Len := base64.StdEncoding.EncodedLen(sign.BinarySize())
+
+	pp := &PuzzlePayload{}
+
+	pp.puzzleBase64 = make([]byte, puzzleBase64Len)
+	// Write puzzle to base64
+	puzzleWriter := base64.NewEncoder(base64.StdEncoding, bytes.NewBuffer(pp.puzzleBase64[:0]))
+	if _, err := p.WriteTo(puzzleWriter); err != nil {
+		slog.ErrorContext(ctx, "Failed to write puzzle", common.ErrAttr(err))
+		return nil, err
+	}
+	if err := puzzleWriter.Close(); err != nil {
+		slog.ErrorContext(ctx, "Failed to flush puzzle encoder", common.ErrAttr(err))
 		return nil, err
 	}
 
-	puzzleBase64Len := base64.StdEncoding.EncodedLen(len(puzzleBytes))
-	signatureBase64Len := base64.StdEncoding.EncodedLen(len(signatureBytes))
-
-	pp := &PuzzlePayload{
-		puzzleBase64:    make([]byte, puzzleBase64Len),
-		signatureBase64: make([]byte, signatureBase64Len),
+	pp.signatureBase64 = make([]byte, signatureBase64Len)
+	// Write signature to base64
+	signatureWriter := base64.NewEncoder(base64.StdEncoding, bytes.NewBuffer(pp.signatureBase64[:0]))
+	if _, err := sign.WriteTo(signatureWriter); err != nil {
+		slog.ErrorContext(ctx, "Failed to write signature", common.ErrAttr(err))
+		return nil, err
 	}
-
-	base64.StdEncoding.Encode(pp.puzzleBase64, puzzleBytes)
-	base64.StdEncoding.Encode(pp.signatureBase64, signatureBytes)
+	if err := signatureWriter.Close(); err != nil {
+		slog.ErrorContext(ctx, "Failed to flush signature encoder", common.ErrAttr(err))
+		return nil, err
+	}
 
 	return pp, nil
 }

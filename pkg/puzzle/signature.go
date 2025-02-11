@@ -37,14 +37,29 @@ func (s *signature) HasExtra() bool {
 	return s.Flags&flagWithExtra != 0
 }
 
+func (s *signature) BinarySize() int {
+	return 3 + len(s.Hash)
+}
+
+func (s *signature) WriteTo(w io.Writer) (int64, error) {
+	if err := binary.Write(w, binary.LittleEndian, s.Version); err != nil {
+		return 0, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, s.Flags); err != nil {
+		return 1, err
+	}
+	if err := binary.Write(w, binary.LittleEndian, s.Fingerprint); err != nil {
+		return 2, err
+	}
+	n, err := w.Write(s.Hash)
+	return 3 + int64(n), err
+}
+
 func (s *signature) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
-
-	binary.Write(&buf, binary.LittleEndian, s.Version)
-	binary.Write(&buf, binary.LittleEndian, s.Flags)
-	binary.Write(&buf, binary.LittleEndian, s.Fingerprint)
-	binary.Write(&buf, binary.LittleEndian, s.Hash)
-
+	if _, err := s.WriteTo(&buf); err != nil {
+		return nil, err
+	}
 	return buf.Bytes(), nil
 }
 
