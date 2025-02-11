@@ -47,10 +47,12 @@ func NewPuzzle(puzzleID uint64, propertyID [16]byte, difficulty uint8) *Puzzle {
 		PropertyID:     propertyID,
 		PuzzleID:       puzzleID,
 		UserData:       make([]byte, UserDataSize),
+		Expiration:     time.Time{},
 	}
 }
 
 func (p *Puzzle) Init() error {
+	// TODO: Check if we need both random UserData and random PuzzleID
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
 		return err
 	}
