@@ -29,7 +29,7 @@ const (
 type Metrics interface {
 	Handler(h http.Handler) http.Handler
 	HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
-	ObservePuzzleCreated(userID int32, isStub bool)
+	ObservePuzzleCreated(userID int32)
 	ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool)
 }
 
@@ -83,7 +83,7 @@ func NewService() *service {
 			Name:      "create_total",
 			Help:      "Total number of puzzles created",
 		},
-		[]string{stubLabel, userIDLabel},
+		[]string{userIDLabel},
 	)
 	reg.MustRegister(puzzleCount)
 
@@ -125,10 +125,9 @@ func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) ht
 	}
 }
 
-func (s *service) ObservePuzzleCreated(userID int32, isStub bool) {
+func (s *service) ObservePuzzleCreated(userID int32) {
 	s.puzzleCount.With(prometheus.Labels{
 		userIDLabel: strconv.Itoa(int(userID)),
-		stubLabel:   strconv.FormatBool(isStub),
 	}).Inc()
 }
 

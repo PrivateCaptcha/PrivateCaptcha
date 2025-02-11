@@ -25,42 +25,42 @@ const (
 	solutionsCount = 16
 )
 
-const (
-	flagInitialized uint8 = 1 << iota
-	flagStub
-)
-
 var (
 	dotBytes = []byte(".")
 )
 
 type Puzzle struct {
 	Version        uint8
-	Flags          uint8
 	Difficulty     uint8
 	SolutionsCount uint8
 	PropertyID     [PropertyIDSize]byte
 	PuzzleID       uint64
 	Expiration     time.Time
 	UserData       []byte
-	Salt           []byte
 }
 
-func NewPuzzle() *Puzzle {
+func NewPuzzle(puzzleID uint64, propertyID [16]byte, difficulty uint8) *Puzzle {
 	return &Puzzle{
 		Version:        puzzleVersion,
-		Flags:          flagStub,
-		Difficulty:     0,
+		Difficulty:     difficulty,
 		SolutionsCount: solutionsCount,
-		PropertyID:     [16]byte{},
-		PuzzleID:       0,
+		PropertyID:     propertyID,
+		PuzzleID:       puzzleID,
 		UserData:       make([]byte, UserDataSize),
-		Expiration:     time.Time{},
-		Salt:           nil,
 	}
 }
 
-func (p *Puzzle) Init(propertyID [16]byte, difficulty uint8, salt []byte) error {
+func (p *Puzzle) Init() error {
+	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
+		return err
+	}
+
+	p.Expiration = time.Now().UTC().Add(ValidityPeriod)
+
+	return nil
+}
+
+func RandomPuzzleID() uint64 {
 	const maxTries = 10
 	var puzzleID uint64
 
@@ -68,30 +68,11 @@ func (p *Puzzle) Init(propertyID [16]byte, difficulty uint8, salt []byte) error 
 		puzzleID = randv2.Uint64()
 	}
 
-	p.PropertyID = propertyID
-	p.PuzzleID = puzzleID
-	p.Difficulty = difficulty
-	p.Expiration = time.Now().UTC().Add(ValidityPeriod)
-	p.Salt = salt
-
-	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
-		return err
-	}
-
-	var flags uint8
-	flags |= flagInitialized
-
-	if len(salt) == 0 {
-		flags |= flagStub
-	}
-
-	p.Flags = flags
-
-	return nil
+	return puzzleID
 }
 
 func (p *Puzzle) IsStub() bool {
-	return (p.Flags & flagStub) != 0
+	return p.PuzzleID == 0
 }
 
 func (p *Puzzle) IsZero() bool {
@@ -106,7 +87,6 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 
 	binary.Write(&buf, binary.LittleEndian, p.Version)
-	binary.Write(&buf, binary.LittleEndian, p.Flags)
 	binary.Write(&buf, binary.LittleEndian, p.PropertyID)
 	binary.Write(&buf, binary.LittleEndian, p.PuzzleID)
 	binary.Write(&buf, binary.LittleEndian, p.Difficulty)
@@ -126,16 +106,13 @@ func (p *Puzzle) MarshalBinary() ([]byte, error) {
 }
 
 func (p *Puzzle) UnmarshalBinary(data []byte) error {
-	if len(data) < (PropertyIDSize + 8 + UserDataSize + 7 + 1) {
+	if len(data) < (PropertyIDSize + 8 + UserDataSize + 7) {
 		return io.ErrShortBuffer
 	}
 
 	var offset int
 
 	p.Version = data[0]
-	offset += 1
-
-	p.Flags = data[offset]
 	offset += 1
 
 	copy(p.PropertyID[:], data[offset:offset+PropertyIDSize])
@@ -164,44 +141,60 @@ func (p *Puzzle) UnmarshalBinary(data []byte) error {
 }
 
 type PuzzlePayload struct {
-	puzzleBase64 string
-	hashBase64   string
+	puzzleBase64    []byte
+	signatureBase64 []byte
 }
 
-func (p *Puzzle) Serialize(ctx context.Context, salt []byte) (*PuzzlePayload, error) {
+func (p *Puzzle) Serialize(ctx context.Context, salt *Salt, extraSalt []byte) (*PuzzlePayload, error) {
 	puzzleBytes, err := p.MarshalBinary()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		return nil, err
 	}
 
-	hasher := hmac.New(sha1.New, salt)
+	hasher := hmac.New(sha1.New, salt.Data())
 	if _, werr := hasher.Write(puzzleBytes); werr != nil {
 		slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(werr))
+		return nil, werr
 	}
 
-	if !p.IsStub() && (len(p.Salt) > 0) {
-		if _, werr := hasher.Write(p.Salt); werr != nil {
-			slog.ErrorContext(ctx, "Failed to hash puzzle salt", "size", len(p.Salt), common.ErrAttr(werr))
+	if len(extraSalt) > 0 {
+		if _, werr := hasher.Write(extraSalt); werr != nil {
+			slog.ErrorContext(ctx, "Failed to hash puzzle salt", "size", len(extraSalt), common.ErrAttr(werr))
 		}
 	}
 
 	hash := hasher.Sum(nil)
 
-	return &PuzzlePayload{
-		puzzleBase64: base64.StdEncoding.EncodeToString(puzzleBytes),
-		hashBase64:   base64.StdEncoding.EncodeToString(hash),
-	}, nil
+	sign := newSignature(hash, salt, extraSalt)
+	signatureBytes, err := sign.MarshalBinary()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to serialize signature", common.ErrAttr(err))
+		return nil, err
+	}
+
+	puzzleBase64Len := base64.StdEncoding.EncodedLen(len(puzzleBytes))
+	signatureBase64Len := base64.StdEncoding.EncodedLen(len(signatureBytes))
+
+	pp := &PuzzlePayload{
+		puzzleBase64:    make([]byte, puzzleBase64Len),
+		signatureBase64: make([]byte, signatureBase64Len),
+	}
+
+	base64.StdEncoding.Encode(pp.puzzleBase64, puzzleBytes)
+	base64.StdEncoding.Encode(pp.signatureBase64, signatureBytes)
+
+	return pp, nil
 }
 
 func (pp *PuzzlePayload) Write(w io.Writer) error {
-	if _, werr := w.Write([]byte(pp.puzzleBase64)); werr != nil {
+	if _, werr := w.Write(pp.puzzleBase64); werr != nil {
 		return werr
 	}
 
 	_, _ = w.Write(dotBytes)
 
-	if _, werr := w.Write([]byte(pp.hashBase64)); werr != nil {
+	if _, werr := w.Write(pp.signatureBase64); werr != nil {
 		return werr
 	}
 

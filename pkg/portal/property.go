@@ -304,13 +304,13 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	sitekey := r.URL.Query().Get(common.ParamSiteKey)
 	uuid := db.UUIDFromSiteKey(sitekey)
 
-	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init(uuid.Bytes, uint8(level), nil /*salt*/); err != nil {
+	p := puzzle.NewPuzzle(0 /*puzzle ID*/, uuid.Bytes, uint8(level))
+	if err := p.Init(); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
-	_ = s.PuzzleEngine.Write(ctx, puzzle, w)
+	_ = s.PuzzleEngine.Write(ctx, p, nil /*extra salt*/, w)
 }
 
 // This one cannot be "MVC" function because it redirects in case of success

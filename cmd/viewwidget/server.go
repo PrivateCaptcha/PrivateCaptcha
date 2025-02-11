@@ -27,7 +27,7 @@ var (
 type server struct {
 	prefix string
 	count  int32
-	salt   []byte
+	salt   *puzzle.Salt
 }
 
 func (s *server) Setup(router *http.ServeMux) {
@@ -72,14 +72,14 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	puzzle := puzzle.NewPuzzle()
-	if err := puzzle.Init([16]byte{}, 90, propertySalt); err != nil {
+	p := puzzle.NewPuzzle(0 /*puzzle ID*/, [16]byte{}, uint8(common.DifficultyLevelMedium))
+	if err := p.Init(); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	s.writePuzzle(ctx, puzzle, w)
+	s.writePuzzle(ctx, p, propertySalt, w)
 }
 
 func (s *server) zeroPuzzle(w http.ResponseWriter, r *http.Request) {
@@ -95,15 +95,14 @@ func (s *server) zeroPuzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := puzzle.NewPuzzle()
-	p.PropertyID = db.TestPropertyUUID.Bytes
+	p := puzzle.NewPuzzle(0, db.TestPropertyUUID.Bytes, uint8(common.DifficultyLevelSmall))
 
-	s.writePuzzle(ctx, p, w)
+	s.writePuzzle(ctx, p, nil /*extra salt*/, w)
 }
 
 // mostly copy-paste from api/server.go
-func (s *server) writePuzzle(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) {
-	payload, err := p.Serialize(ctx, s.salt)
+func (s *server) writePuzzle(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) {
+	payload, err := p.Serialize(ctx, s.salt, extraSalt)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

@@ -22,6 +22,6 @@ func (sm *stubMetrics) HandlerFunc(func() string) func(http.Handler) http.Handle
 	return common.NoopMiddleware
 }
 
-func (sm *stubMetrics) ObservePuzzleCreated(userID int32, isStub bool) {}
+func (sm *stubMetrics) ObservePuzzleCreated(userID int32) {}
 
 func (sm *stubMetrics) ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool) {}

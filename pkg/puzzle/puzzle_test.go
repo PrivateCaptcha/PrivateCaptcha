@@ -16,7 +16,7 @@ func randInit(data []byte) {
 func TestNewPuzzleIsZero(t *testing.T) {
 	t.Parallel()
 
-	if !NewPuzzle().IsZero() {
+	if !new(Puzzle).IsZero() {
 		t.Error("new puzzle is not zero!")
 	}
 }
@@ -24,7 +24,7 @@ func TestNewPuzzleIsZero(t *testing.T) {
 func TestPuzzleUnmarshalFail(t *testing.T) {
 	t.Parallel()
 
-	puzzle := NewPuzzle()
+	puzzle := NewPuzzle(RandomPuzzleID(), [16]byte{}, 123)
 
 	randInit(puzzle.PropertyID[:])
 
@@ -75,13 +75,12 @@ func checkPuzzles(oldPuzzle, newPuzzle *Puzzle, t *testing.T) {
 
 func TestPuzzleMarshalling(t *testing.T) {
 	t.Parallel()
-	// Create a sample Puzzle
-	puzzle := NewPuzzle()
-
 	propertyID := [16]byte{}
 	randInit(propertyID[:])
 
-	puzzle.Init(propertyID, 123, nil /*salt*/)
+	// Create a sample Puzzle
+	puzzle := NewPuzzle(RandomPuzzleID(), propertyID, 123)
+	_ = puzzle.Init()
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()
@@ -101,7 +100,8 @@ func TestPuzzleMarshalling(t *testing.T) {
 func TestZeroPuzzleMarshalling(t *testing.T) {
 	t.Parallel()
 	// Create a sample Puzzle
-	puzzle := NewPuzzle()
+	puzzle := new(Puzzle)
+	puzzle.UserData = make([]byte, UserDataSize)
 
 	//puzzle.Init(propertyID, 123)
 

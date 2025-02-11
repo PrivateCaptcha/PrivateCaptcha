@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 	"github.com/rs/cors"
@@ -20,7 +21,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	srv := &server{salt: []byte("salt")}
+	srv := &server{salt: puzzle.NewSalt([]byte("salt"))}
 	router := http.NewServeMux()
 
 	corsDefault := cors.Default()

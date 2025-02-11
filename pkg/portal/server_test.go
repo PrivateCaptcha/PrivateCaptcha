@@ -38,7 +38,7 @@ type fakePuzzleEngine struct {
 	result puzzle.VerifyError
 }
 
-func (f *fakePuzzleEngine) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
+func (f *fakePuzzleEngine) Write(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) error {
 	return nil
 }
 

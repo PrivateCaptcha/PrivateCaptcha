@@ -40,8 +40,8 @@ func TestSolver(t *testing.T) {
 		t.Run(fmt.Sprintf("solver_%v", i), func(t *testing.T) {
 			t.Parallel()
 
-			p := NewPuzzle()
-			if err := p.Init([16]byte{}, difficulty, nil /*salt*/); err != nil {
+			p := NewPuzzle(0, [16]byte{}, difficulty)
+			if err := p.Init(); err != nil {
 				t.Fatal(err)
 			}
 
@@ -71,8 +71,8 @@ func TestSolver(t *testing.T) {
 
 func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		p := NewPuzzle()
-		if err := p.Init([16]byte{}, difficulty, nil /*salt*/); err != nil {
+		p := NewPuzzle(0, [16]byte{}, difficulty)
+		if err := p.Init(); err != nil {
 			b.Fatal(err)
 		}
 

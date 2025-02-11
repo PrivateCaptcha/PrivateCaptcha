@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 var (
@@ -13,22 +14,21 @@ var (
 
 type puzzleSalt struct {
 	configItem common.ConfigItem
-	value      []byte
+	value      *puzzle.Salt
 }
 
 func newPuzzleSalt(configItem common.ConfigItem) *puzzleSalt {
 	return &puzzleSalt{
 		configItem: configItem,
-		value:      make([]byte, 0),
 	}
 }
 
 func (ps *puzzleSalt) Update() error {
-	ps.value = []byte(ps.configItem.Value())
+	ps.value = puzzle.NewSalt([]byte(ps.configItem.Value()))
 	return nil
 }
 
-func (ps *puzzleSalt) Value() []byte {
+func (ps *puzzleSalt) Value() *puzzle.Salt {
 	return ps.value
 }
 

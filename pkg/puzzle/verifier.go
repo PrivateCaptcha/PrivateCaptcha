@@ -17,6 +17,10 @@ var (
 	errPayloadEmpty      = errors.New("payload is empty")
 	errWrongPartsNumber  = errors.New("wrong number of parts")
 	errSignatureMismatch = errors.New("puzzle signature mismatch")
+	errEmptyPayloadPart  = errors.New("payload part is empty")
+	errEmptySignature    = errors.New("empty signature")
+	errEmptyPuzzle       = errors.New("empty puzzle")
+	ErrSignKeyMismatch   = errors.New("signature fingerprint mismatch")
 )
 
 type VerifyError int
@@ -86,10 +90,10 @@ type OwnerIDSource interface {
 }
 
 type VerifyPayload struct {
-	puzzle        *Puzzle
-	solutionsData string
-	puzzleData    []byte
-	signature     []byte
+	puzzle     *Puzzle
+	signature  *signature
+	solutions  string
+	puzzleData []byte
 }
 
 func ParseVerifyPayload(ctx context.Context, payload string) (*VerifyPayload, error) {
@@ -103,18 +107,32 @@ func ParseVerifyPayload(ctx context.Context, payload string) (*VerifyPayload, er
 	}
 
 	parts := strings.Split(payload, ".")
-	solutionsData, puzzleData, signature := parts[0], parts[1], parts[2]
+	solutionsStr, puzzleStr, signatureStr := parts[0], parts[1], parts[2]
+	if len(solutionsStr) == 0 || len(puzzleStr) == 0 || len(signatureStr) == 0 {
+		slog.WarnContext(ctx, "Invalid length of payload parts", "solutions", len(solutionsStr), "puzzle", len(puzzleStr),
+			"signature", len(signatureStr))
+		return nil, errEmptyPayloadPart
+	}
 
-	puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleData)
+	puzzleBytes, err := base64.StdEncoding.DecodeString(puzzleStr)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to base64 decode puzzle bytes", common.ErrAttr(err))
 		return nil, err
 	}
 
-	requestHash, err := base64.StdEncoding.DecodeString(signature)
+	if len(puzzleBytes) == 0 {
+		return nil, errEmptyPuzzle
+	}
+
+	signatureBytes, err := base64.StdEncoding.DecodeString(signatureStr)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to base64 decode signature bytes", common.ErrAttr(err))
 		return nil, err
+	}
+
+	signatureLen := len(signatureBytes)
+	if signatureLen == 0 {
+		return nil, errEmptySignature
 	}
 
 	p := new(Puzzle)
@@ -123,32 +141,46 @@ func ParseVerifyPayload(ctx context.Context, payload string) (*VerifyPayload, er
 		return nil, uerr
 	}
 
+	s := new(signature)
+	if uerr := s.UnmarshalBinary(signatureBytes); uerr != nil {
+		slog.ErrorContext(ctx, "Failed to unmashal binary signature", common.ErrAttr(uerr))
+		return nil, uerr
+	}
+
 	return &VerifyPayload{
-		solutionsData: solutionsData,
-		puzzleData:    puzzleBytes,
-		signature:     requestHash,
-		puzzle:        p,
+		solutions:  solutionsStr,
+		puzzleData: puzzleBytes,
+		puzzle:     p,
+		signature:  s,
 	}, nil
 }
 
-func (vp *VerifyPayload) VerifySignature(ctx context.Context, commonSalt, puzzleSalt []byte) error {
-	hasher := hmac.New(sha1.New, commonSalt)
+func (vp *VerifyPayload) NeedsExtraSalt() bool {
+	return vp.signature.HasExtra()
+}
+
+func (vp *VerifyPayload) VerifySignature(ctx context.Context, salt *Salt, extraSalt []byte) error {
+	if vp.signature.Fingerprint != salt.Fingerprint() {
+		return ErrSignKeyMismatch
+	}
+
+	hasher := hmac.New(sha1.New, salt.Data())
 
 	if _, werr := hasher.Write(vp.puzzleData); werr != nil {
 		slog.WarnContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(werr))
 		return werr
 	}
 
-	if len(puzzleSalt) > 0 {
-		if _, werr := hasher.Write(puzzleSalt); werr != nil {
-			slog.ErrorContext(ctx, "Failed to hash puzzle salt", "size", len(puzzleSalt), common.ErrAttr(werr))
+	if vp.signature.HasExtra() && (len(extraSalt) > 0) {
+		if _, werr := hasher.Write(extraSalt); werr != nil {
+			slog.ErrorContext(ctx, "Failed to hash puzzle salt", "size", len(extraSalt), common.ErrAttr(werr))
 			return werr
 		}
 	}
 
 	actualSignature := hasher.Sum(nil)
 
-	if !bytes.Equal(actualSignature, vp.signature) {
+	if !bytes.Equal(actualSignature, vp.signature.Hash) {
 		slog.WarnContext(ctx, "Puzzle hash is not equal")
 		return errSignatureMismatch
 	}
@@ -161,7 +193,7 @@ func (vp *VerifyPayload) Puzzle() *Puzzle {
 }
 
 func (vp *VerifyPayload) VerifySolutions(ctx context.Context) (*Metadata, VerifyError) {
-	solutions, err := NewSolutions(vp.solutionsData)
+	solutions, err := NewSolutions(vp.solutions)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to decode solutions bytes", common.ErrAttr(err))
 		return nil, ParseResponseError

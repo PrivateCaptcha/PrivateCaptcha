@@ -140,10 +140,9 @@ func (s *server) Init(ctx context.Context) error {
 		return err
 	}
 
-	testPuzzle := puzzle.NewPuzzle()
-	testPuzzle.PropertyID = db.TestPropertyUUID.Bytes
+	testPuzzle := puzzle.NewPuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
 	var err error
-	s.testPuzzleData, err = testPuzzle.Serialize(ctx, s.salt.Value())
+	s.testPuzzleData, err = testPuzzle.Serialize(ctx, s.salt.Value(), nil /*property salt*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize test puzzle", common.ErrAttr(err))
 		return err
@@ -215,9 +214,9 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 		}
 
 		uuid := db.UUIDFromSiteKey(sitekey)
-		stubPuzzle := puzzle.NewPuzzle()
 		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
-		if err := stubPuzzle.Init(uuid.Bytes, uint8(common.DifficultyLevelMedium), nil /*salt*/); err != nil {
+		stubPuzzle := puzzle.NewPuzzle(0 /*puzzle ID*/, uuid.Bytes, uint8(common.DifficultyLevelMedium))
+		if err := stubPuzzle.Init(); err != nil {
 			slog.ErrorContext(ctx, "Failed to init stub puzzle", common.ErrAttr(err))
 		}
 
@@ -250,8 +249,9 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	tnow := time.Now()
 	puzzleDifficulty := s.levels.Difficulty(fingerprint, property, tnow)
 
-	result := puzzle.NewPuzzle()
-	if err := result.Init(property.ExternalID.Bytes, puzzleDifficulty, property.Salt); err != nil {
+	puzzleID := puzzle.RandomPuzzleID()
+	result := puzzle.NewPuzzle(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
+	if err := result.Init(); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
 
@@ -290,17 +290,20 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.Write(ctx, puzzle, w)
-
+	var extraSalt []byte
 	var userID int32 = -1
 	if property != nil {
 		userID = property.OrgOwnerID.Int32
+		extraSalt = property.Salt
 	}
-	s.metrics.ObservePuzzleCreated(userID, puzzle.IsStub())
+
+	s.Write(ctx, puzzle, extraSalt, w)
+
+	s.metrics.ObservePuzzleCreated(userID)
 }
 
-func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, w http.ResponseWriter) error {
-	payload, err := p.Serialize(ctx, s.salt.Value())
+func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) error {
+	payload, err := p.Serialize(ctx, s.salt.Value(), extraSalt)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
@@ -433,8 +436,8 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 		return p, nil, puzzle.PuzzleExpiredError
 	}
 
-	if p.IsStub() {
-		if serr := payload.VerifySignature(ctx, s.salt.Value(), nil /*puzzle salt*/); serr != nil {
+	if !payload.NeedsExtraSalt() {
+		if serr := payload.VerifySignature(ctx, s.salt.Value(), nil /*extra salt*/); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
 	}
@@ -459,7 +462,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 	}
 
 	property := properties[0]
-	if !p.IsStub() {
+	if payload.NeedsExtraSalt() {
 		if serr := payload.VerifySignature(ctx, s.salt.Value(), property.Salt); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
