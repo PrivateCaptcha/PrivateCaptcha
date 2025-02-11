@@ -59,13 +59,17 @@ func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
 }
 
 func NewMailer(cfg common.ConfigStore) *simpleMailer {
-	return &simpleMailer{}
+	return &simpleMailer{
+		endpoint: cfg.Get(common.SmtpEndpointKey),
+		username: cfg.Get(common.SmtpUsernameKey),
+		password: cfg.Get(common.SmtpPasswordKey),
+	}
 }
 
 type simpleMailer struct {
-	URL      common.ConfigItem
-	Username common.ConfigItem
-	Password common.ConfigItem
+	endpoint common.ConfigItem
+	username common.ConfigItem
+	password common.ConfigItem
 }
 
 func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
@@ -73,7 +77,7 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 		return errInvalidMessage
 	}
 
-	dialer, err := smtpDialer(sm.URL.Value(), sm.Username.Value(), sm.Password.Value())
+	dialer, err := smtpDialer(sm.endpoint.Value(), sm.username.Value(), sm.password.Value())
 	if err != nil {
 		return err
 	}
