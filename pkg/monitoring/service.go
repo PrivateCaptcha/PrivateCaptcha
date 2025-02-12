@@ -34,11 +34,11 @@ type Metrics interface {
 }
 
 type service struct {
-	registry        *prometheus.Registry
-	stdMiddleware   middleware.Middleware
-	roughMiddleware middleware.Middleware
-	puzzleCount     *prometheus.CounterVec
-	verifyCount     *prometheus.CounterVec
+	registry         *prometheus.Registry
+	fineMiddleware   middleware.Middleware
+	coarseMiddleware middleware.Middleware
+	puzzleCount      *prometheus.CounterVec
+	verifyCount      *prometheus.CounterVec
 }
 
 var _ Metrics = (*service)(nil)
@@ -101,26 +101,26 @@ func NewService() *service {
 
 	return &service{
 		registry: reg,
-		stdMiddleware: middleware.New(middleware.Config{
+		fineMiddleware: middleware.New(middleware.Config{
+			// this is added as Service label
 			Service:            metricsNamespace,
 			DisableMeasureSize: true,
 			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
-				// this is added as Service label
-				// Prefix:   metricsNamespace,
+				Prefix:          "fine",
 				Registry:        reg,
-				DurationBuckets: []float64{0.2, 0.4, 0.8, 1.6, 3.2},
+				DurationBuckets: []float64{.05, .1, .25, .5, 1, 2.5},
 			}),
 		}),
-		roughMiddleware: middleware.New(middleware.Config{
+		coarseMiddleware: middleware.New(middleware.Config{
+			// this is added as Service label
 			Service:                metricsNamespace,
 			GroupedStatus:          true,
 			DisableMeasureSize:     true,
 			DisableMeasureInflight: true,
 			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
-				// this is added as Service label
-				// Prefix:   metricsNamespace,
+				Prefix:          "coarse",
 				Registry:        reg,
-				DurationBuckets: []float64{0.01, 0.16, 0.64, 1.28},
+				DurationBuckets: []float64{.05, .1, .5, 1, 2.5},
 			}),
 		}),
 		puzzleCount: puzzleCount,
@@ -130,22 +130,22 @@ func NewService() *service {
 
 func (s *service) Handler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
-	return std.Handler("", s.stdMiddleware, h)
+	return std.Handler("", s.fineMiddleware, h)
 }
 
 func (s *service) CDNHandler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
-	return std.Handler("", s.roughMiddleware, h)
+	return std.Handler("", s.coarseMiddleware, h)
 }
 
 func (s *service) IgnoredHandler(h http.Handler) http.Handler {
-	return std.Handler("_ignored", s.roughMiddleware, h)
+	return std.Handler("_ignored", s.coarseMiddleware, h)
 }
 
 func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		handlerID := handlerIDFunc()
-		return std.Handler(handlerID, s.stdMiddleware, h)
+		return std.Handler(handlerID, s.fineMiddleware, h)
 	}
 }
 
