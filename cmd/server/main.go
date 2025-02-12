@@ -182,13 +182,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalServer.Setup(router, portalDomain, auth.EdgeVerify(portalDomain))
 	rateLimiter := auth.DefaultRateLimiter().RateLimit
 	cdnDomain := cdnURLConfig.Domain()
-	cdnChain := alice.New(common.Recovered, auth.EdgeVerify(cdnDomain), metrics.Handler, rateLimiter)
+	cdnChain := alice.New(common.Recovered, auth.EdgeVerify(cdnDomain), metrics.CDNHandler, rateLimiter)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, internalAPIChain.ThenFunc(healthCheck.HandlerFunc))
 	// "protection" (NOTE: different than usual order of monitoring)
-	publicChain := alice.New(common.Recovered, auth.EdgeVerify("" /*domain*/), metrics.Handler, rateLimiter)
+	publicChain := alice.New(common.Recovered, auth.EdgeVerify("" /*domain*/), metrics.IgnoredHandler, rateLimiter)
 	common.SetupWellKnownPaths(router, publicChain)
 
 	httpServer := &http.Server{
