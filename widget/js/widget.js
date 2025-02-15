@@ -83,7 +83,7 @@ export class CaptchaWidget {
 
     // fetches puzzle from the server and setup workers
     async init(autoStart) {
-        this.trace("init() was called");
+        this.trace(`init() was called. state=${this._state}`);
 
         const sitekey = this._options.sitekey || this._element.dataset["sitekey"];
         if (!sitekey) {
