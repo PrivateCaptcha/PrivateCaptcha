@@ -112,7 +112,7 @@ func (s *Server) postSupport(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	if err := s.Mailer.SendSupportRequest(ctx, user.Email, req); err == nil {
-		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you soon."
+		renderCtx.SuccessMessage = "Your message has been sent. We will reply to you as soon as possible."
 		renderCtx.Message = ""
 		renderCtx.Subject = ""
 
