@@ -5,8 +5,8 @@
         --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
         --label-spacing: 10px;
         --border-radius: 2px;
-        --warn-color: #DD1C1A;
-        --accent-color: #0080A0;
+        --warn-color: #A70B0B;
+        --accent-color: #009400;
     }
 }
 
@@ -20,11 +20,11 @@
     }
 
     :host([theme="dark"]) {
-        --background-color: #111827;
         --dark-color: #fff;
         --gray-color: #656C7B;
+        --light-color: #d2d6dd;
         --lighter-color: #3C4353;
-        --light-color: #6B778E;
+        --background-color: #111827;
     }
 }
 
@@ -169,8 +169,14 @@ a.pc-link:hover {
     }
 }
 
+/* tick mark */
 svg.verified polyline {
     animation: checkmark 0.35s ease-in-out 0.1s backwards;
+    stroke: #F2F2F2;
+}
+
+svg.verified circle {
+    fill: var(--accent-color);
 }
 
 #pc-debug {

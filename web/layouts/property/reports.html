@@ -2,7 +2,7 @@
     <div class="sm:hidden">
         <label for="tabs" class="sr-only">Select a tab</label>
         <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
-        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-indigo-500 focus:outline-none focus:ring-indigo-500 sm:text-sm"
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
             hx-target="#property-tabs"
             hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint }}"
             hx-on::config-request="event.detail.path += '/'+this.value"
@@ -15,8 +15,8 @@
     <div class="hidden sm:block">
         <div class="border-b border-gray-200">
             <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-                <!-- Current: "border-indigo-500 text-indigo-600", Default: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700" -->
-                <a href="#" class="border-indigo-500 text-indigo-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Reports</a>
+                <!-- Current: "border-pclime-500 text-pclime-600", Default: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700" -->
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Reports</a>
                 <a href="#"
                     hx-target="#property-tabs"
                     hx-swap="innerHTML"
@@ -40,28 +40,28 @@
             <nav class="flex items-center justify-center mt-4 space-x-1 2xl:order-2 lg:order-3 md:mt-0 lg:mt-4 sm:space-x-2 2xl:mt-0">
                 <a href="#" title=""
                     @click="period = '1y'; updateChart()"
-                    :class="period == '1y' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
+                    :class="period == '1y' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     12 Months
                 </a>
 
                 <a href="#" title=""
                     @click="period = '30d'; updateChart()"
-                    :class="period == '30d' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
+                    :class="period == '30d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     30 Days
                 </a>
 
                 <a href="#" title=""
                     @click="period = '7d'; updateChart()"
-                    :class="period == '7d' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
+                    :class="period == '7d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     7 Days
                 </a>
 
                 <a href="#" title=""
                     @click="period = '24h'; updateChart()"
-                    :class="period == '24h' ? 'text-gray-900 border-gray-900' : 'text-gray-500 border-transparent'"
+                    :class="period == '24h' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     24 Hours
                 </a>

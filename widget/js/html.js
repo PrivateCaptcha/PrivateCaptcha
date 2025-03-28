@@ -27,8 +27,8 @@ const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" wi
 </svg>`;
 
 const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" width="${RING_SIZE}px" height="${RING_SIZE}px" viewBox="0 0 154 154">
-<g fill="none"><circle fill="#0080A0" cx="77" cy="77" r="76"></circle>
-<polyline class="st0" stroke="#F2F2F2" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
+<g fill="none"><circle cx="77" cy="77" r="76"></circle>
+<polyline class="st0" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
 </svg>
 `;
 

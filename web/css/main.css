@@ -6,9 +6,9 @@
     @apply font-bold;
     @apply rounded;
     @apply underline;
-    @apply hover:text-gray-600;
+    @apply hover:text-pclime-600;
     @apply focus:outline-none;
-    @apply focus:text-gray-900;
+    @apply focus:text-pclime-900;
 }
 
 .pc-form-text {
@@ -35,16 +35,16 @@
     @apply text-white;
     @apply transition-all;
     @apply duration-200;
-    @apply bg-gray-900;
+    @apply bg-pclime-600;
     @apply border;
     @apply border-transparent;
     @apply rounded-xl;
     @apply focus:outline-none;
     @apply focus:ring-2;
     @apply focus:ring-offset-2;
-    @apply focus:ring-gray-900;
+    @apply focus:ring-pclime-600;
     @apply font-sans;
-    @apply hover:bg-gray-600;
+    @apply hover:bg-pclime-500;
 }
 
 .pc-internal-form-button {
@@ -75,9 +75,9 @@
 }
 
 .pc-internal-form-button-primary {
-    @apply bg-indigo-600;
-    @apply focus:ring-indigo-600;
-    @apply hover:bg-indigo-500;
+    @apply bg-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply hover:bg-pclime-500;
     @apply text-white;
 }
 
@@ -102,14 +102,14 @@
     @apply border;
     @apply border-gray-300;
     @apply bg-white;
-    @apply checked:border-indigo-600;
-    @apply checked:bg-indigo-600;
-    @apply indeterminate:border-indigo-600;
-    @apply indeterminate:bg-indigo-600;
+    @apply checked:border-pclime-600;
+    @apply checked:bg-pclime-600;
+    @apply indeterminate:border-pclime-600;
+    @apply indeterminate:bg-pclime-600;
     @apply focus-visible:outline;
     @apply focus-visible:outline-2;
     @apply focus-visible:outline-offset-2;
-    @apply focus-visible:outline-indigo-600;
+    @apply focus-visible:outline-pclime-600;
     @apply disabled:border-gray-300;
     @apply disabled:bg-gray-100;
     @apply disabled:checked:bg-gray-100;
@@ -142,8 +142,9 @@
 
 .pc-form-input-normal {
     @apply border-gray-400;
-    @apply focus:border-gray-900;
-    @apply focus:ring-gray-900;
+    @apply focus:border-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply focus:ring-2;
     @apply caret-gray-900;
 }
 
@@ -152,6 +153,7 @@
     @apply border-red-200;
     @apply focus:border-red-500;
     @apply focus:ring-red-500;
+    @apply focus:ring-2;
     @apply caret-red-500;
 }
 
@@ -213,7 +215,7 @@ body.pc-vertical-stretch {
 
 .pc-dashboard-menu-button {
     @apply text-gray-300;
-    @apply hover:bg-gray-700;
+    @apply hover:bg-white/10;
     @apply hover:text-white;
     @apply rounded-md;
     @apply px-3;
@@ -224,7 +226,7 @@ body.pc-vertical-stretch {
 }
 
 .pc-dashboard-menu-button-current {
-    @apply bg-gray-900;
+    @apply bg-pcteal-900;
     @apply text-white;
 }
 
@@ -236,11 +238,11 @@ body.pc-vertical-stretch {
     @apply pl-4;
     @apply pr-10;
     @apply border;
-    @apply border-gray-300;
+    @apply border-gray-400;
     @apply rounded-lg;
-    @apply focus:outline-none;
-    @apply focus:ring-gray-900;
-    @apply focus:border-gray-900;
+    @apply focus:border-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply focus:ring-2;
     @apply sm:text-sm;
 }
 
@@ -302,7 +304,7 @@ input[type=button]:disabled {
   @apply px-3;
   @apply py-2;
   @apply rounded-md;
-  @apply bg-gray-900;
+  @apply bg-pcteal-900;
   @apply text-white;
 
   text-align: center;
