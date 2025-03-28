@@ -514,23 +514,24 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	tabParam := r.URL.Query().Get(common.ParamTab)
+	slog.Log(ctx, common.LevelTrace, "Property tab was requested", "tab", tabParam)
 	var model Model
 	var derr error
 	switch tabParam {
-	case "integrations":
+	case common.IntegrationsEndpoint:
 		if integrationsCtx, err := s.getPropertyIntegrations(w, r); err == nil {
 			model = integrationsCtx
 		} else {
 			derr = err
 		}
-	case "settings":
+	case common.SettingsEndpoint:
 		if renderCtx, err := s.getOrgPropertySettings(w, r); err == nil {
 			model = renderCtx
 		} else {
 			derr = err
 		}
 	default:
-		if (tabParam != "reports") && (tabParam != "") {
+		if (tabParam != common.ReportsEndpoint) && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
 		if renderCtx, _, err := s.getOrgProperty(w, r); err == nil {

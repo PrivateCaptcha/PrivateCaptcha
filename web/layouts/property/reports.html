@@ -21,11 +21,13 @@
                     hx-target="#property-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.IntegrationsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.IntegrationsEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Integrations</a>
                 <a href="#"
                     hx-target="#property-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.SettingsEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
             </nav>
         </div>

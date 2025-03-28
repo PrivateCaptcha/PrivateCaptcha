@@ -26,6 +26,8 @@
         {{template "apikeys.html" .}}
         {{- else if eq .Params.Tab 2 -}}
         {{template "billing.html" .}}
+        {{- else if eq .Params.Tab 3 -}}
+        {{template "usage.html" .}}
         {{- else -}}
         {{template "general.html" .}}
         {{- end -}}

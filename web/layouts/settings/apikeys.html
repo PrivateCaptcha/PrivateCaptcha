@@ -7,6 +7,7 @@
                 <!-- Current: "bg-gray-50 text-pclime-600", Default: "text-gray-700 hover:text-pclime-600 hover:bg-gray-50" -->
                 <a href="#"
                     hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.GeneralEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.GeneralEndpoint}}"
                     hx-target="#settings"
                     hx-swap="innerHTML"
                     class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
@@ -27,6 +28,7 @@
             <li>
                 <a href="#"
                     hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.BillingEndpoint}}"
                     hx-target="#settings"
                     hx-swap="innerHTML"
                     class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
@@ -39,6 +41,7 @@
             <li>
                 <a href="#"
                     hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.UsageEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.UsageEndpoint}}"
                     hx-target="#settings"
                     hx-swap="innerHTML"
                     class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">

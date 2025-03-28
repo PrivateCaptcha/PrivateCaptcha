@@ -47,6 +47,7 @@ type settingsCommonRenderContext struct {
 type settingsUsageRenderContext struct {
 	alertRenderContext
 	settingsCommonRenderContext
+	csrfRenderContext
 	Limit int
 }
 
@@ -132,6 +133,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 	var err error
 
 	tabParam := r.URL.Query().Get(common.ParamTab)
+	slog.Log(ctx, common.LevelTrace, "Settings tab was requested", "tab", tabParam)
 	switch tabParam {
 	case common.APIKeysEndpoint:
 		renderCtx, _, err = s.getAPIKeysSettings(w, r)
@@ -147,7 +149,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create settings render context")
+		slog.ErrorContext(ctx, "Failed to create settings render context", common.ErrAttr(err))
 		return nil, "", err
 	}
 
@@ -782,6 +784,7 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model
 	}
 
 	renderCtx := &settingsUsageRenderContext{
+		csrfRenderContext:           s.createCsrfContext(user),
 		settingsCommonRenderContext: s.createSettingsCommonRenderContext(3 /*tab*/, user),
 	}
 
@@ -798,6 +801,8 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model
 		} else {
 			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
 		}
+	} else {
+		slog.DebugContext(ctx, "User does not have a subscription", "userID", user.ID)
 	}
 
 	return renderCtx, settingsUsageTemplate, nil
