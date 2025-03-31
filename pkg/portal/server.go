@@ -213,21 +213,23 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 
 	// separately configured "public" ones
 	public := alice.New(common.Recovered, security, s.Metrics.HandlerFunc(rg.LastPath), s.RateLimiter.RateLimit, monitoring.Logged)
-	publicMaintenance := public.Append(s.maintenance)
-	router.Handle(rg.Get(common.LoginEndpoint), publicMaintenance.Then(common.Cached(s.handler(s.getLogin))))
-	router.Handle(rg.Get(common.RegisterEndpoint), publicMaintenance.Then(common.Cached(s.handler(s.getRegister))))
-	router.Handle(rg.Get(common.TwoFactorEndpoint), publicMaintenance.ThenFunc(s.getTwoFactor))
+	publicTimeout := common.TimeoutHandler(2 * time.Second)
+	openRead := public.Append(s.maintenance, publicTimeout)
+	router.Handle(rg.Get(common.LoginEndpoint), openRead.Then(common.Cached(s.handler(s.getLogin))))
+	router.Handle(rg.Get(common.RegisterEndpoint), openRead.Then(common.Cached(s.handler(s.getRegister))))
+	router.Handle(rg.Get(common.TwoFactorEndpoint), openRead.ThenFunc(s.getTwoFactor))
 	router.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public.ThenFunc(s.error))
 	router.Handle(rg.Get(common.ExpiredEndpoint), public.ThenFunc(s.expired))
 	router.Handle(rg.Get(common.LogoutEndpoint), public.ThenFunc(s.logout))
 
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
-	openWrite := publicMaintenance.Append(maxBytesHandler)
+	openWrite := public.Append(s.maintenance, maxBytesHandler, publicTimeout)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
-	privateWrite := openWrite.Append(s.csrf(s.csrfUserIDKeyFunc), s.private)
+	internalTimeout := common.TimeoutHandler(5 * time.Second)
+	privateWrite := public.Append(s.maintenance, maxBytesHandler, internalTimeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 	subscribedWrite := privateWrite.Append(s.subscribed)
 
-	privateRead := public.Append(s.private)
+	privateRead := public.Append(s.maintenance, internalTimeout, s.private)
 	subscribedRead := privateRead.Append(s.subscribed)
 
 	router.Handle(rg.Post(common.LoginEndpoint), openWrite.ThenFunc(s.postLogin))
@@ -320,6 +322,8 @@ func (s *Server) handler(modelFunc ModelFunc) http.Handler {
 				s.redirectError(http.StatusServiceUnavailable, w, r)
 			case errRegistrationDisabled:
 				s.redirectError(http.StatusNotFound, w, r)
+			case context.DeadlineExceeded:
+				// do nothing and just return below
 			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)

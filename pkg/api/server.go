@@ -185,16 +185,17 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
 	publicChain := alice.New(common.Recovered, monitoring.Traced, s.auth.EdgeVerify(domain), s.metrics.Handler)
-	verifyChain := publicChain.Append(s.auth.APIKey)
 	// NOTE: auth middleware provides rate limiting internally
-	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, s.auth.Sitekey).ThenFunc(s.puzzleHandler))
+	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, common.TimeoutHandler(1*time.Second), s.auth.Sitekey).ThenFunc(s.puzzleHandler))
 	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler, s.auth.SitekeyOptions).ThenFunc(s.puzzlePreFlight))
+	verifyChain := publicChain.Append(common.TimeoutHandler(5*time.Second), s.auth.APIKey)
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
 	maxBytesHandler := func(next http.Handler) http.Handler {
 		return http.MaxBytesHandler(next, maxPaddleBodySize)
 	}
-	paddleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.Private, monitoring.Logged, maxBytesHandler)
+	// in almost all Paddle handlers we make external http requests, hence larger timeout
+	paddleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.Private, monitoring.Logged, maxBytesHandler, common.TimeoutHandler(10*time.Second))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
@@ -264,7 +265,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// the reason for this is that we cache test property responses
+	// the reason for this is that we intend to cache test property responses
 	if sitekey, ok := ctx.Value(common.SitekeyContextKey).(string); ok && (sitekey == db.TestPropertySitekey) {
 		common.WriteHeaders(w, headersAnyOrigin)
 	}

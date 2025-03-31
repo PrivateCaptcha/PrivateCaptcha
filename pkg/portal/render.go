@@ -136,6 +136,11 @@ func (s *Server) renderResponse(ctx context.Context, name string, data interface
 	}
 
 	var out bytes.Buffer
+
+	if err := ctx.Err(); err == context.DeadlineExceeded {
+		return out, err
+	}
+
 	err := s.template.Render(ctx, &out, name, actualData)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", "name", name, common.ErrAttr(err))
@@ -167,6 +172,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		w.WriteHeader(http.StatusOK)
 		out.WriteTo(w)
 	} else {
-		s.renderError(ctx, w, http.StatusInternalServerError)
+		errorStatus := http.StatusInternalServerError
+		if err == context.DeadlineExceeded {
+			errorStatus = http.StatusGatewayTimeout
+		}
+		s.renderError(ctx, w, errorStatus)
 	}
 }
