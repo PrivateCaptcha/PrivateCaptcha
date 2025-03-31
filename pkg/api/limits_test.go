@@ -93,6 +93,9 @@ func TestUsersWithConsecutiveViolations(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// truncate day to 1st of this year, otherwise there's a case of March 31 - 1 month makes March 3 in Go
+	tnow = time.Date(tnow.Year(), tnow.Month(), 1, 0, 0, 0, 0, tnow.Location())
+
 	store.AddUsageLimitsViolations(ctx, []*common.UserTimeCount{
 		&common.UserTimeCount{
 			UserID:    uint32(user.ID),
