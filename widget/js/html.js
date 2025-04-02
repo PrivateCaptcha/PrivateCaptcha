@@ -3,6 +3,7 @@
 import { ProgressRing } from './progress.js';
 import styles from "./styles.css" assert {type: 'css'};
 import * as i18n from './strings.js';
+import * as errors from './errors.js';
 
 window.customElements.define('progress-ring', ProgressRing);
 
@@ -12,6 +13,7 @@ export const STATE_LOADING = 'loading';
 export const STATE_READY = 'ready';
 export const STATE_IN_PROGRESS = 'inprogress';
 export const STATE_VERIFIED = 'verified';
+export const STATE_INVALID = 'invalid';
 
 export const DISPLAY_POPUP = 'popup';
 const DISPLAY_HIDDEN = 'hidden';
@@ -21,6 +23,7 @@ const RING_SIZE = 36;
 const CHECKBOX_ID = 'pc-checkbox';
 const PROGRESS_ID = 'pc-progress';
 const DEBUG_ID = 'pc-debug';
+const DEBUG_ERROR_CLASS = 'warn';
 
 const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" width="39.4" height="41.99" xmlns="http://www.w3.org/2000/svg" class="pc-logo">
 <path d="M0 0v30.62l4.29 2.48V4.85h30.83v23.29l-15.41 8.9-6.83-3.94v-4.95l6.83 3.94 11.12-6.42V9.91H8.58v25.66l11.12 6.42 19.7-11.37V0Zm12.87 14.86h13.66v8.32l-6.83 3.94-6.83-3.94z" fill="currentColor"/>
@@ -31,8 +34,6 @@ const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" wi
 <polyline class="st0" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
 </svg>
 `;
-
-const activeAreaEmptyCheckbox = `<input type="checkbox" id="${CHECKBOX_ID}" required>`;
 
 function checkbox(cls) {
     return `<input type="checkbox" id="${CHECKBOX_ID}" class="${cls}" required>`
@@ -94,7 +95,7 @@ export class CaptchaElement extends HTMLElement {
         switch (state) {
             case STATE_EMPTY:
                 bindCheckEvent = true;
-                activeArea = activeAreaEmptyCheckbox + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
+                activeArea = checkbox('') + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
                 break;
             case STATE_LOADING:
                 bindCheckEvent = true;
@@ -113,6 +114,9 @@ export class CaptchaElement extends HTMLElement {
             case STATE_VERIFIED:
                 activeArea = verifiedSVG + label(strings[i18n.SUCCESS], PROGRESS_ID);
                 showPopupIfNeeded = canShow;
+                break;
+            case STATE_INVALID:
+                activeArea = checkbox('invalid') + label(strings[i18n.UNAVAILABLE], CHECKBOX_ID);
                 break;
             default:
                 console.error(`[privatecaptcha][progress] unknown state: ${state}`);
@@ -185,14 +189,34 @@ export class CaptchaElement extends HTMLElement {
     }
 
     setError(value) {
-        this._error = value;
+        const strings = i18n.STRINGS[this._lang];
+
+        switch (value) {
+            case errors.ERROR_NO_ERROR:
+                this._error = null;
+                break;
+            case errors.ERROR_NOT_CONFIGURED:
+                this._error = strings[i18n.INCOMPLETE];
+                break;
+            case errors.ERROR_ZERO_PUZZLE:
+                this._error = strings[i18n.TESTING];
+                break;
+            default:
+                this._error = strings[i18n.ERROR];
+                break;
+        };
     }
 
-    setDebugState(state) {
+    setDebugText(text, error) {
         const debugElement = this._root.getElementById(DEBUG_ID);
         if (debugElement) {
-            const debugText = this._error ? this._error : state;
+            const debugText = this._error ? this._error : text;
             debugElement.innerHTML = `[${debugText}]`;
+            if (error || this._error) {
+                debugElement.classList.add(DEBUG_ERROR_CLASS);
+            } else {
+                debugElement.classList.remove(DEBUG_ERROR_CLASS);
+            }
         }
     }
 

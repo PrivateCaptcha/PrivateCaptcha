@@ -88,19 +88,31 @@
     animation: colorChange 2s infinite;
     animation-timing-function: ease-in-out;
     background-color: var(--light-color);
+    cursor: default;
 }
 
 .pc-interactive-area input[type="checkbox"].ready {
     background-color: var(--lighter-color);
     border-color: var(--dark-color);
+    cursor: pointer;
 }
 
-.pc-interactive-area input[type="checkbox"]:hover {
+.pc-interactive-area input[type="checkbox"].invalid {
+    background-color: var(--light-color);
+    border-color: var(--gray-color);
+    cursor: not-allowed;
+}
+
+.pc-interactive-area input[type="checkbox"]:not(.invalid):hover {
     background-color: var(--lighter-color);
     border-color: var(--accent-color);
 }
 
-.pc-interactive-area input[type="checkbox"]:hover + label {
+.pc-interactive-area input[type="checkbox"].invalid:hover + label {
+    cursor: not-allowed;
+}
+
+.pc-interactive-area input[type="checkbox"]:not(.invalid):hover + label {
     cursor: pointer;
     /* color: var(--dark-color); /* Highlight the text */
 }
@@ -185,6 +197,7 @@ svg.verified circle {
     position: absolute;
     top: 100%;
     left: 50px; /*30px checkbox + 2*10 margins*/
+    cursor: default;
 }
 
 #pc-debug.warn {

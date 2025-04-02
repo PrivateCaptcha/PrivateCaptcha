@@ -3,14 +3,13 @@
 import { getPuzzle, Puzzle } from './puzzle.js'
 import { encode } from 'base64-arraybuffer';
 import { WorkersPool } from './workerspool.js'
-import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
+import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
+import * as errors from './errors.js';
 
 window.customElements.define('private-captcha', CaptchaElement);
 
 const PUZZLE_ENDPOINT_URL = 'https://api.privatecaptcha.com/puzzle';
-const ERROR_NO_ERROR = 0;
-const ERROR_FETCH_PUZZLE = 1;
-const ERROR_SOLVE_PUZZLE = 2;
+
 
 function findParentFormElement(element) {
     while (element && element.tagName !== 'FORM') {
@@ -29,7 +28,7 @@ export class CaptchaWidget {
         this._solution = null;
         this._userStarted = false; // aka 'user started while we were initializing'
         this._options = {};
-        this._errorCode = ERROR_NO_ERROR;
+        this._errorCode = errors.ERROR_NO_ERROR;
 
         this.setOptions(options);
 
@@ -61,6 +60,8 @@ export class CaptchaWidget {
                     console.warn('[privatecaptcha] cannot find anchor for popup')
                 }
             }
+
+            this.checkConfigured();
         } else {
             console.warn('[privatecaptcha] cannot find form element');
         }
@@ -85,11 +86,12 @@ export class CaptchaWidget {
     async init(autoStart) {
         this.trace(`init() was called. state=${this._state}`);
 
-        const sitekey = this._options.sitekey || this._element.dataset["sitekey"];
-        if (!sitekey) {
-            console.error("[privatecaptcha] sitekey not set on captcha element");
-            return;
-        }
+        this._puzzle = null;
+        this._solution = null;
+        this._errorCode = errors.ERROR_NO_ERROR;
+
+        const sitekey = this.checkConfigured();
+        if (!sitekey) { return; }
 
         if ((this._state != STATE_EMPTY) && (this._state != STATE_ERROR)) {
             console.warn(`[privatecaptcha] captcha has already been initialized. state=${this._state}`)
@@ -103,13 +105,11 @@ export class CaptchaWidget {
         const startWorkers = (this._options.startMode == "auto") || autoStart;
 
         try {
-            this._puzzle = null;
-            this._solution = null;
-            this._errorCode = ERROR_NO_ERROR;
             this.setState(STATE_LOADING);
             this.trace('fetching puzzle');
             const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
             this._puzzle = new Puzzle(puzzleData);
+            if (this._puzzle && this._puzzle.isZero()) { this._errorCode = error.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
@@ -118,7 +118,7 @@ export class CaptchaWidget {
         } catch (e) {
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
-            this._errorCode = ERROR_FETCH_PUZZLE;
+            this._errorCode = errors.ERROR_FETCH_PUZZLE;
             this.setState(STATE_ERROR);
             this.setProgressState(this._userStarted ? STATE_VERIFIED : STATE_EMPTY);
             this.saveSolutions();
@@ -126,6 +126,19 @@ export class CaptchaWidget {
                 this.signalErrored();
             }
         }
+    }
+
+    checkConfigured() {
+        const sitekey = this._options.sitekey || this._element.dataset["sitekey"];
+        if (!sitekey) {
+            console.error("[privatecaptcha] sitekey not set on captcha element");
+            this._errorCode = errors.ERROR_NOT_CONFIGURED;
+            this.setState(STATE_INVALID);
+            this.setProgressState(STATE_INVALID);
+            return null;
+        }
+
+        return sitekey;
     }
 
     start() {
@@ -250,6 +263,7 @@ export class CaptchaWidget {
                 break;
             default:
                 console.warn('[privatecaptcha] onChecked: unexpected state. state=' + this._state);
+                return;
         };
 
         this.setProgressState(progressState);
@@ -271,7 +285,7 @@ export class CaptchaWidget {
 
     onWorkerError(error) {
         console.error('[privatecaptcha] error in worker:', error)
-        this._errorCode = ERROR_SOLVE_PUZZLE;
+        this._errorCode = errors.ERROR_SOLVE_PUZZLE;
     }
 
     onWorkStarted() {
@@ -325,28 +339,24 @@ export class CaptchaWidget {
         // NOTE: hidden display mode is taken care of inside setState() even when (_userStarted == true)
         const canShow = this._userStarted || (DISPLAY_WIDGET === this._options.displayMode);
         const pcElement = this._element.querySelector('private-captcha');
-        if (pcElement) { pcElement.setState(state, canShow); }
-        else { console.error('[privatecaptcha] component not found when changing state'); }
+        if (pcElement) {
+            pcElement.setError(this._errorCode);
+            pcElement.setState(state, canShow);
+        }
+        else {
+            console.error('[privatecaptcha] component not found when changing state');
+        }
     }
 
     // this updates the "internal" (actual) state
     setState(state) {
         this.trace(`change state. old=${this._state} new=${state}`);
         this._state = state;
-        if (this._options.debug ||
-            !this._puzzle ||
-            this._puzzle.isZero()) {
+
+        if (this._options.debug) {
             const pcElement = this._element.querySelector('private-captcha');
             if (pcElement) {
-                if (STATE_ERROR == state) {
-                    pcElement.setError('error');
-                } else if (this._puzzle && this._puzzle.isZero()) {
-                    pcElement.setError('testing');
-                } else if (!this._puzzle) {
-                    pcElement.setError(null);
-                }
-
-                pcElement.setDebugState(state);
+                pcElement.setDebugText(state, (STATE_ERROR == state));
             }
         }
     }
