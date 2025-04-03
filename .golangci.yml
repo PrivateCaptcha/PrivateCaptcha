@@ -1,0 +1,18 @@
+issues:
+  exclude:
+    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
+    - "exported (type|method|function) (.+) should have comment or be unexported"
+    - "ST1000: at least one file in a package should have a package comment"
+
+linters:
+  exclusions:
+    paths:
+      - cmd/loadtest/
+      - cmd/paddlemock/
+      - cmd/playground/
+      - cmd/viewemails/
+      - cmd/viewwidget/
+
+run:
+  timeout: 5m
+  tests: false
