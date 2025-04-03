@@ -180,7 +180,7 @@ func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32,
 		if (newLimit > status.Limit) || (!billing.IsSubscriptionActive(status.Status) && billing.IsSubscriptionActive(newStatus)) {
 			slog.InfoContext(ctx, "Unblocking throttled user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
 				"oldStatus", status.Status, "newStatus", status)
-			am.userLimits.Delete(ctx, userID)
+			_ = am.userLimits.Delete(ctx, userID)
 		} else {
 			slog.WarnContext(ctx, "Cannot unblock user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
 				"oldStatus", status.Status, "newStatus", status)
@@ -191,8 +191,11 @@ func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32,
 }
 
 func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64, status string) {
-	am.userLimits.Set(ctx, userID, &common.UserLimitStatus{Status: status, Limit: limit}, db.UserLimitTTL)
-	slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
+	if err := am.userLimits.Set(ctx, userID, &common.UserLimitStatus{Status: status, Limit: limit}, db.UserLimitTTL); err != nil {
+		slog.ErrorContext(ctx, "Failed to block user for auth", "userID", userID, common.ErrAttr(err))
+	} else {
+		slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
+	}
 }
 
 func isSiteKeyValid(sitekey string) bool {
@@ -245,10 +248,10 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 	if subscriptions, err := am.store.RetrieveSubscriptionsByUserIDs(ctx, owners); err == nil {
 		for _, s := range subscriptions {
 			if !billing.IsSubscriptionActive(s.Subscription.Status) {
-				am.userLimits.Set(ctx, s.UserID, &common.UserLimitStatus{Status: s.Subscription.Status, Limit: 0}, db.UserLimitTTL)
+				_ = am.userLimits.Set(ctx, s.UserID, &common.UserLimitStatus{Status: s.Subscription.Status, Limit: 0}, db.UserLimitTTL)
 				slog.DebugContext(ctx, "Found user with inactive subscription", "userID", s.UserID, "status", s.Subscription.Status)
 			} else {
-				am.userLimits.SetMissing(ctx, s.UserID, db.UserLimitTTL)
+				_ = am.userLimits.SetMissing(ctx, s.UserID, db.UserLimitTTL)
 			}
 		}
 	} else {
@@ -257,7 +260,7 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 
 	if users, err := am.store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
 		for _, u := range users {
-			am.userLimits.Set(ctx, u.ID, &common.UserLimitStatus{Status: "", Limit: 0}, db.UserLimitTTL)
+			_ = am.userLimits.Set(ctx, u.ID, &common.UserLimitStatus{Status: "", Limit: 0}, db.UserLimitTTL)
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))

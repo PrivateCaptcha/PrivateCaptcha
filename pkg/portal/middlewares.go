@@ -6,21 +6,6 @@ import (
 	"golang.org/x/net/xsrftoken"
 )
 
-const (
-	actionLogin            = "login"
-	actionVerify           = "verify"
-	actionRegister         = "register"
-	actionNewProperty      = "property-new"
-	actionNewOrg           = "org-new"
-	actionPropertySettings = "property-settings"
-	actionOrgSettings      = "org-settings"
-	actionOrgMembers       = "org-members"
-	actionUserSettings     = "user-settings"
-	actionAPIKeysSettings  = "apikeys-settings"
-	actionSupport          = "support"
-	actionBillingSettings  = "billing-settings"
-)
-
 type XSRFMiddleware struct {
 	Key     string
 	Timeout time.Duration

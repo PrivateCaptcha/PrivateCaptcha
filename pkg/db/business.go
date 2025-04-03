@@ -25,7 +25,6 @@ var (
 	ErrTestProperty       = errors.New("test property")
 	ErrPermissions        = errors.New("insufficient permissions")
 	errInvalidCacheType   = errors.New("cache record type does not match")
-	markerData            = []byte{'{', '}'}
 	TestPropertySitekey   = strings.ReplaceAll(TestPropertyID, "-", "")
 	PortalLoginSitekey    = strings.ReplaceAll(PortalLoginPropertyID, "-", "")
 	PortalRegisterSitekey = strings.ReplaceAll(PortalRegisterPropertyID, "-", "")

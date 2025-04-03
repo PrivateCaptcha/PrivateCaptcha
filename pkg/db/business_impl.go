@@ -95,15 +95,21 @@ func (c *txCache) Delete(ctx context.Context, key CacheKey) error {
 
 func (c *txCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any]) {
 	for key := range c.del {
-		cache.Delete(ctx, key)
+		if err := cache.Delete(ctx, key); err != nil {
+			slog.ErrorContext(ctx, "Failed to delete from cache", "key", key, common.ErrAttr(err))
+		}
 	}
 
 	for key, value := range c.missing {
-		cache.SetMissing(ctx, key, value)
+		if err := cache.SetMissing(ctx, key, value); err != nil {
+			slog.ErrorContext(ctx, "Failed to set missing in cache", "key", key, common.ErrAttr(err))
+		}
 	}
 
 	for key, value := range c.set {
-		cache.Set(ctx, key, value.item, value.ttl)
+		if err := cache.Set(ctx, key, value.item, value.ttl); err != nil {
+			slog.ErrorContext(ctx, "Failed to set in cache", "key", key, common.ErrAttr(err))
+		}
 	}
 }
 
@@ -173,9 +179,9 @@ func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name st
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
-
 	if user != nil {
+		slog.DebugContext(ctx, "Created user in DB", "email", email, "id", user.ID)
+
 		// we need to update cache as we just set user as missing when checking for it's existence
 		cacheKey := userCacheKey(user.ID)
 		_ = impl.cache.Set(ctx, cacheKey, user, impl.ttl)
@@ -198,9 +204,9 @@ func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name s
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
-
 	if org != nil {
+		slog.DebugContext(ctx, "Created organization in DB", "name", name, "id", org.ID)
+
 		cacheKey := orgCacheKey(org.ID)
 		_ = impl.cache.Set(ctx, cacheKey, org, impl.ttl)
 
@@ -366,7 +372,7 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 	apiKey, err := impl.queries.GetAPIKeyByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, ErrRecordNotFound
 		}
 
@@ -441,7 +447,7 @@ func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (
 	user, err := impl.queries.GetUserByID(ctx, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, ErrRecordNotFound
 		}
 
@@ -591,7 +597,7 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, nullAccessLevelNull, ErrRecordNotFound
 		}
 
@@ -648,7 +654,7 @@ func (impl *businessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 	property, err := impl.queries.GetPropertyByID(ctx, propID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, ErrRecordNotFound
 		}
 
@@ -677,7 +683,7 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 	subscription, err := impl.queries.GetSubscriptionByID(ctx, sID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, ErrRecordNotFound
 		}
 
@@ -704,9 +710,9 @@ func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *d
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Updated subscription in DB", "id", subscription.ID, "status", subscription.Status)
-
 	if subscription != nil {
+		slog.DebugContext(ctx, "Updated subscription in DB", "id", subscription.ID, "status", subscription.Status)
+
 		cacheKey := subscriptionCacheKey(subscription.ID)
 		_ = impl.cache.Set(ctx, cacheKey, subscription, impl.ttl)
 	}
@@ -1348,7 +1354,7 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 		return ErrRecordNotFound
 	}
 
-	userIDs = nil
+	userIDs = nil //nolint:ineffassign
 
 	userProducts := make(map[int32]string)
 	for _, s := range subscriptions {
@@ -1380,7 +1386,7 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 		params.Dates = append(params.Dates, Date(v.Timestamp))
 	}
 
-	userProducts = map[int32]string{}
+	userProducts = map[int32]string{} //nolint:ineffassign
 
 	err = impl.queries.AddUsageLimitViolations(ctx, params)
 	if err != nil {
@@ -1618,7 +1624,7 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 	notification, err := impl.queries.GetNotificationById(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
+			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
 			return nil, ErrRecordNotFound
 		}
 

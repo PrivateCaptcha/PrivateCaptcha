@@ -123,11 +123,11 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess.Set(session.KeyLoginStep, loginStepSignInVerify)
-	sess.Set(session.KeyUserEmail, user.Email)
-	sess.Set(session.KeyUserName, user.Name)
-	sess.Set(session.KeyTwoFactorCode, code)
-	sess.Set(session.KeyUserID, user.ID)
+	_ = sess.Set(session.KeyLoginStep, loginStepSignInVerify)
+	_ = sess.Set(session.KeyUserEmail, user.Email)
+	_ = sess.Set(session.KeyUserName, user.Name)
+	_ = sess.Set(session.KeyTwoFactorCode, code)
+	_ = sess.Set(session.KeyUserID, user.ID)
 
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }

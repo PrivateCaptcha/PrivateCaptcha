@@ -2,13 +2,8 @@ package db
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
-)
-
-var (
-	errFull = errors.New("maximum size reached")
 )
 
 type StaticCache[TKey comparable, TValue comparable] struct {

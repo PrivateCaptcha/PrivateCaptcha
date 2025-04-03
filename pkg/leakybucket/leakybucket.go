@@ -1,12 +1,7 @@
 package leakybucket
 
 import (
-	"errors"
 	"time"
-)
-
-var (
-	errPastEvent = errors.New("cannot account retroactively")
 )
 
 // we assume that one bucket will not hold more than 4*10^9 units, this also restricts max level

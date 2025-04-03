@@ -197,7 +197,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 		return nil, "", err
 	}
 
-	sess.Set(session.KeyTwoFactorCode, code)
+	_ = sess.Set(session.KeyTwoFactorCode, code)
 
 	renderCtx := &settingsGeneralRenderContext{
 		settingsCommonRenderContext: s.createSettingsCommonRenderContext(0 /*tab*/, user),
@@ -251,7 +251,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		formCode := r.FormValue(common.ParamVerificationCode)
 
 		// we "used" the code now
-		sess.Delete(session.KeyTwoFactorCode)
+		_ = sess.Delete(session.KeyTwoFactorCode)
 
 		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, common.ErrAttr(err))
@@ -275,7 +275,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if err := s.Store.UpdateUser(ctx, user.ID, renderCtx.Name, renderCtx.Email /*new email*/, user.Email /*old email*/); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
-			sess.Set(session.KeyUserName, renderCtx.Name)
+			_ = sess.Set(session.KeyUserName, renderCtx.Name)
 		} else {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		}

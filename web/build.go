@@ -109,6 +109,9 @@ func (t *Template) Render(ctx context.Context, w io.Writer, name string, data in
 		return err
 	}
 
-	buf.WriteTo(w)
+	if _, werr := buf.WriteTo(w); werr != nil {
+		slog.ErrorContext(ctx, "Failed to write template", common.ErrAttr(werr))
+	}
+
 	return nil
 }

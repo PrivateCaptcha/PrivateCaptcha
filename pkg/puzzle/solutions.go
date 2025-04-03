@@ -39,16 +39,24 @@ type Metadata struct {
 func (m *Metadata) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 
-	binary.Write(&buf, binary.LittleEndian, byte(metadataVersion))
-	binary.Write(&buf, binary.LittleEndian, m.errorCode)
+	if err := binary.Write(&buf, binary.LittleEndian, byte(metadataVersion)); err != nil {
+		return buf.Bytes(), err
+	}
+	if err := binary.Write(&buf, binary.LittleEndian, m.errorCode); err != nil {
+		return buf.Bytes(), err
+	}
 
 	var wasmFlag byte = 0
 	if m.wasmFlag {
 		wasmFlag = 1
 	}
-	binary.Write(&buf, binary.LittleEndian, wasmFlag)
+	if err := binary.Write(&buf, binary.LittleEndian, wasmFlag); err != nil {
+		return buf.Bytes(), err
+	}
 
-	binary.Write(&buf, binary.LittleEndian, m.elapsedMillis)
+	if err := binary.Write(&buf, binary.LittleEndian, m.elapsedMillis); err != nil {
+		return buf.Bytes(), err
+	}
 
 	return buf.Bytes(), nil
 }
@@ -73,7 +81,7 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 	offset += 1
 
 	m.elapsedMillis = binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4
+	offset += 4 // nolint:ineffassign
 
 	return nil
 }

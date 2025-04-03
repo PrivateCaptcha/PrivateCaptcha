@@ -87,7 +87,7 @@ func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("started"))
+	_, _ = w.Write([]byte("started"))
 }
 
 func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +114,7 @@ func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write([]byte("started"))
+	_, _ = w.Write([]byte("started"))
 }
 
 func (j *jobs) Shutdown() {

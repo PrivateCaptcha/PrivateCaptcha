@@ -170,7 +170,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	if err == nil {
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)
-		out.WriteTo(w)
+		if _, werr := out.WriteTo(w); werr != nil {
+			slog.ErrorContext(ctx, "Failed to write response", common.ErrAttr(werr))
+		}
 	} else {
 		errorStatus := http.StatusInternalServerError
 		if err == context.DeadlineExceeded {

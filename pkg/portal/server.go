@@ -369,7 +369,7 @@ func (s *Server) private(next http.Handler) http.Handler {
 			}
 		}
 
-		sess.Set(session.KeyReturnURL, r.URL.RequestURI())
+		_ = sess.Set(session.KeyReturnURL, r.URL.RequestURI())
 		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 	})
 }

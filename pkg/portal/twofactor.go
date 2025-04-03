@@ -99,7 +99,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
 		if user, _, err := s.doRegister(ctx, sess); err == nil {
-			sess.Set(session.KeyUserID, user.ID)
+			_ = sess.Set(session.KeyUserID, user.ID)
 			// NOTE: we can redirect user to create the first property instead of dashboard, but currently it's fine
 			// redirectURL = s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
 		} else {
@@ -113,21 +113,21 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		if userID, ok := sess.Get(session.KeyUserID).(int32); ok {
 			slog.DebugContext(bctx, "Fetching system notification for user", "userID", userID)
 			if n, err := s.Store.RetrieveUserNotification(bctx, time.Now().UTC(), userID); err == nil {
-				sess.Set(session.KeyNotificationID, n.ID)
+				_ = sess.Set(session.KeyNotificationID, n.ID)
 			}
 		} else {
 			slog.ErrorContext(bctx, "UserID not found in session")
 		}
 	}(common.CopyTraceID(ctx, context.Background()))
 
-	sess.Set(session.KeyLoginStep, loginStepCompleted)
-	sess.Delete(session.KeyTwoFactorCode)
-	sess.Delete(session.KeyUserEmail)
-	sess.Set(session.KeyPersistent, true)
+	_ = sess.Set(session.KeyLoginStep, loginStepCompleted)
+	_ = sess.Delete(session.KeyTwoFactorCode)
+	_ = sess.Delete(session.KeyUserEmail)
+	_ = sess.Set(session.KeyPersistent, true)
 
 	if returnURL, ok := sess.Get(session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
-		sess.Delete(session.KeyReturnURL)
+		_ = sess.Delete(session.KeyReturnURL)
 		common.Redirect(s.relURL(returnURL), http.StatusOK, w, r)
 	} else {
 		redirectURL := s.relURL("/")
@@ -160,6 +160,6 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess.Set(session.KeyTwoFactorCode, code)
+	_ = sess.Set(session.KeyTwoFactorCode, code)
 	s.render(w, r, "twofactor/resend.html", struct{}{})
 }

@@ -83,18 +83,6 @@ func (s *Server) property(orgID int32, r *http.Request) (*dbgen.Property, error)
 	return property, nil
 }
 
-func (s *Server) propertyID(r *http.Request) (int32, error) {
-	ctx := r.Context()
-
-	propertyID, value, err := common.IntPathArg(r, common.ParamProperty)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse property path parameter", "value", value, common.ErrAttr(err))
-		return 0, errInvalidPathArg
-	}
-
-	return int32(propertyID), nil
-}
-
 func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session {
 	ctx := r.Context()
 	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)

@@ -227,7 +227,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			slog.DebugContext(ctx, "Received signal", "signal", sig)
 			switch sig {
 			case syscall.SIGHUP:
-				env.Update()
+				if uerr := env.Update(); uerr != nil {
+					slog.ErrorContext(ctx, "Failed to update environment", common.ErrAttr(uerr))
+				}
 				updateConfigFunc(ctx)
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)

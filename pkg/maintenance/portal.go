@@ -12,10 +12,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const (
-	paddlePricesAttempts = 5
-)
-
 type PaddlePricesJob struct {
 	Stage     string
 	PaddleAPI billing.PaddleAPI

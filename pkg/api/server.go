@@ -36,8 +36,6 @@ const (
 
 var (
 	errProductNotFound = errors.New("product not found")
-	errNoop            = errors.New("nothing to do")
-	errIPNotFound      = errors.New("no valid IP address found")
 	errAPIKeyNotSet    = errors.New("API key is not set in context")
 	headersAnyOrigin   = map[string][]string{
 		http.CanonicalHeaderKey(common.HeaderAccessControlOrigin): []string{"*"},
@@ -297,7 +295,9 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		extraSalt = property.Salt
 	}
 
-	s.Write(ctx, puzzle, extraSalt, w)
+	if err := s.Write(ctx, puzzle, extraSalt, w); err != nil {
+		slog.ErrorContext(ctx, "Failed to write puzzle", common.ErrAttr(err))
+	}
 
 	s.metrics.ObservePuzzleCreated(userID)
 }

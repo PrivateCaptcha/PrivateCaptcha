@@ -7,7 +7,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	config_pkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/sync/errgroup"
@@ -69,7 +68,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, migrate, up bool) (p
 			User:     clickHouseUser(cfg, migrate),
 			Password: clickHousePassword(cfg, migrate),
 			Port:     9000,
-			Verbose:  config.AsBool(cfg.Get(common.VerboseKey)),
+			Verbose:  config_pkg.AsBool(cfg.Get(common.VerboseKey)),
 		}
 		clickhouse = connectClickhouse(ctx, opts)
 		if perr := clickhouse.Ping(); perr != nil {

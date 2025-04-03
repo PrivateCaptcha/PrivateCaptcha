@@ -68,7 +68,9 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		common.WriteHeaders(w, common.CachedHeaders)
 		w.WriteHeader(code)
-		out.WriteTo(w)
+		if _, werr := out.WriteTo(w); werr != nil {
+			slog.ErrorContext(ctx, "Failed to write error page", common.ErrAttr(werr))
+		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to render error template", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

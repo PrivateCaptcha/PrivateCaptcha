@@ -113,10 +113,10 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := s.Session.SessionStart(w, r)
-	sess.Set(session.KeyLoginStep, loginStepSignUpVerify)
-	sess.Set(session.KeyUserEmail, email)
-	sess.Set(session.KeyUserName, name)
-	sess.Set(session.KeyTwoFactorCode, code)
+	_ = sess.Set(session.KeyLoginStep, loginStepSignUpVerify)
+	_ = sess.Set(session.KeyUserEmail, email)
+	_ = sess.Set(session.KeyUserName, name)
+	_ = sess.Set(session.KeyTwoFactorCode, code)
 
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }

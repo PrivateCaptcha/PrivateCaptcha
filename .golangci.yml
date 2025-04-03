@@ -1,17 +1,21 @@
-issues:
-  exclude:
-    - "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv). is not checked"
-    - "exported (type|method|function) (.+) should have comment or be unexported"
-    - "ST1000: at least one file in a package should have a package comment"
+version: "2"
 
 linters:
   exclusions:
+    rules:
+      - text: "Error return value of .((os\\.)?std(out|err)\\..*|.*Close|.*Flush|os\\.Remove(All)?|.*printf?|os\\.(Un)?Setenv|.*println?). is not checked"
+        path: '.*\.go'
+      - text: "exported (type|method|function) (.+) should have comment or be unexported"
+        path: '.*\.go'
+      - text: "ST1000: at least one file in a package should have a package comment"
+        path: '.*\.go'
     paths:
       - cmd/loadtest/
       - cmd/paddlemock/
       - cmd/playground/
       - cmd/viewemails/
       - cmd/viewwidget/
+      - pkg/db/generated/
 
 run:
   timeout: 5m

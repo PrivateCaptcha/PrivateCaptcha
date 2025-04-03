@@ -44,7 +44,9 @@ func (j *UniquePeriodicJob) RunOnce(ctx context.Context) error {
 			// NOTE: in usual circumstances we do NOT release the lock, letting it expire by TTL, thus effectively
 			// preventing other possible maintenance jobs during the interval. The only use-case is when the job
 			// itself fails, then we want somebody to retry "sooner"
-			j.Store.ReleaseLock(ctx, lockName)
+			if rerr := j.Store.ReleaseLock(ctx, lockName); rerr != nil {
+				slog.ErrorContext(ctx, "Failed to release the lock for periodic job", "name", lockName, common.ErrAttr(rerr))
+			}
 		}
 	} else {
 		level := slog.LevelError
