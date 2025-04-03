@@ -215,7 +215,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 		uuid := db.UUIDFromSiteKey(sitekey)
 		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
 		stubPuzzle := puzzle.NewPuzzle(0 /*puzzle ID*/, uuid.Bytes, uint8(common.DifficultyLevelMedium))
-		if err := stubPuzzle.Init(); err != nil {
+		if err := stubPuzzle.Init(puzzle.DefaultValidityPeriod); err != nil {
 			slog.ErrorContext(ctx, "Failed to init stub puzzle", common.ErrAttr(err))
 		}
 
@@ -249,7 +249,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 
 	puzzleID := puzzle.RandomPuzzleID()
 	result := puzzle.NewPuzzle(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
-	if err := result.Init(); err != nil {
+	if err := result.Init(property.ValidityInterval); err != nil {
 		slog.ErrorContext(ctx, "Failed to init puzzle", common.ErrAttr(err))
 	}
 
@@ -336,7 +336,7 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 		return puzzleObject, verr, nil
 	}
 
-	if puzzleObject != nil {
+	if (puzzleObject != nil) && !property.AllowReplay {
 		if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
 			slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 		}
@@ -378,7 +378,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if p != nil && !p.IsZero() {
-		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.ValidityPeriod))
+		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.DefaultValidityPeriod))
 
 		sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
 		if property, err := s.businessDB.GetCachedPropertyBySitekey(ctx, sitekey); err == nil {

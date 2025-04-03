@@ -41,7 +41,7 @@ func TestSolver(t *testing.T) {
 			t.Parallel()
 
 			p := NewPuzzle(0, [16]byte{}, difficulty)
-			if err := p.Init(); err != nil {
+			if err := p.Init(DefaultValidityPeriod); err != nil {
 				t.Fatal(err)
 			}
 
@@ -72,7 +72,7 @@ func TestSolver(t *testing.T) {
 func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p := NewPuzzle(0, [16]byte{}, difficulty)
-		if err := p.Init(); err != nil {
+		if err := p.Init(DefaultValidityPeriod); err != nil {
 			b.Fatal(err)
 		}
 

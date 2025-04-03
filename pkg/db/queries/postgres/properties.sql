@@ -7,7 +7,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateProperty :one
-UPDATE backend.properties SET name = $2, level = $3, growth = $4, allow_subdomains = $5, allow_localhost = $6, updated_at = NOW()
+UPDATE backend.properties SET name = $2, level = $3, growth = $4, validity_interval = $5, allow_subdomains = $6, allow_localhost = $7, allow_replay = $8, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 

@@ -80,7 +80,7 @@ func TestPuzzleMarshalling(t *testing.T) {
 
 	// Create a sample Puzzle
 	puzzle := NewPuzzle(RandomPuzzleID(), propertyID, 123)
-	_ = puzzle.Init()
+	_ = puzzle.Init(DefaultValidityPeriod)
 
 	// Marshal the Puzzle to a byte slice
 	data, err := puzzle.MarshalBinary()

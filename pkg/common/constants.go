@@ -38,8 +38,10 @@ const (
 	ParamKey              = "key"
 	ParamCode             = "code"
 	ParamID               = "id"
+	ParamValidityInterval = "validity_interval"
 	ParamAllowSubdomains  = "allow_subdomains"
 	ParamAllowLocalhost   = "allow_localhost"
+	ParamAllowReplay      = "allow_replay"
 )
 
 var (

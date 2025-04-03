@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	PropertyIDSize = 16
-	UserDataSize   = 16
-	ValidityPeriod = 6 * time.Hour
-	puzzleVersion  = 1
-	solutionsCount = 16
+	PropertyIDSize        = 16
+	UserDataSize          = 16
+	DefaultValidityPeriod = 6 * time.Hour
+	puzzleVersion         = 1
+	solutionsCount        = 16
 )
 
 var (
@@ -51,12 +51,12 @@ func NewPuzzle(puzzleID uint64, propertyID [16]byte, difficulty uint8) *Puzzle {
 	}
 }
 
-func (p *Puzzle) Init() error {
+func (p *Puzzle) Init(validityPeriod time.Duration) error {
 	if _, err := io.ReadFull(rand.Reader, p.UserData); err != nil {
 		return err
 	}
 
-	p.Expiration = time.Now().UTC().Add(ValidityPeriod)
+	p.Expiration = time.Now().UTC().Add(validityPeriod)
 
 	return nil
 }

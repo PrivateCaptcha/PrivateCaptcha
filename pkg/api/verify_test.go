@@ -201,6 +201,43 @@ func TestVerifyPuzzleReplay(t *testing.T) {
 	}
 }
 
+func TestVerifyPuzzleAllowReplay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, err := store.GetCachedPropertyBySitekey(context.TODO(), sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// this should be still cached so we don't need to actually update DB
+	property.AllowReplay = true
+
+	resp, err := verifySuite(payload, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	// now second time the same
+	resp, err = verifySuite(payload, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := checkVerifyError(resp, puzzle.VerifyNoError); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // same as successful test (TestVerifyPuzzle), but invalidates api key in cache
 func TestVerifyCachePriority(t *testing.T) {
 	if testing.Short() {

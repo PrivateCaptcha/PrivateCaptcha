@@ -65,8 +65,10 @@ var (
 		PrivacyEndpoint      string
 		ErrorEndpoint        string
 		AboutEndpoint        string
+		ValidityInterval     string
 		AllowSubdomains      string
 		AllowLocalhost       string
+		AllowReplay          string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -119,8 +121,10 @@ var (
 		PrivacyEndpoint:      common.PrivacyEndpoint,
 		ErrorEndpoint:        common.ErrorEndpoint,
 		AboutEndpoint:        common.AboutEndpoint,
+		ValidityInterval:     common.ParamValidityInterval,
 		AllowSubdomains:      common.ParamAllowSubdomains,
 		AllowLocalhost:       common.ParamAllowLocalhost,
+		AllowReplay:          common.ParamAllowReplay,
 	}
 )
 

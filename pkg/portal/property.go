@@ -47,14 +47,16 @@ type propertyWizardRenderContext struct {
 }
 
 type userProperty struct {
-	ID              string
-	OrgID           string
-	Name            string
-	Domain          string
-	Level           int
-	Growth          int
-	AllowSubdomains bool
-	AllowLocalhost  bool
+	ID               string
+	OrgID            string
+	Name             string
+	Domain           string
+	Level            int
+	Growth           int
+	ValidityInterval int
+	AllowSubdomains  bool
+	AllowLocalhost   bool
+	AllowReplay      bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -104,14 +106,16 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 
 func propertyToUserProperty(p *dbgen.Property) *userProperty {
 	return &userProperty{
-		ID:              strconv.Itoa(int(p.ID)),
-		OrgID:           strconv.Itoa(int(p.OrgID.Int32)),
-		Name:            p.Name,
-		Domain:          p.Domain,
-		Level:           int(p.Level.Int16),
-		Growth:          growthLevelToIndex(p.Growth),
-		AllowSubdomains: p.AllowSubdomains,
-		AllowLocalhost:  p.AllowLocalhost,
+		ID:               strconv.Itoa(int(p.ID)),
+		OrgID:            strconv.Itoa(int(p.OrgID.Int32)),
+		Name:             p.Name,
+		Domain:           p.Domain,
+		Level:            int(p.Level.Int16),
+		Growth:           growthLevelToIndex(p.Growth),
+		ValidityInterval: validityIntervalToIndex(p.ValidityInterval),
+		AllowReplay:      p.AllowReplay,
+		AllowSubdomains:  p.AllowSubdomains,
+		AllowLocalhost:   p.AllowLocalhost,
 	}
 }
 
@@ -164,6 +168,51 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	default:
 		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
 		return dbgen.DifficultyGrowthMedium
+	}
+}
+
+func validityIntervalToIndex(period time.Duration) int {
+	switch period {
+	case 1 * time.Hour:
+		return 0
+	case 6 * time.Hour:
+		return 1
+	case 12 * time.Hour:
+		return 2
+	case 24 * time.Hour:
+		return 3
+	case 2 * 24 * time.Hour:
+		return 4
+	case 7 * 24 * time.Hour:
+		return 5
+	default:
+		return 1
+	}
+}
+
+func validityIntervalFromIndex(ctx context.Context, index string) time.Duration {
+	i, err := strconv.Atoi(index)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to convert validity period", "value", index, common.ErrAttr(err))
+		return puzzle.DefaultValidityPeriod
+	}
+
+	switch i {
+	case 0:
+		return 1 * time.Hour
+	case 1:
+		return 6 * time.Hour
+	case 2:
+		return 12 * time.Hour
+	case 3:
+		return 24 * time.Hour
+	case 4:
+		return 2 * 24 * time.Hour
+	case 5:
+		return 7 * 24 * time.Hour
+	default:
+		slog.WarnContext(ctx, "Invalid validity period index", "index", i)
+		return puzzle.DefaultValidityPeriod
 	}
 }
 
@@ -305,7 +354,7 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	uuid := db.UUIDFromSiteKey(sitekey)
 
 	p := puzzle.NewPuzzle(0 /*puzzle ID*/, uuid.Bytes, uint8(level))
-	if err := p.Init(); err != nil {
+	if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -639,21 +688,27 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
+	validityInterval := validityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]
+	_, allowReplay := r.Form[common.ParamAllowReplay]
 
 	if (name != property.Name) ||
 		(int16(difficulty) != property.Level.Int16) ||
 		(growth != property.Growth) ||
+		(validityInterval != property.ValidityInterval) ||
+		(allowReplay != property.AllowReplay) ||
 		(allowSubdomains != property.AllowSubdomains) ||
 		(allowLocalhost != property.AllowLocalhost) {
 		if updatedProperty, err := s.Store.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
-			ID:              property.ID,
-			Name:            name,
-			Level:           db.Int2(int16(difficulty)),
-			Growth:          growth,
-			AllowSubdomains: allowSubdomains,
-			AllowLocalhost:  allowLocalhost,
+			ID:               property.ID,
+			Name:             name,
+			Level:            db.Int2(int16(difficulty)),
+			Growth:           growth,
+			ValidityInterval: validityInterval,
+			AllowSubdomains:  allowSubdomains,
+			AllowLocalhost:   allowLocalhost,
+			AllowReplay:      allowReplay,
 		}); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {

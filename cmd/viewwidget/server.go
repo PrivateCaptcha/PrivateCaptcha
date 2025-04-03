@@ -73,7 +73,7 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p := puzzle.NewPuzzle(0 /*puzzle ID*/, [16]byte{}, uint8(common.DifficultyLevelMedium))
-	if err := p.Init(); err != nil {
+	if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
