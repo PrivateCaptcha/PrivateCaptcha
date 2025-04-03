@@ -1,0 +1,47 @@
+name: golangci-lint
+on:
+  push:
+    branches:
+    - '**'
+    paths-ignore:
+    - 'widget/js/**'
+    - 'widget/node_modules/**'
+    - 'web/js/**'
+    - 'web/css/**'
+    - 'web/node_modules/**'
+    - 'docs/**'
+    - 'docker/**'
+    - 'node_modules/**'
+    - '**.md'
+    - '**/.*.yml'
+    - '.vscode/**'
+    - '.devcontainer/**'
+    - 'Dockerfile'
+    tags-ignore:
+    - '*'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  # pull-requests: read
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Pre-fill embed directories
+        run: |
+          touch widget/static/index.html
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.0
