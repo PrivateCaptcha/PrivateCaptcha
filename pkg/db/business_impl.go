@@ -1386,7 +1386,7 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 		params.Dates = append(params.Dates, Date(v.Timestamp))
 	}
 
-	userProducts = map[int32]string{} //nolint:ineffassign
+	userProducts = map[int32]string{} //nolint:ineffassign,staticcheck
 
 	err = impl.queries.AddUsageLimitViolations(ctx, params)
 	if err != nil {

@@ -74,15 +74,15 @@ func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Dura
 
 func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
-	var leaked int64 = int64(diff / lb.leakInterval)
-	var currLevel int64 = max(0, int64(lb.level)-leaked)
+	var leaked = int64(diff / lb.leakInterval)
+	var currLevel = max(0, int64(lb.level)-leaked)
 	return TLevel(currLevel)
 }
 
 func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	diff := tnow.Sub(lb.lastAccessTime)
 
-	var leaked int64 = max(int64(diff/lb.leakInterval), 0)
+	var leaked = max(int64(diff/lb.leakInterval), 0)
 	// leakage is constant, so if event is in past, we already accounted for leak during that time
 	// so it means that only the current level could have been larger
 	if diff > 0 {
@@ -90,8 +90,8 @@ func (lb *ConstLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel)
 		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
 	}
 
-	var currLevel int64 = max(0, int64(lb.level)-leaked)
-	var nextLevel int64 = min(int64(lb.capacity), currLevel+int64(n))
+	var currLevel = max(0, int64(lb.level)-leaked)
+	var nextLevel = min(int64(lb.capacity), currLevel+int64(n))
 	lb.level = TLevel(nextLevel)
 
 	// {current level}, {how much added}
@@ -135,21 +135,21 @@ func (lb *VarLeakyBucket[TKey]) LeakInterval() time.Duration {
 
 func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {
 	diff := tnow.Sub(lb.lastAccessTime)
-	var leaked int64 = int64(lb.leakRate * float64(diff) / float64(lb.leakInterval))
-	var currLevel int64 = max(0, int64(lb.level)-leaked)
+	var leaked = int64(lb.leakRate * float64(diff) / float64(lb.leakInterval))
+	var currLevel = max(0, int64(lb.level)-leaked)
 	return TLevel(currLevel)
 }
 
 func (lb *VarLeakyBucket[TKey]) Add(tnow time.Time, n TLevel) (TLevel, TLevel) {
 	diff := tnow.Sub(lb.lastAccessTime)
 	intervals := max(diff/lb.leakInterval, 0)
-	var leaked int64 = int64(lb.leakRate * float64(intervals))
+	var leaked = int64(lb.leakRate * float64(intervals))
 	if diff > 0 {
 		lb.lastAccessTime = tnow.Truncate(lb.leakInterval)
 	}
 
-	var currLevel int64 = max(0, int64(lb.level)-leaked)
-	var nextLevel int64 = min(int64(lb.capacity), currLevel+int64(n))
+	var currLevel = max(0, int64(lb.level)-leaked)
+	var nextLevel = min(int64(lb.capacity), currLevel+int64(n))
 	lb.level = TLevel(nextLevel)
 
 	// this is the way of saying "is this the new {leakRate} interval at {tnow}"

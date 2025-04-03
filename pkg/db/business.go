@@ -229,7 +229,11 @@ func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.Crea
 	if err != nil {
 		return nil, nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
+	}()
 
 	db := dbgen.New(s.pool)
 	tmpCache := NewTxCache()
@@ -353,7 +357,11 @@ func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32) error 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
+	}()
 
 	db := dbgen.New(s.pool)
 	tmpCache := NewTxCache()
@@ -426,7 +434,11 @@ func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byt
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
+	}()
 
 	db := dbgen.New(s.pool)
 	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}
@@ -452,7 +464,11 @@ func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
+	}()
 
 	db := dbgen.New(s.pool)
 	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}

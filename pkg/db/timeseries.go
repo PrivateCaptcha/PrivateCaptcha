@@ -108,7 +108,7 @@ func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
 }
 
 func (ts *TimeSeriesStore) isAvailable() bool {
-	return (ts.maintenanceMode.Load() == false)
+	return !ts.maintenanceMode.Load()
 }
 
 func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {

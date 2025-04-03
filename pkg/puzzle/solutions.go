@@ -66,7 +66,7 @@ func (m *Metadata) UnmarshalBinary(data []byte) error {
 		return io.ErrShortBuffer
 	}
 
-	var offset int = 0
+	var offset = 0
 
 	version := data[offset]
 	if version != 1 {
