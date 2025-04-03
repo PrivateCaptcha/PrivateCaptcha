@@ -10,6 +10,8 @@ on:
     - 'web/build.go'
     - '.github/workflows/golangci-lint.yml'
     - '!pkg/db/generated/**'
+    - '!pkg/db/queries/**'
+    - '!pkg/db/migrations/**'
     - '!vendor/**'
     tags-ignore:
     - '*'
