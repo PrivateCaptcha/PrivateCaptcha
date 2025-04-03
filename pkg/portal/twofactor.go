@@ -98,8 +98,10 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
-		if user, err := s.doRegister(ctx, sess); err == nil {
+		if user, _, err := s.doRegister(ctx, sess); err == nil {
 			sess.Set(session.KeyUserID, user.ID)
+			// NOTE: we can redirect user to create the first property instead of dashboard, but currently it's fine
+			// redirectURL = s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
 		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
 			s.redirectError(http.StatusInternalServerError, w, r)
@@ -128,9 +130,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		sess.Delete(session.KeyReturnURL)
 		common.Redirect(s.relURL(returnURL), http.StatusOK, w, r)
 	} else {
-		// TODO: Redirect user to create the first property instead of dashboard
-		// in case we're registering
-		common.Redirect(s.relURL("/"), http.StatusOK, w, r)
+		redirectURL := s.relURL("/")
+		common.Redirect(redirectURL, http.StatusOK, w, r)
 	}
 }
 

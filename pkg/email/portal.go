@@ -62,7 +62,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	}{
 		Code:        fmt.Sprintf("%06d", code),
 		CDN:         pm.cdn,
-		Domain:      pm.domain,
+		Domain:      fmt.Sprintf("https://%s/", pm.domain),
 		CurrentYear: time.Now().Year(),
 	}
 

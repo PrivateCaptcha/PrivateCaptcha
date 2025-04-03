@@ -230,7 +230,6 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	hash, err := blake2b.New256(s.uaKey.Value())
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
-		// TODO: handle calculating hash with error
 		fingerprint = common.RandomFingerprint()
 	} else {
 		// TODO: Check if we really need to take user agent into account here

@@ -135,7 +135,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
 
 	mailer := email.NewMailer(cfg)
-	portalMailer := email.NewPortalMailer("https:"+cdnURLConfig.URL(), portalURLConfig.URL(), mailer, cfg)
+	portalMailer := email.NewPortalMailer("https:"+cdnURLConfig.URL(), portalURLConfig.Domain(), mailer, cfg)
 
 	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 10*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg)
 	if err := apiServer.Init(ctx); err != nil {

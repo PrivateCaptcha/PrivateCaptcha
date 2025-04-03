@@ -134,26 +134,26 @@ func createInternalTrial(plan *billing.Plan) *dbgen.CreateSubscriptionParams {
 	}
 }
 
-func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
+func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.User, *dbgen.Organization, error) {
 	email, ok := sess.Get(session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
-		return nil, errIncompleteSession
+		return nil, nil, errIncompleteSession
 	}
 
 	name, ok := sess.Get(session.KeyUserName).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get user name from session")
-		return nil, errIncompleteSession
+		return nil, nil, errIncompleteSession
 	}
 
 	plan := billing.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan)
 
-	user, _, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
+	user, org, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
@@ -164,5 +164,5 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		}
 	}(common.CopyTraceID(ctx, context.Background()), user.Email)
 
-	return user, nil
+	return user, org, nil
 }
