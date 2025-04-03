@@ -3,20 +3,18 @@ on:
   push:
     branches:
     - '**'
+    paths:
+    - 'pkg/**'
+    - 'cmd/**'
+    - 'widget/build.go'
+    - 'web/build.go'
+    - '.github/workflows/golangci-lint.yml'
     paths-ignore:
-    - 'widget/js/**'
-    - 'widget/node_modules/**'
-    - 'web/js/**'
-    - 'web/css/**'
-    - 'web/node_modules/**'
+    - 'pkg/db/generated/**'
+    - 'vendor/**'
     - 'docs/**'
     - 'docker/**'
     - 'node_modules/**'
-    - '**.md'
-    - '**/.*.yml'
-    - '.vscode/**'
-    - '.devcontainer/**'
-    - 'Dockerfile'
     tags-ignore:
     - '*'
   pull_request:
