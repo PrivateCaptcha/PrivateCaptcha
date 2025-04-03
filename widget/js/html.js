@@ -1,7 +1,7 @@
 'use strict';
 
 import { ProgressRing } from './progress.js';
-import styles from "./styles.css" assert {type: 'css'};
+import styles from "./styles.css" with { type: 'css' };
 import * as i18n from './strings.js';
 import * as errors from './errors.js';
 

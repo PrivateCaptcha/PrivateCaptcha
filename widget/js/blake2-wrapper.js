@@ -27,22 +27,23 @@ Blake2b.ready = function(cb) {
     })
 }
 
-module.exports.impl = function createHash(outlen, key, salt, personal) {
+function createHash(outlen, key, salt, personal) {
     return new Blake2b(outlen, key);
 }
 
-module.exports.ready = function(cb) {
-    b2wasm.ready(function() { // ignore errors
+export function ready(cb) {
+    b2wasm.ready(function() {
         cb()
     })
 }
 
-module.exports.WASM_SUPPORTED = b2wasm.SUPPORTED
-module.exports.WASM_LOADED = false
+export let WASM_SUPPORTED = b2wasm.SUPPORTED;
+export let WASM_LOADED = false;
+export let impl = createHash;
 
 b2wasm.ready(function(err) {
     if (!err) {
-        module.exports.WASM_LOADED = true
-        module.exports.impl = b2wasm.default
+        WASM_LOADED = true;
+        impl = b2wasm.default;
     }
 })

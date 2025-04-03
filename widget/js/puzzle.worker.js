@@ -1,6 +1,6 @@
 'use strict';
 
-import blake2bModule from './blake2-wrapper.js';
+import * as blake2bModule from './blake2-wrapper.js';
 let blake2b = blake2bModule.impl;
 let blake2bInitialized = false;
 let puzzleBuffer = null;

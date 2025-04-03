@@ -2,13 +2,16 @@
   "name": "widget",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "devDependencies": {
     "esbuild": "^0.25.0",
-    "esbuild-plugin-inline-worker": "^0.1.1"
+    "esbuild-plugin-inline-worker": "^0.1.1",
+    "eslint": "^9.23.0"
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint js/**/*.js"
   },
   "dependencies": {
     "base64-arraybuffer": "^1.0.2",
