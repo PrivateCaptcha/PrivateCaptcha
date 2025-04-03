@@ -14,6 +14,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.55.1
+    pull_policy: if_not_present
     depends_on:
       - server
     volumes:
@@ -28,6 +29,7 @@ services:
 
   grafana:
     image: grafana/grafana-oss:latest-ubuntu
+    pull_policy: if_not_present
     depends_on:
       - prometheus
     ports:

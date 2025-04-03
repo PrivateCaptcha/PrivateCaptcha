@@ -55,6 +55,7 @@ services:
 
   vetsqlc:
     image: sqlc/sqlc
+    pull_policy: if_not_present
     command:
       vet
     environment:
@@ -71,6 +72,7 @@ services:
 
   postgres:
     image: postgres
+    pull_policy: if_not_present
     command: >
         -c ssl=on 
         -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
@@ -94,6 +96,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:24.8.7-alpine
+    pull_policy: if_not_present
     environment:
       CLICKHOUSE_DB: privatecaptcha
     healthcheck:
