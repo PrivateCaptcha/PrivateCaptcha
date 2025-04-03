@@ -7,10 +7,9 @@ on:
     - 'widget/js/**'
     - '.github/workflows/eslint.yml'
     # - 'web/js/**'
-    paths-ignore:
-    - 'node_modules/**'
-    - 'widget/node_modules/**'
-    - 'web/node_modules/**'
+    - '!node_modules/**'
+    - '!widget/node_modules/**'
+    - '!web/node_modules/**'
     tags-ignore:
     - '*'
   pull_request:

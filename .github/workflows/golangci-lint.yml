@@ -9,12 +9,8 @@ on:
     - 'widget/build.go'
     - 'web/build.go'
     - '.github/workflows/golangci-lint.yml'
-    paths-ignore:
-    - 'pkg/db/generated/**'
-    - 'vendor/**'
-    - 'docs/**'
-    - 'docker/**'
-    - 'node_modules/**'
+    - '!pkg/db/generated/**'
+    - '!vendor/**'
     tags-ignore:
     - '*'
   pull_request:
