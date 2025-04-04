@@ -14,17 +14,19 @@
     :host([theme="light"]) {
         --dark-color: #070113;
         --gray-color: #E0E0E0;
-        --light-color: #F2F2F2;
-        --lighter-color: #FFF;
+        --pie-color: #D8E9E9;
         --background-color: #fff;
+        --checkbox-background-color: #FFF;
+        --checkbox-hover-color: #EBF4F4;
     }
 
     :host([theme="dark"]) {
-        --dark-color: #fff;
+        --dark-color: #EBF4F4;
         --gray-color: #656C7B;
-        --light-color: #d2d6dd;
-        --lighter-color: #3C4353;
-        --background-color: #111827;
+        --pie-color: #376262;
+        --background-color: #041616;
+        --checkbox-background-color: #223C3C;
+        --checkbox-hover-color: #1C3232;
     }
 }
 
@@ -69,7 +71,7 @@
     height: 32px;
     margin: 0 0 0 var(--extra-spacing);
     appearance: none;
-    background-color: var(--lighter-color);
+    background-color: var(--checkbox-background-color);
     border: 2px solid var(--dark-color);
     border-radius: 4px;
     cursor: pointer;
@@ -87,24 +89,24 @@
 .pc-interactive-area input[type="checkbox"].loading {
     animation: colorChange 2s infinite;
     animation-timing-function: ease-in-out;
-    background-color: var(--light-color);
+    background-color: var(--checkbox-hover-color);
     cursor: default;
 }
 
 .pc-interactive-area input[type="checkbox"].ready {
-    background-color: var(--lighter-color);
+    background-color: var(--checkbox-background-color);
     border-color: var(--dark-color);
     cursor: pointer;
 }
 
 .pc-interactive-area input[type="checkbox"].invalid {
-    background-color: var(--light-color);
+    background-color: var(--checkbox-hover-color);
     border-color: var(--gray-color);
     cursor: not-allowed;
 }
 
 .pc-interactive-area input[type="checkbox"]:not(.invalid):hover {
-    background-color: var(--lighter-color);
+    background-color: var(--checkbox-hover-color);
     border-color: var(--accent-color);
 }
 

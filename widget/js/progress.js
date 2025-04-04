@@ -48,7 +48,7 @@ export class ProgressRing extends HTMLElement {
 
           <style>
             #pie {
-                stroke: var(--light-color);
+                stroke: var(--pie-color);
                 transition: stroke-dasharray 0.35s;
                 transform: rotate(-90deg);
                 transform-origin: 50% 50%;
