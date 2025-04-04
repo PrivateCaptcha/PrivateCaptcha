@@ -15,7 +15,7 @@ import (
 type Levels struct {
 	timeSeries      *db.TimeSeriesStore
 	propertyBuckets *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
-	userBuckets     *leakybucket.Manager[common.TFingerprint, leakybucket.VarLeakyBucket[common.TFingerprint], *leakybucket.VarLeakyBucket[common.TFingerprint]]
+	userBuckets     *leakybucket.Manager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint], *leakybucket.ConstLeakyBucket[common.TFingerprint]]
 	accessChan      chan *common.AccessRecord
 	backfillChan    chan *common.BackfillRequest
 	batchSize       int
@@ -26,19 +26,24 @@ type Levels struct {
 func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
 
 	const (
-		leakyBucketCap      = math.MaxUint32
+		propertyBucketCap   = math.MaxUint32
 		maxPendingBatchSize = 100_000
 		// below numbers are rather arbitrary as we can support "many"
 		// as for users, we want to keep only the "most active" ones as "not active enough" activity
 		// does not affect difficulty much, if at all
 		maxUserBuckets     = 1_000_000
 		maxPropertyBuckets = 100_000
+		userBucketCap      = math.MaxUint32
+		// user worst case: everybody in the private network (VPN, BigCorp internal) access single resource (survey, login)
+		// estimate: 12 "free" requests per minute should be "enough for everybody" (tm), after that difficulty grows
+		userLeakRatePerMinute = 12
+		userBucketSize        = time.Minute / userLeakRatePerMinute
 	)
 
 	levels := &Levels{
 		timeSeries:      timeSeries,
-		propertyBuckets: leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, leakyBucketCap, bucketSize),
-		userBuckets:     leakybucket.NewManager[common.TFingerprint, leakybucket.VarLeakyBucket[common.TFingerprint]](maxUserBuckets, leakyBucketCap, bucketSize),
+		propertyBuckets: leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, propertyBucketCap, bucketSize),
+		userBuckets:     leakybucket.NewManager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint]](maxUserBuckets, userBucketCap, userBucketSize),
 		accessChan:      make(chan *common.AccessRecord, 10*batchSize),
 		backfillChan:    make(chan *common.BackfillRequest, batchSize),
 		batchSize:       batchSize,

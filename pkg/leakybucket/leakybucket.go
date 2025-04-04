@@ -105,6 +105,7 @@ func NewConstBucket[TKey comparable](key TKey, capacity TLevel, leakInterval tim
 }
 
 // Variable LeakyBucket, that updates it's leaking rate
+// which {level} is an accumulated deviation ("anomaly") from the running mean during current {bucketSize} interval
 type VarLeakyBucket[TKey comparable] struct {
 	ConstLeakyBucket[TKey]
 	// ConstLeakBucket always leaks 1 level per {leakInterval}, but {VarLeakyBucket} removes {leakRate} levels
@@ -113,7 +114,7 @@ type VarLeakyBucket[TKey comparable] struct {
 	// we change {leakRate} only in different time windows (with resolution of {leakInterval})
 	// and {pendingSum} is what accumulates added elements for the yet unaccounted time window
 	pendingSum int64
-	// total count of items added to the bucket. NOTE: in case of uint64 overflow happens
+	// total count of items added to the bucket. NOTE: in the unlikely case of uint64 overflow
 	// we just reset all stats and continue as usual
 	count uint64
 }
