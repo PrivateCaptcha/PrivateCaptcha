@@ -1,7 +1,6 @@
 'use strict';
 
 import { getPuzzle, Puzzle } from './puzzle.js'
-import { encode } from 'base64-arraybuffer';
 import { WorkersPool } from './workerspool.js'
 import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
 import * as errors from './errors.js';
@@ -109,12 +108,13 @@ export class CaptchaWidget {
             this.trace('fetching puzzle');
             const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
             this._puzzle = new Puzzle(puzzleData);
-            if (this._puzzle && this._puzzle.isZero()) { this._errorCode = error.ERROR_ZERO_PUZZLE; }
+            if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
             if (expirationMillis) { this._expiryTimeout = setTimeout(() => this.expire(), expirationMillis); }
             this._workersPool.init(this._puzzle, startWorkers);
+            this.signalInit();
         } catch (e) {
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
@@ -157,24 +157,55 @@ export class CaptchaWidget {
         }
     }
 
+    signalInit() {
+        const callback = this._element.dataset['initCallback'];
+        if (callback) {
+            try {
+                window[callback](this);
+            } catch (e) {
+                console.error('[privatecaptcha] Error in init callback:', e);
+            }
+        } else {
+            this.trace('init callback')
+        }
+    }
+
     signalStarted() {
         const callback = this._element.dataset['startedCallback'];
         if (callback) {
-            window[callback](this);
+            try {
+                window[callback](this);
+            } catch (e) {
+                console.error('[privatecaptcha] Error in started callback:', e);
+            }
+        } else {
+            this.trace('started callback')
         }
     }
 
     signalFinished() {
         const callback = this._element.dataset['finishedCallback'];
         if (callback) {
-            window[callback](this);
+            try {
+                window[callback](this);
+            } catch (e) {
+                console.error('[privatecaptcha] Error in finished callback:', e);
+            }
+        } else {
+            this.trace('finished callback')
         }
     }
 
     signalErrored() {
         const callback = this._element.dataset['erroredCallback'];
         if (callback) {
-            window[callback](this);
+            try {
+                window[callback](this);
+            } catch (e) {
+                console.error('[privatecaptcha] Error in errored callback:', e);
+            }
+        } else {
+            this.trace('errored callback')
         }
     }
 
@@ -192,8 +223,8 @@ export class CaptchaWidget {
     reset(options = {}) {
         this.trace('reset captcha')
 
-        if (this._workersPool) { this._workersPool.stop(); }
         if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
+        if (this._workersPool) { this._workersPool.stop(); }
 
         this.setState(STATE_EMPTY);
         this.setProgressState(STATE_EMPTY);
@@ -204,7 +235,10 @@ export class CaptchaWidget {
     }
 
     expire() {
-        this.trace('time to expire captcha');
+        this.trace('expire captcha');
+
+        if (this._workersPool) { this._workersPool.stop(); }
+
         this.setState(STATE_EMPTY);
         this.setProgressState(STATE_EMPTY);
         this.ensureNoSolutionField();
@@ -239,7 +273,7 @@ export class CaptchaWidget {
 
         // always show spinner when user clicked
         let progressState = STATE_IN_PROGRESS;
-        let signal = false;
+        let finished = false;
 
         switch (this._state) {
             case STATE_READY:
@@ -259,7 +293,7 @@ export class CaptchaWidget {
             case STATE_VERIFIED:
                 // happens when we finished verification fully in the background, still should animate "the end"
                 progressState = STATE_VERIFIED;
-                signal = true;
+                finished = true;
                 break;
             default:
                 console.warn('[privatecaptcha] onChecked: unexpected state. state=' + this._state);
@@ -267,7 +301,7 @@ export class CaptchaWidget {
         };
 
         this.setProgressState(progressState);
-        if (signal) { this.signalFinished(); }
+        if (finished) { this.signalFinished(); }
     }
 
     onWorkersReady(autoStart) {

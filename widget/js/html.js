@@ -43,6 +43,19 @@ function label(text, forElement) {
     return `<label for="${forElement}">${text}</label>`;
 }
 
+function errorDescription(code, strings) {
+    switch (code) {
+        case errors.ERROR_NO_ERROR:
+            return '';
+        case errors.ERROR_NOT_CONFIGURED:
+            return strings[i18n.INCOMPLETE];
+        case errors.ERROR_ZERO_PUZZLE:
+            return strings[i18n.TESTING];
+        default:
+            return strings[i18n.ERROR];
+    };
+}
+
 export class CaptchaElement extends HTMLElement {
     constructor() {
         super();
@@ -124,8 +137,8 @@ export class CaptchaElement extends HTMLElement {
         }
 
         if (this._debug || this._error) {
-            const debugText = this._error ? this._error : state;
-            activeArea += `<span id="${DEBUG_ID}"${this._error ? ' class="warn"' : ''}>[${debugText}]</span>`;
+            const debugText = this._error ? errorDescription(this._error, strings) : `[${state}]`;
+            activeArea += `<span id="${DEBUG_ID}" class="${this._error ? DEBUG_ERROR_CLASS : ''}">${debugText}</span>`;
         }
 
         let displayClass = '';
@@ -189,29 +202,20 @@ export class CaptchaElement extends HTMLElement {
     }
 
     setError(value) {
-        const strings = i18n.STRINGS[this._lang];
-
-        switch (value) {
-            case errors.ERROR_NO_ERROR:
-                this._error = null;
-                break;
-            case errors.ERROR_NOT_CONFIGURED:
-                this._error = strings[i18n.INCOMPLETE];
-                break;
-            case errors.ERROR_ZERO_PUZZLE:
-                this._error = strings[i18n.TESTING];
-                break;
-            default:
-                this._error = strings[i18n.ERROR];
-                break;
-        };
+        this._error = value;
     }
 
     setDebugText(text, error) {
         const debugElement = this._root.getElementById(DEBUG_ID);
         if (debugElement) {
-            const debugText = this._error ? this._error : text;
-            debugElement.innerHTML = `[${debugText}]`;
+            let debugText = '';
+            if (this._error) {
+                const strings = i18n.STRINGS[this._lang];
+                debugText = errorDescription(this._error, strings);
+            } else {
+                debugText = `[${text}]`;
+            }
+            debugElement.innerHTML = debugText;
             if (error || this._error) {
                 debugElement.classList.add(DEBUG_ERROR_CLASS);
             } else {
