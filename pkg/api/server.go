@@ -336,7 +336,7 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 		return puzzleObject, verr, nil
 	}
 
-	if (puzzleObject != nil) && !property.AllowReplay {
+	if (puzzleObject != nil) && (property != nil) && !property.AllowReplay {
 		if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
 			slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 		}
@@ -404,7 +404,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {
 	if (p == nil) || (property == nil) {
-		slog.ErrorContext(ctx, "Invalid input for verify record")
+		slog.ErrorContext(ctx, "Invalid input for verify record", "property", (property != nil), "puzzle", (p != nil))
 		return
 	}
 
