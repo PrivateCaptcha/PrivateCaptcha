@@ -122,11 +122,20 @@ func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbg
 }
 
 func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
+	if p.PuzzleID == 0 {
+		return false
+	}
+
 	ok, err := s.puzzleCache.Get(ctx, p.PuzzleID)
 	return (err == nil) && ok
 }
 
 func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error {
+	if p.PuzzleID == 0 {
+		slog.Log(ctx, common.LevelTrace, "Skipping caching stub puzzle")
+		return nil
+	}
+
 	// this check should have been done before in the pipeline. Here the check only to safeguard storing in cache
 	if !tnow.Before(p.Expiration) {
 		slog.WarnContext(ctx, "Skipping caching expired puzzle", "now", tnow, "expiration", p.Expiration)
