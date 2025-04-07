@@ -154,19 +154,37 @@ func (s *Server) validateOrgName(ctx context.Context, name string, userID int32)
 }
 
 func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string {
-	var subscription *dbgen.Subscription
+	var subscr *dbgen.Subscription
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscription, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
 		}
 	}
 
-	if (subscription == nil) || !billing.IsSubscriptionActive(subscription.Status) {
-		return "You need an active subscription to create new organizations"
+	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+		return "You need an active subscription to create new organizations."
+	}
+
+	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
+	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	// NOTE: this should be freshly cached as we should have just rendered the dashboard
+	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user orgs", "userID", user.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	if (plan.OrgsLimit > 0) && (len(orgs) >= plan.OrgsLimit) {
+		return "Organizations limit reached on your current plan, please upgrade to create more."
 	}
 
 	return ""

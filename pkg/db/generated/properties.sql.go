@@ -318,6 +318,17 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 	return items, nil
 }
 
+const getUserPropertiesCount = `-- name: GetUserPropertiesCount :one
+SELECT COUNT(*) as count FROM backend.properties WHERE org_owner_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserPropertiesCount, orgOwnerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
 UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, allow_replay
 `

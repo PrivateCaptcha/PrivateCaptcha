@@ -532,3 +532,7 @@ func (s *BusinessStore) CreateNotification(ctx context.Context, message string, 
 func (s *BusinessStore) RetrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
 	return s.impl().retrieveProperties(ctx, limit)
 }
+
+func (s *BusinessStore) RetrieveUserPropertiesCount(ctx context.Context, userID int32) (int64, error) {
+	return s.impl().retrieveUserPropertiesCount(ctx, userID)
+}

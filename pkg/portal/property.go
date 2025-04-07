@@ -324,20 +324,73 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 	return "Failed to resolve domain name."
 }
 
-func (s *Server) validatePropertiesLimit(ctx context.Context, user *dbgen.User) string {
-	var subscription *dbgen.Subscription
+func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
+	var subscr *dbgen.Subscription
 	var err error
 
-	if user.SubscriptionID.Valid {
-		subscription, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if sessUser.SubscriptionID.Valid {
+		subscr, err = s.Store.RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to retrieve session user subscription", "userID", sessUser.ID, common.ErrAttr(err))
 			return ""
 		}
 	}
 
-	if (subscription == nil) || !billing.IsSubscriptionActive(subscription.Status) {
-		return "You need an active subscription to create new properties"
+	isUserOrgOwner := org.UserID.Int32 == sessUser.ID
+	userIDToCheck := sessUser.ID
+
+	if !isUserOrgOwner {
+		slog.DebugContext(ctx, "Session user is not org owner", "userID", sessUser.ID, "orgUserID", org.UserID.Int32)
+
+		orgUser, err := s.Store.RetrieveUser(ctx, org.UserID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org's owner user by ID", "id", org.UserID.Int32, common.ErrAttr(err))
+			return ""
+		}
+
+		userIDToCheck = orgUser.ID
+		subscr = nil
+
+		if orgUser.SubscriptionID.Valid {
+			subscr, err = s.Store.RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve org owner's subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
+				return ""
+			}
+		}
+	}
+
+	return s.doValidatePropertiesLimit(ctx, subscr, userIDToCheck, isUserOrgOwner)
+}
+
+func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Subscription, userID int32, isOrgOwner bool) string {
+	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+		if isOrgOwner {
+			return "You need an active subscription to create new properties."
+		}
+
+		return "Organization owner needs an active subscription to create new properties."
+	}
+
+	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
+	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	count, err := s.Store.RetrieveUserPropertiesCount(ctx, userID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve properties count", "userID", userID, common.ErrAttr(err))
+		return ""
+	}
+
+	if (plan.PropertiesLimit > 0) && (count >= int64(plan.PropertiesLimit)) {
+		if isOrgOwner {
+			return "Properties limit reached on your current plan, please upgrade to create more."
+		}
+
+		return "Properties limit reached for this organization's owner, contact them to upgrade."
 	}
 
 	return ""
@@ -415,7 +468,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if limitError := s.validatePropertiesLimit(ctx, user); len(limitError) > 0 {
+	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return

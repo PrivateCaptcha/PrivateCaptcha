@@ -82,7 +82,7 @@ var (
 		PriceYearly:          0,
 		Version:              version1,
 		RequestsLimit:        1_000,
-		OrgsLimit:            1,
+		OrgsLimit:            2,
 		PropertiesLimit:      10,
 		ThrottleLimit:        2_000,
 		APIRequestsPerSecond: 10,

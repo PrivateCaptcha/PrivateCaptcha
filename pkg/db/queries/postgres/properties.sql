@@ -39,3 +39,6 @@ DELETE FROM backend.properties WHERE id = ANY($1::INT[]);
 
 -- name: GetProperties :many
 SELECT * FROM backend.properties LIMIT $1;
+
+-- name: GetUserPropertiesCount :one
+SELECT COUNT(*) as count FROM backend.properties WHERE org_owner_id = $1 AND deleted_at IS NULL;

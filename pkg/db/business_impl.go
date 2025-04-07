@@ -1719,3 +1719,19 @@ func (impl *businessStoreImpl) retrieveProperties(ctx context.Context, limit int
 
 	return properties, nil
 }
+
+func (impl *businessStoreImpl) retrieveUserPropertiesCount(ctx context.Context, userID int32) (int64, error) {
+	if impl.queries == nil {
+		return 0, ErrMaintenance
+	}
+
+	count, err := impl.queries.GetUserPropertiesCount(ctx, Int(userID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user properties count", "userID", userID, common.ErrAttr(err))
+		return 0, err
+	}
+
+	slog.DebugContext(ctx, "Fetched user properties count", "userID", userID, "count", count)
+
+	return count, nil
+}
