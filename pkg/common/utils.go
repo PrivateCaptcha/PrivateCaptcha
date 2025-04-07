@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -162,6 +163,11 @@ func IsLocalhost(address string) bool {
 		(address == "127.0.0.1") ||
 		(address == "::1") ||
 		(address == "0:0:0:0:0:0:0:1")
+}
+
+func IsIPAddress(str string) bool {
+	_, err := netip.ParseAddr(str)
+	return err == nil
 }
 
 func IsSubDomainOrDomain(subDomain, domain string) bool {

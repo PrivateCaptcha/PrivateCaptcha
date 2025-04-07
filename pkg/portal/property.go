@@ -278,10 +278,14 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 		return "Domain name cannot be empty."
 	}
 
-	const localhostError = "Localhost is not allowed as a domain"
+	const localhostError = "Localhost is not allowed as a domain."
 
 	if common.IsLocalhost(domain) {
 		return localhostError
+	}
+
+	if common.IsIPAddress(domain) {
+		return "IP address cannot be used as a domain."
 	}
 
 	_, err := idna.Lookup.ToASCII(domain)
