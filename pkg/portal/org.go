@@ -389,6 +389,53 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 	return renderCtx, orgMembersTemplate, nil
 }
 
+// here we know that user is already organization owner
+func (s *Server) validateAddOrgMember(ctx context.Context, user *dbgen.User, members []*dbgen.GetOrganizationUsersRow, inviteEmail string) string {
+	if inviteEmail == user.Email {
+		return "You are already a member of this organization."
+	}
+
+	if err := checkmail.ValidateFormat(inviteEmail); err != nil {
+		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
+		return "Email address is not valid."
+	}
+
+	existingIndex := slices.IndexFunc(members, func(r *dbgen.GetOrganizationUsersRow) bool { return r.User.Email == inviteEmail })
+	if existingIndex != -1 {
+		member := members[existingIndex]
+		slog.WarnContext(ctx, "User is already a member", "userID", member.User.ID, "level", member.Level)
+		return "User with this email is already a member of this organization."
+	}
+
+	var subscr *dbgen.Subscription
+	var err error
+
+	if user.SubscriptionID.Valid {
+		subscr, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
+			return ""
+		}
+	}
+
+	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+		return "You need an active subscription to invite organization members."
+	}
+
+	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
+	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	if len(members) >= plan.OrgMembersLimit {
+		return "Organization members limit reached on your current plan, please upgrade to invite more."
+	}
+
+	return ""
+}
+
 func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 	user, err := s.sessionUser(ctx, s.session(w, r))
@@ -426,14 +473,8 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 	}
 
 	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
-	if inviteEmail == user.Email {
-		renderCtx.ErrorMessage = "You are already a member of this organization."
-		return renderCtx, orgMembersTemplate, nil
-	}
-
-	if err := checkmail.ValidateFormat(inviteEmail); err != nil {
-		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
-		renderCtx.ErrorMessage = "Email address is not valid."
+	if errorMsg := s.validateAddOrgMember(ctx, user, members, inviteEmail); len(errorMsg) > 0 {
+		renderCtx.ErrorMessage = errorMsg
 		return renderCtx, orgMembersTemplate, nil
 	}
 

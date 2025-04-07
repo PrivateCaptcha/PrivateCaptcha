@@ -20,6 +20,7 @@ type Plan struct {
 	RequestsLimit        int64
 	OrgsLimit            int
 	PropertiesLimit      int
+	OrgMembersLimit      int
 	ThrottleLimit        int64
 	APIRequestsPerSecond float64
 }
@@ -63,6 +64,7 @@ const (
 	defaultOrgLimit        = 10
 	defaultPropertiesLimit = 50
 	defaultTrialDays       = 14
+	defaultOrgMembersLimit = 5
 	defaultAPIKeyRequests  = 1.0
 	version1               = 1
 )
@@ -83,6 +85,7 @@ var (
 		Version:              version1,
 		RequestsLimit:        1_000,
 		OrgsLimit:            2,
+		OrgMembersLimit:      2,
 		PropertiesLimit:      10,
 		ThrottleLimit:        2_000,
 		APIRequestsPerSecond: 10,
@@ -100,6 +103,7 @@ var (
 		RequestsLimit:        1_000_000,
 		OrgsLimit:            1_00,
 		PropertiesLimit:      1_000,
+		OrgMembersLimit:      100,
 		ThrottleLimit:        2_000_000,
 		APIRequestsPerSecond: 100,
 	}
@@ -117,6 +121,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        5_000, // next plan's limit
 			APIRequestsPerSecond: 1.0,
 		},
@@ -132,6 +137,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        10_000, // next plan's limit
 			APIRequestsPerSecond: 1.0,
 		},
@@ -147,6 +153,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        25_000, // next plan's limit
 			APIRequestsPerSecond: 2.0,
 		},
@@ -162,6 +169,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        50_000, // next plan's limit
 			APIRequestsPerSecond: 2.0,
 		},
@@ -177,6 +185,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        100_000, // next plan's limit
 			APIRequestsPerSecond: 4.0,
 		},
@@ -192,6 +201,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        200_000, // x2
 			APIRequestsPerSecond: 10.0,
 		},
@@ -210,6 +220,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        5_000, // next plan's limit
 			APIRequestsPerSecond: 10,
 		},
@@ -225,6 +236,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        10_000, // next plan's limit
 			APIRequestsPerSecond: 15,
 		},
@@ -240,6 +252,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        25_000, // next plan's limit
 			APIRequestsPerSecond: 20,
 		},
@@ -255,6 +268,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        50_000, // next plan's limit
 			APIRequestsPerSecond: 25,
 		},
@@ -270,6 +284,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        100_000, // next plan's limit
 			APIRequestsPerSecond: 40,
 		},
@@ -285,6 +300,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        200_000, // next plan's limit
 			APIRequestsPerSecond: 75,
 		},
@@ -300,6 +316,7 @@ var (
 			Version:              version1,
 			OrgsLimit:            defaultOrgLimit,
 			PropertiesLimit:      defaultPropertiesLimit,
+			OrgMembersLimit:      defaultOrgMembersLimit,
 			ThrottleLimit:        400_000, // next plan's limit
 			APIRequestsPerSecond: 100,
 		},
