@@ -12,7 +12,7 @@
         }
 
     :host {
-        --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
+        --extra-spacing: 0px;
         --label-spacing: 10px;
         --border-radius: 2px;
         --warn-color: #A70B0B;
@@ -87,7 +87,8 @@
 .pc-interactive-area input[type="checkbox"] {
     width: 32px;
     height: 32px;
-    margin: 0 0 0 var(--extra-spacing);
+    /* 2px (RING_SIZE - checkbox.dimension)/2 */
+    margin: 0 0 0 calc(2px + var(--extra-spacing));
     appearance: none;
     background-color: var(--checkbox-background-color);
     border: 2px solid var(--dark-color);
@@ -96,7 +97,8 @@
 }
 
 .pc-interactive-area input[type="checkbox"]+label {
-    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
+    /* 2px (RING_SIZE - checkbox.dimension)/2 */
+    padding: 0 0 0 calc(2px + var(--extra-spacing) + var(--label-spacing));
 }
 
 @keyframes colorChange {
@@ -162,13 +164,19 @@
 #pc-progress {
     display: flex;
     justify-content: center;
+    margin: 0 0 0 var(--extra-spacing);
+}
+
+#pc-progress+label {
+    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
 }
 
 .pc-info {
     display: flex;
     flex-direction: column;
     align-items: center;
-    margin-right: var(--extra-spacing);
+    /*2px here is just for "backward consistency"*/
+    margin-right: calc(2px + var(--extra-spacing));
     color: var(--dark-color);
 }
 
@@ -199,6 +207,14 @@ a.pc-link:hover {
     100% {
         stroke-dashoffset: 0px
     }
+}
+
+svg.verified {
+    margin: 0 0 0 var(--extra-spacing);
+}
+
+svg.verified+label {
+    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
 }
 
 /* tick mark */
