@@ -371,7 +371,9 @@ export class CaptchaWidget {
     // this updates the "UI" state of the widget
     setProgressState(state) {
         // NOTE: hidden display mode is taken care of inside setState() even when (_userStarted == true)
-        const canShow = this._userStarted || (DISPLAY_WIDGET === this._options.displayMode);
+        const canShow = this._userStarted ||
+            (DISPLAY_WIDGET === this._options.displayMode) ||
+            (DISPLAY_WIDGET_STRETCH === this._options.displayMode);
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
             pcElement.setError(this._errorCode);
