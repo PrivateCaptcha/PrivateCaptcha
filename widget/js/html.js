@@ -18,6 +18,7 @@ export const STATE_INVALID = 'invalid';
 export const DISPLAY_POPUP = 'popup';
 const DISPLAY_HIDDEN = 'hidden';
 export const DISPLAY_WIDGET = 'widget';
+export const DISPLAY_WIDGET_STRETCH = 'widget-stretch';
 
 const RING_SIZE = 36;
 const CHECKBOX_ID = 'pc-checkbox';
@@ -89,7 +90,8 @@ export class CaptchaElement extends HTMLElement {
             this._root.adoptedStyleSheets.push(overridesSheet);
         }
         // init
-        this.setState(STATE_EMPTY, (this._displayMode == DISPLAY_WIDGET) /*can show*/);
+        const canShow = (this._displayMode == DISPLAY_WIDGET) || (this._displayMode == DISPLAY_WIDGET_STRETCH);
+        this.setState(STATE_EMPTY, canShow);
     }
 
     setState(state, canShow) {
@@ -148,6 +150,9 @@ export class CaptchaElement extends HTMLElement {
                 break;
             case DISPLAY_POPUP:
                 displayClass = showPopupIfNeeded ? 'floating' : 'hidden';
+                break;
+            case DISPLAY_WIDGET_STRETCH:
+                displayClass = 'stretch';
                 break;
             case DISPLAY_WIDGET:
                 break;

@@ -33,12 +33,19 @@
 .pc-captcha-widget {
     display: inline-flex;
     align-items: center;
-    max-width: 360px;
+    flex-direction: row;
     padding: 12px 16px;
     border: 1px solid var(--gray-color);
     border-radius: var(--border-radius);
     background-color: var(--background-color);
     gap: 64px;
+}
+
+.pc-captcha-widget.stretch {
+    display: flex;
+    height: 100%;
+    max-width: none;
+    justify-content: space-between;
 }
 
 .pc-captcha-widget.hidden {
