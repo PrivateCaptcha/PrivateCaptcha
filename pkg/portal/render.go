@@ -69,6 +69,7 @@ var (
 		AllowSubdomains      string
 		AllowLocalhost       string
 		AllowReplay          string
+		IgnoreError          string
 	}{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
@@ -125,6 +126,7 @@ var (
 		AllowSubdomains:      common.ParamAllowSubdomains,
 		AllowLocalhost:       common.ParamAllowLocalhost,
 		AllowReplay:          common.ParamAllowReplay,
+		IgnoreError:          common.ParamIgnoreError,
 	}
 )
 

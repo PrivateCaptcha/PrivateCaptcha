@@ -41,6 +41,8 @@ type difficultyLevelsRenderContext struct {
 type propertyWizardRenderContext struct {
 	csrfRenderContext
 	alertRenderContext
+	Name        string
+	Domain      string
 	NameError   string
 	DomainError string
 	CurrentOrg  *userOrg
@@ -294,7 +296,7 @@ func (s *Server) validateDomainName(ctx context.Context, domain string) string {
 		return "Domain name is not valid."
 	}
 
-	const timeout = 5 * time.Second
+	const timeout = 3 * time.Second
 	rctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
 	var r net.Resolver
@@ -447,25 +449,28 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		CurrentOrg:         orgToUserOrg(org, user.ID),
 	}
 
-	name := r.FormValue(common.ParamName)
-	if nameError := s.validatePropertyName(ctx, name, org.ID); len(nameError) > 0 {
+	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
+	if nameError := s.validatePropertyName(ctx, renderCtx.Name, org.ID); len(nameError) > 0 {
 		renderCtx.NameError = nameError
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
 
-	paramDomain := strings.TrimSpace(r.FormValue(common.ParamDomain))
-	domain, err := common.ParseDomainName(paramDomain)
+	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
+	domain, err := common.ParseDomainName(renderCtx.Domain)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to parse domain name", "domain", paramDomain, common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
 		renderCtx.DomainError = "Invalid format of domain name"
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
-	if domainError := s.validateDomainName(ctx, domain); len(domainError) > 0 {
-		renderCtx.DomainError = domainError
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+
+	if _, ignoreError := r.Form[common.ParamIgnoreError]; !ignoreError {
+		if domainError := s.validateDomainName(ctx, domain); len(domainError) > 0 {
+			renderCtx.DomainError = domainError
+			s.render(w, r, createPropertyFormTemplate, renderCtx)
+			return
+		}
 	}
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
@@ -475,7 +480,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	property, err := s.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       name,
+		Name:       renderCtx.Name,
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
 		OrgOwnerID: org.UserID,

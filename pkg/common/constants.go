@@ -42,6 +42,7 @@ const (
 	ParamAllowSubdomains  = "allow_subdomains"
 	ParamAllowLocalhost   = "allow_localhost"
 	ParamAllowReplay      = "allow_replay"
+	ParamIgnoreError      = "ignore_error"
 )
 
 var (
