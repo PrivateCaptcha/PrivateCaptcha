@@ -1,6 +1,16 @@
 @layer base, theme, custom;
 
 @layer base {
+    :host,
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border: 0 solid;
+        }
+
     :host {
         --extra-spacing: 2px; /* (RING_SIZE - checkbox.dimension)/2 */
         --label-spacing: 10px;
@@ -39,6 +49,7 @@
     border-radius: var(--border-radius);
     background-color: var(--background-color);
     gap: 64px;
+    box-sizing: border-box;
 }
 
 .pc-captcha-widget.stretch {
