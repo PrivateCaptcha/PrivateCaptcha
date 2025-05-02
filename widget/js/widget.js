@@ -2,7 +2,7 @@
 
 import { getPuzzle, Puzzle } from './puzzle.js'
 import { WorkersPool } from './workerspool.js'
-import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
+import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET, DISPLAY_WIDGET_STRETCH } from './html.js';
 import * as errors from './errors.js';
 
 window.customElements.define('private-captcha', CaptchaElement);
