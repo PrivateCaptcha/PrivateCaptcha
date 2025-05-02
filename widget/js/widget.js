@@ -226,6 +226,7 @@ export class CaptchaWidget {
         if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
         if (this._workersPool) { this._workersPool.stop(); }
 
+        this._errorCode = errors.ERROR_NO_ERROR;
         this.setState(STATE_EMPTY);
         this.setProgressState(STATE_EMPTY);
         this.ensureNoSolutionField();
