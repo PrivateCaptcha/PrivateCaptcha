@@ -253,7 +253,7 @@ svg.verified circle {
     color: var(--gray-color);
     position: absolute;
     top: 100%;
-    left: calc(2em + 2*var(--label-spacing)); /*32px checkbox + 2*10 margins*/
+    left: calc(2em + 1em + 2*0.125em + 2*var(--extra-spacing) + var(--label-spacing));
     cursor: default;
 }
 
