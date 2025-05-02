@@ -17,6 +17,8 @@
         --border-radius: 2px;
         --warn-color: #A70B0B;
         --accent-color: #009400;
+        --size: 1rem;
+        font-size: var(--size);
     }
 }
 
@@ -44,12 +46,12 @@
     display: inline-flex;
     align-items: center;
     flex-direction: row;
-    padding: 12px 16px;
+    padding: 0.75em 1em;
     border: 1px solid var(--gray-color);
     border-radius: var(--border-radius);
     background-color: var(--background-color);
-    gap: 64px;
     box-sizing: border-box;
+    min-width: 320px;
 }
 
 .pc-captcha-widget.stretch {
@@ -75,30 +77,34 @@
     display: flex;
     align-items: center;
     position: relative;
-    min-width: 160px;
-    font-size: 1em;
+    /*font-size: 1em;*/
 }
 
 .pc-interactive-area label {
     padding-left: var(--label-spacing);
     color: var(--dark-color);
+    flex: 1;
+    min-width: 1em;
+    white-space: normal;
 }
 
 .pc-interactive-area input[type="checkbox"] {
-    width: 32px;
-    height: 32px;
+    font-size: 1em;
+    width: 2em;
+    height: 2em;
     /* 2px (RING_SIZE - checkbox.dimension)/2 */
-    margin: 0 0 0 calc(2px + var(--extra-spacing));
+    margin: 0 0 0 calc(0.125em + var(--extra-spacing));
     appearance: none;
     background-color: var(--checkbox-background-color);
-    border: 2px solid var(--dark-color);
-    border-radius: 4px;
+    border: 0.125em solid var(--dark-color);
+    border-radius: 0.25em;
     cursor: pointer;
+    flex-shrink: 0;
 }
 
 .pc-interactive-area input[type="checkbox"]+label {
     /* 2px (RING_SIZE - checkbox.dimension)/2 */
-    padding: 0 0 0 calc(2px + var(--extra-spacing) + var(--label-spacing));
+    padding: 0 0 0 calc(0.125em + var(--extra-spacing) + var(--label-spacing));
 }
 
 @keyframes colorChange {
@@ -165,24 +171,36 @@
     display: flex;
     justify-content: center;
     margin: 0 0 0 var(--extra-spacing);
+    flex-shrink: 0;
 }
 
 #pc-progress+label {
     padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
 }
 
+.pc-spacer {
+    flex-basis: 0;
+    flex-shrink: 1;
+    flex-grow: 1;
+    width: 4em;
+    min-width: 0;
+}
+
 .pc-info {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     /*2px here is just for "backward consistency"*/
-    margin-right: calc(2px + var(--extra-spacing));
+    margin-right: calc(0.125em + var(--extra-spacing));
     color: var(--dark-color);
 }
 
-.company-logo {
-    max-width: 100px;
-    height: auto;
+.pc-info svg {
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 a.pc-link {
@@ -211,6 +229,9 @@ a.pc-link:hover {
 
 svg.verified {
     margin: 0 0 0 var(--extra-spacing);
+    flex-shrink: 0;
+    width: 2.25em;
+    height: 2.25em;
 }
 
 svg.verified+label {
@@ -228,11 +249,11 @@ svg.verified circle {
 }
 
 #pc-debug {
-    font-size: 12px;
+    font-size: 0.75em;
     color: var(--gray-color);
     position: absolute;
     top: 100%;
-    left: 50px; /*30px checkbox + 2*10 margins*/
+    left: calc(2em + 2*var(--label-spacing)); /*32px checkbox + 2*10 margins*/
     cursor: default;
 }
 

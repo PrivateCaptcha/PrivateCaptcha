@@ -7,7 +7,6 @@ export class ProgressRing extends HTMLElement {
         // NOTE: stroke is sized with regards to {size} variable below
         // not to the scaled (external) size of SVG (yes, it's a bit confusing)
         const stroke = this.getAttribute('stroke');
-        const attrSize = this.getAttribute('size');
         const size = 100;
         const radius = size / 2;
         const normalizedRadius = radius - stroke / 2;
@@ -16,7 +15,7 @@ export class ProgressRing extends HTMLElement {
         // create shadow dom root
         this._root = this.attachShadow({ mode: 'open' });
         this._root.innerHTML = `
-          <svg height="${attrSize}" width="${attrSize}" preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${size} ${size}">
+          <svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${size} ${size}">
             <circle
                id="pie"
                style="stroke-dasharray: 0 ${this._circumference}"
@@ -47,6 +46,10 @@ export class ProgressRing extends HTMLElement {
           </svg>
 
           <style>
+            svg {
+                width: 2.25em;
+                height: 2.25em;
+            }
             #pie {
                 stroke: var(--pie-color);
                 transition: stroke-dasharray 0.35s;

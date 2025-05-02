@@ -20,17 +20,16 @@ const DISPLAY_HIDDEN = 'hidden';
 export const DISPLAY_WIDGET = 'widget';
 export const DISPLAY_WIDGET_STRETCH = 'widget-stretch';
 
-const RING_SIZE = 36;
 const CHECKBOX_ID = 'pc-checkbox';
 const PROGRESS_ID = 'pc-progress';
 const DEBUG_ID = 'pc-debug';
 const DEBUG_ERROR_CLASS = 'warn';
 
-const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" width="39.4" height="41.99" xmlns="http://www.w3.org/2000/svg" class="pc-logo">
+const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" class="pc-logo" preserveAspectRatio="xMidYMid meet">
 <path d="M0 0v30.62l4.29 2.48V4.85h30.83v23.29l-15.41 8.9-6.83-3.94v-4.95l6.83 3.94 11.12-6.42V9.91H8.58v25.66l11.12 6.42 19.7-11.37V0Zm12.87 14.86h13.66v8.32l-6.83 3.94-6.83-3.94z" fill="currentColor"/>
 </svg>`;
 
-const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" width="${RING_SIZE}px" height="${RING_SIZE}px" viewBox="0 0 154 154">
+const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 154 154">
 <g fill="none"><circle cx="77" cy="77" r="76"></circle>
 <polyline class="st0" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
 </svg>
@@ -123,7 +122,7 @@ export class CaptchaElement extends HTMLElement {
                 break;
             case STATE_IN_PROGRESS:
                 const text = strings[i18n.VERIFYING];
-                activeArea = `<progress-ring id="${PROGRESS_ID}" stroke="12" size="${RING_SIZE}" progress="0"></progress-ring><label for="${PROGRESS_ID}">${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span></label>`;
+                activeArea = `<progress-ring id="${PROGRESS_ID}" stroke="12" progress="0"></progress-ring><label for="${PROGRESS_ID}">${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span></label>`;
                 showPopupIfNeeded = canShow;
                 break;
             case STATE_VERIFIED:
@@ -163,6 +162,7 @@ export class CaptchaElement extends HTMLElement {
             <div class="pc-interactive-area">
                 ${activeArea}
             </div>
+            <div class="pc-spacer"></div>
             <div class="pc-info">
                 ${privateCaptchaSVG}
                 <a href="https://privatecaptcha.com" class="pc-link" rel="noopener" target="_blank">Private<br />Captcha</a>
