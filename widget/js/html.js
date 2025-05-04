@@ -18,7 +18,6 @@ export const STATE_INVALID = 'invalid';
 export const DISPLAY_POPUP = 'popup';
 const DISPLAY_HIDDEN = 'hidden';
 export const DISPLAY_WIDGET = 'widget';
-export const DISPLAY_WIDGET_STRETCH = 'widget-stretch';
 
 const CHECKBOX_ID = 'pc-checkbox';
 const PROGRESS_ID = 'pc-progress';
@@ -89,7 +88,7 @@ export class CaptchaElement extends HTMLElement {
             this._root.adoptedStyleSheets.push(overridesSheet);
         }
         // init
-        const canShow = (this._displayMode == DISPLAY_WIDGET) || (this._displayMode == DISPLAY_WIDGET_STRETCH);
+        const canShow = (this._displayMode == DISPLAY_WIDGET);
         this.setState(STATE_EMPTY, canShow);
     }
 
@@ -142,23 +141,23 @@ export class CaptchaElement extends HTMLElement {
             activeArea += `<span id="${DEBUG_ID}" class="${this._error ? DEBUG_ERROR_CLASS : ''}">${debugText}</span>`;
         }
 
-        let displayClass = '';
+        let hostClass = '';
         switch (this._displayMode) {
             case DISPLAY_HIDDEN:
-                displayClass = 'hidden';
+                hostClass = 'hidden';
                 break;
             case DISPLAY_POPUP:
-                displayClass = showPopupIfNeeded ? 'floating' : 'hidden';
-                break;
-            case DISPLAY_WIDGET_STRETCH:
-                displayClass = 'stretch';
+                hostClass = showPopupIfNeeded ? 'floating' : 'hidden';
                 break;
             case DISPLAY_WIDGET:
                 break;
         };
 
+        this.classList.remove('hidden', 'floating');
+        if (hostClass) { this.classList.add(hostClass); }
+
         this._state = state;
-        this._root.innerHTML = `<div class="pc-captcha-widget ${displayClass}">
+        this._root.innerHTML = `<div class="pc-captcha-widget">
             <div class="pc-interactive-area">
                 ${activeArea}
             </div>

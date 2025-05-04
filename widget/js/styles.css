@@ -13,12 +13,34 @@
 
     :host {
         --extra-spacing: 0px;
-        --label-spacing: 10px;
-        --border-radius: 2px;
+        --label-spacing: 0.625rem;
+        --border-radius: 0.125rem;
         --warn-color: #A70B0B;
         --accent-color: #009400;
-        --size: 1rem;
-        font-size: var(--size);
+
+        min-width: 0;
+        font-size: 1rem;
+        display: inline-block; /* Switch to "block" to stretch */
+        max-width: 100%; /* Prevent exceeding parent */
+    }
+
+    :host(.hidden) {
+        display: none;
+    }
+
+    :host(.floating) {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translate(0, -100%);
+        z-index: 1000;
+    }
+
+    @media (min-width: 30em) {
+        :host {
+            min-width: 20em;
+        }
     }
 }
 
@@ -43,7 +65,7 @@
 }
 
 .pc-captcha-widget {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     flex-direction: row;
     padding: 0.75em 1em;
@@ -51,39 +73,23 @@
     border-radius: var(--border-radius);
     background-color: var(--background-color);
     box-sizing: border-box;
-    min-width: 320px;
-}
-
-.pc-captcha-widget.stretch {
-    display: flex;
-    height: 100%;
-    max-width: none;
-    justify-content: space-between;
-}
-
-.pc-captcha-widget.hidden {
-    display: none;
-}
-
-.pc-captcha-widget.floating {
-    position: absolute;
-    left: 0;
-    top: 0;
-    transform: translate(0, -100%);
-    background-color: #FFF;
+    width: 100%; /* Fill the host element */
+    height: 100%; /* Fill the host element */
 }
 
 .pc-interactive-area {
     display: flex;
+    flex: 0 1 auto;
     align-items: center;
     position: relative;
+    min-width: 0;
     /*font-size: 1em;*/
 }
 
 .pc-interactive-area label {
     padding-left: var(--label-spacing);
     color: var(--dark-color);
-    flex: 1;
+    flex: 0 1 auto;
     min-width: 1em;
     white-space: normal;
 }
@@ -188,6 +194,7 @@
 
 .pc-info {
     display: flex;
+    flex: 0 0 auto;
     flex-direction: column;
     align-items: center;
     justify-content: center;
