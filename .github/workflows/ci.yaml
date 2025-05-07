@@ -110,7 +110,7 @@ jobs:
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
-        VERBOSE: 1
+        PC_VERBOSE: 1
       run: ./bin/server -mode migrate -migrate-hash $GITHUB_SHA
 
     - name: Set up sqlc
@@ -131,9 +131,9 @@ jobs:
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: captchasrv
         PC_CLICKHOUSE_PASSWORD: uwnhNn4YW01
-        UA_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
+        PC_USER_FINGERPRINT_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
         PC_PRIVATE_API_KEY: ZSGS1i1NvYWTpyKL
-        RATE_LIMIT_HEADER: X-REAL-IP
+        PC_RATE_LIMIT_HEADER: X-REAL-IP
       run: ./docker/run-tests.sh
 
     - name: Migrate Databases Down
@@ -143,7 +143,7 @@ jobs:
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
-        VERBOSE: 1
+        PC_VERBOSE: 1
       run: ./bin/server -mode rollback -migrate-hash $GITHUB_SHA
 
     - uses: actions/upload-artifact@master

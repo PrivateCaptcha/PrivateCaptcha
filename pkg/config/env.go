@@ -31,7 +31,7 @@ func envVar(c common.ConfigKey) string {
 	case common.StageKey:
 		return "STAGE"
 	case common.VerboseKey:
-		return "VERBOSE"
+		return "PC_VERBOSE"
 	case common.SmtpEndpointKey:
 		return "SMTP_ENDPOINT"
 	case common.SmtpUsernameKey:
@@ -85,31 +85,31 @@ func envVar(c common.ConfigKey) string {
 	case common.RegistrationAllowedKey:
 		return "PC_REGISTRATION_ALLOWED"
 	case common.HealthCheckIntervalKey:
-		return "HEALTHCHECK"
+		return "PC_HEALTHCHECK"
 	case common.PrivateAPIKeyKey:
 		return "PC_PRIVATE_API_KEY"
 	case common.PresharedSecretKey:
-		return "PRESHARED_SECRET"
+		return "PC_PRESHARED_SECRET"
 	case common.PuzzleLeakyBucketRateKey:
-		return "PUZZLE_LEAKY_BUCKET_RPS"
+		return "PC_PUZZLE_LEAKY_BUCKET_RPS"
 	case common.PuzzleLeakyBucketBurstKey:
-		return "PUZZLE_LEAKY_BUCKET_BURST"
+		return "PC_PUZZLE_LEAKY_BUCKET_BURST"
 	case common.DefaultLeakyBucketRateKey:
-		return "DEFAULT_LEAKY_BUCKET_RPS"
+		return "PC_DEFAULT_LEAKY_BUCKET_RPS"
 	case common.DefaultLeakyBucketBurstKey:
-		return "DEFAULT_LEAKY_BUCKET_BURST"
+		return "PC_DEFAULT_LEAKY_BUCKET_BURST"
 	case common.RateLimitHeaderKey:
-		return "RATE_LIMIT_HEADER"
+		return "PC_RATE_LIMIT_HEADER"
 	case common.PresharedSecretHeaderKey:
-		return "PRESHARED_SECRET_HEADER"
+		return "PC_PRESHARED_SECRET_HEADER"
 	case common.HostKey:
 		return "PC_HOST"
 	case common.PortKey:
 		return "PC_PORT"
 	case common.UserFingerprintIVKey:
-		return "UA_KEY"
+		return "PC_USER_FINGERPRINT_KEY"
 	case common.APISaltKey:
-		return "API_SALT"
+		return "PC_API_SALT"
 	default:
 		return ""
 	}

@@ -11,8 +11,8 @@ services:
       - pc.env
     environment:
       PC_PORT: 8080
-      VERBOSE: 1
-      HEALTHCHECK: slow
+      PC_VERBOSE: 1
+      PC_HEALTHCHECK: slow
     depends_on:
       migration:
         condition: service_completed_successfully

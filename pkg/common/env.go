@@ -1,6 +1,7 @@
 package common
 
 import (
+	"log/slog"
 	"os"
 	"sync"
 
@@ -22,16 +23,19 @@ func (em *EnvMap) GetEx(key string) (string, bool) {
 	defer em.lock.Unlock()
 
 	if em.envMap == nil {
-		value := os.Getenv(key)
-		return value, len(value) > 0
+		return os.LookupEnv(key)
 	}
 
 	v, ok := em.envMap[key]
-	return v, ok && len(v) > 0
+	return v, ok
 }
 
 func (em *EnvMap) Get(key string) string {
-	v, _ := em.GetEx(key)
+	v, ok := em.GetEx(key)
+	if !ok {
+		slog.Warn("Environment variable is not set", "key", key)
+	}
+
 	return v
 }
 

@@ -5,8 +5,8 @@ services:
       - 6060:6060
     environment:
       PC_LOCAL_ADDRESS: "0.0.0.0:6060"
-      VERBOSE: ''
-      RATE_LIMIT_HEADER: 'X-REAL-IP'
+      PC_VERBOSE: ''
+      PC_RATE_LIMIT_HEADER: 'X-REAL-IP'
     build:
       args:
         EXTRA_BUILD_FLAGS: '-tags profile -gcflags=all=-N'
