@@ -2,7 +2,6 @@ package portal
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -106,42 +105,6 @@ func (s *Server) sessionUser(ctx context.Context, sess *common.Session) (*dbgen.
 	}
 
 	return user, nil
-}
-
-func (s *Server) subscribed(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		user, err := s.sessionUser(ctx, s.session(w, r))
-		if err != nil {
-			common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-			return
-		}
-
-		billingPath := fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.BillingEndpoint)
-
-		if !user.SubscriptionID.Valid {
-			slog.WarnContext(ctx, "User does not have a subscription", "userID", user.ID)
-			url := s.relURL(billingPath)
-			common.Redirect(url, http.StatusPaymentRequired, w, r)
-			return
-		}
-
-		if subscr, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
-			if !s.PlanService.IsSubscriptionActive(subscr.Status) {
-				slog.WarnContext(ctx, "User's subscription is not active", "status", subscr.Status, "userID", user.ID)
-				url := s.relURL(billingPath)
-				common.Redirect(url, http.StatusPaymentRequired, w, r)
-				return
-			}
-		} else {
-			slog.ErrorContext(ctx, "Failed to check user subscription", "userID", user.ID, common.ErrAttr(err))
-			s.redirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {

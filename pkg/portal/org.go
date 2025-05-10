@@ -25,11 +25,12 @@ var (
 )
 
 const (
-	orgPropertiesTemplate = "portal/org-dashboard.html"
-	orgSettingsTemplate   = "portal/org-settings.html"
-	orgMembersTemplate    = "portal/org-members.html"
-	orgWizardTemplate     = "org-wizard/wizard.html"
-	portalTemplate        = "portal/portal.html"
+	orgPropertiesTemplate         = "portal/org-dashboard.html"
+	orgSettingsTemplate           = "portal/org-settings.html"
+	orgMembersTemplate            = "portal/org-members.html"
+	orgWizardTemplate             = "org-wizard/wizard.html"
+	portalTemplate                = "portal/portal.html"
+	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
 )
 
 type orgSettingsRenderContext struct {
@@ -128,9 +129,15 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, strin
 		return nil, "", err
 	}
 
-	return &orgWizardRenderContext{
+	renderCtx := &orgWizardRenderContext{
 		csrfRenderContext: s.createCsrfContext(user),
-	}, orgWizardTemplate, nil
+	}
+
+	if !user.SubscriptionID.Valid {
+		renderCtx.ErrorMessage = activeSubscriptionForOrgError
+	}
+
+	return renderCtx, orgWizardTemplate, nil
 }
 
 func (s *Server) validateOrgName(ctx context.Context, name string, userID int32) string {
@@ -165,7 +172,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	}
 
 	if (subscr == nil) || !s.PlanService.IsSubscriptionActive(subscr.Status) {
-		return "You need an active subscription to create new organizations."
+		return activeSubscriptionForOrgError
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)

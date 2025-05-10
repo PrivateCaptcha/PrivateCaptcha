@@ -113,10 +113,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	verbose := config.AsBool(cfg.Get(common.VerboseKey))
 	common.SetupLogs(stage, verbose)
 
-	paddleAPI, err := billing.NewPaddleAPI(cfg)
-	if err != nil {
-		return err
-	}
 	planService := billing.NewPlanService()
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
@@ -146,8 +142,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		Salt:               api.NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey: api.NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
-		PaddleAPI:          paddleAPI,
-		PlanService:        planService,
 		Metrics:            metrics,
 		Mailer:             portalMailer,
 		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),
@@ -159,10 +153,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	router := http.NewServeMux()
 
-	baseAuth := common.NewAuthMiddleware(cfg)
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiDomain := apiURLConfig.Domain()
-	apiServer.Setup(router, apiDomain, verbose, baseAuth.EdgeVerify(apiDomain))
+	apiServer.Setup(router, apiDomain, verbose, common.NoopMiddleware)
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
@@ -175,7 +168,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
-		PaddleAPI:    paddleAPI,
 		PlanService:  planService,
 		APIURL:       apiURLConfig.URL(),
 		CDNURL:       cdnURLConfig.URL(),
@@ -203,16 +195,17 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	portalDomain := portalURLConfig.Domain()
-	portalServer.Setup(router, portalDomain, baseAuth.EdgeVerify(portalDomain))
+	portalServer.Setup(router, portalDomain, common.NoopMiddleware)
 	rateLimiter := portalServer.Auth.RateLimit()
 	cdnDomain := cdnURLConfig.Domain()
-	cdnChain := alice.New(common.Recovered, baseAuth.EdgeVerify(cdnDomain), metrics.CDNHandler, rateLimiter)
+	cdnChain := alice.New(common.Recovered, metrics.CDNHandler, rateLimiter)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, internalAPIChain.ThenFunc(healthCheck.HandlerFunc))
 	// "protection" (NOTE: different than usual order of monitoring)
-	publicChain := alice.New(common.Recovered, baseAuth.EdgeVerify("" /*domain*/), metrics.IgnoredHandler, rateLimiter)
+	publicChain := alice.New(common.Recovered, metrics.IgnoredHandler, rateLimiter)
+	portalServer.SetupCatchAll(router, portalDomain, publicChain)
 	common.SetupWellKnownPaths(router, publicChain)
 
 	httpServer := &http.Server{
@@ -273,40 +266,11 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	// start maintenance jobs
 	jobs := maintenance.NewJobs(businessDB)
 	jobs.Add(healthCheck)
-	jobs.AddLocked(4*time.Hour, &maintenance.UsageLimitsJob{
-		MaxUsers:   200, // it will be a truly great problem to have when 200 will be not enough
-		From:       common.StartOfMonth(),
-		BusinessDB: businessDB,
-		TimeSeries: timeSeriesDB,
-	})
-	jobs.AddLocked(24*time.Hour, &maintenance.NotifyLimitsViolationsJob{
-		Mailer: email.NewAdminMailer(mailer, cfg),
-		Store:  businessDB,
-	})
-	jobs.AddLocked(6*time.Hour, &maintenance.PaddlePricesJob{
-		Stage:       stage,
-		PaddleAPI:   paddleAPI,
-		Store:       businessDB,
-		PlanService: planService,
-	})
 	jobs.Add(&maintenance.SessionsCleanupJob{
 		Session: portalServer.Session,
 	})
-	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
-	jobs.Add(&maintenance.ThrottleViolationsJob{
-		Stage:       stage,
-		UserLimits:  apiServer.Auth.UserLimits(),
-		Store:       businessDB,
-		From:        common.StartOfMonth(),
-		PlanService: planService,
-	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})
-	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
-		Store:       businessDB,
-		Stage:       stage,
-		PlanService: planService,
-	})
 	jobs.AddLocked(24*time.Hour, &maintenance.GarbageCollectDataJob{
 		Age:        30 * 24 * time.Hour,
 		BusinessDB: businessDB,

@@ -96,7 +96,6 @@ type Server struct {
 	Session         session.Manager
 	Mailer          common.Mailer
 	Stage           string
-	PaddleAPI       billing.PaddleAPI
 	PlanService     billing.PlanService
 	PuzzleEngine    puzzle.Engine
 	Metrics         monitoring.Metrics
@@ -120,12 +119,6 @@ func (s *Server) createSettingsTabs() []*SettingsTab {
 			Name:           "API Keys",
 			TemplatePrefix: settingsAPIKeysTemplatePrefix,
 			ModelHandler:   s.getAPIKeysSettings,
-		},
-		{
-			ID:             common.BillingEndpoint,
-			Name:           "Billing",
-			TemplatePrefix: settingsBillingTemplatePrefix,
-			ModelHandler:   s.getBillingSettings,
 		},
 		{
 			ID:             common.UsageEndpoint,
@@ -166,7 +159,16 @@ func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify alice.Constructor) {
-	s.setupWithPrefix(domain+s.relURL("/"), router, edgeVerify)
+	prefix := domain + s.relURL("/")
+	rg := &RouteGenerator{Prefix: prefix}
+	slog.Debug("Setting up the portal routes", "prefix", prefix)
+	s.setupWithPrefix(router, rg, edgeVerify)
+}
+
+func (s *Server) SetupCatchAll(router *http.ServeMux, domain string, chain alice.Chain) {
+	prefix := domain + s.relURL("/")
+	slog.Debug("Setting up the catchall portal routes", "prefix", prefix)
+	s.setupCatchAllWithPrefix(router, prefix, chain)
 }
 
 func (s *Server) relURL(url string) string {
@@ -181,13 +183,13 @@ func (s *Server) partsURL(a ...string) string {
 // the whole magic can break if for some reason Go will not evaluate result of Route() before calling Alice's Then()
 // when calling router.Handle() in setupWithPrefix()
 type RouteGenerator struct {
-	prefix string
-	path   string
+	Prefix string
+	Path   string
 }
 
 func (rg *RouteGenerator) Route(method string, parts ...string) string {
-	rg.path = rg.prefix + strings.Join(parts, "/")
-	return method + " " + rg.path
+	rg.Path = rg.Prefix + strings.Join(parts, "/")
+	return method + " " + rg.Path
 }
 
 func (rg *RouteGenerator) Get(parts ...string) string {
@@ -207,9 +209,9 @@ func (rg *RouteGenerator) Delete(parts ...string) string {
 }
 
 func (rg *RouteGenerator) LastPath() string {
-	result := rg.path
+	result := rg.Path
 	// side-effect: this will cause go http metrics handler to use handlerID based on request Path
-	rg.path = ""
+	rg.Path = ""
 	return result
 }
 
@@ -242,15 +244,7 @@ func (s *Server) MiddlewarePrivateWrite(public alice.Chain) alice.Chain {
 	return public.Append(s.maintenance, defaultMaxBytesHandler, internalTimeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 }
 
-func (s *Server) MiddlewareSubscribed(prev alice.Chain) alice.Chain {
-	return prev.Append(s.subscribed)
-}
-
-func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security alice.Constructor) {
-	slog.Debug("Setting up the portal routes", "prefix", prefix)
-
-	rg := &RouteGenerator{prefix: prefix}
-
+func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, security alice.Constructor) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
@@ -270,17 +264,14 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	openWrite := s.MiddlewareOpenWrite(public)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	privateWrite := s.MiddlewarePrivateWrite(public)
-	subscribedWrite := s.MiddlewareSubscribed(privateWrite)
-
 	privateRead := s.MiddlewarePrivateRead(public)
-	subscribedRead := s.MiddlewareSubscribed(privateRead)
 
 	router.Handle(rg.Post(common.LoginEndpoint), openWrite.ThenFunc(s.postLogin))
 	router.Handle(rg.Post(common.RegisterEndpoint), openWrite.ThenFunc(s.postRegister))
 	router.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail.ThenFunc(s.postTwoFactor))
 	router.Handle(rg.Post(common.ResendEndpoint), csrfEmail.ThenFunc(s.resend2fa))
 	router.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrg)))
-	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), subscribedWrite.ThenFunc(s.postNewOrg))
+	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrg))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead.ThenFunc(s.getPortal))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead.Then(s.Handler(s.getOrgDashboard)))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead.Then(s.Handler(s.getOrgMembers)))
@@ -291,8 +282,8 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.ThenFunc(s.leaveOrg))
 	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite.Then(s.Handler(s.putOrg)))
 	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite.ThenFunc(s.deleteOrg))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedRead.Then(s.Handler(s.getNewOrgProperty)))
-	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), subscribedWrite.ThenFunc(s.postNewOrgProperty))
+	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrgProperty)))
+	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrgProperty))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateRead.Then(s.Handler(s.getPropertyDashboard)))
 	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWrite.Then(s.Handler(s.putProperty)))
 	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite.ThenFunc(s.deleteProperty))
@@ -306,16 +297,10 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	router.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite.Then(s.Handler(s.editEmail)))
 	router.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite.Then(s.Handler(s.putGeneralSettings)))
 	router.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite.Then(s.Handler(s.postAPIKeySettings)))
-	router.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.PreviewEndpoint), privateWrite.Then(s.Handler(s.postBillingPreview)))
-	router.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint), subscribedWrite.Then(s.Handler(s.putBilling)))
-	router.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.CancelEndpoint), subscribedRead.ThenFunc(s.getCancelSubscription))
-	router.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint, common.UpdateEndpoint), subscribedRead.ThenFunc(s.getUpdateSubscription))
 
 	router.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead.ThenFunc(s.getAccountStats))
 	router.Handle(rg.Delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite.ThenFunc(s.deleteAPIKey))
 	router.Handle(rg.Delete(common.UserEndpoint), privateWrite.ThenFunc(s.deleteAccount))
-	router.Handle(rg.Get(common.SupportEndpoint), privateRead.Then(s.Handler(s.getSupport)))
-	router.Handle(rg.Post(common.SupportEndpoint), privateWrite.Then(s.Handler(s.postSupport)))
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
 	router.Handle(rg.Post(common.ErrorEndpoint), privateRead.ThenFunc(s.postClientSideError))
 	router.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead.ThenFunc(s.echoPuzzle))
@@ -324,12 +309,15 @@ func (s *Server) setupWithPrefix(prefix string, router *http.ServeMux, security 
 	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
 	router.Handle(rg.Get(common.AboutEndpoint), public.Then(s.static("about/about.html")))
 	// {$} matches the end of the URL
-	router.Handle(http.MethodGet+" "+prefix+"{$}", privateRead.ThenFunc(s.getPortal))
+	router.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead.ThenFunc(s.getPortal))
+}
+
+func (s *Server) setupCatchAllWithPrefix(router *http.ServeMux, prefix string, chain alice.Chain) {
 	// wildcards (everything not matched will be handled in main())
-	router.Handle(rg.Get(common.OrgEndpoint)+"/", public.ThenFunc(s.notFound))
-	router.Handle(rg.Get(common.ErrorEndpoint)+"/", public.ThenFunc(s.notFound))
-	router.Handle(rg.Get(common.SettingsEndpoint)+"/", public.ThenFunc(s.notFound))
-	router.Handle(rg.Get(common.UserEndpoint)+"/", public.ThenFunc(s.notFound))
+	router.Handle(http.MethodGet+" "+prefix+common.OrgEndpoint+"/", chain.ThenFunc(s.notFound))
+	router.Handle(http.MethodGet+" "+prefix+common.ErrorEndpoint+"/", chain.ThenFunc(s.notFound))
+	router.Handle(http.MethodGet+" "+prefix+common.SettingsEndpoint+"/", chain.ThenFunc(s.notFound))
+	router.Handle(http.MethodGet+" "+prefix+common.UserEndpoint+"/", chain.ThenFunc(s.notFound))
 }
 
 func (s *Server) isMaintenanceMode() bool {

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -185,59 +184,4 @@ func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/wp-admin/", chain.ThenFunc(noContentCached))
 	router.Handle("/changelog.txt", chain.ThenFunc(noContentCached))
 	router.Handle("/", chain.ThenFunc(catchAll))
-}
-
-type AuthMiddleware struct {
-	presharedHeader ConfigItem
-	presharedSecret ConfigItem
-}
-
-func NewAuthMiddleware(cfg ConfigStore) *AuthMiddleware {
-	return &AuthMiddleware{
-		presharedHeader: cfg.Get(PresharedSecretHeaderKey),
-		presharedSecret: cfg.Get(PresharedSecretKey),
-	}
-}
-
-// NOTE: unlike other "auth" middlewares, EdgeVerify() does NOT add rate limiting
-func (am *AuthMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if len(allowedHost) > 0 {
-				host := r.Host
-				if h, _, err := net.SplitHostPort(host); err == nil {
-					host = h
-				}
-
-				if len(host) == 0 {
-					slog.Log(r.Context(), LevelTrace, "Host header missing")
-					http.Error(w, "", http.StatusUnauthorized)
-					return
-				}
-
-				if host != allowedHost {
-					slog.Log(r.Context(), LevelTrace, "Host header mismatch", "expected", allowedHost, "actual", host)
-					http.Error(w, "", http.StatusForbidden)
-					return
-				}
-			}
-
-			if presharedSecret := am.presharedSecret.Value(); len(presharedSecret) > 0 {
-				secretHeader := r.Header.Get(am.presharedHeader.Value())
-				if len(secretHeader) == 0 {
-					slog.Log(r.Context(), LevelTrace, "Preshared secret missing")
-					http.Error(w, "", http.StatusUnauthorized)
-					return
-				}
-
-				if secretHeader != presharedSecret {
-					slog.Log(r.Context(), LevelTrace, "Preshared secret mismatch", "actual", secretHeader[:maxHeaderLen])
-					http.Error(w, "", http.StatusForbidden)
-					return
-				}
-			}
-
-			h.ServeHTTP(w, r)
-		})
-	}
 }

@@ -81,8 +81,6 @@ func TestMain(m *testing.M) {
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Salt:               NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey: NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
-		PaddleAPI:          &billing.StubPaddleClient{},
-		PlanService:        planService,
 		Metrics:            monitoring.NewStub(),
 		Mailer:             &email.StubMailer{},
 		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),

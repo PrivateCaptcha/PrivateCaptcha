@@ -40,14 +40,6 @@ func DefaultMapper(c common.ConfigKey) string {
 		return "SMTP_USERNAME"
 	case common.SmtpPasswordKey:
 		return "SMTP_PASSWORD"
-	case common.PaddleBaseURLKey:
-		return "PADDLE_BASE_URL"
-	case common.PaddleAPIKeyKey:
-		return "PADDLE_API_KEY"
-	case common.PaddleEnvironmentKey:
-		return "PADDLE_ENVIRONMENT"
-	case common.PaddleClientTokenKey:
-		return "PADDLE_CLIENT_TOKEN"
 	case common.ClickHouseHostKey:
 		return "PC_CLICKHOUSE_HOST"
 	case common.ClickHouseDBKey:
@@ -90,8 +82,6 @@ func DefaultMapper(c common.ConfigKey) string {
 		return "PC_HEALTHCHECK"
 	case common.PrivateAPIKeyKey:
 		return "PC_PRIVATE_API_KEY"
-	case common.PresharedSecretKey:
-		return "PC_PRESHARED_SECRET"
 	case common.PuzzleLeakyBucketRateKey:
 		return "PC_PUZZLE_LEAKY_BUCKET_RPS"
 	case common.PuzzleLeakyBucketBurstKey:
@@ -102,8 +92,6 @@ func DefaultMapper(c common.ConfigKey) string {
 		return "PC_DEFAULT_LEAKY_BUCKET_BURST"
 	case common.RateLimitHeaderKey:
 		return "PC_RATE_LIMIT_HEADER"
-	case common.PresharedSecretHeaderKey:
-		return "PC_PRESHARED_SECRET_HEADER"
 	case common.HostKey:
 		return "PC_HOST"
 	case common.PortKey:

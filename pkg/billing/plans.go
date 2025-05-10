@@ -1,12 +1,14 @@
 package billing
 
 import (
+	"context"
 	"errors"
 	"sync"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
+
+type Prices map[string]int
 
 type Plan struct {
 	Name                 string
@@ -88,6 +90,7 @@ type PlanService interface {
 	UpdatePlansPrices(prices Prices, stage string)
 	IsSubscriptionActive(status string) bool
 	IsSubscriptionTrialing(status string) bool
+	CancelSubscription(ctx context.Context, sid string) error
 }
 
 type defaultPlanService struct {
@@ -468,9 +471,14 @@ func (s *defaultPlanService) UpdatePlansPrices(prices Prices, stage string) {
 	}
 }
 
+func (s *defaultPlanService) CancelSubscription(ctx context.Context, sid string) error {
+	// BUMP
+	return nil
+}
+
 func (s *defaultPlanService) IsSubscriptionActive(status string) bool {
-	switch paddlenotification.SubscriptionStatus(status) {
-	case paddlenotification.SubscriptionStatusActive, paddlenotification.SubscriptionStatusTrialing:
+	switch status {
+	case "active", "trialing":
 		return true
 	default:
 		return false
@@ -478,8 +486,8 @@ func (s *defaultPlanService) IsSubscriptionActive(status string) bool {
 }
 
 func (s *defaultPlanService) IsSubscriptionTrialing(status string) bool {
-	switch paddlenotification.SubscriptionStatus(status) {
-	case paddlenotification.SubscriptionStatusTrialing:
+	switch status {
+	case "trialing":
 		return true
 	default:
 		return false

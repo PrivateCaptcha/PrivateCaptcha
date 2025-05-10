@@ -11,7 +11,6 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -34,9 +33,8 @@ const (
 )
 
 var (
-	errProductNotFound = errors.New("product not found")
-	errAPIKeyNotSet    = errors.New("API key is not set in context")
-	headersAnyOrigin   = map[string][]string{
+	errAPIKeyNotSet  = errors.New("API key is not set in context")
+	headersAnyOrigin = map[string][]string{
 		http.CanonicalHeaderKey(common.HeaderAccessControlOrigin): []string{"*"},
 		http.CanonicalHeaderKey(common.HeaderAccessControlAge):    []string{"86400"},
 	}
@@ -55,8 +53,6 @@ type Server struct {
 	Salt               *puzzleSalt
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
-	PaddleAPI          billing.PaddleAPI
-	PlanService        billing.PlanService
 	Cors               *cors.Cors
 	Metrics            monitoring.Metrics
 	Mailer             common.Mailer
@@ -168,16 +164,8 @@ func (s *Server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	verifyChain := publicChain.Append(common.TimeoutHandler(5*time.Second), s.Auth.APIKey)
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
-	maxBytesHandler := func(next http.Handler) http.Handler {
-		return http.MaxBytesHandler(next, maxPaddleBodySize)
-	}
-	// in almost all Paddle handlers we make external http requests, hence larger timeout
-	paddleChain := alice.New(common.Recovered, s.Metrics.Handler, security, s.Auth.Private, monitoring.Logged, maxBytesHandler, common.TimeoutHandler(10*time.Second))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
-	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
 	// "root" access
-	router.Handle(http.MethodGet+" "+prefix+"{$}", publicChain.Then(common.HttpStatus(http.StatusForbidden)))
+	router.Handle(prefix+"{$}", publicChain.Then(common.HttpStatus(http.StatusForbidden)))
 }
 
 func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Property, error) {

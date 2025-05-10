@@ -3,14 +3,12 @@ package portal
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -33,10 +31,7 @@ const (
 )
 
 var (
-	errMissingSubscription  = errors.New("user does not have a subscription")
-	errInternalSubscription = errors.New("internal subscription")
-	errInvalidSubscription  = errors.New("invalid subscription")
-	errNoTabs               = errors.New("no settings tabs configured")
+	errNoTabs = errors.New("no settings tabs configured")
 )
 
 type SettingsTab struct {
@@ -63,11 +58,6 @@ type settingsCommonRenderContext struct {
 	ActiveTabID string
 	Email       string
 	UserID      int32
-
-	// NOTE: these 2 are here because scripts.html is common for all settings endpoints
-	// otherwise their place is in settingsBillingRenderContext
-	PaddleEnvironment string
-	PaddleClientToken string
 }
 
 type settingsUsageRenderContext struct {
@@ -100,21 +90,6 @@ type settingsAPIKeysRenderContext struct {
 	NameError  string
 	Keys       []*userAPIKey
 	CreateOpen bool
-}
-
-type settingsBillingRenderContext struct {
-	settingsCommonRenderContext
-	Plans           []*billing.Plan
-	CurrentPlan     *billing.Plan
-	PreviewPlan     string
-	PreviewPeriod   string
-	PreviewCharge   int
-	PreviewCurrency string
-	PreviewPriceID  string
-	YearlyBilling   bool
-	IsSubscribed    bool
-	PreviewOpen     bool
-	CanManage       bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time) *userAPIKey {
@@ -235,8 +210,6 @@ func (s *Server) createSettingsCommonRenderContext(activeTabID string, user *dbg
 		Tabs:              viewModels,
 		Email:             user.Email,
 		UserID:            user.ID,
-		PaddleEnvironment: s.PaddleAPI.Environment(),
-		PaddleClientToken: s.PaddleAPI.ClientToken(),
 	}
 }
 
@@ -378,7 +351,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if s.PlanService.IsSubscriptionActive(subscription.Status) && subscription.PaddleSubscriptionID.Valid {
-			if err := s.PaddleAPI.CancelSubscription(ctx, subscription.PaddleSubscriptionID.String); err != nil {
+			if err := s.PlanService.CancelSubscription(ctx, subscription.PaddleSubscriptionID.String); err != nil {
 				slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "userID", user.ID, common.ErrAttr(err))
 				s.redirectError(http.StatusInternalServerError, w, r)
 				return
@@ -508,307 +481,6 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-}
-
-func (s *Server) createBillingSettingsModel(ctx context.Context, user *dbgen.User) *settingsBillingRenderContext {
-	renderCtx := &settingsBillingRenderContext{
-		settingsCommonRenderContext: s.createSettingsCommonRenderContext(common.BillingEndpoint, user),
-		CurrentPlan:                 &billing.Plan{},
-	}
-
-	if plans, ok := s.PlanService.GetPlansForStage(s.Stage); ok {
-		renderCtx.Plans = plans
-	}
-
-	isSubscribed := false
-	var subscription *dbgen.Subscription
-
-	if user.SubscriptionID.Valid {
-		var err error
-		subscription, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve subscription for billing tab", "userID", user.ID, common.ErrAttr(err))
-		}
-	}
-
-	if subscription != nil {
-		isInternalSubscription := db.IsInternalSubscription(subscription.Source)
-		isInternalTrial := isInternalSubscription && s.PlanService.IsSubscriptionTrialing(subscription.Status)
-		renderCtx.IsSubscribed = !isInternalTrial && s.PlanService.IsSubscriptionActive(subscription.Status)
-		if renderCtx.IsSubscribed {
-			renderCtx.CanManage = !isInternalSubscription
-
-			if subscription.CancelFrom.Valid && subscription.CancelFrom.Time.After(time.Now()) {
-				renderCtx.InfoMessage = fmt.Sprintf("Your subscription ends on %s.", subscription.CancelFrom.Time.Format("02 Jan 2006"))
-			} else if subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
-				renderCtx.InfoMessage = fmt.Sprintf("Your trial ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
-			}
-
-			if plan, err := s.PlanService.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage, isInternalSubscription); err == nil {
-				renderCtx.CurrentPlan = plan
-				renderCtx.YearlyBilling = plan.IsYearly(subscription.PaddlePriceID)
-				isSubscribed = true
-			} else {
-				slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
-				renderCtx.ErrorMessage = "Could not determine your current plan details."
-			}
-		} else if isInternalTrial && subscription.TrialEndsAt.Valid && subscription.TrialEndsAt.Time.After(time.Now()) {
-			renderCtx.InfoMessage = fmt.Sprintf("Your free evaluation ends on %s.", subscription.TrialEndsAt.Time.Format("02 Jan 2006"))
-			isSubscribed = true
-		}
-	} else {
-		renderCtx.ErrorMessage = "Could not load your subscription details."
-	}
-
-	if !isSubscribed && (renderCtx.ErrorMessage == "") {
-		renderCtx.WarningMessage = "You don't have an active subscription."
-	}
-
-	return renderCtx
-}
-
-func (s *Server) getBillingSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
-	if err != nil {
-		return nil, "", err
-	}
-
-	renderCtx := s.createBillingSettingsModel(ctx, user)
-
-	if !renderCtx.IsSubscribed {
-		w.Header().Set("HX-Trigger-After-Swap", "load-paddle")
-	}
-
-	return renderCtx, "", nil
-}
-
-func (s *Server) retrieveUserManagementURLs(w http.ResponseWriter, r *http.Request) (*billing.ManagementURLs, error) {
-	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
-	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
-		return nil, err
-	}
-
-	if !user.SubscriptionID.Valid {
-		slog.ErrorContext(ctx, "Cannot get Paddle URLs without subscription", "userID", user.ID)
-		http.Error(w, "", http.StatusInternalServerError)
-		return nil, errMissingSubscription
-	}
-
-	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
-		http.Error(w, "", http.StatusInternalServerError)
-		return nil, err
-	}
-
-	if db.IsInternalSubscription(subscription.Source) {
-		slog.WarnContext(ctx, "Cannot modify internal subscription", "userID", user.ID, "subscription", subscription.Source)
-		http.Error(w, "", http.StatusNotAcceptable)
-		return nil, errInternalSubscription
-	}
-
-	if !subscription.PaddleSubscriptionID.Valid {
-		slog.ErrorContext(ctx, "Paddle Subscription ID is NULL", "userID", user.ID, "subscriptionID", subscription.ID)
-		http.Error(w, "", http.StatusInternalServerError)
-		return nil, errInvalidSubscription
-	}
-
-	urls, err := s.PaddleAPI.GetManagementURLs(ctx, subscription.PaddleSubscriptionID.String)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to fetch Paddle URLs", common.ErrAttr(err))
-		http.Error(w, "", http.StatusInternalServerError)
-		return nil, err
-	}
-
-	return urls, nil
-}
-
-func (s *Server) getCancelSubscription(w http.ResponseWriter, r *http.Request) {
-	urls, err := s.retrieveUserManagementURLs(w, r)
-	if err != nil {
-		return
-	}
-
-	if len(urls.CancelURL) > 0 {
-		common.Redirect(urls.CancelURL, http.StatusOK, w, r)
-	} else {
-		http.Error(w, "URL is empty", http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) getUpdateSubscription(w http.ResponseWriter, r *http.Request) {
-	urls, err := s.retrieveUserManagementURLs(w, r)
-	if err != nil {
-		return
-	}
-
-	if len(urls.UpdateURL) > 0 {
-		common.Redirect(urls.UpdateURL, http.StatusOK, w, r)
-	} else {
-		http.Error(w, "URL is empty", http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) postBillingPreview(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
-	if err != nil {
-		return nil, "", err
-	}
-
-	err = r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", err
-	}
-	product := r.FormValue(common.ParamProduct)
-	plan, err := s.PlanService.FindPlanByProductID(product, s.Stage)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find plan by product ID", "productID", product, common.ErrAttr(err))
-		return nil, "", err
-	}
-
-	previewPeriod := "monthly"
-	priceID := plan.PaddlePriceIDMonthly
-	if yearly := common.ParseBoolean(r.FormValue(common.ParamYearly)); yearly || (len(plan.PaddlePriceIDMonthly) == 0) {
-		priceID = plan.PaddlePriceIDYearly
-		previewPeriod = "annual"
-	}
-
-	renderCtx := s.createBillingSettingsModel(ctx, user)
-
-	if !renderCtx.IsSubscribed {
-		renderCtx.ErrorMessage = "You must have an active subscription to change plans."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
-	if err != nil {
-		renderCtx.ErrorMessage = "Could not retrieve your subscription details."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if (priceID == subscription.PaddlePriceID) && (product == subscription.PaddleProductID) {
-		renderCtx.InfoMessage = "You are already on this plan."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if db.IsInternalSubscription(subscription.Source) {
-		renderCtx.ErrorMessage = internalSubscriptionMessage
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if !subscription.PaddleSubscriptionID.Valid {
-		renderCtx.WarningMessage = "Invalid subscription. Please contact support for assistance."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	changePreview, err := s.PaddleAPI.PreviewChangeSubscription(ctx, subscription.PaddleSubscriptionID.String, priceID, 1 /*quantity*/)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to preview Paddle change", common.ErrAttr(err))
-		renderCtx.ErrorMessage = "Failed to change your subscription. Please contact support for assistance."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	renderCtx.PreviewOpen = true
-	renderCtx.PreviewPlan = plan.Name
-	renderCtx.PreviewPeriod = previewPeriod
-	renderCtx.PreviewCharge = changePreview.ChargeAmount
-	renderCtx.PreviewCurrency = changePreview.ChargeCurrency
-	renderCtx.PreviewPriceID = priceID
-
-	return renderCtx, settingsBillingContentTemplate, nil
-}
-
-func (s *Server) putBilling(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
-	if err != nil {
-		return nil, "", err
-	}
-
-	err = r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", err
-	}
-
-	priceID := r.FormValue(common.ParamPrice)
-	newPlan, err := s.PlanService.FindPlanByPriceID(priceID, s.Stage)
-	if err != nil {
-		slog.ErrorContext(ctx, "PriceID is not valid", "priceID", priceID, common.ErrAttr(err))
-		return nil, "", err
-	}
-
-	renderCtx := s.createBillingSettingsModel(ctx, user)
-	renderCtx.ClearAlerts()
-
-	if !renderCtx.IsSubscribed {
-		slog.ErrorContext(ctx, "Attempt to update subscription while not subscribed", "userID", user.ID)
-		renderCtx.ErrorMessage = "You must have an active subscription to change plans."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve user subscription", common.ErrAttr(err))
-		renderCtx.ErrorMessage = "Could not retrieve your subscription details."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if priceID == subscription.PaddlePriceID {
-		slog.WarnContext(ctx, "No subscription changes required")
-		renderCtx.InfoMessage = "You are already on this plan."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if newPlan.IsDowngradeFor(renderCtx.CurrentPlan) {
-		slog.DebugContext(ctx, "Downgrade attempt detected", "oldPlan", renderCtx.CurrentPlan.Name, "newPlan", newPlan.Name)
-		timeFrom := time.Now().UTC().AddDate(0 /*years*/, -3 /*months*/, 0 /*days*/)
-		if stats, err := s.TimeSeries.ReadAccountStats(ctx, user.ID, timeFrom); err == nil {
-			anyHigher := false
-
-			for _, stat := range stats {
-				if !newPlan.IsLegitUsage(int64(stat.Count)) {
-					slog.WarnContext(ctx, "Found exceeding usage", "timestamp", stat.Timestamp, "count", stat.Count, "limit", newPlan.RequestsLimit)
-					anyHigher = true
-					break
-				}
-			}
-
-			if anyHigher {
-				renderCtx.ErrorMessage = "To downgrade, your usage in the last 2 months must be within the new plan's limits."
-				return renderCtx, settingsBillingContentTemplate, nil
-			}
-		} else {
-			renderCtx.ErrorMessage = "Could not verify usage for downgrade. Please try again or contact support."
-			return renderCtx, settingsBillingContentTemplate, nil
-		}
-	} else {
-		slog.ErrorContext(ctx, "Failed to find new billing plan", "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
-	}
-
-	if db.IsInternalSubscription(subscription.Source) {
-		renderCtx.ErrorMessage = internalSubscriptionMessage
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if !subscription.PaddleSubscriptionID.Valid {
-		renderCtx.WarningMessage = "Invalid subscription. Please contact support for assistance."
-		return renderCtx, settingsBillingContentTemplate, nil
-	}
-
-	if err := s.PaddleAPI.ChangeSubscription(ctx, subscription.PaddleSubscriptionID.String, priceID, 1 /*quantity*/); err == nil {
-		renderCtx.SuccessMessage = "Subscription was updated successfully."
-	} else {
-		slog.ErrorContext(ctx, "Failed to update Paddle subscription", common.ErrAttr(err))
-		renderCtx.ErrorMessage = "Failed to update subscription. Please contact support for assistance."
-	}
-
-	return renderCtx, settingsBillingContentTemplate, nil
 }
 
 func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {

@@ -15,8 +15,6 @@ const (
 	HealthCheckIntervalKey
 	AdminEmailKey
 	PrivateAPIKeyKey
-	PresharedSecretHeaderKey
-	PresharedSecretKey
 	PostgresKey
 	PostgresHostKey
 	PostgresDBKey
@@ -37,10 +35,6 @@ const (
 	SmtpEndpointKey
 	SmtpUsernameKey
 	SmtpPasswordKey
-	PaddleBaseURLKey
-	PaddleAPIKeyKey
-	PaddleEnvironmentKey
-	PaddleClientTokenKey
 	EmailFromKey
 	SupportEmailKey
 	HostKey

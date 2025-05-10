@@ -50,7 +50,6 @@ func (f *fakePuzzleEngine) Verify(ctx context.Context, payload string, expectedO
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	paddleAPI := &billing.StubPaddleClient{}
 	planService := billing.NewPlanService()
 
 	if testing.Short() {
@@ -62,7 +61,6 @@ func TestMain(m *testing.M) {
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
-			PaddleAPI:    paddleAPI,
 			PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
 			PlanService:  planService,
 		}
@@ -112,7 +110,6 @@ func TestMain(m *testing.M) {
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
 		Mailer:       &email.StubMailer{},
-		PaddleAPI:    paddleAPI,
 		Auth:         &AuthMiddleware{rateLimiter: &ratelimit.StubRateLimiter{}},
 		PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
 		Metrics:      monitoring.NewStub(),

@@ -46,11 +46,9 @@ type RenderConstants struct {
 	UserEndpoint         string
 	APIKeysEndpoint      string
 	Months               string
-	SupportEndpoint      string
 	Message              string
 	Subject              string
 	Category             string
-	BillingEndpoint      string
 	Product              string
 	CancelEndpoint       string
 	UpdateEndpoint       string
@@ -106,11 +104,9 @@ func createRenderConstants() *RenderConstants {
 		UserEndpoint:         common.UserEndpoint,
 		APIKeysEndpoint:      common.APIKeysEndpoint,
 		Months:               common.ParamMonths,
-		SupportEndpoint:      common.SupportEndpoint,
 		Message:              common.ParamMessage,
 		Subject:              common.ParamSubject,
 		Category:             common.ParamCategory,
-		BillingEndpoint:      common.BillingEndpoint,
 		Product:              common.ParamProduct,
 		CancelEndpoint:       common.CancelEndpoint,
 		UpdateEndpoint:       common.UpdateEndpoint,

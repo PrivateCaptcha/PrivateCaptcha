@@ -29,6 +29,7 @@ const (
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	propertySettingsTabIndex              = 2
 	propertyIntegrationsTabIndex          = 1
+	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
 )
 
 type difficultyLevelsRenderContext struct {
@@ -252,6 +253,11 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 		},
 	}
 
+	// this is a quick check, longer check is done in POST
+	if isUserOrgOwner := org.UserID.Int32 == user.ID; isUserOrgOwner && !user.SubscriptionID.Valid {
+		data.ErrorMessage = activeSubscriptionForPropertyError
+	}
+
 	return data, propertyWizardTemplate, nil
 }
 
@@ -329,18 +335,18 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 	var subscr *dbgen.Subscription
 	var err error
 
-	if sessUser.SubscriptionID.Valid {
-		subscr, err = s.Store.RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve session user subscription", "userID", sessUser.ID, common.ErrAttr(err))
-			return ""
-		}
-	}
-
 	isUserOrgOwner := org.UserID.Int32 == sessUser.ID
 	userIDToCheck := sessUser.ID
 
-	if !isUserOrgOwner {
+	if isUserOrgOwner {
+		if sessUser.SubscriptionID.Valid {
+			subscr, err = s.Store.RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve session user subscription", "userID", sessUser.ID, common.ErrAttr(err))
+				return ""
+			}
+		}
+	} else {
 		slog.DebugContext(ctx, "Session user is not org owner", "userID", sessUser.ID, "orgUserID", org.UserID.Int32)
 
 		orgUser, err := s.Store.RetrieveUser(ctx, org.UserID.Int32)

@@ -278,32 +278,6 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"foo", "bar"},
 		},
 		{
-			path: []string{common.SettingsEndpoint, common.TabEndpoint, common.BillingEndpoint},
-			// NOTE: we use "tab" here instead of "page" becaues of <script> text and JS that breaks XML parser
-			template: settingsBillingTemplatePrefix + "tab.html",
-			model: &settingsBillingRenderContext{
-				settingsCommonRenderContext: settingsCommonRenderContext{
-					csrfRenderContext: stubToken(),
-					alertRenderContext: alertRenderContext{
-						WarningMessage: "Test warning!",
-					},
-					Email:       "foo@bar.com",
-					ActiveTabID: common.BillingEndpoint,
-					Tabs:        createTabViewModels(common.BillingEndpoint, server.SettingsTabs),
-				},
-				Plans:         []*billing.Plan{stubBillingPlan("123"), stubBillingPlan("456")},
-				CurrentPlan:   stubBillingPlan("123"),
-				YearlyBilling: false,
-				IsSubscribed:  true,
-				PreviewOpen:   true,
-				PreviewCharge: 123,
-				PreviewPlan:   "Plan",
-				PreviewPeriod: "monthly",
-			},
-			selector: "span.billing-plan-name",
-			matches:  []string{"Stub plan 123", "Stub plan 456"},
-		},
-		{
 			path: []string{common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint},
 			// NOTE: we use "tab" here instead of "page" becaues of <script> text and JS that breaks XML parser
 			template: settingsUsageTemplatePrefix + "tab.html",
@@ -321,18 +295,6 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector: "",
 			matches:  []string{},
-		},
-		{
-			path:     []string{common.SupportEndpoint},
-			template: supportTemplate,
-			model: &supportRenderContext{
-				alertRenderContext: alertRenderContext{
-					SuccessMessage: "Message sent",
-				},
-				csrfRenderContext: stubToken(),
-				Message:           "test",
-				Category:          "problem",
-			},
 		},
 	}
 
