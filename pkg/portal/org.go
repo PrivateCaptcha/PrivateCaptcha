@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -165,12 +164,12 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 		}
 	}
 
-	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+	if (subscr == nil) || !s.PlanService.IsSubscriptionActive(subscr.Status) {
 		return "You need an active subscription to create new organizations."
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""
@@ -418,12 +417,12 @@ func (s *Server) validateAddOrgMember(ctx context.Context, user *dbgen.User, mem
 		}
 	}
 
-	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+	if (subscr == nil) || !s.PlanService.IsSubscriptionActive(subscr.Status) {
 		return "You need an active subscription to invite organization members."
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""

@@ -110,10 +110,11 @@ func (j *NotifyLimitsViolationsJob) RunOnce(ctx context.Context) error {
 }
 
 type ThrottleViolationsJob struct {
-	Stage      string
-	UserLimits common.Cache[int32, *common.UserLimitStatus]
-	Store      *db.BusinessStore
-	From       time.Time
+	Stage       string
+	UserLimits  common.Cache[int32, *common.UserLimitStatus]
+	Store       *db.BusinessStore
+	From        time.Time
+	PlanService billing.PlanService
 }
 
 var _ common.PeriodicJob = (*ThrottleViolationsJob)(nil)
@@ -145,7 +146,7 @@ func (j *ThrottleViolationsJob) RunOnce(ctx context.Context) error {
 			continue
 		}
 
-		plan, err := billing.FindPlanByProductID(productID, j.Stage)
+		plan, err := j.PlanService.FindPlanByProductID(productID, j.Stage)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to find billing plan", "productID", productID)
 			continue
@@ -161,7 +162,8 @@ func (j *ThrottleViolationsJob) RunOnce(ctx context.Context) error {
 			slog.InfoContext(ctx, "Found user to be throttled", "userID", v.User.ID, "productID", productID,
 				"count", v.UsageLimitViolation.RequestsCount, "limit", v.UsageLimitViolation.RequestsLimit)
 
-			status := &common.UserLimitStatus{Status: v.Status, Limit: v.UsageLimitViolation.RequestsLimit}
+			isActive := j.PlanService.IsSubscriptionActive(v.Status)
+			status := &common.UserLimitStatus{IsSubscriptionActive: isActive, Limit: v.UsageLimitViolation.RequestsLimit}
 			if err := j.UserLimits.Set(ctx, int32(v.User.ID), status, db.UserLimitTTL); err != nil {
 				slog.ErrorContext(ctx, "Failed to add user to block", "userID", v.User.ID, common.ErrAttr(err))
 			}

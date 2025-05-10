@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 )
@@ -44,11 +45,12 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	cfg := config.NewEnvConfig(env.Get)
+	cfg := config.NewEnvConfig(config.DefaultMapper, env.Get)
 
 	switch *flagMode {
 	case modeSeed:
-		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, cfg)
+		svc := billing.NewPlanService()
+		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, svc, cfg)
 	case modeTest:
 		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), cfg, *flagRatePerSecond, *flagDuration,
 			*flagSitekeyPercent)

@@ -13,9 +13,10 @@ import (
 )
 
 type PaddlePricesJob struct {
-	Stage     string
-	PaddleAPI billing.PaddleAPI
-	Store     *db.BusinessStore
+	Stage       string
+	PaddleAPI   billing.PaddleAPI
+	Store       *db.BusinessStore
+	PlanService billing.PlanService
 }
 
 var _ common.PeriodicJob = (*PaddlePricesJob)(nil)
@@ -33,14 +34,14 @@ func (j *PaddlePricesJob) Name() string {
 }
 
 func (j *PaddlePricesJob) RunOnce(ctx context.Context) error {
-	products := billing.GetProductsForStage(j.Stage)
+	products := j.PlanService.GetProductsForStage(j.Stage)
 	prices, err := j.PaddleAPI.GetPrices(ctx, products)
 	if err == nil {
 		if err = j.Store.CachePaddlePrices(ctx, prices); err != nil {
 			slog.ErrorContext(ctx, "Failed to cache paddle prices", common.ErrAttr(err))
 		}
 
-		billing.UpdatePlansPrices(prices, j.Stage)
+		j.PlanService.UpdatePlansPrices(prices, j.Stage)
 	}
 
 	return err
@@ -71,8 +72,9 @@ func (j *SessionsCleanupJob) RunOnce(ctx context.Context) error {
 }
 
 type WarmupPaddlePrices struct {
-	Store *db.BusinessStore
-	Stage string
+	Store       *db.BusinessStore
+	Stage       string
+	PlanService billing.PlanService
 }
 
 var _ common.OneOffJob = (*WarmupPaddlePrices)(nil)
@@ -88,7 +90,7 @@ func (j *WarmupPaddlePrices) InitialPause() time.Duration {
 func (j *WarmupPaddlePrices) RunOnce(ctx context.Context) error {
 	prices, err := j.Store.RetrievePaddlePrices(ctx)
 	if err == nil {
-		billing.UpdatePlansPrices(prices, j.Stage)
+		j.PlanService.UpdatePlansPrices(prices, j.Stage)
 	} else {
 		slog.WarnContext(ctx, "Paddle prices are not cached properly", common.ErrAttr(err))
 	}

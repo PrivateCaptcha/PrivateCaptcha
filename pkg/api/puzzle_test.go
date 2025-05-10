@@ -45,7 +45,7 @@ func generateRandomIPv4() string {
 
 func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", true /*verbose*/)
+	s.Setup(srv, "", true /*verbose*/, common.NoopMiddleware)
 
 	//srv.HandleFunc("/", catchAll)
 

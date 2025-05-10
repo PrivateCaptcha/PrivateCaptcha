@@ -68,7 +68,7 @@ func TestGetLogin(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 
-	server.handler(server.getLogin).ServeHTTP(rr, req)
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
 
 	// check if the status code is 200
 	if rr.Code != http.StatusOK {
@@ -121,7 +121,7 @@ func TestPostLogin(t *testing.T) {
 	// Get the CSRF token
 	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
 	rr := httptest.NewRecorder()
-	server.handler(server.getLogin).ServeHTTP(rr, req)
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
 	csrfToken, err := parseCsrfToken(rr.Body.String())
 	if err != nil {
 		t.Fatalf("failed to parse CSRF token: %v", err)

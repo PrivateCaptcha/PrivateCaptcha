@@ -14,17 +14,17 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
-	s          *server
+	s          *Server
 	cfg        common.ConfigStore
 	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
-	auth       *authMiddleware
 	store      *db.BusinessStore
 )
 
@@ -34,7 +34,7 @@ const (
 )
 
 func testsConfigStore() common.ConfigStore {
-	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
+	baseCfg := config.NewBaseConfig(config.NewEnvConfig(config.DefaultMapper, os.Getenv))
 	baseCfg.Add(config.NewStaticValue(common.PuzzleLeakyBucketBurstKey, "20"))
 	baseCfg.Add(config.NewStaticValue(common.DefaultLeakyBucketBurstKey, "20"))
 	baseCfg.Add(config.NewStaticValue(common.PuzzleLeakyBucketRateKey, "10"))
@@ -71,11 +71,24 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusinessEx(pool, cache)
 
-	auth = NewAuthMiddleware(cfg, store, authBackfillDelay)
-	defer auth.Shutdown()
+	planService := billing.NewPlanService()
 
-	s = NewServer(store, timeSeries, auth, verifyFlushInterval, &billing.StubPaddleClient{}, monitoring.NewStub(), &email.StubMailer{}, cfg)
-	if err := s.Init(context.TODO()); err != nil {
+	s = &Server{
+		Stage:              common.StageTest,
+		BusinessDB:         store,
+		TimeSeries:         timeSeries,
+		Auth:               NewAuthMiddleware(cfg, store, authBackfillDelay, planService),
+		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
+		Salt:               NewPuzzleSalt(cfg.Get(common.APISaltKey)),
+		UserFingerprintKey: NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
+		PaddleAPI:          &billing.StubPaddleClient{},
+		PlanService:        planService,
+		Metrics:            monitoring.NewStub(),
+		Mailer:             &email.StubMailer{},
+		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
+		VerifyLogCancel:    func() {},
+	}
+	if err := s.Init(context.TODO(), verifyFlushInterval); err != nil {
 		panic(err)
 	}
 	defer s.Shutdown()

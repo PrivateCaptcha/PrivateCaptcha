@@ -24,10 +24,8 @@ func TestBackfillLevels(t *testing.T) {
 	}
 
 	// minutes per bucket
-	levels := difficulty.NewLevelsEx(timeSeries, 200,
-		testBucketSize,
-		500*time.Millisecond, /*access log*/
-		700*time.Millisecond /*backfill*/)
+	levels := difficulty.NewLevels(timeSeries, 200, testBucketSize)
+	levels.Init(500*time.Millisecond /*access log*/, 700*time.Millisecond /*backfill*/)
 	defer levels.Shutdown()
 	tnow := time.Now()
 	userID := int32(123)

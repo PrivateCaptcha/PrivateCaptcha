@@ -1,60 +1,3 @@
-<h2 class="sr-only">API Keys</h2>
-
-<aside class="flex overflow-x-auto border-b border-gray-900/5 py-4 lg:block lg:w-64 lg:flex-none lg:border-0 lg:py-20">
-    <nav class="flex-none px-4 sm:px-6 lg:px-0">
-        <ul role="list" class="flex gap-x-3 gap-y-1 whitespace-nowrap lg:flex-col">
-            <li>
-                <!-- Current: "bg-gray-50 text-pclime-600", Default: "text-gray-700 hover:text-pclime-600 hover:bg-gray-50" -->
-                <a href="#"
-                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.GeneralEndpoint }}"
-                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.GeneralEndpoint}}"
-                    hx-target="#settings"
-                    hx-swap="innerHTML"
-                    class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
-                    <svg class="h-6 w-6 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    General
-                </a>
-            </li>
-            <li>
-                <a href="#" class="bg-pcslate-50 text-pclime-600 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
-                    <svg class="h-6 w-6 shrink-0 text-pclime-600 group-hover:text-pclime-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.864 4.243A7.5 7.5 0 0119.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 004.5 10.5a7.464 7.464 0 01-1.15 3.993m1.989 3.559A11.209 11.209 0 008.25 10.5a3.75 3.75 0 117.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 01-3.6 9.75m6.633-4.596a18.666 18.666 0 01-2.485 5.33" />
-                    </svg>
-                    API Keys
-                </a>
-            </li>
-            <li>
-                <a href="#"
-                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.BillingEndpoint }}"
-                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.BillingEndpoint}}"
-                    hx-target="#settings"
-                    hx-swap="innerHTML"
-                    class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
-                    <svg class="h-6 w-6 shrink-0 text-gray-400 group-hover:text-pclime-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
-                    </svg>
-                    Billing
-                </a>
-            </li>
-            <li>
-                <a href="#"
-                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.UsageEndpoint }}"
-                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{$.Const.UsageEndpoint}}"
-                    hx-target="#settings"
-                    hx-swap="innerHTML"
-                    class="text-gray-700 hover:text-pclime-600 hover:bg-gray-50 group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
-                    <svg class="h-6 w-6 shrink-0 text-gray-400 group-hover:text-pclime-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75H6A2.25 2.25 0 003.75 6v12A2.25 2.25 0 006 20.25z" />
-                    </svg>
-                    Usage
-                </a>
-            </li>
-        </ul>
-    </nav>
-</aside>
-
 <main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20" x-data="{createOpen: {{ .Params.CreateOpen }}}">
     <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
         x-show="createOpen"
@@ -78,15 +21,25 @@
                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95">
                 <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:w-full sm:max-w-lg sm:flex">
                     <form class="sm:flex-1 sm:flex sm:flex-col"
-                        hx-target="#settings"
+                        hx-target="#settings-content-area"
                         hx-swap="innerHTML"
                         hx-post="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint $.Const.APIKeysEndpoint $.Const.NewEndpoint }}">
-                        {{ template "apikeys-form.html" . }}
+                        {{ template "form.html" . }}
                     </form>
                 </div>
             </div>
         </div>
     </div>
+
+    {{- if .Params.ErrorMessage -}}
+    <div class="pb-5">{{ template "error-message.html" .Params.ErrorMessage }}</div>
+    {{- else if .Params.WarningMessage -}}
+    <div class="pb-5">{{ template "warning-message.html" .Params.WarningMessage }}</div>
+    {{- else if .Params.SuccessMessage -}}
+    <div class="pb-5">{{ template "success-message.html" .Params.SuccessMessage }}</div>
+    {{- else if .Params.InfoMessage -}}
+    <div class="pb-5">{{ template "info-message.html" .Params.InfoMessage }}</div>
+    {{- end -}}
 
     <div class="mx-auto max-w-4xl">
         <div class="border-b border-gray-200 pb-5 sm:flex sm:items-center sm:justify-between">
@@ -116,7 +69,7 @@
                             <a href="#"
                                 title="Copy to clipboard"
                                 class="text-gray-400 hover:text-gray-600 focus:text-gray-400 pl-2"
-                                onclick="navigator.clipboard.writeText('{{$key.Secret}}');">
+                                onclick="navigator.clipboard.writeText('{{$key.Secret}}'); event.preventDefault();">
                                 <svg class="h-5 w-5"  fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
                                 </svg>

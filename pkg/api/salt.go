@@ -17,7 +17,7 @@ type puzzleSalt struct {
 	value      *puzzle.Salt
 }
 
-func newPuzzleSalt(configItem common.ConfigItem) *puzzleSalt {
+func NewPuzzleSalt(configItem common.ConfigItem) *puzzleSalt {
 	return &puzzleSalt{
 		configItem: configItem,
 	}
@@ -37,7 +37,7 @@ type userFingerprintKey struct {
 	key        []byte
 }
 
-func newUserFingerprintKey(configItem common.ConfigItem) *userFingerprintKey {
+func NewUserFingerprintKey(configItem common.ConfigItem) *userFingerprintKey {
 	return &userFingerprintKey{
 		configItem: configItem,
 		key:        make([]byte, 64),

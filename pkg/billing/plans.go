@@ -60,6 +60,10 @@ func (p *Plan) ShouldBeThrottled(requestsCount int64) bool {
 	return (requestsCount > p.RequestsLimit) && (requestsCount > p.ThrottleLimit)
 }
 
+func (plan *Plan) IsYearly(priceID string) bool {
+	return plan.PaddlePriceIDYearly == priceID
+}
+
 const (
 	defaultOrgLimit        = 10
 	defaultPropertiesLimit = 50
@@ -70,10 +74,29 @@ const (
 )
 
 var (
-	lock                sync.RWMutex
 	ErrUnknownProductID = errors.New("unknown product ID")
 	ErrUnknownPriceID   = errors.New("unknown price ID")
+	ErrInvalidArgument  = errors.New("invalid argument")
+)
 
+type PlanService interface {
+	GetProductsForStage(stage string) []string
+	GetPlansForStage(stage string) ([]*Plan, bool)
+	FindPlanByProductID(paddleProductID string, stage string) (*Plan, error)
+	FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error)
+	FindPlanEx(paddleProductID string, paddlePriceID string, stage string, internal bool) (*Plan, error)
+	UpdatePlansPrices(prices Prices, stage string)
+	IsSubscriptionActive(status string) bool
+	IsSubscriptionTrialing(status string) bool
+}
+
+type defaultPlanService struct {
+	lock          sync.RWMutex
+	stagePlans    map[string][]*Plan
+	internalPlans []*Plan
+}
+
+var (
 	internalTrialPlan = &Plan{
 		Name:                 "Internal Trial",
 		PaddleProductID:      "pctrial_CGK710ObXUu3hnErY87KMx4gnt3",
@@ -321,21 +344,20 @@ var (
 			APIRequestsPerSecond: 100,
 		},
 	}
-
-	stagePlans = map[string][]*Plan{
-		common.StageProd:    prodPlans,
-		common.StageStaging: devPlans,
-		common.StageDev:     devPlans,
-	}
-
-	internalPlans = []*Plan{
-		internalTrialPlan,
-		internalAdminPlan,
-	}
 )
 
-func (plan *Plan) IsYearly(priceID string) bool {
-	return plan.PaddlePriceIDYearly == priceID
+func NewPlanService() PlanService {
+	return &defaultPlanService{
+		stagePlans: map[string][]*Plan{
+			common.StageProd:    prodPlans,
+			common.StageStaging: devPlans,
+			common.StageDev:     devPlans,
+		},
+		internalPlans: []*Plan{
+			internalTrialPlan,
+			internalAdminPlan,
+		},
+	}
 }
 
 func GetInternalAdminPlan() *Plan {
@@ -346,11 +368,11 @@ func GetInternalTrialPlan() *Plan {
 	return internalTrialPlan
 }
 
-func GetProductsForStage(stage string) []string {
-	lock.RLock()
-	defer lock.RUnlock()
+func (s *defaultPlanService) GetProductsForStage(stage string) []string {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	plans, ok := stagePlans[stage]
+	plans, ok := s.stagePlans[stage]
 	if !ok {
 		return []string{}
 	}
@@ -364,23 +386,23 @@ func GetProductsForStage(stage string) []string {
 	return products
 }
 
-func GetPlansForStage(stage string) ([]*Plan, bool) {
-	lock.RLock()
-	defer lock.RUnlock()
+func (s *defaultPlanService) GetPlansForStage(stage string) ([]*Plan, bool) {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	plans, ok := stagePlans[stage]
+	plans, ok := s.stagePlans[stage]
 	return plans, ok
 }
 
-func FindPlanByProductID(paddleProductID string, stage string) (*Plan, error) {
+func (s *defaultPlanService) FindPlanByProductID(paddleProductID string, stage string) (*Plan, error) {
 	if (stage == "") || (paddleProductID == "") {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
-	lock.RLock()
-	defer lock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	for _, p := range stagePlans[stage] {
+	for _, p := range s.stagePlans[stage] {
 		if p.PaddleProductID == paddleProductID {
 			return p, nil
 		}
@@ -389,15 +411,15 @@ func FindPlanByProductID(paddleProductID string, stage string) (*Plan, error) {
 	return nil, ErrUnknownProductID
 }
 
-func FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error) {
+func (s *defaultPlanService) FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error) {
 	if (stage == "") || (paddlePriceID == "") {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
-	lock.RLock()
-	defer lock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
-	for _, p := range stagePlans[stage] {
+	for _, p := range s.stagePlans[stage] {
 		if (p.PaddlePriceIDMonthly == paddlePriceID) || (p.PaddlePriceIDYearly == paddlePriceID) {
 			return p, nil
 		}
@@ -406,19 +428,19 @@ func FindPlanByPriceID(paddlePriceID string, stage string) (*Plan, error) {
 	return nil, ErrUnknownPriceID
 }
 
-func FindPlanEx(paddleProductID string, paddlePriceID string, stage string, internal bool) (*Plan, error) {
+func (s *defaultPlanService) FindPlanEx(paddleProductID string, paddlePriceID string, stage string, internal bool) (*Plan, error) {
 	if (stage == "") || (paddleProductID == "") || (paddlePriceID == "") {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
-	lock.RLock()
-	defer lock.RUnlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 
 	var plans []*Plan
 	if internal {
-		plans = internalPlans
+		plans = s.internalPlans
 	} else {
-		plans = stagePlans[stage]
+		plans = s.stagePlans[stage]
 	}
 
 	for _, p := range plans {
@@ -431,11 +453,11 @@ func FindPlanEx(paddleProductID string, paddlePriceID string, stage string, inte
 	return nil, ErrUnknownProductID
 }
 
-func UpdatePlansPrices(prices Prices, stage string) {
-	lock.Lock()
-	defer lock.Unlock()
+func (s *defaultPlanService) UpdatePlansPrices(prices Prices, stage string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	for _, p := range stagePlans[stage] {
+	for _, p := range s.stagePlans[stage] {
 		if priceMonthly, ok := prices[p.PaddlePriceIDMonthly]; ok {
 			p.PriceMonthly = priceMonthly
 		}
@@ -446,7 +468,7 @@ func UpdatePlansPrices(prices Prices, stage string) {
 	}
 }
 
-func IsSubscriptionActive(status string) bool {
+func (s *defaultPlanService) IsSubscriptionActive(status string) bool {
 	switch paddlenotification.SubscriptionStatus(status) {
 	case paddlenotification.SubscriptionStatusActive, paddlenotification.SubscriptionStatusTrialing:
 		return true
@@ -455,7 +477,7 @@ func IsSubscriptionActive(status string) bool {
 	}
 }
 
-func IsSubscriptionTrialing(status string) bool {
+func (s *defaultPlanService) IsSubscriptionTrialing(status string) bool {
 	switch paddlenotification.SubscriptionStatus(status) {
 	case paddlenotification.SubscriptionStatusTrialing:
 		return true

@@ -3,9 +3,7 @@ package api
 import (
 	"context"
 	"log/slog"
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -13,36 +11,27 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 )
 
 const (
-	maxTokenLen  = 300
-	maxHeaderLen = 100
-	// by default we are allowing 1 request per 2 seconds from a single client IP address with a {leakyBucketCap} burst
-	// for portal we raise these limits for authenticated users and for CDN we have full-on caching
-	// for API we have a separate configuration altogether
-	// NOTE: this assumes correct configuration of the whole chain of reverse proxies
-	// the main problem are NATs/VPNs that make possible for lots of legitimate users to actually come from 1 public IP
-	defaultLeakyBucketCap = 10
-	defaultLeakInterval   = 2 * time.Second
+	maxTokenLen = 300
 	// for puzzles the logic is that if something becomes popular, there will be a spike, but normal usage should be low
 	puzzleLeakyBucketCap = 20
 	puzzleLeakInterval   = 1 * time.Second
 )
 
-type authMiddleware struct {
-	store              *db.BusinessStore
-	puzzleRateLimiter  ratelimit.HTTPRateLimiter
-	apiKeyRateLimiter  ratelimit.HTTPRateLimiter
-	defaultRateLimiter ratelimit.HTTPRateLimiter
-	sitekeyChan        chan string
-	batchSize          int
-	backfillCancel     context.CancelFunc
-	userLimits         common.Cache[int32, *common.UserLimitStatus]
-	privateAPIKey      common.ConfigItem
-	presharedHeader    common.ConfigItem
-	presharedSecret    common.ConfigItem
+type AuthMiddleware struct {
+	store             *db.BusinessStore
+	planService       billing.PlanService
+	puzzleRateLimiter ratelimit.HTTPRateLimiter
+	apiKeyRateLimiter ratelimit.HTTPRateLimiter
+	sitekeyChan       chan string
+	batchSize         int
+	backfillCancel    context.CancelFunc
+	userLimits        common.Cache[int32, *common.UserLimitStatus]
+	privateAPIKey     common.ConfigItem
 }
 
 func newAPIKeyBuckets() *ratelimit.StringBuckets {
@@ -58,26 +47,6 @@ func newAPIKeyBuckets() *ratelimit.StringBuckets {
 	return ratelimit.NewAPIKeyBuckets(maxBuckets, leakyBucketCap, leakInterval)
 }
 
-func leakyBucketCap(value string, fallback uint32) uint32 {
-	i, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-
-	return uint32(i)
-}
-
-func leakyBucketInterval(value string, fallback time.Duration) time.Duration {
-	rps, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return fallback
-	}
-
-	interval := float64(time.Second) / rps
-
-	return time.Duration(interval)
-}
-
 func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 	const (
 		// number of simultaneous different users for /puzzle
@@ -88,27 +57,14 @@ func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 	puzzleBucketBurst := cfg.Get(common.PuzzleLeakyBucketBurstKey)
 
 	return ratelimit.NewIPAddrBuckets(maxBuckets,
-		leakyBucketCap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
-		leakyBucketInterval(puzzleBucketRate.Value(), puzzleLeakInterval))
-}
-
-func newDefaultIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
-	const (
-		// this is a number of simultaneous users of the portal with different IPs
-		maxBuckets = 1_000
-	)
-
-	defaultBucketRate := cfg.Get(common.DefaultLeakyBucketRateKey)
-	defaultBucketBurst := cfg.Get(common.DefaultLeakyBucketBurstKey)
-
-	return ratelimit.NewIPAddrBuckets(maxBuckets,
-		leakyBucketCap(defaultBucketBurst.Value(), defaultLeakyBucketCap),
-		leakyBucketInterval(defaultBucketRate.Value(), defaultLeakInterval))
+		leakybucket.Cap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
+		leakybucket.Interval(puzzleBucketRate.Value(), puzzleLeakInterval))
 }
 
 func NewAuthMiddleware(cfg common.ConfigStore,
 	store *db.BusinessStore,
-	backfillDelay time.Duration) *authMiddleware {
+	backfillDelay time.Duration,
+	planService billing.PlanService) *AuthMiddleware {
 	const maxLimitedUsers = 10_000
 	var userLimits common.Cache[int32, *common.UserLimitStatus]
 	var err error
@@ -121,16 +77,14 @@ func NewAuthMiddleware(cfg common.ConfigStore,
 	const batchSize = 10
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 
-	am := &authMiddleware{
-		puzzleRateLimiter:  ratelimit.NewIPAddrRateLimiter("puzzle", rateLimitHeader, newPuzzleIPAddrBuckets(cfg)),
-		defaultRateLimiter: ratelimit.NewIPAddrRateLimiter("default", rateLimitHeader, newDefaultIPAddrBuckets(cfg)),
-		store:              store,
-		sitekeyChan:        make(chan string, 10*batchSize),
-		batchSize:          batchSize,
-		userLimits:         userLimits,
-		privateAPIKey:      cfg.Get(common.PrivateAPIKeyKey),
-		presharedHeader:    cfg.Get(common.PresharedSecretHeaderKey),
-		presharedSecret:    cfg.Get(common.PresharedSecretKey),
+	am := &AuthMiddleware{
+		puzzleRateLimiter: ratelimit.NewIPAddrRateLimiter("puzzle", rateLimitHeader, newPuzzleIPAddrBuckets(cfg)),
+		store:             store,
+		planService:       planService,
+		sitekeyChan:       make(chan string, 10*batchSize),
+		batchSize:         batchSize,
+		userLimits:        userLimits,
+		privateAPIKey:     cfg.Get(common.PrivateAPIKeyKey),
 	}
 
 	am.apiKeyRateLimiter = ratelimit.NewAPIKeyRateLimiter(
@@ -144,57 +98,46 @@ func NewAuthMiddleware(cfg common.ConfigStore,
 	return am
 }
 
-func (am *authMiddleware) UserLimits() common.Cache[int32, *common.UserLimitStatus] {
+func (am *AuthMiddleware) UserLimits() common.Cache[int32, *common.UserLimitStatus] {
 	return am.userLimits
 }
 
-func (am *authMiddleware) DefaultRateLimiter() ratelimit.HTTPRateLimiter {
-	return am.defaultRateLimiter
-}
-
-func (am *authMiddleware) UpdateConfig(cfg common.ConfigStore) {
+func (am *AuthMiddleware) UpdateConfig(cfg common.ConfigStore) {
 	puzzleBucketRate := cfg.Get(common.PuzzleLeakyBucketRateKey)
 	puzzleBucketBurst := cfg.Get(common.PuzzleLeakyBucketBurstKey)
 	am.puzzleRateLimiter.UpdateLimits(
-		leakyBucketCap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
-		leakyBucketInterval(puzzleBucketRate.Value(), puzzleLeakInterval))
-
-	defaultBucketRate := cfg.Get(common.DefaultLeakyBucketRateKey)
-	defaultBucketBurst := cfg.Get(common.DefaultLeakyBucketBurstKey)
-	am.defaultRateLimiter.UpdateLimits(
-		leakyBucketCap(defaultBucketBurst.Value(), defaultLeakyBucketCap),
-		leakyBucketInterval(defaultBucketRate.Value(), defaultLeakInterval))
+		leakybucket.Cap(puzzleBucketBurst.Value(), puzzleLeakyBucketCap),
+		leakybucket.Interval(puzzleBucketRate.Value(), puzzleLeakInterval))
 }
 
-func (am *authMiddleware) Shutdown() {
+func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	am.apiKeyRateLimiter.Shutdown()
 	am.puzzleRateLimiter.Shutdown()
-	am.defaultRateLimiter.Shutdown()
 	am.backfillCancel()
 	close(am.sitekeyChan)
 }
 
-func (am *authMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64, newStatus string) {
+func (am *AuthMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64, subscriptionActive bool) {
 	if status, err := am.userLimits.Get(ctx, userID); err == nil {
-		if (newLimit > status.Limit) || (!billing.IsSubscriptionActive(status.Status) && billing.IsSubscriptionActive(newStatus)) {
+		if (newLimit > status.Limit) || (!status.IsSubscriptionActive && subscriptionActive) {
 			slog.InfoContext(ctx, "Unblocking throttled user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
-				"oldStatus", status.Status, "newStatus", status)
+				"oldActive", status.IsSubscriptionActive, "newActive", subscriptionActive)
 			_ = am.userLimits.Delete(ctx, userID)
 		} else {
 			slog.WarnContext(ctx, "Cannot unblock user for auth", "userID", userID, "oldLimit", status.Limit, "newLimit", newLimit,
-				"oldStatus", status.Status, "newStatus", status)
+				"oldActive", status.IsSubscriptionActive, "newActive", subscriptionActive)
 		}
 	} else {
 		slog.DebugContext(ctx, "User was not blocked", "userID", userID, common.ErrAttr(err))
 	}
 }
 
-func (am *authMiddleware) BlockUser(ctx context.Context, userID int32, limit int64, status string) {
-	if err := am.userLimits.Set(ctx, userID, &common.UserLimitStatus{Status: status, Limit: limit}, db.UserLimitTTL); err != nil {
+func (am *AuthMiddleware) BlockUser(ctx context.Context, userID int32, limit int64, subscriptionActive bool) {
+	if err := am.userLimits.Set(ctx, userID, &common.UserLimitStatus{IsSubscriptionActive: subscriptionActive, Limit: limit}, db.UserLimitTTL); err != nil {
 		slog.ErrorContext(ctx, "Failed to block user for auth", "userID", userID, common.ErrAttr(err))
 	} else {
-		slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "status", status)
+		slog.InfoContext(ctx, "Blocked user for auth", "userID", userID, "limit", limit, "active", subscriptionActive)
 	}
 }
 
@@ -213,8 +156,8 @@ func isSiteKeyValid(sitekey string) bool {
 	return true
 }
 
-func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
-	usersMap := make(map[int32]bool)
+func (am *AuthMiddleware) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
+	usersMap := make(map[int32]struct{})
 	for _, p := range properties {
 		userID := p.OrgOwnerID.Int32
 
@@ -223,7 +166,7 @@ func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, propertie
 		}
 
 		if _, err := am.userLimits.Get(ctx, userID); err == db.ErrCacheMiss {
-			usersMap[userID] = true
+			usersMap[userID] = struct{}{}
 		}
 	}
 
@@ -235,7 +178,7 @@ func (am *authMiddleware) unknownPropertiesOwners(ctx context.Context, propertie
 	return result
 }
 
-func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) {
+func (am *AuthMiddleware) checkPropertyOwners(ctx context.Context, properties []*dbgen.Property) {
 	if len(properties) == 0 {
 		return
 	}
@@ -248,8 +191,8 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 
 	if subscriptions, err := am.store.RetrieveSubscriptionsByUserIDs(ctx, owners); err == nil {
 		for _, s := range subscriptions {
-			if !billing.IsSubscriptionActive(s.Subscription.Status) {
-				_ = am.userLimits.Set(ctx, s.UserID, &common.UserLimitStatus{Status: s.Subscription.Status, Limit: 0}, db.UserLimitTTL)
+			if isActive := am.planService.IsSubscriptionActive(s.Subscription.Status); !isActive {
+				_ = am.userLimits.Set(ctx, s.UserID, &common.UserLimitStatus{IsSubscriptionActive: isActive, Limit: 0}, db.UserLimitTTL)
 				slog.DebugContext(ctx, "Found user with inactive subscription", "userID", s.UserID, "status", s.Subscription.Status)
 			} else {
 				_ = am.userLimits.SetMissing(ctx, s.UserID, db.UserLimitTTL)
@@ -261,7 +204,7 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 
 	if users, err := am.store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
 		for _, u := range users {
-			_ = am.userLimits.Set(ctx, u.ID, &common.UserLimitStatus{Status: "", Limit: 0}, db.UserLimitTTL)
+			_ = am.userLimits.Set(ctx, u.ID, &common.UserLimitStatus{IsSubscriptionActive: false, Limit: 0}, db.UserLimitTTL)
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))
@@ -269,7 +212,7 @@ func (am *authMiddleware) checkPropertyOwners(ctx context.Context, properties []
 }
 
 // the only purpose of this routine is to cache properties and block users without a subscription
-func (am *authMiddleware) backfillImpl(ctx context.Context, batch map[string]struct{}) error {
+func (am *AuthMiddleware) backfillImpl(ctx context.Context, batch map[string]struct{}) error {
 	properties, err := am.store.RetrievePropertiesBySitekey(ctx, batch)
 
 	if err != nil {
@@ -281,50 +224,7 @@ func (am *authMiddleware) backfillImpl(ctx context.Context, batch map[string]str
 	return err
 }
 
-// NOTE: unlike other "auth" middlewares, EdgeVerify() does NOT add rate limiting
-func (am *authMiddleware) EdgeVerify(allowedHost string) func(http.Handler) http.Handler {
-	return func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if len(allowedHost) > 0 {
-				host := r.Host
-				if h, _, err := net.SplitHostPort(host); err == nil {
-					host = h
-				}
-
-				if len(host) == 0 {
-					slog.Log(r.Context(), common.LevelTrace, "Host header missing")
-					http.Error(w, "", http.StatusUnauthorized)
-					return
-				}
-
-				if host != allowedHost {
-					slog.Log(r.Context(), common.LevelTrace, "Host header mismatch", "expected", allowedHost, "actual", host)
-					http.Error(w, "", http.StatusForbidden)
-					return
-				}
-			}
-
-			if presharedSecret := am.presharedSecret.Value(); len(presharedSecret) > 0 {
-				secretHeader := r.Header.Get(am.presharedHeader.Value())
-				if len(secretHeader) == 0 {
-					slog.Log(r.Context(), common.LevelTrace, "Preshared secret missing")
-					http.Error(w, "", http.StatusUnauthorized)
-					return
-				}
-
-				if secretHeader != presharedSecret {
-					slog.Log(r.Context(), common.LevelTrace, "Preshared secret mismatch", "actual", secretHeader[:maxHeaderLen])
-					http.Error(w, "", http.StatusForbidden)
-					return
-				}
-			}
-
-			h.ServeHTTP(w, r)
-		})
-	}
-}
-
-func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
+func (am *AuthMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
 	authHeader := r.Header.Get(common.HeaderAuthorization)
 	if len(authHeader) == 0 {
 		slog.WarnContext(ctx, "Authorization header missing")
@@ -339,7 +239,7 @@ func (am *authMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request
 	return strings.TrimPrefix(authHeader, "Bearer ")
 }
 
-func (am *authMiddleware) Private(next http.Handler) http.Handler {
+func (am *AuthMiddleware) Private(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -356,13 +256,13 @@ func (am *authMiddleware) Private(next http.Handler) http.Handler {
 			return
 		}
 
-		// TODO: Check if we need to rate limit after private key auth
-		rateLimited := am.defaultRateLimiter.RateLimit(next)
+		// NOTE: it's not exactly a job for "api key rate limiter", but we moved "default" one to Portal
+		rateLimited := am.apiKeyRateLimiter.RateLimit(next)
 		rateLimited.ServeHTTP(w, r)
 	})
 }
 
-func (am *authMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
+func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
 	return len(origin) > 0, nil
 }
 
@@ -378,7 +278,7 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 	return origin == property.Domain
 }
 
-func (am *authMiddleware) SitekeyOptions(next http.Handler) http.Handler {
+func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 	return am.puzzleRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -396,7 +296,7 @@ func (am *authMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 	}))
 }
 
-func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
+func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 	return am.puzzleRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
@@ -452,7 +352,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 
 			if status, err := am.userLimits.Get(ctx, property.OrgOwnerID.Int32); err == nil {
 				// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
-				if !billing.IsSubscriptionActive(status.Status) {
+				if !status.IsSubscriptionActive {
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				} else {
 					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
@@ -469,7 +369,7 @@ func (am *authMiddleware) Sitekey(next http.Handler) http.Handler {
 	}))
 }
 
-func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
+func (am *AuthMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, tnow time.Time) bool {
 	if key == nil {
 		return false
 	}
@@ -487,7 +387,7 @@ func (am *authMiddleware) isAPIKeyValid(ctx context.Context, key *dbgen.APIKey, 
 	return true
 }
 
-func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
+func (am *AuthMiddleware) apiKeyKeyFunc(r *http.Request) string {
 	ctx := r.Context()
 	secret := r.Header.Get(common.HeaderAPIKey)
 
@@ -504,7 +404,7 @@ func (am *authMiddleware) apiKeyKeyFunc(r *http.Request) string {
 	return ""
 }
 
-func (am *authMiddleware) APIKey(next http.Handler) http.Handler {
+func (am *AuthMiddleware) APIKey(next http.Handler) http.Handler {
 	return am.apiKeyRateLimiter.RateLimit(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		secret := r.Header.Get(common.HeaderAPIKey)

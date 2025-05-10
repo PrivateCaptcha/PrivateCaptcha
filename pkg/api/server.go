@@ -27,9 +27,8 @@ import (
 const (
 	maxSolutionsBodySize  = 256 * 1024
 	maxPaddleBodySize     = 10 * 1024
-	verifyBatchSize       = 100
-	propertyBucketSize    = 5 * time.Minute
-	levelsBatchSize       = 100
+	VerifyBatchSize       = 100
+	PropertyBucketSize    = 5 * time.Minute
 	updateLimitsBatchSize = 100
 	maxVerifyBatchSize    = 100_000
 )
@@ -46,58 +45,25 @@ var (
 	}
 )
 
-type server struct {
-	stage           string
-	businessDB      *db.BusinessStore
-	timeSeries      *db.TimeSeriesStore
-	levels          *difficulty.Levels
-	auth            *authMiddleware
-	uaKey           *userFingerprintKey
-	salt            *puzzleSalt
-	verifyLogChan   chan *common.VerifyRecord
-	verifyLogCancel context.CancelFunc
-	paddleAPI       billing.PaddleAPI
-	cors            *cors.Cors
-	metrics         monitoring.Metrics
-	mailer          common.Mailer
-	testPuzzleData  *puzzle.PuzzlePayload
+type Server struct {
+	Stage              string
+	BusinessDB         *db.BusinessStore
+	TimeSeries         *db.TimeSeriesStore
+	Levels             *difficulty.Levels
+	Auth               *AuthMiddleware
+	UserFingerprintKey *userFingerprintKey
+	Salt               *puzzleSalt
+	VerifyLogChan      chan *common.VerifyRecord
+	VerifyLogCancel    context.CancelFunc
+	PaddleAPI          billing.PaddleAPI
+	PlanService        billing.PlanService
+	Cors               *cors.Cors
+	Metrics            monitoring.Metrics
+	Mailer             common.Mailer
+	TestPuzzleData     *puzzle.PuzzlePayload
 }
 
-var _ puzzle.Engine = (*server)(nil)
-
-func NewServer(store *db.BusinessStore,
-	timeSeries *db.TimeSeriesStore,
-	auth *authMiddleware,
-	verifyFlushInterval time.Duration,
-	paddleAPI billing.PaddleAPI,
-	metrics monitoring.Metrics,
-	mailer common.Mailer,
-	cfg common.ConfigStore) *server {
-
-	srv := &server{
-		stage:         cfg.Get(common.StageKey).Value(),
-		businessDB:    store,
-		timeSeries:    timeSeries,
-		auth:          auth,
-		verifyLogChan: make(chan *common.VerifyRecord, 10*verifyBatchSize),
-		salt:          newPuzzleSalt(cfg.Get(common.APISaltKey)),
-		uaKey:         newUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
-		paddleAPI:     paddleAPI,
-		metrics:       metrics,
-		mailer:        mailer,
-	}
-
-	srv.levels = difficulty.NewLevelsEx(timeSeries, levelsBatchSize, propertyBucketSize,
-		2*time.Second /*access log interval*/, propertyBucketSize /*backfill interval*/)
-
-	var cancelVerifyCtx context.Context
-	cancelVerifyCtx, srv.verifyLogCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "flush_verify_log"))
-
-	go common.ProcessBatchArray(cancelVerifyCtx, srv.verifyLogChan, verifyFlushInterval, verifyBatchSize, maxVerifyBatchSize, srv.timeSeries.WriteVerifyLogBatch)
-
-	return srv
-}
+var _ puzzle.Engine = (*Server)(nil)
 
 type apiKeyOwnerSource struct{}
 
@@ -127,33 +93,41 @@ type verifyResponseRecaptchaV3 struct {
 	Action string  `json:"action"`
 }
 
-func (s *server) Init(ctx context.Context) error {
-	if err := s.salt.Update(); err != nil {
+func (s *Server) Init(ctx context.Context, verifyFlushInterval time.Duration) error {
+	if err := s.Salt.Update(); err != nil {
 		slog.ErrorContext(ctx, "Failed to update puzzle salt", common.ErrAttr(err))
 		return err
 	}
 
-	if err := s.uaKey.Update(); err != nil {
+	if err := s.UserFingerprintKey.Update(); err != nil {
 		slog.ErrorContext(ctx, "Failed to update user fingerprint key", common.ErrAttr(err))
 		return err
 	}
 
 	testPuzzle := puzzle.NewPuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
 	var err error
-	s.testPuzzleData, err = testPuzzle.Serialize(ctx, s.salt.Value(), nil /*property salt*/)
+	s.TestPuzzleData, err = testPuzzle.Serialize(ctx, s.Salt.Value(), nil /*property salt*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialize test puzzle", common.ErrAttr(err))
 		return err
 	}
 
+	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/)
+
+	var cancelVerifyCtx context.Context
+	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "flush_verify_log"))
+
+	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, verifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+
 	return nil
 }
 
-func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
+func (s *Server) Setup(router *http.ServeMux, domain string, verbose bool, security alice.Constructor) {
 	corsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
-		AllowOriginVaryRequestFunc: s.auth.originAllowed,
+		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
 		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
 		AllowedMethods:             []string{http.MethodGet},
 		AllowPrivateNetwork:        true,
@@ -166,34 +140,39 @@ func (s *server) Setup(router *http.ServeMux, domain string, verbose bool) {
 		corsOpts.Logger = &common.FmtLogger{Ctx: common.TraceContext(context.TODO(), "cors"), Level: common.LevelTrace}
 	}
 
-	s.cors = cors.New(corsOpts)
+	s.Cors = cors.New(corsOpts)
 
-	s.setupWithPrefix(domain, router, s.cors.Handler)
+	s.setupWithPrefix(domain, router, s.Cors.Handler, security)
 }
 
-func (s *server) Shutdown() {
-	s.levels.Shutdown()
+func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
+	s.Auth.UpdateConfig(cfg)
+}
+
+func (s *Server) Shutdown() {
+	s.Levels.Shutdown()
+	s.Auth.Shutdown()
 
 	slog.Debug("Shutting down API server routines")
-	s.verifyLogCancel()
-	close(s.verifyLogChan)
+	s.VerifyLogCancel()
+	close(s.VerifyLogChan)
 }
 
-func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler alice.Constructor) {
+func (s *Server) setupWithPrefix(domain string, router *http.ServeMux, corsHandler, security alice.Constructor) {
 	prefix := domain + "/"
 	slog.Debug("Setting up the API routes", "prefix", prefix)
-	publicChain := alice.New(common.Recovered, monitoring.Traced, s.auth.EdgeVerify(domain), s.metrics.Handler)
+	publicChain := alice.New(common.Recovered, monitoring.Traced, security, s.Metrics.Handler)
 	// NOTE: auth middleware provides rate limiting internally
-	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, common.TimeoutHandler(1*time.Second), s.auth.Sitekey).ThenFunc(s.puzzleHandler))
-	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler, s.auth.SitekeyOptions).ThenFunc(s.puzzlePreFlight))
-	verifyChain := publicChain.Append(common.TimeoutHandler(5*time.Second), s.auth.APIKey)
+	router.Handle(http.MethodGet+" "+prefix+common.PuzzleEndpoint, publicChain.Append(corsHandler, common.TimeoutHandler(1*time.Second), s.Auth.Sitekey).ThenFunc(s.puzzleHandler))
+	router.Handle(http.MethodOptions+" "+prefix+common.PuzzleEndpoint, publicChain.Append(common.Cached, corsHandler, s.Auth.SitekeyOptions).ThenFunc(s.puzzlePreFlight))
+	verifyChain := publicChain.Append(common.TimeoutHandler(5*time.Second), s.Auth.APIKey)
 	router.Handle(http.MethodPost+" "+prefix+common.VerifyEndpoint, verifyChain.Then(http.MaxBytesHandler(http.HandlerFunc(s.verifyHandler), maxSolutionsBodySize)))
 
 	maxBytesHandler := func(next http.Handler) http.Handler {
 		return http.MaxBytesHandler(next, maxPaddleBodySize)
 	}
 	// in almost all Paddle handlers we make external http requests, hence larger timeout
-	paddleChain := alice.New(common.Recovered, s.metrics.Handler, s.auth.EdgeVerify(domain), s.auth.Private, monitoring.Logged, maxBytesHandler, common.TimeoutHandler(10*time.Second))
+	paddleChain := alice.New(common.Recovered, s.Metrics.Handler, security, s.Auth.Private, monitoring.Logged, maxBytesHandler, common.TimeoutHandler(10*time.Second))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCreated, paddleChain.ThenFunc(s.subscriptionCreated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionUpdated, paddleChain.ThenFunc(s.subscriptionUpdated))
 	router.Handle(http.MethodPost+" "+prefix+common.PaddleSubscriptionCancelled, paddleChain.ThenFunc(s.subscriptionCancelled))
@@ -201,7 +180,7 @@ func (s *server) setupWithPrefix(domain string, router *http.ServeMux, corsHandl
 	router.Handle(http.MethodGet+" "+prefix+"{$}", publicChain.Then(common.HttpStatus(http.StatusForbidden)))
 }
 
-func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Property, error) {
+func (s *Server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Property, error) {
 	ctx := r.Context()
 	property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	// property will not be cached for auth.backfillDelay and we return an "average" puzzle instead
@@ -225,7 +204,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	}
 
 	var fingerprint common.TFingerprint
-	hash, err := blake2b.New256(s.uaKey.Value())
+	hash, err := blake2b.New256(s.UserFingerprintKey.Value())
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
 		fingerprint = common.RandomFingerprint()
@@ -245,7 +224,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	}
 
 	tnow := time.Now()
-	puzzleDifficulty := s.levels.Difficulty(fingerprint, property, tnow)
+	puzzleDifficulty := s.Levels.Difficulty(fingerprint, property, tnow)
 
 	puzzleID := puzzle.RandomPuzzleID()
 	result := puzzle.NewPuzzle(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
@@ -259,7 +238,7 @@ func (s *server) puzzleForRequest(r *http.Request) (*puzzle.Puzzle, *dbgen.Prope
 	return result, property, nil
 }
 
-func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
+func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	// the reason for this is that we intend to cache test property responses
@@ -270,7 +249,7 @@ func (s *server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	puzzle, property, err := s.puzzleForRequest(r)
 	if err != nil {
@@ -279,7 +258,7 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 			// we cache test property responses, can as well allow them anywhere
 			common.WriteHeaders(w, headersAnyOrigin)
 			common.WriteHeaders(w, headersContentPlain)
-			_ = s.testPuzzleData.Write(w)
+			_ = s.TestPuzzleData.Write(w)
 			return
 		}
 
@@ -299,11 +278,11 @@ func (s *server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "Failed to write puzzle", common.ErrAttr(err))
 	}
 
-	s.metrics.ObservePuzzleCreated(userID)
+	s.Metrics.ObservePuzzleCreated(userID)
 }
 
-func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) error {
-	payload, err := p.Serialize(ctx, s.salt.Value(), extraSalt)
+func (s *Server) Write(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, w http.ResponseWriter) error {
+	payload, err := p.Serialize(ctx, s.Salt.Value(), extraSalt)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return err
@@ -314,7 +293,7 @@ func (s *server) Write(ctx context.Context, p *puzzle.Puzzle, extraSalt []byte, 
 	return payload.Write(w)
 }
 
-func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
+func (s *Server) Verify(ctx context.Context, payload string, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, puzzle.VerifyError, error) {
 	verifyPayload, err := puzzle.ParseVerifyPayload(ctx, payload)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse verify payload", common.ErrAttr(err))
@@ -337,7 +316,7 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 	}
 
 	if (puzzleObject != nil) && (property != nil) && !property.AllowReplay {
-		if cerr := s.businessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
+		if cerr := s.BusinessDB.CachePuzzle(ctx, puzzleObject, tnow); cerr != nil {
 			slog.ErrorContext(ctx, "Failed to cache puzzle", common.ErrAttr(cerr))
 		}
 	}
@@ -347,7 +326,7 @@ func (s *server) Verify(ctx context.Context, payload string, expectedOwner puzzl
 	return puzzleObject, perr, nil
 }
 
-func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	data, err := io.ReadAll(r.Body)
@@ -381,7 +360,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.DefaultValidityPeriod))
 
 		sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-		if property, err := s.businessDB.GetCachedPropertyBySitekey(ctx, sitekey); err == nil {
+		if property, err := s.BusinessDB.GetCachedPropertyBySitekey(ctx, sitekey); err == nil {
 			vr2.Hostname = property.Domain
 		}
 	}
@@ -402,7 +381,7 @@ func (s *server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, result, common.NoCacheHeaders)
 }
 
-func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {
+func (s *Server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property *dbgen.Property, verr puzzle.VerifyError) {
 	if (p == nil) || (property == nil) {
 		slog.ErrorContext(ctx, "Invalid input for verify record", "property", (property != nil), "puzzle", (p != nil))
 		return
@@ -417,12 +396,12 @@ func (s *server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 		Status:     int8(verr),
 	}
 
-	s.verifyLogChan <- vr
+	s.VerifyLogChan <- vr
 
-	s.metrics.ObservePuzzleVerified(vr.UserID, verr, p.IsStub())
+	s.Metrics.ObservePuzzleVerified(vr.UserID, verr, p.IsStub())
 }
 
-func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {
+func (s *Server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {
 	p := payload.Puzzle()
 	plog := slog.With("puzzleID", p.PuzzleID)
 
@@ -437,18 +416,18 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 	}
 
 	if !payload.NeedsExtraSalt() {
-		if serr := payload.VerifySignature(ctx, s.salt.Value(), nil /*extra salt*/); serr != nil {
+		if serr := payload.VerifySignature(ctx, s.Salt.Value(), nil /*extra salt*/); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
 	}
 
-	if s.businessDB.CheckPuzzleCached(ctx, p) {
+	if s.BusinessDB.CheckPuzzleCached(ctx, p) {
 		plog.WarnContext(ctx, "Puzzle is already cached")
 		return p, nil, puzzle.VerifiedBeforeError
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	properties, err := s.businessDB.RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}})
+	properties, err := s.BusinessDB.RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}})
 	if (err != nil) || (len(properties) != 1) {
 		switch err {
 		case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
@@ -463,7 +442,7 @@ func (s *server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 
 	property := properties[0]
 	if payload.NeedsExtraSalt() {
-		if serr := payload.VerifySignature(ctx, s.salt.Value(), property.Salt); serr != nil {
+		if serr := payload.VerifySignature(ctx, s.Salt.Value(), property.Salt); serr != nil {
 			return p, nil, puzzle.IntegrityError
 		}
 	}

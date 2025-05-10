@@ -23,11 +23,10 @@ type Levels struct {
 	cleanupCancel   context.CancelFunc
 }
 
-func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, accessLogInterval, backfillInterval time.Duration) *Levels {
+func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
 
 	const (
-		propertyBucketCap   = math.MaxUint32
-		maxPendingBatchSize = 100_000
+		propertyBucketCap = math.MaxUint32
 		// below numbers are rather arbitrary as we can support "many"
 		// as for users, we want to keep only the "most active" ones as "not active enough" activity
 		// does not affect difficulty much, if at all
@@ -47,33 +46,11 @@ func NewLevelsEx(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize, acce
 		accessChan:      make(chan *common.AccessRecord, 10*batchSize),
 		backfillChan:    make(chan *common.BackfillRequest, batchSize),
 		batchSize:       batchSize,
+		accessLogCancel: func() {},
+		cleanupCancel:   func() {},
 	}
 
-	var accessCtx context.Context
-	accessCtx, levels.accessLogCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "access_log"))
-	go common.ProcessBatchArray(accessCtx, levels.accessChan, accessLogInterval, levels.batchSize, maxPendingBatchSize, levels.timeSeries.WriteAccessLogBatch)
-
-	go levels.backfillDifficulty(context.WithValue(context.Background(), common.TraceIDContextKey, "backfill_difficulty"),
-		backfillInterval)
-
-	var cancelCtx context.Context
-	cancelCtx, levels.cleanupCancel = context.WithCancel(
-		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_stats"))
-	// bucket window is currently 5 minutes so it may change at a minute step
-	// here we have 30 seconds since 1 minute sounds like way too long
-	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
-		return levels.propertyBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
-	})
-	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
-		return levels.userBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
-	})
-
 	return levels
-}
-
-func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
-	return NewLevelsEx(timeSeries, batchSize, bucketSize, 2*time.Second, bucketSize)
 }
 
 func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.DifficultyGrowth) uint8 {
@@ -112,6 +89,31 @@ func requestsToDifficulty(requests float64, minDifficulty uint8, level dbgen.Dif
 	}
 
 	return uint8(difficulty)
+}
+
+func (levels *Levels) Init(accessLogInterval, backfillInterval time.Duration) {
+	const (
+		maxPendingBatchSize = 100_000
+	)
+	var accessCtx context.Context
+	accessCtx, levels.accessLogCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "access_log"))
+	go common.ProcessBatchArray(accessCtx, levels.accessChan, accessLogInterval, levels.batchSize, maxPendingBatchSize, levels.timeSeries.WriteAccessLogBatch)
+
+	go levels.backfillDifficulty(context.WithValue(context.Background(), common.TraceIDContextKey, "backfill_difficulty"),
+		backfillInterval)
+
+	var cancelCtx context.Context
+	cancelCtx, levels.cleanupCancel = context.WithCancel(
+		context.WithValue(context.Background(), common.TraceIDContextKey, "cleanup_stats"))
+	// bucket window is currently 5 minutes so it may change at a minute step
+	// here we have 30 seconds since 1 minute sounds like way too long
+	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
+		return levels.propertyBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
+	})
+	go common.ChunkedCleanup(cancelCtx, 1*time.Second, 30*time.Second, 100 /*chunkSize*/, func(ctx context.Context, t time.Time, size int) int {
+		return levels.userBuckets.Cleanup(ctx, t, size, nil /*cleanup callback*/)
+	})
 }
 
 func (l *Levels) Shutdown() {

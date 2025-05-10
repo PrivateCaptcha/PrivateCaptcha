@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -366,7 +365,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 }
 
 func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Subscription, userID int32, isOrgOwner bool) string {
-	if (subscr == nil) || !billing.IsSubscriptionActive(subscr.Status) {
+	if (subscr == nil) || !s.PlanService.IsSubscriptionActive(subscr.Status) {
 		if isOrgOwner {
 			return "You need an active subscription to create new properties."
 		}
@@ -375,7 +374,7 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := billing.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""

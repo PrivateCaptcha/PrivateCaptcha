@@ -20,6 +20,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
+	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -50,6 +51,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	paddleAPI := &billing.StubPaddleClient{}
+	planService := billing.NewPlanService()
 
 	if testing.Short() {
 		server = &Server{
@@ -62,9 +64,14 @@ func TestMain(m *testing.M) {
 			},
 			PaddleAPI:    paddleAPI,
 			PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
+			PlanService:  planService,
 		}
 
-		if err := server.Init(context.TODO()); err != nil {
+		ctx := context.TODO()
+		templatesBuilder := NewTemplatesBuilder()
+		templatesBuilder.AddFS(ctx, web.Templates(), "core")
+
+		if err := server.Init(ctx, templatesBuilder); err != nil {
 			panic(err)
 		}
 
@@ -73,7 +80,7 @@ func TestMain(m *testing.M) {
 
 	common.SetupLogs(common.StageTest, true)
 
-	cfg = config.NewEnvConfig(os.Getenv)
+	cfg = config.NewEnvConfig(config.DefaultMapper, os.Getenv)
 
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
@@ -86,6 +93,7 @@ func TestMain(m *testing.M) {
 	timeSeries = db.NewTimeSeries(clickhouse)
 
 	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
+	levels.Init(2*time.Second, 5*time.Minute)
 	defer levels.Shutdown()
 
 	store = db.NewBusiness(pool)
@@ -105,12 +113,17 @@ func TestMain(m *testing.M) {
 		},
 		Mailer:       &email.StubMailer{},
 		PaddleAPI:    paddleAPI,
-		RateLimiter:  &ratelimit.StubRateLimiter{},
+		Auth:         &AuthMiddleware{rateLimiter: &ratelimit.StubRateLimiter{}},
 		PuzzleEngine: &fakePuzzleEngine{result: puzzle.VerifyNoError},
 		Metrics:      monitoring.NewStub(),
+		PlanService:  planService,
 	}
 
-	if err := server.Init(context.TODO()); err != nil {
+	ctx := context.TODO()
+	templatesBuilder := NewTemplatesBuilder()
+	templatesBuilder.AddFS(ctx, web.Templates(), "core")
+
+	if err := server.Init(ctx, templatesBuilder); err != nil {
 		panic(err)
 	}
 

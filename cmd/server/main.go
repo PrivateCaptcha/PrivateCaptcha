@@ -22,6 +22,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
@@ -116,6 +117,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	if err != nil {
 		return err
 	}
+	planService := billing.NewPlanService()
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {
@@ -128,7 +130,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	businessDB := db.NewBusiness(pool)
 	timeSeriesDB := db.NewTimeSeries(clickhouse)
 
-	auth := api.NewAuthMiddleware(cfg, businessDB, 1*time.Second /*backfill duration*/)
 	metrics := monitoring.NewService()
 
 	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
@@ -137,15 +138,31 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	mailer := email.NewMailer(cfg)
 	portalMailer := email.NewPortalMailer("https:"+cdnURLConfig.URL(), portalURLConfig.Domain(), mailer, cfg)
 
-	apiServer := api.NewServer(businessDB, timeSeriesDB, auth, 10*time.Second /*flush interval*/, paddleAPI, metrics, portalMailer, cfg)
-	if err := apiServer.Init(ctx); err != nil {
+	apiServer := &api.Server{
+		Stage:              stage,
+		BusinessDB:         businessDB,
+		TimeSeries:         timeSeriesDB,
+		Auth:               api.NewAuthMiddleware(cfg, businessDB, 1*time.Second /*backfill duration*/, planService),
+		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
+		Salt:               api.NewPuzzleSalt(cfg.Get(common.APISaltKey)),
+		UserFingerprintKey: api.NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
+		PaddleAPI:          paddleAPI,
+		PlanService:        planService,
+		Metrics:            metrics,
+		Mailer:             portalMailer,
+		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),
+		VerifyLogCancel:    func() {},
+	}
+	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/); err != nil {
 		return err
 	}
 
 	router := http.NewServeMux()
 
+	baseAuth := common.NewAuthMiddleware(cfg)
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
-	apiServer.Setup(router, apiURLConfig.Domain(), verbose)
+	apiDomain := apiURLConfig.Domain()
+	apiServer.Setup(router, apiDomain, verbose, baseAuth.EdgeVerify(apiDomain))
 
 	sessionStore := db.NewSessionStore(pool, memory.New(), 1*time.Minute, session.KeyPersistent)
 	portalServer := &portal.Server{
@@ -159,14 +176,21 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			MaxLifetime: sessionStore.MaxLifetime(),
 		},
 		PaddleAPI:    paddleAPI,
+		PlanService:  planService,
 		APIURL:       apiURLConfig.URL(),
 		CDNURL:       cdnURLConfig.URL(),
 		PuzzleEngine: apiServer,
 		Metrics:      metrics,
 		Mailer:       portalMailer,
-		RateLimiter:  auth.DefaultRateLimiter(),
+		Auth:         portal.NewAuthMiddleware(cfg),
 	}
-	if err := portalServer.Init(ctx); err != nil {
+
+	templatesBuilder := portal.NewTemplatesBuilder()
+	if err := templatesBuilder.AddFS(ctx, web.Templates(), "core"); err != nil {
+		return err
+	}
+
+	if err := portalServer.Init(ctx, templatesBuilder); err != nil {
 		return err
 	}
 
@@ -179,16 +203,16 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	portalDomain := portalURLConfig.Domain()
-	portalServer.Setup(router, portalDomain, auth.EdgeVerify(portalDomain))
-	rateLimiter := auth.DefaultRateLimiter().RateLimit
+	portalServer.Setup(router, portalDomain, baseAuth.EdgeVerify(portalDomain))
+	rateLimiter := portalServer.Auth.RateLimit()
 	cdnDomain := cdnURLConfig.Domain()
-	cdnChain := alice.New(common.Recovered, auth.EdgeVerify(cdnDomain), metrics.CDNHandler, rateLimiter)
+	cdnChain := alice.New(common.Recovered, baseAuth.EdgeVerify(cdnDomain), metrics.CDNHandler, rateLimiter)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
 	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, internalAPIChain.ThenFunc(healthCheck.HandlerFunc))
 	// "protection" (NOTE: different than usual order of monitoring)
-	publicChain := alice.New(common.Recovered, auth.EdgeVerify("" /*domain*/), metrics.IgnoredHandler, rateLimiter)
+	publicChain := alice.New(common.Recovered, baseAuth.EdgeVerify("" /*domain*/), metrics.IgnoredHandler, rateLimiter)
 	common.SetupWellKnownPaths(router, publicChain)
 
 	httpServer := &http.Server{
@@ -206,7 +230,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
 		portalServer.UpdateConfig(ctx, cfg)
-		auth.UpdateConfig(cfg)
+		apiServer.UpdateConfig(ctx, cfg)
 	}
 	updateConfigFunc(ctx)
 
@@ -260,25 +284,28 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Store:  businessDB,
 	})
 	jobs.AddLocked(6*time.Hour, &maintenance.PaddlePricesJob{
-		Stage:     stage,
-		PaddleAPI: paddleAPI,
-		Store:     businessDB,
+		Stage:       stage,
+		PaddleAPI:   paddleAPI,
+		Store:       businessDB,
+		PlanService: planService,
 	})
 	jobs.Add(&maintenance.SessionsCleanupJob{
 		Session: portalServer.Session,
 	})
 	// NOTE: this job should not be DB-locked as we need to have a blocklist on every server
 	jobs.Add(&maintenance.ThrottleViolationsJob{
-		Stage:      stage,
-		UserLimits: auth.UserLimits(),
-		Store:      businessDB,
-		From:       common.StartOfMonth(),
+		Stage:       stage,
+		UserLimits:  apiServer.Auth.UserLimits(),
+		Store:       businessDB,
+		From:        common.StartOfMonth(),
+		PlanService: planService,
 	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})
 	jobs.AddOneOff(&maintenance.WarmupPaddlePrices{
-		Store: businessDB,
-		Stage: stage,
+		Store:       businessDB,
+		Stage:       stage,
+		PlanService: planService,
 	})
 	jobs.AddLocked(24*time.Hour, &maintenance.GarbageCollectDataJob{
 		Age:        30 * 24 * time.Hour,
@@ -318,7 +345,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
-		auth.Shutdown()
+		portalServer.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
@@ -367,7 +394,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
-	cfg := config.NewEnvConfig(env.Get)
+	cfg := config.NewEnvConfig(config.DefaultMapper, env.Get)
 
 	switch *flagMode {
 	case modeServer, modeSystemd:

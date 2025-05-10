@@ -26,7 +26,7 @@ var (
 	growthLevels     = []dbgen.DifficultyGrowth{dbgen.DifficultyGrowthSlow, dbgen.DifficultyGrowthMedium, dbgen.DifficultyGrowthFast}
 )
 
-func seed(usersCount, orgsCount, propertiesCount int, cfg common.ConfigStore) error {
+func seed(usersCount, orgsCount, propertiesCount int, billingSvc billing.PlanService, cfg common.ConfigStore) error {
 	ctx := context.TODO()
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
@@ -39,7 +39,7 @@ func seed(usersCount, orgsCount, propertiesCount int, cfg common.ConfigStore) er
 
 	businessDB := db.NewBusiness(pool)
 
-	plans, ok := billing.GetPlansForStage(cfg.Get(common.StageKey).Value())
+	plans, ok := billingSvc.GetPlansForStage(cfg.Get(common.StageKey).Value())
 	if !ok || (len(plans) == 0) {
 		return errors.New("no billing plans available for current stage")
 	}

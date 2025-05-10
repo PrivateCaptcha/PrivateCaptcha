@@ -73,7 +73,7 @@ func stubSubscriptionCreatedEvent() *paddlenotification.SubscriptionCreated {
 }
 
 func subscriptionCreatedSuite(ctx context.Context, evt *paddlenotification.SubscriptionCreated, email string, t *testing.T) {
-	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, auth.privateAPIKey.Value())
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionCreated, s.Auth.privateAPIKey.Value())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestSubscriptionCreated(t *testing.T) {
 	evt := stubSubscriptionCreatedEvent()
 
 	ci := &billing.CustomerInfo{Email: t.Name() + "@example.com", Name: t.Name()}
-	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
+	s.PaddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
 
 	subscriptionCreatedSuite(context.TODO(), evt, ci.Email, t)
 }
@@ -130,14 +130,14 @@ func TestSubscriptionCreatedWithExisting(t *testing.T) {
 	evt.Data.CustomData[pcUserPaddlePassthroughKey] = strconv.Itoa(int(user.ID))
 
 	ci := &billing.CustomerInfo{Email: user.Email, Name: t.Name()}
-	s.paddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
+	s.PaddleAPI.(*billing.StubPaddleClient).CustomerInfo = ci
 
 	subscriptionCreatedSuite(ctx, evt, ci.Email, t)
 }
 
 func paddleSuite(evt any, endpoint, token string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", true /*verbose*/)
+	s.Setup(srv, "", true /*verbose*/, common.NoopMiddleware)
 
 	data, _ := json.Marshal(evt)
 	req, err := http.NewRequest(http.MethodPost, "/"+endpoint, bytes.NewReader(data))
@@ -215,7 +215,7 @@ func TestSubscriptionUpdated(t *testing.T) {
 		},
 	}
 
-	resp, err := paddleSuite(evt, common.PaddleSubscriptionUpdated, auth.privateAPIKey.Value())
+	resp, err := paddleSuite(evt, common.PaddleSubscriptionUpdated, s.Auth.privateAPIKey.Value())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -19,13 +18,13 @@ import (
 // this field is set in the javascript of the billing page (currently in settings/scripts.html)
 const pcUserPaddlePassthroughKey = "privateCaptchaUserID"
 
-func findProductID(ctx context.Context, items []paddlenotification.SubscriptionItem, stage string) int {
+func (s *Server) findProductID(ctx context.Context, items []paddlenotification.SubscriptionItem, stage string) int {
 	if len(items) == 0 {
 		return -1
 	}
 	j := -1
 	for i, subscr := range items {
-		if _, err := billing.FindPlanEx(subscr.Price.ProductID, subscr.Price.ID, stage, false /*internal*/); err == nil {
+		if _, err := s.PlanService.FindPlanEx(subscr.Price.ProductID, subscr.Price.ID, stage, false /*internal*/); err == nil {
 			j = i
 			break
 		}
@@ -44,8 +43,8 @@ func findProductID(ctx context.Context, items []paddlenotification.SubscriptionI
 	return j
 }
 
-func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddlenotification.SubscriptionCreatedNotification) (*dbgen.CreateSubscriptionParams, int32, error) {
-	j := findProductID(ctx, evt.Items, s.stage)
+func (s *Server) newCreateSubscriptionParams(ctx context.Context, evt *paddlenotification.SubscriptionCreatedNotification) (*dbgen.CreateSubscriptionParams, int32, error) {
+	j := s.findProductID(ctx, evt.Items, s.Stage)
 	if j == -1 {
 		return nil, -1, errProductNotFound
 	}
@@ -94,7 +93,7 @@ func (s *server) newCreateSubscriptionParams(ctx context.Context, evt *paddlenot
 	return params, int32(userID), nil
 }
 
-func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
+func (s *Server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	body, err := io.ReadAll(r.Body)
@@ -115,7 +114,7 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 	elog := slog.With("eventID", evt.EventID, "subscriptionID", evt.Data.ID)
 	elog.DebugContext(ctx, "Handling subscription created event")
 
-	customer, err := s.paddleAPI.GetCustomerInfo(ctx, evt.Data.CustomerID)
+	customer, err := s.PaddleAPI.GetCustomerInfo(ctx, evt.Data.CustomerID)
 	if err != nil {
 		elog.ErrorContext(ctx, "Failed to fetch customer data from Paddle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -129,22 +128,23 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, _, err := s.businessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, common.DefaultOrgName, existingUserID)
+	user, _, err := s.BusinessDB.CreateNewAccount(ctx, subscrParams, customer.Email, customer.Name, common.DefaultOrgName, existingUserID)
 	if (err != nil) && (err != db.ErrDuplicateAccount) {
 		elog.ErrorContext(ctx, "Failed to create a new account", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if plan, err := billing.FindPlanByProductID(subscrParams.PaddleProductID, s.stage); err == nil {
-		_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
-		s.auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit, subscrParams.Status)
+	if plan, err := s.PlanService.FindPlanByProductID(subscrParams.PaddleProductID, s.Stage); err == nil {
+		_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+		isActive := s.PlanService.IsSubscriptionActive(subscrParams.Status)
+		s.Auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit, isActive)
 	} else {
 		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
 	}
 
 	go func(bctx context.Context, email string) {
-		if err := s.mailer.SendWelcome(bctx, email); err != nil {
+		if err := s.Mailer.SendWelcome(bctx, email); err != nil {
 			slog.ErrorContext(bctx, "Failed to send welcome email", common.ErrAttr(err))
 		}
 	}(common.CopyTraceID(ctx, context.Background()), customer.Email)
@@ -152,8 +152,8 @@ func (s *server) subscriptionCreated(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddlenotification.SubscriptionNotification) (*dbgen.UpdateSubscriptionParams, error) {
-	j := findProductID(ctx, data.Items, s.stage)
+func (s *Server) newUpdateSubscriptionParams(ctx context.Context, data *paddlenotification.SubscriptionNotification) (*dbgen.UpdateSubscriptionParams, error) {
+	j := s.findProductID(ctx, data.Items, s.Stage)
 	if j == -1 {
 		return nil, errProductNotFound
 	}
@@ -187,7 +187,7 @@ func (s *server) newUpdateSubscriptionParams(ctx context.Context, data *paddleno
 	return params, nil
 }
 
-func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
+func (s *Server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	body, err := io.ReadAll(r.Body)
@@ -215,18 +215,19 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subscription, err := s.businessDB.UpdateSubscription(ctx, subscrParams)
+	subscription, err := s.BusinessDB.UpdateSubscription(ctx, subscrParams)
 	if err != nil {
 		elog.ErrorContext(ctx, "Failed to update the subscription", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	if plan, err := billing.FindPlanByProductID(subscrParams.PaddleProductID, s.stage); err == nil {
-		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
-			_ = s.timeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
-			s.auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit, subscription.Status)
-			_ = s.businessDB.UpdateUserAPIKeysRateLimits(ctx, user.ID, plan.APIRequestsPerSecond)
+	if plan, err := s.PlanService.FindPlanByProductID(subscrParams.PaddleProductID, s.Stage); err == nil {
+		if user, err := s.BusinessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
+			_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+			isActive := s.PlanService.IsSubscriptionActive(subscription.Status)
+			s.Auth.UnblockUserIfNeeded(ctx, user.ID, plan.RequestsLimit, isActive)
+			_ = s.BusinessDB.UpdateUserAPIKeysRateLimits(ctx, user.ID, plan.APIRequestsPerSecond)
 		}
 	} else {
 		elog.ErrorContext(ctx, "Failed to find Paddle plan", "productID", subscrParams.PaddleProductID, common.ErrAttr(err))
@@ -235,7 +236,7 @@ func (s *server) subscriptionUpdated(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (s *server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
+func (s *Server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	body, err := io.ReadAll(r.Body)
@@ -263,9 +264,9 @@ func (s *server) subscriptionCancelled(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if subscription, err := s.businessDB.UpdateSubscription(ctx, subscrParams); err == nil {
-		if user, err := s.businessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
-			s.auth.BlockUser(ctx, user.ID, 0 /*limit*/, subscription.Status)
+	if subscription, err := s.BusinessDB.UpdateSubscription(ctx, subscrParams); err == nil {
+		if user, err := s.BusinessDB.FindUserBySubscriptionID(ctx, subscription.ID); err == nil {
+			s.Auth.BlockUser(ctx, user.ID, 0 /*limit*/, false /*subscription active*/)
 		}
 	} else {
 		elog.ErrorContext(ctx, "Failed to update the subscription", common.ErrAttr(err))

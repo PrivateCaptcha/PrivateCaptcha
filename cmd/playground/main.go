@@ -26,7 +26,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 	}
 
-	cfg := config.NewEnvConfig(env.Get)
+	cfg := config.NewEnvConfig(config.DefaultMapper, env.Get)
 
 	paddleAPI, err := billing.NewPaddleAPI(cfg)
 	if err != nil {
@@ -34,7 +34,7 @@ func main() {
 		return
 	}
 
-	products := billing.GetProductsForStage(cfg.Get(common.StageKey).Value())
+	products := billing.NewPlanService().GetProductsForStage(cfg.Get(common.StageKey).Value())
 	prices, err := paddleAPI.GetPrices(context.TODO(), products)
 	if err == nil {
 		fmt.Printf("Fetched prices: %v", prices)

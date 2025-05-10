@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"net/http"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -129,7 +128,7 @@ func (s *Server) subscribed(next http.Handler) http.Handler {
 		}
 
 		if subscr, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
-			if !billing.IsSubscriptionActive(subscr.Status) {
+			if !s.PlanService.IsSubscriptionActive(subscr.Status) {
 				slog.WarnContext(ctx, "User's subscription is not active", "status", subscr.Status, "userID", user.ID)
 				url := s.relURL(billingPath)
 				common.Redirect(url, http.StatusPaymentRequired, w, r)

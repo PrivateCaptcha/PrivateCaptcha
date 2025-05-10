@@ -40,7 +40,7 @@ func TestSerializeResponse(t *testing.T) {
 
 func verifySuite(response, secret string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup(srv, "", true /*verbose*/)
+	s.Setup(srv, "", true /*verbose*/, common.NoopMiddleware)
 
 	//srv.HandleFunc("/", catchAll)
 

@@ -12,65 +12,67 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-var (
-	renderConstants = struct {
-		LoginEndpoint        string
-		TwoFactorEndpoint    string
-		ResendEndpoint       string
-		RegisterEndpoint     string
-		SettingsEndpoint     string
-		LogoutEndpoint       string
-		NewEndpoint          string
-		OrgEndpoint          string
-		PropertyEndpoint     string
-		DashboardEndpoint    string
-		TabEndpoint          string
-		ReportsEndpoint      string
-		IntegrationsEndpoint string
-		EditEndpoint         string
-		Token                string
-		Email                string
-		Name                 string
-		Tab                  string
-		VerificationCode     string
-		Domain               string
-		Difficulty           string
-		Growth               string
-		Stats                string
-		DeleteEndpoint       string
-		MembersEndpoint      string
-		OrgLevelInvited      string
-		OrgLevelMember       string
-		OrgLevelOwner        string
-		GeneralEndpoint      string
-		EmailEndpoint        string
-		UserEndpoint         string
-		APIKeysEndpoint      string
-		Months               string
-		SupportEndpoint      string
-		Message              string
-		Subject              string
-		Category             string
-		BillingEndpoint      string
-		Product              string
-		CancelEndpoint       string
-		UpdateEndpoint       string
-		PreviewEndpoint      string
-		Yearly               string
-		Price                string
-		HeaderCSRFToken      string
-		UsageEndpoint        string
-		NotificationEndpoint string
-		LegalEndpoint        string
-		PrivacyEndpoint      string
-		ErrorEndpoint        string
-		AboutEndpoint        string
-		ValidityInterval     string
-		AllowSubdomains      string
-		AllowLocalhost       string
-		AllowReplay          string
-		IgnoreError          string
-	}{
+type RenderConstants struct {
+	LoginEndpoint        string
+	TwoFactorEndpoint    string
+	ResendEndpoint       string
+	RegisterEndpoint     string
+	SettingsEndpoint     string
+	LogoutEndpoint       string
+	NewEndpoint          string
+	OrgEndpoint          string
+	PropertyEndpoint     string
+	DashboardEndpoint    string
+	TabEndpoint          string
+	ReportsEndpoint      string
+	IntegrationsEndpoint string
+	EditEndpoint         string
+	Token                string
+	Email                string
+	Name                 string
+	Tab                  string
+	VerificationCode     string
+	Domain               string
+	Difficulty           string
+	Growth               string
+	Stats                string
+	DeleteEndpoint       string
+	MembersEndpoint      string
+	OrgLevelInvited      string
+	OrgLevelMember       string
+	OrgLevelOwner        string
+	GeneralEndpoint      string
+	EmailEndpoint        string
+	UserEndpoint         string
+	APIKeysEndpoint      string
+	Months               string
+	SupportEndpoint      string
+	Message              string
+	Subject              string
+	Category             string
+	BillingEndpoint      string
+	Product              string
+	CancelEndpoint       string
+	UpdateEndpoint       string
+	PreviewEndpoint      string
+	Yearly               string
+	Price                string
+	HeaderCSRFToken      string
+	UsageEndpoint        string
+	NotificationEndpoint string
+	LegalEndpoint        string
+	PrivacyEndpoint      string
+	ErrorEndpoint        string
+	AboutEndpoint        string
+	ValidityInterval     string
+	AllowSubdomains      string
+	AllowLocalhost       string
+	AllowReplay          string
+	IgnoreError          string
+}
+
+func createRenderConstants() *RenderConstants {
+	return &RenderConstants{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
 		ResendEndpoint:       common.ResendEndpoint,
@@ -128,7 +130,7 @@ var (
 		AllowReplay:          common.ParamAllowReplay,
 		IgnoreError:          common.ParamIgnoreError,
 	}
-)
+}
 
 func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *requestContext) (bytes.Buffer, error) {
 	actualData := struct {
@@ -137,7 +139,7 @@ func (s *Server) renderResponse(ctx context.Context, name string, data interface
 		Ctx    interface{}
 	}{
 		Params: data,
-		Const:  renderConstants,
+		Const:  s.RenderConstants,
 		Ctx:    reqCtx,
 	}
 

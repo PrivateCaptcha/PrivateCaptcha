@@ -20,7 +20,9 @@ type envConfigValue struct {
 
 var _ common.ConfigItem = (*envConfigValue)(nil)
 
-func envVar(c common.ConfigKey) string {
+type ConfigMapper func(common.ConfigKey) string
+
+func DefaultMapper(c common.ConfigKey) string {
 	switch c {
 	case common.APIBaseURLKey:
 		return "PC_API_BASE_URL"
@@ -123,9 +125,9 @@ func (v *envConfigValue) Value() string {
 	return v.value
 }
 
-func (v *envConfigValue) Update(getenv func(string) string) error {
+func (v *envConfigValue) Update(mapper ConfigMapper, getenv func(string) string) error {
 	// NOTE: there's still a kind of a race condition here as we don't protect access
-	value := getenv(envVar(v.key))
+	value := getenv(mapper(v.key))
 	v.value = value
 	if len(value) == 0 {
 		return errEmptyEnvVar
@@ -138,14 +140,16 @@ type envConfig struct {
 	lock   sync.Mutex
 	items  map[common.ConfigKey]*envConfigValue
 	getenv func(string) string
+	mapper ConfigMapper
 }
 
 var _ common.ConfigStore = (*envConfig)(nil)
 
-func NewEnvConfig(getenv func(string) string) *envConfig {
+func NewEnvConfig(mapper ConfigMapper, getenv func(string) string) *envConfig {
 	return &envConfig{
 		items:  make(map[common.ConfigKey]*envConfigValue),
 		getenv: getenv,
+		mapper: mapper,
 	}
 }
 
@@ -161,7 +165,7 @@ func (c *envConfig) Get(key common.ConfigKey) common.ConfigItem {
 	// NOTE: not optimal to read under the lock, but it's not too bad here
 	item = &envConfigValue{
 		key:   key,
-		value: c.getenv(envVar(key)),
+		value: c.getenv(c.mapper(key)),
 	}
 	c.items[key] = item
 
@@ -173,8 +177,8 @@ func (c *envConfig) Update(ctx context.Context) {
 	defer c.lock.Unlock()
 
 	for key, cfg := range c.items {
-		if err := cfg.Update(c.getenv); err != nil {
-			slog.WarnContext(ctx, "Cannot update environment config", "key", envVar(key), common.ErrAttr(err))
+		if err := cfg.Update(c.mapper, c.getenv); err != nil {
+			slog.WarnContext(ctx, "Cannot update environment config", "key", c.mapper(key), common.ErrAttr(err))
 		}
 	}
 }

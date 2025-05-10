@@ -45,7 +45,7 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		Ctx    interface{}
 	}{
 		Params: data,
-		Const:  renderConstants,
+		Const:  s.RenderConstants,
 		Ctx:    reqCtx,
 	}
 

@@ -2,7 +2,6 @@ package billing
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"strconv"
 	"time"
@@ -10,10 +9,6 @@ import (
 	paddle "github.com/PaddleHQ/paddle-go-sdk/v3"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/jpillora/backoff"
-)
-
-var (
-	errInvalidArgument = errors.New("invalid argument")
 )
 
 type CustomerInfo struct {
@@ -99,7 +94,7 @@ func (pc *paddleClient) paddleContext(ctx context.Context) (context.Context, con
 
 func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) (*CustomerInfo, error) {
 	if len(customerID) == 0 {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)
@@ -118,7 +113,7 @@ func (pc *paddleClient) GetCustomerInfo(ctx context.Context, customerID string) 
 
 func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID string) (*ManagementURLs, error) {
 	if len(subscriptionID) == 0 {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)
@@ -143,7 +138,7 @@ func (pc *paddleClient) GetManagementURLs(ctx context.Context, subscriptionID st
 
 func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Prices, error) {
 	if len(productIDs) == 0 {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)
@@ -178,7 +173,7 @@ func (pc *paddleClient) GetPrices(ctx context.Context, productIDs []string) (Pri
 
 func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) (*ChangePreview, error) {
 	if (len(subscriptionID) == 0) || (len(priceID) == 0) {
-		return nil, errInvalidArgument
+		return nil, ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)
@@ -215,7 +210,7 @@ func (pc *paddleClient) PreviewChangeSubscription(ctx context.Context, subscript
 
 func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID string, priceID string, quantity int) error {
 	if (len(subscriptionID) == 0) || (len(priceID) == 0) {
-		return errInvalidArgument
+		return ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)
@@ -245,7 +240,7 @@ func (pc *paddleClient) ChangeSubscription(ctx context.Context, subscriptionID s
 
 func (pc *paddleClient) CancelSubscription(ctx context.Context, subscriptionID string) error {
 	if len(subscriptionID) == 0 {
-		return errInvalidArgument
+		return ErrInvalidArgument
 	}
 
 	ctx, cancel := pc.paddleContext(ctx)

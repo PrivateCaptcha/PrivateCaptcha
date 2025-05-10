@@ -22,15 +22,7 @@
 {{define "main"}}
 <div class="flex-1">
     <div id="settings" class="mx-auto max-w-7xl lg:flex lg:gap-x-16 lg:px-8">
-        {{- if eq .Params.Tab 1 -}}
-        {{template "apikeys.html" .}}
-        {{- else if eq .Params.Tab 2 -}}
-        {{template "billing.html" .}}
-        {{- else if eq .Params.Tab 3 -}}
-        {{template "usage.html" .}}
-        {{- else -}}
-        {{template "general.html" .}}
-        {{- end -}}
+        {{ block "settings-page" .}}{{end}}
     </div>
 </div>
 {{end}}
