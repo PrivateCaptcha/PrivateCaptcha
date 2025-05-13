@@ -96,7 +96,7 @@ func TestGetLoginMaintenance(t *testing.T) {
 	defer server.maintenanceMode.Store(false)
 
 	srv := http.NewServeMux()
-	server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	resp := w.Result()

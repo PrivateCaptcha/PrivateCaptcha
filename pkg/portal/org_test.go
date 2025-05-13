@@ -30,7 +30,7 @@ func TestGetAnotherUsersOrg(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
 
 	cookie, err := authenticateSuite(ctx, user2.Email, srv)
 	if err != nil {

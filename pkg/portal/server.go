@@ -158,11 +158,12 @@ func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
 	}
 }
 
-func (s *Server) Setup(router *http.ServeMux, domain string, edgeVerify alice.Constructor) {
+func (s *Server) Setup(router *http.ServeMux, domain string, security alice.Constructor) *RouteGenerator {
 	prefix := domain + s.relURL("/")
 	rg := &RouteGenerator{Prefix: prefix}
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
-	s.setupWithPrefix(router, rg, edgeVerify)
+	s.setupWithPrefix(router, rg, security)
+	return rg
 }
 
 func (s *Server) SetupCatchAll(router *http.ServeMux, domain string, chain alice.Chain) {

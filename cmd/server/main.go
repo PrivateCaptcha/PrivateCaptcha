@@ -195,7 +195,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	portalDomain := portalURLConfig.Domain()
-	portalServer.Setup(router, portalDomain, common.NoopMiddleware)
+	_ = portalServer.Setup(router, portalDomain, common.NoopMiddleware)
 	rateLimiter := portalServer.Auth.RateLimit()
 	cdnDomain := cdnURLConfig.Domain()
 	cdnChain := alice.New(common.Recovered, metrics.CDNHandler, rateLimiter)
