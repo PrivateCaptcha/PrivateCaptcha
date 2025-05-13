@@ -71,7 +71,7 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusinessEx(pool, cache)
 
-	planService := billing.NewPlanService()
+	planService := billing.NewPlanService(nil)
 
 	s = &Server{
 		Stage:              common.StageTest,

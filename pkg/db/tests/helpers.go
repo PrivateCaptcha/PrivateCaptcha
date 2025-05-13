@@ -43,7 +43,7 @@ func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
 		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: db.Text(xid.New().String()),
 		PaddleCustomerID:     db.Text(xid.New().String()),
-		Status:               string(paddlenotification.SubscriptionStatusTrialing),
+		Status:               string(billing.InternalStatusTrialing),
 		Source:               dbgen.SubscriptionSourceInternal,
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),

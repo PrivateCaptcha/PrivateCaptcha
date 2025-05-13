@@ -113,7 +113,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	verbose := config.AsBool(cfg.Get(common.VerboseKey))
 	common.SetupLogs(stage, verbose)
 
-	planService := billing.NewPlanService()
+	planService := billing.NewPlanService(nil)
 
 	pool, clickhouse, dberr := db.Connect(ctx, cfg)
 	if dberr != nil {

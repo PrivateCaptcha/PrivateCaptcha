@@ -50,7 +50,7 @@ func (f *fakePuzzleEngine) Verify(ctx context.Context, payload string, expectedO
 func TestMain(m *testing.M) {
 	flag.Parse()
 
-	planService := billing.NewPlanService()
+	planService := billing.NewPlanService(nil)
 
 	if testing.Short() {
 		server = &Server{

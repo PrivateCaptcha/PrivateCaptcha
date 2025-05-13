@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -121,13 +120,13 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }
 
-func createInternalTrial(plan *billing.Plan) *dbgen.CreateSubscriptionParams {
+func createInternalTrial(plan *billing.Plan, status string) *dbgen.CreateSubscriptionParams {
 	return &dbgen.CreateSubscriptionParams{
 		PaddleProductID:      plan.PaddleProductID,
 		PaddlePriceID:        plan.PaddlePriceIDMonthly,
 		PaddleSubscriptionID: pgtype.Text{},
 		PaddleCustomerID:     pgtype.Text{},
-		Status:               string(paddlenotification.SubscriptionStatusTrialing),
+		Status:               status,
 		Source:               dbgen.SubscriptionSourceInternal,
 		TrialEndsAt:          db.Timestampz(time.Now().AddDate(0, 0, plan.TrialDays)),
 		NextBilledAt:         db.Timestampz(time.Time{}),
@@ -148,7 +147,7 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 	}
 
 	plan := billing.GetInternalTrialPlan()
-	subscrParams := createInternalTrial(plan)
+	subscrParams := createInternalTrial(plan, s.PlanService.TrialStatus())
 
 	user, org, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
 	if err != nil {

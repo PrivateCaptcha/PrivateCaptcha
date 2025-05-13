@@ -1,6 +1,7 @@
 module github.com/PrivateCaptcha/PrivateCaptcha
 
-go 1.23
+go 1.23.0
+
 toolchain go1.24.1
 
 require (
@@ -36,13 +37,10 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/dolthub/maphash v0.1.0 // indirect
 	github.com/gammazero/deque v0.2.1 // indirect
-	github.com/ggicci/httpin v0.19.0 // indirect
-	github.com/ggicci/owl v0.8.2 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.6.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/influxdata/tdigest v0.0.1 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect

@@ -49,7 +49,7 @@ func main() {
 
 	switch *flagMode {
 	case modeSeed:
-		svc := billing.NewPlanService()
+		svc := billing.NewPlanService(nil)
 		err = seed(*flagUsersCount, *flagOrgsCount, *flagPropertiesCount, svc, cfg)
 	case modeTest:
 		err = load((*flagUsersCount)*(*flagOrgsCount)*(*flagPropertiesCount), cfg, *flagRatePerSecond, *flagDuration,

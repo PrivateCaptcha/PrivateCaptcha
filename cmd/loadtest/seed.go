@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	randv2 "math/rand/v2"
 	"time"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -39,12 +37,7 @@ func seed(usersCount, orgsCount, propertiesCount int, billingSvc billing.PlanSer
 
 	businessDB := db.NewBusiness(pool)
 
-	plans, ok := billingSvc.GetPlansForStage(cfg.Get(common.StageKey).Value())
-	if !ok || (len(plans) == 0) {
-		return errors.New("no billing plans available for current stage")
-	}
-
-	plan := plans[len(plans)-1]
+	plan := billing.GetInternalTrialPlan()
 
 	semaphore := make(chan struct{}, maxParallel)
 	errs, ctx := errgroup.WithContext(ctx)
@@ -75,7 +68,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 		PaddleSubscriptionID: db.Text(xid.New().String()),
 		PaddleCustomerID:     db.Text(xid.New().String()),
 		Source:               dbgen.SubscriptionSourceInternal,
-		Status:               string(paddlenotification.SubscriptionStatusTrialing),
+		Status:               "trialing",
 		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
 		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}, email, name, orgName, -1 /*existingUserID*/)

@@ -122,7 +122,7 @@ func (s *Server) static(tpl string) http.Handler {
 func (s *Server) createCaptchaRenderContext(sitekey string) captchaRenderContext {
 	return captchaRenderContext{
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
-		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: captchaSolutionField,
 		CaptchaSitekey:       sitekey,
 	}
@@ -131,7 +131,7 @@ func (s *Server) createCaptchaRenderContext(sitekey string) captchaRenderContext
 func (s *Server) createDemoCaptchaRenderContext(sitekey string) captchaRenderContext {
 	return captchaRenderContext{
 		CaptchaEndpoint:      "/" + common.EchoPuzzleEndpoint,
-		CaptchaDebug:         s.Stage != common.StageProd,
+		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: captchaSolutionField,
 		CaptchaSitekey:       sitekey,
 	}
