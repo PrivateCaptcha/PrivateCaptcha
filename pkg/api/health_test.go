@@ -18,7 +18,6 @@ func TestHealthEndpoint(t *testing.T) {
 		BusinessDB:   store,
 		TimeSeriesDB: timeSeries,
 		Router:       nil,
-		WithSystemd:  false,
 	}
 
 	if err := healthCheck.RunOnce(context.TODO()); err != nil {

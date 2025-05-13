@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	"github.com/coreos/go-systemd/daemon"
 )
 
 type HealthCheckJob struct {
@@ -22,7 +20,6 @@ type HealthCheckJob struct {
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
 	CheckInterval    common.ConfigItem
-	WithSystemd      bool
 }
 
 const (
@@ -54,12 +51,6 @@ func (j *HealthCheckJob) Name() string {
 func (hc *HealthCheckJob) RunOnce(ctx context.Context) error {
 	hc.postgresFlag.Store(hc.checkPostgres(ctx))
 	hc.clickhouseFlag.Store(hc.checkClickHouse(ctx))
-
-	if hc.WithSystemd {
-		if result := hc.checkHTTP(ctx); result == flagTrue {
-			_, _ = daemon.SdNotify(false, daemon.SdNotifyWatchdog)
-		}
-	}
 
 	return nil
 }
@@ -94,22 +85,6 @@ func (hc *HealthCheckJob) isClickHouseHealthy() bool {
 
 func (hc *HealthCheckJob) isShuttingDown() bool {
 	return hc.shuttingDownFlag.Load() == flagTrue
-}
-
-func (hc *HealthCheckJob) checkHTTP(ctx context.Context) int32 {
-	result := int32(flagFalse)
-	req, err := http.NewRequest(http.MethodGet, "/"+common.HealthEndpoint, nil)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to ping own health endpoint", common.ErrAttr(err))
-		return result
-	}
-	w := httptest.NewRecorder()
-	hc.Router.ServeHTTP(w, req)
-	resp := w.Result()
-	if resp.StatusCode == http.StatusOK {
-		result = flagTrue
-	}
-	return result
 }
 
 func (hc *HealthCheckJob) Shutdown(ctx context.Context) {

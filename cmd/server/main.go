@@ -31,20 +31,18 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session/store/memory"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
-	"github.com/coreos/go-systemd/v22/activation"
 	"github.com/justinas/alice"
 )
 
 const (
 	modeMigrate  = "migrate"
 	modeRollback = "rollback"
-	modeSystemd  = "systemd"
 	modeServer   = "server"
 )
 
 var (
 	GitCommit       string
-	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeSystemd, modeServer}, " | "))
+	flagMode        = flag.String("mode", "", strings.Join([]string{modeMigrate, modeServer}, " | "))
 	envFileFlag     = flag.String("env", "", "Path to .env file, 'stdin' or empty")
 	versionFlag     = flag.Bool("version", false, "Print version and exit")
 	migrateHashFlag = flag.String("migrate-hash", "", "Target migration version (git commit)")
@@ -67,37 +65,19 @@ func listenAddress(cfg common.ConfigStore) string {
 	return address
 }
 
-func createListener(ctx context.Context, cfg common.ConfigStore) (net.Listener, bool, error) {
-	var listener net.Listener
-	systemdListener := (*flagMode == modeSystemd)
-	if systemdListener {
-		listeners, err := activation.Listeners()
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve systemd listeners", common.ErrAttr(err))
-			return nil, systemdListener, err
-		}
-
-		if len(listeners) != 1 {
-			slog.ErrorContext(ctx, "Unexpected number of systemd listeners available", "count", len(listeners))
-			return nil, systemdListener, errors.New("unexpected number of systemd listeners")
-		}
-
-		listener = listeners[0]
-	} else {
-		address := listenAddress(cfg)
-		var err error
-		listener, err = net.Listen("tcp", address)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
-			return nil, systemdListener, err
-		}
+func createListener(ctx context.Context, cfg common.ConfigStore) (net.Listener, error) {
+	address := listenAddress(cfg)
+	listener, err := net.Listen("tcp", address)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to listen", "address", address, common.ErrAttr(err))
+		return nil, err
 	}
 
 	if useTLS := (*certFileFlag != "") && (*keyFileFlag != ""); useTLS {
 		cert, err := tls.LoadX509KeyPair(*certFileFlag, *keyFileFlag)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to load certificates", "cert", *certFileFlag, "key", *keyFileFlag, common.ErrAttr(err))
-			return nil, systemdListener, err
+			return nil, err
 		}
 		tlsConfig := &tls.Config{
 			Certificates: []tls.Certificate{cert},
@@ -105,10 +85,10 @@ func createListener(ctx context.Context, cfg common.ConfigStore) (net.Listener, 
 		listener = tls.NewListener(listener, tlsConfig)
 	}
 
-	return listener, systemdListener, nil
+	return listener, nil
 }
 
-func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener net.Listener, systemdListener bool) error {
+func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener net.Listener) error {
 	stage := cfg.Get(common.StageKey).Value()
 	verbose := config.AsBool(cfg.Get(common.VerboseKey))
 	common.SetupLogs(stage, verbose)
@@ -189,7 +169,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:    businessDB,
 		TimeSeriesDB:  timeSeriesDB,
-		WithSystemd:   systemdListener,
 		CheckInterval: cfg.Get(common.HealthCheckIntervalKey),
 		Router:        router,
 	}
@@ -361,10 +340,10 @@ func main() {
 	cfg := config.NewEnvConfig(config.DefaultMapper, env.Get)
 
 	switch *flagMode {
-	case modeServer, modeSystemd:
+	case modeServer:
 		ctx := common.TraceContext(context.Background(), "main")
-		if listener, systemdListener, lerr := createListener(ctx, cfg); lerr == nil {
-			err = run(ctx, cfg, os.Stderr, listener, systemdListener)
+		if listener, lerr := createListener(ctx, cfg); lerr == nil {
+			err = run(ctx, cfg, os.Stderr, listener)
 		} else {
 			err = lerr
 		}
