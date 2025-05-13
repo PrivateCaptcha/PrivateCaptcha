@@ -246,7 +246,7 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint},
 			template: settingsGeneralTemplatePrefix + "page.html",
 			model: &settingsGeneralRenderContext{
-				settingsCommonRenderContext: settingsCommonRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
 					alertRenderContext: alertRenderContext{
 						SuccessMessage: "Test",
 					},
@@ -262,7 +262,7 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint},
 			template: settingsAPIKeysTemplatePrefix + "page.html",
 			model: &settingsAPIKeysRenderContext{
-				settingsCommonRenderContext: settingsCommonRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
 					csrfRenderContext: stubToken(),
 					alertRenderContext: alertRenderContext{
 						WarningMessage: "Test warning!",
@@ -282,7 +282,7 @@ func TestRenderHTML(t *testing.T) {
 			// NOTE: we use "tab" here instead of "page" becaues of <script> text and JS that breaks XML parser
 			template: settingsUsageTemplatePrefix + "tab.html",
 			model: &settingsUsageRenderContext{
-				settingsCommonRenderContext: settingsCommonRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
 					csrfRenderContext: stubToken(),
 					alertRenderContext: alertRenderContext{
 						WarningMessage: "Test warning!",

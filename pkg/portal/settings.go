@@ -49,7 +49,7 @@ type settingsTabViewModel struct {
 	IsActive     bool
 }
 
-type settingsCommonRenderContext struct {
+type SettingsCommonRenderContext struct {
 	alertRenderContext
 	csrfRenderContext
 
@@ -61,12 +61,12 @@ type settingsCommonRenderContext struct {
 }
 
 type settingsUsageRenderContext struct {
-	settingsCommonRenderContext
+	SettingsCommonRenderContext
 	Limit int
 }
 
 type settingsGeneralRenderContext struct {
-	settingsCommonRenderContext
+	SettingsCommonRenderContext
 	Name           string
 	NameError      string
 	EmailError     string
@@ -85,7 +85,7 @@ type userAPIKey struct {
 }
 
 type settingsAPIKeysRenderContext struct {
-	settingsCommonRenderContext
+	SettingsCommonRenderContext
 	Name       string
 	NameError  string
 	Keys       []*userAPIKey
@@ -201,10 +201,10 @@ func createTabViewModels(activeTabID string, tabs []*SettingsTab) []*settingsTab
 	return viewModels
 }
 
-func (s *Server) createSettingsCommonRenderContext(activeTabID string, user *dbgen.User) settingsCommonRenderContext {
+func (s *Server) CreateSettingsCommonRenderContext(activeTabID string, user *dbgen.User) SettingsCommonRenderContext {
 	viewModels := createTabViewModels(activeTabID, s.SettingsTabs)
 
-	return settingsCommonRenderContext{
+	return SettingsCommonRenderContext{
 		csrfRenderContext: s.createCsrfContext(user),
 		ActiveTabID:       activeTabID,
 		Tabs:              viewModels,
@@ -215,7 +215,7 @@ func (s *Server) createSettingsCommonRenderContext(activeTabID string, user *dbg
 
 func (s *Server) createGeneralSettingsModel(ctx context.Context, user *dbgen.User) *settingsGeneralRenderContext {
 	return &settingsGeneralRenderContext{
-		settingsCommonRenderContext: s.createSettingsCommonRenderContext(common.GeneralEndpoint, user),
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.GeneralEndpoint, user),
 		Name:                        user.Name,
 	}
 }
@@ -369,7 +369,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.User) *settingsAPIKeysRenderContext {
-	commonCtx := s.createSettingsCommonRenderContext(common.APIKeysEndpoint, user)
+	commonCtx := s.CreateSettingsCommonRenderContext(common.APIKeysEndpoint, user)
 
 	keys, err := s.Store.RetrieveUserAPIKeys(ctx, user.ID)
 	if err != nil {
@@ -378,7 +378,7 @@ func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.Use
 	}
 
 	return &settingsAPIKeysRenderContext{
-		settingsCommonRenderContext: commonCtx,
+		SettingsCommonRenderContext: commonCtx,
 		Keys:                        apiKeysToUserAPIKeys(keys, time.Now().UTC()),
 	}
 }
@@ -528,7 +528,7 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User) *settingsUsageRenderContext {
 	renderCtx := &settingsUsageRenderContext{
-		settingsCommonRenderContext: s.createSettingsCommonRenderContext(common.UsageEndpoint, user),
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.UsageEndpoint, user),
 	}
 
 	if user.SubscriptionID.Valid {

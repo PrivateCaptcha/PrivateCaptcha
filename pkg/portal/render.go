@@ -50,9 +50,6 @@ type RenderConstants struct {
 	Subject              string
 	Category             string
 	Product              string
-	CancelEndpoint       string
-	UpdateEndpoint       string
-	PreviewEndpoint      string
 	Yearly               string
 	Price                string
 	HeaderCSRFToken      string
@@ -108,9 +105,6 @@ func createRenderConstants() *RenderConstants {
 		Subject:              common.ParamSubject,
 		Category:             common.ParamCategory,
 		Product:              common.ParamProduct,
-		CancelEndpoint:       common.CancelEndpoint,
-		UpdateEndpoint:       common.UpdateEndpoint,
-		PreviewEndpoint:      common.PreviewEndpoint,
 		Yearly:               common.ParamYearly,
 		Price:                common.ParamPrice,
 		HeaderCSRFToken:      common.HeaderCSRFToken,
