@@ -141,7 +141,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder) er
 	s.Sessions.Path = prefix
 
 	s.SettingsTabs = s.createSettingsTabs()
-	s.RenderConstants = createRenderConstants()
+	s.RenderConstants = NewRenderConstants()
 
 	return nil
 }

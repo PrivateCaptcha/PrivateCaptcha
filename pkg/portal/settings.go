@@ -20,7 +20,6 @@ const (
 	// Content-specific template names
 	settingsGeneralTemplatePrefix = "settings-general/"
 	settingsAPIKeysTemplatePrefix = "settings-apikeys/"
-	settingsBillingTemplatePrefix = "settings-billing/"
 	settingsUsageTemplatePrefix   = "settings-usage/"
 
 	// Other templates

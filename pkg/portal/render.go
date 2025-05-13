@@ -60,7 +60,7 @@ type RenderConstants struct {
 	IgnoreError          string
 }
 
-func createRenderConstants() *RenderConstants {
+func NewRenderConstants() *RenderConstants {
 	return &RenderConstants{
 		LoginEndpoint:        common.LoginEndpoint,
 		TwoFactorEndpoint:    common.TwoFactorEndpoint,
