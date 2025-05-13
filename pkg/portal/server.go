@@ -45,7 +45,7 @@ type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
 type Model = any
 type ModelFunc func(http.ResponseWriter, *http.Request) (Model, string, error)
 
-type requestContext struct {
+type RequestContext struct {
 	Path        string
 	LoggedIn    bool
 	CurrentYear int
@@ -54,7 +54,7 @@ type requestContext struct {
 	CDN         string
 }
 
-type csrfRenderContext struct {
+type CsrfRenderContext struct {
 	Token string
 }
 
@@ -63,14 +63,14 @@ type systemNotificationContext struct {
 	NotificationID string
 }
 
-type alertRenderContext struct {
+type AlertRenderContext struct {
 	ErrorMessage   string
 	SuccessMessage string
 	WarningMessage string
 	InfoMessage    string
 }
 
-type captchaRenderContext struct {
+type CaptchaRenderContext struct {
 	CaptchaError         string
 	CaptchaEndpoint      string
 	CaptchaSolutionField string
@@ -78,7 +78,7 @@ type captchaRenderContext struct {
 	CaptchaDebug         bool
 }
 
-func (ac *alertRenderContext) ClearAlerts() {
+func (ac *AlertRenderContext) ClearAlerts() {
 	ac.ErrorMessage = ""
 	ac.SuccessMessage = ""
 	ac.WarningMessage = ""
@@ -93,7 +93,7 @@ type Server struct {
 	Prefix          string
 	template        *Templates
 	XSRF            XSRFMiddleware
-	Session         session.Manager
+	Sessions        session.Manager
 	Mailer          common.Mailer
 	Stage           string
 	PlanService     billing.PlanService
@@ -138,7 +138,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder) er
 		return err
 	}
 
-	s.Session.Path = prefix
+	s.Sessions.Path = prefix
 
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = createRenderConstants()
@@ -224,17 +224,6 @@ func (s *Server) MiddlewarePublicChain(rg *RouteGenerator, security alice.Constr
 	return alice.New(common.Recovered, security, s.Metrics.HandlerFunc(rg.LastPath), s.Auth.RateLimit(), monitoring.Logged)
 }
 
-func (s *Server) MiddlewareOpenRead(public alice.Chain) alice.Chain {
-	publicTimeout := common.TimeoutHandler(2 * time.Second)
-	return public.Append(s.maintenance, publicTimeout)
-}
-
-// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
-func (s *Server) MiddlewareOpenWrite(public alice.Chain) alice.Chain {
-	publicTimeout := common.TimeoutHandler(3 * time.Second)
-	return public.Append(s.maintenance, defaultMaxBytesHandler, publicTimeout)
-}
-
 func (s *Server) MiddlewarePrivateRead(public alice.Chain) alice.Chain {
 	internalTimeout := common.TimeoutHandler(10 * time.Second)
 	return public.Append(s.maintenance, internalTimeout, s.private)
@@ -254,7 +243,8 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 
 	// separately configured "public" ones
 	public := s.MiddlewarePublicChain(rg, security)
-	openRead := s.MiddlewareOpenRead(public)
+	publicTimeout := common.TimeoutHandler(2 * time.Second)
+	openRead := public.Append(s.maintenance, publicTimeout)
 	router.Handle(rg.Get(common.LoginEndpoint), openRead.Then(common.Cached(s.Handler(s.getLogin))))
 	router.Handle(rg.Get(common.RegisterEndpoint), openRead.Then(common.Cached(s.Handler(s.getRegister))))
 	router.Handle(rg.Get(common.TwoFactorEndpoint), openRead.ThenFunc(s.getTwoFactor))
@@ -262,7 +252,8 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 	router.Handle(rg.Get(common.ExpiredEndpoint), public.ThenFunc(s.expired))
 	router.Handle(rg.Get(common.LogoutEndpoint), public.ThenFunc(s.logout))
 
-	openWrite := s.MiddlewareOpenWrite(public)
+	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
+	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicTimeout)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	privateWrite := s.MiddlewarePrivateWrite(public)
 	privateRead := s.MiddlewarePrivateRead(public)
@@ -339,29 +330,29 @@ func (s *Server) Handler(modelFunc ModelFunc) http.Handler {
 			case errInvalidSession:
 				common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 			case errInvalidPathArg, errInvalidRequestArg:
-				s.redirectError(http.StatusBadRequest, w, r)
+				s.RedirectError(http.StatusBadRequest, w, r)
 			case errOrgSoftDeleted:
 				common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
 			case errPropertySoftDeleted:
-				if orgID, err := s.orgID(r); err == nil {
+				if orgID, err := s.OrgID(r); err == nil {
 					url := s.relURL(fmt.Sprintf("/%s/%v", common.OrgEndpoint, orgID))
 					common.Redirect(url, http.StatusBadRequest, w, r)
 				} else {
 					common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
 				}
 			case db.ErrPermissions:
-				s.redirectError(http.StatusForbidden, w, r)
+				s.RedirectError(http.StatusForbidden, w, r)
 			case db.ErrSoftDeleted:
-				s.redirectError(http.StatusNotAcceptable, w, r)
+				s.RedirectError(http.StatusNotAcceptable, w, r)
 			case db.ErrMaintenance:
-				s.redirectError(http.StatusServiceUnavailable, w, r)
+				s.RedirectError(http.StatusServiceUnavailable, w, r)
 			case errRegistrationDisabled:
-				s.redirectError(http.StatusNotFound, w, r)
+				s.RedirectError(http.StatusNotFound, w, r)
 			case context.DeadlineExceeded:
 				slog.WarnContext(ctx, "Context deadline exceeded during model function", common.ErrAttr(err))
 			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
-				s.redirectError(http.StatusInternalServerError, w, r)
+				s.RedirectError(http.StatusInternalServerError, w, r)
 			}
 			return
 		}
@@ -377,7 +368,7 @@ func (s *Server) maintenance(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.isMaintenanceMode() {
 			slog.Log(r.Context(), common.LevelTrace, "Rejecting request under maintenance mode")
-			s.redirectError(http.StatusServiceUnavailable, w, r)
+			s.RedirectError(http.StatusServiceUnavailable, w, r)
 			return
 		}
 
@@ -387,7 +378,7 @@ func (s *Server) maintenance(next http.Handler) http.Handler {
 
 func (s *Server) private(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		sess := s.Session.SessionStart(w, r)
+		sess := s.Sessions.SessionStart(w, r)
 
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.SessionID())

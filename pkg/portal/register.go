@@ -28,8 +28,8 @@ const (
 )
 
 type registerRenderContext struct {
-	csrfRenderContext
-	captchaRenderContext
+	CsrfRenderContext
+	CaptchaRenderContext
 	NameError  string
 	EmailError string
 }
@@ -40,10 +40,10 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	return &registerRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(db.PortalRegisterSitekey),
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
 	}, "register/register.html", nil
 }
 
@@ -53,21 +53,21 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	if !s.canRegister.Load() {
 		slog.WarnContext(ctx, "Registration is disabled")
-		s.redirectError(http.StatusNotImplemented, w, r)
+		s.RedirectError(http.StatusNotImplemented, w, r)
 		return
 	}
 
 	data := &registerRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(db.PortalRegisterSitekey),
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
 	}
 
 	ownerSource := &portalPropertyOwnerSource{Store: s.Store, Sitekey: data.CaptchaSitekey}
@@ -107,11 +107,11 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	_ = sess.Set(session.KeyLoginStep, loginStepSignUpVerify)
 	_ = sess.Set(session.KeyUserEmail, email)
 	_ = sess.Set(session.KeyUserName, name)

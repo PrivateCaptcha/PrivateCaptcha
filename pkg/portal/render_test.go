@@ -83,8 +83,8 @@ func stubOrg(orgID string) *userOrg {
 	return stubOrgEx(orgID, dbgen.AccessLevelOwner)
 }
 
-func stubToken() csrfRenderContext {
-	return csrfRenderContext{Token: "token"}
+func stubToken() CsrfRenderContext {
+	return CsrfRenderContext{Token: "token"}
 }
 
 func stubUser(name string, level dbgen.AccessLevel) *orgUser {
@@ -137,17 +137,17 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.LoginEndpoint},
 			template: loginTemplate,
-			model:    &loginRenderContext{csrfRenderContext: stubToken()},
+			model:    &loginRenderContext{CsrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.TwoFactorEndpoint},
 			template: twofactorTemplate,
-			model:    &twoFactorRenderContext{csrfRenderContext: stubToken(), Email: "foo@bar.com"},
+			model:    &twoFactorRenderContext{CsrfRenderContext: stubToken(), Email: "foo@bar.com"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, common.NewEndpoint},
 			template: orgWizardTemplate,
-			model:    &orgWizardRenderContext{csrfRenderContext: stubToken()},
+			model:    &orgWizardRenderContext{CsrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123"},
@@ -176,11 +176,11 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
 			template: orgMembersTemplate,
 			model: &orgMemberRenderContext{
-				alertRenderContext: alertRenderContext{
+				AlertRenderContext: AlertRenderContext{
 					SuccessMessage: "Test",
 				},
 				CurrentOrg:        stubOrg("123"),
-				csrfRenderContext: stubToken(),
+				CsrfRenderContext: stubToken(),
 				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
 				CanEdit:           true,
 			},
@@ -192,20 +192,20 @@ func TestRenderHTML(t *testing.T) {
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{
 				CurrentOrg:        stubOrg("123"),
-				csrfRenderContext: stubToken(),
+				CsrfRenderContext: stubToken(),
 				CanEdit:           true,
 			},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, common.NewEndpoint},
 			template: propertyWizardTemplate,
-			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), csrfRenderContext: stubToken()},
+			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken()},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardTemplate,
 			model: &propertyDashboardRenderContext{
-				csrfRenderContext: stubToken(),
+				CsrfRenderContext: stubToken(),
 				Property:          stubProperty("Foo", "123"),
 				Org:               stubOrg("123"),
 				CanEdit:           true,
@@ -217,7 +217,7 @@ func TestRenderHTML(t *testing.T) {
 			template: propertyDashboardIntegrationsTemplate,
 			model: &propertyIntegrationsRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
-					csrfRenderContext: stubToken(),
+					CsrfRenderContext: stubToken(),
 					Property:          stubProperty("Foo", "123"),
 					Org:               stubOrg("123"),
 					CanEdit:           true,
@@ -232,10 +232,10 @@ func TestRenderHTML(t *testing.T) {
 			model: &propertySettingsRenderContext{
 				difficultyLevelsRenderContext: createDifficultyLevelsRenderContext(),
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
-					alertRenderContext: alertRenderContext{
+					AlertRenderContext: AlertRenderContext{
 						SuccessMessage: "Test",
 					},
-					csrfRenderContext: stubToken(),
+					CsrfRenderContext: stubToken(),
 					Property:          stubProperty("Foo", "123"),
 					Org:               stubOrg("123"),
 					CanEdit:           true,
@@ -247,10 +247,10 @@ func TestRenderHTML(t *testing.T) {
 			template: settingsGeneralTemplatePrefix + "page.html",
 			model: &settingsGeneralRenderContext{
 				SettingsCommonRenderContext: SettingsCommonRenderContext{
-					alertRenderContext: alertRenderContext{
+					AlertRenderContext: AlertRenderContext{
 						SuccessMessage: "Test",
 					},
-					csrfRenderContext: stubToken(),
+					CsrfRenderContext: stubToken(),
 					Email:             "foo@bar.com",
 					ActiveTabID:       common.GeneralEndpoint,
 					Tabs:              createTabViewModels(common.GeneralEndpoint, server.SettingsTabs),
@@ -263,8 +263,8 @@ func TestRenderHTML(t *testing.T) {
 			template: settingsAPIKeysTemplatePrefix + "page.html",
 			model: &settingsAPIKeysRenderContext{
 				SettingsCommonRenderContext: SettingsCommonRenderContext{
-					csrfRenderContext: stubToken(),
-					alertRenderContext: alertRenderContext{
+					CsrfRenderContext: stubToken(),
+					AlertRenderContext: AlertRenderContext{
 						WarningMessage: "Test warning!",
 					},
 					Email:       "foo@bar.com",
@@ -283,8 +283,8 @@ func TestRenderHTML(t *testing.T) {
 			template: settingsUsageTemplatePrefix + "tab.html",
 			model: &settingsUsageRenderContext{
 				SettingsCommonRenderContext: SettingsCommonRenderContext{
-					csrfRenderContext: stubToken(),
-					alertRenderContext: alertRenderContext{
+					CsrfRenderContext: stubToken(),
+					AlertRenderContext: AlertRenderContext{
 						WarningMessage: "Test warning!",
 					},
 					Email:       "foo@bar.com",
@@ -302,7 +302,7 @@ func TestRenderHTML(t *testing.T) {
 		t.Run(fmt.Sprintf("render_%s", strings.Join(tc.path, "_")), func(t *testing.T) {
 			ctx := context.TODO()
 			path := server.relURL(strings.Join(tc.path, "/"))
-			buf, err := server.renderResponse(ctx, tc.template, tc.model, &requestContext{Path: server.relURL(path)})
+			buf, err := server.renderResponse(ctx, tc.template, tc.model, &RequestContext{Path: server.relURL(path)})
 			if err != nil {
 				t.Fatal(err)
 			}

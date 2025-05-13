@@ -21,7 +21,7 @@ func twoFactorCode() int {
 	return rand.Intn(900000) + 100000
 }
 
-func (s *Server) org(userID int32, r *http.Request) (*dbgen.Organization, error) {
+func (s *Server) Org(userID int32, r *http.Request) (*dbgen.Organization, error) {
 	ctx := r.Context()
 
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg)
@@ -47,7 +47,7 @@ func (s *Server) org(userID int32, r *http.Request) (*dbgen.Organization, error)
 	return org, nil
 }
 
-func (s *Server) orgID(r *http.Request) (int32, error) {
+func (s *Server) OrgID(r *http.Request) (int32, error) {
 	ctx := r.Context()
 
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg)
@@ -59,7 +59,7 @@ func (s *Server) orgID(r *http.Request) (int32, error) {
 	return int32(orgID), nil
 }
 
-func (s *Server) property(orgID int32, r *http.Request) (*dbgen.Property, error) {
+func (s *Server) Property(orgID int32, r *http.Request) (*dbgen.Property, error) {
 	ctx := r.Context()
 
 	propertyID, value, err := common.IntPathArg(r, common.ParamProperty)
@@ -81,17 +81,17 @@ func (s *Server) property(orgID int32, r *http.Request) (*dbgen.Property, error)
 	return property, nil
 }
 
-func (s *Server) session(w http.ResponseWriter, r *http.Request) *common.Session {
+func (s *Server) Session(w http.ResponseWriter, r *http.Request) *common.Session {
 	ctx := r.Context()
 	sess, ok := ctx.Value(common.SessionContextKey).(*common.Session)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get session from context")
-		sess = s.Session.SessionStart(w, r)
+		sess = s.Sessions.SessionStart(w, r)
 	}
 	return sess
 }
 
-func (s *Server) sessionUser(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
+func (s *Server) SessionUser(ctx context.Context, sess *common.Session) (*dbgen.User, error) {
 	userID, ok := sess.Get(session.KeyUserID).(int32)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get userID from session")
@@ -108,19 +108,19 @@ func (s *Server) sessionUser(ctx context.Context, sess *common.Session) (*dbgen.
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	s.Session.SessionDestroy(w, r)
+	s.Sessions.SessionDestroy(w, r)
 	common.Redirect(s.relURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
 func (s *Server) static(tpl string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		renderCtx := &csrfRenderContext{}
+		renderCtx := &CsrfRenderContext{}
 		s.render(w, r, tpl, renderCtx)
 	})
 }
 
-func (s *Server) createCaptchaRenderContext(sitekey string) captchaRenderContext {
-	return captchaRenderContext{
+func (s *Server) CreateCaptchaRenderContext(sitekey string) CaptchaRenderContext {
+	return CaptchaRenderContext{
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
 		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: captchaSolutionField,
@@ -128,8 +128,8 @@ func (s *Server) createCaptchaRenderContext(sitekey string) captchaRenderContext
 	}
 }
 
-func (s *Server) createDemoCaptchaRenderContext(sitekey string) captchaRenderContext {
-	return captchaRenderContext{
+func (s *Server) createDemoCaptchaRenderContext(sitekey string) CaptchaRenderContext {
+	return CaptchaRenderContext{
 		CaptchaEndpoint:      "/" + common.EchoPuzzleEndpoint,
 		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: captchaSolutionField,

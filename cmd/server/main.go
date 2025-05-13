@@ -143,7 +143,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
 		XSRF:       portal.XSRFMiddleware{Key: "pckey", Timeout: 1 * time.Hour},
-		Session: session.Manager{
+		Sessions: session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
@@ -246,7 +246,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	jobs := maintenance.NewJobs(businessDB)
 	jobs.Add(healthCheck)
 	jobs.Add(&maintenance.SessionsCleanupJob{
-		Session: portalServer.Session,
+		Session: portalServer.Sessions,
 	})
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
 	jobs.Add(&maintenance.CleanupDeletedRecordsJob{Store: businessDB, Age: 365 * 24 * time.Hour})

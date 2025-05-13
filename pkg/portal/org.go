@@ -34,8 +34,8 @@ const (
 )
 
 type orgSettingsRenderContext struct {
-	alertRenderContext
-	csrfRenderContext
+	AlertRenderContext
+	CsrfRenderContext
 	CurrentOrg *userOrg
 	NameError  string
 	CanEdit    bool
@@ -49,8 +49,8 @@ type orgUser struct {
 }
 
 type orgMemberRenderContext struct {
-	alertRenderContext
-	csrfRenderContext
+	AlertRenderContext
+	CsrfRenderContext
 	CurrentOrg *userOrg
 	Members    []*orgUser
 	CanEdit    bool
@@ -63,7 +63,7 @@ type userOrg struct {
 }
 
 type orgDashboardRenderContext struct {
-	csrfRenderContext
+	CsrfRenderContext
 	systemNotificationContext
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
@@ -72,8 +72,8 @@ type orgDashboardRenderContext struct {
 }
 
 type orgWizardRenderContext struct {
-	csrfRenderContext
-	alertRenderContext
+	CsrfRenderContext
+	AlertRenderContext
 	NameError string
 }
 
@@ -124,13 +124,13 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow) []*userOrg {
 func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
 
 	renderCtx := &orgWizardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 	}
 
 	if !user.SubscriptionID.Valid {
@@ -198,22 +198,22 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	renderCtx := &orgWizardRenderContext{
-		csrfRenderContext:  s.createCsrfContext(user),
-		alertRenderContext: alertRenderContext{},
+		CsrfRenderContext:  s.CreateCsrfContext(user),
+		AlertRenderContext: AlertRenderContext{},
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -232,7 +232,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	org, err := s.Store.CreateNewOrganization(ctx, name, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create organization", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -242,7 +242,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *common.Session) (*orgDashboardRenderContext, error) {
 	slog.DebugContext(ctx, "Creating org dashboard context", "orgID", orgID)
 
-	user, err := s.sessionUser(ctx, sess)
+	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 	}
 
 	renderCtx := &orgDashboardRenderContext{
-		csrfRenderContext:         s.createCsrfContext(user),
+		CsrfRenderContext:         s.CreateCsrfContext(user),
 		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs),
 		Properties:                []*userProperty{},
@@ -308,7 +308,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 
 	orgID, _, err := common.IntPathArg(r, common.ParamOrg)
 	if err != nil {
@@ -322,12 +322,12 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			common.Redirect(s.partsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
 		} else if err == errInvalidSession {
 			slog.WarnContext(ctx, "Inconsistent user session found")
-			s.Session.SessionDestroy(w, r)
+			s.Sessions.SessionDestroy(w, r)
 			common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		} else if err == errInvalidPathArg {
-			s.redirectError(http.StatusBadRequest, w, r)
+			s.RedirectError(http.StatusBadRequest, w, r)
 		} else {
-			s.redirectError(http.StatusInternalServerError, w, r)
+			s.RedirectError(http.StatusInternalServerError, w, r)
 		}
 		return
 	}
@@ -337,12 +337,12 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -353,7 +353,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 	}
 
 	renderCtx := &orgPropertiesRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID),
 		Properties:        propertiesToUserProperties(ctx, properties),
 	}
@@ -363,18 +363,18 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 
 func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
 
 	renderCtx := &orgMemberRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID),
 		CanEdit:           org.UserID.Int32 == user.ID,
 	}
@@ -444,7 +444,7 @@ func (s *Server) validateAddOrgMember(ctx context.Context, user *dbgen.User, mem
 
 func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -455,7 +455,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		return nil, "", errInvalidRequestArg
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -467,7 +467,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 	}
 
 	renderCtx := &orgMemberRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID),
 		Members:           usersToOrgUsers(members),
 		CanEdit:           org.UserID.Int32 == user.ID,
@@ -503,29 +503,29 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	userID, value, err := common.IntPathArg(r, common.ParamUser)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse user from request", "value", value, common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -539,15 +539,15 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
-	orgID, err := s.orgID(r)
+	orgID, err := s.OrgID(r)
 	if err != nil {
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -555,21 +555,21 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
 }
 
 func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
-	orgID, err := s.orgID(r)
+	orgID, err := s.OrgID(r)
 	if err != nil {
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -577,24 +577,24 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
 }
 
 func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
 
 	renderCtx := &orgSettingsRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID),
 		CanEdit:           org.UserID.Int32 == user.ID,
 	}
@@ -604,7 +604,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, 
 
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -614,13 +614,13 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, "", errInvalidRequestArg
 	}
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
 
 	renderCtx := &orgSettingsRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID),
 		CanEdit:           org.UserID.Int32 == user.ID,
 	}
@@ -651,27 +651,27 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
 	if org.UserID.Int32 != user.ID {
 		slog.ErrorContext(ctx, "Does not have permissions to delete org", "userID", user.ID, "orgUserID", org.UserID.Int32)
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	if err := s.Store.SoftDeleteOrganization(ctx, org.ID, user.ID); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organization", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 

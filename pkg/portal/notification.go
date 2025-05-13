@@ -25,7 +25,7 @@ func (s *Server) createSystemNotificationContext(ctx context.Context, sess *comm
 
 func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 
 	value := r.PathValue(common.ParamID)
 	id, err := strconv.Atoi(value)

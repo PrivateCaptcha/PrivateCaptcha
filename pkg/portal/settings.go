@@ -26,8 +26,6 @@ const (
 	// Other templates
 	settingsGeneralFormTemplate    = "settings-general/form.html"
 	settingsAPIKeysContentTemplate = "settings-apikeys/content.html"
-	settingsBillingContentTemplate = "settings-billing/content.html"
-	internalSubscriptionMessage    = "Please contact support to change internal subscription."
 )
 
 var (
@@ -50,8 +48,8 @@ type settingsTabViewModel struct {
 }
 
 type SettingsCommonRenderContext struct {
-	alertRenderContext
-	csrfRenderContext
+	AlertRenderContext
+	CsrfRenderContext
 
 	// For navigation and content rendering
 	Tabs        []*settingsTabViewModel
@@ -205,7 +203,7 @@ func (s *Server) CreateSettingsCommonRenderContext(activeTabID string, user *dbg
 	viewModels := createTabViewModels(activeTabID, s.SettingsTabs)
 
 	return SettingsCommonRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		ActiveTabID:       activeTabID,
 		Tabs:              viewModels,
 		Email:             user.Email,
@@ -222,7 +220,7 @@ func (s *Server) createGeneralSettingsModel(ctx context.Context, user *dbgen.Use
 
 func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -234,8 +232,8 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	sess := s.session(w, r)
-	user, err := s.sessionUser(ctx, sess)
+	sess := s.Session(w, r)
+	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
 		return nil, "", err
 	}
@@ -259,7 +257,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -277,7 +275,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 	renderCtx.EditEmail = (len(formEmail) > 0) && (formEmail != user.Email) && ((len(formName) == 0) || (formName == user.Name))
 
 	anyChange := false
-	sess := s.session(w, r)
+	sess := s.Session(w, r)
 
 	if renderCtx.EditEmail {
 		renderCtx.Email = formEmail
@@ -336,9 +334,9 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
@@ -346,14 +344,14 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
-			s.redirectError(http.StatusInternalServerError, w, r)
+			s.RedirectError(http.StatusInternalServerError, w, r)
 			return
 		}
 
 		if s.PlanService.IsSubscriptionActive(subscription.Status) && subscription.PaddleSubscriptionID.Valid {
 			if err := s.PlanService.CancelSubscription(ctx, subscription.PaddleSubscriptionID.String); err != nil {
 				slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "userID", user.ID, common.ErrAttr(err))
-				s.redirectError(http.StatusInternalServerError, w, r)
+				s.RedirectError(http.StatusInternalServerError, w, r)
 				return
 			}
 		}
@@ -363,7 +361,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		s.logout(w, r)
 	} else {
 		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 }
@@ -385,7 +383,7 @@ func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.Use
 
 func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -412,7 +410,7 @@ func monthsFromParam(ctx context.Context, param string) int {
 
 func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -461,16 +459,16 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	keyID, value, err := common.IntPathArg(r, common.ParamKey)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse key path parameter", "value", value)
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -486,7 +484,7 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
@@ -556,7 +554,7 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}

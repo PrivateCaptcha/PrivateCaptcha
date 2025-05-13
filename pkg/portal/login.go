@@ -28,8 +28,8 @@ var (
 )
 
 type loginRenderContext struct {
-	csrfRenderContext
-	captchaRenderContext
+	CsrfRenderContext
+	CaptchaRenderContext
 	EmailError  string
 	CanRegister bool
 }
@@ -51,10 +51,10 @@ func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context) (int32, error) 
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	return &loginRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(db.PortalLoginSitekey),
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
 		CanRegister:          s.canRegister.Load(),
 	}, loginTemplate, nil
 }
@@ -65,15 +65,15 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
 	data := &loginRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
-		captchaRenderContext: s.createCaptchaRenderContext(db.PortalLoginSitekey),
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
 		CanRegister:          s.canRegister.Load(),
 	}
 
@@ -104,7 +104,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); ok {
 		if step == loginStepCompleted {
 			slog.DebugContext(ctx, "User seem to be already logged in", "email", email)
@@ -119,7 +119,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 

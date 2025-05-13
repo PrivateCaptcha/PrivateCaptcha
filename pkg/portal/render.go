@@ -46,12 +46,6 @@ type RenderConstants struct {
 	UserEndpoint         string
 	APIKeysEndpoint      string
 	Months               string
-	Message              string
-	Subject              string
-	Category             string
-	Product              string
-	Yearly               string
-	Price                string
 	HeaderCSRFToken      string
 	UsageEndpoint        string
 	NotificationEndpoint string
@@ -101,12 +95,6 @@ func createRenderConstants() *RenderConstants {
 		UserEndpoint:         common.UserEndpoint,
 		APIKeysEndpoint:      common.APIKeysEndpoint,
 		Months:               common.ParamMonths,
-		Message:              common.ParamMessage,
-		Subject:              common.ParamSubject,
-		Category:             common.ParamCategory,
-		Product:              common.ParamProduct,
-		Yearly:               common.ParamYearly,
-		Price:                common.ParamPrice,
 		HeaderCSRFToken:      common.HeaderCSRFToken,
 		UsageEndpoint:        common.UsageEndpoint,
 		NotificationEndpoint: common.NotificationEndpoint,
@@ -122,7 +110,7 @@ func createRenderConstants() *RenderConstants {
 	}
 }
 
-func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *requestContext) (bytes.Buffer, error) {
+func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext) (bytes.Buffer, error) {
 	actualData := struct {
 		Params interface{}
 		Const  interface{}
@@ -152,14 +140,14 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 
 	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
 
-	reqCtx := &requestContext{
+	reqCtx := &RequestContext{
 		Path:        r.URL.Path,
 		LoggedIn:    ok && loggedIn,
 		CurrentYear: time.Now().Year(),
 		CDN:         s.CDNURL,
 	}
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	if username, ok := sess.Get(session.KeyUserName).(string); ok {
 		reqCtx.UserName = username
 	}

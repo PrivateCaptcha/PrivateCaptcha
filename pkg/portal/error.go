@@ -17,7 +17,7 @@ const (
 )
 
 type errorRenderContext struct {
-	csrfRenderContext
+	CsrfRenderContext
 	ErrorCode    int
 	ErrorMessage string
 	Detail       string
@@ -87,7 +87,7 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request) {
 	s.renderError(r.Context(), w, code)
 }
 
-func (s *Server) redirectError(code int, w http.ResponseWriter, r *http.Request) {
+func (s *Server) RedirectError(code int, w http.ResponseWriter, r *http.Request) {
 	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
 	common.Redirect(url, code, w, r)
 }

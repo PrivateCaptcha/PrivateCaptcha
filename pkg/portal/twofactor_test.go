@@ -34,7 +34,7 @@ func authenticateSuite(ctx context.Context, email string, srv *http.ServeMux) (*
 		return nil, errors.New("failed to cast Mailer to StubMailer")
 	}
 	resp := w.Result()
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Session.CookieName })
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
 	if idx == -1 {
 		return nil, errors.New("cannot find session cookie in response")
 	}

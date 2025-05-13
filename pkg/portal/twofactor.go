@@ -17,7 +17,7 @@ const (
 )
 
 type twoFactorRenderContext struct {
-	csrfRenderContext
+	CsrfRenderContext
 	Email string
 	Error string
 }
@@ -25,7 +25,7 @@ type twoFactorRenderContext struct {
 func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step, "found", ok)
 		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
@@ -40,7 +40,7 @@ func (s *Server) getTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &twoFactorRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(email),
 		},
 		Email: common.MaskEmail(email, '*'),
@@ -55,11 +55,11 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	err := r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	step, ok := sess.Get(session.KeyLoginStep).(int)
 	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
@@ -82,7 +82,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := &twoFactorRenderContext{
-		csrfRenderContext: csrfRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(email),
 		},
 		Email: common.MaskEmail(email, '*'),
@@ -104,7 +104,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 			// redirectURL = s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
 		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
-			s.redirectError(http.StatusInternalServerError, w, r)
+			s.RedirectError(http.StatusInternalServerError, w, r)
 			return
 		}
 	}
@@ -138,7 +138,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	sess := s.Session.SessionStart(w, r)
+	sess := s.Sessions.SessionStart(w, r)
 	if step, ok := sess.Get(session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
 		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)

@@ -39,8 +39,8 @@ type difficultyLevelsRenderContext struct {
 }
 
 type propertyWizardRenderContext struct {
-	csrfRenderContext
-	alertRenderContext
+	CsrfRenderContext
+	AlertRenderContext
 	Name        string
 	Domain      string
 	NameError   string
@@ -62,16 +62,16 @@ type userProperty struct {
 }
 
 type orgPropertiesRenderContext struct {
-	csrfRenderContext
+	CsrfRenderContext
 	Properties []*userProperty
 	CurrentOrg *userOrg
 }
 
 type propertyDashboardRenderContext struct {
-	alertRenderContext
-	csrfRenderContext
+	AlertRenderContext
+	CsrfRenderContext
 	// scripts.html is shared so captcha context has to be shared too
-	captchaRenderContext
+	CaptchaRenderContext
 	Property  *userProperty
 	Org       *userOrg
 	NameError string
@@ -234,18 +234,18 @@ func difficultyLevelFromValue(ctx context.Context, value string) common.Difficul
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
 
 	data := &propertyWizardRenderContext{
-		csrfRenderContext: s.createCsrfContext(user),
+		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg: &userOrg{
 			Name:  org.Name,
 			ID:    strconv.Itoa(int(org.ID)),
@@ -429,28 +429,28 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 // This one cannot be "MVC" function because it redirects in case of success
 func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
 	renderCtx := &propertyWizardRenderContext{
-		csrfRenderContext:  s.createCsrfContext(user),
-		alertRenderContext: alertRenderContext{},
+		CsrfRenderContext:  s.CreateCsrfContext(user),
+		AlertRenderContext: AlertRenderContext{},
 		CurrentOrg:         orgToUserOrg(org, user.ID),
 	}
 
@@ -495,7 +495,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
@@ -507,20 +507,20 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 		return
 	}
 
 	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
-	property, err := s.property(org.ID, r)
+	property, err := s.Property(org.ID, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -583,24 +583,24 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, *dbgen.Property, error) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	property, err := s.property(org.ID, r)
+	property, err := s.Property(org.ID, r)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
-		csrfRenderContext:    s.createCsrfContext(user),
-		captchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
+		CsrfRenderContext:    s.CreateCsrfContext(user),
+		CaptchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
 		Property:             propertyToUserProperty(property),
 		Org:                  orgToUserOrg(org, user.ID),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
@@ -710,7 +710,7 @@ func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Reque
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
 	ctx := r.Context()
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, "", err
 	}
@@ -727,12 +727,12 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	}
 
 	// should hit cache right away
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
 
-	property, err := s.property(org.ID, r)
+	property, err := s.Property(org.ID, r)
 	if err != nil {
 		return nil, "", err
 	}
@@ -791,21 +791,21 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	user, err := s.sessionUser(ctx, s.session(w, r))
+	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
-	org, err := s.org(user.ID, r)
+	org, err := s.Org(user.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	property, err := s.property(org.ID, r)
+	property, err := s.Property(org.ID, r)
 	if err != nil {
-		s.redirectError(http.StatusBadRequest, w, r)
+		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
@@ -813,13 +813,13 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	if !canDelete {
 		slog.ErrorContext(ctx, "Not enough permissions to delete property", "userID", user.ID,
 			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
-		s.redirectError(http.StatusUnauthorized, w, r)
+		s.RedirectError(http.StatusUnauthorized, w, r)
 		return
 	}
 
 	if err := s.Store.SoftDeleteProperty(ctx, property.ID, org.ID); err == nil {
 		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), http.StatusOK, w, r)
 	} else {
-		s.redirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
 }
