@@ -13,12 +13,6 @@ import (
 	"github.com/jpillora/backoff"
 )
 
-func StartOfMonth() time.Time {
-	tnow := time.Now().UTC()
-	// NOTE: it does not correctly adjust time itself
-	return tnow.AddDate(0 /*years*/, 0 /*months*/, -tnow.Day()+1)
-}
-
 func RelURL(prefix, url string) string {
 	url = strings.TrimPrefix(url, "/")
 	p := strings.Trim(prefix, "/")
