@@ -16,6 +16,7 @@ type PortalMailer struct {
 	CDN                   string
 	Domain                string
 	EmailFrom             common.ConfigItem
+	AdminEmail            common.ConfigItem
 	twofactorHTMLTemplate *template.Template
 	twofactorTextTemplate *template.Template
 	welcomeHTMLTemplate   *template.Template
@@ -26,6 +27,7 @@ func NewPortalMailer(cdn, domain string, mailer *SimpleMailer, cfg common.Config
 	return &PortalMailer{
 		Mailer:                mailer,
 		EmailFrom:             cfg.Get(common.EmailFromKey),
+		AdminEmail:            cfg.Get(common.AdminEmailKey),
 		CDN:                   cdn,
 		Domain:                domain,
 		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
@@ -76,7 +78,14 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	clog := slog.With("email", email, "code", data.Code)
 
 	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
-		clog.ErrorContext(ctx, "Failed to send two factor code", common.ErrAttr(err))
+		level := slog.LevelError
+
+		if email == pm.AdminEmail.Value() {
+			level = slog.LevelWarn
+			err = nil
+		}
+
+		clog.Log(ctx, level, "Failed to send two factor code", common.ErrAttr(err))
 
 		return err
 	}

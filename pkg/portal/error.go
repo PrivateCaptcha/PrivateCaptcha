@@ -34,6 +34,7 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	reqCtx := struct {
 		LoggedIn bool
 		CDN      string
+		Path     string
 	}{
 		LoggedIn: false,
 		CDN:      s.CDNURL,
