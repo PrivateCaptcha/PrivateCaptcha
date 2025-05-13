@@ -36,7 +36,6 @@ const (
 	SmtpUsernameKey
 	SmtpPasswordKey
 	EmailFromKey
-	SupportEmailKey
 	HostKey
 	PortKey
 	UserFingerprintIVKey

@@ -70,8 +70,6 @@ func DefaultMapper(c common.ConfigKey) string {
 		return "PC_ADMIN_EMAIL"
 	case common.EmailFromKey:
 		return "PC_EMAIL_FROM"
-	case common.SupportEmailKey:
-		return "PC_SUPPORT_EMAIL"
 	case common.LocalAddressKey:
 		return "PC_LOCAL_ADDRESS"
 	case common.MaintenanceModeKey:
