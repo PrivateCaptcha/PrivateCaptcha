@@ -12,22 +12,22 @@ import (
 )
 
 type PortalMailer struct {
-	mailer                *simpleMailer
-	cdn                   string
-	domain                string
-	emailFrom             common.ConfigItem
+	Mailer                *SimpleMailer
+	CDN                   string
+	Domain                string
+	EmailFrom             common.ConfigItem
 	twofactorHTMLTemplate *template.Template
 	twofactorTextTemplate *template.Template
 	welcomeHTMLTemplate   *template.Template
 	welcomeTextTemplate   *template.Template
 }
 
-func NewPortalMailer(cdn, domain string, mailer *simpleMailer, cfg common.ConfigStore) *PortalMailer {
+func NewPortalMailer(cdn, domain string, mailer *SimpleMailer, cfg common.ConfigStore) *PortalMailer {
 	return &PortalMailer{
-		mailer:                mailer,
-		emailFrom:             cfg.Get(common.EmailFromKey),
-		cdn:                   cdn,
-		domain:                domain,
+		Mailer:                mailer,
+		EmailFrom:             cfg.Get(common.EmailFromKey),
+		CDN:                   cdn,
+		Domain:                domain,
 		twofactorHTMLTemplate: template.Must(template.New("HtmlBody").Parse(TwoFactorHTMLTemplate)),
 		twofactorTextTemplate: template.Must(template.New("TextBody").Parse(twoFactorTextTemplate)),
 		welcomeHTMLTemplate:   template.Must(template.New("HtmlBody").Parse(WelcomeHTMLTemplate)),
@@ -49,8 +49,8 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		CDN         string
 	}{
 		Code:        fmt.Sprintf("%06d", code),
-		CDN:         pm.cdn,
-		Domain:      fmt.Sprintf("https://%s/", pm.domain),
+		CDN:         pm.CDN,
+		Domain:      fmt.Sprintf("https://%s/", pm.Domain),
 		CurrentYear: time.Now().Year(),
 	}
 
@@ -69,13 +69,13 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		TextBody:  textBodyTpl.String(),
 		Subject:   fmt.Sprintf("[%s] Your verification code is %v", common.PrivateCaptcha, data.Code),
 		EmailTo:   email,
-		EmailFrom: pm.emailFrom.Value(),
+		EmailFrom: pm.EmailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 	}
 
 	clog := slog.With("email", email, "code", data.Code)
 
-	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
+	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
 		clog.ErrorContext(ctx, "Failed to send two factor code", common.ErrAttr(err))
 
 		return err
@@ -92,8 +92,8 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email string) error {
 		CurrentYear int
 		CDN         string
 	}{
-		CDN:         pm.cdn,
-		Domain:      pm.domain,
+		CDN:         pm.CDN,
+		Domain:      pm.Domain,
 		CurrentYear: time.Now().Year(),
 	}
 
@@ -112,12 +112,12 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email string) error {
 		TextBody:  textBodyTpl.String(),
 		Subject:   "Welcome to Private Captcha",
 		EmailTo:   email,
-		EmailFrom: pm.emailFrom.Value(),
+		EmailFrom: pm.EmailFrom.Value(),
 		NameFrom:  common.PrivateCaptcha,
 		ReplyTo:   email,
 	}
 
-	if err := pm.mailer.SendEmail(ctx, msg); err != nil {
+	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
 		slog.ErrorContext(ctx, "Failed to send welcome email", common.ErrAttr(err))
 
 		return err

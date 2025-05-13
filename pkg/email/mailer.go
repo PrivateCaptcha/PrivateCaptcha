@@ -58,21 +58,21 @@ func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
 	return d, nil
 }
 
-func NewMailer(cfg common.ConfigStore) *simpleMailer {
-	return &simpleMailer{
+func NewMailer(cfg common.ConfigStore) *SimpleMailer {
+	return &SimpleMailer{
 		endpoint: cfg.Get(common.SmtpEndpointKey),
 		username: cfg.Get(common.SmtpUsernameKey),
 		password: cfg.Get(common.SmtpPasswordKey),
 	}
 }
 
-type simpleMailer struct {
+type SimpleMailer struct {
 	endpoint common.ConfigItem
 	username common.ConfigItem
 	password common.ConfigItem
 }
 
-func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
+func (sm *SimpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 	if !msg.Valid() {
 		return errInvalidMessage
 	}
