@@ -24,7 +24,6 @@ const (
 	ParamTab              = "tab"
 	ParamNew              = "new"
 	ParamMonths           = "months"
-	ParamProduct          = "product"
 	ParamOrg              = "org"
 	ParamUser             = "user"
 	ParamPeriod           = "period"
