@@ -452,7 +452,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", errInvalidRequestArg
+		return nil, "", ErrInvalidRequestArg
 	}
 
 	org, err := s.Org(user.ID, r)
@@ -612,7 +612,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", errInvalidRequestArg
+		return nil, "", ErrInvalidRequestArg
 	}
 	org, err := s.Org(user.ID, r)
 	if err != nil {

@@ -24,7 +24,7 @@ import (
 
 var (
 	errInvalidPathArg      = errors.New("path argument is not valid")
-	errInvalidRequestArg   = errors.New("request argument is not valid")
+	ErrInvalidRequestArg   = errors.New("request argument is not valid")
 	errOrgSoftDeleted      = errors.New("organization is deleted")
 	errPropertySoftDeleted = errors.New("property is deleted")
 )
@@ -329,7 +329,7 @@ func (s *Server) Handler(modelFunc ModelFunc) http.Handler {
 			switch err {
 			case errInvalidSession:
 				common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-			case errInvalidPathArg, errInvalidRequestArg:
+			case errInvalidPathArg, ErrInvalidRequestArg:
 				s.RedirectError(http.StatusBadRequest, w, r)
 			case errOrgSoftDeleted:
 				common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)

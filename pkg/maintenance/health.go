@@ -25,8 +25,8 @@ type HealthCheckJob struct {
 const (
 	greenPage = `<!DOCTYPE html><html><body style="background-color: green;"></body></html>`
 	redPage   = `<!DOCTYPE html><html><body style="background-color: red;"></body></html>`
-	flagTrue  = 1
-	flagFalse = 0
+	FlagTrue  = 1
+	FlagFalse = 0
 )
 
 var _ common.PeriodicJob = (*HealthCheckJob)(nil)
@@ -56,9 +56,9 @@ func (hc *HealthCheckJob) RunOnce(ctx context.Context) error {
 }
 
 func (hc *HealthCheckJob) checkClickHouse(ctx context.Context) int32 {
-	result := int32(flagFalse)
+	result := int32(FlagFalse)
 	if err := hc.TimeSeriesDB.Ping(ctx); err == nil {
-		result = flagTrue
+		result = FlagTrue
 	} else {
 		slog.ErrorContext(ctx, "Failed to ping ClickHouse", common.ErrAttr(err))
 	}
@@ -66,9 +66,9 @@ func (hc *HealthCheckJob) checkClickHouse(ctx context.Context) int32 {
 }
 
 func (hc *HealthCheckJob) checkPostgres(ctx context.Context) int32 {
-	result := int32(flagFalse)
+	result := int32(FlagFalse)
 	if err := hc.BusinessDB.Ping(ctx); err == nil {
-		result = flagTrue
+		result = FlagTrue
 	} else {
 		slog.ErrorContext(ctx, "Failed to ping Postgres", common.ErrAttr(err))
 	}
@@ -76,20 +76,20 @@ func (hc *HealthCheckJob) checkPostgres(ctx context.Context) int32 {
 }
 
 func (hc *HealthCheckJob) isPostgresHealthy() bool {
-	return hc.postgresFlag.Load() == flagTrue
+	return hc.postgresFlag.Load() == FlagTrue
 }
 
 func (hc *HealthCheckJob) isClickHouseHealthy() bool {
-	return hc.clickhouseFlag.Load() == flagTrue
+	return hc.clickhouseFlag.Load() == FlagTrue
 }
 
 func (hc *HealthCheckJob) isShuttingDown() bool {
-	return hc.shuttingDownFlag.Load() == flagTrue
+	return hc.shuttingDownFlag.Load() == FlagTrue
 }
 
 func (hc *HealthCheckJob) Shutdown(ctx context.Context) {
 	slog.DebugContext(ctx, "Shutting down health check job")
-	hc.shuttingDownFlag.Store(flagTrue)
+	hc.shuttingDownFlag.Store(FlagTrue)
 }
 
 func (hc *HealthCheckJob) HandlerFunc(w http.ResponseWriter, r *http.Request) {

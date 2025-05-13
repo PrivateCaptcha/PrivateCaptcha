@@ -718,7 +718,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", errInvalidRequestArg
+		return nil, "", ErrInvalidRequestArg
 	}
 
 	renderCtx, err := s.getOrgPropertySettings(w, r)

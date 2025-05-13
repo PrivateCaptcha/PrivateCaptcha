@@ -264,7 +264,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", errInvalidRequestArg
+		return nil, "", ErrInvalidRequestArg
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -417,7 +417,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", errInvalidRequestArg
+		return nil, "", ErrInvalidRequestArg
 	}
 
 	renderCtx := s.createAPIKeysSettingsModel(ctx, user)
