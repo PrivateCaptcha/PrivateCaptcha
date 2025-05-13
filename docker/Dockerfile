@@ -23,13 +23,13 @@ RUN --mount=type=cache,target=/cache/web,sharing=locked npm run build
 # has to be done first because `npm install` fails otherwise
 WORKDIR /app/widget
 
-ARG WIDGET_ROOT=.
+ARG WIDGET_ROOT=./widget
 # Install dependencies and build the frontend
-COPY ${WIDGET_ROOT}/widget/package.json /app/widget/package.json
+COPY ${WIDGET_ROOT}/package.json /app/widget/package.json
 RUN --mount=type=cache,target=/cache/widget npm install --verbose 
 
 # copy the rest
-COPY ${WIDGET_ROOT}/widget /app/widget
+COPY ${WIDGET_ROOT} /app/widget
 
 ARG STAGE
 ENV STAGE=${STAGE}
@@ -48,7 +48,7 @@ COPY ./vendor /app/vendor
 COPY ./cmd/server /app/cmd/server
 COPY ./pkg /app/pkg
 COPY ./web /app/web
-COPY ./widget /app/widget
+COPY ${WIDGET_ROOT} /app/widget
 
 COPY --from=frontend-builder /app/web/static /app/web/static
 COPY --from=frontend-builder /app/widget/static /app/widget/static
