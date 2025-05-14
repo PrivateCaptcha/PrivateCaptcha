@@ -94,12 +94,11 @@ jobs:
     - name: Unit Tests
       run: make test-unit
 
-    - name: Upload unit coverage report
-      uses: actions/upload-artifact@v4
+    - name: Cache unit coverage report
+      uses: actions/cache/save@v4
       with:
-        name: unit-coverage-report
         path: coverage_unit.out
-        retention-days: 7
+        key: unit-coverage-${{ github.run_id }}
 
     - name: Build tests
       run: make build-tests
@@ -143,13 +142,12 @@ jobs:
         PC_RATE_LIMIT_HEADER: X-REAL-IP
       run: ./docker/run-tests.sh
 
-    - name: Upload integration coverage report
-      uses: actions/upload-artifact@v4
-      if: always()
+    - name: Cache integration coverage report
+      uses: actions/cache/save@v4
+      if: success() # Only cache if tests succeeded and file is presumably complete
       with:
-        name: integration-coverage-report
         path: coverage_integration.out
-        retention-days: 7
+        key: integration-coverage-${{ github.run_id }}
 
     - name: Migrate Databases Down
       env:
@@ -177,17 +175,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download unit coverage report
-        uses: actions/download-artifact@v4
+      - name: Restore unit coverage report
+        uses: actions/cache/restore@v4
         with:
-          name: unit-coverage-report
-          path: .
+          path: coverage_unit.out
+          key: unit-coverage-${{ github.run_id }}
+          fail-on-cache-miss: true
 
-      - name: Download integration coverage report
-        uses: actions/download-artifact@v4
+      - name: Restore integration coverage report
+        uses: actions/cache/restore@v4
         with:
-          name: integration-coverage-report
-          path: .
+          path: coverage_integration.out
+          key: integration-coverage-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
