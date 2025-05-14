@@ -109,7 +109,7 @@ func (s *Server) SessionUser(ctx context.Context, sess *common.Session) (*dbgen.
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	s.Sessions.SessionDestroy(w, r)
-	common.Redirect(s.relURL(common.LoginEndpoint), http.StatusOK, w, r)
+	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
 func (s *Server) static(tpl string) http.Handler {

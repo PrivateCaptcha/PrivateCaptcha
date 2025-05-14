@@ -110,7 +110,7 @@ func NewRenderConstants() *RenderConstants {
 	}
 }
 
-func (s *Server) renderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext) (bytes.Buffer, error) {
+func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext) (bytes.Buffer, error) {
 	actualData := struct {
 		Params interface{}
 		Const  interface{}
@@ -152,7 +152,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		reqCtx.UserName = username
 	}
 
-	out, err := s.renderResponse(ctx, name, data, reqCtx)
+	out, err := s.RenderResponse(ctx, name, data, reqCtx)
 	if err == nil {
 		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		w.WriteHeader(http.StatusOK)

@@ -7,7 +7,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
-	"golang.org/x/net/xsrftoken"
 )
 
 const (
@@ -23,19 +22,6 @@ const (
 	// this effectively means 1 request/second
 	authenticatedLeakInterval = 1 * time.Second
 )
-
-type XSRFMiddleware struct {
-	Key     string
-	Timeout time.Duration
-}
-
-func (xm *XSRFMiddleware) Token(userID string) string {
-	return xsrftoken.Generate(xm.Key, userID, "-")
-}
-
-func (xm *XSRFMiddleware) VerifyToken(token, userID string) bool {
-	return xsrftoken.ValidFor(token, xm.Key, userID, "-", xm.Timeout)
-}
 
 func newDefaultIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 	const (
@@ -55,11 +41,15 @@ type AuthMiddleware struct {
 	rateLimiter ratelimit.HTTPRateLimiter
 }
 
-func NewAuthMiddleware(cfg common.ConfigStore) *AuthMiddleware {
+func NewRateLimiter(cfg common.ConfigStore) ratelimit.HTTPRateLimiter {
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 
+	return ratelimit.NewIPAddrRateLimiter("default", rateLimitHeader, newDefaultIPAddrBuckets(cfg))
+}
+
+func NewAuthMiddleware(rateLimiter ratelimit.HTTPRateLimiter) *AuthMiddleware {
 	return &AuthMiddleware{
-		rateLimiter: ratelimit.NewIPAddrRateLimiter("default", rateLimitHeader, newDefaultIPAddrBuckets(cfg)),
+		rateLimiter: rateLimiter,
 	}
 }
 

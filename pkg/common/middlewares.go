@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/justinas/alice"
+	"golang.org/x/net/xsrftoken"
 )
 
 const (
@@ -184,4 +185,17 @@ func SetupWellKnownPaths(router *http.ServeMux, chain alice.Chain) {
 	router.Handle("/wp-admin/", chain.ThenFunc(noContentCached))
 	router.Handle("/changelog.txt", chain.ThenFunc(noContentCached))
 	router.Handle("/", chain.ThenFunc(catchAll))
+}
+
+type XSRFMiddleware struct {
+	Key     string
+	Timeout time.Duration
+}
+
+func (xm *XSRFMiddleware) Token(userID string) string {
+	return xsrftoken.Generate(xm.Key, userID, "-")
+}
+
+func (xm *XSRFMiddleware) VerifyToken(token, userID string) bool {
+	return xsrftoken.ValidFor(token, xm.Key, userID, "-", xm.Timeout)
 }

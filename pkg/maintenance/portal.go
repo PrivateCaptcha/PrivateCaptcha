@@ -12,7 +12,7 @@ import (
 )
 
 type SessionsCleanupJob struct {
-	Session session.Manager
+	Session *session.Manager
 }
 
 var _ common.PeriodicJob = (*SessionsCleanupJob)(nil)

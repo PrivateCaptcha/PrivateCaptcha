@@ -117,7 +117,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(session.KeyUserName, name)
 	_ = sess.Set(session.KeyTwoFactorCode, code)
 
-	common.Redirect(s.relURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
+	common.Redirect(s.RelURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }
 
 func createInternalTrial(plan *billing.Plan, status string) *dbgen.CreateSubscriptionParams {

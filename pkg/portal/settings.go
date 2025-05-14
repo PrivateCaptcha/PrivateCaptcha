@@ -38,8 +38,8 @@ type SettingsTab struct {
 	ModelHandler   ModelFunc
 }
 
-// settingsTabViewModel is used for rendering the navigation in templates
-type settingsTabViewModel struct {
+// SettingsTabViewModel is used for rendering the navigation in templates
+type SettingsTabViewModel struct {
 	ID           string
 	Name         string
 	IconTemplate string
@@ -51,7 +51,7 @@ type SettingsCommonRenderContext struct {
 	CsrfRenderContext
 
 	// For navigation and content rendering
-	Tabs        []*settingsTabViewModel
+	Tabs        []*SettingsTabViewModel
 	ActiveTabID string
 	Email       string
 	UserID      int32
@@ -185,10 +185,10 @@ func (s *Server) findTab(ctx context.Context, tabID string) (*SettingsTab, error
 	return tab, nil
 }
 
-func createTabViewModels(activeTabID string, tabs []*SettingsTab) []*settingsTabViewModel {
-	viewModels := make([]*settingsTabViewModel, 0, len(tabs))
+func CreateTabViewModels(activeTabID string, tabs []*SettingsTab) []*SettingsTabViewModel {
+	viewModels := make([]*SettingsTabViewModel, 0, len(tabs))
 	for _, tab := range tabs {
-		viewModels = append(viewModels, &settingsTabViewModel{
+		viewModels = append(viewModels, &SettingsTabViewModel{
 			ID:           tab.ID,
 			Name:         tab.Name,
 			IsActive:     tab.ID == activeTabID,
@@ -199,7 +199,7 @@ func createTabViewModels(activeTabID string, tabs []*SettingsTab) []*settingsTab
 }
 
 func (s *Server) CreateSettingsCommonRenderContext(activeTabID string, user *dbgen.User) SettingsCommonRenderContext {
-	viewModels := createTabViewModels(activeTabID, s.SettingsTabs)
+	viewModels := CreateTabViewModels(activeTabID, s.SettingsTabs)
 
 	return SettingsCommonRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),

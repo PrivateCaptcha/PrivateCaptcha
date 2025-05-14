@@ -118,6 +118,10 @@ func (am *AuthMiddleware) Shutdown() {
 	close(am.sitekeyChan)
 }
 
+func (am *AuthMiddleware) PrivateKey() string {
+	return am.privateAPIKey.Value()
+}
+
 func (am *AuthMiddleware) UnblockUserIfNeeded(ctx context.Context, userID int32, newLimit int64, subscriptionActive bool) {
 	if status, err := am.userLimits.Get(ctx, userID); err == nil {
 		if (newLimit > status.Limit) || (!status.IsSubscriptionActive && subscriptionActive) {

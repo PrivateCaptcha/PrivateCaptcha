@@ -56,8 +56,8 @@ func TestMain(m *testing.M) {
 		server = &Server{
 			Stage:  common.StageTest,
 			Prefix: "",
-			XSRF:   XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
-			Sessions: session.Manager{
+			XSRF:   &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+			Sessions: &session.Manager{
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
@@ -103,8 +103,8 @@ func TestMain(m *testing.M) {
 		Store:      store,
 		TimeSeries: timeSeries,
 		Prefix:     "",
-		XSRF:       XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
-		Sessions: session.Manager{
+		XSRF:       &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+		Sessions: &session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
@@ -118,7 +118,9 @@ func TestMain(m *testing.M) {
 
 	ctx := context.TODO()
 	templatesBuilder := NewTemplatesBuilder()
-	templatesBuilder.AddFS(ctx, web.Templates(), "core")
+	if err := templatesBuilder.AddFS(ctx, web.Templates(), "core"); err != nil {
+		panic(err)
+	}
 
 	if err := server.Init(ctx, templatesBuilder); err != nil {
 		panic(err)

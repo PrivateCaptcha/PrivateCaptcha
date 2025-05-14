@@ -10,6 +10,8 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
 func TestGetAnotherUsersOrg(t *testing.T) {
@@ -32,7 +34,7 @@ func TestGetAnotherUsersOrg(t *testing.T) {
 	srv := http.NewServeMux()
 	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
 
-	cookie, err := authenticateSuite(ctx, user2.Email, srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user2.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
 		t.Fatal(err)
 	}

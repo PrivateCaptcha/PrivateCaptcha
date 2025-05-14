@@ -89,7 +89,7 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) RedirectError(code int, w http.ResponseWriter, r *http.Request) {
-	url := s.relURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
+	url := s.RelURL(common.ErrorEndpoint + "/" + strconv.Itoa(code))
 	common.Redirect(url, code, w, r)
 }
 

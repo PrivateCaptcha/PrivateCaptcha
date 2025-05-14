@@ -92,8 +92,8 @@ type Server struct {
 	CDNURL          string
 	Prefix          string
 	template        *Templates
-	XSRF            XSRFMiddleware
-	Sessions        session.Manager
+	XSRF            *common.XSRFMiddleware
+	Sessions        *session.Manager
 	Mailer          common.Mailer
 	Stage           string
 	PlanService     billing.PlanService
@@ -159,7 +159,7 @@ func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
 }
 
 func (s *Server) Setup(router *http.ServeMux, domain string, security alice.Constructor) *RouteGenerator {
-	prefix := domain + s.relURL("/")
+	prefix := domain + s.RelURL("/")
 	rg := &RouteGenerator{Prefix: prefix}
 	slog.Debug("Setting up the portal routes", "prefix", prefix)
 	s.setupWithPrefix(router, rg, security)
@@ -167,17 +167,17 @@ func (s *Server) Setup(router *http.ServeMux, domain string, security alice.Cons
 }
 
 func (s *Server) SetupCatchAll(router *http.ServeMux, domain string, chain alice.Chain) {
-	prefix := domain + s.relURL("/")
+	prefix := domain + s.RelURL("/")
 	slog.Debug("Setting up the catchall portal routes", "prefix", prefix)
 	s.setupCatchAllWithPrefix(router, prefix, chain)
 }
 
-func (s *Server) relURL(url string) string {
+func (s *Server) RelURL(url string) string {
 	return common.RelURL(s.Prefix, url)
 }
 
-func (s *Server) partsURL(a ...string) string {
-	return s.relURL(strings.Join(a, "/"))
+func (s *Server) PartsURL(a ...string) string {
+	return s.RelURL(strings.Join(a, "/"))
 }
 
 // RouteGenerator's point is to passthrough the path correctly to the std.Handler() of slok/go-http-metrics
@@ -328,17 +328,17 @@ func (s *Server) Handler(modelFunc ModelFunc) http.Handler {
 		if err != nil {
 			switch err {
 			case errInvalidSession:
-				common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+				common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 			case errInvalidPathArg, ErrInvalidRequestArg:
 				s.RedirectError(http.StatusBadRequest, w, r)
 			case errOrgSoftDeleted:
-				common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
+				common.Redirect(s.RelURL("/"), http.StatusBadRequest, w, r)
 			case errPropertySoftDeleted:
 				if orgID, err := s.OrgID(r); err == nil {
-					url := s.relURL(fmt.Sprintf("/%s/%v", common.OrgEndpoint, orgID))
+					url := s.RelURL(fmt.Sprintf("/%s/%v", common.OrgEndpoint, orgID))
 					common.Redirect(url, http.StatusBadRequest, w, r)
 				} else {
-					common.Redirect(s.relURL("/"), http.StatusBadRequest, w, r)
+					common.Redirect(s.RelURL("/"), http.StatusBadRequest, w, r)
 				}
 			case db.ErrPermissions:
 				s.RedirectError(http.StatusForbidden, w, r)
@@ -399,6 +399,6 @@ func (s *Server) private(next http.Handler) http.Handler {
 		}
 
 		_ = sess.Set(session.KeyReturnURL, r.URL.RequestURI())
-		common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 	})
 }

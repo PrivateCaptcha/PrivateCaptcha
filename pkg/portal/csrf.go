@@ -66,7 +66,7 @@ func (s *Server) csrf(keyFunc CsrfKeyFunc) alice.Constructor {
 				slog.WarnContext(ctx, "CSRF token is missing")
 			}
 
-			common.Redirect(s.relURL(common.ExpiredEndpoint), http.StatusUnauthorized, w, r)
+			common.Redirect(s.RelURL(common.ExpiredEndpoint), http.StatusUnauthorized, w, r)
 		})
 	}
 }

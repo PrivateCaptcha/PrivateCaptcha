@@ -236,7 +236,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), http.StatusOK, w, r)
+	common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), http.StatusOK, w, r)
 }
 
 func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *common.Session) (*orgDashboardRenderContext, error) {
@@ -319,11 +319,11 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	renderCtx, err := s.createOrgDashboardContext(ctx, int32(orgID), sess)
 	if err != nil {
 		if (orgID == -1) && (err == errNoOrgs) {
-			common.Redirect(s.partsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
+			common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
 		} else if err == errInvalidSession {
 			slog.WarnContext(ctx, "Inconsistent user session found")
 			s.Sessions.SessionDestroy(w, r)
-			common.Redirect(s.relURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+			common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		} else if err == errInvalidPathArg {
 			s.RedirectError(http.StatusBadRequest, w, r)
 		} else {
@@ -553,7 +553,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Store.JoinOrg(ctx, orgID, user.ID); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
-		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
+		common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
@@ -575,7 +575,7 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Store.LeaveOrg(ctx, int32(orgID), user.ID); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
-		common.Redirect(s.partsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
+		common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
@@ -675,5 +675,5 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	common.Redirect(s.relURL("/"), http.StatusOK, w, r)
+	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
 }

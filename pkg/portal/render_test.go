@@ -1,64 +1,17 @@
 package portal
 
 import (
-	"bytes"
 	"context"
-	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/PuerkitoBio/goquery"
-	"golang.org/x/net/html"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
-
-// courtesy of https://martinfowler.com/articles/tdd-html-templates.html
-func assertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
-	data := buf.Bytes()
-	// special handling for Alpine.js, otherwise we get XML parsing error "attribute expected"
-	data = bytes.ReplaceAll(data, []byte(" @click="), []byte(" click="))
-	data = bytes.ReplaceAll(data, []byte(" hx-on::"), []byte(" hx-on-"))
-
-	decoder := xml.NewDecoder(bytes.NewReader(data))
-	decoder.Strict = false
-	decoder.AutoClose = xml.HTMLAutoClose
-	decoder.Entity = xml.HTMLEntity
-	for {
-		token, err := decoder.Token()
-		switch err {
-		case io.EOF:
-			return // We're done, it's valid!
-		case nil:
-			// do nothing
-		default:
-			fmt.Println(buf.String())
-			t.Fatalf("Error parsing html: %s, %v", err, token)
-		}
-	}
-}
-
-func parseHTML(t *testing.T, buf bytes.Buffer) *goquery.Document {
-	assertWellFormedHTML(t, buf)
-	document, err := goquery.NewDocumentFromReader(bytes.NewReader(buf.Bytes()))
-	if err != nil {
-		// if parsing fails, we stop the test here with t.FatalF
-		t.Fatalf("Error rendering template %s", err)
-	}
-	return document
-}
-
-func text(node *html.Node) string {
-	// A little mess due to the fact that goquery has
-	// a .Text() method on Selection but not on html.Node
-	sel := goquery.Selection{Nodes: []*html.Node{node}}
-	return strings.TrimSpace(sel.Text())
-}
 
 func stubProperty(name, orgID string) *userProperty {
 	return &userProperty{
@@ -103,21 +56,6 @@ func stubAPIKey(name string) *userAPIKey {
 		ExpiresAt:   common.JSONTimeNowAdd(1 * time.Hour).String(),
 		Secret:      "",
 		ExpiresSoon: false,
-	}
-}
-
-func stubBillingPlan(id string) *billing.Plan {
-	return &billing.Plan{
-		Name:                 "Stub plan " + id,
-		PaddleProductID:      id,
-		PaddlePriceIDMonthly: "price" + id,
-		PaddlePriceIDYearly:  "price" + id,
-		PriceMonthly:         9,
-		PriceYearly:          90,
-		Version:              1,
-		RequestsLimit:        100,
-		PropertiesLimit:      10,
-		OrgsLimit:            1,
 	}
 }
 
@@ -253,7 +191,7 @@ func TestRenderHTML(t *testing.T) {
 					CsrfRenderContext: stubToken(),
 					Email:             "foo@bar.com",
 					ActiveTabID:       common.GeneralEndpoint,
-					Tabs:              createTabViewModels(common.GeneralEndpoint, server.SettingsTabs),
+					Tabs:              CreateTabViewModels(common.GeneralEndpoint, server.SettingsTabs),
 				},
 				Name: "User",
 			},
@@ -269,7 +207,7 @@ func TestRenderHTML(t *testing.T) {
 					},
 					Email:       "foo@bar.com",
 					ActiveTabID: common.APIKeysEndpoint,
-					Tabs:        createTabViewModels(common.APIKeysEndpoint, server.SettingsTabs),
+					Tabs:        CreateTabViewModels(common.APIKeysEndpoint, server.SettingsTabs),
 				},
 				Keys:       []*userAPIKey{stubAPIKey("foo"), stubAPIKey("bar")},
 				CreateOpen: false,
@@ -289,7 +227,7 @@ func TestRenderHTML(t *testing.T) {
 					},
 					Email:       "foo@bar.com",
 					ActiveTabID: common.UsageEndpoint,
-					Tabs:        createTabViewModels(common.UsageEndpoint, server.SettingsTabs),
+					Tabs:        CreateTabViewModels(common.UsageEndpoint, server.SettingsTabs),
 				},
 				Limit: 12345,
 			},
@@ -301,26 +239,26 @@ func TestRenderHTML(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("render_%s", strings.Join(tc.path, "_")), func(t *testing.T) {
 			ctx := context.TODO()
-			path := server.relURL(strings.Join(tc.path, "/"))
-			buf, err := server.renderResponse(ctx, tc.template, tc.model, &RequestContext{Path: server.relURL(path)})
+			path := server.RelURL(strings.Join(tc.path, "/"))
+			buf, err := server.RenderResponse(ctx, tc.template, tc.model, &RequestContext{Path: server.RelURL(path)})
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if len(tc.selector) > 0 {
-				document := parseHTML(t, buf)
+				document := portal_tests.ParseHTML(t, buf)
 				selection := document.Find(tc.selector)
 				if len(tc.matches) != len(selection.Nodes) {
 					t.Fatalf("Expected %v matches, but got %v", len(tc.matches), len(selection.Nodes))
 				}
 				for i, node := range selection.Nodes {
-					nodeText := text(node)
+					nodeText := portal_tests.Text(node)
 					if tc.matches[i] != nodeText {
 						t.Errorf("Expected match %v at %v, but got %v", tc.matches[i], i, nodeText)
 					}
 				}
 			} else {
-				assertWellFormedHTML(t, buf)
+				portal_tests.AssertWellFormedHTML(t, buf)
 			}
 		})
 	}

@@ -142,8 +142,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Stage:      stage,
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
-		XSRF:       portal.XSRFMiddleware{Key: "pckey", Timeout: 1 * time.Hour},
-		Sessions: session.Manager{
+		XSRF:       &common.XSRFMiddleware{Key: "pckey", Timeout: 1 * time.Hour},
+		Sessions: &session.Manager{
 			CookieName:  "pcsid",
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.MaxLifetime(),
@@ -154,7 +154,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		PuzzleEngine: apiServer,
 		Metrics:      metrics,
 		Mailer:       portalMailer,
-		Auth:         portal.NewAuthMiddleware(cfg),
+		Auth:         portal.NewAuthMiddleware(portal.NewRateLimiter(cfg)),
 	}
 
 	templatesBuilder := portal.NewTemplatesBuilder()
