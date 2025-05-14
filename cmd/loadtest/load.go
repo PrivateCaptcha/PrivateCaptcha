@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -38,17 +39,6 @@ func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error
 	slog.Info("Fetched properties", "count", len(properties))
 
 	return properties, nil
-}
-
-func generateRandomIPv4() string {
-	// Generate a random 32-bit integer
-	ipInt := randv2.Uint32()
-	// Extract each byte and format as IP address
-	return fmt.Sprintf("%d.%d.%d.%d",
-		(ipInt>>24)&0xFF,
-		(ipInt>>16)&0xFF,
-		(ipInt>>8)&0xFF,
-		ipInt&0xFF)
 }
 
 func randomSiteKey() string {
@@ -88,7 +78,7 @@ func puzzleTargeter(properties []*dbgen.Property, sitekeyPercent int, cfg common
 
 		header := http.Header{}
 		header.Add("Origin", property.Domain)
-		header.Add(rateLimitHeader, generateRandomIPv4())
+		header.Add(rateLimitHeader, common_test.GenerateRandomIPv4())
 		tgt.Header = header
 
 		return nil

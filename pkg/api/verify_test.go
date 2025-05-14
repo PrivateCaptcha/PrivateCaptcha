@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -50,7 +51,7 @@ func verifySuite(response, secret string) (*http.Response, error) {
 	}
 
 	req.Header.Set(common.HeaderAPIKey, secret)
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), generateRandomIPv4())
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

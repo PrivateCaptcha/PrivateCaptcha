@@ -3,10 +3,8 @@ package api
 import (
 	"context"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"math/rand"
-	randv2 "math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +12,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -32,17 +31,6 @@ func makeOriginHeader(domain string) string {
 	return domain
 }
 
-func generateRandomIPv4() string {
-	// Generate a random 32-bit integer
-	ipInt := randv2.Uint32()
-	// Extract each byte and format as IP address
-	return fmt.Sprintf("%d.%d.%d.%d",
-		(ipInt>>24)&0xFF,
-		(ipInt>>16)&0xFF,
-		(ipInt>>8)&0xFF,
-		ipInt&0xFF)
-}
-
 func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "", true /*verbose*/, common.NoopMiddleware)
@@ -55,7 +43,7 @@ func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	}
 
 	req.Header.Set("Origin", makeOriginHeader(domain))
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), generateRandomIPv4())
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
 
 	q := req.URL.Query()
 	q.Add(common.ParamSiteKey, sitekey)
