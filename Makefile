@@ -24,7 +24,7 @@ vendors:
 build: build-server build-loadtest
 
 build-tests:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ ./...
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ $(shell go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...)
 
 build-server:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" -o bin/server cmd/server/*.go
