@@ -6,14 +6,15 @@ on:
     types:
       - completed
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-    permissions:
-      actions: read
-      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
