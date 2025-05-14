@@ -167,13 +167,40 @@ jobs:
         path: bin/server
         retention-days: 7
 
+  sonarqube:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    needs: tests
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download unit coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage-report
+          path: .
+
+      - name: Download integration coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-coverage-report
+          path: .
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
   deploy:
     name: Deploy captcha binary
     runs-on: ubuntu-latest
     needs: tests
     if: ${{ success() && github.ref == 'refs/heads/main' }}
     steps:
-      - uses: actions/download-artifact@master
+      - uses: actions/download-artifact@v4
         with:
           name: privatecaptcha
           path: bin
