@@ -94,6 +94,13 @@ jobs:
     - name: Unit Tests
       run: make test-unit
 
+    - name: Upload unit coverage report
+      uses: actions/upload-artifact@v4
+      with:
+        name: unit-coverage-report
+        path: coverage_unit.out
+        retention-days: 7
+
     - name: Build tests
       run: make build-tests
 
@@ -136,6 +143,14 @@ jobs:
         PC_RATE_LIMIT_HEADER: X-REAL-IP
       run: ./docker/run-tests.sh
 
+    - name: Upload integration coverage report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: integration-coverage-report
+        path: coverage_integration.out
+        retention-days: 7
+
     - name: Migrate Databases Down
       env:
         PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?search_path=public
@@ -146,7 +161,7 @@ jobs:
         PC_VERBOSE: 1
       run: ./bin/server -mode rollback -migrate-hash $GITHUB_SHA
 
-    - uses: actions/upload-artifact@master
+    - uses: actions/upload-artifact@v4
       with:
         name: privatecaptcha
         path: bin/server

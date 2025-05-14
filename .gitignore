@@ -30,3 +30,5 @@ pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env
 .aider*
 .env
+
+coverage_*.out

@@ -1,25 +1,35 @@
 name: SonarQube
 
 on:
-  # Trigger analysis when pushing to your main branches, and when creating a pull request.
-  push:
-    branches:
-    - main
-    tags-ignore:
-    - '*'
-  pull_request:
-    types: [opened, synchronize, reopened]
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
 jobs:
   sonarqube:
     name: SonarQube
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+
+      - name: Download unit coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: unit-coverage-report # Artifact name from ci.yaml
+          run-id: ${{ github.event.workflow_run.id }}
+          path: .
+
+      - name: Download integration coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: integration-coverage-report # Artifact name from ci.yaml
+          run-id: ${{ github.event.workflow_run.id }}
+          path: .
+
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:

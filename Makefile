@@ -6,7 +6,7 @@ DOCKER_IMAGE ?= private-captcha
 SQLC_MIGRATION_FIX = pkg/db/migrations/postgres/000000_sqlc_fix.sql
 
 test-unit:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -short ./...
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -short -coverprofile=coverage_unit.out ./...
 
 bench-unit:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -bench=. -benchtime=20s -short ./...
@@ -24,7 +24,7 @@ vendors:
 build: build-server build-loadtest
 
 build-tests:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -o tests/ $(shell go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...)
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -cover -covermode=atomic -o tests/ $(shell go list -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...)
 
 build-server:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" -o bin/server cmd/server/*.go
@@ -107,6 +107,3 @@ run-view-widget:
 	reflex -r '^(widget|web|cmd\/viewwidget)/' \
 		-R '^(web/static/js|widget/static/js|widget/node_modules|web/node_modules)' \
 		-s -- sh -c 'make view-widget'
-
-playground: build-playground
-	bin/playground -env docker/pc.env
