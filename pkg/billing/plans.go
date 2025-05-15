@@ -41,6 +41,7 @@ func (plan *basePlan) Equals(productID string, priceID string) bool {
 		((plan.priceIDMonthly == priceID) || (plan.priceIDYearly == priceID))
 }
 
+func (p *basePlan) Name() string                        { return p.name }
 func (p *basePlan) CheckOrgsLimit(count int) bool       { return true }
 func (p *basePlan) CheckOrgMembersLimit(count int) bool { return true }
 func (p *basePlan) CheckPropertiesLimit(count int) bool { return true }
@@ -61,6 +62,7 @@ var (
 )
 
 type Plan interface {
+	Name() string
 	ProductID() string
 	PriceIDs() (string, string)
 	IsValid() bool
