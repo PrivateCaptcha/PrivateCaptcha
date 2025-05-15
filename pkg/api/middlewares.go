@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -16,11 +15,15 @@ import (
 )
 
 const (
-	maxTokenLen = 300
 	// for puzzles the logic is that if something becomes popular, there will be a spike, but normal usage should be low
 	puzzleLeakyBucketCap = 20
 	puzzleLeakInterval   = 1 * time.Second
 )
+
+type UserLimiter interface {
+	CheckProperties(ctx context.Context, properties []*dbgen.Property)
+	Evaluate(ctx context.Context, userID int32) (bool, error)
+}
 
 type AuthMiddleware struct {
 	Store             *db.BusinessStore
@@ -30,6 +33,7 @@ type AuthMiddleware struct {
 	SitekeyChan       chan string
 	BatchSize         int
 	BackfillCancel    context.CancelFunc
+	Limiter           UserLimiter
 }
 
 func newAPIKeyBuckets() *ratelimit.StringBuckets {
@@ -59,8 +63,78 @@ func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 		leakybucket.Interval(puzzleBucketRate.Value(), puzzleLeakInterval))
 }
 
+type BaseUserLimiter struct {
+	store      *db.BusinessStore
+	userLimits common.Cache[int32, any]
+}
+
+func (ul *BaseUserLimiter) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
+	usersMap := make(map[int32]struct{})
+	for _, p := range properties {
+		userID := p.OrgOwnerID.Int32
+
+		if _, ok := usersMap[userID]; ok {
+			continue
+		}
+
+		if _, err := ul.userLimits.Get(ctx, userID); err == db.ErrCacheMiss {
+			usersMap[userID] = struct{}{}
+		}
+	}
+
+	result := make([]int32, 0, len(usersMap))
+	for key := range usersMap {
+		result = append(result, key)
+	}
+
+	return result
+}
+
+func (ul *BaseUserLimiter) CheckProperties(ctx context.Context, properties []*dbgen.Property) {
+	if len(properties) == 0 {
+		return
+	}
+
+	owners := ul.unknownPropertiesOwners(ctx, properties)
+	if len(owners) == 0 {
+		slog.DebugContext(ctx, "No new users to check", "properties", len(properties))
+		return
+	}
+
+	if users, err := ul.store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
+		for _, u := range users {
+			_ = ul.userLimits.Set(ctx, u.ID, struct{}{}, db.UserLimitTTL)
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))
+	}
+}
+
+func (ul *BaseUserLimiter) Evaluate(ctx context.Context, userID int32) (bool, error) {
+	_, err := ul.userLimits.Get(ctx, userID)
+	// "false" because by we only check if user has a subscription at all, we don't verify usage limits
+	return false, err
+}
+
+func NewUserLimiter(store *db.BusinessStore) *BaseUserLimiter {
+	const maxLimitedUsers = 10_000
+	var userLimits common.Cache[int32, any]
+	var err error
+	userLimits, err = db.NewMemoryCache[int32, any](maxLimitedUsers, nil /*missing value*/)
+	if err != nil {
+		slog.Error("Failed to create memory cache for user limits", common.ErrAttr(err))
+		userLimits = db.NewStaticCache[int32, any](maxLimitedUsers, nil /*missing data*/)
+	}
+
+	return &BaseUserLimiter{
+		userLimits: userLimits,
+		store:      store,
+	}
+}
+
 func NewAuthMiddleware(cfg common.ConfigStore,
 	store *db.BusinessStore,
+	limiter UserLimiter,
 	planService billing.PlanService) *AuthMiddleware {
 	const batchSize = 10
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
@@ -68,6 +142,7 @@ func NewAuthMiddleware(cfg common.ConfigStore,
 	am := &AuthMiddleware{
 		PuzzleRateLimiter: ratelimit.NewIPAddrRateLimiter("puzzle", rateLimitHeader, newPuzzleIPAddrBuckets(cfg)),
 		Store:             store,
+		Limiter:           limiter,
 		PlanService:       planService,
 		SitekeyChan:       make(chan string, 10*batchSize),
 		BatchSize:         batchSize,
@@ -120,27 +195,14 @@ func isSiteKeyValid(sitekey string) bool {
 
 // the only purpose of this routine is to cache properties and block users without a subscription
 func (am *AuthMiddleware) backfillImpl(ctx context.Context, batch map[string]struct{}) error {
-	if _, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err != nil {
+	if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err == nil {
+		am.Limiter.CheckProperties(ctx, properties)
+	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 		return err
 	}
 
 	return nil
-}
-
-func (am *AuthMiddleware) retrieveAuthToken(ctx context.Context, r *http.Request) string {
-	authHeader := r.Header.Get(common.HeaderAuthorization)
-	if len(authHeader) == 0 {
-		slog.WarnContext(ctx, "Authorization header missing")
-		return ""
-	}
-
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		slog.WarnContext(ctx, "Invalid authorization header format", "header", authHeader)
-		return ""
-	}
-
-	return strings.TrimPrefix(authHeader, "Bearer ")
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
@@ -228,6 +290,16 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 			} else {
 				slog.WarnContext(ctx, "Failed to parse origin domain name", common.ErrAttr(err))
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
+
+			if softRestriction, err := am.Limiter.Evaluate(ctx, property.OrgOwnerID.Int32); err == nil {
+				// if user is not an active subscriber, their properties and orgs might still exist but should not serve puzzles
+				if !softRestriction {
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				} else {
+					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+				}
 				return
 			}
 

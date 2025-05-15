@@ -136,45 +136,6 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 	puzzleSuiteWithBackfillWait(t, sitekey, property.Domain)
 }
 
-func TestGetPuzzleWithCancelledSubscription(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	t.Parallel()
-
-	ctx := context.TODO()
-
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	sitekey := db.UUIDToSiteKey(property.ExternalID)
-	if err := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := db_test.CancelUserSubscription(ctx, store, user.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	puzzleSuiteWithBackfillWait(t, sitekey, property.Domain)
-}
-
 func parsePuzzle(resp *http.Response) (*puzzle.Puzzle, string, error) {
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

@@ -95,7 +95,7 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	srv.ServeHTTP(w, req)
 
 	if w.Code != http.StatusSeeOther {
-		return nil, fmt.Errorf("Unexpected post twofactor code: %v", w.Code)
+		return nil, fmt.Errorf("unexpected post twofactor code: %v", w.Code)
 	}
 
 	slog.Log(ctx, common.LevelTrace, "Looks like we are authenticated", "code", w.Code)

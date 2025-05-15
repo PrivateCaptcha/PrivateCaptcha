@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 		Stage:              common.StageTest,
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
-		Auth:               NewAuthMiddleware(cfg, store, planService),
+		Auth:               NewAuthMiddleware(cfg, store, NewUserLimiter(store), planService),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Salt:               NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey: NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
