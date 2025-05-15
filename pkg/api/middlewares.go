@@ -26,7 +26,7 @@ type UserLimiter interface {
 }
 
 type AuthMiddleware struct {
-	Store             *db.BusinessStore
+	Store             db.Implementor
 	PlanService       billing.PlanService
 	PuzzleRateLimiter ratelimit.HTTPRateLimiter
 	ApiKeyRateLimiter ratelimit.HTTPRateLimiter
@@ -141,7 +141,7 @@ func NewUserLimiter(store *db.BusinessStore) *baseUserLimiter {
 }
 
 func NewAuthMiddleware(cfg common.ConfigStore,
-	store *db.BusinessStore,
+	store db.Implementor,
 	limiter UserLimiter,
 	planService billing.PlanService) *AuthMiddleware {
 	const batchSize = 10

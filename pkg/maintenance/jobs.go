@@ -11,7 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
-func NewJobs(store *db.BusinessStore) *jobs {
+func NewJobs(store db.Implementor) *jobs {
 	return &jobs{
 		store:        store,
 		periodicJobs: make([]common.PeriodicJob, 0),
@@ -20,7 +20,7 @@ func NewJobs(store *db.BusinessStore) *jobs {
 }
 
 type jobs struct {
-	store             *db.BusinessStore
+	store             db.Implementor
 	periodicJobs      []common.PeriodicJob
 	oneOffJobs        []common.OneOffJob
 	maintenanceCancel context.CancelFunc

@@ -9,7 +9,7 @@ import (
 )
 
 type CleanupDBCacheJob struct {
-	Store *db.BusinessStore
+	Store db.Implementor
 }
 
 var _ common.PeriodicJob = (*CleanupDBCacheJob)(nil)
@@ -31,7 +31,7 @@ func (j *CleanupDBCacheJob) RunOnce(ctx context.Context) error {
 }
 
 type CleanupDeletedRecordsJob struct {
-	Store *db.BusinessStore
+	Store db.Implementor
 	Age   time.Duration
 }
 
