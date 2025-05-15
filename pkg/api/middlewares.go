@@ -102,8 +102,16 @@ func (ul *BaseUserLimiter) CheckProperties(ctx context.Context, properties []*db
 	}
 
 	if users, err := ul.store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
+		violatorsMap := make(map[int32]struct{})
 		for _, u := range users {
 			_ = ul.userLimits.Set(ctx, u.ID, struct{}{}, db.UserLimitTTL)
+			violatorsMap[u.ID] = struct{}{}
+		}
+
+		for _, u := range owners {
+			if _, found := violatorsMap[u]; !found {
+				_ = ul.userLimits.SetMissing(ctx, u, db.UserLimitTTL)
+			}
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to check users without subscriptions", common.ErrAttr(err))
