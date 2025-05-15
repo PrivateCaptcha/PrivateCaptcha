@@ -7,7 +7,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/PaddleHQ/paddle-go-sdk/v3/pkg/paddlenotification"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -34,24 +33,24 @@ func createUserAndOrgName(testName string) (string, string) {
 	return name, orgName
 }
 
-func CreateNewSubscriptionParams() *dbgen.CreateSubscriptionParams {
-	testPlan := billing.GetInternalTrialPlan()
+func CreateNewSubscriptionParams(plan billing.Plan) *dbgen.CreateSubscriptionParams {
 	tnow := time.Now()
+	priceIDMonthly, _ := plan.PriceIDs()
 
 	return &dbgen.CreateSubscriptionParams{
-		PaddleProductID:      testPlan.PaddleProductID,
-		PaddlePriceID:        testPlan.PaddlePriceIDMonthly,
-		PaddleSubscriptionID: db.Text(xid.New().String()),
-		PaddleCustomerID:     db.Text(xid.New().String()),
-		Status:               string(billing.InternalStatusTrialing),
-		Source:               dbgen.SubscriptionSourceInternal,
-		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
-		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
+		ExternalProductID:      plan.ProductID(),
+		ExternalPriceID:        priceIDMonthly,
+		ExternalSubscriptionID: db.Text(xid.New().String()),
+		ExternalCustomerID:     db.Text(xid.New().String()),
+		Status:                 string(billing.InternalStatusTrialing),
+		Source:                 dbgen.SubscriptionSourceInternal,
+		TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
+		NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}
 }
 
-func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
-	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams())
+func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string, plan billing.Plan) (*dbgen.User, *dbgen.Organization, error) {
+	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams(plan))
 }
 
 func CreateNewAccountForTestEx(ctx context.Context, store *db.BusinessStore, testName string, subscrParams *dbgen.CreateSubscriptionParams) (*dbgen.User, *dbgen.Organization, error) {
@@ -69,11 +68,11 @@ func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID
 
 	subscr := subscriptions[0]
 	_, err = store.UpdateSubscription(ctx, &dbgen.UpdateSubscriptionParams{
-		PaddleSubscriptionID: subscr.Subscription.PaddleSubscriptionID,
-		PaddleProductID:      subscr.Subscription.PaddleProductID,
-		Status:               string(paddlenotification.SubscriptionStatusCanceled),
-		NextBilledAt:         pgtype.Timestamptz{},
-		CancelFrom:           db.Timestampz(time.Now().UTC()),
+		ExternalSubscriptionID: subscr.Subscription.ExternalSubscriptionID,
+		ExternalProductID:      subscr.Subscription.ExternalProductID,
+		Status:                 "cancelled",
+		NextBilledAt:           pgtype.Timestamptz{},
+		CancelFrom:             db.Timestampz(time.Now().UTC()),
 	})
 
 	return err

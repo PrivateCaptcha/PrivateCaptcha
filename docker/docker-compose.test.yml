@@ -43,6 +43,7 @@ services:
       PC_CLICKHOUSE_DB: privatecaptcha
       PC_CLICKHOUSE_USER: default
       PC_CLICKHOUSE_PASSWORD: ''
+      PC_VERBOSE: true
     depends_on:
       postgres:
         condition: service_healthy

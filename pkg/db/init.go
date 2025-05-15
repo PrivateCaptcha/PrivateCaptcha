@@ -21,13 +21,13 @@ var (
 
 func Connect(ctx context.Context, cfg common.ConfigStore) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, false /*migrate*/, false)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, nil /*admin plan*/, false /*migrate*/, false)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func Migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
-	pool, clickhouse, err := connectEx(ctx, cfg, true /*migrate*/, up)
+func Migrate(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
+	pool, clickhouse, err := connectEx(ctx, cfg, adminPlan, true /*migrate*/, up)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func clickHousePassword(cfg common.ConfigStore, admin bool) string {
 	return cfg.Get(common.ClickHousePasswordKey).Value()
 }
 
-func connectEx(ctx context.Context, cfg common.ConfigStore, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func connectEx(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
@@ -99,8 +99,9 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, migrate, up bool) (p
 
 		if migrate {
 			stage := cfg.Get(common.StageKey).Value()
-			adminPlan := billing.GetInternalAdminPlan()
 			portalDomain := config_pkg.AsURL(ctx, cfg.Get(common.PortalBaseURLKey)).Domain()
+
+			_, priceIDYearly := adminPlan.PriceIDs()
 
 			migrateCtx := &migrateContext{
 				Stage:                    stage,
@@ -108,8 +109,8 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, migrate, up bool) (p
 				PortalRegisterPropertyID: PortalRegisterPropertyID,
 				PortalDomain:             portalDomain,
 				AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
-				PaddleProductID:          adminPlan.PaddleProductID,
-				PaddlePriceID:            adminPlan.PaddlePriceIDYearly,
+				ExternalProductID:        adminPlan.ProductID(),
+				ExternalPriceID:          priceIDYearly,
 				PortalLoginDifficulty:    common.DifficultyLevelSmall,
 				PortalRegisterDifficulty: common.DifficultyLevelSmall,
 			}

@@ -25,7 +25,6 @@ import (
 
 const (
 	maxSolutionsBodySize  = 256 * 1024
-	maxPaddleBodySize     = 10 * 1024
 	VerifyBatchSize       = 100
 	PropertyBucketSize    = 5 * time.Minute
 	updateLimitsBatchSize = 100

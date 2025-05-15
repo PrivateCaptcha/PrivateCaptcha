@@ -21,7 +21,7 @@ var (
 
 func IsInternalSubscription(source dbgen.SubscriptionSource) bool {
 	switch source {
-	case dbgen.SubscriptionSourcePaddle:
+	case dbgen.SubscriptionSourceExternal:
 		return false
 	default:
 		return true

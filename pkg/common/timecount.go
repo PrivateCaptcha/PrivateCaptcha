@@ -23,9 +23,9 @@ type TimeCount struct {
 }
 
 type UserTimeCount struct {
-	UserID          uint32
-	Timestamp       time.Time
-	Count           uint64
-	Limit           uint64
-	PaddleProductID string
+	UserID            uint32
+	Timestamp         time.Time
+	Count             uint64
+	Limit             uint64
+	ExternalProductID string
 }

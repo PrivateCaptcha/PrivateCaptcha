@@ -109,8 +109,8 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 
 type migrateContext struct {
 	Stage                    string
-	PaddleProductID          string
-	PaddlePriceID            string
+	ExternalProductID        string
+	ExternalPriceID          string
 	PortalLoginPropertyID    string
 	PortalRegisterPropertyID string
 	PortalDomain             string

@@ -30,7 +30,7 @@ func TestDetectUsageViolations(t *testing.T) {
 	tnow := time.Now()
 	const requests = 1000
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestUsersWithConsecutiveViolations(t *testing.T) {
 	ctx := context.TODO()
 	tnow := time.Now()
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestUsersWithLargeViolation(t *testing.T) {
 	tnow := time.Now()
 	const rate = 1.25
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}

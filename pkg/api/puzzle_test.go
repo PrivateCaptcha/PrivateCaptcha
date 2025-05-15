@@ -164,7 +164,7 @@ func TestGetPuzzle(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,6 @@ toolchain go1.24.1
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.17.1
-	github.com/PaddleHQ/paddle-go-sdk/v3 v3.0.0
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/badoux/checkmail v1.2.4
 	github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
@@ -58,6 +57,7 @@ require (
 	github.com/rs/dnscache v0.0.0-20230804202142-fc85eb664529 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	go.opentelemetry.io/otel v1.19.0 // indirect
 	go.opentelemetry.io/otel/trace v1.19.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect

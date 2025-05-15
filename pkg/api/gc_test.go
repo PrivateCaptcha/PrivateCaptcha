@@ -72,7 +72,7 @@ func TestGCPropertyData(t *testing.T) {
 
 	ctx := context.TODO()
 
-	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestGCOrganizationData(t *testing.T) {
 
 	ctx := context.TODO()
 
-	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestGCUserData(t *testing.T) {
 
 	ctx := context.TODO()
 
-	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}

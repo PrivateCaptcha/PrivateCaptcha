@@ -2,7 +2,6 @@ package db
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"slices"
@@ -16,7 +15,6 @@ import (
 )
 
 const (
-	paddlePricesKey = "paddle_prices"
 	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
 	propertyTTL = 30 * time.Minute
 	apiKeyTTL   = 30 * time.Minute
@@ -388,50 +386,6 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 	return apiKey, nil
 }
 
-func (impl *businessStoreImpl) cachePaddlePrices(ctx context.Context, prices map[string]int) error {
-	if len(prices) == 0 {
-		return ErrInvalidInput
-	}
-
-	if impl.queries == nil {
-		return ErrMaintenance
-	}
-
-	data, err := json.Marshal(prices)
-	if err != nil {
-		return err
-	}
-
-	return impl.queries.CreateCache(ctx, &dbgen.CreateCacheParams{
-		Key:     paddlePricesKey,
-		Value:   data,
-		Column3: 24 * time.Hour,
-	})
-}
-
-func (impl *businessStoreImpl) retrievePaddlePrices(ctx context.Context) (map[string]int, error) {
-	if impl.queries == nil {
-		return nil, ErrMaintenance
-	}
-
-	data, err := impl.queries.GetCachedByKey(ctx, paddlePricesKey)
-	if err == pgx.ErrNoRows {
-		return nil, ErrCacheMiss
-	} else if err != nil {
-		slog.ErrorContext(ctx, "Failed to read Paddle prices", common.ErrAttr(err))
-		return nil, err
-	}
-
-	var prices map[string]int
-	err = json.Unmarshal(data, &prices)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to unmarshal Paddle prices", common.ErrAttr(err))
-		return nil, err
-	}
-
-	return prices, nil
-}
-
 func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {
 	cacheKey := userCacheKey(userID)
 	if user, err := fetchCachedOne[dbgen.User](ctx, impl.cache, cacheKey); err == nil {
@@ -706,7 +660,7 @@ func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *d
 
 	subscription, err := impl.queries.UpdateSubscription(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update subscription in DB", "paddleSubscriptionID", params.PaddleSubscriptionID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to update subscription in DB", "externalSubscriptionID", params.ExternalSubscriptionID, common.ErrAttr(err))
 		return nil, err
 	}
 
@@ -1328,7 +1282,7 @@ func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Contex
 	return subscriptions, err
 }
 
-// NOTE: This function has a side-effect that updates PaddleProductID field in the violations array, if found valid
+// NOTE: This function has a side-effect that updates ExternalProductID field in the violations array, if found valid
 func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
 	if len(violations) == 0 {
 		return nil
@@ -1358,7 +1312,7 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 
 	userProducts := make(map[int32]string)
 	for _, s := range subscriptions {
-		userProducts[s.UserID] = s.Subscription.PaddleProductID
+		userProducts[s.UserID] = s.Subscription.ExternalProductID
 	}
 
 	params := &dbgen.AddUsageLimitViolationsParams{
@@ -1377,7 +1331,7 @@ func (impl *businessStoreImpl) addUsageLimitsViolations(ctx context.Context, vio
 		}
 
 		// This is an important side-effect of this function
-		v.PaddleProductID = product
+		v.ExternalProductID = product
 
 		params.UserIds = append(params.UserIds, int32(v.UserID))
 		params.Products = append(params.Products, product)

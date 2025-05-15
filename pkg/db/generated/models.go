@@ -102,7 +102,7 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 type SubscriptionSource string
 
 const (
-	SubscriptionSourcePaddle   SubscriptionSource = "paddle"
+	SubscriptionSourceExternal SubscriptionSource = "external"
 	SubscriptionSourceInternal SubscriptionSource = "internal"
 )
 
@@ -257,18 +257,18 @@ type Property struct {
 }
 
 type Subscription struct {
-	ID                   int32              `db:"id" json:"id"`
-	PaddleProductID      string             `db:"paddle_product_id" json:"paddle_product_id"`
-	PaddlePriceID        string             `db:"paddle_price_id" json:"paddle_price_id"`
-	PaddleSubscriptionID pgtype.Text        `db:"paddle_subscription_id" json:"paddle_subscription_id"`
-	PaddleCustomerID     pgtype.Text        `db:"paddle_customer_id" json:"paddle_customer_id"`
-	Status               string             `db:"status" json:"status"`
-	Source               SubscriptionSource `db:"source" json:"source"`
-	TrialEndsAt          pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
-	NextBilledAt         pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
-	CancelFrom           pgtype.Timestamptz `db:"cancel_from" json:"cancel_from"`
-	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	ID                     int32              `db:"id" json:"id"`
+	ExternalProductID      string             `db:"external_product_id" json:"external_product_id"`
+	ExternalPriceID        string             `db:"external_price_id" json:"external_price_id"`
+	ExternalSubscriptionID pgtype.Text        `db:"external_subscription_id" json:"external_subscription_id"`
+	ExternalCustomerID     pgtype.Text        `db:"external_customer_id" json:"external_customer_id"`
+	Status                 string             `db:"status" json:"status"`
+	Source                 SubscriptionSource `db:"source" json:"source"`
+	TrialEndsAt            pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
+	NextBilledAt           pgtype.Timestamptz `db:"next_billed_at" json:"next_billed_at"`
+	CancelFrom             pgtype.Timestamptz `db:"cancel_from" json:"cancel_from"`
+	CreatedAt              pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt              pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
 type Support struct {
@@ -293,12 +293,12 @@ type SystemNotification struct {
 }
 
 type UsageLimitViolation struct {
-	UserID          int32       `db:"user_id" json:"user_id"`
-	PaddleProductID string      `db:"paddle_product_id" json:"paddle_product_id"`
-	RequestsLimit   int64       `db:"requests_limit" json:"requests_limit"`
-	RequestsCount   int64       `db:"requests_count" json:"requests_count"`
-	DetectionMonth  pgtype.Date `db:"detection_month" json:"detection_month"`
-	LastViolatedAt  pgtype.Date `db:"last_violated_at" json:"last_violated_at"`
+	UserID            int32       `db:"user_id" json:"user_id"`
+	ExternalProductID string      `db:"external_product_id" json:"external_product_id"`
+	RequestsLimit     int64       `db:"requests_limit" json:"requests_limit"`
+	RequestsCount     int64       `db:"requests_count" json:"requests_count"`
+	DetectionMonth    pgtype.Date `db:"detection_month" json:"detection_month"`
+	LastViolatedAt    pgtype.Date `db:"last_violated_at" json:"last_violated_at"`
 }
 
 type User struct {

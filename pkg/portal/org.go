@@ -176,7 +176,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""
@@ -189,7 +189,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 		return ""
 	}
 
-	if (plan.OrgsLimit > 0) && (len(orgs) >= plan.OrgsLimit) {
+	if !plan.CheckOrgsLimit(len(orgs)) {
 		return "Organizations limit reached on your current plan, please upgrade to create more."
 	}
 
@@ -429,13 +429,13 @@ func (s *Server) validateAddOrgMember(ctx context.Context, user *dbgen.User, mem
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""
 	}
 
-	if len(members) >= plan.OrgMembersLimit {
+	if !plan.CheckOrgMembersLimit(len(members)) {
 		return "Organization members limit reached on your current plan, please upgrade to invite more."
 	}
 

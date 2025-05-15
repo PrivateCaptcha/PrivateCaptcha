@@ -29,6 +29,7 @@ var (
 	cfg        common.ConfigStore
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
+	testPlan   billing.Plan
 )
 
 func portalDomain() string {
@@ -51,6 +52,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	planService := billing.NewPlanService(nil)
+	testPlan = planService.GetInternalTrialPlan()
 
 	if testing.Short() {
 		server = &Server{

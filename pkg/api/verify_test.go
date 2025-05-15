@@ -87,7 +87,7 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 func setupVerifySuite(username string) (string, string, string, error) {
 	ctx := context.TODO()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username)
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username, testPlan)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -247,7 +247,7 @@ func TestVerifyCachePriority(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +311,7 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestVerifyTestProperty(t *testing.T) {
 	}
 	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}

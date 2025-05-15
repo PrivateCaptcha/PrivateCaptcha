@@ -380,7 +380,7 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 	}
 
 	isInternalSubscription := db.IsInternalSubscription(subscr.Source)
-	plan, err := s.PlanService.FindPlanEx(subscr.PaddleProductID, subscr.PaddlePriceID, s.Stage, isInternalSubscription)
+	plan, err := s.PlanService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, s.Stage, isInternalSubscription)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
 		return ""
@@ -392,7 +392,7 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 		return ""
 	}
 
-	if (plan.PropertiesLimit > 0) && (count >= int64(plan.PropertiesLimit)) {
+	if !plan.CheckPropertiesLimit(int(count)) {
 		if isOrgOwner {
 			return "Properties limit reached on your current plan, please upgrade to create more."
 		}

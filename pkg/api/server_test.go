@@ -26,6 +26,7 @@ var (
 	cache      common.Cache[db.CacheKey, any]
 	timeSeries *db.TimeSeriesStore
 	store      *db.BusinessStore
+	testPlan   billing.Plan
 )
 
 const (
@@ -72,6 +73,7 @@ func TestMain(m *testing.M) {
 	store = db.NewBusinessEx(pool, cache)
 
 	planService := billing.NewPlanService(nil)
+	testPlan = planService.GetInternalTrialPlan()
 
 	s = &Server{
 		Stage:              common.StageTest,

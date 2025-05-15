@@ -20,13 +20,13 @@ func TestGetAnotherUsersOrg(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	_, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1")
+	_, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
 	// Create another user account
-	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2")
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create intruder account: %v", err)
 	}

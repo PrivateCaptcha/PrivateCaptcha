@@ -37,7 +37,8 @@ func seed(usersCount, orgsCount, propertiesCount int, billingSvc billing.PlanSer
 
 	businessDB := db.NewBusiness(pool)
 
-	plan := billing.GetInternalTrialPlan()
+	planService := billing.NewPlanService(nil)
+	plan := planService.GetInternalTrialPlan()
 
 	semaphore := make(chan struct{}, maxParallel)
 	errs, ctx := errgroup.WithContext(ctx)
@@ -54,7 +55,7 @@ func seed(usersCount, orgsCount, propertiesCount int, billingSvc billing.PlanSer
 	return errs.Wait()
 }
 
-func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *billing.Plan, store *db.BusinessStore) error {
+func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan billing.Plan, store *db.BusinessStore) error {
 	email := fmt.Sprintf("test.user.%v@privatecaptcha.com", u)
 	name := fmt.Sprintf("John%v Doe%v", u, u)
 	orgName := fmt.Sprintf("John%v-doe%v", u, u)
@@ -62,15 +63,17 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan *
 
 	orgs := make([]*dbgen.Organization, 0)
 
+	priceIDMonthly, _ := plan.PriceIDs()
+
 	user, org, err := store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
-		PaddleProductID:      plan.PaddleProductID,
-		PaddlePriceID:        plan.PaddlePriceIDMonthly,
-		PaddleSubscriptionID: db.Text(xid.New().String()),
-		PaddleCustomerID:     db.Text(xid.New().String()),
-		Source:               dbgen.SubscriptionSourceInternal,
-		Status:               "trialing",
-		TrialEndsAt:          db.Timestampz(tnow.AddDate(0, 1, 0)),
-		NextBilledAt:         db.Timestampz(tnow.AddDate(0, 1, 0)),
+		ExternalProductID:      plan.ProductID(),
+		ExternalPriceID:        priceIDMonthly,
+		ExternalSubscriptionID: db.Text(xid.New().String()),
+		ExternalCustomerID:     db.Text(xid.New().String()),
+		Source:                 dbgen.SubscriptionSourceInternal,
+		Status:                 "trialing",
+		TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
+		NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}, email, name, orgName, -1 /*existingUserID*/)
 
 	if err != nil {

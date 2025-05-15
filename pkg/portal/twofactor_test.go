@@ -22,7 +22,7 @@ func TestPostTwoFactor(t *testing.T) {
 
 	ctx := context.TODO()
 
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("failed to create new account: %v", err)
 	}

@@ -347,9 +347,9 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if s.PlanService.IsSubscriptionActive(subscription.Status) && subscription.PaddleSubscriptionID.Valid {
-			if err := s.PlanService.CancelSubscription(ctx, subscription.PaddleSubscriptionID.String); err != nil {
-				slog.ErrorContext(ctx, "Failed to cancel Paddle subscription", "userID", user.ID, common.ErrAttr(err))
+		if s.PlanService.IsSubscriptionActive(subscription.Status) && subscription.ExternalSubscriptionID.Valid {
+			if err := s.PlanService.CancelSubscription(ctx, subscription.ExternalSubscriptionID.String); err != nil {
+				slog.ErrorContext(ctx, "Failed to cancel external subscription", "userID", user.ID, common.ErrAttr(err))
 				s.RedirectError(http.StatusInternalServerError, w, r)
 				return
 			}
@@ -432,9 +432,9 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	apiKeyRequestsPerSecond := 1.0
 	if user.SubscriptionID.Valid {
 		if subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
-			if plan, err := s.PlanService.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage,
+			if plan, err := s.PlanService.FindPlan(subscription.ExternalProductID, subscription.ExternalPriceID, s.Stage,
 				db.IsInternalSubscription(subscription.Source)); err == nil {
-				apiKeyRequestsPerSecond = plan.APIRequestsPerSecond
+				apiKeyRequestsPerSecond = plan.APIRequestsPerSecond()
 			}
 		}
 	}
@@ -534,11 +534,11 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription for usage tab", common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Could not load subscription details for usage limits."
 		} else {
-			if plan, err := s.PlanService.FindPlanEx(subscription.PaddleProductID, subscription.PaddlePriceID, s.Stage,
+			if plan, err := s.PlanService.FindPlan(subscription.ExternalProductID, subscription.ExternalPriceID, s.Stage,
 				db.IsInternalSubscription(subscription.Source)); err == nil {
-				renderCtx.Limit = int(plan.RequestsLimit)
+				renderCtx.Limit = int(plan.RequestsLimit())
 			} else {
-				slog.ErrorContext(ctx, "Failed to find billing plan for usage tab", "productID", subscription.PaddleProductID, "priceID", subscription.PaddlePriceID, common.ErrAttr(err))
+				slog.ErrorContext(ctx, "Failed to find billing plan for usage tab", "productID", subscription.ExternalProductID, "priceID", subscription.ExternalPriceID, common.ErrAttr(err))
 				renderCtx.ErrorMessage = "Could not determine usage limits from your plan."
 			}
 		}

@@ -320,7 +320,9 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 	common.SetupLogs(stage, verbose)
 	slog.InfoContext(ctx, "Migrating", "up", up, "version", GitCommit, "stage", stage)
 
-	return db.Migrate(ctx, cfg, up)
+	planService := billing.NewPlanService(nil)
+
+	return db.Migrate(ctx, cfg, planService.GetInternalAdminPlan(), up)
 }
 
 func main() {

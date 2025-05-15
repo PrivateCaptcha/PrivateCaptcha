@@ -12,16 +12,16 @@ import (
 )
 
 const addUsageLimitViolations = `-- name: AddUsageLimitViolations :exec
-INSERT INTO backend.usage_limit_violations (user_id, paddle_product_id, requests_limit, requests_count, detection_month, last_violated_at)
+INSERT INTO backend.usage_limit_violations (user_id, external_product_id, requests_limit, requests_count, detection_month, last_violated_at)
 SELECT unnest($1::INT[]) AS user_id,
-       unnest($2::TEXT[]) AS paddle_product_id,
+       unnest($2::TEXT[]) AS external_product_id,
        unnest($3::BIGINT[]) AS requests_limit,
        unnest($4::BIGINT[]) AS requests_count,
        date_trunc('month', unnest($5::date[])) AS detection_month,
        unnest($5::date[]) AS last_violated_at
-ON CONFLICT (user_id, paddle_product_id, detection_month)
+ON CONFLICT (user_id, external_product_id, detection_month)
 DO UPDATE SET
-    paddle_product_id = EXCLUDED.paddle_product_id,
+    external_product_id = EXCLUDED.external_product_id,
     requests_limit = EXCLUDED.requests_limit,
     requests_count = EXCLUDED.requests_count,
     last_violated_at = GREATEST(usage_limit_violations.last_violated_at, EXCLUDED.last_violated_at)
@@ -52,7 +52,7 @@ FROM backend.usage_limit_violations v1
 JOIN backend.usage_limit_violations v2 ON v1.user_id = v2.user_id
 JOIN backend.users u ON v1.user_id = u.id
 JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE s.paddle_product_id = v1.paddle_product_id
+WHERE s.external_product_id = v1.external_product_id
   AND u.deleted_at IS NULL
   AND EXTRACT(YEAR FROM v1.detection_month) = EXTRACT(YEAR FROM CURRENT_DATE)
   AND EXTRACT(MONTH FROM v1.detection_month) = EXTRACT(MONTH FROM CURRENT_DATE)
@@ -93,11 +93,11 @@ func (q *Queries) GetUsersWithConsecutiveViolations(ctx context.Context) ([]*Get
 }
 
 const getUsersWithLargeViolations = `-- name: GetUsersWithLargeViolations :many
-SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.paddle_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at, s.status as status
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, uv.user_id, uv.external_product_id, uv.requests_limit, uv.requests_count, uv.detection_month, uv.last_violated_at, s.status as status
 FROM backend.users u
 JOIN backend.usage_limit_violations uv ON u.id = uv.user_id
 JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE s.paddle_product_id = uv.paddle_product_id
+WHERE s.external_product_id = uv.external_product_id
   AND u.deleted_at IS NULL
   AND uv.requests_count >= ($1::float * uv.requests_limit)
   AND uv.last_violated_at >= $2::date
@@ -132,7 +132,7 @@ func (q *Queries) GetUsersWithLargeViolations(ctx context.Context, arg *GetUsers
 			&i.User.UpdatedAt,
 			&i.User.DeletedAt,
 			&i.UsageLimitViolation.UserID,
-			&i.UsageLimitViolation.PaddleProductID,
+			&i.UsageLimitViolation.ExternalProductID,
 			&i.UsageLimitViolation.RequestsLimit,
 			&i.UsageLimitViolation.RequestsCount,
 			&i.UsageLimitViolation.DetectionMonth,

@@ -414,14 +414,6 @@ func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.
 	return s.impl().createSupportTicket(ctx, category, subject, message, userID, sessID)
 }
 
-func (s *BusinessStore) CachePaddlePrices(ctx context.Context, prices map[string]int) error {
-	return s.impl().cachePaddlePrices(ctx, prices)
-}
-
-func (s *BusinessStore) RetrievePaddlePrices(ctx context.Context) (map[string]int, error) {
-	return s.impl().retrievePaddlePrices(ctx)
-}
-
 func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
 	return s.impl().addUsageLimitsViolations(ctx, violations)
 }

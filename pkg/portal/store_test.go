@@ -20,7 +20,7 @@ func TestSoftDeleteOrganization(t *testing.T) {
 	ctx := context.TODO()
 
 	// Create a new user and organization
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 
 	ctx := context.TODO()
 
-	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
@@ -189,7 +189,7 @@ func TestSystemNotification(t *testing.T) {
 	tnow := time.Now().UTC()
 
 	// Create a new user and organization
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}

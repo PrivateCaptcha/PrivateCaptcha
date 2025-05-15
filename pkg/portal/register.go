@@ -120,16 +120,17 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.RelURL(common.TwoFactorEndpoint), http.StatusOK, w, r)
 }
 
-func createInternalTrial(plan *billing.Plan, status string) *dbgen.CreateSubscriptionParams {
+func createInternalTrial(plan billing.Plan, status string) *dbgen.CreateSubscriptionParams {
+	priceIDMonthly, _ := plan.PriceIDs()
 	return &dbgen.CreateSubscriptionParams{
-		PaddleProductID:      plan.PaddleProductID,
-		PaddlePriceID:        plan.PaddlePriceIDMonthly,
-		PaddleSubscriptionID: pgtype.Text{},
-		PaddleCustomerID:     pgtype.Text{},
-		Status:               status,
-		Source:               dbgen.SubscriptionSourceInternal,
-		TrialEndsAt:          db.Timestampz(time.Now().AddDate(0, 0, plan.TrialDays)),
-		NextBilledAt:         db.Timestampz(time.Time{}),
+		ExternalProductID:      plan.ProductID(),
+		ExternalPriceID:        priceIDMonthly,
+		ExternalSubscriptionID: pgtype.Text{},
+		ExternalCustomerID:     pgtype.Text{},
+		Status:                 status,
+		Source:                 dbgen.SubscriptionSourceInternal,
+		TrialEndsAt:            db.Timestampz(time.Now().AddDate(0, 0, plan.TrialDays())),
+		NextBilledAt:           db.Timestampz(time.Time{}),
 	}
 }
 
@@ -146,7 +147,7 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, nil, errIncompleteSession
 	}
 
-	plan := billing.GetInternalTrialPlan()
+	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.TrialStatus())
 
 	user, org, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
@@ -155,7 +156,7 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, nil, err
 	}
 
-	_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit})
+	_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit()})
 
 	go func(bctx context.Context, email string) {
 		if err := s.Mailer.SendWelcome(bctx, email); err != nil {
