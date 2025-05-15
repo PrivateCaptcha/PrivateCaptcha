@@ -65,16 +65,23 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 
 	priceIDMonthly, _ := plan.PriceIDs()
 
-	user, org, err := store.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
-		ExternalProductID:      plan.ProductID(),
-		ExternalPriceID:        priceIDMonthly,
-		ExternalSubscriptionID: db.Text(xid.New().String()),
-		ExternalCustomerID:     db.Text(xid.New().String()),
-		Source:                 dbgen.SubscriptionSourceInternal,
-		Status:                 "trialing",
-		TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
-		NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
-	}, email, name, orgName, -1 /*existingUserID*/)
+	var user *dbgen.User
+	var org *dbgen.Organization
+
+	err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		var err error
+		user, org, err = impl.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
+			ExternalProductID:      plan.ProductID(),
+			ExternalPriceID:        priceIDMonthly,
+			ExternalSubscriptionID: db.Text(xid.New().String()),
+			ExternalCustomerID:     db.Text(xid.New().String()),
+			Source:                 dbgen.SubscriptionSourceInternal,
+			Status:                 "trialing",
+			TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
+			NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
+		}, email, name, orgName, -1 /*existingUserID*/)
+		return err
+	})
 
 	if err != nil {
 		return err
@@ -84,7 +91,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 
 	for o := 0; o < orgsCount-1; o++ {
 		extraOrgName := fmt.Sprintf("%s-extra%v", orgName, o)
-		org, err := store.CreateNewOrganization(ctx, extraOrgName, user.ID)
+		org, err := store.Impl().CreateNewOrganization(ctx, extraOrgName, user.ID)
 		if err != nil {
 			return err
 		}
@@ -94,7 +101,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 
 	for o, org := range orgs {
 		for p := 0; p < propertiesCount; p++ {
-			_, err = store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+			_, err = store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 				Name:       fmt.Sprintf("my great property %v", p), // constraint is unique_property_name_per_organization
 				OrgID:      db.Int(org.ID),
 				CreatorID:  db.Int(user.ID),
@@ -110,7 +117,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 		}
 	}
 
-	_, err = store.CreateAPIKey(ctx, user.ID, "Test API Key", tnow.AddDate(0, 1, 0), 1000 /*rps*/)
+	_, err = store.Impl().CreateAPIKey(ctx, user.ID, "Test API Key", tnow.AddDate(0, 1, 0), 1000 /*rps*/)
 	if err != nil {
 		return err
 	}

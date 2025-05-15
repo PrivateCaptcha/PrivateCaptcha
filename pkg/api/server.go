@@ -44,7 +44,7 @@ var (
 
 type Server struct {
 	Stage              string
-	BusinessDB         *db.BusinessStore
+	BusinessDB         db.Implementor
 	TimeSeries         *db.TimeSeriesStore
 	Levels             *difficulty.Levels
 	Auth               *AuthMiddleware
@@ -348,7 +348,7 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		vr2.ChallengeTS = common.JSONTime(p.Expiration.Add(-puzzle.DefaultValidityPeriod))
 
 		sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-		if property, err := s.BusinessDB.GetCachedPropertyBySitekey(ctx, sitekey); err == nil {
+		if property, err := s.BusinessDB.Impl().GetCachedPropertyBySitekey(ctx, sitekey); err == nil {
 			vr2.Hostname = property.Domain
 		}
 	}
@@ -415,7 +415,7 @@ func (s *Server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPa
 	}
 
 	sitekey := db.UUIDToSiteKey(pgtype.UUID{Valid: true, Bytes: p.PropertyID})
-	properties, err := s.BusinessDB.RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}})
+	properties, err := s.BusinessDB.Impl().RetrievePropertiesBySitekey(ctx, map[string]struct{}{sitekey: {}})
 	if (err != nil) || (len(properties) != 1) {
 		switch err {
 		case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:

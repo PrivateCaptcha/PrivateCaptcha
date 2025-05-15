@@ -115,7 +115,7 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -169,7 +169,7 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -238,7 +238,7 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),

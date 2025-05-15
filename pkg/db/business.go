@@ -11,7 +11,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,13 +38,23 @@ const (
 
 type BusinessStore struct {
 	pool          *pgxpool.Pool
-	defaultImpl   *businessStoreImpl
-	cacheOnlyImpl *businessStoreImpl
+	defaultImpl   *BusinessStoreImpl
+	cacheOnlyImpl *BusinessStoreImpl
 	cache         common.Cache[CacheKey, any]
 	// this could have been a bloom/cuckoo filter with expiration, if they existed
 	puzzleCache     common.Cache[uint64, bool]
 	maintenanceMode atomic.Bool
 }
+
+type Implementor interface {
+	Impl() *BusinessStoreImpl
+	WithTx(ctx context.Context, fn func(*BusinessStoreImpl) error) error
+	Ping(ctx context.Context) error
+	CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool
+	CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow time.Time) error
+}
+
+var _ Implementor = (*BusinessStore)(nil)
 
 func NewBusiness(pool *pgxpool.Pool) *BusinessStore {
 	const maxCacheSize = 1_000_000
@@ -72,8 +81,8 @@ func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *Busin
 
 	return &BusinessStore{
 		pool:          pool,
-		defaultImpl:   &businessStoreImpl{cache: cache, queries: dbgen.New(pool), ttl: DefaultCacheTTL},
-		cacheOnlyImpl: &businessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
+		defaultImpl:   &BusinessStoreImpl{cache: cache, querier: dbgen.New(pool), ttl: DefaultCacheTTL},
+		cacheOnlyImpl: &BusinessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
 		cache:         cache,
 		puzzleCache:   puzzleCache,
 	}
@@ -83,7 +92,7 @@ func (s *BusinessStore) UpdateConfig(maintenanceMode bool) {
 	s.maintenanceMode.Store(maintenanceMode)
 }
 
-func (s *BusinessStore) impl() *businessStoreImpl {
+func (s *BusinessStore) Impl() *BusinessStoreImpl {
 	if s.maintenanceMode.Load() {
 		return s.cacheOnlyImpl
 	}
@@ -91,34 +100,44 @@ func (s *BusinessStore) impl() *businessStoreImpl {
 	return s.defaultImpl
 }
 
+func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) error) error {
+	if s.maintenanceMode.Load() {
+		return ErrMaintenance
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
+	}()
+
+	db := dbgen.New(s.pool)
+	tmpCache := NewTxCache()
+	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx), ttl: DefaultCacheTTL}
+
+	err = fn(impl)
+
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		return err
+	}
+
+	tmpCache.Commit(ctx, s.cache)
+
+	return nil
+}
+
 func (s *BusinessStore) Ping(ctx context.Context) error {
 	// NOTE: we always use "real" DB connection to check for ping
 	return s.defaultImpl.ping(ctx)
-}
-
-func (s *BusinessStore) DeleteExpiredCache(ctx context.Context) error {
-	return s.impl().deleteExpiredCache(ctx)
-}
-
-func (s *BusinessStore) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
-	if sitekey == TestPropertySitekey {
-		return nil, ErrTestProperty
-	}
-
-	return s.impl().getCachedPropertyBySitekey(ctx, sitekey)
-}
-
-func (s *BusinessStore) RetrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]struct{}) ([]*dbgen.Property, error) {
-	return s.impl().retrievePropertiesBySitekey(ctx, sitekeys)
-}
-
-func (s *BusinessStore) GetCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
-	return s.impl().getCachedAPIKey(ctx, secret)
-}
-
-// Fetches API keyfrom DB, backed by cache
-func (s *BusinessStore) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
-	return s.impl().retrieveAPIKey(ctx, secret)
 }
 
 func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle) bool {
@@ -143,376 +162,4 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 	}
 
 	return s.puzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
-}
-
-func (s *BusinessStore) RetrieveUser(ctx context.Context, id int32) (*dbgen.User, error) {
-	user, err := s.impl().retrieveUser(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-
-	if user.DeletedAt.Valid {
-		slog.WarnContext(ctx, "User is soft-deleted", "userID", id, "deletedAt", user.DeletedAt.Time)
-		return user, ErrSoftDeleted
-	}
-
-	return user, nil
-}
-
-func (s *BusinessStore) FindUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
-	return s.impl().findUserByEmail(ctx, email)
-}
-
-func (s *BusinessStore) FindUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
-	return s.impl().findUserBySubscriptionID(ctx, subscriptionID)
-}
-
-func (s *BusinessStore) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
-	return s.impl().retrieveUserOrganizations(ctx, userID)
-}
-
-func (s *BusinessStore) RetrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
-	org, level, err := s.impl().retrieveOrganizationWithAccess(ctx, userID, orgID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !level.Valid {
-		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", userID)
-		return nil, ErrPermissions
-	}
-
-	if org.DeletedAt.Valid {
-		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
-		return org, ErrSoftDeleted
-	}
-
-	return org, nil
-}
-
-func (s *BusinessStore) RetrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
-	property, err := s.impl().retrieveOrgProperty(ctx, orgID, propID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !property.OrgID.Valid || (property.OrgID.Int32 != orgID) {
-		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", orgID)
-		return nil, ErrPermissions
-	}
-
-	if property.DeletedAt.Valid {
-		slog.WarnContext(ctx, "Property is soft-deleted", "propID", propID, "deletedAt", property.DeletedAt.Time)
-		return property, ErrSoftDeleted
-	}
-
-	return property, nil
-}
-
-func (s *BusinessStore) CreateNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
-	return s.impl().createNewOrganization(ctx, name, userID)
-}
-
-func (s *BusinessStore) RetrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
-	return s.impl().retrieveSubscriptionsByUserIDs(ctx, userIDs)
-}
-
-func (s *BusinessStore) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
-	return s.impl().retrieveUsersWithoutSubscription(ctx, userIDs)
-}
-
-func (s *BusinessStore) RetrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
-	return s.impl().retrieveSubscription(ctx, sID)
-}
-
-func (s *BusinessStore) UpdateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
-	return s.impl().updateSubscription(ctx, params)
-}
-
-func (s *BusinessStore) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string, existingUserID int32) (*dbgen.User, *dbgen.Organization, error) {
-	if s.maintenanceMode.Load() {
-		return nil, nil, ErrMaintenance
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
-		}
-	}()
-
-	db := dbgen.New(s.pool)
-	tmpCache := NewTxCache()
-	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx), ttl: DefaultCacheTTL}
-
-	var subscriptionID *int32
-
-	if params != nil {
-		subscription, err := impl.createNewSubscription(ctx, params)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		subscriptionID = &subscription.ID
-
-		if existingUser, err := impl.findUserByEmail(ctx, email); err == nil {
-			slog.InfoContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
-			if ((existingUser.ID == existingUserID) || (existingUserID == -1)) && !existingUser.SubscriptionID.Valid {
-				if err := impl.updateUserSubscription(ctx, existingUser.ID, subscription.ID); err != nil {
-					return nil, nil, err
-				}
-
-				err = tx.Commit(ctx)
-				if err != nil {
-					return nil, nil, err
-				}
-
-				tmpCache.Commit(ctx, s.cache)
-
-				return existingUser, nil, nil
-			} else {
-				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID,
-					"passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid, "email", email)
-				return nil, nil, ErrDuplicateAccount
-			}
-		}
-	}
-
-	user, err := impl.createNewUser(ctx, email, name, subscriptionID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	org, err := impl.createNewOrganization(ctx, orgName, user.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tmpCache.Commit(ctx, s.cache)
-
-	return user, org, nil
-}
-
-func (s *BusinessStore) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
-	return s.impl().findOrgProperty(ctx, name, orgID)
-}
-
-func (s *BusinessStore) FindOrg(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
-	return s.impl().findOrg(ctx, name, userID)
-}
-
-func (s *BusinessStore) CreateNewProperty(ctx context.Context, params *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
-	return s.impl().createNewProperty(ctx, params)
-}
-
-func (s *BusinessStore) UpdateProperty(ctx context.Context, params *dbgen.UpdatePropertyParams) (*dbgen.Property, error) {
-	return s.impl().updateProperty(ctx, params)
-}
-
-func (s *BusinessStore) SoftDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
-	return s.impl().softDeleteProperty(ctx, propID, orgID)
-}
-
-func (s *BusinessStore) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
-	return s.impl().retrieveOrgProperties(ctx, orgID)
-}
-
-func (s *BusinessStore) UpdateOrganization(ctx context.Context, orgID int32, name string) (*dbgen.Organization, error) {
-	return s.impl().updateOrganization(ctx, orgID, name)
-}
-
-func (s *BusinessStore) SoftDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().softDeleteOrganization(ctx, orgID, Int(userID))
-}
-
-func (s *BusinessStore) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
-	return s.impl().retrieveOrganizationUsers(ctx, orgID)
-}
-
-func (s *BusinessStore) InviteUserToOrg(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().inviteUserToOrg(ctx, orgID, userID)
-}
-
-func (s *BusinessStore) JoinOrg(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().joinOrg(ctx, orgID, userID)
-}
-
-func (s *BusinessStore) LeaveOrg(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().leaveOrg(ctx, orgID, userID)
-}
-
-func (s *BusinessStore) RemoveUserFromOrg(ctx context.Context, orgID int32, userID int32) error {
-	return s.impl().removeUserFromOrg(ctx, orgID, userID)
-}
-
-func (s *BusinessStore) UpdateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {
-	return s.impl().updateUser(ctx, userID, name, newEmail, oldEmail)
-}
-
-func (s *BusinessStore) SoftDeleteUser(ctx context.Context, userID int32) error {
-	if s.maintenanceMode.Load() {
-		return ErrMaintenance
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
-		}
-	}()
-
-	db := dbgen.New(s.pool)
-	tmpCache := NewTxCache()
-	impl := &businessStoreImpl{cache: tmpCache, queries: db.WithTx(tx), ttl: DefaultCacheTTL}
-	err = impl.softDeleteUser(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return err
-	}
-
-	tmpCache.Commit(ctx, s.cache)
-
-	return nil
-}
-
-func (s *BusinessStore) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
-	return s.impl().retrieveUserAPIKeys(ctx, userID)
-}
-
-func (s *BusinessStore) CreateAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
-	return s.impl().createAPIKey(ctx, userID, name, expiration, requestsPerSecond)
-}
-
-func (s *BusinessStore) UpdateAPIKey(ctx context.Context, externalID pgtype.UUID, expiration time.Time, enabled bool) error {
-	return s.impl().updateAPIKey(ctx, externalID, expiration, enabled)
-}
-
-func (s *BusinessStore) DeleteAPIKey(ctx context.Context, userID, keyID int32) error {
-	return s.impl().deleteAPIKey(ctx, userID, keyID)
-}
-
-func (s *BusinessStore) UpdateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
-	return s.impl().updateUserAPIKeysRateLimits(ctx, userID, requestsPerSecond)
-}
-
-func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.SupportCategory, subject, message string, userID int32, sessID string) (*dbgen.Support, error) {
-	return s.impl().createSupportTicket(ctx, category, subject, message, userID, sessID)
-}
-
-func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
-	if s.maintenanceMode.Load() {
-		return nil, ErrMaintenance
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
-		}
-	}()
-
-	db := dbgen.New(s.pool)
-	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}
-	lock, err := impl.acquireLock(ctx, name, data, expiration)
-	if err != nil {
-		return nil, err
-	}
-
-	err = tx.Commit(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return lock, nil
-}
-
-func (s *BusinessStore) ReleaseLock(ctx context.Context, name string) error {
-	if s.maintenanceMode.Load() {
-		return ErrMaintenance
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := tx.Rollback(ctx); err != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
-		}
-	}()
-
-	db := dbgen.New(s.pool)
-	impl := &businessStoreImpl{queries: db.WithTx(tx), ttl: DefaultCacheTTL}
-	err = impl.releaseLock(ctx, name)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *BusinessStore) DeleteDeletedRecords(ctx context.Context, before time.Time) error {
-	return s.impl().deleteDeletedRecords(ctx, before)
-}
-
-func (s *BusinessStore) RetrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
-	return s.impl().retrieveSoftDeletedProperties(ctx, before, limit)
-}
-
-func (s *BusinessStore) DeleteProperties(ctx context.Context, ids []int32) error {
-	return s.impl().deleteProperties(ctx, ids)
-}
-
-func (s *BusinessStore) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
-	return s.impl().retrieveSoftDeletedOrganizations(ctx, before, limit)
-}
-
-func (s *BusinessStore) DeleteOrganizations(ctx context.Context, ids []int32) error {
-	return s.impl().deleteOrganizations(ctx, ids)
-}
-
-func (s *BusinessStore) RetrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
-	return s.impl().retrieveSoftDeletedUsers(ctx, before, limit)
-}
-
-func (s *BusinessStore) DeleteUsers(ctx context.Context, ids []int32) error {
-	return s.impl().deleteUsers(ctx, ids)
-}
-
-func (s *BusinessStore) RetrieveNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
-	return s.impl().retrieveNotification(ctx, id)
-}
-
-func (s *BusinessStore) RetrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
-	return s.impl().retrieveUserNotification(ctx, tnow, userID)
-}
-
-func (s *BusinessStore) CreateNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
-	return s.impl().createNotification(ctx, message, tnow, duration, userID)
-}
-
-func (s *BusinessStore) RetrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
-	return s.impl().retrieveProperties(ctx, limit)
-}
-
-func (s *BusinessStore) RetrieveUserPropertiesCount(ctx context.Context, userID int32) (int64, error) {
-	return s.impl().retrieveUserPropertiesCount(ctx, userID)
 }

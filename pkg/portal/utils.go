@@ -30,7 +30,7 @@ func (s *Server) Org(userID int32, r *http.Request) (*dbgen.Organization, error)
 		return nil, errInvalidPathArg
 	}
 
-	org, err := s.Store.RetrieveUserOrganization(ctx, userID, int32(orgID))
+	org, err := s.Store.Impl().RetrieveUserOrganization(ctx, userID, int32(orgID))
 	if err != nil {
 		if err == db.ErrSoftDeleted {
 			return nil, errOrgSoftDeleted
@@ -68,7 +68,7 @@ func (s *Server) Property(orgID int32, r *http.Request) (*dbgen.Property, error)
 		return nil, errInvalidPathArg
 	}
 
-	property, err := s.Store.RetrieveOrgProperty(ctx, orgID, int32(propertyID))
+	property, err := s.Store.Impl().RetrieveOrgProperty(ctx, orgID, int32(propertyID))
 	if err != nil {
 		if err == db.ErrSoftDeleted {
 			return nil, errPropertySoftDeleted
@@ -98,7 +98,7 @@ func (s *Server) SessionUser(ctx context.Context, sess *common.Session) (*dbgen.
 		return nil, errInvalidSession
 	}
 
-	user, err := s.Store.RetrieveUser(ctx, userID)
+	user, err := s.Store.Impl().RetrieveUser(ctx, userID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find user by ID", "id", userID, common.ErrAttr(err))
 		return nil, err

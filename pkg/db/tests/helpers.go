@@ -57,17 +57,27 @@ func CreateNewAccountForTestEx(ctx context.Context, store *db.BusinessStore, tes
 	email := testName + "@privatecaptcha.com"
 	name, orgName := createUserAndOrgName(testName)
 
-	return store.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existingUserID*/)
+	var user *dbgen.User
+	var org *dbgen.Organization
+
+	if err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		var err error
+		user, org, err = impl.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existingUserID*/)
+		return err
+	}); err != nil {
+		return nil, nil, err
+	}
+	return user, org, nil
 }
 
 func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID int32) error {
-	subscriptions, err := store.RetrieveSubscriptionsByUserIDs(ctx, []int32{userID})
+	subscriptions, err := store.Impl().RetrieveSubscriptionsByUserIDs(ctx, []int32{userID})
 	if err != nil {
 		return err
 	}
 
 	subscr := subscriptions[0]
-	_, err = store.UpdateSubscription(ctx, &dbgen.UpdateSubscriptionParams{
+	_, err = store.Impl().UpdateSubscription(ctx, &dbgen.UpdateSubscriptionParams{
 		ExternalSubscriptionID: subscr.Subscription.ExternalSubscriptionID,
 		ExternalProductID:      subscr.Subscription.ExternalProductID,
 		Status:                 "cancelled",
@@ -82,11 +92,22 @@ func CreateNewBareAccount(ctx context.Context, store *db.BusinessStore, testName
 	email := testName + "@privatecaptcha.com"
 	name, orgName := createUserAndOrgName(testName)
 
-	return store.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
+	var user *dbgen.User
+	var org *dbgen.Organization
+
+	if err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		var err error
+
+		user, org, err = impl.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
+		return err
+	}); err != nil {
+		return nil, nil, err
+	}
+	return user, org, nil
 }
 
 func CreatePropertyForOrg(ctx context.Context, store *db.BusinessStore, org *dbgen.Organization) (*dbgen.Property, error) {
-	return store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	return store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       fmt.Sprintf("user %v property", org.UserID.Int32),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(org.UserID.Int32),

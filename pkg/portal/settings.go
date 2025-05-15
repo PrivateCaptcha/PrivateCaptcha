@@ -315,7 +315,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if renderCtx.EditEmail {
 			emailToUpdate = formEmail
 		}
-		if err := s.Store.UpdateUser(ctx, user.ID, renderCtx.Name, emailToUpdate, user.Email); err == nil {
+		if err := s.Store.Impl().UpdateUser(ctx, user.ID, renderCtx.Name, emailToUpdate, user.Email); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
 			_ = sess.Set(session.KeyUserName, renderCtx.Name)
@@ -340,7 +340,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.SubscriptionID.Valid {
-		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
@@ -356,7 +356,9 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.Store.SoftDeleteUser(ctx, user.ID); err == nil {
+	if err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		return impl.SoftDeleteUser(ctx, user.ID)
+	}); err == nil {
 		s.logout(w, r)
 	} else {
 		slog.ErrorContext(ctx, "Failed to delete user", common.ErrAttr(err))
@@ -368,7 +370,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.User) *settingsAPIKeysRenderContext {
 	commonCtx := s.CreateSettingsCommonRenderContext(common.APIKeysEndpoint, user)
 
-	keys, err := s.Store.RetrieveUserAPIKeys(ctx, user.ID)
+	keys, err := s.Store.Impl().RetrieveUserAPIKeys(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user API keys", common.ErrAttr(err))
 		commonCtx.ErrorMessage = "Could not load API keys."
@@ -431,7 +433,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 
 	apiKeyRequestsPerSecond := 1.0
 	if user.SubscriptionID.Valid {
-		if subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
+		if subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
 			if plan, err := s.PlanService.FindPlan(subscription.ExternalProductID, subscription.ExternalPriceID, s.Stage,
 				db.IsInternalSubscription(subscription.Source)); err == nil {
 				apiKeyRequestsPerSecond = plan.APIRequestsPerSecond()
@@ -442,7 +444,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	months := monthsFromParam(ctx, r.FormValue(common.ParamMonths))
 	tnow := time.Now().UTC()
 	expiration := tnow.AddDate(0, months, 0)
-	newKey, err := s.Store.CreateAPIKey(ctx, user.ID, formName, expiration, apiKeyRequestsPerSecond)
+	newKey, err := s.Store.Impl().CreateAPIKey(ctx, user.ID, formName, expiration, apiKeyRequestsPerSecond)
 	if err == nil {
 		userKey := apiKeyToUserAPIKey(newKey, tnow)
 		userKey.Secret = db.UUIDToSecret(newKey.ExternalID)
@@ -471,7 +473,7 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.DeleteAPIKey(ctx, user.ID, int32(keyID)); err != nil {
+	if err := s.Store.Impl().DeleteAPIKey(ctx, user.ID, int32(keyID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete the API key", "keyID", keyID, common.ErrAttr(err))
 		http.Error(w, "", http.StatusUnauthorized)
 		return
@@ -529,7 +531,7 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 	}
 
 	if user.SubscriptionID.Valid {
-		subscription, err := s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription for usage tab", common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Could not load subscription details for usage limits."

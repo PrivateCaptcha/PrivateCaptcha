@@ -13,7 +13,7 @@ import (
 )
 
 type HealthCheckJob struct {
-	BusinessDB       *db.BusinessStore
+	BusinessDB       db.Implementor
 	TimeSeriesDB     *db.TimeSeriesStore
 	Router           *http.ServeMux
 	postgresFlag     atomic.Int32

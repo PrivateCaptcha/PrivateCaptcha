@@ -35,12 +35,12 @@ type loginRenderContext struct {
 }
 
 type portalPropertyOwnerSource struct {
-	Store   *db.BusinessStore
+	Store   db.Implementor
 	Sitekey string
 }
 
 func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
-	properties, err := s.Store.RetrievePropertiesBySitekey(ctx, map[string]struct{}{s.Sitekey: {}})
+	properties, err := s.Store.Impl().RetrievePropertiesBySitekey(ctx, map[string]struct{}{s.Sitekey: {}})
 	if (err != nil) || (len(properties) != 1) {
 		slog.ErrorContext(ctx, "Failed to fetch login property", common.ErrAttr(err))
 		return -1, errPortalPropertyNotFound
@@ -96,7 +96,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := s.Store.FindUserByEmail(ctx, email)
+	user, err := s.Store.Impl().FindUserByEmail(ctx, email)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
 		data.EmailError = "User with such email does not exist."

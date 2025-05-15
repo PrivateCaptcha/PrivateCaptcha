@@ -16,7 +16,7 @@ const (
 
 type GarbageCollectDataJob struct {
 	Age        time.Duration
-	BusinessDB *db.BusinessStore
+	BusinessDB db.Implementor
 	TimeSeries *db.TimeSeriesStore
 }
 
@@ -36,14 +36,14 @@ func (j *GarbageCollectDataJob) Name() string {
 
 func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time.Time) error {
 	// NOTE: we're processing properties that are soft-deleted, but org is not
-	if properties, err := j.BusinessDB.RetrieveSoftDeletedProperties(ctx, before, maxSoftDeletedProperties); (err == nil) && (len(properties) > 0) {
+	if properties, err := j.BusinessDB.Impl().RetrieveSoftDeletedProperties(ctx, before, maxSoftDeletedProperties); (err == nil) && (len(properties) > 0) {
 		ids := make([]int32, 0, len(properties))
 		for _, p := range properties {
 			ids = append(ids, p.Property.ID)
 		}
 
 		if err := j.TimeSeries.DeletePropertiesData(ctx, ids); err == nil {
-			_ = j.BusinessDB.DeleteProperties(ctx, ids)
+			_ = j.BusinessDB.Impl().DeleteProperties(ctx, ids)
 		}
 	}
 
@@ -52,14 +52,14 @@ func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time
 
 func (j *GarbageCollectDataJob) purgeOrganizations(ctx context.Context, before time.Time) error {
 	// NOTE: we're processing organizations that are soft-deleted, but user is not
-	if organizations, err := j.BusinessDB.RetrieveSoftDeletedOrganizations(ctx, before, maxSoftDeletedOrganizations); (err == nil) && (len(organizations) > 0) {
+	if organizations, err := j.BusinessDB.Impl().RetrieveSoftDeletedOrganizations(ctx, before, maxSoftDeletedOrganizations); (err == nil) && (len(organizations) > 0) {
 		ids := make([]int32, 0, len(organizations))
 		for _, p := range organizations {
 			ids = append(ids, p.Organization.ID)
 		}
 
 		if err := j.TimeSeries.DeleteOrganizationsData(ctx, ids); err == nil {
-			_ = j.BusinessDB.DeleteOrganizations(ctx, ids)
+			_ = j.BusinessDB.Impl().DeleteOrganizations(ctx, ids)
 		}
 	}
 
@@ -68,14 +68,14 @@ func (j *GarbageCollectDataJob) purgeOrganizations(ctx context.Context, before t
 }
 
 func (j *GarbageCollectDataJob) purgeUsers(ctx context.Context, before time.Time) error {
-	if users, err := j.BusinessDB.RetrieveSoftDeletedUsers(ctx, before, maxSoftDeletedUsers); (err == nil) && (len(users) > 0) {
+	if users, err := j.BusinessDB.Impl().RetrieveSoftDeletedUsers(ctx, before, maxSoftDeletedUsers); (err == nil) && (len(users) > 0) {
 		ids := make([]int32, 0, len(users))
 		for _, p := range users {
 			ids = append(ids, p.User.ID)
 		}
 
 		if err := j.TimeSeries.DeleteUsersData(ctx, ids); err == nil {
-			_ = j.BusinessDB.DeleteUsers(ctx, ids)
+			_ = j.BusinessDB.Impl().DeleteUsers(ctx, ids)
 		}
 	}
 

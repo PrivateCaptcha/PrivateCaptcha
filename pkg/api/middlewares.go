@@ -64,7 +64,7 @@ func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 }
 
 type baseUserLimiter struct {
-	store      *db.BusinessStore
+	store      db.Implementor
 	userLimits common.Cache[int32, any]
 }
 
@@ -101,7 +101,7 @@ func (ul *baseUserLimiter) CheckProperties(ctx context.Context, properties []*db
 		return
 	}
 
-	if users, err := ul.store.RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
+	if users, err := ul.store.Impl().RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
 		violatorsMap := make(map[int32]struct{})
 		for _, u := range users {
 			_ = ul.userLimits.Set(ctx, u.ID, struct{}{}, db.UserLimitTTL)
@@ -203,7 +203,7 @@ func isSiteKeyValid(sitekey string) bool {
 
 // the only purpose of this routine is to cache properties and block users without a subscription
 func (am *AuthMiddleware) backfillImpl(ctx context.Context, batch map[string]struct{}) error {
-	if properties, err := am.Store.RetrievePropertiesBySitekey(ctx, batch); err == nil {
+	if properties, err := am.Store.Impl().RetrievePropertiesBySitekey(ctx, batch); err == nil {
 		am.Limiter.CheckProperties(ctx, properties)
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
@@ -267,7 +267,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		// NOTE: there's a potential problem here if the property is still cached then
 		// we will not backfill and, thus, verify the subscription validity of the user
-		property, err := am.Store.GetCachedPropertyBySitekey(ctx, sitekey)
+		property, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 		if err != nil {
 			switch err {
 			// this will happen when the user does not have such property or it was deleted
@@ -343,7 +343,7 @@ func (am *AuthMiddleware) apiKeyKeyFunc(r *http.Request) string {
 	secret := r.Header.Get(common.HeaderAPIKey)
 
 	if len(secret) == db.SecretLen {
-		if apiKey, err := am.Store.GetCachedAPIKey(ctx, secret); err == nil {
+		if apiKey, err := am.Store.Impl().GetCachedAPIKey(ctx, secret); err == nil {
 			tnow := time.Now().UTC()
 			if am.isAPIKeyValid(ctx, apiKey, tnow) {
 				// if we know API key is valid, we ratelimit by API key which has different limits
@@ -365,7 +365,7 @@ func (am *AuthMiddleware) APIKey(next http.Handler) http.Handler {
 		}
 
 		// by now we are ratelimited or cached, so kind of OK to attempt access DB here
-		apiKey, err := am.Store.RetrieveAPIKey(ctx, secret)
+		apiKey, err := am.Store.Impl().RetrieveAPIKey(ctx, secret)
 		if err != nil {
 			switch err {
 			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:

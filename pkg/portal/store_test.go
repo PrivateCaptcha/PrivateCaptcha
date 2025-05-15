@@ -26,7 +26,7 @@ func TestSoftDeleteOrganization(t *testing.T) {
 	}
 
 	// Verify that the organization is returned by FindUserOrganizations
-	orgs, err := store.RetrieveUserOrganizations(ctx, user.ID)
+	orgs, err := store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to find user organizations: %v", err)
 	}
@@ -34,12 +34,12 @@ func TestSoftDeleteOrganization(t *testing.T) {
 		t.Errorf("Expected to find the created organization, but got: %v", orgs)
 	}
 
-	err = store.SoftDeleteOrganization(ctx, org.ID, user.ID)
+	err = store.Impl().SoftDeleteOrganization(ctx, org.ID, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to soft delete organization: %v", err)
 	}
 
-	orgs, err = store.RetrieveUserOrganizations(ctx, user.ID)
+	orgs, err = store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to find user organizations: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
-	prop, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	prop, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       "Test Property",
 		OrgID:      db.Int(org.ID),
 		CreatorID:  org.UserID,
@@ -75,7 +75,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 	}
 
 	// Retrieve the organization's properties
-	orgProperties, err := store.RetrieveOrgProperties(ctx, org.ID)
+	orgProperties, err := store.Impl().RetrieveOrgProperties(ctx, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve organization properties: %v", err)
 	}
@@ -87,13 +87,13 @@ func TestSoftDeleteProperty(t *testing.T) {
 	}
 
 	// Soft delete the property
-	err = store.SoftDeleteProperty(ctx, prop.ID, org.ID)
+	err = store.Impl().SoftDeleteProperty(ctx, prop.ID, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to soft delete property: %v", err)
 	}
 
 	// Retrieve the organization's properties again
-	orgProperties, err = store.RetrieveOrgProperties(ctx, org.ID)
+	orgProperties, err = store.Impl().RetrieveOrgProperties(ctx, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve organization properties: %v", err)
 	}
@@ -103,6 +103,17 @@ func TestSoftDeleteProperty(t *testing.T) {
 	if idx != -1 {
 		t.Errorf("Soft-deleted property found in organization properties")
 	}
+}
+
+func acquireLock(ctx context.Context, store db.Implementor, name string, expiration time.Time) (*dbgen.Lock, error) {
+	var lock *dbgen.Lock
+	err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		var err error
+		lock, err = impl.AcquireLock(ctx, name, nil, expiration)
+		return err
+	})
+
+	return lock, err
 }
 
 func TestLockTwice(t *testing.T) {
@@ -115,7 +126,7 @@ func TestLockTwice(t *testing.T) {
 	var lockName = t.Name()
 
 	initialExpiration := time.Now().UTC().Add(lockDuration).Truncate(time.Millisecond)
-	lock, err := store.AcquireLock(ctx, lockName, nil, initialExpiration)
+	_, err := acquireLock(ctx, store, lockName, initialExpiration)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +141,7 @@ func TestLockTwice(t *testing.T) {
 			break
 		}
 
-		if lock, err = store.AcquireLock(ctx, lockName, nil, tnow.Add(lockDuration)); err == nil {
+		if lock, err := acquireLock(ctx, store, lockName, tnow.Add(lockDuration)); err == nil {
 			t.Fatalf("Was able to acquire a lock again. i=%v tnow=%v expires_at=%v", i, tnow, lock.ExpiresAt.Time)
 		}
 
@@ -142,7 +153,7 @@ func TestLockTwice(t *testing.T) {
 	}
 
 	// now it should succeed after the lock TTL
-	_, err = store.AcquireLock(ctx, lockName, nil, time.Now().UTC().Add(lockDuration))
+	_, err = acquireLock(ctx, store, lockName, time.Now().UTC().Add(lockDuration))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,23 +169,25 @@ func TestLockUnlock(t *testing.T) {
 	var lockName = t.Name()
 	expiration := time.Now().UTC().Add(lockDuration)
 
-	_, err := store.AcquireLock(ctx, lockName, nil, expiration)
+	_, err := acquireLock(ctx, store, lockName, expiration)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = store.AcquireLock(ctx, lockName, nil, expiration)
+	_, err = acquireLock(ctx, store, lockName, expiration)
 	if err == nil {
 		t.Fatal("Was able to acquire a lock again right away")
 	}
 
-	err = store.ReleaseLock(ctx, lockName)
+	err = store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		return impl.ReleaseLock(ctx, lockName)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// this time it should succeed as we just released the lock
-	_, err = store.AcquireLock(ctx, lockName, nil, expiration)
+	_, err = acquireLock(ctx, store, lockName, expiration)
 	if err != nil {
 		t.Fatal("Was able to acquire a lock again right away")
 	}
@@ -194,26 +207,26 @@ func TestSystemNotification(t *testing.T) {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
-	if _, err := store.RetrieveUserNotification(ctx, tnow, user.ID); err != db.ErrRecordNotFound {
+	if _, err := store.Impl().RetrieveUserNotification(ctx, tnow, user.ID); err != db.ErrRecordNotFound {
 		t.Errorf("Unexpected result for user notification: %v", err)
 	}
 
-	generalNotification, err := store.CreateNotification(ctx, "message", tnow, nil /*duration*/, nil /*userID*/)
+	generalNotification, err := store.Impl().CreateNotification(ctx, "message", tnow, nil /*duration*/, nil /*userID*/)
 	if err != nil {
 		t.Error(err)
 	}
 
-	if n, err := store.RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != generalNotification.ID) {
+	if n, err := store.Impl().RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != generalNotification.ID) {
 		t.Errorf("Cannot retrieve generic user notification: %v", err)
 	}
 
-	userNotification, err := store.CreateNotification(ctx, "message", tnow.Add(-1*time.Minute), nil /*duration*/, &user.ID)
+	userNotification, err := store.Impl().CreateNotification(ctx, "message", tnow.Add(-1*time.Minute), nil /*duration*/, &user.ID)
 	if err != nil {
 		t.Error(err)
 	}
 
 	// specific notification has precedence over general one, even though both are active AND system notification is "fresher"
-	if n, err := store.RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != userNotification.ID) {
+	if n, err := store.Impl().RetrieveUserNotification(ctx, tnow, user.ID); (err != nil) || (n.ID != userNotification.ID) {
 		t.Errorf("Cannot retrieve specific user notification: %v", err)
 	}
 }

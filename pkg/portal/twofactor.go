@@ -112,7 +112,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	go func(bctx context.Context) {
 		if userID, ok := sess.Get(session.KeyUserID).(int32); ok {
 			slog.DebugContext(bctx, "Fetching system notification for user", "userID", userID)
-			if n, err := s.Store.RetrieveUserNotification(bctx, time.Now().UTC(), userID); err == nil {
+			if n, err := s.Store.Impl().RetrieveUserNotification(bctx, time.Now().UTC(), userID); err == nil {
 				_ = sess.Set(session.KeyNotificationID, n.ID)
 			}
 		} else {

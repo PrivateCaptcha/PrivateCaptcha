@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
@@ -83,7 +84,7 @@ func TestGCPropertyData(t *testing.T) {
 	}
 
 	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
-		return store.SoftDeleteProperty(ctx, p.ID, p.OrgOwnerID.Int32)
+		return store.Impl().SoftDeleteProperty(ctx, p.ID, p.OrgOwnerID.Int32)
 	}, t)
 }
 
@@ -105,7 +106,7 @@ func TestGCOrganizationData(t *testing.T) {
 	}
 
 	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
-		return store.SoftDeleteOrganization(ctx, p.OrgID.Int32, p.OrgOwnerID.Int32)
+		return store.Impl().SoftDeleteOrganization(ctx, p.OrgID.Int32, p.OrgOwnerID.Int32)
 	}, t)
 }
 
@@ -127,6 +128,8 @@ func TestGCUserData(t *testing.T) {
 	}
 
 	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
-		return store.SoftDeleteUser(ctx, p.OrgOwnerID.Int32)
+		return store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+			return impl.SoftDeleteUser(ctx, p.OrgOwnerID.Int32)
+		})
 	}, t)
 }

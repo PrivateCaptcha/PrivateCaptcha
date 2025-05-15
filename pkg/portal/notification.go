@@ -14,7 +14,7 @@ func (s *Server) createSystemNotificationContext(ctx context.Context, sess *comm
 	renderCtx := systemNotificationContext{}
 
 	if notificationID, ok := sess.Get(session.KeyNotificationID).(int32); ok {
-		if notification, err := s.Store.RetrieveNotification(ctx, notificationID); err == nil {
+		if notification, err := s.Store.Impl().RetrieveNotification(ctx, notificationID); err == nil {
 			renderCtx.Notification = notification.Message
 			renderCtx.NotificationID = strconv.Itoa(int(notification.ID))
 		}

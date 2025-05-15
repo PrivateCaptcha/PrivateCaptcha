@@ -151,7 +151,7 @@ func (s *Server) validateOrgName(ctx context.Context, name string, userID int32)
 		}
 	}
 
-	if _, err := s.Store.FindOrg(ctx, name, userID); err != db.ErrRecordNotFound {
+	if _, err := s.Store.Impl().FindOrg(ctx, name, userID); err != db.ErrRecordNotFound {
 		slog.WarnContext(ctx, "Org already exists", "name", name, common.ErrAttr(err))
 		return "Organization with this name already exists."
 	}
@@ -164,7 +164,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
@@ -183,7 +183,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	}
 
 	// NOTE: this should be freshly cached as we should have just rendered the dashboard
-	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
+	orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user orgs", "userID", user.ID, common.ErrAttr(err))
 		return ""
@@ -229,7 +229,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Store.CreateNewOrganization(ctx, name, user.ID)
+	org, err := s.Store.Impl().CreateNewOrganization(ctx, name, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create organization", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -247,7 +247,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		return nil, err
 	}
 
-	orgs, err := s.Store.RetrieveUserOrganizations(ctx, user.ID)
+	orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 	if (0 <= idx) && (idx < len(orgs)) {
 		if orgs[idx].Level != dbgen.AccessLevelInvited {
-			if properties, err := s.Store.RetrieveOrgProperties(ctx, orgs[idx].Organization.ID); err == nil {
+			if properties, err := s.Store.Impl().RetrieveOrgProperties(ctx, orgs[idx].Organization.ID); err == nil {
 				renderCtx.Properties = propertiesToUserProperties(ctx, properties)
 			}
 		}
@@ -347,7 +347,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 		return nil, "", err
 	}
 
-	properties, err := s.Store.RetrieveOrgProperties(ctx, org.ID)
+	properties, err := s.Store.Impl().RetrieveOrgProperties(ctx, org.ID)
 	if err != nil {
 		return nil, "", err
 	}
@@ -384,7 +384,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 		return renderCtx, orgMembersTemplate, nil
 	}
 
-	members, err := s.Store.RetrieveOrganizationUsers(ctx, org.ID)
+	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return nil, "", err
@@ -417,7 +417,7 @@ func (s *Server) validateAddOrgMember(ctx context.Context, user *dbgen.User, mem
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.Store.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
@@ -460,7 +460,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		return nil, "", err
 	}
 
-	members, err := s.Store.RetrieveOrganizationUsers(ctx, org.ID)
+	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return nil, "", err
@@ -484,13 +484,13 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		return renderCtx, orgMembersTemplate, nil
 	}
 
-	inviteUser, err := s.Store.FindUserByEmail(ctx, inviteEmail)
+	inviteUser, err := s.Store.Impl().FindUserByEmail(ctx, inviteEmail)
 	if err != nil {
 		renderCtx.ErrorMessage = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
 		return renderCtx, orgMembersTemplate, nil
 	}
 
-	if err = s.Store.InviteUserToOrg(ctx, org.UserID.Int32, inviteUser.ID); err != nil {
+	if err = s.Store.Impl().InviteUserToOrg(ctx, org.UserID.Int32, inviteUser.ID); err != nil {
 		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
 	} else {
 		ou := userToOrgUser(inviteUser, string(dbgen.AccessLevelInvited))
@@ -529,7 +529,7 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.RemoveUserFromOrg(ctx, org.ID, int32(userID)); err != nil {
+	if err := s.Store.Impl().RemoveUserFromOrg(ctx, org.ID, int32(userID)); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -551,7 +551,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.JoinOrg(ctx, orgID, user.ID); err == nil {
+	if err := s.Store.Impl().JoinOrg(ctx, orgID, user.ID); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
@@ -573,7 +573,7 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.LeaveOrg(ctx, int32(orgID), user.ID); err == nil {
+	if err := s.Store.Impl().LeaveOrg(ctx, int32(orgID), user.ID); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(orgID))), http.StatusOK, w, r)
 	} else {
@@ -637,7 +637,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 			return renderCtx, orgSettingsTemplate, nil
 		}
 
-		if updatedOrg, err := s.Store.UpdateOrganization(ctx, org.ID, name); err != nil {
+		if updatedOrg, err := s.Store.Impl().UpdateOrganization(ctx, org.ID, name); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			renderCtx.SuccessMessage = "Settings were updated"
@@ -669,7 +669,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.SoftDeleteOrganization(ctx, org.ID, user.ID); err != nil {
+	if err := s.Store.Impl().SoftDeleteOrganization(ctx, org.ID, user.ID); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organization", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return

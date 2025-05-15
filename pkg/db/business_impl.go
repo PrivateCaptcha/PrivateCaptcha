@@ -63,35 +63,35 @@ type txCacheArg struct {
 	ttl  time.Duration
 }
 
-type txCache struct {
+type TxCache struct {
 	set     map[CacheKey]*txCacheArg
 	del     map[CacheKey]struct{}
 	missing map[CacheKey]time.Duration
 }
 
-func NewTxCache() *txCache {
-	return &txCache{
+func NewTxCache() *TxCache {
+	return &TxCache{
 		set:     make(map[CacheKey]*txCacheArg),
 		del:     make(map[CacheKey]struct{}),
 		missing: make(map[CacheKey]time.Duration),
 	}
 }
 
-func (c *txCache) Get(ctx context.Context, key CacheKey) (any, error) { return nil, errUnsupported }
-func (c *txCache) SetMissing(ctx context.Context, key CacheKey, ttl time.Duration) error {
+func (c *TxCache) Get(ctx context.Context, key CacheKey) (any, error) { return nil, errUnsupported }
+func (c *TxCache) SetMissing(ctx context.Context, key CacheKey, ttl time.Duration) error {
 	c.missing[key] = ttl
 	return nil
 }
-func (c *txCache) Set(ctx context.Context, key CacheKey, t any, ttl time.Duration) error {
+func (c *TxCache) Set(ctx context.Context, key CacheKey, t any, ttl time.Duration) error {
 	c.set[key] = &txCacheArg{item: t, ttl: ttl}
 	return nil
 }
-func (c *txCache) Delete(ctx context.Context, key CacheKey) error {
+func (c *TxCache) Delete(ctx context.Context, key CacheKey) error {
 	c.del[key] = struct{}{}
 	return nil
 }
 
-func (c *txCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any]) {
+func (c *TxCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any]) {
 	for key := range c.del {
 		if err := cache.Delete(ctx, key); err != nil {
 			slog.ErrorContext(ctx, "Failed to delete from cache", "key", key, common.ErrAttr(err))
@@ -111,18 +111,50 @@ func (c *txCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any])
 	}
 }
 
-type businessStoreImpl struct {
-	queries *dbgen.Queries
+type BusinessStoreImpl struct {
+	querier dbgen.Querier
 	cache   common.Cache[CacheKey, any]
 	ttl     time.Duration
 }
 
-func (impl *businessStoreImpl) ping(ctx context.Context) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string) ([]byte, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	data, err := impl.querier.GetCachedByKey(ctx, key)
+	if err == pgx.ErrNoRows {
+		return nil, ErrCacheMiss
+	} else if err != nil {
+		slog.ErrorContext(ctx, "Failed to read Paddle prices", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (impl *BusinessStoreImpl) StoreInCache(ctx context.Context, key string, data []byte, ttl time.Duration) error {
+	if len(data) == 0 {
+		return ErrInvalidInput
+	}
+
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	v, err := impl.queries.Ping(ctx)
+	return impl.querier.CreateCache(ctx, &dbgen.CreateCacheParams{
+		Key:     key,
+		Value:   data,
+		Column3: ttl,
+	})
+}
+
+func (impl *BusinessStoreImpl) ping(ctx context.Context) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	v, err := impl.querier.Ping(ctx)
 	if err != nil {
 		return err
 	}
@@ -130,20 +162,20 @@ func (impl *businessStoreImpl) ping(ctx context.Context) error {
 	return nil
 }
 
-func (impl *businessStoreImpl) deleteExpiredCache(ctx context.Context) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) DeleteExpiredCache(ctx context.Context) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	return impl.queries.DeleteExpiredCache(ctx)
+	return impl.querier.DeleteExpiredCache(ctx)
 }
 
-func (impl *businessStoreImpl) createNewSubscription(ctx context.Context, params *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) createNewSubscription(ctx context.Context, params *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	subscription, err := impl.queries.CreateSubscription(ctx, params)
+	subscription, err := impl.querier.CreateSubscription(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create a subscription in DB", common.ErrAttr(err))
 		return nil, err
@@ -157,8 +189,8 @@ func (impl *businessStoreImpl) createNewSubscription(ctx context.Context, params
 	return subscription, nil
 }
 
-func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name string, subscriptionID *int32) (*dbgen.User, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) createNewUser(ctx context.Context, email, name string, subscriptionID *int32) (*dbgen.User, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
@@ -171,7 +203,7 @@ func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name st
 		params.SubscriptionID = Int(*subscriptionID)
 	}
 
-	user, err := impl.queries.CreateUser(ctx, params)
+	user, err := impl.querier.CreateUser(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create user in DB", "email", email, common.ErrAttr(err))
 		return nil, err
@@ -188,12 +220,12 @@ func (impl *businessStoreImpl) createNewUser(ctx context.Context, email, name st
 	return user, nil
 }
 
-func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) CreateNewOrganization(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	org, err := impl.queries.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
+	org, err := impl.querier.CreateOrganization(ctx, &dbgen.CreateOrganizationParams{
 		Name:   name,
 		UserID: Int(userID),
 	})
@@ -215,12 +247,12 @@ func (impl *businessStoreImpl) createNewOrganization(ctx context.Context, name s
 	return org, nil
 }
 
-func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	user, err := impl.queries.SoftDeleteUser(ctx, userID)
+	user, err := impl.querier.SoftDeleteUser(ctx, userID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", userID, common.ErrAttr(err))
 		return err
@@ -228,14 +260,14 @@ func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32)
 		slog.DebugContext(ctx, "Soft-deleted user", "userID", userID)
 	}
 
-	if err := impl.queries.SoftDeleteUserOrganizations(ctx, Int(userID)); err != nil {
+	if err := impl.querier.SoftDeleteUserOrganizations(ctx, Int(userID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user organizations", "userID", userID, common.ErrAttr(err))
 		return err
 	} else {
 		slog.DebugContext(ctx, "Soft-deleted user organizations", "userID", userID)
 	}
 
-	if err := impl.queries.DeleteUserAPIKeys(ctx, Int(userID)); err != nil {
+	if err := impl.querier.DeleteUserAPIKeys(ctx, Int(userID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user API keys", "userID", userID, common.ErrAttr(err))
 		return err
 	} else {
@@ -259,7 +291,7 @@ func (impl *businessStoreImpl) softDeleteUser(ctx context.Context, userID int32)
 	return nil
 }
 
-func (impl *businessStoreImpl) getCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) getCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
 	eid := UUIDFromSiteKey(sitekey)
 	if !eid.Valid {
 		return nil, ErrInvalidInput
@@ -276,7 +308,7 @@ func (impl *businessStoreImpl) getCachedPropertyBySitekey(ctx context.Context, s
 	}
 }
 
-func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]struct{}) ([]*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) RetrievePropertiesBySitekey(ctx context.Context, sitekeys map[string]struct{}) ([]*dbgen.Property, error) {
 	keys := make([]pgtype.UUID, 0, len(sitekeys))
 	keysMap := make(map[string]bool)
 	result := make([]*dbgen.Property, 0, len(sitekeys))
@@ -309,11 +341,11 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 		return nil, ErrInvalidInput
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return result, ErrMaintenance
 	}
 
-	properties, err := impl.queries.GetPropertiesByExternalID(ctx, keys)
+	properties, err := impl.querier.GetPropertiesByExternalID(ctx, keys)
 	if err != nil && err != pgx.ErrNoRows {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekeys", common.ErrAttr(err))
 		return nil, err
@@ -337,7 +369,7 @@ func (impl *businessStoreImpl) retrievePropertiesBySitekey(ctx context.Context, 
 	return result, nil
 }
 
-func (impl *businessStoreImpl) getCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
+func (impl *BusinessStoreImpl) GetCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	cacheKey := APIKeyCacheKey(secret)
 
 	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
@@ -349,7 +381,8 @@ func (impl *businessStoreImpl) getCachedAPIKey(ctx context.Context, secret strin
 	}
 }
 
-func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
+// Fetches API keyfrom DB, backed by cache
+func (impl *BusinessStoreImpl) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	cacheKey := APIKeyCacheKey(secret)
 
 	if apiKey, err := fetchCachedOne[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
@@ -358,7 +391,7 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
@@ -367,7 +400,7 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 		return nil, ErrInvalidInput
 	}
 
-	apiKey, err := impl.queries.GetAPIKeyByExternalID(ctx, eid)
+	apiKey, err := impl.querier.GetAPIKeyByExternalID(ctx, eid)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -386,7 +419,7 @@ func (impl *businessStoreImpl) retrieveAPIKey(ctx context.Context, secret string
 	return apiKey, nil
 }
 
-func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {
+func (impl *BusinessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {
 	cacheKey := userCacheKey(userID)
 	if user, err := fetchCachedOne[dbgen.User](ctx, impl.cache, cacheKey); err == nil {
 		return user, nil
@@ -394,11 +427,11 @@ func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (
 		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	user, err := impl.queries.GetUserByID(ctx, userID)
+	user, err := impl.querier.GetUserByID(ctx, userID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -417,16 +450,16 @@ func (impl *businessStoreImpl) retrieveUser(ctx context.Context, userID int32) (
 	return user, nil
 }
 
-func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
+func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string) (*dbgen.User, error) {
 	if len(email) == 0 {
 		return nil, ErrInvalidInput
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	user, err := impl.queries.GetUserByEmail(ctx, email)
+	user, err := impl.querier.GetUserByEmail(ctx, email)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrRecordNotFound
@@ -445,12 +478,12 @@ func (impl *businessStoreImpl) findUserByEmail(ctx context.Context, email string
 	return user, nil
 }
 
-func (impl *businessStoreImpl) findUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) FindUserBySubscriptionID(ctx context.Context, subscriptionID int32) (*dbgen.User, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	user, err := impl.queries.GetUserBySubscriptionID(ctx, Int(subscriptionID))
+	user, err := impl.querier.GetUserBySubscriptionID(ctx, Int(subscriptionID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, ErrRecordNotFound
@@ -469,18 +502,18 @@ func (impl *businessStoreImpl) findUserBySubscriptionID(ctx context.Context, sub
 	return user, nil
 }
 
-func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
 	cacheKey := userOrgsCacheKey(userID)
 
 	if orgs, err := fetchCachedMany[dbgen.GetUserOrganizationsRow](ctx, impl.cache, cacheKey); err == nil {
 		return orgs, nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	orgs, err := impl.queries.GetUserOrganizations(ctx, Int(userID))
+	orgs, err := impl.querier.GetUserOrganizations(ctx, Int(userID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.Set(ctx, cacheKey, emptyUserOrgs, impl.ttl)
@@ -507,7 +540,7 @@ func (impl *businessStoreImpl) retrieveUserOrganizations(ctx context.Context, us
 	return orgs, nil
 }
 
-func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Context, userID, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
+func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Context, userID, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	cacheKey := orgCacheKey(orgID)
 
 	if org, err := fetchCachedOne[dbgen.Organization](ctx, impl.cache, cacheKey); err == nil {
@@ -539,13 +572,13 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 		}
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, nullAccessLevelNull, ErrMaintenance
 	}
 
 	// NOTE: we don't return the whole row from org_users in query and instead we only get the level back
 	// left join and embed() do not work together in sqlc (https://github.com/sqlc-dev/sqlc/issues/2348)
-	orgAndAccess, err := impl.queries.GetOrganizationWithAccess(ctx, &dbgen.GetOrganizationWithAccessParams{
+	orgAndAccess, err := impl.querier.GetOrganizationWithAccess(ctx, &dbgen.GetOrganizationWithAccessParams{
 		ID:     orgID,
 		UserID: userID,
 	})
@@ -573,7 +606,7 @@ func (impl *businessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	return org, orgAndAccess.Level, nil
 }
 
-func (impl *businessStoreImpl) cacheProperty(ctx context.Context, property *dbgen.Property) {
+func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
 	}
@@ -584,7 +617,7 @@ func (impl *businessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 	_ = impl.cache.Set(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
 }
 
-func (impl *businessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
 	cacheKey := propertyByIDCacheKey(propID)
 
 	if prop, err := fetchCachedOne[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
@@ -601,11 +634,11 @@ func (impl *businessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 		}
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	property, err := impl.queries.GetPropertyByID(ctx, propID)
+	property, err := impl.querier.GetPropertyByID(ctx, propID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -622,7 +655,7 @@ func (impl *businessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 	return property, nil
 }
 
-func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
+func (impl *BusinessStoreImpl) RetrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
 	cacheKey := subscriptionCacheKey(sID)
 	if subscription, err := fetchCachedOne[dbgen.Subscription](ctx, impl.cache, cacheKey); err == nil {
 		return subscription, nil
@@ -630,11 +663,11 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	subscription, err := impl.queries.GetSubscriptionByID(ctx, sID)
+	subscription, err := impl.querier.GetSubscriptionByID(ctx, sID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -653,12 +686,12 @@ func (impl *businessStoreImpl) retrieveSubscription(ctx context.Context, sID int
 	return subscription, nil
 }
 
-func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateSubscription(ctx context.Context, params *dbgen.UpdateSubscriptionParams) (*dbgen.Subscription, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	subscription, err := impl.queries.UpdateSubscription(ctx, params)
+	subscription, err := impl.querier.UpdateSubscription(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update subscription in DB", "externalSubscriptionID", params.ExternalSubscriptionID, common.ErrAttr(err))
 		return nil, err
@@ -674,16 +707,16 @@ func (impl *businessStoreImpl) updateSubscription(ctx context.Context, params *d
 	return subscription, nil
 }
 
-func (impl *businessStoreImpl) findOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) FindOrgProperty(ctx context.Context, name string, orgID int32) (*dbgen.Property, error) {
 	if len(name) == 0 {
 		return nil, ErrInvalidInput
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	property, err := impl.queries.GetOrgPropertyByName(ctx, &dbgen.GetOrgPropertyByNameParams{
+	property, err := impl.querier.GetOrgPropertyByName(ctx, &dbgen.GetOrgPropertyByNameParams{
 		OrgID: Int(orgID),
 		Name:  name,
 	})
@@ -700,16 +733,16 @@ func (impl *businessStoreImpl) findOrgProperty(ctx context.Context, name string,
 	return property, nil
 }
 
-func (impl *businessStoreImpl) findOrg(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
+func (impl *BusinessStoreImpl) FindOrg(ctx context.Context, name string, userID int32) (*dbgen.Organization, error) {
 	if len(name) == 0 {
 		return nil, ErrInvalidInput
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	org, err := impl.queries.FindUserOrgByName(ctx, &dbgen.FindUserOrgByNameParams{
+	org, err := impl.querier.FindUserOrgByName(ctx, &dbgen.FindUserOrgByNameParams{
 		UserID: Int(userID),
 		Name:   name,
 	})
@@ -726,12 +759,12 @@ func (impl *businessStoreImpl) findOrg(ctx context.Context, name string, userID 
 	return org, nil
 }
 
-func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	property, err := impl.queries.CreateProperty(ctx, params)
+	property, err := impl.querier.CreateProperty(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property in DB", "name", params.Name, "org", params.OrgID, common.ErrAttr(err))
 		return nil, err
@@ -749,12 +782,12 @@ func (impl *businessStoreImpl) createNewProperty(ctx context.Context, params *db
 	return property, nil
 }
 
-func (impl *businessStoreImpl) updateProperty(ctx context.Context, params *dbgen.UpdatePropertyParams) (*dbgen.Property, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, params *dbgen.UpdatePropertyParams) (*dbgen.Property, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	property, err := impl.queries.UpdateProperty(ctx, params)
+	property, err := impl.querier.UpdateProperty(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update property in DB", "name", params.Name, "propID", params.ID, common.ErrAttr(err))
 		return nil, err
@@ -774,12 +807,12 @@ func (impl *businessStoreImpl) updateProperty(ctx context.Context, params *dbgen
 	return property, nil
 }
 
-func (impl *businessStoreImpl) softDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, propID int32, orgID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	property, err := impl.queries.SoftDeleteProperty(ctx, propID)
+	property, err := impl.querier.SoftDeleteProperty(ctx, propID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", propID, common.ErrAttr(err))
 		return err
@@ -798,18 +831,18 @@ func (impl *businessStoreImpl) softDeleteProperty(ctx context.Context, propID in
 	return nil
 }
 
-func (impl *businessStoreImpl) retrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	cacheKey := orgPropertiesCacheKey(orgID)
 
 	if properties, err := fetchCachedMany[dbgen.Property](ctx, impl.cache, cacheKey); err == nil {
 		return properties, nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	properties, err := impl.queries.GetOrgProperties(ctx, Int(orgID))
+	properties, err := impl.querier.GetOrgProperties(ctx, Int(orgID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.Set(ctx, cacheKey, emptyProperties, impl.ttl)
@@ -828,12 +861,12 @@ func (impl *businessStoreImpl) retrieveOrgProperties(ctx context.Context, orgID 
 	return properties, err
 }
 
-func (impl *businessStoreImpl) updateOrganization(ctx context.Context, orgID int32, name string) (*dbgen.Organization, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, orgID int32, name string) (*dbgen.Organization, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	org, err := impl.queries.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
+	org, err := impl.querier.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
 		Name: name,
 		ID:   orgID,
 	})
@@ -853,14 +886,14 @@ func (impl *businessStoreImpl) updateOrganization(ctx context.Context, orgID int
 	return org, nil
 }
 
-func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID int32, userID pgtype.Int4) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, orgID int32, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	if err := impl.queries.SoftDeleteUserOrganization(ctx, &dbgen.SoftDeleteUserOrganizationParams{
+	if err := impl.querier.SoftDeleteUserOrganization(ctx, &dbgen.SoftDeleteUserOrganizationParams{
 		ID:     orgID,
-		UserID: userID,
+		UserID: Int(userID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark organization as deleted in DB", "orgID", orgID, common.ErrAttr(err))
 		return err
@@ -871,24 +904,24 @@ func (impl *businessStoreImpl) softDeleteOrganization(ctx context.Context, orgID
 	// update caches
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(orgID), impl.ttl)
 	// invalidate user orgs in cache as we just deleted one
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID.Int32))
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID))
 
 	return nil
 }
 
 // NOTE: by definition this does not include the owner as this relationship is set directly in the 'organizations' table
-func (impl *businessStoreImpl) retrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
+func (impl *BusinessStoreImpl) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
 	cacheKey := orgUsersCacheKey(orgID)
 
 	if users, err := fetchCachedMany[dbgen.GetOrganizationUsersRow](ctx, impl.cache, cacheKey); err == nil {
 		return users, nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.queries.GetOrganizationUsers(ctx, orgID)
+	users, err := impl.querier.GetOrganizationUsers(ctx, orgID)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.Set(ctx, cacheKey, emptyOrgUsers, impl.ttl)
@@ -907,12 +940,12 @@ func (impl *businessStoreImpl) retrieveOrganizationUsers(ctx context.Context, or
 	return users, nil
 }
 
-func (impl *businessStoreImpl) inviteUserToOrg(ctx context.Context, orgID int32, userID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	_, err := impl.queries.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
+	_, err := impl.querier.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
 		OrgID:  orgID,
 		UserID: userID,
 	})
@@ -930,12 +963,12 @@ func (impl *businessStoreImpl) inviteUserToOrg(ctx context.Context, orgID int32,
 	return nil
 }
 
-func (impl *businessStoreImpl) joinOrg(ctx context.Context, orgID int32, userID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  userID,
 		Level:   dbgen.AccessLevelMember,
@@ -956,12 +989,12 @@ func (impl *businessStoreImpl) joinOrg(ctx context.Context, orgID int32, userID 
 	return nil
 }
 
-func (impl *businessStoreImpl) leaveOrg(ctx context.Context, orgID int32, userID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  userID,
 		Level:   dbgen.AccessLevelInvited,
@@ -982,12 +1015,12 @@ func (impl *businessStoreImpl) leaveOrg(ctx context.Context, orgID int32, userID
 	return nil
 }
 
-func (impl *businessStoreImpl) removeUserFromOrg(ctx context.Context, orgID int32, userID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, orgID int32, userID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
+	err := impl.querier.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
 		OrgID:  orgID,
 		UserID: userID,
 	})
@@ -1006,12 +1039,12 @@ func (impl *businessStoreImpl) removeUserFromOrg(ctx context.Context, orgID int3
 	return nil
 }
 
-func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userID, subscriptionID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) updateUserSubscription(ctx context.Context, userID, subscriptionID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	user, err := impl.queries.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
+	user, err := impl.querier.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
 		ID:             userID,
 		SubscriptionID: Int(subscriptionID),
 	})
@@ -1030,12 +1063,12 @@ func (impl *businessStoreImpl) updateUserSubscription(ctx context.Context, userI
 	return nil
 }
 
-func (impl *businessStoreImpl) updateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, userID int32, name string, newEmail, oldEmail string) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	user, err := impl.queries.UpdateUserData(ctx, &dbgen.UpdateUserDataParams{
+	user, err := impl.querier.UpdateUserData(ctx, &dbgen.UpdateUserDataParams{
 		Name:  name,
 		Email: newEmail,
 		ID:    userID,
@@ -1055,7 +1088,7 @@ func (impl *businessStoreImpl) updateUser(ctx context.Context, userID int32, nam
 	return nil
 }
 
-func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
+func (impl *BusinessStoreImpl) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
 	cacheKey := userAPIKeysCacheKey(userID)
 
 	if keys, err := fetchCachedMany[dbgen.APIKey](ctx, impl.cache, cacheKey); err == nil {
@@ -1064,11 +1097,11 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	keys, err := impl.queries.GetUserAPIKeys(ctx, Int(userID))
+	keys, err := impl.querier.GetUserAPIKeys(ctx, Int(userID))
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.Set(ctx, cacheKey, emptyAPIKeys, impl.ttl)
@@ -1087,12 +1120,12 @@ func (impl *businessStoreImpl) retrieveUserAPIKeys(ctx context.Context, userID i
 	return keys, err
 }
 
-func (impl *businessStoreImpl) updateAPIKey(ctx context.Context, externalID pgtype.UUID, expiration time.Time, enabled bool) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateAPIKey(ctx context.Context, externalID pgtype.UUID, expiration time.Time, enabled bool) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	key, err := impl.queries.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
+	key, err := impl.querier.UpdateAPIKey(ctx, &dbgen.UpdateAPIKeyParams{
 		ExpiresAt:  Timestampz(expiration),
 		Enabled:    Bool(enabled),
 		ExternalID: externalID,
@@ -1117,8 +1150,8 @@ func (impl *businessStoreImpl) updateAPIKey(ctx context.Context, externalID pgty
 	return nil
 }
 
-func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) CreateAPIKey(ctx context.Context, userID int32, name string, expiration time.Time, requestsPerSecond float64) (*dbgen.APIKey, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
@@ -1129,7 +1162,7 @@ func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, n
 		burst = minAPIKeyRequestsBurst
 	}
 
-	key, err := impl.queries.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
+	key, err := impl.querier.CreateAPIKey(ctx, &dbgen.CreateAPIKeyParams{
 		Name:              name,
 		UserID:            Int(userID),
 		ExpiresAt:         Timestampz(expiration),
@@ -1154,12 +1187,12 @@ func (impl *businessStoreImpl) createAPIKey(ctx context.Context, userID int32, n
 	return key, nil
 }
 
-func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID int32) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) DeleteAPIKey(ctx context.Context, userID, keyID int32) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	key, err := impl.queries.DeleteAPIKey(ctx, &dbgen.DeleteAPIKeyParams{
+	key, err := impl.querier.DeleteAPIKey(ctx, &dbgen.DeleteAPIKeyParams{
 		ID:     keyID,
 		UserID: Int(userID),
 	})
@@ -1188,12 +1221,12 @@ func (impl *businessStoreImpl) deleteAPIKey(ctx context.Context, userID, keyID i
 	return nil
 }
 
-func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) UpdateUserAPIKeysRateLimits(ctx context.Context, userID int32, requestsPerSecond float64) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.UpdateUserAPIKeysRateLimits(ctx, &dbgen.UpdateUserAPIKeysRateLimitsParams{
+	err := impl.querier.UpdateUserAPIKeysRateLimits(ctx, &dbgen.UpdateUserAPIKeysRateLimitsParams{
 		RequestsPerSecond: requestsPerSecond,
 		UserID:            Int(userID),
 	})
@@ -1217,35 +1250,12 @@ func (impl *businessStoreImpl) updateUserAPIKeysRateLimits(ctx context.Context, 
 	return nil
 }
 
-func (impl *businessStoreImpl) createSupportTicket(ctx context.Context, category dbgen.SupportCategory, subject, message string, userID int32, sessID string) (*dbgen.Support, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	ticket, err := impl.queries.CreateSupportTicket(ctx, &dbgen.CreateSupportTicketParams{
-		Category:  category,
-		Subject:   Text(subject),
-		Message:   Text(message),
-		UserID:    Int(userID),
-		SessionID: Text(sessID),
-	})
-
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create support ticket", "userID", userID, common.ErrAttr(err))
-		return nil, err
-	}
-
-	slog.DebugContext(ctx, "Created support ticket in DB", "ticketID", ticket.ID)
-
-	return ticket, nil
-}
-
-func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
-	if impl.queries == nil {
-		return nil, ErrMaintenance
-	}
-
-	users, err := impl.queries.GetUsersWithoutSubscription(ctx, userIDs)
+	users, err := impl.querier.GetUsersWithoutSubscription(ctx, userIDs)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return []*dbgen.User{}, nil
@@ -1261,12 +1271,12 @@ func (impl *businessStoreImpl) retrieveUsersWithoutSubscription(ctx context.Cont
 	return users, err
 }
 
-func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveSubscriptionsByUserIDs(ctx context.Context, userIDs []int32) ([]*dbgen.GetSubscriptionsByUserIDsRow, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	subscriptions, err := impl.queries.GetSubscriptionsByUserIDs(ctx, userIDs)
+	subscriptions, err := impl.querier.GetSubscriptionsByUserIDs(ctx, userIDs)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return []*dbgen.GetSubscriptionsByUserIDsRow{}, nil
@@ -1282,16 +1292,16 @@ func (impl *businessStoreImpl) retrieveSubscriptionsByUserIDs(ctx context.Contex
 	return subscriptions, err
 }
 
-func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
+func (impl *BusinessStoreImpl) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	if (len(name) == 0) || expiration.IsZero() {
 		return nil, ErrInvalidInput
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	lock, err := impl.queries.InsertLock(ctx, &dbgen.InsertLockParams{
+	lock, err := impl.querier.InsertLock(ctx, &dbgen.InsertLockParams{
 		Name:      name,
 		Data:      data,
 		ExpiresAt: Timestampz(expiration),
@@ -1310,11 +1320,11 @@ func (impl *businessStoreImpl) acquireLock(ctx context.Context, name string, dat
 	return lock, nil
 }
 
-func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) ReleaseLock(ctx context.Context, name string) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
-	err := impl.queries.DeleteLock(ctx, name)
+	err := impl.querier.DeleteLock(ctx, name)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to release a lock", "name", name, common.ErrAttr(err))
 	}
@@ -1322,12 +1332,12 @@ func (impl *businessStoreImpl) releaseLock(ctx context.Context, name string) err
 	return err
 }
 
-func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context, before time.Time) error {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) DeleteDeletedRecords(ctx context.Context, before time.Time) error {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.DeleteDeletedRecords(ctx, Timestampz(before))
+	err := impl.querier.DeleteDeletedRecords(ctx, Timestampz(before))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to cleanup deleted records", "before", before, common.ErrAttr(err))
 	}
@@ -1335,12 +1345,12 @@ func (impl *businessStoreImpl) deleteDeletedRecords(ctx context.Context, before 
 	return err
 }
 
-func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	properties, err := impl.queries.GetSoftDeletedProperties(ctx, &dbgen.GetSoftDeletedPropertiesParams{
+	properties, err := impl.querier.GetSoftDeletedProperties(ctx, &dbgen.GetSoftDeletedPropertiesParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
 	})
@@ -1355,17 +1365,17 @@ func (impl *businessStoreImpl) retrieveSoftDeletedProperties(ctx context.Context
 	return properties, nil
 }
 
-func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32) error {
+func (impl *BusinessStoreImpl) DeleteProperties(ctx context.Context, ids []int32) error {
 	if len(ids) == 0 {
 		slog.WarnContext(ctx, "No properties to delete")
 		return nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.DeleteProperties(ctx, ids)
+	err := impl.querier.DeleteProperties(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete properties", "count", len(ids), common.ErrAttr(err))
@@ -1374,12 +1384,12 @@ func (impl *businessStoreImpl) deleteProperties(ctx context.Context, ids []int32
 	return err
 }
 
-func (impl *businessStoreImpl) retrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	organizations, err := impl.queries.GetSoftDeletedOrganizations(ctx, &dbgen.GetSoftDeletedOrganizationsParams{
+	organizations, err := impl.querier.GetSoftDeletedOrganizations(ctx, &dbgen.GetSoftDeletedOrganizationsParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
 	})
@@ -1394,17 +1404,17 @@ func (impl *businessStoreImpl) retrieveSoftDeletedOrganizations(ctx context.Cont
 	return organizations, nil
 }
 
-func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []int32) error {
+func (impl *BusinessStoreImpl) DeleteOrganizations(ctx context.Context, ids []int32) error {
 	if len(ids) == 0 {
 		slog.WarnContext(ctx, "No organizations to delete")
 		return nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.DeleteOrganizations(ctx, ids)
+	err := impl.querier.DeleteOrganizations(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organizations", "count", len(ids), common.ErrAttr(err))
@@ -1413,12 +1423,12 @@ func (impl *businessStoreImpl) deleteOrganizations(ctx context.Context, ids []in
 	return err
 }
 
-func (impl *businessStoreImpl) retrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int) ([]*dbgen.GetSoftDeletedUsersRow, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.queries.GetSoftDeletedUsers(ctx, &dbgen.GetSoftDeletedUsersParams{
+	users, err := impl.querier.GetSoftDeletedUsers(ctx, &dbgen.GetSoftDeletedUsersParams{
 		DeletedAt: Timestampz(before),
 		Limit:     int32(limit),
 	})
@@ -1433,17 +1443,17 @@ func (impl *businessStoreImpl) retrieveSoftDeletedUsers(ctx context.Context, bef
 	return users, nil
 }
 
-func (impl *businessStoreImpl) deleteUsers(ctx context.Context, ids []int32) error {
+func (impl *BusinessStoreImpl) DeleteUsers(ctx context.Context, ids []int32) error {
 	if len(ids) == 0 {
 		slog.WarnContext(ctx, "No users to delete")
 		return nil
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return ErrMaintenance
 	}
 
-	err := impl.queries.DeleteUsers(ctx, ids)
+	err := impl.querier.DeleteUsers(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete users", "count", len(ids), common.ErrAttr(err))
@@ -1452,7 +1462,7 @@ func (impl *businessStoreImpl) deleteUsers(ctx context.Context, ids []int32) err
 	return err
 }
 
-func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
+func (impl *BusinessStoreImpl) RetrieveNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
 	cacheKey := notificationCacheKey(id)
 
 	if notif, err := fetchCachedOne[dbgen.SystemNotification](ctx, impl.cache, cacheKey); err == nil {
@@ -1461,11 +1471,11 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.queries == nil {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	notification, err := impl.queries.GetNotificationById(ctx, id)
+	notification, err := impl.querier.GetNotificationById(ctx, id)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			_ = impl.cache.SetMissing(ctx, cacheKey, impl.ttl)
@@ -1484,12 +1494,12 @@ func (impl *businessStoreImpl) retrieveNotification(ctx context.Context, id int3
 	return notification, nil
 }
 
-func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveUserNotification(ctx context.Context, tnow time.Time, userID int32) (*dbgen.SystemNotification, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	n, err := impl.queries.GetLastActiveNotification(ctx, &dbgen.GetLastActiveNotificationParams{
+	n, err := impl.querier.GetLastActiveNotification(ctx, &dbgen.GetLastActiveNotificationParams{
 		Column1: Timestampz(tnow),
 		UserID:  Int(userID),
 	})
@@ -1510,8 +1520,8 @@ func (impl *businessStoreImpl) retrieveUserNotification(ctx context.Context, tno
 	return n, err
 }
 
-func (impl *businessStoreImpl) createNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) CreateNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
@@ -1530,7 +1540,7 @@ func (impl *businessStoreImpl) createNotification(ctx context.Context, message s
 		arg.UserID = Int(*userID)
 	}
 
-	n, err := impl.queries.CreateNotification(ctx, arg)
+	n, err := impl.querier.CreateNotification(ctx, arg)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create a system notification", common.ErrAttr(err))
@@ -1547,12 +1557,12 @@ func (impl *businessStoreImpl) createNotification(ctx context.Context, message s
 	return n, err
 }
 
-func (impl *businessStoreImpl) retrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveProperties(ctx context.Context, limit int) ([]*dbgen.Property, error) {
+	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	properties, err := impl.queries.GetProperties(ctx, int32(limit))
+	properties, err := impl.querier.GetProperties(ctx, int32(limit))
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties", common.ErrAttr(err))
@@ -1564,12 +1574,12 @@ func (impl *businessStoreImpl) retrieveProperties(ctx context.Context, limit int
 	return properties, nil
 }
 
-func (impl *businessStoreImpl) retrieveUserPropertiesCount(ctx context.Context, userID int32) (int64, error) {
-	if impl.queries == nil {
+func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, userID int32) (int64, error) {
+	if impl.querier == nil {
 		return 0, ErrMaintenance
 	}
 
-	count, err := impl.queries.GetUserPropertiesCount(ctx, Int(userID))
+	count, err := impl.querier.GetUserPropertiesCount(ctx, Int(userID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user properties count", "userID", userID, common.ErrAttr(err))
 		return 0, err
@@ -1578,4 +1588,108 @@ func (impl *businessStoreImpl) retrieveUserPropertiesCount(ctx context.Context, 
 	slog.DebugContext(ctx, "Fetched user properties count", "userID", userID, "count", count)
 
 	return count, nil
+}
+
+func (s *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
+	if sitekey == TestPropertySitekey {
+		return nil, ErrTestProperty
+	}
+
+	return s.getCachedPropertyBySitekey(ctx, sitekey)
+}
+
+func (s *BusinessStoreImpl) RetrieveUser(ctx context.Context, id int32) (*dbgen.User, error) {
+	user, err := s.retrieveUser(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if user.DeletedAt.Valid {
+		slog.WarnContext(ctx, "User is soft-deleted", "userID", id, "deletedAt", user.DeletedAt.Time)
+		return user, ErrSoftDeleted
+	}
+
+	return user, nil
+}
+
+func (s *BusinessStoreImpl) RetrieveUserOrganization(ctx context.Context, userID, orgID int32) (*dbgen.Organization, error) {
+	org, level, err := s.retrieveOrganizationWithAccess(ctx, userID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !level.Valid {
+		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", userID)
+		return nil, ErrPermissions
+	}
+
+	if org.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
+		return org, ErrSoftDeleted
+	}
+
+	return org, nil
+}
+
+func (s *BusinessStoreImpl) RetrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
+	property, err := s.retrieveOrgProperty(ctx, orgID, propID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !property.OrgID.Valid || (property.OrgID.Int32 != orgID) {
+		slog.ErrorContext(ctx, "Property org does not match", "propertyOrgID", property.OrgID.Int32, "orgID", orgID)
+		return nil, ErrPermissions
+	}
+
+	if property.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Property is soft-deleted", "propID", propID, "deletedAt", property.DeletedAt.Time)
+		return property, ErrSoftDeleted
+	}
+
+	return property, nil
+}
+
+func (s *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbgen.CreateSubscriptionParams, email, name, orgName string, existingUserID int32) (*dbgen.User, *dbgen.Organization, error) {
+	if s.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	var subscriptionID *int32
+
+	if params != nil {
+		subscription, err := s.createNewSubscription(ctx, params)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		subscriptionID = &subscription.ID
+
+		if existingUser, err := s.FindUserByEmail(ctx, email); err == nil {
+			slog.InfoContext(ctx, "User with such email already exists", "userID", existingUser.ID, "subscriptionID", existingUser.SubscriptionID)
+			if ((existingUser.ID == existingUserID) || (existingUserID == -1)) && !existingUser.SubscriptionID.Valid {
+				if err := s.updateUserSubscription(ctx, existingUser.ID, subscription.ID); err != nil {
+					return nil, nil, err
+				}
+
+				return existingUser, nil, nil
+			} else {
+				slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID,
+					"passthrough", existingUserID, "subscribed", existingUser.SubscriptionID.Valid, "email", email)
+				return nil, nil, ErrDuplicateAccount
+			}
+		}
+	}
+
+	user, err := s.createNewUser(ctx, email, name, subscriptionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	org, err := s.CreateNewOrganization(ctx, orgName, user.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return user, org, nil
 }

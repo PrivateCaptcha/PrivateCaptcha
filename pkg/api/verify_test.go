@@ -92,7 +92,7 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		return "", "", "", err
 	}
 
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       fmt.Sprintf("%v property", username),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -111,7 +111,7 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		return "", "", "", err
 	}
 
-	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
+	apikey, err := store.Impl().CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -212,7 +212,7 @@ func TestVerifyPuzzleAllowReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.GetCachedPropertyBySitekey(context.TODO(), sitekey)
+	property, err := store.Impl().GetCachedPropertyBySitekey(context.TODO(), sitekey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,7 +252,7 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -316,12 +316,12 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
+	apikey, err := store.Impl().CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = store.UpdateAPIKey(ctx, apikey.ExternalID, time.Now().AddDate(0, 0, -1), true)
+	err = store.Impl().UpdateAPIKey(ctx, apikey.ExternalID, time.Now().AddDate(0, 0, -1), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestVerifyTestProperty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := store.CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
+	apikey, err := store.Impl().CreateAPIKey(ctx, user.ID, "", time.Now().Add(1*time.Hour), 10.0 /*rps*/)
 	if err != nil {
 		t.Fatal(err)
 	}

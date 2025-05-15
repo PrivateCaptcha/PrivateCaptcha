@@ -96,7 +96,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := s.Store.FindUserByEmail(ctx, email); err == nil {
+	if _, err := s.Store.Impl().FindUserByEmail(ctx, email); err == nil {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.EmailError = "Such email is already registered. Login instead?"
 		s.render(w, r, registerFormTemplate, data)
@@ -150,8 +150,14 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.TrialStatus())
 
-	user, org, err := s.Store.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
-	if err != nil {
+	var user *dbgen.User
+	var org *dbgen.Organization
+
+	if err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+		var err error
+		user, org, err = impl.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
+		return err
+	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return nil, nil, err
 	}

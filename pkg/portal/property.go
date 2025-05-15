@@ -272,7 +272,7 @@ func (s *Server) validatePropertyName(ctx context.Context, name string, orgID in
 		}
 	}
 
-	if _, err := s.Store.FindOrgProperty(ctx, name, orgID); err != db.ErrRecordNotFound {
+	if _, err := s.Store.Impl().FindOrgProperty(ctx, name, orgID); err != db.ErrRecordNotFound {
 		slog.WarnContext(ctx, "Property already exists", "name", name, common.ErrAttr(err))
 		return "Property with this name already exists."
 	}
@@ -340,7 +340,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 
 	if isUserOrgOwner {
 		if sessUser.SubscriptionID.Valid {
-			subscr, err = s.Store.RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
+			subscr, err = s.Store.Impl().RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to retrieve session user subscription", "userID", sessUser.ID, common.ErrAttr(err))
 				return ""
@@ -349,7 +349,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 	} else {
 		slog.DebugContext(ctx, "Session user is not org owner", "userID", sessUser.ID, "orgUserID", org.UserID.Int32)
 
-		orgUser, err := s.Store.RetrieveUser(ctx, org.UserID.Int32)
+		orgUser, err := s.Store.Impl().RetrieveUser(ctx, org.UserID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve org's owner user by ID", "id", org.UserID.Int32, common.ErrAttr(err))
 			return ""
@@ -359,7 +359,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 		subscr = nil
 
 		if orgUser.SubscriptionID.Valid {
-			subscr, err = s.Store.RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
+			subscr, err = s.Store.Impl().RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to retrieve org owner's subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
 				return ""
@@ -386,7 +386,7 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 		return ""
 	}
 
-	count, err := s.Store.RetrieveUserPropertiesCount(ctx, userID)
+	count, err := s.Store.Impl().RetrieveUserPropertiesCount(ctx, userID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties count", "userID", userID, common.ErrAttr(err))
 		return ""
@@ -484,7 +484,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	property, err := s.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       renderCtx.Name,
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(user.ID),
@@ -767,7 +767,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		(allowReplay != property.AllowReplay) ||
 		(allowSubdomains != property.AllowSubdomains) ||
 		(allowLocalhost != property.AllowLocalhost) {
-		if updatedProperty, err := s.Store.UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
+		if updatedProperty, err := s.Store.Impl().UpdateProperty(ctx, &dbgen.UpdatePropertyParams{
 			ID:               property.ID,
 			Name:             name,
 			Level:            db.Int2(int16(difficulty)),
@@ -817,7 +817,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.SoftDeleteProperty(ctx, property.ID, org.ID); err == nil {
+	if err := s.Store.Impl().SoftDeleteProperty(ctx, property.ID, org.ID); err == nil {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, strconv.Itoa(int(org.ID))), http.StatusOK, w, r)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)

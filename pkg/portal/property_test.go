@@ -30,7 +30,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	// Create a new property
-	property, err := server.Store.CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       "propertyName",
 		OrgID:      db.Int(org1.ID),
 		CreatorID:  org1.UserID,

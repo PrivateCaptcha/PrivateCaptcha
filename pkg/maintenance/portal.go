@@ -36,7 +36,7 @@ func (j *SessionsCleanupJob) RunOnce(ctx context.Context) error {
 }
 
 type WarmupPortalAuth struct {
-	Store *db.BusinessStore
+	Store db.Implementor
 }
 
 var _ common.OneOffJob = (*WarmupPortalAuth)(nil)
@@ -68,7 +68,7 @@ func (j *WarmupPortalAuth) RunOnce(ctx context.Context) error {
 		return err
 	}
 
-	if _, err := j.Store.RetrievePropertiesBySitekey(ctx, sitekeys); err != nil {
+	if _, err := j.Store.Impl().RetrievePropertiesBySitekey(ctx, sitekeys); err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties by sitekey", common.ErrAttr(err))
 	}
 

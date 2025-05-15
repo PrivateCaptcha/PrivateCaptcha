@@ -31,7 +31,7 @@ func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error
 
 	businessDB := db.NewBusiness(pool)
 
-	properties, err := businessDB.RetrieveProperties(ctx, count)
+	properties, err := businessDB.Impl().RetrieveProperties(ctx, count)
 	if err != nil {
 		return nil, err
 	}

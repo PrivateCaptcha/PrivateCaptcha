@@ -14,6 +14,7 @@ sql:
         package: "generated"
         sql_package: "pgx/v5"
         out: "generated"
+        emit_interface: true
         emit_db_tags: true
         emit_json_tags: true
         emit_result_struct_pointers: true

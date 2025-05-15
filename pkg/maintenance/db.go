@@ -27,7 +27,7 @@ func (j *CleanupDBCacheJob) Name() string {
 }
 
 func (j *CleanupDBCacheJob) RunOnce(ctx context.Context) error {
-	return j.Store.DeleteExpiredCache(ctx)
+	return j.Store.Impl().DeleteExpiredCache(ctx)
 }
 
 type CleanupDeletedRecordsJob struct {
@@ -51,5 +51,5 @@ func (j *CleanupDeletedRecordsJob) Name() string {
 
 func (j *CleanupDeletedRecordsJob) RunOnce(ctx context.Context) error {
 	before := time.Now().UTC().Add(-j.Age)
-	return j.Store.DeleteDeletedRecords(ctx, before)
+	return j.Store.Impl().DeleteDeletedRecords(ctx, before)
 }
