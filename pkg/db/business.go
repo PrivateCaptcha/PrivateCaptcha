@@ -414,18 +414,6 @@ func (s *BusinessStore) CreateSupportTicket(ctx context.Context, category dbgen.
 	return s.impl().createSupportTicket(ctx, category, subject, message, userID, sessID)
 }
 
-func (s *BusinessStore) AddUsageLimitsViolations(ctx context.Context, violations []*common.UserTimeCount) error {
-	return s.impl().addUsageLimitsViolations(ctx, violations)
-}
-
-func (s *BusinessStore) RetrieveUsersWithConsecutiveViolations(ctx context.Context) ([]*dbgen.GetUsersWithConsecutiveViolationsRow, error) {
-	return s.impl().retrieveUsersWithConsecutiveViolations(ctx)
-}
-
-func (s *BusinessStore) RetrieveUsersWithLargeViolations(ctx context.Context, from time.Time, rate float64) ([]*dbgen.GetUsersWithLargeViolationsRow, error) {
-	return s.impl().retrieveUsersWithLargeViolations(ctx, from, rate)
-}
-
 func (s *BusinessStore) AcquireLock(ctx context.Context, name string, data []byte, expiration time.Time) (*dbgen.Lock, error) {
 	if s.maintenanceMode.Load() {
 		return nil, ErrMaintenance
