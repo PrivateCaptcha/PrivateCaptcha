@@ -63,12 +63,12 @@ func newPuzzleIPAddrBuckets(cfg common.ConfigStore) *ratelimit.IPAddrBuckets {
 		leakybucket.Interval(puzzleBucketRate.Value(), puzzleLeakInterval))
 }
 
-type BaseUserLimiter struct {
+type baseUserLimiter struct {
 	store      *db.BusinessStore
 	userLimits common.Cache[int32, any]
 }
 
-func (ul *BaseUserLimiter) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
+func (ul *baseUserLimiter) unknownPropertiesOwners(ctx context.Context, properties []*dbgen.Property) []int32 {
 	usersMap := make(map[int32]struct{})
 	for _, p := range properties {
 		userID := p.OrgOwnerID.Int32
@@ -90,7 +90,7 @@ func (ul *BaseUserLimiter) unknownPropertiesOwners(ctx context.Context, properti
 	return result
 }
 
-func (ul *BaseUserLimiter) CheckProperties(ctx context.Context, properties []*dbgen.Property) {
+func (ul *baseUserLimiter) CheckProperties(ctx context.Context, properties []*dbgen.Property) {
 	if len(properties) == 0 {
 		return
 	}
@@ -118,13 +118,13 @@ func (ul *BaseUserLimiter) CheckProperties(ctx context.Context, properties []*db
 	}
 }
 
-func (ul *BaseUserLimiter) Evaluate(ctx context.Context, userID int32) (bool, error) {
+func (ul *baseUserLimiter) Evaluate(ctx context.Context, userID int32) (bool, error) {
 	_, err := ul.userLimits.Get(ctx, userID)
 	// "false" because by we only check if user has a subscription at all, we don't verify usage limits
 	return false, err
 }
 
-func NewUserLimiter(store *db.BusinessStore) *BaseUserLimiter {
+func NewUserLimiter(store *db.BusinessStore) *baseUserLimiter {
 	const maxLimitedUsers = 10_000
 	var userLimits common.Cache[int32, any]
 	var err error
@@ -134,7 +134,7 @@ func NewUserLimiter(store *db.BusinessStore) *BaseUserLimiter {
 		userLimits = db.NewStaticCache[int32, any](maxLimitedUsers, nil /*missing data*/)
 	}
 
-	return &BaseUserLimiter{
+	return &baseUserLimiter{
 		userLimits: userLimits,
 		store:      store,
 	}

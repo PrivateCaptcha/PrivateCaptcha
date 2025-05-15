@@ -30,4 +30,4 @@ LIMIT $2;
 DELETE FROM backend.users WHERE id = ANY($1::INT[]);
 
 -- name: GetUsersWithoutSubscription :many
-SELECT * FROM backend.users where id = ANY($1::INT[]) AND subscription_id IS NULL;
+SELECT * FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL);

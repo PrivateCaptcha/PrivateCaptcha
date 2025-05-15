@@ -148,7 +148,7 @@ func (q *Queries) GetUserBySubscriptionID(ctx context.Context, subscriptionID pg
 }
 
 const getUsersWithoutSubscription = `-- name: GetUsersWithoutSubscription :many
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users where id = ANY($1::INT[]) AND subscription_id IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL)
 `
 
 func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error) {
