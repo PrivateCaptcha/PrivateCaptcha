@@ -118,7 +118,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Stage:              stage,
 		BusinessDB:         businessDB,
 		TimeSeries:         timeSeriesDB,
-		Auth:               api.NewAuthMiddleware(cfg, businessDB, 1*time.Second /*backfill duration*/, planService),
+		Auth:               api.NewAuthMiddleware(cfg, businessDB, planService),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		Salt:               api.NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey: api.NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
@@ -127,7 +127,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),
 		VerifyLogCancel:    func() {},
 	}
-	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/); err != nil {
+	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/); err != nil {
 		return err
 	}
 

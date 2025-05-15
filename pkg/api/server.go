@@ -89,7 +89,7 @@ type verifyResponseRecaptchaV3 struct {
 	Action string  `json:"action"`
 }
 
-func (s *Server) Init(ctx context.Context, verifyFlushInterval time.Duration) error {
+func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay time.Duration) error {
 	if err := s.Salt.Update(); err != nil {
 		slog.ErrorContext(ctx, "Failed to update puzzle salt", common.ErrAttr(err))
 		return err
@@ -109,6 +109,7 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval time.Duration) er
 	}
 
 	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/)
+	s.Auth.BackfillProperties(authBackfillDelay)
 
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(

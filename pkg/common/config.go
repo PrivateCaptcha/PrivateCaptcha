@@ -14,7 +14,6 @@ const (
 	RegistrationAllowedKey
 	HealthCheckIntervalKey
 	AdminEmailKey
-	PrivateAPIKeyKey
 	PostgresKey
 	PostgresHostKey
 	PostgresDBKey

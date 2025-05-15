@@ -78,8 +78,6 @@ func DefaultMapper(c common.ConfigKey) string {
 		return "PC_REGISTRATION_ALLOWED"
 	case common.HealthCheckIntervalKey:
 		return "PC_HEALTHCHECK"
-	case common.PrivateAPIKeyKey:
-		return "PC_PRIVATE_API_KEY"
 	case common.PuzzleLeakyBucketRateKey:
 		return "PC_PUZZLE_LEAKY_BUCKET_RPS"
 	case common.PuzzleLeakyBucketBurstKey:

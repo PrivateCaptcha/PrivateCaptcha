@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 		Stage:              common.StageTest,
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
-		Auth:               NewAuthMiddleware(cfg, store, authBackfillDelay, planService),
+		Auth:               NewAuthMiddleware(cfg, store, planService),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Salt:               NewPuzzleSalt(cfg.Get(common.APISaltKey)),
 		UserFingerprintKey: NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
@@ -86,7 +86,7 @@ func TestMain(m *testing.M) {
 		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
 		VerifyLogCancel:    func() {},
 	}
-	if err := s.Init(context.TODO(), verifyFlushInterval); err != nil {
+	if err := s.Init(context.TODO(), verifyFlushInterval, authBackfillDelay); err != nil {
 		panic(err)
 	}
 	defer s.Shutdown()
