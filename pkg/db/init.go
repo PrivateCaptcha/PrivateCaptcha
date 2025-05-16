@@ -26,20 +26,20 @@ func Connect(ctx context.Context, cfg common.ConfigStore, admin bool) (*pgxpool.
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func MigrateClickHouse(ctx context.Context, cfg common.ConfigStore, up bool) error {
+func MigrateClickHouse(ctx context.Context, db *sql.DB, cfg common.ConfigStore, up bool) error {
 	dbCfg := cfg.Get(common.ClickHouseDBKey)
 	const migrationsTable = "private_captcha_migrations"
 
-	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), globalClickhouse, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable)
+	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), db, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable)
 }
 
-func MigratePostgres(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
+func MigratePostgres(ctx context.Context, pool *pgxpool.Pool, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
 	const migrationTable = "private_captcha_migrations"
 
 	migrateCtx := NewPostgresMigrateContext(ctx, cfg, adminPlan)
 	tplFS := NewTemplateFS(postgresMigrationsFS, migrateCtx)
 
-	return MigratePostgresEx(common.TraceContext(ctx, "postgres"), globalPool, tplFS, migrationTable, up)
+	return MigratePostgresEx(common.TraceContext(ctx, "postgres"), pool, tplFS, migrationTable, up)
 }
 
 func clickHouseUser(cfg common.ConfigStore, admin bool) string {

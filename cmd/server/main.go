@@ -330,11 +330,11 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	if err := db.MigratePostgres(ctx, cfg, planService.GetInternalAdminPlan(), up); err != nil {
+	if err := db.MigratePostgres(ctx, pool, cfg, planService.GetInternalAdminPlan(), up); err != nil {
 		return err
 	}
 
-	if err := db.MigrateClickHouse(ctx, cfg, up); err != nil {
+	if err := db.MigrateClickHouse(ctx, clickhouse, cfg, up); err != nil {
 		return err
 	}
 
