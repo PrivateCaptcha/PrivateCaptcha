@@ -27,11 +27,13 @@ const (
 	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
 )
 
-type TimeSeriesStore struct {
+type TimeSeriesDB struct {
 	Clickhouse         *sql.DB
 	statsQueryTemplate *template.Template
 	maintenanceMode    atomic.Bool
 }
+
+var _ common.TimeSeriesStore = (*TimeSeriesDB)(nil)
 
 func idsToString(ids []int32) string {
 	idStrings := make([]string, len(ids))
@@ -42,7 +44,7 @@ func idsToString(ids []int32) string {
 	return idsStr
 }
 
-func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesStore {
+func NewTimeSeries(clickhouse *sql.DB) *TimeSeriesDB {
 	// ClickHouse docs:
 	// The join (a search in the right table) is run before filtering in WHERE and before aggregation.
 	const statsQuery = `WITH requests AS
@@ -74,17 +76,17 @@ GROUP BY agg_time
 ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
 SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`
 
-	return &TimeSeriesStore{
+	return &TimeSeriesDB{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
 		Clickhouse:         clickhouse,
 	}
 }
 
-func (ts *TimeSeriesStore) UpdateConfig(maintenanceMode bool) {
+func (ts *TimeSeriesDB) UpdateConfig(maintenanceMode bool) {
 	ts.maintenanceMode.Store(maintenanceMode)
 }
 
-func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
+func (ts *TimeSeriesDB) Ping(ctx context.Context) error {
 	rows, err := ts.Clickhouse.Query("SELECT 1")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute ping query", common.ErrAttr(err))
@@ -106,11 +108,11 @@ func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (ts *TimeSeriesStore) IsAvailable() bool {
+func (ts *TimeSeriesDB) IsAvailable() bool {
 	return !ts.maintenanceMode.Load()
 }
 
-func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {
+func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*common.AccessRecord) error {
 	if len(records) == 0 {
 		slog.WarnContext(ctx, "Attempt to insert empty access log batch")
 		return nil
@@ -150,7 +152,7 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 	return err
 }
 
-func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*common.VerifyRecord) error {
+func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*common.VerifyRecord) error {
 	if len(records) == 0 {
 		slog.WarnContext(ctx, "Attempt to insert empty verify batch")
 		return nil
@@ -190,7 +192,7 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 	return err
 }
 
-func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
+func (ts *TimeSeriesDB) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -228,7 +230,7 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
+func (ts *TimeSeriesDB) ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -262,7 +264,7 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
+func (ts *TimeSeriesDB) RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -354,7 +356,7 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 	return results, nil
 }
 
-func (ts *TimeSeriesStore) lightDelete(ctx context.Context, tables []string, column string, ids string) error {
+func (ts *TimeSeriesDB) lightDelete(ctx context.Context, tables []string, column string, ids string) error {
 	for _, table := range tables {
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", table, column, ids)
 		if _, err := ts.Clickhouse.Exec(query); err != nil {
@@ -367,7 +369,7 @@ func (ts *TimeSeriesStore) lightDelete(ctx context.Context, tables []string, col
 	return nil
 }
 
-func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs []int32) error {
+func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []int32) error {
 	if len(propertyIDs) == 0 {
 		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
 		return nil
@@ -388,7 +390,7 @@ func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs
 	return ts.lightDelete(ctx, tables, "property_id", ids)
 }
 
-func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error {
+func (ts *TimeSeriesDB) DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error {
 	if len(orgIDs) == 0 {
 		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
 		return nil
@@ -408,7 +410,7 @@ func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs [
 	return ts.lightDelete(ctx, tables, "org_id", ids)
 }
 
-func (ts *TimeSeriesStore) DeleteUsersData(ctx context.Context, userIDs []int32) error {
+func (ts *TimeSeriesDB) DeleteUsersData(ctx context.Context, userIDs []int32) error {
 	if len(userIDs) == 0 {
 		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
 		return nil

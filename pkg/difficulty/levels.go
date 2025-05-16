@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 )
 
 type Levels struct {
-	timeSeries      *db.TimeSeriesStore
+	timeSeries      common.TimeSeriesStore
 	propertyBuckets *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
 	userBuckets     *leakybucket.Manager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint], *leakybucket.ConstLeakyBucket[common.TFingerprint]]
 	accessChan      chan *common.AccessRecord
@@ -23,8 +22,7 @@ type Levels struct {
 	cleanupCancel   context.CancelFunc
 }
 
-func NewLevels(timeSeries *db.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
-
+func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
 	const (
 		propertyBucketCap = math.MaxUint32
 		// below numbers are rather arbitrary as we can support "many"

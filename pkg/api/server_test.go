@@ -24,7 +24,7 @@ var (
 	s          *Server
 	cfg        common.ConfigStore
 	cache      common.Cache[db.CacheKey, any]
-	timeSeries *db.TimeSeriesStore
+	timeSeries *db.TimeSeriesDB
 	store      *db.BusinessStore
 	testPlan   billing.Plan
 )

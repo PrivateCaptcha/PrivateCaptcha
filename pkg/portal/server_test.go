@@ -27,7 +27,7 @@ import (
 var (
 	server     *Server
 	cfg        common.ConfigStore
-	timeSeries *db.TimeSeriesStore
+	timeSeries *db.TimeSeriesDB
 	store      *db.BusinessStore
 	testPlan   billing.Plan
 )

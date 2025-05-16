@@ -29,3 +29,15 @@ type ConfigStore interface {
 	Get(key ConfigKey) ConfigItem
 	Update(ctx context.Context)
 }
+
+type TimeSeriesStore interface {
+	Ping(ctx context.Context) error
+	WriteAccessLogBatch(ctx context.Context, records []*AccessRecord) error
+	WriteVerifyLogBatch(ctx context.Context, records []*VerifyRecord) error
+	ReadPropertyStats(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
+	ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*TimeCount, error)
+	RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
+	DeletePropertiesData(ctx context.Context, propertyIDs []int32) error
+	DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error
+	DeleteUsersData(ctx context.Context, userIDs []int32) error
+}

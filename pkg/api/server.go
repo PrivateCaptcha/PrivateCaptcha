@@ -45,7 +45,7 @@ var (
 type Server struct {
 	Stage              string
 	BusinessDB         db.Implementor
-	TimeSeries         *db.TimeSeriesStore
+	TimeSeries         common.TimeSeriesStore
 	Levels             *difficulty.Levels
 	Auth               *AuthMiddleware
 	UserFingerprintKey *userFingerprintKey

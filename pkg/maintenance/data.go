@@ -17,7 +17,7 @@ const (
 type GarbageCollectDataJob struct {
 	Age        time.Duration
 	BusinessDB db.Implementor
-	TimeSeries *db.TimeSeriesStore
+	TimeSeries common.TimeSeriesStore
 }
 
 var _ common.PeriodicJob = (*GarbageCollectDataJob)(nil)

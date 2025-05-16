@@ -14,7 +14,7 @@ import (
 
 type HealthCheckJob struct {
 	BusinessDB       db.Implementor
-	TimeSeriesDB     *db.TimeSeriesStore
+	TimeSeriesDB     common.TimeSeriesStore
 	Router           *http.ServeMux
 	postgresFlag     atomic.Int32
 	clickhouseFlag   atomic.Int32

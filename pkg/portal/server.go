@@ -87,7 +87,7 @@ func (ac *AlertRenderContext) ClearAlerts() {
 
 type Server struct {
 	Store           db.Implementor
-	TimeSeries      *db.TimeSeriesStore
+	TimeSeries      common.TimeSeriesStore
 	APIURL          string
 	CDNURL          string
 	Prefix          string
