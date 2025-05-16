@@ -141,50 +141,6 @@ func (ns NullSubscriptionSource) Value() (driver.Value, error) {
 	return string(ns.SubscriptionSource), nil
 }
 
-type SupportCategory string
-
-const (
-	SupportCategoryQuestion   SupportCategory = "question"
-	SupportCategorySuggestion SupportCategory = "suggestion"
-	SupportCategoryProblem    SupportCategory = "problem"
-	SupportCategoryUnknown    SupportCategory = "unknown"
-)
-
-func (e *SupportCategory) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = SupportCategory(s)
-	case string:
-		*e = SupportCategory(s)
-	default:
-		return fmt.Errorf("unsupported scan type for SupportCategory: %T", src)
-	}
-	return nil
-}
-
-type NullSupportCategory struct {
-	SupportCategory SupportCategory `json:"backend_support_category"`
-	Valid           bool            `json:"valid"` // Valid is true if SupportCategory is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullSupportCategory) Scan(value interface{}) error {
-	if value == nil {
-		ns.SupportCategory, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.SupportCategory.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullSupportCategory) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.SupportCategory), nil
-}
-
 type APIKey struct {
 	ID                int32              `db:"id" json:"id"`
 	Name              string             `db:"name" json:"name"`
@@ -271,18 +227,6 @@ type Subscription struct {
 	UpdatedAt              pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
-type Support struct {
-	ID         int32              `db:"id" json:"id"`
-	Category   SupportCategory    `db:"category" json:"category"`
-	ExternalID pgtype.UUID        `db:"external_id" json:"external_id"`
-	Subject    pgtype.Text        `db:"subject" json:"subject"`
-	Message    pgtype.Text        `db:"message" json:"message"`
-	SessionID  pgtype.Text        `db:"session_id" json:"session_id"`
-	Resolution pgtype.Text        `db:"resolution" json:"resolution"`
-	UserID     pgtype.Int4        `db:"user_id" json:"user_id"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at" json:"created_at"`
-}
-
 type SystemNotification struct {
 	ID        int32              `db:"id" json:"id"`
 	Message   string             `db:"message" json:"message"`
@@ -290,15 +234,6 @@ type SystemNotification struct {
 	EndDate   pgtype.Timestamptz `db:"end_date" json:"end_date"`
 	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
 	IsActive  pgtype.Bool        `db:"is_active" json:"is_active"`
-}
-
-type UsageLimitViolation struct {
-	UserID            int32       `db:"user_id" json:"user_id"`
-	ExternalProductID string      `db:"external_product_id" json:"external_product_id"`
-	RequestsLimit     int64       `db:"requests_limit" json:"requests_limit"`
-	RequestsCount     int64       `db:"requests_count" json:"requests_count"`
-	DetectionMonth    pgtype.Date `db:"detection_month" json:"detection_month"`
-	LastViolatedAt    pgtype.Date `db:"last_violated_at" json:"last_violated_at"`
 }
 
 type User struct {

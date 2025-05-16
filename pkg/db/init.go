@@ -19,23 +19,27 @@ var (
 	globalDBErr      error
 )
 
-func Connect(ctx context.Context, cfg common.ConfigStore) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, cfg common.ConfigStore, admin bool) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, nil /*admin plan*/, false /*migrate*/, false)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, admin)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
 
-func Migrate(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
-	pool, clickhouse, err := connectEx(ctx, cfg, adminPlan, true /*migrate*/, up)
-	if err != nil {
-		return err
-	}
+func MigrateClickHouse(ctx context.Context, cfg common.ConfigStore, up bool) error {
+	dbCfg := cfg.Get(common.ClickHouseDBKey)
+	const migrationsTable = "private_captcha_migrations"
 
-	defer pool.Close()
-	defer clickhouse.Close()
+	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), globalClickhouse, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable)
+}
 
-	return err
+func MigratePostgres(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
+	const migrationTable = "private_captcha_migrations"
+
+	migrateCtx := NewPostgresMigrateContext(ctx, cfg, adminPlan)
+	tplFS := NewTemplateFS(postgresMigrationsFS, migrateCtx)
+
+	return MigratePostgresEx(common.TraceContext(ctx, "postgres"), globalPool, tplFS, migrationTable, up)
 }
 
 func clickHouseUser(cfg common.ConfigStore, admin bool) string {
@@ -58,15 +62,15 @@ func clickHousePassword(cfg common.ConfigStore, admin bool) string {
 	return cfg.Get(common.ClickHousePasswordKey).Value()
 }
 
-func connectEx(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan, migrate, up bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func connectEx(ctx context.Context, cfg common.ConfigStore, admin bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
 		opts := ClickHouseConnectOpts{
 			Host:     cfg.Get(common.ClickHouseHostKey).Value(),
 			Database: cfg.Get(common.ClickHouseDBKey).Value(),
-			User:     clickHouseUser(cfg, migrate),
-			Password: clickHousePassword(cfg, migrate),
+			User:     clickHouseUser(cfg, admin),
+			Password: clickHousePassword(cfg, admin),
 			Port:     9000,
 			Verbose:  config_pkg.AsBool(cfg.Get(common.VerboseKey)),
 		}
@@ -75,15 +79,11 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Pl
 			return perr
 		}
 
-		if migrate {
-			return migrateClickhouse(common.TraceContext(ctx, "clickhouse"), clickhouse, opts.Database)
-		}
-
 		return nil
 	})
 
 	errs.Go(func() error {
-		config, cerr := createPgxConfig(ctx, cfg, migrate)
+		config, cerr := createPgxConfig(ctx, cfg, admin)
 		if cerr != nil {
 			return cerr
 		}
@@ -95,27 +95,6 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Pl
 		}
 		if perr := pool.Ping(ctx); perr != nil {
 			return perr
-		}
-
-		if migrate {
-			stage := cfg.Get(common.StageKey).Value()
-			portalDomain := config_pkg.AsURL(ctx, cfg.Get(common.PortalBaseURLKey)).Domain()
-
-			_, priceIDYearly := adminPlan.PriceIDs()
-
-			migrateCtx := &migrateContext{
-				Stage:                    stage,
-				PortalLoginPropertyID:    PortalLoginPropertyID,
-				PortalRegisterPropertyID: PortalRegisterPropertyID,
-				PortalDomain:             portalDomain,
-				AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
-				ExternalProductID:        adminPlan.ProductID(),
-				ExternalPriceID:          priceIDYearly,
-				PortalLoginDifficulty:    common.DifficultyLevelSmall,
-				PortalRegisterDifficulty: common.DifficultyLevelSmall,
-			}
-
-			return migratePostgres(common.TraceContext(ctx, "postgres"), pool, migrateCtx, up)
 		}
 
 		return nil

@@ -3,11 +3,14 @@ package db
 import (
 	"context"
 	"embed"
+	"io/fs"
 	"log/slog"
 	"strconv"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	config_pkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -107,7 +110,7 @@ func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool
 	return pool, nil
 }
 
-type migrateContext struct {
+type PostgresMigrateContext struct {
 	Stage                    string
 	ExternalProductID        string
 	ExternalPriceID          string
@@ -119,14 +122,31 @@ type migrateContext struct {
 	PortalRegisterDifficulty common.DifficultyLevel
 }
 
-func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateContext, up bool) error {
-	db := stdlib.OpenDBFromPool(pool)
+func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan) *PostgresMigrateContext {
+	stage := cfg.Get(common.StageKey).Value()
+	portalDomain := config_pkg.AsURL(ctx, cfg.Get(common.PortalBaseURLKey)).Domain()
 
-	tplFS := NewTemplateFS(postgresMigrationsFS, data)
+	_, priceIDYearly := adminPlan.PriceIDs()
+
+	return &PostgresMigrateContext{
+		Stage:                    stage,
+		PortalLoginPropertyID:    PortalLoginPropertyID,
+		PortalRegisterPropertyID: PortalRegisterPropertyID,
+		PortalDomain:             portalDomain,
+		AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
+		ExternalProductID:        adminPlan.ProductID(),
+		ExternalPriceID:          priceIDYearly,
+		PortalLoginDifficulty:    common.DifficultyLevelSmall,
+		PortalRegisterDifficulty: common.DifficultyLevelSmall,
+	}
+}
+
+func MigratePostgresEx(ctx context.Context, pool *pgxpool.Pool, migrationsFS fs.FS, tableName string, up bool) error {
+	db := stdlib.OpenDBFromPool(pool)
 
 	mlog := slog.With("up", up)
 
-	d, err := iofs.New(tplFS, "migrations/postgres")
+	d, err := iofs.New(migrationsFS, "migrations/postgres")
 	if err != nil {
 		mlog.ErrorContext(ctx, "Failed to read from Postgres migrations IOFS", common.ErrAttr(err))
 		return err
@@ -135,7 +155,10 @@ func migratePostgres(ctx context.Context, pool *pgxpool.Pool, data *migrateConte
 	// NOTE: beware the run migrations twice problem with migrate, related to search_path
 	// https://github.com/golang-migrate/migrate/blob/master/database/postgres/TUTORIAL.md#fix-issue-where-migrations-run-twice
 	// the fix is to add '&search_path=public' to the connection string to force specific schema (for migrations table only)
-	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{SchemaName: pgMigrationsSchema})
+	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{
+		MigrationsTable: tableName,
+		SchemaName:      pgMigrationsSchema,
+	})
 	if err != nil {
 		mlog.ErrorContext(ctx, "Failed to create migrate driver", common.ErrAttr(err))
 		return err

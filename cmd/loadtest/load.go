@@ -21,7 +21,7 @@ import (
 func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, false /*admin*/)
 	if dberr != nil {
 		return nil, dberr
 	}

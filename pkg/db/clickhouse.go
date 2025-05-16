@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"time"
 
@@ -56,15 +57,15 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 	return conn
 }
 
-func migrateClickhouse(ctx context.Context, db *sql.DB, dbName string) error {
-	d, err := iofs.New(clickhouseMigrationsFS, "migrations/clickhouse")
+func MigrateClickhouseEx(ctx context.Context, db *sql.DB, migrationsFS fs.FS, dbName, tableName string) error {
+	d, err := iofs.New(migrationsFS, "migrations/clickhouse")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from Clickhouse migrations IOFS", common.ErrAttr(err))
 		return err
 	}
 
 	config := &chmigrate.Config{
-		MigrationsTable:       chmigrate.DefaultMigrationsTable,
+		MigrationsTable:       tableName,
 		MigrationsTableEngine: chmigrate.DefaultMigrationsTableEngine,
 		DatabaseName:          dbName,
 		ClusterName:           "",

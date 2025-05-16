@@ -95,7 +95,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	planService := billing.NewPlanService(nil)
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, false /*admin*/)
 	if dberr != nil {
 		return dberr
 	}
@@ -322,7 +322,23 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 
 	planService := billing.NewPlanService(nil)
 
-	return db.Migrate(ctx, cfg, planService.GetInternalAdminPlan(), up)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, true /*admin*/)
+	if dberr != nil {
+		return dberr
+	}
+
+	defer pool.Close()
+	defer clickhouse.Close()
+
+	if err := db.MigratePostgres(ctx, cfg, planService.GetInternalAdminPlan(), up); err != nil {
+		return err
+	}
+
+	if err := db.MigrateClickHouse(ctx, cfg, up); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {

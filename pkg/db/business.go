@@ -37,13 +37,13 @@ const (
 )
 
 type BusinessStore struct {
-	pool          *pgxpool.Pool
+	Pool          *pgxpool.Pool
 	defaultImpl   *BusinessStoreImpl
 	cacheOnlyImpl *BusinessStoreImpl
-	cache         common.Cache[CacheKey, any]
+	Cache         common.Cache[CacheKey, any]
 	// this could have been a bloom/cuckoo filter with expiration, if they existed
-	puzzleCache     common.Cache[uint64, bool]
-	maintenanceMode atomic.Bool
+	PuzzleCache     common.Cache[uint64, bool]
+	MaintenanceMode atomic.Bool
 }
 
 type Implementor interface {
@@ -80,20 +80,20 @@ func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *Busin
 	}
 
 	return &BusinessStore{
-		pool:          pool,
+		Pool:          pool,
 		defaultImpl:   &BusinessStoreImpl{cache: cache, querier: dbgen.New(pool), ttl: DefaultCacheTTL},
 		cacheOnlyImpl: &BusinessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
-		cache:         cache,
-		puzzleCache:   puzzleCache,
+		Cache:         cache,
+		PuzzleCache:   puzzleCache,
 	}
 }
 
 func (s *BusinessStore) UpdateConfig(maintenanceMode bool) {
-	s.maintenanceMode.Store(maintenanceMode)
+	s.MaintenanceMode.Store(maintenanceMode)
 }
 
 func (s *BusinessStore) Impl() *BusinessStoreImpl {
-	if s.maintenanceMode.Load() {
+	if s.MaintenanceMode.Load() {
 		return s.cacheOnlyImpl
 	}
 
@@ -101,11 +101,11 @@ func (s *BusinessStore) Impl() *BusinessStoreImpl {
 }
 
 func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) error) error {
-	if s.maintenanceMode.Load() {
+	if s.MaintenanceMode.Load() {
 		return ErrMaintenance
 	}
 
-	tx, err := s.pool.Begin(ctx)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
@@ -115,7 +115,7 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 		}
 	}()
 
-	db := dbgen.New(s.pool)
+	db := dbgen.New(s.Pool)
 	tmpCache := NewTxCache()
 	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx), ttl: DefaultCacheTTL}
 
@@ -130,7 +130,7 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 		return err
 	}
 
-	tmpCache.Commit(ctx, s.cache)
+	tmpCache.Commit(ctx, s.Cache)
 
 	return nil
 }
@@ -145,7 +145,7 @@ func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle)
 		return false
 	}
 
-	ok, err := s.puzzleCache.Get(ctx, p.PuzzleID)
+	ok, err := s.PuzzleCache.Get(ctx, p.PuzzleID)
 	return (err == nil) && ok
 }
 
@@ -161,5 +161,5 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 		return nil
 	}
 
-	return s.puzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
+	return s.PuzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
 }
