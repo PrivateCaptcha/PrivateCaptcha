@@ -6,5 +6,5 @@ import (
 )
 
 type Jobs interface {
-	OnboardUserJob(user *dbgen.User) common.OneOffJob
+	OnboardUser(user *dbgen.User) common.OneOffJob
 }

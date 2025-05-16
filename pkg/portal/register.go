@@ -162,12 +162,12 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, nil, err
 	}
 
-	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), s.Jobs.OnboardUserJob(user))
+	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), s.Jobs.OnboardUser(user))
 
 	return user, org, nil
 }
 
-func (s *Server) OnboardUserJob(user *dbgen.User) common.OneOffJob {
+func (s *Server) OnboardUser(user *dbgen.User) common.OneOffJob {
 	return &onboardUserJob{user: user, mailer: s.Mailer}
 }
 
