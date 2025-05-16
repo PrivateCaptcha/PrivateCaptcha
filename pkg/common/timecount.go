@@ -21,11 +21,3 @@ type TimeCount struct {
 	Timestamp time.Time
 	Count     uint32
 }
-
-type UserTimeCount struct {
-	UserID            uint32
-	Timestamp         time.Time
-	Count             uint64
-	Limit             uint64
-	ExternalProductID string
-}

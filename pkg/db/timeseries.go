@@ -29,7 +29,7 @@ const (
 )
 
 type TimeSeriesStore struct {
-	clickhouse         *sql.DB
+	Clickhouse         *sql.DB
 	statsQueryTemplate *template.Template
 	maintenanceMode    atomic.Bool
 }
@@ -77,7 +77,7 @@ SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling 
 
 	return &TimeSeriesStore{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
-		clickhouse:         clickhouse,
+		Clickhouse:         clickhouse,
 	}
 }
 
@@ -86,7 +86,7 @@ func (ts *TimeSeriesStore) UpdateConfig(maintenanceMode bool) {
 }
 
 func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
-	rows, err := ts.clickhouse.Query("SELECT 1")
+	rows, err := ts.Clickhouse.Query("SELECT 1")
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to execute ping query", common.ErrAttr(err))
 		return err
@@ -121,7 +121,7 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 		return ErrMaintenance
 	}
 
-	scope, err := ts.clickhouse.Begin()
+	scope, err := ts.Clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
@@ -161,7 +161,7 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 		return ErrMaintenance
 	}
 
-	scope, err := ts.clickhouse.Begin()
+	scope, err := ts.Clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
@@ -201,7 +201,7 @@ func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int
 		return ErrMaintenance
 	}
 
-	scope, err := ts.clickhouse.Begin()
+	scope, err := ts.Clickhouse.Begin()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
@@ -243,7 +243,7 @@ FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
-	rows, err := ts.clickhouse.Query(fmt.Sprintf(query, accessLogTableName5m),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessLogTableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
@@ -281,7 +281,7 @@ FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
-	rows, err := ts.clickhouse.Query(fmt.Sprintf(query, accessLogTableName1mo),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessLogTableName1mo),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", from.Format(time.DateTime)))
 	if err != nil {
@@ -367,7 +367,7 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 	}
 	query := buf.String()
 
-	rows, err := ts.clickhouse.Query(query,
+	rows, err := ts.Clickhouse.Query(query,
 		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(propertyID))),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
@@ -397,62 +397,10 @@ func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, pro
 	return results, nil
 }
 
-// takes {maxUsers} that were active since time {from} and checks if they violated their plan limits
-// assumes that somebody has filled in the limits table previously
-func (ts *TimeSeriesStore) FindUserLimitsViolations(ctx context.Context, from time.Time, maxUsers int) ([]*common.UserTimeCount, error) {
-	if !ts.isAvailable() {
-		return nil, ErrMaintenance
-	}
-
-	// NOTE: also can restrict monthly timestamp by the end of current month with:
-	// AND timestamp < toStartOfMonth(addMonths(now(), 1))
-	const limitsQuery = `SELECT rl.user_id, rl.monthly_count, ul.limit, rl.latest_timestamp
-	FROM (
-		SELECT user_id, SUM(count) AS monthly_count, MAX(timestamp) as latest_timestamp
-		FROM %s FINAL
-		WHERE user_id IN (
-			SELECT DISTINCT user_id
-			FROM %s
-			WHERE timestamp >= toStartOfHour({timestamp:DateTime})
-			LIMIT {maxUsers:UInt32}
-		)
-		AND timestamp >= toStartOfMonth(now())
-		GROUP BY user_id
-	) AS rl
-	JOIN %s AS ul ON rl.user_id = ul.user_id
-	WHERE rl.monthly_count > ul.limit`
-
-	query := fmt.Sprintf(limitsQuery, accessLogTableName1mo, accessLogTableName1h, userLimitsTableName)
-	rows, err := ts.clickhouse.Query(query,
-		clickhouse.Named("maxUsers", strconv.Itoa(maxUsers)),
-		clickhouse.Named("timestamp", from.UTC().Format(time.DateTime)))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to query user limits violations", "maxUsers", maxUsers, "from", from, common.ErrAttr(err))
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	results := make([]*common.UserTimeCount, 0)
-
-	for rows.Next() {
-		uc := &common.UserTimeCount{}
-		if err := rows.Scan(&uc.UserID, &uc.Count, &uc.Limit, &uc.Timestamp); err != nil {
-			slog.ErrorContext(ctx, "Failed to read row from user limits query", common.ErrAttr(err))
-			return nil, err
-		}
-		results = append(results, uc)
-	}
-
-	slog.DebugContext(ctx, "Found usage violations", "count", len(results))
-
-	return results, nil
-}
-
 func (ts *TimeSeriesStore) lightDelete(ctx context.Context, tables []string, column string, ids string) error {
 	for _, table := range tables {
 		query := fmt.Sprintf("DELETE FROM %s WHERE %s IN (%s)", table, column, ids)
-		if _, err := ts.clickhouse.Exec(query); err != nil {
+		if _, err := ts.Clickhouse.Exec(query); err != nil {
 			slog.ErrorContext(ctx, "Failed to delete data", "table", table, "column", column, common.ErrAttr(err))
 			return err
 		}
