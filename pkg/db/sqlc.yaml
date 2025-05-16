@@ -32,9 +32,6 @@ sql:
           backend_difficulty_growth: DifficultyGrowth
           backend_property: Property
           backend_cache: Cache
-          backend_support_category: SupportCategory
-          backend_support: Support
-          backend_usage_limit_violation: UsageLimitViolation
           backend_lock: Lock
           backend_difficulty_growth_constant: DifficultyGrowthConstant
           backend_difficulty_growth_slow: DifficultyGrowthSlow
@@ -43,10 +40,6 @@ sql:
           backend_access_level_member: AccessLevelMember
           backend_access_level_invited: AccessLevelInvited
           backend_access_level_owner: AccessLevelOwner
-          backend_support_category_question: SupportCategoryQuestion
-          backend_support_category_suggestion: SupportCategorySuggestion
-          backend_support_category_problem: SupportCategoryProblem
-          backend_support_category_unknown: SupportCategoryUnknown
           backend_system_notification: SystemNotification
           backend_subscription_source: SubscriptionSource
           backend_subscription_source_external: SubscriptionSourceExternal
