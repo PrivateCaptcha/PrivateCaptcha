@@ -23,6 +23,7 @@ const (
 type UserLimiter interface {
 	CheckProperties(ctx context.Context, properties []*dbgen.Property)
 	Evaluate(ctx context.Context, userID int32) (bool, error)
+	Limit(ctx context.Context, userID int32, isActive bool) error
 }
 
 type AuthMiddleware struct {
@@ -104,7 +105,7 @@ func (ul *baseUserLimiter) CheckProperties(ctx context.Context, properties []*db
 	if users, err := ul.store.Impl().RetrieveUsersWithoutSubscription(ctx, owners); err == nil {
 		violatorsMap := make(map[int32]struct{})
 		for _, u := range users {
-			_ = ul.userLimits.Set(ctx, u.ID, struct{}{}, db.UserLimitTTL)
+			_ = ul.Limit(ctx, u.ID, false)
 			violatorsMap[u.ID] = struct{}{}
 		}
 
@@ -122,6 +123,10 @@ func (ul *baseUserLimiter) Evaluate(ctx context.Context, userID int32) (bool, er
 	_, err := ul.userLimits.Get(ctx, userID)
 	// "false" because by we only check if user has a subscription at all, we don't verify usage limits
 	return false, err
+}
+
+func (ul *baseUserLimiter) Limit(ctx context.Context, userID int32, isActive bool) error {
+	return ul.userLimits.Set(ctx, userID, struct{}{}, db.UserLimitTTL)
 }
 
 func NewUserLimiter(store *db.BusinessStore) *baseUserLimiter {
