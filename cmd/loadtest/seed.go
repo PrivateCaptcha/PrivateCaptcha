@@ -55,7 +55,7 @@ func seed(usersCount, orgsCount, propertiesCount int, billingSvc billing.PlanSer
 	return errs.Wait()
 }
 
-func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan billing.Plan, store *db.BusinessStore) error {
+func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan billing.Plan, store db.Implementor) error {
 	email := fmt.Sprintf("test.user.%v@privatecaptcha.com", u)
 	name := fmt.Sprintf("John%v Doe%v", u, u)
 	orgName := fmt.Sprintf("John%v-doe%v", u, u)

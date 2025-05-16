@@ -49,11 +49,11 @@ func CreateNewSubscriptionParams(plan billing.Plan) *dbgen.CreateSubscriptionPar
 	}
 }
 
-func CreateNewAccountForTest(ctx context.Context, store *db.BusinessStore, testName string, plan billing.Plan) (*dbgen.User, *dbgen.Organization, error) {
+func CreateNewAccountForTest(ctx context.Context, store db.Implementor, testName string, plan billing.Plan) (*dbgen.User, *dbgen.Organization, error) {
 	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams(plan))
 }
 
-func CreateNewAccountForTestEx(ctx context.Context, store *db.BusinessStore, testName string, subscrParams *dbgen.CreateSubscriptionParams) (*dbgen.User, *dbgen.Organization, error) {
+func CreateNewAccountForTestEx(ctx context.Context, store db.Implementor, testName string, subscrParams *dbgen.CreateSubscriptionParams) (*dbgen.User, *dbgen.Organization, error) {
 	email := testName + "@privatecaptcha.com"
 	name, orgName := createUserAndOrgName(testName)
 
@@ -70,7 +70,7 @@ func CreateNewAccountForTestEx(ctx context.Context, store *db.BusinessStore, tes
 	return user, org, nil
 }
 
-func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID int32) error {
+func CancelUserSubscription(ctx context.Context, store db.Implementor, userID int32) error {
 	subscriptions, err := store.Impl().RetrieveSubscriptionsByUserIDs(ctx, []int32{userID})
 	if err != nil {
 		return err
@@ -88,7 +88,7 @@ func CancelUserSubscription(ctx context.Context, store *db.BusinessStore, userID
 	return err
 }
 
-func CreateNewBareAccount(ctx context.Context, store *db.BusinessStore, testName string) (*dbgen.User, *dbgen.Organization, error) {
+func CreateNewBareAccount(ctx context.Context, store db.Implementor, testName string) (*dbgen.User, *dbgen.Organization, error) {
 	email := testName + "@privatecaptcha.com"
 	name, orgName := createUserAndOrgName(testName)
 
@@ -106,7 +106,7 @@ func CreateNewBareAccount(ctx context.Context, store *db.BusinessStore, testName
 	return user, org, nil
 }
 
-func CreatePropertyForOrg(ctx context.Context, store *db.BusinessStore, org *dbgen.Organization) (*dbgen.Property, error) {
+func CreatePropertyForOrg(ctx context.Context, store db.Implementor, org *dbgen.Organization) (*dbgen.Property, error) {
 	return store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       fmt.Sprintf("user %v property", org.UserID.Int32),
 		OrgID:      db.Int(org.ID),

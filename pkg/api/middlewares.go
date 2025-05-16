@@ -124,7 +124,7 @@ func (ul *baseUserLimiter) Evaluate(ctx context.Context, userID int32) (bool, er
 	return false, err
 }
 
-func NewUserLimiter(store *db.BusinessStore) *baseUserLimiter {
+func NewUserLimiter(store db.Implementor) *baseUserLimiter {
 	const maxLimitedUsers = 10_000
 	var userLimits common.Cache[int32, any]
 	var err error
