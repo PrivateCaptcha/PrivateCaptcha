@@ -106,7 +106,7 @@ func (ts *TimeSeriesStore) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (ts *TimeSeriesStore) isAvailable() bool {
+func (ts *TimeSeriesStore) IsAvailable() bool {
 	return !ts.maintenanceMode.Load()
 }
 
@@ -116,7 +116,7 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 		return nil
 	}
 
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return ErrMaintenance
 	}
 
@@ -156,7 +156,7 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 		return nil
 	}
 
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return ErrMaintenance
 	}
 
@@ -191,7 +191,7 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 }
 
 func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
@@ -229,7 +229,7 @@ ORDER BY timestamp`
 }
 
 func (ts *TimeSeriesStore) ReadAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
@@ -263,7 +263,7 @@ ORDER BY timestamp`
 }
 
 func (ts *TimeSeriesStore) RetrievePropertyStats(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
@@ -373,7 +373,7 @@ func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs
 		return nil
 	}
 
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return ErrMaintenance
 	}
 
@@ -394,7 +394,7 @@ func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs [
 		return nil
 	}
 
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return ErrMaintenance
 	}
 
@@ -414,7 +414,7 @@ func (ts *TimeSeriesStore) DeleteUsersData(ctx context.Context, userIDs []int32)
 		return nil
 	}
 
-	if !ts.isAvailable() {
+	if !ts.IsAvailable() {
 		return ErrMaintenance
 	}
 
