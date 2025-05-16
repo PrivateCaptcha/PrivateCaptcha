@@ -42,7 +42,7 @@ type BusinessStore struct {
 	cacheOnlyImpl *BusinessStoreImpl
 	Cache         common.Cache[CacheKey, any]
 	// this could have been a bloom/cuckoo filter with expiration, if they existed
-	PuzzleCache     common.Cache[uint64, bool]
+	puzzleCache     common.Cache[uint64, bool]
 	MaintenanceMode atomic.Bool
 }
 
@@ -84,7 +84,7 @@ func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *Busin
 		defaultImpl:   &BusinessStoreImpl{cache: cache, querier: dbgen.New(pool), ttl: DefaultCacheTTL},
 		cacheOnlyImpl: &BusinessStoreImpl{cache: cache, ttl: DefaultCacheTTL},
 		Cache:         cache,
-		PuzzleCache:   puzzleCache,
+		puzzleCache:   puzzleCache,
 	}
 }
 
@@ -145,7 +145,7 @@ func (s *BusinessStore) CheckPuzzleCached(ctx context.Context, p *puzzle.Puzzle)
 		return false
 	}
 
-	ok, err := s.PuzzleCache.Get(ctx, p.PuzzleID)
+	ok, err := s.puzzleCache.Get(ctx, p.PuzzleID)
 	return (err == nil) && ok
 }
 
@@ -161,5 +161,5 @@ func (s *BusinessStore) CachePuzzle(ctx context.Context, p *puzzle.Puzzle, tnow 
 		return nil
 	}
 
-	return s.PuzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
+	return s.puzzleCache.Set(ctx, p.PuzzleID, true, p.Expiration.Sub(tnow))
 }
