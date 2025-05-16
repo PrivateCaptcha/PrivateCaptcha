@@ -104,6 +104,7 @@ type Server struct {
 	SettingsTabs    []*SettingsTab
 	Auth            *AuthMiddleware
 	RenderConstants interface{}
+	Jobs            Jobs
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -140,6 +141,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder) er
 
 	s.Sessions.Path = prefix
 
+	s.Jobs = s
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 

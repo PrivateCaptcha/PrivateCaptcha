@@ -162,13 +162,28 @@ func (s *Server) doRegister(ctx context.Context, sess *common.Session) (*dbgen.U
 		return nil, nil, err
 	}
 
-	_ = s.TimeSeries.UpdateUserLimits(ctx, map[int32]int64{user.ID: plan.RequestsLimit()})
-
-	go func(bctx context.Context, email string) {
-		if err := s.Mailer.SendWelcome(bctx, email); err != nil {
-			slog.ErrorContext(bctx, "Failed to send welcome email", common.ErrAttr(err))
-		}
-	}(common.CopyTraceID(ctx, context.Background()), user.Email)
+	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), s.Jobs.OnboardUserJob(user))
 
 	return user, org, nil
+}
+
+func (s *Server) OnboardUserJob(user *dbgen.User) common.OneOffJob {
+	return &onboardUserJob{user: user, mailer: s.Mailer}
+}
+
+type onboardUserJob struct {
+	user   *dbgen.User
+	mailer common.Mailer
+}
+
+func (j *onboardUserJob) Name() string {
+	return "OnboardUser"
+}
+
+func (j *onboardUserJob) InitialPause() time.Duration {
+	return 0
+}
+
+func (j *onboardUserJob) RunOnce(ctx context.Context) error {
+	return j.mailer.SendWelcome(ctx, j.user.Email)
 }

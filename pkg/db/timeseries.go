@@ -17,15 +17,14 @@ import (
 )
 
 const (
-	verifyLogTableName    = "privatecaptcha.verify_logs"
-	verifyLogTable1h      = "privatecaptcha.verify_logs_1h"
-	verifyLogTable1d      = "privatecaptcha.verify_logs_1d"
-	accessLogTableName    = "privatecaptcha.request_logs"
-	accessLogTableName5m  = "privatecaptcha.request_logs_5m"
-	accessLogTableName1h  = "privatecaptcha.request_logs_1h"
-	accessLogTableName1d  = "privatecaptcha.request_logs_1d"
-	accessLogTableName1mo = "privatecaptcha.request_logs_1mo"
-	userLimitsTableName   = "privatecaptcha.user_limits"
+	VerifyLogTableName    = "privatecaptcha.verify_logs"
+	VerifyLogTable1h      = "privatecaptcha.verify_logs_1h"
+	VerifyLogTable1d      = "privatecaptcha.verify_logs_1d"
+	AccessLogTableName    = "privatecaptcha.request_logs"
+	AccessLogTableName5m  = "privatecaptcha.request_logs_5m"
+	AccessLogTableName1h  = "privatecaptcha.request_logs_1h"
+	AccessLogTableName1d  = "privatecaptcha.request_logs_1d"
+	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
 )
 
 type TimeSeriesStore struct {
@@ -127,7 +126,7 @@ func (ts *TimeSeriesStore) WriteAccessLogBatch(ctx context.Context, records []*c
 		return err
 	}
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", accessLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", AccessLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
@@ -167,7 +166,7 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 		return err
 	}
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", verifyLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", VerifyLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
@@ -191,48 +190,6 @@ func (ts *TimeSeriesStore) WriteVerifyLogBatch(ctx context.Context, records []*c
 	return err
 }
 
-func (ts *TimeSeriesStore) UpdateUserLimits(ctx context.Context, records map[int32]int64) error {
-	if len(records) == 0 {
-		slog.WarnContext(ctx, "Attempt to insert empty limit records")
-		return nil
-	}
-
-	if !ts.isAvailable() {
-		return ErrMaintenance
-	}
-
-	scope, err := ts.Clickhouse.Begin()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
-		return err
-	}
-
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", userLimitsTableName))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
-		return err
-	}
-
-	tnow := time.Now().UTC()
-
-	for key, value := range records {
-		_, err = batch.Exec(uint32(key), uint64(value), tnow)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "userID", key)
-			return err
-		}
-	}
-
-	err = scope.Commit()
-	if err == nil {
-		slog.DebugContext(ctx, "Updated user limits", "count", len(records))
-	} else {
-		slog.ErrorContext(ctx, "Failed to update user limits", common.ErrAttr(err))
-	}
-
-	return err
-}
-
 func (ts *TimeSeriesStore) ReadPropertyStats(ctx context.Context, r *common.BackfillRequest, from time.Time) ([]*common.TimeCount, error) {
 	if !ts.isAvailable() {
 		return nil, ErrMaintenance
@@ -243,7 +200,7 @@ FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessLogTableName5m),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName5m),
 		clickhouse.Named("user_id", strconv.Itoa(int(r.UserID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(r.OrgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(r.PropertyID))),
@@ -281,7 +238,7 @@ FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY timestamp
 ORDER BY timestamp`
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessLogTableName1mo),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", from.Format(time.DateTime)))
 	if err != nil {
@@ -424,8 +381,8 @@ func (ts *TimeSeriesStore) DeletePropertiesData(ctx context.Context, propertyIDs
 
 	// NOTE: access table for 1 month is not included as it does not have property_id column
 	tables := []string{
-		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d,
-		verifyLogTable1h, verifyLogTable1d,
+		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
+		VerifyLogTable1h, VerifyLogTable1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
@@ -444,8 +401,8 @@ func (ts *TimeSeriesStore) DeleteOrganizationsData(ctx context.Context, orgIDs [
 	ids := idsToString(orgIDs)
 
 	tables := []string{
-		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, accessLogTableName1mo,
-		verifyLogTable1h, verifyLogTable1d,
+		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
+		VerifyLogTable1h, VerifyLogTable1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "org_id", ids)
@@ -464,8 +421,8 @@ func (ts *TimeSeriesStore) DeleteUsersData(ctx context.Context, userIDs []int32)
 	ids := idsToString(userIDs)
 
 	tables := []string{
-		accessLogTableName5m, accessLogTableName1h, accessLogTableName1d, accessLogTableName1mo,
-		verifyLogTable1h, verifyLogTable1d,
+		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
+		VerifyLogTable1h, VerifyLogTable1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "user_id", ids)
