@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	randv2 "math/rand/v2"
+	"strings"
 )
 
 func GenerateRandomIPv4() string {
@@ -14,4 +15,11 @@ func GenerateRandomIPv4() string {
 		(ipInt>>16)&0xFF,
 		(ipInt>>8)&0xFF,
 		ipInt&0xFF)
+}
+
+func PrependProtocol(domain string) string {
+	if !strings.HasPrefix(domain, "https://") && !strings.HasPrefix(domain, "http://") {
+		return "https://" + domain
+	}
+	return domain
 }

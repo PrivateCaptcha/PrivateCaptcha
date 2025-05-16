@@ -24,13 +24,6 @@ const (
 	testPropertyDomain = "example.com"
 )
 
-func makeOriginHeader(domain string) string {
-	if !strings.HasPrefix(domain, "https://") {
-		return "https://" + domain
-	}
-	return domain
-}
-
 func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup(srv, "", true /*verbose*/, common.NoopMiddleware)
@@ -42,7 +35,7 @@ func puzzleSuite(sitekey, domain string) (*http.Response, error) {
 		return nil, err
 	}
 
-	req.Header.Set("Origin", makeOriginHeader(domain))
+	req.Header.Set("Origin", common_test.PrependProtocol(domain))
 	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
 
 	q := req.URL.Query()
