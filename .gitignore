@@ -23,8 +23,7 @@ secrets.yml
 node_modules
 
 web/static/
-widget/static/css
-widget/static/js
+widget/static/
 
 pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env
