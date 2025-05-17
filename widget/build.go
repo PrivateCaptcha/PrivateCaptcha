@@ -12,10 +12,6 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
-const (
-	cdnTagWidget = "widget"
-)
-
 func Static() http.HandlerFunc {
 	sub, _ := fs.Sub(staticFiles, "static")
 	srv := http.FileServer(http.FS(sub))
@@ -23,7 +19,6 @@ func Static() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
 		common.WriteHeaders(w, common.CachedHeaders)
-		w.Header().Set(common.HeaderCDNTag, cdnTagWidget)
 		srv.ServeHTTP(w, r)
 	}
 }
