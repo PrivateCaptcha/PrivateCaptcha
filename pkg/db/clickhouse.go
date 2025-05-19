@@ -30,7 +30,7 @@ type ClickHouseConnectOpts struct {
 
 func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB {
 	slog.DebugContext(ctx, "Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
-	conn := clickhouse.OpenDB(&clickhouse.Options{
+	options := &clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%v", opts.Host, opts.Port)},
 		Auth: clickhouse.Auth{
 			Database: opts.Database,
@@ -46,11 +46,13 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 		//},
 		Debug: opts.Verbose,
 		Debugf: func(format string, v ...any) {
-			slog.Log(context.TODO(), common.LevelTrace, fmt.Sprintf(format, v...), "source", "clickhouse")
+			slog.Log(ctx, common.LevelTrace, fmt.Sprintf(format, v...), "source", "clickhouse")
 		},
 		//BlockBufferSize:      10,
 		//MaxCompressionBuffer: 10240,
-	})
+	}
+
+	conn := clickhouse.OpenDB(options)
 	conn.SetMaxIdleConns(5)
 	conn.SetMaxOpenConns(10)
 	conn.SetConnMaxLifetime(time.Hour)

@@ -99,15 +99,27 @@ func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool) 
 	return
 }
 
-func connectPostgres(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
-	slog.DebugContext(ctx, "Connecting to Postgres...")
-	pool, err := pgxpool.NewWithConfig(ctx, config)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
-		return nil, err
-	}
+func connectPostgres(ctx context.Context, config *pgxpool.Config, timeout time.Duration) (*pgxpool.Pool, error) {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 
-	return pool, nil
+	timeoutExceeded := time.After(timeout)
+	for {
+		select {
+		case <-timeoutExceeded:
+			slog.ErrorContext(ctx, "Connection to Postgres failed", "timeout", timeout)
+			return nil, errConnectionTimeout
+
+		case <-ticker.C:
+			slog.DebugContext(ctx, "Connecting to Postgres...")
+			pool, err := pgxpool.NewWithConfig(ctx, config)
+			if err == nil {
+				return pool, nil
+			}
+
+			slog.ErrorContext(ctx, "Failed to create pgxpool", common.ErrAttr(err))
+		}
+	}
 }
 
 type PostgresMigrateContext struct {

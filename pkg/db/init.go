@@ -3,7 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"sync"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -13,15 +15,16 @@ import (
 )
 
 var (
-	connectOnce      sync.Once
-	globalPool       *pgxpool.Pool
-	globalClickhouse *sql.DB
-	globalDBErr      error
+	connectOnce          sync.Once
+	globalPool           *pgxpool.Pool
+	globalClickhouse     *sql.DB
+	globalDBErr          error
+	errConnectionTimeout = errors.New("connection timeout")
 )
 
-func Connect(ctx context.Context, cfg common.ConfigStore, admin bool) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, admin)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, timeout, admin)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
@@ -62,7 +65,7 @@ func clickHousePassword(cfg common.ConfigStore, admin bool) string {
 	return cfg.Get(common.ClickHousePasswordKey).Value()
 }
 
-func connectEx(ctx context.Context, cfg common.ConfigStore, admin bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
@@ -89,7 +92,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, admin bool) (pool *p
 		}
 
 		var perr error
-		pool, perr = connectPostgres(ctx, config)
+		pool, perr = connectPostgres(ctx, config, timeout)
 		if perr != nil {
 			return perr
 		}

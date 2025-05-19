@@ -41,6 +41,7 @@ const (
 	_readinessDrainDelay = 1 * time.Second
 	_shutdownHardPeriod  = 3 * time.Second
 	_shutdownPeriod      = 10 * time.Second
+	_dbConnectTimeout    = 30 * time.Second
 )
 
 var (
@@ -98,7 +99,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	planService := billing.NewPlanService(nil)
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, false /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, false /*admin*/)
 	if dberr != nil {
 		return dberr
 	}
@@ -335,7 +336,7 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 
 	planService := billing.NewPlanService(nil)
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, true /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, true /*admin*/)
 	if dberr != nil {
 		return dberr
 	}

@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 	var pool *pgxpool.Pool
 	var clickhouse *sql.DB
 	var dberr error
-	pool, clickhouse, dberr = db.Connect(context.Background(), cfg, false /*admin*/)
+	pool, clickhouse, dberr = db.Connect(context.Background(), cfg, 3*time.Second, false /*admin*/)
 	if dberr != nil {
 		panic(dberr)
 	}
