@@ -81,3 +81,25 @@ const demoWidget = {
         this._clearTimeout = setTimeout(this.resetCaptcha, 2000 /*millis*/);
     },
 };
+
+function loadScript(url, callback) {
+    const scripts = document.getElementsByTagName('script');
+    for (var i = 0; i < scripts.length; i++) {
+        if (scripts[i].src === url) {
+            if (callback) {
+                setTimeout(callback, 0);
+            }
+            return;
+        }
+    }
+
+    var script = document.createElement('script');
+    script.type = 'text/javascript';
+    script.src = url;
+    // several events for cross browser compatibility.
+    script.onreadystatechange = callback;
+    script.onload = callback;
+    // Fire the loading
+    document.head.appendChild(script);
+}
+

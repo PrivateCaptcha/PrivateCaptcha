@@ -123,6 +123,7 @@ func (b *TemplatesBuilder) Build(ctx context.Context, appFuncs template.FuncMap)
 	templates.finalFuncs = template.FuncMap{
 		"qescape":  url.QueryEscape,
 		"safeHTML": func(s string) any { return template.HTML(s) },
+		"safeJS":   func(s string) any { return template.JS(s) },
 		"plus1":    func(x int) int { return x + 1 },
 		"sub":      func(a, b int) int { return a - b },
 		"include":  templates.includeFile,
