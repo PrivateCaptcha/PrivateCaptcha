@@ -35,9 +35,12 @@ import (
 )
 
 const (
-	modeMigrate  = "migrate"
-	modeRollback = "rollback"
-	modeServer   = "server"
+	modeMigrate          = "migrate"
+	modeRollback         = "rollback"
+	modeServer           = "server"
+	_readinessDrainDelay = 1 * time.Second
+	_shutdownHardPeriod  = 3 * time.Second
+	_shutdownPeriod      = 10 * time.Second
 )
 
 var (
@@ -187,6 +190,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)
 	common.SetupWellKnownPaths(router, publicChain)
 
+	ongoingCtx, stopOngoingGracefully := context.WithCancel(context.Background())
 	httpServer := &http.Server{
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
@@ -194,6 +198,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		WriteTimeout:      10 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    1024 * 1024,
+		BaseContext: func(_ net.Listener) context.Context {
+			return ongoingCtx
+		},
 	}
 
 	updateConfigFunc := func(ctx context.Context) {
@@ -229,6 +236,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 				updateConfigFunc(ctx)
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
+				// Give time for readiness check to propagate
+				time.Sleep(_readinessDrainDelay)
 				close(quit)
 				return
 			}
@@ -289,11 +298,15 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
 		portalServer.Shutdown()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			fmt.Fprintf(stderr, "error shutting down http server: %s\n", err)
+		serr := httpServer.Shutdown(shutdownCtx)
+		stopOngoingGracefully()
+		if serr != nil {
+			slog.ErrorContext(ctx, "Failed to shutdown gracefully", common.ErrAttr(serr))
+			fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)
+			time.Sleep(_shutdownHardPeriod)
 		}
 		if localServer != nil {
 			localServer.Close()
