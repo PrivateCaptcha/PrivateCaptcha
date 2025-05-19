@@ -84,7 +84,7 @@ const demoWidget = {
 
 function loadScript(url, callback) {
     const scripts = document.getElementsByTagName('script');
-    for (var i = 0; i < scripts.length; i++) {
+    for (let i = 0; i < scripts.length; i++) {
         if (scripts[i].src === url) {
             if (callback) {
                 setTimeout(callback, 0);
@@ -93,7 +93,7 @@ function loadScript(url, callback) {
         }
     }
 
-    var script = document.createElement('script');
+    let script = document.createElement('script');
     script.type = 'text/javascript';
     script.src = url;
     // several events for cross browser compatibility.
