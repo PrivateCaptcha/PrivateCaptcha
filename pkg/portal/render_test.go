@@ -83,6 +83,11 @@ func TestRenderHTML(t *testing.T) {
 			model:    &twoFactorRenderContext{CsrfRenderContext: stubToken(), Email: "foo@bar.com"},
 		},
 		{
+			path:     []string{common.RegisterEndpoint},
+			template: registerTemplate,
+			model:    &registerRenderContext{CsrfRenderContext: stubToken()},
+		},
+		{
 			path:     []string{common.OrgEndpoint, common.NewEndpoint},
 			template: orgWizardTemplate,
 			model:    &orgWizardRenderContext{CsrfRenderContext: stubToken()},

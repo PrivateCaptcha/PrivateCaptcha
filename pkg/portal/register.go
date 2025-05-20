@@ -25,6 +25,7 @@ var (
 
 const (
 	registerFormTemplate = "register/form.html"
+	registerTemplate     = "register/register.html"
 )
 
 type registerRenderContext struct {
@@ -44,7 +45,7 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, str
 			Token: s.XSRF.Token(""),
 		},
 		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
-	}, "register/register.html", nil
+	}, registerTemplate, nil
 }
 
 func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
