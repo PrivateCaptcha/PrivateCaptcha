@@ -138,7 +138,6 @@ jobs:
         PC_CLICKHOUSE_USER: captchasrv
         PC_CLICKHOUSE_PASSWORD: uwnhNn4YW01
         PC_USER_FINGERPRINT_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
-        PC_PRIVATE_API_KEY: ZSGS1i1NvYWTpyKL
         PC_RATE_LIMIT_HEADER: X-REAL-IP
       run: ./docker/run-tests.sh
 
@@ -193,44 +192,3 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-  deploy:
-    name: Deploy captcha binary
-    runs-on: ubuntu-latest
-    needs: tests
-    if: ${{ success() && github.ref == 'refs/heads/main' }}
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: privatecaptcha
-          path: bin
-
-      - name: Display downloaded files
-        run: ls -R bin
-
-      - name: Install s3cmd
-        run: sudo apt-get update && sudo apt-get install -y s3cmd
-
-      - name: Extract branch name
-        shell: bash
-        run: echo "branch=${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}" >> $GITHUB_OUTPUT
-        id: extract_branch
-
-      - name: Copy files to S3 bucket
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
-          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
-          HOST_BUCKET: "%(bucket).${{ secrets.AWS_ENDPOINT_URL }}"
-        run: |
-          # https://s3tools.org/usage
-          s3cmd \
-            --ssl --acl-private --no-guess-mime-type --verbose \
-            --access_key=${AWS_ACCESS_KEY_ID} \
-            --secret_key=${AWS_SECRET_ACCESS_KEY} \
-            --bucket-location=${AWS_DEFAULT_REGION} \
-            --host=${{ secrets.AWS_ENDPOINT_URL }} \
-            --host-bucket=${HOST_BUCKET} \
-            put bin/server "s3://${{ secrets.RELEASE_BUCKET_NAME }}/${{ steps.extract_branch.outputs.branch }}/binary/server"
