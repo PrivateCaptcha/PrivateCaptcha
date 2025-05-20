@@ -112,13 +112,6 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
 
-func (s *Server) static(tpl string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		renderCtx := &CsrfRenderContext{}
-		s.render(w, r, tpl, renderCtx)
-	})
-}
-
 func (s *Server) CreateCaptchaRenderContext(sitekey string) CaptchaRenderContext {
 	return CaptchaRenderContext{
 		CaptchaEndpoint:      s.APIURL + "/" + common.PuzzleEndpoint,
