@@ -59,10 +59,12 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 	return conn
 }
 
-func MigrateClickhouseEx(ctx context.Context, db *sql.DB, migrationsFS fs.FS, dbName, tableName string) error {
+func MigrateClickhouseEx(ctx context.Context, db *sql.DB, migrationsFS fs.FS, dbName, tableName string, up bool) error {
+	mlog := slog.With("up", up)
+
 	d, err := iofs.New(migrationsFS, "migrations/clickhouse")
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read from Clickhouse migrations IOFS", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to read from Clickhouse migrations IOFS", common.ErrAttr(err))
 		return err
 	}
 
@@ -77,24 +79,28 @@ func MigrateClickhouseEx(ctx context.Context, db *sql.DB, migrationsFS fs.FS, db
 
 	driver, err := chmigrate.WithInstance(db, config)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to connect to Clickhouse", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to connect to Clickhouse", common.ErrAttr(err))
 		return err
 	}
 
 	m, err := migrate.NewWithInstance("iofs", d, "clickhouse", driver)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create migration engine for Clickhouse", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to create migration engine for Clickhouse", common.ErrAttr(err))
 		return err
 	}
 
 	slog.DebugContext(ctx, "Running Clickhouse migrations...")
-	err = m.Up()
+	if up {
+		err = m.Up()
+	} else {
+		err = m.Down()
+	}
 	if err != nil && err != migrate.ErrNoChange {
-		slog.ErrorContext(ctx, "Failed to apply migrations in Clickhouse", common.ErrAttr(err))
+		mlog.ErrorContext(ctx, "Failed to apply migrations in Clickhouse", common.ErrAttr(err))
 		return err
 	}
 
-	slog.InfoContext(ctx, "Clickhouse migrated", "changes", (err != migrate.ErrNoChange))
+	mlog.InfoContext(ctx, "Clickhouse migrated", "changes", (err != migrate.ErrNoChange))
 
 	return nil
 }

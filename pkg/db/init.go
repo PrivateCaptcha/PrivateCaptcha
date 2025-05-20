@@ -33,7 +33,7 @@ func MigrateClickHouse(ctx context.Context, db *sql.DB, cfg common.ConfigStore, 
 	dbCfg := cfg.Get(common.ClickHouseDBKey)
 	const migrationsTable = "private_captcha_migrations"
 
-	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), db, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable)
+	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), db, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable, up)
 }
 
 func MigratePostgres(ctx context.Context, pool *pgxpool.Pool, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
