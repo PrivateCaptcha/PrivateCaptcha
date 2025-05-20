@@ -29,5 +29,6 @@ pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env
 .aider*
 .env
+.DS_Store
 
 coverage_*.out

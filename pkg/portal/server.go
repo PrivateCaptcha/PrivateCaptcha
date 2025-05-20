@@ -298,10 +298,7 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
 	router.Handle(rg.Post(common.ErrorEndpoint), privateRead.ThenFunc(s.postClientSideError))
 	router.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead.ThenFunc(s.echoPuzzle))
-	// TODO: Remove this after landing page is published
-	router.Handle(rg.Get(common.LegalEndpoint), public.Then(s.static("tos/tos.html")))
-	router.Handle(rg.Get(common.PrivacyEndpoint), public.Then(s.static("privacy/privacy.html")))
-	router.Handle(rg.Get(common.AboutEndpoint), public.Then(s.static("about/about.html")))
+
 	// {$} matches the end of the URL
 	router.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead.ThenFunc(s.getPortal))
 }

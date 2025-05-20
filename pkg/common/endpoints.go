@@ -27,10 +27,7 @@ const (
 	EmailEndpoint        = "email"
 	UserEndpoint         = "user"
 	APIKeysEndpoint      = "apikeys"
-	LegalEndpoint        = "legal"
-	PrivacyEndpoint      = "privacy"
 	UsageEndpoint        = "usage"
 	HealthEndpoint       = "health"
 	NotificationEndpoint = "notification"
-	AboutEndpoint        = "about"
 )

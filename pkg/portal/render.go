@@ -49,10 +49,7 @@ type RenderConstants struct {
 	HeaderCSRFToken      string
 	UsageEndpoint        string
 	NotificationEndpoint string
-	LegalEndpoint        string
-	PrivacyEndpoint      string
 	ErrorEndpoint        string
-	AboutEndpoint        string
 	ValidityInterval     string
 	AllowSubdomains      string
 	AllowLocalhost       string
@@ -98,10 +95,7 @@ func NewRenderConstants() *RenderConstants {
 		HeaderCSRFToken:      common.HeaderCSRFToken,
 		UsageEndpoint:        common.UsageEndpoint,
 		NotificationEndpoint: common.NotificationEndpoint,
-		LegalEndpoint:        common.LegalEndpoint,
-		PrivacyEndpoint:      common.PrivacyEndpoint,
 		ErrorEndpoint:        common.ErrorEndpoint,
-		AboutEndpoint:        common.AboutEndpoint,
 		ValidityInterval:     common.ParamValidityInterval,
 		AllowSubdomains:      common.ParamAllowSubdomains,
 		AllowLocalhost:       common.ParamAllowLocalhost,
