@@ -15,33 +15,19 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package column
+package chcol
 
-import (
-	"fmt"
-	"time"
-)
+type Dynamic = Variant
 
-const secInDay = 24 * 60 * 60
+// NewDynamic creates a new Dynamic with the given value
+func NewDynamic(v any) Dynamic {
+	return Dynamic{value: v}
+}
 
-func dateOverflow(min, max, v time.Time, format string) error {
-	if v.Before(min) || v.After(max) {
-		return &DateOverflowError{
-			Min:    min,
-			Max:    max,
-			Value:  v,
-			Format: format,
-		}
+// NewDynamicWithType creates a new Dynamic with the given value and ClickHouse type
+func NewDynamicWithType(v any, chType string) Dynamic {
+	return Dynamic{
+		value:  v,
+		chType: chType,
 	}
-	return nil
-}
-
-type DateOverflowError struct {
-	Min, Max time.Time
-	Value    time.Time
-	Format   string
-}
-
-func (e *DateOverflowError) Error() string {
-	return fmt.Sprintf("clickhouse: dateTime overflow. must be between %s and %s", e.Min.Format(e.Format), e.Max.Format(e.Format))
 }
