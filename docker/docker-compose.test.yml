@@ -5,6 +5,7 @@ services:
       dockerfile: ./docker/Dockerfile.test
       args:
         GIT_COMMIT: '${GIT_COMMIT}'
+        EXTRA_BUILD_FLAGS: '-tags enterprise'
     ports:
       - 8080:8080
     environment:

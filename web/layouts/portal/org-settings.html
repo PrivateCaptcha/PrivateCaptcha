@@ -113,7 +113,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
+            <button type="submit" {{ if (not (and .Params.CanEdit $.Platform.Enterprise )) }}disabled{{ end }} class="pc-internal-form-button {{ if (and .Params.CanEdit $.Platform.Enterprise) }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
         </div>
     </div>
     {{ else }}

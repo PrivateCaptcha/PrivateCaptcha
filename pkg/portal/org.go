@@ -31,6 +31,7 @@ const (
 	orgWizardTemplate             = "org-wizard/wizard.html"
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
+	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
 )
 
 type orgSettingsRenderContext struct {
@@ -135,6 +136,8 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, strin
 
 	if !user.SubscriptionID.Valid {
 		renderCtx.ErrorMessage = activeSubscriptionForOrgError
+	} else if !s.isEnterprise() {
+		renderCtx.WarningMessage = enterpriseOrgError
 	}
 
 	return renderCtx, orgWizardTemplate, nil

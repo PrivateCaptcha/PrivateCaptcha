@@ -106,13 +106,15 @@ func NewRenderConstants() *RenderConstants {
 
 func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext) (bytes.Buffer, error) {
 	actualData := struct {
-		Params interface{}
-		Const  interface{}
-		Ctx    interface{}
+		Params   interface{}
+		Const    interface{}
+		Ctx      interface{}
+		Platform interface{}
 	}{
-		Params: data,
-		Const:  s.RenderConstants,
-		Ctx:    reqCtx,
+		Params:   data,
+		Const:    s.RenderConstants,
+		Ctx:      reqCtx,
+		Platform: s.PlatformCtx,
 	}
 
 	var out bytes.Buffer

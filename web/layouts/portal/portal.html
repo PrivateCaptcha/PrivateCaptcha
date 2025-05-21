@@ -54,18 +54,20 @@
                     <label id="listbox-label" class="sr-only">Change selected organization</label>
                     <div class="relative">
                         <div class="inline-flex divide-x divide-white/20 rounded-md shadow-sm">
-                            <div class="inline-flex items-center gap-x-2.5 rounded-l-md bg-white/10 px-3 py-2 text-white shadow-sm">
+                            <div class="inline-flex items-center gap-x-2.5 {{ if $.Platform.Enterprise }}rounded-l-md{{else}}rounded-md{{end}} bg-white/10 px-3 py-2 text-white shadow-sm">
                                 <svg class="-ml-0.5 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" aria-hidden="true">
   <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
 </svg>
                                 <p class="text-sm font-semibold" x-text="orgName"></p>
                             </div>
+                            {{ if $.Platform.Enterprise }}
                             <button type="button" @click="toggle()" class="inline-flex items-center rounded-l-none rounded-r-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 focus:ring-offset-2 focus:ring-offset-gray-800" aria-haspopup="listbox" aria-expanded="true" aria-labelledby="listbox-label">
                                 <span class="sr-only">Change selected organization</span>
                                 <svg class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                     <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                                 </svg>
                             </button>
+                            {{ end }}
                         </div>
 
                         <ul x-show="open"
@@ -109,6 +111,7 @@
                             </li>
                             {{ end }}
                             {{ end }}
+                            {{ if $.Platform.Enterprise }}
                             <li class="group text-gray-900 cursor-default select-none text-sm hover:bg-gray-100" role="option">
                                 <a
                                     href="{{ partsURL $.Const.OrgEndpoint .Const.NewEndpoint }}"
@@ -120,6 +123,7 @@
                                     Add New Organization
                                 </a>
                             </li>
+                            {{ end }}
                         </ul>
                     </div>
                 </div>

@@ -1,6 +1,8 @@
 <div class="space-y-4">
     {{- if .Params.ErrorMessage -}}
     {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- else if .Params.WarningMessage -}}
+        {{template "warning-message.html" .Params.WarningMessage}}
     {{- end -}}
 
     <div>
@@ -30,7 +32,8 @@
 
     <button
         type="submit"
-        class="pc-internal-form-button pc-internal-form-button-primary"
+        class="pc-internal-form-button {{if $.Platform.Enterprise}}pc-internal-form-button-primary{{else}}pc-internal-form-button-disabled{{end}}"
+        {{if not $.Platform.Enterprise}}disabled{{end}}
     >
     <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

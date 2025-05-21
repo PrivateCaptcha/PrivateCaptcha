@@ -78,6 +78,10 @@ type CaptchaRenderContext struct {
 	CaptchaDebug         bool
 }
 
+type PlatformRenderContext struct {
+	Enterprise bool
+}
+
 func (ac *AlertRenderContext) ClearAlerts() {
 	ac.ErrorMessage = ""
 	ac.SuccessMessage = ""
@@ -105,6 +109,7 @@ type Server struct {
 	Auth            *AuthMiddleware
 	RenderConstants interface{}
 	Jobs            Jobs
+	PlatformCtx     interface{}
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -144,6 +149,9 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder) er
 	s.Jobs = s
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
+	s.PlatformCtx = &PlatformRenderContext{
+		Enterprise: s.isEnterprise(),
+	}
 
 	return nil
 }
@@ -259,23 +267,24 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	privateWrite := s.MiddlewarePrivateWrite(public)
 	privateRead := s.MiddlewarePrivateRead(public)
+	enterprise := privateWrite.Append(s.enterprise)
 
 	router.Handle(rg.Post(common.LoginEndpoint), openWrite.ThenFunc(s.postLogin))
 	router.Handle(rg.Post(common.RegisterEndpoint), openWrite.ThenFunc(s.postRegister))
 	router.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail.ThenFunc(s.postTwoFactor))
 	router.Handle(rg.Post(common.ResendEndpoint), csrfEmail.ThenFunc(s.resend2fa))
 	router.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrg)))
-	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrg))
+	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), enterprise.ThenFunc(s.postNewOrg))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead.ThenFunc(s.getPortal))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead.Then(s.Handler(s.getOrgDashboard)))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead.Then(s.Handler(s.getOrgMembers)))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead.Then(s.Handler(s.getOrgSettings)))
-	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.Then(s.Handler(s.postOrgMembers)))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWrite.ThenFunc(s.deleteOrgMembers))
-	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.ThenFunc(s.joinOrg))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.ThenFunc(s.leaveOrg))
+	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), enterprise.Then(s.Handler(s.postOrgMembers)))
+	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), enterprise.ThenFunc(s.deleteOrgMembers))
+	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), enterprise.ThenFunc(s.joinOrg))
+	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), enterprise.ThenFunc(s.leaveOrg))
 	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite.Then(s.Handler(s.putOrg)))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite.ThenFunc(s.deleteOrg))
+	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), enterprise.ThenFunc(s.deleteOrg))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrgProperty)))
 	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrgProperty))
 	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateRead.Then(s.Handler(s.getPropertyDashboard)))
