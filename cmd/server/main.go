@@ -344,7 +344,7 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool) error {
 	defer pool.Close()
 	defer clickhouse.Close()
 
-	if err := db.MigratePostgres(ctx, pool, cfg, planService.GetInternalAdminPlan(), up); err != nil {
+	if err := db.MigratePostgres(ctx, pool, cfg, planService, up); err != nil {
 		return err
 	}
 

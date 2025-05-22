@@ -32,8 +32,8 @@ build-server:
 build-loadtest:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/loadtest cmd/loadtest/*.go
 
-build-playground:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/playground cmd/playground/*.go
+build-puzzledbg:
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/puzzledbg cmd/puzzledbg/*.go
 
 deploy:
 	echo "Nothing here"

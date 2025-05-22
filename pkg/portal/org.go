@@ -193,6 +193,9 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	}
 
 	if !plan.CheckOrgsLimit(len(orgs)) {
+		slog.WarnContext(ctx, "Organizations limit check failed", "orgs", len(orgs), "userID", user.ID, "subscriptionID", subscr.ID,
+			"plan", plan.Name(), "internal", isInternalSubscription)
+
 		return "Organizations limit reached on your current plan, please upgrade to create more."
 	}
 

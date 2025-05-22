@@ -35,11 +35,14 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 				slog.ErrorContext(ctx, "Mismatch between notification ID in session", "session", notificationID, "param", id)
 			}
 		}
-		_ = sess.Delete(session.KeyNotificationID)
-		slog.DebugContext(r.Context(), "Dismissed notification", "id", id)
+		if derr := sess.Delete(session.KeyNotificationID); derr != nil {
+			slog.ErrorContext(ctx, "Failed to dismiss notification", "id", id, common.ErrAttr(derr))
+		} else {
+			slog.DebugContext(ctx, "Dismissed notification", "id", id)
+		}
 		w.WriteHeader(http.StatusOK)
 	} else {
-		slog.ErrorContext(r.Context(), "Failed to parse notification ID", "id", value[:10], "length", len(value), common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to parse notification ID", "id", value[:10], "length", len(value), common.ErrAttr(err))
 		http.Error(w, "", http.StatusBadRequest)
 	}
 }

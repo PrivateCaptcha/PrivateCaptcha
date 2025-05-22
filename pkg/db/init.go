@@ -36,10 +36,10 @@ func MigrateClickHouse(ctx context.Context, db *sql.DB, cfg common.ConfigStore, 
 	return MigrateClickhouseEx(common.TraceContext(ctx, "clickhouse"), db, clickhouseMigrationsFS, dbCfg.Value(), migrationsTable, up)
 }
 
-func MigratePostgres(ctx context.Context, pool *pgxpool.Pool, cfg common.ConfigStore, adminPlan billing.Plan, up bool) error {
+func MigratePostgres(ctx context.Context, pool *pgxpool.Pool, cfg common.ConfigStore, planService billing.PlanService, up bool) error {
 	const migrationTable = "private_captcha_migrations"
 
-	migrateCtx := NewPostgresMigrateContext(ctx, cfg, adminPlan)
+	migrateCtx := NewPostgresMigrateContext(ctx, cfg, planService)
 	tplFS := NewTemplateFS(postgresMigrationsFS, migrateCtx)
 
 	return MigratePostgresEx(common.TraceContext(ctx, "postgres"), pool, tplFS, migrationTable, up)

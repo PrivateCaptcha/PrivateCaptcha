@@ -126,6 +126,7 @@ type PostgresMigrateContext struct {
 	Stage                    string
 	ExternalProductID        string
 	ExternalPriceID          string
+	ExternalStatus           string
 	PortalLoginPropertyID    string
 	PortalRegisterPropertyID string
 	PortalDomain             string
@@ -134,10 +135,11 @@ type PostgresMigrateContext struct {
 	PortalRegisterDifficulty common.DifficultyLevel
 }
 
-func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, adminPlan billing.Plan) *PostgresMigrateContext {
+func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, planService billing.PlanService) *PostgresMigrateContext {
 	stage := cfg.Get(common.StageKey).Value()
 	portalDomain := config_pkg.AsURL(ctx, cfg.Get(common.PortalBaseURLKey)).Domain()
 
+	adminPlan := planService.GetInternalAdminPlan()
 	_, priceIDYearly := adminPlan.PriceIDs()
 
 	return &PostgresMigrateContext{
@@ -148,6 +150,7 @@ func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, admi
 		AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
 		ExternalProductID:        adminPlan.ProductID(),
 		ExternalPriceID:          priceIDYearly,
+		ExternalStatus:           planService.TrialStatus(),
 		PortalLoginDifficulty:    common.DifficultyLevelSmall,
 		PortalRegisterDifficulty: common.DifficultyLevelSmall,
 	}

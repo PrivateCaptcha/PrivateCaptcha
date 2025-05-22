@@ -373,7 +373,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Subscription, userID int32, isOrgOwner bool) string {
 	if (subscr == nil) || !s.PlanService.IsSubscriptionActive(subscr.Status) {
 		if isOrgOwner {
-			return "You need an active subscription to create new properties."
+			return activeSubscriptionForPropertyError
 		}
 
 		return "Organization owner needs an active subscription to create new properties."
@@ -393,6 +393,9 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 	}
 
 	if !plan.CheckPropertiesLimit(int(count)) {
+		slog.WarnContext(ctx, "Properties limit check failed", "properties", count, "userID", userID, "subscriptionID", subscr.ID,
+			"plan", plan.Name(), "internal", isInternalSubscription)
+
 		if isOrgOwner {
 			return "Properties limit reached on your current plan, please upgrade to create more."
 		}

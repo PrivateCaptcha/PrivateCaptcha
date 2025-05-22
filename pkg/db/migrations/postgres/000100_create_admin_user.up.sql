@@ -1,7 +1,7 @@
 -- Create a subscription with a 100-year trial
 WITH subscription_insert AS (
     INSERT INTO backend.subscriptions (external_product_id, external_price_id, external_subscription_id, external_customer_id, status, source, trial_ends_at)
-    VALUES ('{{.ExternalProductID}}', '{{.ExternalPriceID}}', NULL, NULL, 'trialing', 'internal', CURRENT_TIMESTAMP + INTERVAL '100 years')
+    VALUES ('{{.ExternalProductID}}', '{{.ExternalPriceID}}', NULL, NULL, '{{.ExternalStatus}}', 'internal', CURRENT_TIMESTAMP + INTERVAL '100 years')
     RETURNING id
 ), user_insert AS (
     -- Create an admin user
