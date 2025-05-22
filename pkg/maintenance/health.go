@@ -23,10 +23,11 @@ type HealthCheckJob struct {
 }
 
 const (
-	greenPage = `<!DOCTYPE html><html><body style="background-color: green;"></body></html>`
-	redPage   = `<!DOCTYPE html><html><body style="background-color: red;"></body></html>`
-	FlagTrue  = 1
-	FlagFalse = 0
+	greenPage  = `<!DOCTYPE html><html><body style="background-color: green;"></body></html>`
+	orangePage = `<!DOCTYPE html><html><body style="background-color: orange;"></body></html>`
+	redPage    = `<!DOCTYPE html><html><body style="background-color: red;"></body></html>`
+	FlagTrue   = 1
+	FlagFalse  = 0
 )
 
 var _ common.PeriodicJob = (*HealthCheckJob)(nil)
@@ -98,23 +99,21 @@ func (hc *HealthCheckJob) Shutdown(ctx context.Context) {
 }
 
 func (hc *HealthCheckJob) LiveHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-	if shuttingDown := hc.isShuttingDown(); !shuttingDown {
-		fmt.Fprintln(w, greenPage)
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, redPage)
-	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (hc *HealthCheckJob) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-	if healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy(); healthy {
+
+	if shuttingDown := hc.isShuttingDown(); !shuttingDown {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, greenPage)
+		if healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy(); healthy {
+			fmt.Fprintln(w, greenPage)
+		} else {
+			fmt.Fprintln(w, orangePage)
+		}
 	} else {
-		w.WriteHeader(http.StatusInternalServerError)
+		w.WriteHeader(http.StatusServiceUnavailable)
 		fmt.Fprintln(w, redPage)
 	}
 }
