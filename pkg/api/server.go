@@ -53,7 +53,7 @@ type Server struct {
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
 	Cors               *cors.Cors
-	Metrics            monitoring.Metrics
+	Metrics            common.Metrics
 	Mailer             common.Mailer
 	TestPuzzleData     *puzzle.PuzzlePayload
 }
@@ -386,7 +386,7 @@ func (s *Server) addVerifyRecord(ctx context.Context, p *puzzle.Puzzle, property
 
 	s.VerifyLogChan <- vr
 
-	s.Metrics.ObservePuzzleVerified(vr.UserID, verr, p.IsStub())
+	s.Metrics.ObservePuzzleVerified(vr.UserID, verr.String(), p.IsStub())
 }
 
 func (s *Server) verifyPuzzleValid(ctx context.Context, payload *puzzle.VerifyPayload, expectedOwner puzzle.OwnerIDSource, tnow time.Time) (*puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {

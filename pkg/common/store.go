@@ -2,6 +2,7 @@ package common
 
 import (
 	"context"
+	"net/http"
 	"time"
 )
 
@@ -40,4 +41,12 @@ type TimeSeriesStore interface {
 	DeletePropertiesData(ctx context.Context, propertyIDs []int32) error
 	DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error
 	DeleteUsersData(ctx context.Context, userIDs []int32) error
+}
+
+type Metrics interface {
+	Handler(h http.Handler) http.Handler
+	HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
+	ObservePuzzleCreated(userID int32)
+	ObservePuzzleVerified(userID int32, result string, isStub bool)
+	ObserveHealth(postgres, clickhouse bool)
 }

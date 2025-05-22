@@ -183,9 +183,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	cdnChain := alice.New(common.Recovered, metrics.CDNHandler, rateLimiter)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
-	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
-	router.Handle(http.MethodGet+" /"+common.LiveEndpoint, internalAPIChain.ThenFunc(healthCheck.LiveHandler))
-	router.Handle(http.MethodGet+" /"+common.ReadyEndpoint, internalAPIChain.ThenFunc(healthCheck.ReadyHandler))
 	// "protection" (NOTE: different than usual order of monitoring)
 	publicChain := alice.New(common.Recovered, metrics.IgnoredHandler, rateLimiter)
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)
@@ -275,6 +272,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		localRouter := http.NewServeMux()
 		metrics.Setup(localRouter)
 		jobs.Setup(localRouter)
+		localRouter.Handle(http.MethodGet+" /"+common.LiveEndpoint, common.Recovered(http.HandlerFunc(healthCheck.LiveHandler)))
+		localRouter.Handle(http.MethodGet+" /"+common.ReadyEndpoint, common.Recovered(http.HandlerFunc(healthCheck.ReadyHandler)))
 		localServer = &http.Server{
 			Addr:    localAddress,
 			Handler: localRouter,

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,19 +18,17 @@ import (
 )
 
 const (
-	MetricsNamespace       = "server"
-	puzzleMetricsSubsystem = "puzzle"
-	userIDLabel            = "user_id"
-	stubLabel              = "stub"
-	resultLabel            = "result"
+	MetricsNamespace         = "server"
+	puzzleMetricsSubsystem   = "puzzle"
+	platformMetricsSubsystem = "platform"
+	userIDLabel              = "user_id"
+	stubLabel                = "stub"
+	resultLabel              = "result"
+	clickhouseLabel          = "clickhouse"
+	postgresLabel            = "postgres"
+	statusUp                 = "up"
+	statusDown               = "down"
 )
-
-type Metrics interface {
-	Handler(h http.Handler) http.Handler
-	HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
-	ObservePuzzleCreated(userID int32)
-	ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool)
-}
 
 type Service struct {
 	Registry         *prometheus.Registry
@@ -39,9 +36,10 @@ type Service struct {
 	coarseMiddleware middleware.Middleware
 	puzzleCount      *prometheus.CounterVec
 	verifyCount      *prometheus.CounterVec
+	healthGauge      *prometheus.GaugeVec
 }
 
-var _ Metrics = (*Service)(nil)
+var _ common.Metrics = (*Service)(nil)
 
 func traceID() string {
 	return xid.New().String()
@@ -99,6 +97,17 @@ func NewService() *Service {
 	)
 	reg.MustRegister(verifyCount)
 
+	healthGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: platformMetricsSubsystem,
+			Name:      "health",
+			Help:      "Health status of components",
+		},
+		[]string{postgresLabel, clickhouseLabel},
+	)
+	reg.MustRegister(healthGauge)
+
 	return &Service{
 		Registry: reg,
 		fineMiddleware: middleware.New(middleware.Config{
@@ -125,6 +134,7 @@ func NewService() *Service {
 		}),
 		puzzleCount: puzzleCount,
 		verifyCount: verifyCount,
+		healthGauge: healthGauge,
 	}
 }
 
@@ -155,15 +165,41 @@ func (s *Service) ObservePuzzleCreated(userID int32) {
 	}).Inc()
 }
 
-func (s *Service) ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool) {
+func (s *Service) ObservePuzzleVerified(userID int32, result string, isStub bool) {
 	s.verifyCount.With(prometheus.Labels{
 		stubLabel:   strconv.FormatBool(isStub),
-		resultLabel: result.String(),
+		resultLabel: result,
 		userIDLabel: strconv.Itoa(int(userID)),
 	}).Inc()
 }
 
+func (s *Service) ObserveHealth(postgres, clickhouse bool) {
+	var chVal, pgVal float64
+	var chStatus, pgStatus string
+
+	if postgres {
+		pgVal = 1
+		pgStatus = statusUp
+	} else {
+		pgVal = 0
+		pgStatus = statusDown
+	}
+
+	if clickhouse {
+		chVal = 1
+		chStatus = statusUp
+	} else {
+		chVal = 0
+		chStatus = statusDown
+	}
+
+	s.healthGauge.With(prometheus.Labels{
+		clickhouseLabel: chStatus,
+		postgresLabel:   pgStatus,
+	}).Set((chVal + pgVal) / 2)
+}
+
 func (s *Service) Setup(mux *http.ServeMux) {
-	mux.Handle("/metrics", promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{Registry: s.Registry}))
+	mux.Handle(http.MethodGet+" /metrics", common.Recovered(promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{Registry: s.Registry})))
 	s.setupProfiling(context.TODO(), mux)
 }

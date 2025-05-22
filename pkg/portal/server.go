@@ -102,7 +102,7 @@ type Server struct {
 	Stage           string
 	PlanService     billing.PlanService
 	PuzzleEngine    puzzle.Engine
-	Metrics         monitoring.Metrics
+	Metrics         common.Metrics
 	maintenanceMode atomic.Bool
 	canRegister     atomic.Bool
 	SettingsTabs    []*SettingsTab

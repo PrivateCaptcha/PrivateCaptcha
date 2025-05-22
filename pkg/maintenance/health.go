@@ -19,6 +19,7 @@ type HealthCheckJob struct {
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
 	CheckInterval    common.ConfigItem
+	Metrics          common.Metrics
 }
 
 const (
@@ -48,8 +49,13 @@ func (j *HealthCheckJob) Name() string {
 }
 
 func (hc *HealthCheckJob) RunOnce(ctx context.Context) error {
-	hc.postgresFlag.Store(hc.checkPostgres(ctx))
-	hc.clickhouseFlag.Store(hc.checkClickHouse(ctx))
+	pgStatus := hc.checkPostgres(ctx)
+	hc.postgresFlag.Store(pgStatus)
+
+	chStatus := hc.checkClickHouse(ctx)
+	hc.clickhouseFlag.Store(chStatus)
+
+	hc.Metrics.ObserveHealth((pgStatus == FlagTrue), (chStatus == FlagTrue))
 
 	return nil
 }

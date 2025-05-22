@@ -59,8 +59,8 @@ func (j *jobs) Run() {
 }
 
 func (j *jobs) Setup(mux *http.ServeMux) {
-	mux.HandleFunc(http.MethodPost+" /maintenance/periodic/{job}", j.handlePeriodicJob)
-	mux.HandleFunc(http.MethodPost+" /maintenance/oneoff/{job}", j.handleOneoffJob)
+	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", common.Recovered(http.HandlerFunc(j.handlePeriodicJob)))
+	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", common.Recovered(http.HandlerFunc(j.handleOneoffJob)))
 }
 
 func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
