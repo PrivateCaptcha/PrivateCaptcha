@@ -174,6 +174,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BusinessDB:    businessDB,
 		TimeSeriesDB:  timeSeriesDB,
 		CheckInterval: cfg.Get(common.HealthCheckIntervalKey),
+		Metrics:       metrics,
 	}
 
 	portalDomain := portalURLConfig.Domain()

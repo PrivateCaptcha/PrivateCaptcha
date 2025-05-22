@@ -17,6 +17,7 @@ func TestReadyEndpoint(t *testing.T) {
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:   store,
 		TimeSeriesDB: timeSeries,
+		Metrics:      metrics,
 	}
 
 	if err := healthCheck.RunOnce(context.TODO()); err != nil {
