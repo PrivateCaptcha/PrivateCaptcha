@@ -28,6 +28,7 @@ const (
 	UserEndpoint         = "user"
 	APIKeysEndpoint      = "apikeys"
 	UsageEndpoint        = "usage"
-	HealthEndpoint       = "health"
+	ReadyEndpoint        = "ready"
+	LiveEndpoint         = "live"
 	NotificationEndpoint = "notification"
 )

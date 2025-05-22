@@ -15,7 +15,6 @@ import (
 type HealthCheckJob struct {
 	BusinessDB       db.Implementor
 	TimeSeriesDB     common.TimeSeriesStore
-	Router           *http.ServeMux
 	postgresFlag     atomic.Int32
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
@@ -92,11 +91,20 @@ func (hc *HealthCheckJob) Shutdown(ctx context.Context) {
 	hc.shuttingDownFlag.Store(FlagTrue)
 }
 
-func (hc *HealthCheckJob) HandlerFunc(w http.ResponseWriter, r *http.Request) {
+func (hc *HealthCheckJob) LiveHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
-	healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy()
-	shuttingDown := hc.isShuttingDown()
-	if healthy && !shuttingDown {
+	if shuttingDown := hc.isShuttingDown(); !shuttingDown {
+		fmt.Fprintln(w, greenPage)
+		w.WriteHeader(http.StatusOK)
+	} else {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, redPage)
+	}
+}
+
+func (hc *HealthCheckJob) ReadyHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+	if healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy(); healthy {
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintln(w, greenPage)
 	} else {

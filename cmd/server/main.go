@@ -174,7 +174,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BusinessDB:    businessDB,
 		TimeSeriesDB:  timeSeriesDB,
 		CheckInterval: cfg.Get(common.HealthCheckIntervalKey),
-		Router:        router,
 	}
 
 	portalDomain := portalURLConfig.Domain()
@@ -185,7 +184,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static())))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static())))
 	internalAPIChain := alice.New(common.Recovered, rateLimiter, common.NoCache)
-	router.Handle(http.MethodGet+" /"+common.HealthEndpoint, internalAPIChain.ThenFunc(healthCheck.HandlerFunc))
+	router.Handle(http.MethodGet+" /"+common.LiveEndpoint, internalAPIChain.ThenFunc(healthCheck.LiveHandler))
+	router.Handle(http.MethodGet+" /"+common.ReadyEndpoint, internalAPIChain.ThenFunc(healthCheck.ReadyHandler))
 	// "protection" (NOTE: different than usual order of monitoring)
 	publicChain := alice.New(common.Recovered, metrics.IgnoredHandler, rateLimiter)
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)
@@ -238,7 +238,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			case syscall.SIGINT, syscall.SIGTERM:
 				healthCheck.Shutdown(ctx)
 				// Give time for readiness check to propagate
-				time.Sleep(_readinessDrainDelay)
+				time.Sleep(min(_readinessDrainDelay, healthCheck.Interval()))
 				close(quit)
 				return
 			}

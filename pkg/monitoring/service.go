@@ -19,11 +19,11 @@ import (
 )
 
 const (
-	metricsNamespace = "server"
-	metricsSubsystem = "puzzle"
-	userIDLabel      = "user_id"
-	stubLabel        = "stub"
-	resultLabel      = "result"
+	MetricsNamespace       = "server"
+	puzzleMetricsSubsystem = "puzzle"
+	userIDLabel            = "user_id"
+	stubLabel              = "stub"
+	resultLabel            = "result"
 )
 
 type Metrics interface {
@@ -33,15 +33,15 @@ type Metrics interface {
 	ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool)
 }
 
-type service struct {
-	registry         *prometheus.Registry
+type Service struct {
+	Registry         *prometheus.Registry
 	fineMiddleware   middleware.Middleware
 	coarseMiddleware middleware.Middleware
 	puzzleCount      *prometheus.CounterVec
 	verifyCount      *prometheus.CounterVec
 }
 
-var _ Metrics = (*service)(nil)
+var _ Metrics = (*Service)(nil)
 
 func traceID() string {
 	return xid.New().String()
@@ -70,7 +70,7 @@ func Traced(h http.Handler) http.Handler {
 	})
 }
 
-func NewService() *service {
+func NewService() *Service {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(
 		collectors.NewGoCollector(),
@@ -79,8 +79,8 @@ func NewService() *service {
 
 	puzzleCount := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: metricsSubsystem,
+			Namespace: MetricsNamespace,
+			Subsystem: puzzleMetricsSubsystem,
 			Name:      "create_total",
 			Help:      "Total number of puzzles created",
 		},
@@ -90,8 +90,8 @@ func NewService() *service {
 
 	verifyCount := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: metricsNamespace,
-			Subsystem: metricsSubsystem,
+			Namespace: MetricsNamespace,
+			Subsystem: puzzleMetricsSubsystem,
 			Name:      "verify_total",
 			Help:      "Total number of puzzle verifications",
 		},
@@ -99,11 +99,11 @@ func NewService() *service {
 	)
 	reg.MustRegister(verifyCount)
 
-	return &service{
-		registry: reg,
+	return &Service{
+		Registry: reg,
 		fineMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:            metricsNamespace,
+			Service:            MetricsNamespace,
 			DisableMeasureSize: true,
 			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
 				Prefix:          "fine",
@@ -113,7 +113,7 @@ func NewService() *service {
 		}),
 		coarseMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:                metricsNamespace,
+			Service:                MetricsNamespace,
 			GroupedStatus:          true,
 			DisableMeasureSize:     true,
 			DisableMeasureInflight: true,
@@ -128,34 +128,34 @@ func NewService() *service {
 	}
 }
 
-func (s *service) Handler(h http.Handler) http.Handler {
+func (s *Service) Handler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
 	return std.Handler("", s.fineMiddleware, h)
 }
 
-func (s *service) CDNHandler(h http.Handler) http.Handler {
+func (s *Service) CDNHandler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
 	return std.Handler("", s.coarseMiddleware, h)
 }
 
-func (s *service) IgnoredHandler(h http.Handler) http.Handler {
+func (s *Service) IgnoredHandler(h http.Handler) http.Handler {
 	return std.Handler("_ignored", s.coarseMiddleware, h)
 }
 
-func (s *service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
+func (s *Service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		handlerID := handlerIDFunc()
 		return std.Handler(handlerID, s.fineMiddleware, h)
 	}
 }
 
-func (s *service) ObservePuzzleCreated(userID int32) {
+func (s *Service) ObservePuzzleCreated(userID int32) {
 	s.puzzleCount.With(prometheus.Labels{
 		userIDLabel: strconv.Itoa(int(userID)),
 	}).Inc()
 }
 
-func (s *service) ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool) {
+func (s *Service) ObservePuzzleVerified(userID int32, result puzzle.VerifyError, isStub bool) {
 	s.verifyCount.With(prometheus.Labels{
 		stubLabel:   strconv.FormatBool(isStub),
 		resultLabel: result.String(),
@@ -163,7 +163,7 @@ func (s *service) ObservePuzzleVerified(userID int32, result puzzle.VerifyError,
 	}).Inc()
 }
 
-func (s *service) Setup(mux *http.ServeMux) {
-	mux.Handle("/metrics", promhttp.HandlerFor(s.registry, promhttp.HandlerOpts{Registry: s.registry}))
+func (s *Service) Setup(mux *http.ServeMux) {
+	mux.Handle("/metrics", promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{Registry: s.Registry}))
 	s.setupProfiling(context.TODO(), mux)
 }

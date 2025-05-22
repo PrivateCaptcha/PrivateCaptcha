@@ -9,7 +9,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
-func TestHealthEndpoint(t *testing.T) {
+func TestReadyEndpoint(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -17,7 +17,6 @@ func TestHealthEndpoint(t *testing.T) {
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:   store,
 		TimeSeriesDB: timeSeries,
-		Router:       nil,
 	}
 
 	if err := healthCheck.RunOnce(context.TODO()); err != nil {
@@ -30,7 +29,7 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	healthCheck.HandlerFunc(w, req)
+	healthCheck.ReadyHandler(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Unexpected status code %d", w.Code)
