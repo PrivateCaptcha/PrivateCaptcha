@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -31,13 +32,12 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		ErrorMessage: http.StatusText(code),
 	}
 
-	reqCtx := struct {
-		LoggedIn bool
-		CDN      string
-		Path     string
-	}{
-		LoggedIn: false,
-		CDN:      s.CDNURL,
+	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
+	reqCtx := &RequestContext{
+		Path:        "/" + common.ErrorEndpoint,
+		LoggedIn:    ok && loggedIn,
+		CurrentYear: time.Now().Year(),
+		CDN:         s.CDNURL,
 	}
 
 	actualData := struct {
