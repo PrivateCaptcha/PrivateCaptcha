@@ -20,6 +20,7 @@ type HealthCheckJob struct {
 	shuttingDownFlag atomic.Int32
 	CheckInterval    common.ConfigItem
 	Metrics          common.Metrics
+	StrictReadiness  bool
 }
 
 const (
@@ -105,9 +106,12 @@ func (hc *HealthCheckJob) LiveHandler(w http.ResponseWriter, r *http.Request) {
 func (hc *HealthCheckJob) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 
-	if shuttingDown := hc.isShuttingDown(); !shuttingDown {
+	shuttingDown := hc.isShuttingDown()
+	healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy()
+
+	if !shuttingDown && (healthy || !hc.StrictReadiness) {
 		w.WriteHeader(http.StatusOK)
-		if healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy(); healthy {
+		if healthy {
 			fmt.Fprintln(w, greenPage)
 		} else {
 			fmt.Fprintln(w, orangePage)
