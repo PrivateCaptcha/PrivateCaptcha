@@ -371,6 +371,11 @@ func main() {
 
 	cfg := config.NewEnvConfig(config.DefaultMapper, env.Get)
 
+	if err = checkLicense(context.Background(), cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
+	}
+
 	switch *flagMode {
 	case modeServer:
 		ctx := common.TraceContext(context.Background(), "main")

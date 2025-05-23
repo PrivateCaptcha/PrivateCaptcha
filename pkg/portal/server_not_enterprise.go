@@ -3,19 +3,15 @@
 package portal
 
 import (
-	"log/slog"
 	"net/http"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/justinas/alice"
 )
 
 func (s *Server) isEnterprise() bool {
 	return false
 }
 
-func (s *Server) enterprise(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Log(r.Context(), common.LevelTrace, "Rejecting request for enterprise")
-		http.Error(w, "", http.StatusForbidden)
-	})
+func (s *Server) setupEnterprise(*http.ServeMux, *RouteGenerator, alice.Chain) {
+	// BUMP
 }
