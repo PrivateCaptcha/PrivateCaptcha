@@ -222,7 +222,7 @@ func TestRenderHTML(t *testing.T) {
 		},
 		{
 			path: []string{common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint},
-			// NOTE: we use "tab" here instead of "page" becaues of <script> text and JS that breaks XML parser
+			// NOTE: we use "tab" here instead of "page" because of <script> text and JS that breaks XML parser
 			template: settingsUsageTemplatePrefix + "tab.html",
 			model: &settingsUsageRenderContext{
 				SettingsCommonRenderContext: SettingsCommonRenderContext{
