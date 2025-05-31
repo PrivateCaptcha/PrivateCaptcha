@@ -1,0 +1,34 @@
+# Serverless directories
+.serverless
+
+# golang output binary directory
+bin
+
+# golang vendor (dependencies) directory
+# vendor
+
+# Test binary, build with `go test -c`
+*.test
+!Dockerfile.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+*.log
+
+*.swp
+*.swo
+*~
+
+secrets.yml
+node_modules
+
+web/static/
+widget/static/
+
+pkg/db/migrations/postgres/000000_sqlc_fix.sql
+pc.env
+.aider*
+.env
+.DS_Store
+
+coverage_*.out

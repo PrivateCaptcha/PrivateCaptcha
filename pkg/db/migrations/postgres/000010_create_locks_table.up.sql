@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS backend.locks (
+    name TEXT PRIMARY KEY,
+    data BYTEA,
+    expires_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP + INTERVAL '1 minute' NOT NULL
+);

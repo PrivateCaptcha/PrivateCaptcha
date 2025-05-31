@@ -1,0 +1,131 @@
+services:
+  testserver:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.test
+      args:
+        GIT_COMMIT: '${GIT_COMMIT}'
+        EXTRA_BUILD_FLAGS: '-tags enterprise'
+    ports:
+      - 8080:8080
+    environment:
+      STAGE: test
+      PC_PORT: 8080
+      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=disable&search_path=backend
+      PC_CLICKHOUSE_HOST: clickhouse
+      PC_CLICKHOUSE_DB: privatecaptcha
+      PC_CLICKHOUSE_USER: captchasrv
+      PC_CLICKHOUSE_PASSWORD: uwnhNn4YW01
+      PC_USER_FINGERPRINT_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
+      PC_RATE_LIMIT_HEADER: X-REAL-IP
+      # PC_VERBOSE: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - test_postgres_network
+      - test_clickhouse_network
+
+  migration:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile.test
+      args:
+        GIT_COMMIT: '${GIT_COMMIT}'
+    command:
+      /app/bin/server -mode migrate -migrate-hash $GIT_COMMIT
+    env_file:
+      - pc.env
+    environment:
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      PC_CLICKHOUSE_HOST: clickhouse
+      PC_CLICKHOUSE_DB: privatecaptcha
+      PC_CLICKHOUSE_USER: default
+      PC_CLICKHOUSE_PASSWORD: ''
+      PC_VERBOSE: true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - test_postgres_network
+      - test_clickhouse_network
+
+  vetsqlc:
+    image: sqlc/sqlc
+    pull_policy: if_not_present
+    command:
+      vet
+    environment:
+      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      SQLCDEBUG: dumpvetenv=1
+    working_dir: /src
+    volumes:
+      - ../pkg/db:/src
+    depends_on:
+      migration:
+        condition: service_completed_successfully
+    networks:
+      - test_postgres_network
+
+  postgres:
+    image: postgres
+    pull_policy: if_not_present
+    command: >
+        -c ssl=on 
+        -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+        -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+        -c log_statement=all
+        -c log_destination=stderr
+    environment:
+      POSTGRES_DB: privatecaptcha
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: pg_isready -U postgres -d privatecaptcha
+      interval: 3s
+      timeout: 3s
+      retries: 3
+    networks:
+      - test_postgres_network
+    volumes:
+      - test_postgres_data_volume:/var/lib/postgresql/data
+      - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8.7-alpine
+    pull_policy: if_not_present
+    environment:
+      CLICKHOUSE_DB: privatecaptcha
+    healthcheck:
+      test: wget --no-verbose --tries=1 -O - http://0.0.0.0:8123/?query=SELECT%201 || exit 1
+      interval: 3s
+      timeout: 3s
+      retries: 3
+    ports:
+      - '9000:9000' # Native client interface
+      #- '8123:8123' # HTTP interface
+    networks:
+      - test_clickhouse_network
+    volumes:
+      - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml:ro
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml:ro
+      - ../pkg/db/migrations/init/clickhouse.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - test_clickhouse_data_volume:/var/lib/clickhouse
+      # uncomment for debugging
+      # - ./clickhouse-logs:/var/log/clickhouse-server/
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+
+networks:
+  test_postgres_network:
+  test_clickhouse_network:
+
+volumes:
+  test_postgres_data_volume:
+  test_clickhouse_data_volume:

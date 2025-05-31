@@ -1,0 +1,22 @@
+name: Cleanup packages
+
+# Controls when the action will run
+on:
+  schedule:
+    # Runs at 12:00 UTC (midnight) every day
+    # * is a special character in YAML so you have to quote this string
+    - cron: '0 0 * * *'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  delete-package:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with: 
+          package-name: 'privatecaptcha'
+          package-type: 'container'
+          min-versions-to-keep: 10

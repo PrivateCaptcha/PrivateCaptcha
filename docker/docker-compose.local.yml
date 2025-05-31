@@ -1,0 +1,4 @@
+services:
+  server:
+    ports:
+      - 9090:9090

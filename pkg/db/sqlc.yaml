@@ -1,0 +1,58 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "queries/postgres"
+    schema: "migrations/postgres"
+    database:
+      uri: "${PC_POSTGRES}"
+    analyzer:
+      database: false
+    rules:
+      - sqlc/db-prepare
+    gen:
+      go:
+        package: "generated"
+        sql_package: "pgx/v5"
+        out: "generated"
+        emit_interface: true
+        emit_db_tags: true
+        emit_json_tags: true
+        emit_result_struct_pointers: true
+        emit_params_struct_pointers: true
+        #emit_pointers_for_null_types: true
+        rename:
+          #"backend_(.*)": "$1"
+          backend_deleted_record: DeletedRecord
+          backend_apikey: "APIKey"
+          backend_subscription: Subscription
+          backend_user: User
+          backend_organization: Organization
+          backend_access_level: AccessLevel
+          backend_organization_user: OrganizationUser
+          backend_difficulty_growth: DifficultyGrowth
+          backend_property: Property
+          backend_cache: Cache
+          backend_lock: Lock
+          backend_difficulty_growth_constant: DifficultyGrowthConstant
+          backend_difficulty_growth_slow: DifficultyGrowthSlow
+          backend_difficulty_growth_medium: DifficultyGrowthMedium
+          backend_difficulty_growth_fast: DifficultyGrowthFast
+          backend_access_level_member: AccessLevelMember
+          backend_access_level_invited: AccessLevelInvited
+          backend_access_level_owner: AccessLevelOwner
+          backend_system_notification: SystemNotification
+          backend_subscription_source: SubscriptionSource
+          backend_subscription_source_external: SubscriptionSourceExternal
+          backend_subscription_source_internal: SubscriptionSourceInternal
+        overrides:
+          - db_type: "pg_catalog.interval"
+            go_type: "time.Duration"
+          - db_type: "pg_catalog.interval"
+            # It seems like this could be the simpler `go_type: "*time.Duration"`, but
+            # that outputs double points like `**time.Duration` for reasons that are
+            # beyond me (bug?). The expanded version of `go_type` usage below works.
+            go_type:
+              import: "time"
+              type: "Duration"
+              pointer: true
+            nullable: true

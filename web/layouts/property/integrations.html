@@ -1,0 +1,115 @@
+<div>
+    <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
+            hx-target="#property-tabs"
+            hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-swap="innerHTML">
+            <option value="{{ $.Const.ReportsEndpoint }}">Reports</option>
+            <option value="{{ $.Const.IntegrationsEndpoint }}" selected>Integrations</option>
+            <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+        </select>
+    </div>
+    <div class="hidden sm:block">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <!-- Current: "border-pclime-500 text-pclime-600", Default: "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700" -->
+                <a href="#"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.ReportsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.ReportsEndpoint}}"
+                    hx-target="#property-tabs"
+                    hx-swap="innerHTML"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Reports</a>
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Integrations</a>
+                <a href="#"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.SettingsEndpoint}}"
+                    hx-target="#property-tabs"
+                    hx-swap="innerHTML"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<div class="mt-12 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <div class="divide-y divide-gray-200 overflow-hidden rounded-lg bg-gray-50 shadow">
+        <div class="px-4 py-5 sm:px-6">
+            <div class="-ml-4 -mt-4 flex flex-wrap items-center justify-between sm:flex-nowrap">
+                <div class="ml-4 mt-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <img class="h-12 w-12" src="{{$.Ctx.CDN}}/portal/img/html5.svg" alt="">
+                        </div>
+                        <div class="ml-4">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900">HTML/JS Snippet</h3>
+                            <p class="text-sm text-gray-500">
+                            Works with any web application
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex ml-4 mt-4 items-center">
+                    <a href="https://docs.privatecaptcha.com/docs/reference/widget-options" target="_blank" class="text-sm/6 font-semibold text-gray-900">Docs <span aria-hidden="true">&rarr;</span></a>
+                </div>
+            </div>
+        </div>
+        <div class="bg-gray-200 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
+            <div class="grow">
+                <code class="block rounded-md bg-gray-200 text-gray-800">
+                    <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this to the <head> of your website -->` }}
+{{ `<script async defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
+
+{{ `<!-- Add this to your form -->` }}
+{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
+                </code>
+            </div>
+            <div class="mt-4 sm:ml-6 sm:mt-0 sm:flex-shrink-0">
+                <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                    onclick="var textarea = document.getElementById('snippet'); textarea.focus(); textarea.select(); document.execCommand('copy');">
+                    Copy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-10">
+        <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
+            <div class="flex items-center justify-between">
+                <h2 class="text-base font-semibold leading-7 text-gray-900">Other integrations</h2>
+            </div>
+            <ul role="list" class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">
+                <li class="overflow-hidden rounded-xl border border-gray-200">
+                    <div class="flex items-center gap-x-4 border-b border-gray-900/5 bg-gray-50 p-6">
+                        <img src="{{$.Ctx.CDN}}/portal/img/wordpress.png" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
+                        <div class="text-sm font-medium leading-6 text-gray-900">WordPress</div>
+                        <div class="ml-auto">
+                            <span class="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming soon</span>
+                        </div>
+                    </div>
+                    <dl class="-my-3 x-6 py-4 text-sm leading-6">
+                        <div class="flex justify-between gap-x-4 py-3 px-6">
+                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50" disabled>Setup</button>
+                        </div>
+                    </dl>
+                </li>
+                <li class="overflow-hidden rounded-xl border border-gray-200">
+                    <div class="flex items-center gap-x-4 border-b border-gray-900/5 bg-gray-50 p-6">
+                        <img src="{{$.Ctx.CDN}}/portal/img/React.svg" alt="WordPress" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
+                        <div class="text-sm font-medium leading-6 text-gray-900">React</div>
+                        <div class="ml-auto">
+                            <span class="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming soon</span>
+                        </div>
+                    </div>
+                    <dl class="-my-3 x-6 py-4 text-sm leading-6">
+                        <div class="flex justify-between gap-x-4 py-3 px-6">
+                            <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50" disabled>Setup</button>
+                        </div>
+                    </dl>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>

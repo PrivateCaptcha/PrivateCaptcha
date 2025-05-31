@@ -1,0 +1,19 @@
+<div class="space-y-4">
+    <div>
+        <label for="{{ .Const.VerificationCode }}" class="pc-form-label"> Enter the code sent to <span class="italic">{{ .Params.Email }}</span> </label>
+        <div class="mt-2.5 relative">
+            {{- if .Params.Error -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="pc-form-input-base {{ if .Params.Error }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9]{6}" required />
+        </div>
+    </div>
+
+    <div class="relative flex items-center mt-4">
+        <div class="text-base" hx-target="this" hx-swap="innerHTML">
+            <p class="pc-form-text">{{ if .Params.Error }}<span class="pc-form-text-error">{{.Params.Error}}</span>{{ else }}Did not receive the code?{{ end }} <a hx-post='{{ relURL .Const.ResendEndpoint }}' href="#" title="" class="pc-form-link">Resend</a></p>
+        </div>
+    </div>
+</div>
+
+<button type="submit" class="pc-form-button"> Verify </button>

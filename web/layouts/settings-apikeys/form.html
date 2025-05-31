@@ -1,0 +1,41 @@
+<div id="apikeys-form" class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6 sm:flex-1 sm:flex">
+    <div class="sm:flex-1 sm:flex sm:items-start">
+        <div class="mt-3 text-center sm:mt-0 sm:text-left sm:flex-1">
+            <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">Create new API Key</h3>
+            <div class="mt-2">
+                <div class="space-y-4">
+                    <div>
+                        <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
+                        <div class="mt-2 relative">
+                            {{- if .Params.NameError -}}
+                            {{template "info-icon-red.html" .}}
+                            {{- end -}}
+                            <input type="text" name="{{ .Const.Name }}" placeholder="My API Key" maxlength="255" value="" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+                        </div>
+                        {{- if .Params.NameError -}}
+                        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+                        {{- end -}}
+                    </div>
+
+                    <div>
+                        <label for="{{ .Const.Months }}" class="pc-internal-form-label"> Expiration </label>
+                        <div class="mt-2">
+                            <select name="{{ .Const.Months }}" class="pc-internal-form-select">
+                                <option value="3">3 months</option>
+                                <option value="6">6 months</option>
+                                <option value="12" selected="selected">1 year</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
+        Create
+    </button>
+    <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary sm:w-auto" @click="createOpen = false">Cancel</button>
+</div>

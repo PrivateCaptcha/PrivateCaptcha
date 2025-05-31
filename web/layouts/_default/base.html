@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" class='{{block "html_class" .}}h-full{{end}}'>
+<head>
+    {{block "head" .}}
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{block "title" .}}{{end}} - Private Captcha</title>
+    <link rel="stylesheet" href="{{$.Ctx.CDN}}/portal/css/style.css">
+    <link rel="shortcut icon" type="image/png" href="{{$.Ctx.CDN}}/portal/img/favicon.png">
+    {{end}}
+    {{block "scripts" .}}{{template "default-scripts.html" .}}{{end}}
+</head>
+<body class='{{block "body_class" .}}h-full{{end}}' {{ if .Params.Token }}hx-headers='{"{{ .Const.HeaderCSRFToken }}": "{{ .Params.Token }}"}'{{ end }}>
+    {{block "header" .}}{{end}}
+    {{block "main" .}}{{end}}
+    {{block "footer" .}}{{end}}
+</body>
+</html>

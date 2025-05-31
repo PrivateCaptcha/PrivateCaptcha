@@ -1,0 +1,165 @@
+{{template "base.html" .}}
+
+{{define "title"}}Portal{{end}}
+
+{{define "html_class"}}h-full bg-gray-100{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
+{{define "footer"}}{{template "footer-signed-in" .}}{{end}}
+
+{{define "header"}}
+<div class="bg-pcteal-800 pb-32">
+    {{template "header-signed-in" .}}
+    <div class="py-10 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"
+        x-data="{open: false, orgID: '', orgName: '', toggle() { this.open = ! this.open } }"
+        x-init="orgID = '{{ .Params.CurrentOrg.ID }}'; orgName = '{{ .Params.CurrentOrg.Name }}'">
+        <div>
+            <nav class="sm:hidden" aria-label="Back">
+                <a href="javascript:history.back()" class="flex items-center text-sm font-medium text-gray-400 hover:text-gray-200">
+                    <svg class="-ml-1 mr-1 h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clip-rule="evenodd" />
+                    </svg>
+                    Back
+                </a>
+            </nav>
+            <nav class="hidden sm:flex" aria-label="Breadcrumb">
+                <ol role="list" class="flex items-center space-x-4">
+                    <li>
+                        <div class="flex">
+                            <a href="{{ relURL "/" }}" class="text-sm font-medium text-gray-400 hover:text-gray-200">
+                                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                                </svg>
+                            </a>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="flex items-center">
+                            <svg class="h-5 w-5 flex-shrink-0 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
+                            </svg>
+                            <span class="ml-4 text-sm font-medium text-gray-400" x-text="orgName"></span>
+                        </div>
+                    </li>
+                </ol>
+            </nav>
+        </div>
+        <div class="mt-2 md:flex md:items-center md:justify-between">
+            <div class="min-w-0 flex-1">
+                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">Dashboard</h2>
+            </div>
+            <div class="mt-4 flex md:ml-4 md:mt-0">
+                <div>
+                    <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="toggle()" x-show="open"></div>
+                    <label id="listbox-label" class="sr-only">Change selected organization</label>
+                    <div class="relative">
+                        <div class="inline-flex divide-x divide-white/20 rounded-md shadow-sm">
+                            <div class="inline-flex items-center gap-x-2.5 {{ if $.Platform.Enterprise }}rounded-l-md{{else}}rounded-md{{end}} bg-white/10 px-3 py-2 text-white shadow-sm">
+                                <svg class="-ml-0.5 w-5 h-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6" aria-hidden="true">
+  <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3.75h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Zm0 3h.008v.008h-.008v-.008Z" />
+</svg>
+                                <p class="text-sm font-semibold" x-text="orgName"></p>
+                            </div>
+                            {{ if $.Platform.Enterprise }}
+                            <button type="button" @click="toggle()" class="inline-flex items-center rounded-l-none rounded-r-md bg-white/10 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-white/20 focus:outline-none focus:ring-2 focus:ring-white/10 focus:ring-offset-2 focus:ring-offset-gray-800" aria-haspopup="listbox" aria-expanded="true" aria-labelledby="listbox-label">
+                                <span class="sr-only">Change selected organization</span>
+                                <svg class="h-5 w-5 text-white" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
+                            {{ end }}
+                        </div>
+
+                        <ul x-show="open"
+                            x-transition:leave="transition ease-in duration-100"
+                            x-transition:leave-start="opacity-100"
+                            x-transition:leave-end="opacity-0"
+                            class="absolute right-0 z-10 mt-2 w-72 origin-top-right divide-y divide-gray-200 overflow-hidden rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none" tabindex="-1" role="listbox" aria-labelledby="listbox-label">
+                            {{ range $org := .Params.Orgs }}
+                            {{ if eq $org.Level $.Const.OrgLevelInvited }}
+                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100" role="option" aria-hidden="true">
+                                <a href="{{ partsURL $.Const.OrgEndpoint $org.ID }}" class="inline-block cursor-default flex justify-between">
+                                    <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
+                                    <span
+                                        x-show="orgID == '{{ $org.ID }}'"
+                                        class="text-gray-900">
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </a>
+                            </li>
+                            {{ else }}
+                            <li class="group text-gray-900 cursor-default select-none p-4 text-sm hover:bg-gray-100" aria-hidden="true"
+                                @click="open = false; orgID = '{{ $org.ID }}'; orgName = '{{ $org.Name }}'"
+                                hx-target="#org-tabs"
+                                hx-swap="innerHTML"
+                                hx-trigger="click"
+                                hx-get="{{ partsURL $.Const.OrgEndpoint $org.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
+                                hx-replace-url="{{ partsURL $.Const.OrgEndpoint $org.ID }}"
+                                role="option">
+                                <div class="flex justify-between">
+                                    <p :class="orgID == '{{ $org.ID }}' ? 'font-semibold' : 'font-normal'">{{ $org.Name }}</p>
+                                    <span
+                                        x-show="orgID == '{{ $org.ID }}'"
+                                        class="text-gray-900">
+                                        <svg class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                            <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.05-.143z" clip-rule="evenodd" />
+                                        </svg>
+                                    </span>
+                                </div>
+                            </li>
+                            {{ end }}
+                            {{ end }}
+                            {{ if $.Platform.Enterprise }}
+                            <li class="group text-gray-900 cursor-default select-none text-sm hover:bg-gray-100" role="option" aria-hidden="true">
+                                <a
+                                    href="{{ partsURL $.Const.OrgEndpoint .Const.NewEndpoint }}"
+                                    class="inline-flex items-center justify-center leading-4 text-gray-900 w-full h-full p-4 cursor-default"
+                                    >
+                                    <svg class="w-4 h-4 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                    </svg>
+                                    Add New Organization
+                                </a>
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "main"}}
+<main class='-mt-32 flex flex-1'>
+    <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
+        <div class="rounded-lg bg-white shadow flex flex-1">
+            <div class="flex-1 flex px-12 pt-8 pb-12">
+                <div id="org-tabs" class="flex-1 flex flex-col">
+                    {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelInvited }}
+                    <div class="bg-gray-50 sm:rounded-lg mt-4">
+                        <div class="px-4 py-5 sm:p-6">
+                            <h3 class="text-base font-semibold leading-6 text-gray-900">Join {{ .Params.CurrentOrg.Name }}?</h3>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <p class="org-invite">You were invited to join organization <strong>{{ .Params.CurrentOrg.Name }}</strong>. Accepting the invite will grant you access to properties and settings.</p>
+                            </div>
+                            <div class="mt-5">
+                                <button type="button"
+                                    hx-put="{{ partsURL $.Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}"
+                                    class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50">Accept invite</button>
+                            </div>
+                        </div>
+                    </div>
+                    {{ else }}
+                    {{template "org-dashboard.html" .}}
+                    {{ end }}
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{{template "notification" .}}
+{{end}}

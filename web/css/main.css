@@ -1,0 +1,322 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.pc-form-link {
+    @apply font-bold;
+    @apply rounded;
+    @apply underline;
+    @apply hover:text-pclime-600;
+    @apply focus:outline-none;
+    @apply focus:text-pclime-900;
+}
+
+.pc-form-text {
+    @apply text-base;
+    @apply font-normal;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-text-error {
+    @apply text-red-500;
+}
+
+.pc-form-button {
+    @apply flex;
+    @apply items-center;
+    @apply justify-center;
+    @apply w-full;
+    @apply px-8;
+    @apply py-4;
+    @apply mt-8;
+    @apply text-base;
+    @apply font-bold;
+    @apply text-white;
+    @apply transition-all;
+    @apply duration-200;
+    @apply bg-pclime-600;
+    @apply border;
+    @apply border-transparent;
+    @apply rounded-xl;
+    @apply focus:outline-none;
+    @apply focus:ring-2;
+    @apply focus:ring-offset-2;
+    @apply focus:ring-pclime-600;
+    @apply font-sans;
+    @apply hover:bg-pclime-500;
+}
+
+.pc-internal-form-button {
+    @apply min-w-24;
+    @apply inline-flex;
+    @apply items-center;
+    @apply justify-center;
+    @apply px-4;
+    @apply py-2.5;
+    @apply text-sm;
+    @apply font-semibold;
+    @apply font-sans;
+    @apply transition-all;
+    @apply duration-200;
+    @apply border;
+    @apply border-transparent;
+    @apply rounded-md;
+    @apply focus:outline-none;
+    @apply focus:ring-2;
+    @apply focus:ring-offset-2;
+}
+
+.pc-internal-form-button-danger {
+    @apply bg-red-500;
+    @apply hover:bg-red-400;
+    @apply focus:ring-red-500;
+    @apply text-white;
+}
+
+.pc-internal-form-button-primary {
+    @apply bg-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply hover:bg-pclime-500;
+    @apply text-white;
+}
+
+.pc-internal-form-button-secondary {
+    @apply border-gray-300;
+    @apply bg-white;
+    @apply text-gray-600;
+    @apply focus:ring-gray-500;
+    @apply hover:bg-gray-50;
+    @apply hover:text-gray-900;
+}
+
+.pc-internal-form-button-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-100;
+    @apply disabled:text-gray-500;
+}
+
+.pc-internal-form-checkbox {
+    @apply appearance-none;
+    @apply rounded;
+    @apply border;
+    @apply border-gray-300;
+    @apply bg-white;
+    @apply checked:border-pclime-600;
+    @apply checked:bg-pclime-600;
+    @apply indeterminate:border-pclime-600;
+    @apply indeterminate:bg-pclime-600;
+    @apply focus-visible:outline;
+    @apply focus-visible:outline-2;
+    @apply focus-visible:outline-offset-2;
+    @apply focus-visible:outline-pclime-600;
+    @apply disabled:border-gray-300;
+    @apply disabled:bg-gray-100;
+    @apply disabled:checked:bg-gray-100;
+    @apply forced-colors:appearance-auto;
+}
+
+.pc-form-input-base {
+    @apply block;
+    @apply w-full;
+    @apply px-4;
+    @apply py-4;
+    @apply placeholder-gray-600;
+    @apply bg-white;
+    @apply border;
+    @apply rounded-xl;
+    @apply focus:outline-none;
+}
+
+.pc-internal-form-input-base {
+    @apply block;
+    @apply w-full;
+    @apply px-4;
+    @apply py-2.5;
+    @apply placeholder-gray-600;
+    @apply border;
+    @apply rounded-md;
+    @apply focus:outline-none;
+    @apply text-sm;
+}
+
+.pc-form-input-normal {
+    @apply border-gray-400;
+    @apply focus:border-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply focus:ring-2;
+    @apply caret-gray-900;
+}
+
+.pc-form-input-error {
+    @apply text-red-800;
+    @apply border-red-200;
+    @apply focus:border-red-500;
+    @apply focus:ring-red-500;
+    @apply focus:ring-2;
+    @apply caret-red-500;
+}
+
+.pc-form-input-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-50;
+    @apply disabled:text-gray-500;
+    @apply disabled:ring-gray-200;
+}
+
+h1.pc-form-caption {
+    @apply text-xl;
+    @apply font-bold;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+body.pc-vertical-stretch {
+    @apply flex;
+    @apply flex-col;
+    @apply min-h-screen;
+}
+
+.pc-form-error-text {
+    @apply mt-1;
+    @apply text-sm;
+    @apply font-medium;
+    @apply text-red-500;
+}
+
+.pc-form-label {
+    @apply text-base;
+    @apply font-medium;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-internal-form-label {
+    @apply text-sm;
+    @apply font-bold;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-checkbox-label {
+    @apply font-normal;
+    @apply text-gray-900;
+    @apply font-sans;
+}
+
+.pc-form-checkbox {
+    @apply w-5;
+    @apply h-5;
+    @apply text-gray-900;
+    @apply border-gray-300;
+    @apply rounded;
+    @apply focus:ring-gray-900;
+}
+
+.pc-dashboard-menu-button {
+    @apply text-gray-300;
+    @apply hover:bg-white/10;
+    @apply hover:text-white;
+    @apply rounded-md;
+    @apply px-3;
+    @apply py-2;
+    @apply text-sm;
+    @apply font-medium;
+    @apply focus:text-white;
+}
+
+.pc-dashboard-menu-button-current {
+    @apply bg-pcteal-900;
+    @apply text-white;
+}
+
+.pc-internal-form-select {
+    @apply bg-white;
+    @apply block;
+    @apply w-full;
+    @apply py-2.5;
+    @apply pl-4;
+    @apply pr-10;
+    @apply border;
+    @apply border-gray-400;
+    @apply rounded-lg;
+    @apply focus:border-pclime-600;
+    @apply focus:ring-pclime-600;
+    @apply focus:ring-2;
+    @apply sm:text-sm;
+}
+
+.pc-internal-form-select-disabled {
+    @apply disabled:cursor-not-allowed;
+    @apply disabled:bg-gray-100;
+    @apply disabled:text-gray-500;
+}
+
+.pc-hidden {
+    visibility: hidden;
+}
+
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+a:disabled,
+button[type=submit]:disabled,
+button[type=reset]:disabled,
+input[type=submit]:disabled,
+button[type=button]:disabled,
+input[type=button]:disabled {
+    cursor: not-allowed;
+}
+
+.tooltip {
+  @apply relative;
+  @apply cursor-help;
+  @apply border-dashed;
+  @apply border-b;
+  @apply border-gray-400;
+}
+
+.tooltip:before {
+  content: attr(data-tooltip); /* here's the magic */
+  position: absolute;
+
+  /* vertically center */
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+
+  /* move to right */
+  left: 100%;
+  @apply ml-5;
+
+  @apply max-w-64;
+  @apply w-max;
+
+  @apply px-3;
+  @apply py-2;
+  @apply rounded-md;
+  @apply bg-pcteal-900;
+  @apply text-white;
+
+  text-align: center;
+
+  display:none; /* hide by default */
+}
+
+.tooltip:hover:before {
+  display:block;
+}
+
+ul.htmx-swapping li {
+  opacity: 0;
+  transition: opacity 1s ease-out;
+}

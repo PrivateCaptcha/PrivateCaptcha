@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" class='{{block "html_class" .}}h-full bg-pcteal-900{{end}}'>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Captcha</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
+    <script src="/widget/js/privatecaptcha.js"></script>
+    <script type="text/javascript">
+        function onCaptchaSolved() {
+            var submitButton = document.querySelector('#formSubmit');
+            submitButton.disabled = false;
+        }
+        function onCaptchaStarted() {
+            console.log("Started callback called!");
+        }
+        function onCaptchaErrored() {
+            console.log("Errored callback called!");
+        }
+    </script>
+</head>
+<body class='h-full'>
+<div class="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
+  <div class="sm:mx-auto sm:w-full sm:max-w-sm">
+    <img class="mx-auto h-10 w-auto" src="https://tailwindui.com/plus/img/logos/mark.svg?color=indigo&shade=500" alt="Your Company">
+    <h2 class="mt-10 text-center text-2xl/9 font-bold tracking-tight text-white">Sign in to your account</h2>
+  </div>
+
+  <div class="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+    <form class="space-y-6" action="#" method="POST">
+      <div>
+        <label for="email" class="block text-sm/6 font-medium text-white">Email address</label>
+        <div class="mt-2">
+          <input type="email" name="email" id="email" autocomplete="email" required class="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6">
+        </div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between">
+          <label for="password" class="block text-sm/6 font-medium text-white">Password</label>
+          <div class="text-sm">
+            <a href="#" class="font-semibold text-indigo-400 hover:text-indigo-300">Forgot password?</a>
+          </div>
+        </div>
+        <div class="mt-2">
+          <input type="password" name="password" id="password" autocomplete="current-password" required class="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-500 sm:text-sm/6">
+        </div>
+      </div>
+
+      <div class="private-captcha"
+          data-sitekey="your-sitekey"
+          data-puzzle-endpoint="/puzzle"
+          data-started-callback="onCaptchaStarted" 
+          data-finished-callback="onCaptchaSolved"
+          data-errored-callback="onCaptchaErrored"
+          data-theme="dark"
+          {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
+          {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>
+      </div>
+
+      <div>
+        <button id="formSubmit" type="submit" class="flex w-full justify-center rounded-md bg-indigo-500 px-3 py-1.5 text-sm/6 font-semibold text-white shadow-sm hover:bg-indigo-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500">Sign in</button>
+      </div>
+    </form>
+
+    <p class="mt-10 text-center text-sm/6 text-gray-400">
+      Not a member?
+      <a href="#" class="font-semibold text-indigo-400 hover:text-indigo-300">Start a 14 day free trial</a>
+    </p>
+  </div>
+</div>
+</body>
+</html>

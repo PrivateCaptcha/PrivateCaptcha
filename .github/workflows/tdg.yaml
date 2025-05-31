@@ -1,0 +1,34 @@
+name: TODOs
+on:
+  push:
+    branches:
+    - '*'
+    paths-ignore:
+    - 'docs/**'
+    - '**.md'
+    - '**/.*.yml'
+    - '.vscode/**'
+    tags-ignore:
+    - '*.*'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: "!contains(github.event.head_commit.message, '[ci skip]')"
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Run tdg github action
+      uses: ribtoks/tdg-github-action@master
+      with:
+        TOKEN: ${{ secrets.TDG_TOKEN }}
+        REPO: ${{ github.repository }}
+        ISSUE_REPO: "PrivateCaptcha/issues"
+        SHA: ${{ github.sha }}
+        REF: ${{ github.ref }}
+        INCLUDE_PATTERN: "\\.(go|js|css)$"
+        EXCLUDE_PATTERN: "(vendor|node_modules)/.*"
+        COMMENT_ON_ISSUES: 1

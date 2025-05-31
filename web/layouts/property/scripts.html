@@ -1,0 +1,315 @@
+{{define "scripts"}}
+<script defer src="{{$.Ctx.CDN}}/portal/js/d3.v7.min.js" type="text/javascript" charset="utf-8"></script>
+<script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
+{{template "default-scripts.html" .}}
+
+<script>
+    function onDifficultyChange(rangeElement) {
+        const endpoint = '{{.Params.CaptchaEndpoint}}/' + rangeElement.value
+        demoWidget.onDifficultyChange(endpoint);
+    }
+
+    function onCaptchaReset() {
+        demoWidget.onCaptchaReset();
+    }
+
+    function chartComponent() {
+        // Declare 'chart' with 'let' to prevent it from being reactive in Alpine.js. 
+        let chart;
+
+        const yTicksCount = 7;
+        const maxBarWidth = 7;
+
+        const backgroundColor = '#e4e4e7';
+        const requestedColor = '#188B8B'; // pcteal-600
+        const verifiedColor = '#F45D5D'; //pcred-300
+        const grayColor = "#6b7280";
+
+        const weekdayFormat = d3.timeFormat("%a");
+        const monthlyFormat = d3.timeFormat("%b");
+        const monthDayFormat = d3.timeFormat("%e %b");
+
+        const monthlyTicks = (date, i) => {
+            var day = date.getDate();
+            var month = date.getMonth();
+            if ((day == 1) && (month == 0)) {
+                return date.getFullYear();
+            } else {
+                return monthlyFormat(date);
+            }
+        };
+
+        const hourlyTicks = function(date, i) {
+            var hour = date.getHours();
+            if (hour == 0) {
+                return weekdayFormat(date);
+            } else {
+                return hour;
+            }
+        };
+
+        const yTickFormat = function(d) {
+            if (d >= 1000000000) {
+                return (d / 1000000000) + 'B'; // For values in billions
+            } else if (d >= 1000000) {
+                return (d / 1000000) + 'M'; // For values in millions
+            } else if (d >= 1000) {
+                return (d / 1000) + 'K'; // For values in thousands
+            }
+            return d; // For values less than 1000
+        };
+
+        const periodLength = {
+            '24h': 1,
+            '7d': 7,
+            '30d': 30,
+            '1y': 365 
+        }
+
+        const oddTickFilter = function(d, i) { return !(i % 2); };
+        const evenTickFilter = function(d, i) { return (i % 2); };
+
+        const tickFilter = {
+            '24h': evenTickFilter,
+            '7d': evenTickFilter,
+            '30d': evenTickFilter,
+            '1y': oddTickFilter
+        }
+
+        const tickFunction = {
+            '24h': hourlyTicks,
+            '7d': hourlyTicks,
+            '30d': function(date, i) {
+                var day = date.getDate();
+                if (day == 1) {
+                    return monthlyFormat(date);
+                } else {
+                    return day;
+                }
+            },
+            '1y': monthlyTicks
+        };
+
+        const drawNoData = (element, xTickFunction, periodLengthDays) => {
+            const margin = {top: 20, right: 30, bottom: 60, left: 30};
+            const rect = element.getBoundingClientRect();
+
+            let width = rect.width - margin.left - margin.right;
+            let height = rect.height - margin.top - margin.bottom;
+
+            let d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
+
+            let svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            let chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            // Create x scale
+            let x = d3.scaleTime().range([0, width]);
+
+            x.domain([d3.timeDay.offset(new Date(), -periodLengthDays), new Date()]);
+
+            let xTickValues = x.domain().filter(function(d, i) { return !(i % 2); });
+
+            let xAxis = d3.axisBottom(x)
+                .tickValues(xTickValues)
+                .tickFormat(xTickFunction);
+
+            // Create y scale
+            let y = d3.scaleLinear().range([height, 0]);
+
+            // Create x axis
+            chartElement.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(x))
+                .style("color", backgroundColor)
+                .style("stroke-width", 2)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("color", "#000")
+                .attr("dx", "-.8em")
+                .attr("dy", "-.55em")
+                .attr("transform", "rotate(-90)" );
+
+            // Create y axis with horizontal gridlines
+            chartElement.append('g')
+                .call(d3.axisLeft(y).ticks(yTicksCount).tickSize(-width).tickFormat(''))
+                .style("color", backgroundColor)
+                .selectAll(".domain").remove();
+
+            chartElement.append("g")
+              .attr("transform", "translate(" + (width / 2 - 80) + "," + (height / 2 + 5) + ")")
+              .append("text")
+              .text("No data available")
+              .style("font-size", "20px")
+              .style("fill", grayColor);
+        }
+
+        const setBarAttributes = (bars, x, y, height, color, sign) => {
+            const barSpacing = 2;
+            bars.enter().append("rect")
+                .attr("class", "bar")
+                .attr("x", function(d) { 
+                    let barWidth = Math.min(x.bandwidth(), maxBarWidth) + sign*barSpacing/2;
+                    // Adjust the x position to center the bar over the tick
+                    return x(d.x) + (x.bandwidth() + sign*barWidth) / 2;
+                })
+                .attr("width", function() { return Math.min(x.bandwidth(), maxBarWidth) - barSpacing/2; })
+                .attr("y", function(d) { return y(d.y); })
+                .attr("height", function(d) { return d.y > 1e-6 ? height - y(d.y) : 0; })
+                .attr("rx", 3)
+                .attr("ry", 3)
+                .attr("fill", color)
+                .attr("opacity", 1)
+                .on("mouseover", function() { d3.select(this).attr("opacity", 0.8); })
+                .on("mouseout", function() { d3.select(this).attr("opacity", 1); })
+                .append("title").text(function(d) { return d.y; });
+        };
+
+        const setLegend = (legend, text, color) => {
+            // Add the legend color guide
+            legend.append("circle")
+                .attr("cx", -16)
+                .attr("cy", 0)
+                .attr("r", 6)
+                .style("fill", color);
+
+            // Add the legend text
+            legend.append("text")
+                .attr("x", 0)
+                .attr("y", 0)
+                .attr("dy", ".35em")
+                .text(text)
+                .attr("class", "textselected")
+                .style("text-anchor", "start")
+                .style("font-size", "14px");
+        };
+
+        const setChartData = (element, data, xTickFormat, xTickFilter) => {
+            const requested = data.requested;
+            const verified = data.verified;
+            // Convert unix timestamp to JavaScript Date object
+            requested.forEach(d => { d.x = new Date(d.x * 1000); });
+            verified.forEach(d => { d.x = new Date(d.x * 1000); });
+
+            const legendHeight = 50;
+            const margin = {top: 20, right: 30, bottom: 30, left: 30};
+            const rect = element.getBoundingClientRect();
+
+            const width = rect.width - margin.left - margin.right;
+            const height = rect.height - legendHeight - margin.top - margin.bottom;
+
+            let d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
+
+            let svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + legendHeight + margin.top + margin.bottom);
+
+            let chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            let x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
+            let y = d3.scaleLinear().range([height, 0]);
+
+            x.domain(requested.map(function(d) { return d.x; }));
+            // we will always have more or equal requested to verified?
+            const requestedMax = d3.max(requested, function(d) { return d.y; });
+            const verifiedMax = d3.max(verified, function(d) { return d.y; });
+            y.domain([0, Math.max(requestedMax, verifiedMax) * 1.2]);
+
+            // Filter the domain of the X scale to include only every other value
+            let xTickValues = x.domain().filter(xTickFilter);
+
+            let xAxis = d3.axisBottom(x)
+                .tickValues(xTickValues)
+                .tickFormat(xTickFormat);
+            let yAxis = d3.axisLeft(y).ticks(yTicksCount).tickFormat(yTickFormat).tickPadding(5);
+
+            // Add the grid lines
+            let yGrid = chartElement.append("g")
+                .attr("class", "grid")
+                .call(yAxis.tickSize(-width))
+                .style("color", backgroundColor);
+
+            yGrid.selectAll("text").style("color", grayColor);
+            yGrid.selectAll(".domain").remove();
+
+            // Append the rectangles for the bar chart
+            let barsRequested = chartElement.selectAll("bar-requested").data(requested);
+            setBarAttributes(barsRequested, x, y, height, requestedColor, -1);
+
+            let barsVerified = chartElement.selectAll("bar-verified").data(verified);
+            setBarAttributes(barsVerified, x, y, height, verifiedColor, 1);
+
+            // Add the x-axis
+            chartElement.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(xAxis)
+                .style("color", backgroundColor)
+                .style("stroke-width", 2)
+                .selectAll("text")
+                .style("text-anchor", "end")
+                .style("color", "#000")
+                .attr("dx", "-.8em")
+                .attr("dy", "-.55em")
+                .attr("transform", "rotate(-90)" );
+
+            const legendSpace = width/3;
+            const legendItemSize = 100;
+            const xAxisHeight = 30;
+
+            let legendParent = chartElement.append("g")
+                .attr("class", "legendParent")
+                .attr("transform", "translate(" + (width / 2 - legendItemSize) + "," + (xAxisHeight + height + legendHeight/2) + ")");
+
+            let legend1 = legendParent.append("g")
+                .attr("class", "legend-requested");
+            setLegend(legend1, 'Requested', requestedColor);
+
+            let legend2 = legendParent.append("g")
+                .attr("class", "legend-verified")
+                .attr("transform", "translate(" + (legendSpace - legendItemSize) + ",0)");
+            setLegend(legend2, 'Verified', verifiedColor);
+        }; 
+
+        return {
+            // https://d3js.org/d3-time-format#locale_format
+            isLoading: false,
+            period: '24h',
+            async init() {
+                this.updateChart('24h');
+            },
+            async fetchChartData(period) {
+                this.isLoading = true;
+                try {
+                    const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.Stats }}/' + period);
+                    return await response.json();
+                } catch (error) {
+                    console.error('Error fetching chart data:', error);
+                    return null;
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            async updateChart() {
+                const data = await this.fetchChartData(this.period);
+                if (data && data.verified && data.requested &&
+                    ((data.verified.length > 0) || (data.requested.length > 0))) {
+                    setChartData(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
+                } else {
+                    drawNoData(this.$refs.chart, tickFunction[this.period], periodLength[this.period]);
+                }
+            }
+        }
+    }
+</script>
+{{end}}

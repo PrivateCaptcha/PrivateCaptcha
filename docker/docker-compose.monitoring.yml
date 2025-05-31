@@ -1,0 +1,46 @@
+services:
+  server:
+    ports:
+      # this is the default Golang endpoint for pprof. In case of profiling, port 9090 conflicts with prometheus below
+      - 6060:6060
+    environment:
+      PC_LOCAL_ADDRESS: "0.0.0.0:6060"
+      PC_VERBOSE: ''
+      PC_RATE_LIMIT_HEADER: 'X-REAL-IP'
+    build:
+      args:
+        EXTRA_BUILD_FLAGS: '-tags profile -gcflags=all=-N'
+        GO_LDFLAGS: ''
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    pull_policy: if_not_present
+    depends_on:
+      - server
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - 9090:9090
+    networks:
+      - server_network
+      - prometheus_network
+
+  grafana:
+    image: grafana/grafana-oss:latest-ubuntu
+    pull_policy: if_not_present
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    networks:
+      - prometheus_network
+    volumes:
+      #- ./grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml
+      - ./grafana/dashboard_provider.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+
+networks:
+  prometheus_network:

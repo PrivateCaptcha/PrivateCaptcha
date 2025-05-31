@@ -1,0 +1,151 @@
+<div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:max-w-lg sm:grid-cols-6">
+    {{- if .Params.ErrorMessage -}}
+    <div class="col-span-full">
+        {{ template "error-message.html" .Params.ErrorMessage }}
+    </div>
+    {{- else if .Params.SuccessMessage -}}
+    <div class="col-span-full">
+        {{ template "success-message.html" .Params.SuccessMessage }}
+    </div>
+    {{- end -}}
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label" aria-label="Property name"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label" aria-label="Property domain"> Domain </label>
+        <div class="mt-2">
+            <input type="text" disabled name="{{ .Const.Domain }}" maxlength="255" value="{{ $.Params.Property.Domain }}" class="pc-internal-form-input-base pc-form-input-disabled" />
+        </div>
+
+        <div class="mt-2 flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input id="{{ .Const.AllowSubdomains }}" aria-describedby="{{ .Const.AllowSubdomains }}-description" name="{{ .Const.AllowSubdomains }}" type="checkbox" {{ if $.Params.Property.AllowSubdomains }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.AllowSubdomains }}" class="font-medium text-gray-900">Allow subdomains</label>
+                <span id="{{ .Const.AllowSubdomains }}-description" class="text-gray-500"><span class="sr-only">Allow subdomains </span>to access captcha widget</span>
+            </div>
+        </div>
+
+        <div class="mt-2 flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input id="{{ .Const.AllowLocalhost }}" aria-describedby="{{ .Const.AllowLocalhost }}-description" name="{{ .Const.AllowLocalhost }}" type="checkbox" {{ if $.Params.Property.AllowLocalhost }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.AllowLocalhost }}" class="font-medium text-gray-900">Allow localhost</label>
+                {{ if $.Params.Property.AllowLocalhost -}}
+                <span class="ml-3 inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Testing</span>
+                {{- else -}}
+                <span id="{{ .Const.AllowLocalhost }}-description" class="text-gray-500"><span class="sr-only">Allow localhost</span>for testing</span>
+                {{- end }}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-span-full">
+        <label for="{{ .Const.ValidityInterval }}" class="pc-internal-form-label tooltip" data-tooltip="Period during which a single captcha puzzle can be verified"> Verification window </label>
+        <div class="mt-2">
+            <select name="{{ .Const.ValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                <option value="0" {{ if eq $.Params.Property.ValidityInterval 0 }}selected="selected"{{end}}>1 hour</option>
+                <option value="1" {{ if eq $.Params.Property.ValidityInterval 1 }}selected="selected"{{end}}>6 hours</option>
+                <option value="2" {{ if eq $.Params.Property.ValidityInterval 2 }}selected="selected"{{end}}>12 hours</option>
+                <option value="3" {{ if eq $.Params.Property.ValidityInterval 3 }}selected="selected"{{end}}>1 day</option>
+                <option value="4" {{ if eq $.Params.Property.ValidityInterval 4 }}selected="selected"{{end}}>2 days</option>
+                <option value="4" {{ if eq $.Params.Property.ValidityInterval 5 }}selected="selected"{{end}}>1 week</option>
+            </select>
+        </div>
+
+        <div class="mt-2 flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input id="{{ .Const.AllowReplay }}" aria-describedby="{{ .Const.AllowReplay }}-description" name="{{ .Const.AllowReplay }}" type="checkbox" {{ if $.Params.Property.AllowReplay }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.AllowReplay }}" class="font-medium text-gray-900">Accept repeated solutions</label>
+                {{ if $.Params.Property.AllowReplay -}}
+                <span class="ml-3 inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Security trade-off</span>
+                {{- else -}}
+                <span id="{{ .Const.AllowReplay }}-description" class="text-gray-500"><span class="sr-only">Accept repeated solutions</span>during verification window</span>
+                {{- end }}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
+        <div class="mt-2">
+            <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Constant (no growth)</option>
+                <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Slow</option>
+                <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Normal</option>
+                <option value="3" {{ if eq $.Params.Property.Growth 3 }}selected="selected"{{end}}>Fast</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request"> Base difficulty </label>
+        <div class="mt-2">
+            <div class="flex flex-col space-y-2 py-2">
+                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-pclime-600" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" {{ if not .Params.CanEdit }}disabled{{ end }}/>
+                <datalist id="steplist" class="flex justify-evenly w-full">
+                    <option value="{{$.Params.EasyLevel}}" label="Easy" class="translate-x-1/2"></option>
+                    <option value="{{$.Params.NormalLevel}}" label="Normal"></option>
+                    <option value="{{$.Params.HardLevel}}" label="Hard" class="-translate-x-1/2"></option>
+                </datalist>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-span-full">
+        <div class="bg-pcslate-50 sm:rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-base font-semibold text-gray-900">Test widget here</h3>
+                <div class="mt-2 max-w-xl text-sm text-gray-500">
+                    <div class="private-captcha mt-2"
+                        data-sitekey="{{.Params.CaptchaSitekey}}"
+                        data-solution-field="{{.Params.CaptchaSolutionField}}"
+                        data-start-mode="click"
+                        data-finished-callback="onCaptchaReset"
+                        data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}/{{$.Params.Property.Level}}"
+                        data-styles="--border-radius: .375rem;"
+                        {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div class="mt-8 flex">
+    <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-primary{{ else }}pc-internal-form-button-disabled{{ end }}">Save</button>
+</div>

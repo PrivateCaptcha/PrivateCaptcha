@@ -1,0 +1,36 @@
+<div class="space-y-4">
+    <div>
+        <label for="emailInput" class="pc-form-label"> Email </label>
+        <div class="mt-2.5 relative">
+            {{- if .Params.EmailError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="email" id="emailInput" name="{{ .Const.Email }}" placeholder="Email address" autocomplete="on" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.EmailError -}}
+        <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
+        {{- end -}}
+    </div>
+</div>
+<input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
+
+<div class="private-captcha mt-8"
+    data-sitekey="{{.Params.CaptchaSitekey}}"
+    data-solution-field="{{.Params.CaptchaSolutionField}}"
+    data-start-mode="auto"
+    data-finished-callback="onCaptchaSolved"
+    data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
+    data-styles="--border-radius: .75rem;"
+    {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
+</div>
+{{- if .Params.CaptchaError -}}
+<p class="pc-form-error-text">{{ .Params.CaptchaError }}</p>
+{{- end -}}
+
+<button id="loginSubmit" type="submit" class="pc-form-button" disabled>
+    <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    Sign in
+</button>

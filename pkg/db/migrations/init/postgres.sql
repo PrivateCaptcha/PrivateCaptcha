@@ -1,0 +1,18 @@
+\c privatecaptcha;
+
+CREATE USER captchasrv WITH ENCRYPTED PASSWORD 'QMS0fJmTHS8Gzq';
+
+CREATE SCHEMA backend;
+
+REVOKE ALL ON SCHEMA backend FROM public;
+
+GRANT USAGE ON SCHEMA backend TO captchasrv;
+
+-- NOTE: it is assumed 'FOR ROLE current_user' when altering default privileges below
+-- same role must create tables and be schema owner
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO captchasrv;
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT USAGE, UPDATE ON SEQUENCES TO captchasrv;
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT EXECUTE ON ROUTINES TO captchasrv;
+ALTER DEFAULT PRIVILEGES IN SCHEMA backend GRANT USAGE ON TYPES TO captchasrv;
+
+ALTER USER captchasrv SET search_path TO backend;

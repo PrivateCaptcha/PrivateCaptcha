@@ -1,0 +1,42 @@
+name: eslint
+on:
+  push:
+    branches:
+    - '**'
+    paths:
+    - 'widget/js/**'
+    - '.github/workflows/eslint.yml'
+    # - 'web/js/**'
+    - '!node_modules/**'
+    - '!widget/node_modules/**'
+    - '!web/node_modules/**'
+    tags-ignore:
+    - '*'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  # pull-requests: read
+
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20.x'
+
+      - name: Install widget NPM dependencies
+        run: npm ci
+        working-directory: ./widget
+
+      - name: Run eslint for widget
+        run: npm run lint
+        working-directory: ./widget

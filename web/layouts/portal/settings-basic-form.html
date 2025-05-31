@@ -1,0 +1,28 @@
+<div class="grid grid-cols-1 gap-x-6 gap-y-8 sm:max-w-lg sm:grid-cols-6">
+    {{- if .Params.ErrorMessage -}}
+    <div class="col-span-full">
+        {{ template "error-message.html" .Params.ErrorMessage }}
+    </div>
+    {{- else if .Params.SuccessMessage -}}
+    <div class="col-span-full">
+        {{ template "success-message.html" .Params.SuccessMessage }}
+    </div>
+    {{- end -}}
+
+    <div class="col-span-full">
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label" aria-label="Organization name"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" maxlength="255" value="{{ $.Params.CurrentOrg.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+</div>
+
+<div class="mt-8 flex">
+    <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-primary{{ else }}pc-internal-form-button-disabled{{ end }}">Save</button>
+</div>

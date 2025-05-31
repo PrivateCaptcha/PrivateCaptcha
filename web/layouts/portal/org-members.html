@@ -1,0 +1,159 @@
+<div>
+    <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
+            hx-target="#org-tabs"
+            hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-swap="innerHTML">
+            <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            <option value="{{ $.Const.SettingsEndpoint }}" selected>Members</option>
+            <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+        </select>
+    </div>
+    <div class="hidden sm:block">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Members</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<div class="{{ if not $.Platform.Enterprise }}relative{{end}} h-full">
+    <div class="mx-auto max-w-lg mt-12 {{ if not $.Platform.Enterprise }}opacity-75{{end}}">
+        {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+        <div>
+            <div class="text-center">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 48 48" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M34 40h10v-4a6 6 0 00-10.712-3.714M34 40H14m20 0v-4a9.971 9.971 0 00-.712-3.714M14 40H4v-4a6 6 0 0110.713-3.714M14 40v-4c0-1.313.253-2.566.713-3.714m0 0A10.003 10.003 0 0124 26c4.21 0 7.813 2.602 9.288 6.286M30 14a6 6 0 11-12 0 6 6 0 0112 0zm12 6a4 4 0 11-8 0 4 4 0 018 0zm-28 0a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <h2 class="mt-2 text-base font-semibold leading-6 text-gray-900">Add team members</h2>
+                <p class="mt-1 text-sm text-gray-500">As the owner of this organization, you can manage team member permissions.</p>
+            </div>
+            <form
+                hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}'
+                hx-target="#org-tabs"
+                hx-swap="innerHTML"
+                hx-disabled-elt="input, button"
+                class="mt-6 flex">
+                <label for="{{ .Const.Email }}" class="sr-only">Email address</label>
+                <input type="email" name="{{ .Const.Email }}" class="w-full self-center pc-internal-form-input-base {{ if $.Platform.Enterprise }}pc-form-input-normal{{else}}pc-form-input-disabled{{end}}" placeholder="Enter an email" required>
+                <button type="submit" class="ml-4 flex-shrink-0 self-center pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-primary{{else}}pc-internal-form-button-disabled{{end}}" {{ if not $.Platform.Enterprise }}disabled{{end}}>Send invite</button>
+            </form>
+        </div>
+        {{- if .Params.ErrorMessage -}}
+        <div class="mt-4">
+            {{ template "error-message.html" .Params.ErrorMessage }}
+        </div>
+        {{- else if .Params.SuccessMessage -}}
+        <div class="mt-4">
+            {{ template "success-message.html" .Params.SuccessMessage }}
+        </div>
+        {{- end -}}
+        <div class="mt-10">
+            <h3 class="text-sm font-medium text-gray-500">Team members of this organization</h3>
+            <ul role="list" class="mt-4 divide-y divide-gray-200 border-b border-t border-gray-200"
+                hx-confirm="Are you sure?" hx-target="closest li" hx-swap="outerHTML swap:1s"
+                >
+                <li class="flex items-center justify-between space-x-3 py-4">
+                    <div class="flex min-w-0 flex-1 items-center space-x-3">
+                        <div class="flex-shrink-0 overflow-hidden rounded-full bg-gray-100">
+                            <svg class="h-10 w-10 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-gray-900">{{ .Ctx.UserName }}</p>
+                            <p class="truncate text-sm font-medium text-gray-500">That's you</p>
+                        </div>
+                    </div>
+                </li>
+                {{ range $member := .Params.Members }}
+                <li class="flex items-center justify-between space-x-3 py-4">
+                    <div class="flex min-w-0 flex-1 items-center space-x-3">
+                        <div class="flex-shrink-0 overflow-hidden rounded-full bg-gray-100">
+                            <svg class="h-10 w-10 text-gray-300" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="member-name truncate text-sm font-medium text-gray-900">{{ $member.Name }}</p>
+                            <p class="truncate text-sm font-medium text-gray-500">{{ if eq $member.Level "invited" }}Invited{{ else }}Added{{ end }} {{ $member.CreatedAt }}</p>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0">
+                        <button type="button"
+                            {{ if not $.Platform.Enterprise }}disabled{{ end }}
+                            class="inline-flex items-center gap-x-1.5 text-sm font-semibold leading-6 text-gray-900"
+                            hx-delete='{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.MembersEndpoint $member.ID }}'
+                            hx-disabled-elt="this">
+                            <svg class="h-5 w-5 text-gray-400" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
+                                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                            </svg>
+                            Remove <span class="sr-only">{{ $member.Name }}</span>
+                        </button>
+                    </div>
+                </li>
+                {{ end }}
+            </ul>
+        </div>
+        {{ else }}
+        <div class="rounded-md bg-yellow-50 p-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-yellow-800">Insufficient permissions</h3>
+                    <div class="mt-2 text-sm text-yellow-700">
+                        <p>You can only see organization members if you're the owner of this organization.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{ end }}
+    </div>
+    {{ if not $.Platform.Enterprise }}
+    <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-b-lg" aria-hidden="true"></div>
+
+    <div class="absolute inset-0 z-10">
+        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div class="relative transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6">
+                <div class="sm:flex sm:items-start">
+                    <div class="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-pcpalegreen sm:mx-0 sm:size-10">
+                        <svg class="size-6 text-pclime-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-6">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+                        </svg>
+                    </div>
+                    <div class="mt-3 text-center sm:ml-4 sm:mt-0 sm:text-left">
+                        <h3 class="text-base font-semibold text-gray-900" id="modal-title">Enterprise feature</h3>
+                        <div class="mt-2">
+                            <p class="text-sm text-gray-500">Organization management, including members, is only available in the enterprise edition of Private Captcha.</p>
+                        </div>
+                        <div class="mt-3 text-sm/6">
+                            <a href="https://privatecaptcha.com/self-hosted" class="font-semibold text-pclime-600 hover:text-pclime-500">
+                                Learn more about our Enterprise features
+                                <span aria-hidden="true"> &rarr;</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {{ end }}
+</div>

@@ -1,0 +1,69 @@
+<div class="space-y-4">
+    {{- if .Params.ErrorMessage -}}
+    {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- end -}}
+
+    <div>
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{.Params.Name}}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label"> Domain </label>
+        <div class="mt-2 relative">
+            {{- if .Params.DomainError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" maxlength="255" value="{{.Params.Domain}}" class="pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
+        </div>
+        {{- if .Params.DomainError -}}
+        <p class="pc-form-error-text">{{ .Params.DomainError }}</p>
+
+        <div class="mt-2 flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input id="{{ .Const.IgnoreError }}" aria-describedby="{{ .Const.IgnoreError }}-description" name="{{ .Const.IgnoreError }}" type="checkbox" class="col-start-1 row-start-1 pc-internal-form-checkbox">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.IgnoreError }}" class="font-medium text-gray-900">Ignore error</label>
+                <span id="{{ .Const.IgnoreError }}-description" class="text-gray-500"><span class="sr-only">Ignore error </span>and create property</span>
+            </div>
+        </div>
+        {{- end -}}
+    </div>
+</div>
+
+<div class="flex items-center justify-end mt-6 space-x-6">
+    <button
+        type="reset"
+        action="action"
+        onclick="window.history.go(-1); return false;"
+        class="pc-internal-form-button pc-internal-form-button-secondary"
+    >
+        Cancel
+    </button>
+
+    <button
+        type="submit"
+        class="pc-internal-form-button pc-internal-form-button-primary"
+    >
+    <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+        Create
+    </button>
+</div>

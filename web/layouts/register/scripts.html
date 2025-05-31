@@ -1,0 +1,12 @@
+{{define "scripts"}}
+{{template "default-scripts.html" .}}
+<script defer src="{{$.Ctx.CDN}}/widget/js/privatecaptcha.js" type="text/javascript" charset="utf-8"></script>
+<script>
+    function onCaptchaSolved() {
+        var submitButton = document.querySelector('#registerSubmit');
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
+    }
+</script>
+{{end}}

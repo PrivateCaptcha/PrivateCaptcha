@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en" class='{{block "html_class" .}}h-full{{end}}'>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Captcha</title>
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="shortcut icon" type="image/png" href="/assets/img/favicon.png">
+    <script src="/widget/js/privatecaptcha.js"></script>
+    <script type="text/javascript">
+        function onCaptchaSolved() {
+            var submitButton = document.querySelector('#formSubmit');
+            submitButton.disabled = false;
+        }
+        function onCaptchaStarted() {
+            console.log("Started callback called!");
+        }
+        function onCaptchaErrored() {
+            console.log("Errored callback called!");
+        }
+    </script>
+</head>
+<body class='h-full pc-vertical-stretch'>
+<div class="flex flex-1 flex-col justify-center px-6 lg:px-8 bg-gray-50">
+    <section class="-mt-20">
+        <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+            <div class="relative max-w-md mx-auto lg:max-w-lg">
+                <div class="relative overflow-hidden bg-gray-50 shadow-xl rounded-xl">
+                    <div class="px-4 py-6 sm:px-8">
+                        <div class="flex items-center justify-between">
+                            <h1 class="pc-form-caption">Sample form</h1>
+                        </div>
+                        <form action='/submit' method="POST" class="mt-12">
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="email" class="pc-form-label"> Email </label>
+                                    <div class="mt-2.5 relative">
+                                        <input type="email" name="email" placeholder="Email address" class="pc-form-input-base pc-form-input-normal" required />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="private-captcha mt-8"
+                                data-sitekey="your-sitekey"
+                                data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle"
+                                data-started-callback="onCaptchaStarted" 
+                                data-finished-callback="onCaptchaSolved"
+                                data-errored-callback="onCaptchaErrored"
+                                data-styles="--border-radius: .75rem; font-size: 16px; --extra-spacing: 8px; display: block; height: 100%;"
+                                data-display-mode="widget"
+                                data-debug="true"
+                                {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
+                                {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>
+                            </div>
+                            <button id="formSubmit" type="submit" class="pc-form-button" disabled>
+                                Submit
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+</body>
+</html>

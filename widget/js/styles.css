@@ -1,0 +1,270 @@
+@layer base, theme, custom;
+
+@layer base {
+    :host,
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            border: 0 solid;
+        }
+
+    :host {
+        --extra-spacing: 0px;
+        --label-spacing: 0.625rem;
+        --border-radius: 0.125rem;
+        --warn-color: #A70B0B;
+        --accent-color: #009400;
+
+        min-width: 0;
+        font-size: 1rem;
+        display: inline-block; /* Switch to "block" to stretch */
+        max-width: 100%; /* Prevent exceeding parent */
+        border-radius: var(--border-radius);
+    }
+
+    :host(.hidden) {
+        display: none;
+    }
+
+    :host(.floating) {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        transform: translate(0, -100%);
+        z-index: 1000;
+    }
+
+    @media (min-width: 30em) {
+        :host {
+            min-width: 20em;
+        }
+    }
+}
+
+@layer theme {
+    :host([theme="light"]) {
+        --dark-color: #070113;
+        --gray-color: #E0E0E0;
+        --pie-color: #D8E9E9;
+        --background-color: #fff;
+        --checkbox-background-color: #FFF;
+        --checkbox-hover-color: #EBF4F4;
+    }
+
+    :host([theme="dark"]) {
+        --dark-color: #EBF4F4;
+        --gray-color: #656C7B;
+        --pie-color: #376262;
+        --background-color: #041616;
+        --checkbox-background-color: #223C3C;
+        --checkbox-hover-color: #1C3232;
+    }
+}
+
+.pc-captcha-widget {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    padding: 0.75em 1em;
+    border: 1px solid var(--gray-color);
+    border-radius: var(--border-radius);
+    background-color: var(--background-color);
+    box-sizing: border-box;
+    width: 100%; /* Fill the host element */
+    height: 100%; /* Fill the host element */
+}
+
+.pc-interactive-area {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    position: relative;
+    min-width: 0;
+    /*font-size: 1em;*/
+}
+
+.pc-interactive-area label {
+    padding-left: var(--label-spacing);
+    color: var(--dark-color);
+    flex: 0 1 auto;
+    min-width: 1em;
+    white-space: normal;
+}
+
+.pc-interactive-area input[type="checkbox"] {
+    font-size: 1em;
+    width: 2em;
+    height: 2em;
+    /* 2px (RING_SIZE - checkbox.dimension)/2 */
+    margin: 0 0 0 calc(0.125em + var(--extra-spacing));
+    appearance: none;
+    background-color: var(--checkbox-background-color);
+    border: 0.125em solid var(--dark-color);
+    border-radius: 0.25em;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.pc-interactive-area input[type="checkbox"]+label {
+    /* 2px (RING_SIZE - checkbox.dimension)/2 */
+    padding: 0 0 0 calc(0.125em + var(--extra-spacing) + var(--label-spacing));
+}
+
+@keyframes colorChange {
+    0%, 100% { border-color: var(--dark-color); }
+    50% { border-color: var(--gray-color); }
+}
+
+.pc-interactive-area input[type="checkbox"].loading {
+    animation: colorChange 2s infinite;
+    animation-timing-function: ease-in-out;
+    background-color: var(--checkbox-hover-color);
+    cursor: default;
+}
+
+.pc-interactive-area input[type="checkbox"].ready {
+    background-color: var(--checkbox-background-color);
+    border-color: var(--dark-color);
+    cursor: pointer;
+}
+
+.pc-interactive-area input[type="checkbox"].invalid {
+    background-color: var(--checkbox-hover-color);
+    border-color: var(--gray-color);
+    cursor: not-allowed;
+}
+
+.pc-interactive-area input[type="checkbox"]:not(.invalid):hover {
+    background-color: var(--checkbox-hover-color);
+    border-color: var(--accent-color);
+}
+
+.pc-interactive-area input[type="checkbox"].invalid:hover + label {
+    cursor: not-allowed;
+}
+
+.pc-interactive-area input[type="checkbox"]:not(.invalid):hover + label {
+    cursor: pointer;
+    /* color: var(--dark-color); /* Highlight the text */
+}
+
+@keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }
+@keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }
+@keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }
+@-webkit-keyframes dots-1 { from { opacity: 0; } 25% { opacity: 1; } }
+@-webkit-keyframes dots-2 { from { opacity: 0; } 50% { opacity: 1; } }
+@-webkit-keyframes dots-3 { from { opacity: 0; } 75% { opacity: 1; } }
+
+.pc-interactive-area .dots span {
+    animation: dots-1 2s infinite steps(1);
+    -webkit-animation: dots-1 2s infinite steps(1);
+}
+
+.pc-interactive-area .dots span:first-child + span {
+    animation-name: dots-2;
+    -webkit-animation-name: dots-2;
+}
+
+ .pc-interactive-area .dots span:first-child + span + span {
+    animation-name: dots-3;
+    -webkit-animation-name: dots-3;
+}
+
+#pc-progress {
+    display: flex;
+    justify-content: center;
+    margin: 0 0 0 var(--extra-spacing);
+    flex-shrink: 0;
+}
+
+#pc-progress+label {
+    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
+}
+
+.pc-spacer {
+    flex-basis: 0;
+    flex-shrink: 1;
+    flex-grow: 1;
+    width: 4em;
+    min-width: 0;
+}
+
+.pc-info {
+    display: flex;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /*2px here is just for "backward consistency"*/
+    margin-right: calc(0.125em + var(--extra-spacing));
+    color: var(--dark-color);
+}
+
+.pc-info svg {
+    width: auto;
+    height: 3.125em;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+a.pc-link {
+    margin-top: 5px;
+    text-decoration: none;
+    color: currentcolor;
+    text-align: center;
+    font-size: 0.55em;
+    text-transform: uppercase;
+    font-weight: 700;
+    line-height: 1.1em;
+}
+
+a.pc-link:hover {
+    text-decoration: underline;
+}
+
+@keyframes checkmark {
+    0% {
+        stroke-dashoffset: 100px
+    }
+    100% {
+        stroke-dashoffset: 0px
+    }
+}
+
+svg.verified {
+    margin: 0 0 0 var(--extra-spacing);
+    flex-shrink: 0;
+    width: 2.25em;
+    height: 2.25em;
+}
+
+svg.verified+label {
+    padding: 0 0 0 calc(var(--extra-spacing) + var(--label-spacing));
+}
+
+/* tick mark */
+svg.verified polyline {
+    animation: checkmark 0.35s ease-in-out 0.1s backwards;
+    stroke: #F2F2F2;
+}
+
+svg.verified circle {
+    fill: var(--accent-color);
+}
+
+#pc-debug {
+    font-size: 0.75em;
+    color: var(--gray-color);
+    position: absolute;
+    top: 100%;
+    left: calc(2em + 1em + 2*0.125em + 2*var(--extra-spacing) + var(--label-spacing));
+    cursor: default;
+}
+
+#pc-debug.warn {
+    color: var(--warn-color);
+}

@@ -1,0 +1,24 @@
+<aside class="flex overflow-x-auto border-b border-gray-900/5 py-4 lg:block lg:w-64 lg:flex-none lg:border-0 lg:py-20">
+    <nav class="flex-none px-4 sm:px-6 lg:px-0">
+        <ul role="list" class="flex gap-x-3 gap-y-1 whitespace-nowrap lg:flex-col">
+            {{- range .Params.Tabs }}
+            <li>
+                <!-- Current: "bg-gray-50 text-pclime-600", Default: "text-gray-700 hover:text-pclime-600 hover:bg-gray-50" -->
+                <a href="#"
+                    {{ if (not .IsActive) -}}
+                    hx-get="{{ partsURL $.Const.SettingsEndpoint $.Const.TabEndpoint .ID }}"
+                    hx-push-url="{{ partsURL $.Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{.ID}}"
+                    hx-target="#settings"
+                    hx-swap="innerHTML"
+                    {{- end }}
+                    class="{{if .IsActive}}bg-pcslate-50 text-pclime-600{{else}}text-gray-700 hover:text-pclime-600 hover:bg-gray-50{{end}} group flex gap-x-3 rounded-md py-2 pl-2 pr-3 text-sm leading-6 font-semibold">
+                    <span class="{{if .IsActive}}text-pclime-600{{else}}text-gray-400 group-hover:text-pclime-600{{end}}">
+                        {{ include .IconTemplate }}
+                    </span>
+                    {{.Name}}
+                </a>
+            </li>
+            {{ end -}}
+        </ul>
+    </nav>
+</aside>
