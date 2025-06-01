@@ -24,19 +24,16 @@ const (
 	userIDLabel              = "user_id"
 	stubLabel                = "stub"
 	resultLabel              = "result"
-	clickhouseLabel          = "clickhouse"
-	postgresLabel            = "postgres"
-	statusUp                 = "up"
-	statusDown               = "down"
 )
 
 type Service struct {
-	Registry         *prometheus.Registry
-	fineMiddleware   middleware.Middleware
-	coarseMiddleware middleware.Middleware
-	puzzleCount      *prometheus.CounterVec
-	verifyCount      *prometheus.CounterVec
-	healthGauge      *prometheus.GaugeVec
+	Registry              *prometheus.Registry
+	fineMiddleware        middleware.Middleware
+	coarseMiddleware      middleware.Middleware
+	puzzleCount           *prometheus.CounterVec
+	verifyCount           *prometheus.CounterVec
+	clickhouseHealthGauge *prometheus.GaugeVec
+	postgresHealthGauge   *prometheus.GaugeVec
 }
 
 var _ common.Metrics = (*Service)(nil)
@@ -97,16 +94,27 @@ func NewService() *Service {
 	)
 	reg.MustRegister(verifyCount)
 
-	healthGauge := prometheus.NewGaugeVec(
+	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: platformMetricsSubsystem,
-			Name:      "health",
-			Help:      "Health status of components",
+			Name:      "clickhouse_health",
+			Help:      "Health status of ClickHouse",
 		},
-		[]string{postgresLabel, clickhouseLabel},
+		[]string{},
 	)
-	reg.MustRegister(healthGauge)
+	reg.MustRegister(clickhouseHealthGauge)
+
+	postgresHealthGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: MetricsNamespace,
+			Subsystem: platformMetricsSubsystem,
+			Name:      "postgres_health",
+			Help:      "Health status of Postgres",
+		},
+		[]string{},
+	)
+	reg.MustRegister(postgresHealthGauge)
 
 	return &Service{
 		Registry: reg,
@@ -132,9 +140,10 @@ func NewService() *Service {
 				DurationBuckets: []float64{.05, .1, .5, 1, 2.5},
 			}),
 		}),
-		puzzleCount: puzzleCount,
-		verifyCount: verifyCount,
-		healthGauge: healthGauge,
+		puzzleCount:           puzzleCount,
+		verifyCount:           verifyCount,
+		clickhouseHealthGauge: clickhouseHealthGauge,
+		postgresHealthGauge:   postgresHealthGauge,
 	}
 }
 
@@ -175,28 +184,21 @@ func (s *Service) ObservePuzzleVerified(userID int32, result string, isStub bool
 
 func (s *Service) ObserveHealth(postgres, clickhouse bool) {
 	var chVal, pgVal float64
-	var chStatus, pgStatus string
 
 	if postgres {
 		pgVal = 1
-		pgStatus = statusUp
 	} else {
 		pgVal = 0
-		pgStatus = statusDown
 	}
 
 	if clickhouse {
 		chVal = 1
-		chStatus = statusUp
 	} else {
 		chVal = 0
-		chStatus = statusDown
 	}
 
-	s.healthGauge.With(prometheus.Labels{
-		clickhouseLabel: chStatus,
-		postgresLabel:   pgStatus,
-	}).Set((chVal + pgVal) / 2)
+	s.postgresHealthGauge.With(prometheus.Labels{}).Set(pgVal)
+	s.clickhouseHealthGauge.With(prometheus.Labels{}).Set(chVal)
 }
 
 func (s *Service) Setup(mux *http.ServeMux) {
