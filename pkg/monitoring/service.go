@@ -98,7 +98,7 @@ func NewService() *Service {
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: platformMetricsSubsystem,
-			Name:      "clickhouse_health",
+			Name:      "health_clickhouse",
 			Help:      "Health status of ClickHouse",
 		},
 		[]string{},
@@ -109,7 +109,7 @@ func NewService() *Service {
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespace,
 			Subsystem: platformMetricsSubsystem,
-			Name:      "postgres_health",
+			Name:      "health_postgres",
 			Help:      "Health status of Postgres",
 		},
 		[]string{},
