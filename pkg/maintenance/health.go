@@ -20,7 +20,7 @@ type HealthCheckJob struct {
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
 	CheckInterval    common.ConfigItem
-	Metrics          common.Metrics
+	Metrics          common.PlatformMetrics
 	StrictReadiness  bool
 }
 

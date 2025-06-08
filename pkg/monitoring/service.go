@@ -18,7 +18,10 @@ import (
 )
 
 const (
-	MetricsNamespace         = "server"
+	MetricsNamespaceServer   = "server"
+	MetricsNamespaceAPI      = "api"
+	MetricsNamespaceCDN      = "cdn"
+	MetricsNamespacePortal   = "portal"
 	puzzleMetricsSubsystem   = "puzzle"
 	platformMetricsSubsystem = "platform"
 	userIDLabel              = "user_id"
@@ -27,16 +30,20 @@ const (
 )
 
 type Service struct {
-	Registry              *prometheus.Registry
-	fineMiddleware        middleware.Middleware
-	coarseMiddleware      middleware.Middleware
-	puzzleCount           *prometheus.CounterVec
-	verifyCount           *prometheus.CounterVec
-	clickhouseHealthGauge *prometheus.GaugeVec
-	postgresHealthGauge   *prometheus.GaugeVec
+	Registry               *prometheus.Registry
+	fineAPIMiddleware      middleware.Middleware
+	finePortalMiddleware   middleware.Middleware
+	coarseServerMiddleware middleware.Middleware
+	coarseCDNMiddleware    middleware.Middleware
+	puzzleCount            *prometheus.CounterVec
+	verifyCount            *prometheus.CounterVec
+	clickhouseHealthGauge  *prometheus.GaugeVec
+	postgresHealthGauge    *prometheus.GaugeVec
 }
 
-var _ common.Metrics = (*Service)(nil)
+var _ common.PlatformMetrics = (*Service)(nil)
+var _ common.APIMetrics = (*Service)(nil)
+var _ common.PortalMetrics = (*Service)(nil)
 
 func traceID() string {
 	return xid.New().String()
@@ -74,7 +81,7 @@ func NewService() *Service {
 
 	puzzleCount := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: MetricsNamespace,
+			Namespace: MetricsNamespaceAPI,
 			Subsystem: puzzleMetricsSubsystem,
 			Name:      "create_total",
 			Help:      "Total number of puzzles created",
@@ -85,7 +92,7 @@ func NewService() *Service {
 
 	verifyCount := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: MetricsNamespace,
+			Namespace: MetricsNamespaceAPI,
 			Subsystem: puzzleMetricsSubsystem,
 			Name:      "verify_total",
 			Help:      "Total number of puzzle verifications",
@@ -96,7 +103,7 @@ func NewService() *Service {
 
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: MetricsNamespace,
+			Namespace: MetricsNamespaceServer,
 			Subsystem: platformMetricsSubsystem,
 			Name:      "health_clickhouse",
 			Help:      "Health status of ClickHouse",
@@ -107,7 +114,7 @@ func NewService() *Service {
 
 	postgresHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: MetricsNamespace,
+			Namespace: MetricsNamespaceServer,
 			Subsystem: platformMetricsSubsystem,
 			Name:      "health_postgres",
 			Help:      "Health status of Postgres",
@@ -116,29 +123,47 @@ func NewService() *Service {
 	)
 	reg.MustRegister(postgresHealthGauge)
 
+	fineRecorder := prometheus_metrics.NewRecorder(prometheus_metrics.Config{
+		Prefix:          "fine",
+		Registry:        reg,
+		DurationBuckets: []float64{.05, .1, .25, .5, 1, 2.5},
+	})
+
+	coarseRecorder := prometheus_metrics.NewRecorder(prometheus_metrics.Config{
+		Prefix:          "coarse",
+		Registry:        reg,
+		DurationBuckets: []float64{.05, .1, .5, 1, 2.5},
+	})
+
 	return &Service{
 		Registry: reg,
-		fineMiddleware: middleware.New(middleware.Config{
+		fineAPIMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:            MetricsNamespace,
+			Service:            MetricsNamespaceAPI,
 			DisableMeasureSize: true,
-			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
-				Prefix:          "fine",
-				Registry:        reg,
-				DurationBuckets: []float64{.05, .1, .25, .5, 1, 2.5},
-			}),
+			Recorder:           fineRecorder,
 		}),
-		coarseMiddleware: middleware.New(middleware.Config{
+		finePortalMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:                MetricsNamespace,
+			Service:            MetricsNamespacePortal,
+			DisableMeasureSize: true,
+			Recorder:           fineRecorder,
+		}),
+		coarseServerMiddleware: middleware.New(middleware.Config{
+			// this is added as Service label
+			Service:                MetricsNamespaceServer,
 			GroupedStatus:          true,
 			DisableMeasureSize:     true,
 			DisableMeasureInflight: true,
-			Recorder: prometheus_metrics.NewRecorder(prometheus_metrics.Config{
-				Prefix:          "coarse",
-				Registry:        reg,
-				DurationBuckets: []float64{.05, .1, .5, 1, 2.5},
-			}),
+			Recorder:               coarseRecorder,
+		}),
+		coarseCDNMiddleware: middleware.New(middleware.Config{
+			// this is added as Service label
+			Service:                MetricsNamespaceCDN,
+			GroupedStatus:          true,
+			DisableMeasureSize:     true,
+			DisableMeasureInflight: true,
+			Recorder:               coarseRecorder,
 		}),
 		puzzleCount:           puzzleCount,
 		verifyCount:           verifyCount,
@@ -147,24 +172,25 @@ func NewService() *Service {
 	}
 }
 
+// this belongs only to APIMetrics interface (at this time)
 func (s *Service) Handler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
-	return std.Handler("", s.fineMiddleware, h)
+	return std.Handler("", s.fineAPIMiddleware, h)
 }
 
 func (s *Service) CDNHandler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
-	return std.Handler("", s.coarseMiddleware, h)
+	return std.Handler("", s.coarseCDNMiddleware, h)
 }
 
 func (s *Service) IgnoredHandler(h http.Handler) http.Handler {
-	return std.Handler("_ignored", s.coarseMiddleware, h)
+	return std.Handler("_ignored", s.coarseServerMiddleware, h)
 }
 
-func (s *Service) HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
+func (s *Service) HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		handlerID := handlerIDFunc()
-		return std.Handler(handlerID, s.fineMiddleware, h)
+		return std.Handler(handlerID, s.finePortalMiddleware, h)
 	}
 }
 

@@ -6,6 +6,7 @@ services:
     environment:
       PC_LOCAL_ADDRESS: "0.0.0.0:6060"
       PC_VERBOSE: ''
+      # Comment out rate limit header for local hacking (not profiling)
       PC_RATE_LIMIT_HEADER: 'X-REAL-IP'
     build:
       args:
@@ -25,7 +26,7 @@ services:
       - 9090:9090
     networks:
       - server_network
-      - prometheus_network
+      - monitoring_network
 
   grafana:
     image: grafana/grafana-oss:latest-ubuntu
@@ -35,7 +36,7 @@ services:
     ports:
       - 3000:3000
     networks:
-      - prometheus_network
+      - monitoring_network
     volumes:
       #- ./grafana/grafana.ini:/etc/grafana/grafana.ini
       - ./grafana/datasource.yml:/etc/grafana/provisioning/datasources/prometheus.yml
@@ -43,4 +44,4 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
 
 networks:
-  prometheus_network:
+  monitoring_network:

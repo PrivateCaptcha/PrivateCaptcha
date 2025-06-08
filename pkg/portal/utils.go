@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/http"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -19,6 +20,43 @@ const (
 // NOTE: this will eventually be replaced by proper OTP
 func twoFactorCode() int {
 	return rand.Intn(900000) + 100000
+}
+
+// RouteGenerator's point is to passthrough the path correctly to the std.Handler() of slok/go-http-metrics
+// the whole magic can break if for some reason Go will not evaluate result of Route() before calling Alice's Then()
+// when calling router.Handle() in setupWithPrefix()
+type RouteGenerator struct {
+	Prefix string
+	Path   string
+}
+
+func (rg *RouteGenerator) Route(method string, parts ...string) string {
+	rg.Path = strings.Join(parts, "/")
+	result := method + " " + rg.Prefix + rg.Path
+	return result
+}
+
+func (rg *RouteGenerator) Get(parts ...string) string {
+	return rg.Route(http.MethodGet, parts...)
+}
+
+func (rg *RouteGenerator) Post(parts ...string) string {
+	return rg.Route(http.MethodPost, parts...)
+}
+
+func (rg *RouteGenerator) Put(parts ...string) string {
+	return rg.Route(http.MethodPut, parts...)
+}
+
+func (rg *RouteGenerator) Delete(parts ...string) string {
+	return rg.Route(http.MethodDelete, parts...)
+}
+
+func (rg *RouteGenerator) LastPath() string {
+	result := rg.Path
+	// side-effect: this will cause go http metrics handler to use handlerID based on request Path
+	rg.Path = ""
+	return result
 }
 
 func (s *Server) Org(userID int32, r *http.Request) (*dbgen.Organization, error) {

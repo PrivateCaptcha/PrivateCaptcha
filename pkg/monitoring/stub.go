@@ -12,12 +12,14 @@ func NewStub() *stubMetrics {
 	return &stubMetrics{}
 }
 
-var _ common.Metrics = (*stubMetrics)(nil)
+var _ common.PlatformMetrics = (*Service)(nil)
+var _ common.APIMetrics = (*Service)(nil)
+var _ common.PortalMetrics = (*Service)(nil)
 
 func (sm *stubMetrics) Handler(h http.Handler) http.Handler {
 	return h
 }
-func (sm *stubMetrics) HandlerFunc(func() string) func(http.Handler) http.Handler {
+func (sm *stubMetrics) HandlerIDFunc(func() string) func(http.Handler) http.Handler {
 	return common.NoopMiddleware
 }
 

@@ -43,10 +43,16 @@ type TimeSeriesStore interface {
 	DeleteUsersData(ctx context.Context, userIDs []int32) error
 }
 
-type Metrics interface {
+type PlatformMetrics interface {
+	ObserveHealth(postgres, clickhouse bool)
+}
+
+type APIMetrics interface {
 	Handler(h http.Handler) http.Handler
-	HandlerFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
 	ObservePuzzleCreated(userID int32)
 	ObservePuzzleVerified(userID int32, result string, isStub bool)
-	ObserveHealth(postgres, clickhouse bool)
+}
+
+type PortalMetrics interface {
+	HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
 }

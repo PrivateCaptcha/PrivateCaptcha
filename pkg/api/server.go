@@ -53,7 +53,7 @@ type Server struct {
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
 	Cors               *cors.Cors
-	Metrics            common.Metrics
+	Metrics            common.APIMetrics
 	Mailer             common.Mailer
 	TestPuzzleData     *puzzle.PuzzlePayload
 }

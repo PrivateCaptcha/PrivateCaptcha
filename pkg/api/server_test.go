@@ -27,7 +27,6 @@ var (
 	timeSeries *db.TimeSeriesDB
 	store      *db.BusinessStore
 	testPlan   billing.Plan
-	metrics    common.Metrics
 )
 
 const (
@@ -73,7 +72,7 @@ func TestMain(m *testing.M) {
 
 	store = db.NewBusinessEx(pool, cache)
 
-	metrics = monitoring.NewStub()
+	metrics := monitoring.NewStub()
 
 	planService := billing.NewPlanService(nil)
 	testPlan = planService.GetInternalTrialPlan()

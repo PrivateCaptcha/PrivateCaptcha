@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 )
 
 func TestReadyEndpoint(t *testing.T) {
@@ -17,7 +18,7 @@ func TestReadyEndpoint(t *testing.T) {
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:   store,
 		TimeSeriesDB: timeSeries,
-		Metrics:      metrics,
+		Metrics:      monitoring.NewStub(),
 	}
 
 	if err := healthCheck.RunOnce(context.TODO()); err != nil {
