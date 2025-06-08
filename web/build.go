@@ -23,6 +23,7 @@ func Static() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
 		common.WriteHeaders(w, common.CachedHeaders)
+		common.WriteHeaders(w, common.SecurityHeaders)
 		srv.ServeHTTP(w, r)
 	}
 }
