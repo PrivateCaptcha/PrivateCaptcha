@@ -150,7 +150,8 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 
 	out, err := s.RenderResponse(ctx, name, data, reqCtx)
 	if err == nil {
-		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+		common.WriteHeaders(w, common.SecurityHeaders)
+		common.WriteHeaders(w, common.HtmlContentHeaders)
 		w.WriteHeader(http.StatusOK)
 		if _, werr := out.WriteTo(w); werr != nil {
 			slog.ErrorContext(ctx, "Failed to write response", common.ErrAttr(werr))

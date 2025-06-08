@@ -31,6 +31,13 @@ var (
 	CachedHeaders = map[string][]string{
 		http.CanonicalHeaderKey("Cache-Control"): []string{"public, max-age=86400"},
 	}
+	SecurityHeaders = map[string][]string{
+		http.CanonicalHeaderKey("X-Frame-Options"):        []string{"DENY"},
+		http.CanonicalHeaderKey("X-Content-Type-Options"): []string{"nosniff"},
+	}
+	HtmlContentHeaders = map[string][]string{
+		http.CanonicalHeaderKey(HeaderContentType): []string{ContentTypeHTML},
+	}
 )
 
 func NoopMiddleware(next http.Handler) http.Handler {

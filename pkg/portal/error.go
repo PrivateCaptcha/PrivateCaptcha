@@ -66,7 +66,8 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 	var out bytes.Buffer
 	err := s.template.Render(ctx, &out, errorTemplate, actualData)
 	if err == nil {
-		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+		common.WriteHeaders(w, common.HtmlContentHeaders)
+		common.WriteHeaders(w, common.SecurityHeaders)
 		common.WriteHeaders(w, common.CachedHeaders)
 		w.WriteHeader(code)
 		if _, werr := out.WriteTo(w); werr != nil {
