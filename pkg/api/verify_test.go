@@ -20,9 +20,9 @@ import (
 )
 
 func TestSerializeResponse(t *testing.T) {
-	v := verifyResponseRecaptchaV3{
-		verifyResponseRecaptchaV2: verifyResponseRecaptchaV2{
-			verifyResponse: verifyResponse{
+	v := VerifyResponseRecaptchaV3{
+		VerifyResponseRecaptchaV2: VerifyResponseRecaptchaV2{
+			VerifyResponse: VerifyResponse{
 				Success:    false,
 				ErrorCodes: []string{puzzle.VerifyErrorOther.String()},
 			},
@@ -145,7 +145,7 @@ func checkVerifyError(resp *http.Response, expected puzzle.VerifyError) error {
 		return err
 	}
 
-	response := &verifyResponse{}
+	response := &VerifyResponse{}
 	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return err

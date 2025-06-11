@@ -71,19 +71,19 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context) (int32, error) {
 	return apiKey.UserID.Int32, nil
 }
 
-type verifyResponse struct {
+type VerifyResponse struct {
 	Success    bool     `json:"success"`
 	ErrorCodes []string `json:"error-codes,omitempty"`
 }
 
-type verifyResponseRecaptchaV2 struct {
-	verifyResponse
+type VerifyResponseRecaptchaV2 struct {
+	VerifyResponse
 	ChallengeTS common.JSONTime `json:"challenge_ts"`
 	Hostname    string          `json:"hostname"`
 }
 
-type verifyResponseRecaptchaV3 struct {
-	verifyResponseRecaptchaV2
+type VerifyResponseRecaptchaV3 struct {
+	VerifyResponseRecaptchaV2
 	Score  float64 `json:"score"`
 	Action string  `json:"action"`
 }
@@ -335,8 +335,8 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 		errorCodes = append(errorCodes, verr)
 	}
 
-	vr2 := &verifyResponseRecaptchaV2{
-		verifyResponse: verifyResponse{
+	vr2 := &VerifyResponseRecaptchaV2{
+		VerifyResponse: VerifyResponse{
 			Success: (verr == puzzle.VerifyNoError) ||
 				(verr == puzzle.MaintenanceModeError) ||
 				(verr == puzzle.TestPropertyError),
@@ -357,8 +357,8 @@ func (s *Server) verifyHandler(w http.ResponseWriter, r *http.Request) {
 
 	recaptchaCompatVersion := r.Header.Get(common.HeaderCaptchaCompat)
 	if recaptchaCompatVersion == "rcV3" {
-		result = &verifyResponseRecaptchaV3{
-			verifyResponseRecaptchaV2: *vr2,
+		result = &VerifyResponseRecaptchaV3{
+			VerifyResponseRecaptchaV2: *vr2,
 			Action:                    "",
 			Score:                     0.5,
 		}
