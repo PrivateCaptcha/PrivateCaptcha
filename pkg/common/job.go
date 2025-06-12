@@ -54,18 +54,18 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 		}
 	}()
 
-	jlog.DebugContext(ctx, "Starting periodic job", "interval", j.Interval().String())
-
-	interval := j.Interval()
-	jitter := j.Jitter()
+	jlog.DebugContext(ctx, "Starting periodic job")
 
 	for running := true; running; {
+		interval := j.Interval()
+		jitter := j.Jitter()
+
 		select {
 		case <-ctx.Done():
 			running = false
 			// introduction of jitter is supposed to help in case we have multiple workers to distribute the load
 		case <-time.After(interval + time.Duration(randv2.Int64N(int64(jitter)))):
-			jlog.Log(ctx, LevelTrace, "Running periodic job once")
+			jlog.Log(ctx, LevelTrace, "Running periodic job once", "interval", interval.String(), "jitter", jitter.String())
 			_ = j.RunOnce(ctx)
 		}
 	}
