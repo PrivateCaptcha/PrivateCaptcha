@@ -17,7 +17,7 @@ require (
 	github.com/maypok86/otter/v2 v2.0.0-20250616223213-73ec080fc790
 	github.com/prometheus/client_golang v1.20.5
 	github.com/realclientip/realclientip-go v1.0.0
-	github.com/rs/cors v1.11.0
+	github.com/rs/cors v1.11.1
 	github.com/rs/xid v1.5.0
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/tsenart/vegeta/v12 v12.12.0

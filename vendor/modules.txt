@@ -171,7 +171,7 @@ github.com/prometheus/procfs/internal/util
 # github.com/realclientip/realclientip-go v1.0.0
 ## explicit; go 1.13
 github.com/realclientip/realclientip-go
-# github.com/rs/cors v1.11.0
+# github.com/rs/cors v1.11.1
 ## explicit; go 1.13
 github.com/rs/cors
 github.com/rs/cors/internal
