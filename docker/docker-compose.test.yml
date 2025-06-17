@@ -96,7 +96,7 @@ services:
       - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.8.7-alpine
+    image: clickhouse/clickhouse-server:24.12.6-alpine
     pull_policy: if_not_present
     environment:
       CLICKHOUSE_DB: privatecaptcha
