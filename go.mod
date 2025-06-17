@@ -9,7 +9,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/badoux/checkmail v1.2.4
 	github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
-	github.com/golang-migrate/migrate/v4 v4.17.0
+	github.com/golang-migrate/migrate/v4 v4.18.3
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0

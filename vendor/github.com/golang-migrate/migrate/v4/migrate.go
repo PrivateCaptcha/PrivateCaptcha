@@ -89,25 +89,25 @@ func New(sourceURL, databaseURL string) (*Migrate, error) {
 
 	sourceName, err := iurl.SchemeFromURL(sourceURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse scheme from source URL: %w", err)
 	}
 	m.sourceName = sourceName
 
 	databaseName, err := iurl.SchemeFromURL(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse scheme from database URL: %w", err)
 	}
 	m.databaseName = databaseName
 
 	sourceDrv, err := source.Open(sourceURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open source, %q: %w", sourceURL, err)
 	}
 	m.sourceDrv = sourceDrv
 
 	databaseDrv, err := database.Open(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	m.databaseDrv = databaseDrv
 
@@ -131,7 +131,7 @@ func NewWithDatabaseInstance(sourceURL string, databaseName string, databaseInst
 
 	sourceDrv, err := source.Open(sourceURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open source, %q: %w", sourceURL, err)
 	}
 	m.sourceDrv = sourceDrv
 
@@ -149,7 +149,7 @@ func NewWithSourceInstance(sourceName string, sourceInstance source.Driver, data
 
 	databaseName, err := iurl.SchemeFromURL(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse scheme from database URL: %w", err)
 	}
 	m.databaseName = databaseName
 
@@ -157,7 +157,7 @@ func NewWithSourceInstance(sourceName string, sourceInstance source.Driver, data
 
 	databaseDrv, err := database.Open(databaseURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 	m.databaseDrv = databaseDrv
 
@@ -526,7 +526,7 @@ func (m *Migrate) read(from int, to int, ret chan<- interface{}) {
 	}
 }
 
-// readUp reads up migrations from `from` limitted by `limit`.
+// readUp reads up migrations from `from` limited by `limit`.
 // limit can be -1, implying no limit and reading until there are no more migrations.
 // Each migration is then written to the ret channel.
 // If an error occurs during reading, that error is written to the ret channel, too.
@@ -626,7 +626,7 @@ func (m *Migrate) readUp(from int, limit int, ret chan<- interface{}) {
 	}
 }
 
-// readDown reads down migrations from `from` limitted by `limit`.
+// readDown reads down migrations from `from` limited by `limit`.
 // limit can be -1, implying no limit and reading until there are no more migrations.
 // Each migration is then written to the ret channel.
 // If an error occurs during reading, that error is written to the ret channel, too.
