@@ -18,7 +18,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/realclientip/realclientip-go v1.0.0
 	github.com/rs/cors v1.11.1
-	github.com/rs/xid v1.5.0
+	github.com/rs/xid v1.6.0
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/tsenart/vegeta/v12 v12.12.0
 	golang.org/x/crypto v0.36.0
