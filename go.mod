@@ -14,16 +14,16 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
 	github.com/justinas/alice v1.2.0
-	github.com/maypok86/otter/v2 v2.0.0-20250616223213-73ec080fc790
+	github.com/maypok86/otter/v2 v2.0.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/realclientip/realclientip-go v1.0.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/xid v1.6.0
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/tsenart/vegeta/v12 v12.12.0
-	golang.org/x/crypto v0.36.0
-	golang.org/x/net v0.38.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/crypto v0.39.0
+	golang.org/x/net v0.41.0
+	golang.org/x/sync v0.15.0
 )
 
 require (
@@ -58,7 +58,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.26.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df // indirect
