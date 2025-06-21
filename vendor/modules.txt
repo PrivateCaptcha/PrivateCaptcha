@@ -14,14 +14,14 @@ github.com/ClickHouse/clickhouse-go/v2/lib/driver
 github.com/ClickHouse/clickhouse-go/v2/lib/proto
 github.com/ClickHouse/clickhouse-go/v2/lib/timezone
 github.com/ClickHouse/clickhouse-go/v2/resources
-# github.com/PuerkitoBio/goquery v1.9.2
-## explicit; go 1.18
+# github.com/PuerkitoBio/goquery v1.10.3
+## explicit; go 1.23.0
 github.com/PuerkitoBio/goquery
 # github.com/andybalholm/brotli v1.1.1
 ## explicit; go 1.13
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
-# github.com/andybalholm/cascadia v1.3.2
+# github.com/andybalholm/cascadia v1.3.3
 ## explicit; go 1.16
 github.com/andybalholm/cascadia
 # github.com/badoux/checkmail v1.2.4

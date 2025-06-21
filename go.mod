@@ -6,7 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.37.1
-	github.com/PuerkitoBio/goquery v1.9.2
+	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/badoux/checkmail v1.2.4
 	github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
 	github.com/golang-migrate/migrate/v4 v4.18.3
@@ -29,7 +29,7 @@ require (
 require (
 	github.com/ClickHouse/ch-go v0.66.0 // indirect
 	github.com/andybalholm/brotli v1.1.1 // indirect
-	github.com/andybalholm/cascadia v1.3.2 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
