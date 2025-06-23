@@ -14,7 +14,7 @@ services:
         GO_LDFLAGS: ''
 
   prometheus:
-    image: prom/prometheus:v2.55.1
+    image: prom/prometheus:v3.4.1
     pull_policy: if_not_present
     depends_on:
       - server
