@@ -227,7 +227,7 @@ func (am *AuthMiddleware) backfillUsersImpl(ctx context.Context, batch map[int32
 	}
 
 	// TODO: Refactor linear fetching of API keys to use batch mode
-	// we do it linearly instead of in a batch with the asumption that most of these will be cached
+	// we do it linearly instead of in a batch with the assumption that most of these will be cached
 	// (to be verified in metrics)
 	// but we can use another SQL query and also BulkGet API of otter (postponed as benefit is not obvious _atm_)
 	// also the same is in WarmupAPICacheJob (maintenance)
