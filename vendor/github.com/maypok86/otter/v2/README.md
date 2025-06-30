@@ -4,7 +4,7 @@
 </p>
 
 <p align="center">
-<a href="https://pkg.go.dev/github.com/maypok86/otter"><img src="https://pkg.go.dev/badge/github.com/maypok86/otter.svg" alt="Go Reference"></a>
+<a href="https://pkg.go.dev/github.com/maypok86/otter/v2"><img src="https://pkg.go.dev/badge/github.com/maypok86/otter/v2.svg" alt="Go Reference"></a>
 <img src="https://github.com/maypok86/otter/actions/workflows/test.yml/badge.svg" />
 <a href="https://github.com/maypok86/otter/actions?query=branch%3Amain+workflow%3ATest" >
     <img src="https://gist.githubusercontent.com/maypok86/2aae2cd39836dc7c258df7ffec602d1c/raw/coverage.svg"/></a>
@@ -34,7 +34,7 @@ Otter is designed to provide an excellent developer experience while maintaining
 
 Performance-wise, Otter provides:
 
-- [High hit rates](https://maypok86.github.io/otter/performance/hit-ratio/) across all workload types via adaptive W-TinyLFU
+- [High hit rates](https://maypok86.github.io/otter/performance/hit-ratio/) across all workload types via [adaptive W-TinyLFU](https://dl.acm.org/citation.cfm?id=3274816)
 - [Excellent throughput](https://maypok86.github.io/otter/performance/throughput/) under high contention on most workload types
 - Among the lowest [memory overheads](https://maypok86.github.io/otter/performance/memory-consumption/) across all cache capacities
 - Automatic data structures configuration based on contention/parallelism and workload patterns
@@ -42,10 +42,12 @@ Performance-wise, Otter provides:
 Otter also provides a highly configurable caching API, enabling any combination of these optional features:
 
 - Size-based [eviction](https://maypok86.github.io/otter/user-guide/v2/features/eviction/#size-based) when a maximum is exceeded
-- Time-based [expiration](https://maypok86.github.io/otter/user-guide/v2/features/eviction/#time-based) of entries (using [Hierarchical Timing Wheel](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)), measured since last access or last write
+- Time-based [expiration](https://maypok86.github.io/otter/user-guide/v2/features/eviction/#time-based) of entries, measured since last access or last write
 - [Automatic loading](https://maypok86.github.io/otter/user-guide/v2/features/loading/) of entries into the cache
 - [Asynchronously refresh](https://maypok86.github.io/otter/user-guide/v2/features/refresh/) when the first stale request for an entry occurs
+- [Writes propagated](https://maypok86.github.io/otter/user-guide/v2/features/compute/) to an external resource
 -  Accumulation of cache access [statistics](https://maypok86.github.io/otter/user-guide/v2/features/statistics/)
+- [Saving cache](https://maypok86.github.io/otter/user-guide/v2/features/persistence/) to a file and loading cache from a file
 
 ## 📚 Usage <a id="usage" />
 
@@ -125,16 +127,13 @@ func main() {
 
     // Phase 2: Test cache stampede protection
     // --------------------------------------
-    loader := otter.LoaderFunc[string, string](func(ctx context.Context, key string) (string, error) {
-        if key != "key" {
-            panic("incorrect key")  // Validate key
-        }
+    loader := func(ctx context.Context, key string) (string, error) {
         time.Sleep(200 * time.Millisecond)  // Simulate slow load
         return "value1", nil  // Return new value
-    })
+    }
 
     // Concurrent Gets would deduplicate loader calls
-    value, err := cache.Get(ctx, "key", loader)
+    value, err := cache.Get(ctx, "key", otter.LoaderFunc[string, string](loader))
     if err != nil {
         panic(err)
     }
@@ -148,15 +147,12 @@ func main() {
 
     // New loader that returns updated value
     loader = func(ctx context.Context, key string) (string, error) {
-        if key != "key" {
-            panic("incorrect key")
-        }
         time.Sleep(100 * time.Millisecond)  // Simulate refresh
         return "value2", nil  // Return refreshed value
     }
 
     // This triggers async refresh but returns current value
-    value, err = cache.Get(ctx, "key", loader)
+    value, err = cache.Get(ctx, "key", otter.LoaderFunc[string, string](loader))
     if err != nil {
         panic(err)
     }
@@ -221,7 +217,7 @@ Otter is based on the following papers:
 - [TinyLFU: A Highly Efficient Cache Admission Policy](https://dl.acm.org/citation.cfm?id=3149371)
 - [Adaptive Software Cache Management](https://dl.acm.org/citation.cfm?id=3274816)
 - [Denial of Service via Algorithmic Complexity Attack](https://www.usenix.org/legacy/events/sec03/tech/full_papers/crosby/crosby.pdf)
-- [Hashed and Hierarchical Timing Wheels](http://www.cs.columbia.edu/~nahum/w6998/papers/ton97-timing-wheels.pdf)
+- [Hashed and Hierarchical Timing Wheels](https://ieeexplore.ieee.org/document/650142)
 - [A large scale analysis of hundreds of in-memory cache clusters at Twitter](https://www.usenix.org/system/files/osdi20-yang.pdf)
 
 ## 👏 Contribute <a id="contribute" />

@@ -126,6 +126,8 @@ github.com/maypok86/otter/v2 v2.0.0-20250616223213-73ec080fc790 h1:omxwgqzRsRWJp
 github.com/maypok86/otter/v2 v2.0.0-20250616223213-73ec080fc790/go.mod h1:jX2xEKz9PrNVbDqnk8JUuOt5kURK8h7jd1kDYI5QsZk=
 github.com/maypok86/otter/v2 v2.0.0 h1:t+A6nUOQJZTRAQpDGltBKZBcRDjFfLBPTxEZGFfh48A=
 github.com/maypok86/otter/v2 v2.0.0/go.mod h1:jX2xEKz9PrNVbDqnk8JUuOt5kURK8h7jd1kDYI5QsZk=
+github.com/maypok86/otter/v2 v2.1.0 h1:H+FO9NtLuSWYUlIUQ/kT6VNEpWSIF4w4GZJRDhxYb7k=
+github.com/maypok86/otter/v2 v2.1.0/go.mod h1:jX2xEKz9PrNVbDqnk8JUuOt5kURK8h7jd1kDYI5QsZk=
 github.com/moby/docker-image-spec v1.3.1 h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0=
 github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
 github.com/moby/term v0.5.0 h1:xt8Q1nalod/v7BqbG21f8mQPqH+xAaC9C3N3wfWbVP0=

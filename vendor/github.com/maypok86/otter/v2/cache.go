@@ -21,6 +21,37 @@ import (
 	"time"
 )
 
+// ComputeOp tells the Compute methods what to do.
+type ComputeOp int
+
+const (
+	// CancelOp signals to Compute to not do anything as a result
+	// of executing the lambda. If the entry was not present in
+	// the map, nothing happens, and if it was present, the
+	// returned value is ignored.
+	CancelOp ComputeOp = iota
+	// WriteOp signals to Compute to update the entry to the
+	// value returned by the lambda, creating it if necessary.
+	WriteOp
+	// InvalidateOp signals to Compute to always discard the entry
+	// from the cache.
+	InvalidateOp
+)
+
+var computeOpStrings = []string{
+	"CancelOp",
+	"WriteOp",
+	"InvalidateOp",
+}
+
+// String implements [fmt.Stringer] interface.
+func (co ComputeOp) String() string {
+	if co >= 0 && int(co) < len(computeOpStrings) {
+		return computeOpStrings[co]
+	}
+	return "<unknown otter.ComputeOp>"
+}
+
 // Cache is an in-memory cache implementation that supports full concurrency of retrievals and multiple ways to bound the cache.
 type Cache[K comparable, V any] struct {
 	cache *cache[K, V]
@@ -100,6 +131,86 @@ func (c *Cache[K, V]) SetIfAbsent(key K, value V) (V, bool) {
 	return c.cache.SetIfAbsent(key, value)
 }
 
+// Compute either sets the computed new value for the key,
+// invalidates the value for the key, or does nothing, based on
+// the returned [ComputeOp]. When the op returned by remappingFunc
+// is [WriteOp], the value is updated to the new value. If
+// it is [InvalidateOp], the entry is removed from the cache
+// altogether. And finally, if the op is [CancelOp] then the
+// entry is left as-is. In other words, if it did not already
+// exist, it is not created, and if it did exist, it is not
+// updated. This is useful to synchronously execute some
+// operation on the value without incurring the cost of
+// updating the cache every time.
+//
+// The ok result indicates whether the entry is present in the cache after the compute operation.
+// The actualValue result contains the value of the cache
+// if a corresponding entry is present, or the zero value
+// otherwise. You can think of these results as equivalent to regular key-value lookups in a map.
+//
+// This call locks a hash table bucket while the compute function
+// is executed. It means that modifications on other entries in
+// the bucket will be blocked until the remappingFunc executes. Consider
+// this when the function includes long-running operations.
+func (c *Cache[K, V]) Compute(
+	key K,
+	remappingFunc func(oldValue V, found bool) (newValue V, op ComputeOp),
+) (actualValue V, ok bool) {
+	return c.cache.Compute(key, remappingFunc)
+}
+
+// ComputeIfAbsent returns the existing value for the key if
+// present. Otherwise, it tries to compute the value using the
+// provided function. If mappingFunc returns true as the cancel value, the computation is cancelled and the zero value
+// for type V is returned.
+//
+// The ok result indicates whether the entry is present in the cache after the compute operation.
+// The actualValue result contains the value of the cache
+// if a corresponding entry is present, or the zero value
+// otherwise. You can think of these results as equivalent to regular key-value lookups in a map.
+//
+// This call locks a hash table bucket while the compute function
+// is executed. It means that modifications on other entries in
+// the bucket will be blocked until the valueFn executes. Consider
+// this when the function includes long-running operations.
+func (c *Cache[K, V]) ComputeIfAbsent(
+	key K,
+	mappingFunc func() (newValue V, cancel bool),
+) (actualValue V, ok bool) {
+	return c.cache.ComputeIfAbsent(key, mappingFunc)
+}
+
+// ComputeIfPresent returns the zero value for type V if the key is not found.
+// Otherwise, it tries to compute the value using the provided function.
+//
+// ComputeIfPresent either sets the computed new value for the key,
+// invalidates the value for the key, or does nothing, based on
+// the returned [ComputeOp]. When the op returned by remappingFunc
+// is [WriteOp], the value is updated to the new value. If
+// it is [InvalidateOp], the entry is removed from the cache
+// altogether. And finally, if the op is [CancelOp] then the
+// entry is left as-is. In other words, if it did not already
+// exist, it is not created, and if it did exist, it is not
+// updated. This is useful to synchronously execute some
+// operation on the value without incurring the cost of
+// updating the cache every time.
+//
+// The ok result indicates whether the entry is present in the cache after the compute operation.
+// The actualValue result contains the value of the cache
+// if a corresponding entry is present, or the zero value
+// otherwise. You can think of these results as equivalent to regular key-value lookups in a map.
+//
+// This call locks a hash table bucket while the compute function
+// is executed. It means that modifications on other entries in
+// the bucket will be blocked until the valueFn executes. Consider
+// this when the function includes long-running operations.
+func (c *Cache[K, V]) ComputeIfPresent(
+	key K,
+	remappingFunc func(oldValue V) (newValue V, op ComputeOp),
+) (actualValue V, ok bool) {
+	return c.cache.ComputeIfPresent(key, remappingFunc)
+}
+
 // SetExpiresAfter specifies that the entry should be automatically removed from the cache once the duration has
 // elapsed. The expiration policy determines when the entry's age is reset.
 func (c *Cache[K, V]) SetExpiresAfter(key K, expiresAfter time.Duration) {
@@ -124,6 +235,10 @@ func (c *Cache[K, V]) SetRefreshableAfter(key K, refreshableAfter time.Duration)
 //
 // No observable state associated with this cache is modified until loading completes.
 //
+// WARNING: When performing a refresh (see [RefreshCalculator]),
+// the [Loader] will receive a context wrapped in [context.WithoutCancel].
+// If you need to control refresh cancellation, you can use closures or values stored in the context.
+//
 // WARNING: [Loader] must not attempt to update any mappings of this cache directly.
 //
 // WARNING: For any given key, every loader used with it should compute the same value.
@@ -145,6 +260,10 @@ func (c *Cache[K, V]) Get(ctx context.Context, key K, loader Loader[K, V]) (V, e
 // No observable state associated with this cache is modified until loading completes.
 //
 // NOTE: duplicate elements in keys will be ignored.
+//
+// WARNING: When performing a refresh (see [RefreshCalculator]),
+// the [BulkLoader] will receive a context wrapped in [context.WithoutCancel].
+// If you need to control refresh cancellation, you can use closures or values stored in the context.
 //
 // WARNING: [BulkLoader] must not attempt to update any mappings of this cache directly.
 //
@@ -169,6 +288,10 @@ func (c *Cache[K, V]) BulkGet(ctx context.Context, keys []K, bulkLoader BulkLoad
 // Loading is asynchronous by delegating to the configured Executor.
 //
 // Refresh returns a channel that will receive the result when it is ready. The returned channel will not be closed.
+//
+// WARNING: When performing a refresh (see [RefreshCalculator]),
+// the [Loader] will receive a context wrapped in [context.WithoutCancel].
+// If you need to control refresh cancellation, you can use closures or values stored in the context.
 //
 // WARNING: If the cache was constructed without [RefreshCalculator], then Refresh will return the nil channel.
 //
@@ -196,6 +319,10 @@ func (c *Cache[K, V]) Refresh(ctx context.Context, key K, loader Loader[K, V]) <
 // BulkRefresh returns a channel that will receive the results when they are ready. The returned channel will not be closed.
 //
 // NOTE: duplicate elements in keys will be ignored.
+//
+// WARNING: When performing a refresh (see [RefreshCalculator]),
+// the [BulkLoader] will receive a context wrapped in [context.WithoutCancel].
+// If you need to control refresh cancellation, you can use closures or values stored in the context.
 //
 // WARNING: If the cache was constructed without [RefreshCalculator], then BulkRefresh will return the nil channel.
 //
@@ -228,6 +355,26 @@ func (c *Cache[K, V]) All() iter.Seq2[K, V] {
 	return c.cache.All()
 }
 
+// Keys returns an iterator over all keys in the cache.
+// The iteration order is not specified and is not guaranteed to be the same from one call to the next.
+//
+// Iterator is at least weakly consistent: he is safe for concurrent use,
+// but if the cache is modified (including by eviction) after the iterator is
+// created, it is undefined which of the changes (if any) will be reflected in that iterator.
+func (c *Cache[K, V]) Keys() iter.Seq[K] {
+	return c.cache.Keys()
+}
+
+// Values returns an iterator over all values in the cache.
+// The iteration order is not specified and is not guaranteed to be the same from one call to the next.
+//
+// Iterator is at least weakly consistent: he is safe for concurrent use,
+// but if the cache is modified (including by eviction) after the iterator is
+// created, it is undefined which of the changes (if any) will be reflected in that iterator.
+func (c *Cache[K, V]) Values() iter.Seq[V] {
+	return c.cache.Values()
+}
+
 // InvalidateAll discards all entries in the cache. The behavior of this operation is undefined for an entry
 // that is being loaded (or reloaded) and is otherwise not present.
 func (c *Cache[K, V]) InvalidateAll() {
@@ -249,7 +396,7 @@ func (c *Cache[K, V]) SetMaximum(maximum uint64) {
 }
 
 // GetMaximum returns the maximum total weighted or unweighted size of this cache, depending on how the
-// cache was constructed.
+// cache was constructed. If this cache does not use a (weighted) size bound, then the method will return math.MaxUint64.
 func (c *Cache[K, V]) GetMaximum() uint64 {
 	return c.cache.GetMaximum()
 }
@@ -266,6 +413,30 @@ func (c *Cache[K, V]) EstimatedSize() int {
 // use a weighted size bound, then the method will return 0.
 func (c *Cache[K, V]) WeightedSize() uint64 {
 	return c.cache.WeightedSize()
+}
+
+// Hottest returns an iterator for ordered traversal of the cache entries. The order of
+// iteration is from the entries most likely to be retained (hottest) to the entries least
+// likely to be retained (coldest). This order is determined by the eviction policy's best guess
+// at the start of the iteration.
+//
+// WARNING: Beware that this iteration is performed within the eviction policy's exclusive lock, so the
+// iteration should be short and simple. While the iteration is in progress further eviction
+// maintenance will be halted.
+func (c *Cache[K, V]) Hottest() iter.Seq[Entry[K, V]] {
+	return c.cache.Hottest()
+}
+
+// Coldest returns an iterator for ordered traversal of the cache entries. The order of
+// iteration is from the entries least likely to be retained (coldest) to the entries most
+// likely to be retained (hottest). This order is determined by the eviction policy's best guess
+// at the start of the iteration.
+//
+// WARNING: Beware that this iteration is performed within the eviction policy's exclusive lock, so the
+// iteration should be short and simple. While the iteration is in progress further eviction
+// maintenance will be halted.
+func (c *Cache[K, V]) Coldest() iter.Seq[Entry[K, V]] {
+	return c.cache.Coldest()
 }
 
 func (c *Cache[K, V]) has(key K) bool {

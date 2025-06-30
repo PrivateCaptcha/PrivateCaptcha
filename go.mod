@@ -14,7 +14,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
 	github.com/justinas/alice v1.2.0
-	github.com/maypok86/otter/v2 v2.0.0
+	github.com/maypok86/otter/v2 v2.1.0
 	github.com/prometheus/client_golang v1.22.0
 	github.com/realclientip/realclientip-go v1.0.0
 	github.com/rs/cors v1.11.1
