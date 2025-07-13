@@ -122,7 +122,7 @@ github.com/mailru/easyjson
 github.com/mailru/easyjson/buffer
 github.com/mailru/easyjson/jlexer
 github.com/mailru/easyjson/jwriter
-# github.com/maypok86/otter/v2 v2.1.1
+# github.com/maypok86/otter/v2 v2.2.0
 ## explicit; go 1.24
 github.com/maypok86/otter/v2
 github.com/maypok86/otter/v2/internal/deque
