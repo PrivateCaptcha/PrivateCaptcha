@@ -5,7 +5,7 @@ go 1.24
 toolchain go1.24.5
 
 require (
-	github.com/ClickHouse/clickhouse-go/v2 v2.39.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.40.1
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/badoux/checkmail v1.2.4
 	github.com/denisbrodbeck/machineid v1.0.1

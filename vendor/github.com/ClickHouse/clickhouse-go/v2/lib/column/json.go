@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ClickHouse/ch-go/proto"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/binary"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/chcol"
 )
 
@@ -255,7 +256,13 @@ func (c *JSON) Row(row int, ptr bool) any {
 	case JSONObjectSerializationVersion:
 		return c.rowAsJSON(row)
 	case JSONStringSerializationVersion:
-		return c.jsonStrings.Row(row, ptr)
+		str := c.jsonStrings.Row(row, false).(string)
+		strBytes := binary.Str2Bytes(str, len(str))
+		if ptr {
+			return &strBytes
+		}
+
+		return strBytes
 	default:
 		return nil
 	}
@@ -622,7 +629,14 @@ func (c *JSON) Encode(buffer *proto.Buffer) {
 }
 
 func (c *JSON) ScanType() reflect.Type {
-	return scanTypeJSON
+	switch c.serializationVersion {
+	case JSONObjectSerializationVersion:
+		return scanTypeJSON
+	case JSONStringSerializationVersion:
+		return scanTypeJSONString
+	default:
+		return scanTypeJSON
+	}
 }
 
 func (c *JSON) Reset() {
