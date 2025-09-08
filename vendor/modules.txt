@@ -45,7 +45,7 @@ github.com/go-faster/errors
 # github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
 ## explicit
 github.com/go-gomail/gomail
-# github.com/golang-migrate/migrate/v4 v4.18.3
+# github.com/golang-migrate/migrate/v4 v4.19.0
 ## explicit; go 1.23.0
 github.com/golang-migrate/migrate/v4
 github.com/golang-migrate/migrate/v4/database
@@ -214,9 +214,6 @@ go.opentelemetry.io/otel/semconv/v1.34.0
 go.opentelemetry.io/otel/trace
 go.opentelemetry.io/otel/trace/embedded
 go.opentelemetry.io/otel/trace/internal/telemetry
-# go.uber.org/atomic v1.11.0
-## explicit; go 1.18
-go.uber.org/atomic
 # golang.org/x/crypto v0.41.0
 ## explicit; go 1.23.0
 golang.org/x/crypto/blake2b
