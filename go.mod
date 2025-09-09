@@ -1,6 +1,6 @@
 module github.com/PrivateCaptcha/PrivateCaptcha
 
-go 1.24
+go 1.24.0
 
 toolchain go1.24.5
 
@@ -24,7 +24,7 @@ require (
 	github.com/tsenart/vegeta/v12 v12.12.0
 	golang.org/x/crypto v0.41.0
 	golang.org/x/net v0.43.0
-	golang.org/x/sync v0.16.0
+	golang.org/x/sync v0.17.0
 )
 
 require (
