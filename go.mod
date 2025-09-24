@@ -23,7 +23,7 @@ require (
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/tsenart/vegeta/v12 v12.12.0
 	golang.org/x/crypto v0.42.0
-	golang.org/x/net v0.43.0
+	golang.org/x/net v0.44.0
 	golang.org/x/sync v0.17.0
 )
 
