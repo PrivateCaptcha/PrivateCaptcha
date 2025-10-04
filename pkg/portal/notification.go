@@ -42,7 +42,11 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(http.StatusOK)
 	} else {
-		slog.ErrorContext(ctx, "Failed to parse notification ID", "id", value[:10], "length", len(value), common.ErrAttr(err))
+		logID := value
+		if len(value) > 10 {
+			logID = value[:10]
+		}
+		slog.ErrorContext(ctx, "Failed to parse notification ID", "id", logID, "length", len(value), common.ErrAttr(err))
 		http.Error(w, "", http.StatusBadRequest)
 	}
 }

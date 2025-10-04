@@ -3,10 +3,10 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"sort"
-	"text/template"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"

@@ -84,7 +84,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		AlertRenderContext: AlertRenderContext{},
 	}
 
-	name := r.FormValue(common.ParamName)
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if nameError := s.validateOrgName(ctx, name, user); len(nameError) > 0 {
 		renderCtx.NameError = nameError
 		s.render(w, r, createOrgFormTemplate, renderCtx)
@@ -284,7 +284,17 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		code := http.StatusInternalServerError
+		if err == db.ErrPermissions {
+			code = http.StatusForbidden
+		}
+
+		s.RedirectError(code, w, r)
+		return
+	}
+
+	if org.UserID.Int32 != user.ID {
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 

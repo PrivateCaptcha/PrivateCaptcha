@@ -72,6 +72,7 @@ func init() {
 	configKeyToEnvName[common.UserFingerprintIVKey] = "PC_USER_FINGERPRINT_KEY"
 	configKeyToEnvName[common.APISaltKey] = "PC_API_SALT"
 	configKeyToEnvName[common.EnterpriseLicenseKeyKey] = "EE_LICENSE_KEY"
+	configKeyToEnvName[common.XSRFKeyKey] = "PC_XSRF_KEY"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {

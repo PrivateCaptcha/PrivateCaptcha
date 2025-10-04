@@ -2,11 +2,11 @@ package main
 
 import (
 	"embed"
+	"html/template"
 	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )

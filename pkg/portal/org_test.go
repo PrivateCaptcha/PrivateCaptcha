@@ -120,3 +120,71 @@ func TestInviteUser(t *testing.T) {
 		t.Errorf("Org member is not invited user")
 	}
 }
+
+func TestDeleteUserFromOrgPermissions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := context.TODO()
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	userMember1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create 1st invitee account: %v", err)
+	}
+
+	userMember2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_3", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create 2nd invitee account: %v", err)
+	}
+
+	for _, user := range []*dbgen.User{userMember1, userMember2} {
+		if err := store.Impl().InviteUserToOrg(ctx, org, user); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := store.Impl().JoinOrg(ctx, org.ID, user); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	srv := http.NewServeMux()
+	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, userMember1.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// user1 tries to delete user2 from org, despite note being the owner
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%d/members/%d", org.ID, userMember2.ID), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(userMember1.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	url, _ := resp.Location()
+	if path := url.String(); !strings.HasPrefix(path, "/"+common.ErrorEndpoint) {
+		t.Errorf("Unexpected redirect: %s", path)
+	}
+
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(members) != 2 {
+		t.Errorf("Unexpected length of members: %v", len(members))
+	}
+}

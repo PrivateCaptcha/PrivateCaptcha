@@ -118,8 +118,12 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	}
 	offset += 4
 
+	userIDEnd := offset + int(userIDLen)
+	if userIDEnd >= len(data) {
+		return io.ErrShortBuffer
+	}
 	userIDBytes := make([]byte, userIDLen)
-	copy(userIDBytes[:], data[offset:offset+int(userIDLen)])
+	copy(userIDBytes[:], data[offset:userIDEnd])
 	offset += int(userIDLen)
 
 	lm.UserID = string(userIDBytes)
@@ -132,8 +136,12 @@ func (lm *LicenseMessage) UnmarshalBinary(data []byte) error {
 	}
 	offset += 4
 
+	productIDEnd := offset + int(productIDLen)
+	if productIDEnd >= len(data) {
+		return io.ErrShortBuffer
+	}
 	productIDBytes := make([]byte, productIDLen)
-	copy(productIDBytes[:], data[offset:offset+int(productIDLen)])
+	copy(productIDBytes[:], data[offset:productIDEnd])
 	offset += int(productIDLen)
 
 	lm.ProductID = string(productIDBytes)

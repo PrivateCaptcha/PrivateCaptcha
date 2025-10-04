@@ -64,7 +64,7 @@ func (s *signature) MarshalBinary() ([]byte, error) {
 }
 
 func (s *signature) UnmarshalBinary(data []byte) error {
-	if len(data) < 2 {
+	if len(data) < 3 {
 		return io.ErrShortBuffer
 	}
 

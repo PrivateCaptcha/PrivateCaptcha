@@ -181,11 +181,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent)
+	xsrfKey := cfg.Get(common.XSRFKeyKey)
 	portalServer := &portal.Server{
 		Stage:      stage,
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
-		XSRF:       &common.XSRFMiddleware{Key: "pckey", Timeout: 1 * time.Hour},
+		XSRF:       &common.XSRFMiddleware{Key: xsrfKey.Value(), Timeout: 1 * time.Hour},
 		Sessions: &session.Manager{
 			CookieName:   "pcsid",
 			Store:        sessionStore,

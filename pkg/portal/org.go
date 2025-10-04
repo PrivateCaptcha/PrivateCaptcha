@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -149,6 +151,24 @@ func (s *Server) validateOrgName(ctx context.Context, name string, user *dbgen.U
 			return "Name cannot be empty."
 		} else {
 			return "Name is too long."
+		}
+	}
+
+	const allowedPunctuation = "'-_&.:()[]"
+
+	for i, r := range name {
+		switch {
+		case unicode.IsLetter(r):
+			continue
+		case unicode.IsDigit(r):
+			continue
+		case unicode.IsSpace(r):
+			continue
+		case strings.ContainsRune(allowedPunctuation, r):
+			continue
+		default:
+			slog.WarnContext(ctx, "Name contains invalid characters", "position", i, "rune", r)
+			return "Organization name contains invalid characters."
 		}
 	}
 
@@ -365,7 +385,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 		return renderCtx, orgSettingsTemplate, nil
 	}
 
-	name := r.FormValue(common.ParamName)
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if name != org.Name {
 		if nameError := s.validateOrgName(ctx, name, user); len(nameError) > 0 {
 			renderCtx.NameError = nameError
