@@ -46,7 +46,7 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
             if (response.ok) {
                 return response;
             } else {
-                console.warn('[privatecaptcha]', `HTTP request failed. status=${response.status}`);
+                console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
             }
 
             if ((response.status >= 400) && (response.status < 500) &&

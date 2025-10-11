@@ -104,8 +104,10 @@ type propertySettingsRenderContext struct {
 func (pc *propertySettingsRenderContext) UpdateLevels() {
 	const epsilon = common.DifficultyDelta
 
-	pc.MinLevel = max(1, min(pc.EasyLevel-epsilon, int(pc.Property.Level)-epsilon))
-	pc.MaxLevel = min(int(common.MaxDifficultyLevel), max(pc.HardLevel+epsilon, int(pc.Property.Level)+epsilon))
+	pc.MinLevel = max(1, pc.EasyLevel-epsilon)
+	pc.MaxLevel = min(int(common.MaxDifficultyLevel), pc.HardLevel+epsilon)
+
+	pc.Property.Level = max(pc.MinLevel, min(pc.MaxLevel, pc.Property.Level))
 }
 
 type propertyIntegrationsRenderContext struct {
@@ -234,7 +236,7 @@ func parseMaxReplayCount(ctx context.Context, value string) int32 {
 	return max(minValue, min(int32(i), maxValue))
 }
 
-func difficultyLevelFromValue(ctx context.Context, value string) common.DifficultyLevel {
+func difficultyLevelFromValue(ctx context.Context, value string, minLevel, maxLevel int) common.DifficultyLevel {
 	i, err := strconv.Atoi(value)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to convert difficulty level", "value", value, common.ErrAttr(err))
@@ -245,7 +247,7 @@ func difficultyLevelFromValue(ctx context.Context, value string) common.Difficul
 		return common.DifficultyLevelMedium
 	}
 
-	return common.DifficultyLevel(i)
+	return common.DifficultyLevel(max(minLevel, min(maxLevel, i)))
 }
 
 func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
@@ -450,7 +452,7 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 
 	var level common.DifficultyLevel
 	if difficultyParam, err := common.StrPathArg(r, common.ParamDifficulty); err == nil {
-		level = difficultyLevelFromValue(ctx, difficultyParam)
+		level = difficultyLevelFromValue(ctx, difficultyParam, 1, int(common.MaxDifficultyLevel))
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve difficulty argument", common.ErrAttr(err))
 		level = common.DifficultyLevelSmall
@@ -794,7 +796,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		}
 	}
 
-	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty))
+	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := validityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
