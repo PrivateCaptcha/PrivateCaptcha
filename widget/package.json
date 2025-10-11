@@ -7,7 +7,7 @@
     "esbuild": "^0.25.0",
     "esbuild-plugin-inline-worker": "^0.1.1",
     "eslint": "^9.23.0",
-    "happy-dom": "^15.0.0"
+    "happy-dom": "^20.0.0"
   },
   "scripts": {
     "build": "node esbuild.config.mjs",
