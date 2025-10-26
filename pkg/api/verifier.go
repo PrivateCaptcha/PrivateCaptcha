@@ -266,7 +266,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 		uuid := db.UUIDFromSiteKey(sitekey)
 		// NOTE: we potentially can include user fingerprint stats into the calculation of difficulty
 		// but it's besides the point of "quickly returning smth valid from public endpoint"
-		// (all valid properties should be more or less agressively cached all of the time anyways)
+		// (all valid properties should be more or less aggressively cached all of the time anyways)
 		stubPuzzle := v.Create(0 /*puzzle ID*/, uuid.Bytes, uint8(common.DifficultyLevelMedium))
 		// if it's a legit request, then puzzle will be also legit (verifiable) with this PropertyID
 		if err := stubPuzzle.Init(puzzle.DefaultValidityPeriod); err != nil {
