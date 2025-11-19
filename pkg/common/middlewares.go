@@ -22,7 +22,7 @@ var (
 	headerHtmxRequest = http.CanonicalHeaderKey("HX-Request")
 	errPathArgEmpty   = errors.New("path argument is empty")
 	epoch             = time.Unix(0, 0).UTC().Format(http.TimeFormat)
-	// taken from chi, which took it fron nginx
+	// taken from chi, which took it from nginx
 	NoCacheHeaders = map[string][]string{
 		http.CanonicalHeaderKey("Expires"):         []string{epoch},
 		http.CanonicalHeaderKey("Cache-Control"):   []string{"no-cache, no-store, no-transform, must-revalidate, private, max-age=0"},

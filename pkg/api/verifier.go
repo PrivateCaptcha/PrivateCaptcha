@@ -310,7 +310,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 		// or it should be accounted on the anomaly detection side (user-agent is trivial to spoof)
 		// hash.Write([]byte(r.UserAgent()))
 		if ip, ok := contextIP.(netip.Addr); ok {
-			// if IP is not valid (empty), we do want for fingerprint to be the same as ths is fishy enough
+			// if IP is not valid (empty), we do want for fingerprint to be the same as this is fishy enough
 			hash.Write(ip.AsSlice())
 		} else {
 			// this stays as "Error" because we shouldn't even end up here

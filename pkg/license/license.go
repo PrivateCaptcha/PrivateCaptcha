@@ -21,7 +21,7 @@ const (
 )
 
 var (
-	errInvalidLicenseMessageFormat = errors.New("invalid license messasge format")
+	errInvalidLicenseMessageFormat = errors.New("invalid license message format")
 	errActivationSignature         = errors.New("failed to verify the signature")
 	errKeyNotFound                 = errors.New("activation key not found")
 	errActivationExpired           = errors.New("activation expired")

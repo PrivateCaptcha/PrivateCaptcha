@@ -218,7 +218,7 @@ func TestGetTestPuzzle(t *testing.T) {
 	}
 
 	if !p.IsZero() {
-		t.Errorf("Test puzzle respons is not zero puzzle")
+		t.Errorf("Test puzzle response is not zero puzzle")
 	}
 }
 

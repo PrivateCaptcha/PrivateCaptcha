@@ -214,7 +214,7 @@ func (j *UserEmailNotificationsJob) NewParams() any {
 // NOTE: we should NOT refactor this into "while we have pending notifications {}" loop because some notifications
 // are unprocessable by design (e.g. "subscribed-only" notifications for users who don't have subscriptions), therefore
 // there are cases when there will always be "pending" notifications.
-// If we are not managing to process all of them, we need to modify ChunkSize and Interval (or Lock Inteval) instead
+// If we are not managing to process all of them, we need to modify ChunkSize and Interval (or Lock Interval) instead
 func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) error {
 	p, ok := params.(*UserEmailNotificationsParams)
 	if !ok || (p == nil) {
