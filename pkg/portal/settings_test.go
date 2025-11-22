@@ -47,7 +47,7 @@ func TestCreateAPIKey(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -92,14 +92,14 @@ func TestDeleteAPIKey(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	key, err := store.Impl().CreateAPIKey(ctx, user, "My API Key", time.Now(), 24*time.Hour, 10.0)
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, "My API Key", time.Now(), 24*time.Hour, 10.0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestRotateAPIKey(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -146,7 +146,7 @@ func TestRotateAPIKey(t *testing.T) {
 	}
 
 	tnow := time.Now().UTC()
-	key, err := store.Impl().CreateAPIKey(ctx, user, "My API Key", tnow.Add(-24*time.Hour), 23*time.Hour, 10.0)
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, "My API Key", tnow.Add(-24*time.Hour), 23*time.Hour, 10.0)
 	if err != nil {
 		t.Fatal(err)
 	}

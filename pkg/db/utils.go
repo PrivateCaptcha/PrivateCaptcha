@@ -45,6 +45,10 @@ func Int(i int32) pgtype.Int4 {
 	return pgtype.Int4{Int32: i, Valid: true}
 }
 
+func Int8(i int64) pgtype.Int8 {
+	return pgtype.Int8{Int64: i, Valid: true}
+}
+
 func Int2(i int16) pgtype.Int2 {
 	return pgtype.Int2{Int16: i, Valid: true}
 }

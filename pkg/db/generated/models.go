@@ -55,6 +55,55 @@ func (ns NullAccessLevel) Value() (driver.Value, error) {
 	return string(ns.AccessLevel), nil
 }
 
+type AuditLogAction string
+
+const (
+	AuditLogActionUnknown    AuditLogAction = "unknown"
+	AuditLogActionCreate     AuditLogAction = "create"
+	AuditLogActionUpdate     AuditLogAction = "update"
+	AuditLogActionSoftDelete AuditLogAction = "softdelete"
+	AuditLogActionDelete     AuditLogAction = "delete"
+	AuditLogActionRecover    AuditLogAction = "recover"
+	AuditLogActionLogin      AuditLogAction = "login"
+	AuditLogActionLogout     AuditLogAction = "logout"
+	AuditLogActionAccess     AuditLogAction = "access"
+)
+
+func (e *AuditLogAction) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = AuditLogAction(s)
+	case string:
+		*e = AuditLogAction(s)
+	default:
+		return fmt.Errorf("unsupported scan type for AuditLogAction: %T", src)
+	}
+	return nil
+}
+
+type NullAuditLogAction struct {
+	AuditLogAction AuditLogAction `json:"backend_audit_log_action"`
+	Valid          bool           `json:"valid"` // Valid is true if AuditLogAction is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullAuditLogAction) Scan(value interface{}) error {
+	if value == nil {
+		ns.AuditLogAction, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.AuditLogAction.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullAuditLogAction) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.AuditLogAction), nil
+}
+
 type DifficultyGrowth string
 
 const (
@@ -154,6 +203,18 @@ type APIKey struct {
 	Notes             pgtype.Text        `db:"notes" json:"notes"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	Period            time.Duration      `db:"period" json:"period"`
+}
+
+type AuditLog struct {
+	ID          int64              `db:"id" json:"id"`
+	UserID      pgtype.Int4        `db:"user_id" json:"user_id"`
+	Action      AuditLogAction     `db:"action" json:"action"`
+	EntityID    pgtype.Int8        `db:"entity_id" json:"entity_id"`
+	EntityTable string             `db:"entity_table" json:"entity_table"`
+	SessionID   string             `db:"session_id" json:"session_id"`
+	OldValue    []byte             `db:"old_value" json:"old_value"`
+	NewValue    []byte             `db:"new_value" json:"new_value"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 }
 
 type Cache struct {

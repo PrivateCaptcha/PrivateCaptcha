@@ -9,7 +9,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{.Params.Name}}" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{.Params.Name}}" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
@@ -22,7 +22,7 @@
             {{- if .Params.DomainError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" maxlength="255" value="{{.Params.Domain}}" class="pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" maxlength="255" value="{{.Params.Domain}}" class="w-full pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.DomainError -}}
         <p class="pc-form-error-text">{{ .Params.DomainError }}</p>

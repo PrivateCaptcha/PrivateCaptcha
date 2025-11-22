@@ -11,7 +11,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" placeholder="My Org" maxlength="255" value="" class="pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" placeholder="My Org" maxlength="255" value="" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>

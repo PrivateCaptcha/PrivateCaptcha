@@ -25,16 +25,19 @@ func (s *Server) checkUserOrgsLimit(ctx context.Context, user *dbgen.User, count
 	return true
 }
 
-func (s *Server) setupEnterprise(router *http.ServeMux, rg *RouteGenerator, privateWrite alice.Chain) {
+func (s *Server) setupEnterprise(rg *RouteGenerator, privateRead, privateWrite alice.Chain) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
 
-	router.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrg))
-	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.Then(s.Handler(s.postOrgMembers)))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWrite.ThenFunc(s.deleteOrgMembers))
-	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.ThenFunc(s.joinOrg))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite.ThenFunc(s.leaveOrg))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite.ThenFunc(s.deleteOrg))
-	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.MoveEndpoint), privateWrite.ThenFunc(s.moveProperty))
+	rg.Handle(rg.Post(common.OrgEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrg))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, s.Handler(s.postOrgMembers))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint, arg(common.ParamUser)), privateWrite, http.HandlerFunc(s.deleteOrgMembers))
+	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, http.HandlerFunc(s.joinOrg))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.MembersEndpoint), privateWrite, http.HandlerFunc(s.leaveOrg))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteOrg))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.MoveEndpoint), privateWrite, http.HandlerFunc(s.moveProperty))
+
+	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
+	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 }

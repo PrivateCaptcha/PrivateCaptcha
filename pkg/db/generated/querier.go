@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*APIKey, error)
+	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
 	CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
 	CreateNotificationTemplate(ctx context.Context, arg *CreateNotificationTemplateParams) (*NotificationTemplate, error)
@@ -26,6 +27,7 @@ type Querier interface {
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
 	DeleteExpiredCache(ctx context.Context) error
 	DeleteLock(ctx context.Context, name string) error
+	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOrganizations(ctx context.Context, dollar_1 []int32) error
 	DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) error
 	DeleteProcessedUserNotifications(ctx context.Context, processedAt pgtype.Timestamptz) error
@@ -39,6 +41,7 @@ type Querier interface {
 	GetCachedByKey(ctx context.Context, key string) ([]byte, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)
+	GetOrgAuditLogs(ctx context.Context, arg *GetOrgAuditLogsParams) ([]*GetOrgAuditLogsRow, error)
 	GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*Property, error)
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)
 	GetOrganizationUsers(ctx context.Context, orgID int32) ([]*GetOrganizationUsersRow, error)
@@ -47,6 +50,7 @@ type Querier interface {
 	GetProperties(ctx context.Context, limit int32) ([]*Property, error)
 	GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error)
 	GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*Property, error)
+	GetPropertyAuditLogs(ctx context.Context, arg *GetPropertyAuditLogsParams) ([]*GetPropertyAuditLogsRow, error)
 	GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error)
 	GetPropertyByID(ctx context.Context, id int32) (*Property, error)
 	GetSoftDeletedOrganizations(ctx context.Context, arg *GetSoftDeletedOrganizationsParams) ([]*GetSoftDeletedOrganizationsRow, error)
@@ -57,6 +61,7 @@ type Querier interface {
 	GetTrialUsers(ctx context.Context, arg *GetTrialUsersParams) ([]*User, error)
 	GetUserAPIKeyByName(ctx context.Context, arg *GetUserAPIKeyByNameParams) (*APIKey, error)
 	GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error)
+	GetUserAuditLogs(ctx context.Context, arg *GetUserAuditLogsParams) ([]*GetUserAuditLogsRow, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByID(ctx context.Context, id int32) (*User, error)
 	GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error)

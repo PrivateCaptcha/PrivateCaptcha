@@ -5,7 +5,7 @@
             {{- if .Params.CodeError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="pc-form-input-base {{ if .Params.CodeError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9]{6}" required />
+            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="w-full pc-form-input-base {{ if .Params.CodeError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9]{6}" required />
         </div>
     </div>
 
@@ -16,4 +16,4 @@
     </div>
 </div>
 
-<button type="submit" class="pc-form-button"> Verify </button>
+<button type="submit" class="w-full pc-form-button"> Verify </button>

@@ -1,0 +1,15 @@
+<table class="relative min-w-full divide-y divide-gray-300">
+    <thead>
+        <tr>
+            <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900">User</th>
+            <th scope="col" class="px-3 lg:px-10 py-3.5 text-left text-sm font-semibold text-gray-900">Action</th>
+            <th scope="col" class="px-3 lg:px-10 w-full py-3.5 text-left text-sm font-semibold text-gray-900">Resource</th>
+            <th scope="col" class="px-3 lg:px-10 py-3.5 text-left text-sm font-semibold text-gray-900">Time</th>
+        </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-200 bg-white">
+        {{ range $log := .Params.AuditLogs }}
+        {{ template "auditlog-row.html" $log }}
+        {{ end }}
+    </tbody>
+</table>

@@ -25,11 +25,13 @@ const (
 	propertyDashboardReportsTemplate      = "property/reports.html"
 	propertyDashboardSettingsTemplate     = "property/settings.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
+	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	maxPropertyNameLength                 = 255
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	propertySettingsTabIndex              = 2
 	propertyIntegrationsTabIndex          = 1
+	propertyAuditLogsTabIndex             = 3
 	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
 )
 
@@ -115,6 +117,13 @@ func (pc *propertySettingsRenderContext) UpdateLevels() {
 type propertyIntegrationsRenderContext struct {
 	propertyDashboardRenderContext
 	Sitekey string
+}
+
+type propertyAuditLogsRenderContext struct {
+	propertyDashboardRenderContext
+	AuditLogsRenderContext
+	AlertRenderContext
+	CanView bool
 }
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
@@ -252,16 +261,16 @@ func difficultyLevelFromValue(ctx context.Context, value string, minLevel, maxLe
 	return common.DifficultyLevel(max(minLevel, min(maxLevel, i)))
 }
 
-func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	data := &propertyWizardRenderContext{
@@ -278,7 +287,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (Mode
 		data.ErrorMessage = activeSubscriptionForPropertyError
 	}
 
-	return data, propertyWizardTemplate, nil
+	return &ViewModel{Model: data, View: propertyWizardTemplate}, nil
 }
 
 func (s *Server) validatePropertyName(ctx context.Context, name string, org *dbgen.Organization) string {
@@ -529,15 +538,13 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	property, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       renderCtx.Name,
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: org.UserID,
-		Domain:     domain,
-		Level:      db.Int2(int16(common.DifficultyLevelSmall)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, auditEvent, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      renderCtx.Name,
+		CreatorID: db.Int(user.ID),
+		Domain:    domain,
+		Level:     db.Int2(int16(common.DifficultyLevelSmall)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create property", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -547,6 +554,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	dashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))
 	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
 	common.Redirect(dashboardURL, http.StatusOK, w, r)
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
@@ -654,16 +663,16 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 	return renderCtx, property, nil
 }
 
-func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) (*propertySettingsRenderContext, error) {
+func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) (*propertySettingsRenderContext, *common.AuditLogEvent, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	propertyRenderCtx, property, err := s.getOrgProperty(w, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	renderCtx := &propertySettingsRenderContext{
@@ -692,15 +701,18 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 
 	renderCtx.UpdateLevels()
 
-	return renderCtx, nil
+	auditEvent := newAccessAuditLogEvent(user, db.TableNameProperties, int64(property.ID), property.Name, common.SettingsEndpoint)
+
+	return renderCtx, auditEvent, nil
 }
 
-func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	tabParam := r.URL.Query().Get(common.ParamTab)
 	slog.Log(ctx, common.LevelTrace, "Property tab was requested", "tab", tabParam)
 	var model Model
 	var derr error
+	var event *common.AuditLogEvent
 	switch tabParam {
 	case common.IntegrationsEndpoint:
 		if integrationsCtx, err := s.getPropertyIntegrations(w, r); err == nil {
@@ -709,8 +721,16 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 			derr = err
 		}
 	case common.SettingsEndpoint:
-		if renderCtx, err := s.getOrgPropertySettings(w, r); err == nil {
+		if renderCtx, ae, err := s.getOrgPropertySettings(w, r); err == nil {
 			model = renderCtx
+			event = ae
+		} else {
+			derr = err
+		}
+	case common.EventsEndpoint:
+		if auditLogsCtx, ae, err := s.getPropertyAuditLogs(w, r); err == nil {
+			model = auditLogsCtx
+			event = ae
 		} else {
 			derr = err
 		}
@@ -727,28 +747,28 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (M
 	}
 
 	if derr != nil {
-		return nil, "", derr
+		return nil, derr
 	}
 
-	return model, propertyDashboardTemplate, nil
+	return &ViewModel{Model: model, View: propertyDashboardTemplate, AuditEvent: event}, nil
 }
 
-func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	renderCtx, _, err := s.getOrgProperty(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return renderCtx, propertyDashboardReportsTemplate, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardReportsTemplate}, nil
 }
 
-func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	renderCtx, err := s.getOrgPropertySettings(w, r)
+func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, auditEvent, err := s.getOrgPropertySettings(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return renderCtx, propertyDashboardSettingsTemplate, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (*propertyIntegrationsRenderContext, error) {
@@ -767,49 +787,78 @@ func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request)
 	return renderCtx, nil
 }
 
-func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx, err := s.getPropertyIntegrations(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return ctx, propertyDashboardIntegrationsTemplate, nil
+	return &ViewModel{Model: ctx, View: propertyDashboardIntegrationsTemplate}, nil
 }
 
-func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) newPropertyAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetPropertyAuditLogsRow) []*userAuditLog {
+	result := make([]*userAuditLog, 0, len(logs))
+
+	for _, log := range logs {
+		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {
+			if log.Name.Valid && log.Email.Valid {
+				ul.UserName = log.Name.String
+				ul.UserEmail = common.MaskEmail(log.Email.String, '*')
+			} else {
+				ul.UserName = "Unknown User"
+				ul.UserEmail = "-"
+			}
+
+			result = append(result, ul)
+		}
+	}
+
+	return result
+}
+
+func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx, auditEvent, err := s.getPropertyAuditLogs(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvent: auditEvent}, nil
+}
+
+func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", ErrInvalidRequestArg
+		return nil, ErrInvalidRequestArg
 	}
 
-	renderCtx, err := s.getOrgPropertySettings(w, r)
+	renderCtx, _, err := s.getOrgPropertySettings(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	// should hit cache right away
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	property, err := s.Property(org, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	if !renderCtx.CanEdit {
 		slog.WarnContext(ctx, "Insufficient permissions to edit property", "userID", user.ID, "orgUserID", org.UserID.Int32,
 			"propUserID", property.CreatorID.Int32)
 		renderCtx.ErrorMessage = "Insufficient permissions to update settings."
-		return renderCtx, propertyDashboardSettingsTemplate, nil
+		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate}, nil
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -817,7 +866,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		if nameError := s.validatePropertyName(ctx, name, org); len(nameError) > 0 {
 			renderCtx.NameError = nameError
 			renderCtx.Property.Name = name
-			return renderCtx, propertyDashboardSettingsTemplate, nil
+			return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate}, nil
 		}
 	}
 
@@ -831,6 +880,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 	if _, allowReplay := r.Form[common.ParamAllowReplay]; allowReplay {
 		maxReplayCount = parseMaxReplayCount(ctx, r.FormValue(common.ParamMaxReplayCount))
 	}
+
+	var auditEvent *common.AuditLogEvent
 
 	if (name != property.Name) ||
 		(int16(difficulty) != property.Level.Int16) ||
@@ -850,7 +901,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 			MaxReplayCount:   maxReplayCount,
 		}
 
-		if updatedProperty, err := s.Store.Impl().UpdateProperty(ctx, params); err != nil {
+		var updatedProperty *dbgen.Property
+		if updatedProperty, auditEvent, err = s.Store.Impl().UpdateProperty(ctx, property, org, params); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.InfoContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)
@@ -859,7 +911,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (Model, str
 		}
 	}
 
-	return renderCtx, propertyDashboardSettingsTemplate, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
@@ -891,8 +943,9 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().SoftDeleteProperty(ctx, property, org); err == nil {
+	if auditEvent, err := s.Store.Impl().SoftDeleteProperty(ctx, property, org, user); err == nil {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}

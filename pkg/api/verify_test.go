@@ -120,15 +120,13 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		return "", "", "", err
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       fmt.Sprintf("%v property", username),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      fmt.Sprintf("%v property", username),
+		CreatorID: db.Int(user.ID),
+		Domain:    testPropertyDomain,
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -139,7 +137,7 @@ func setupVerifySuite(username string) (string, string, string, error) {
 		return "", "", "", err
 	}
 
-	apikey, err := store.Impl().CreateAPIKey(ctx, user, username+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, username+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -376,15 +374,13 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      t.Name(),
+		CreatorID: db.Int(user.ID),
+		Domain:    testPropertyDomain,
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,12 +463,12 @@ func TestVerifyExpiredKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := store.Impl().CreateAPIKey(ctx, user, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = store.Impl().UpdateAPIKey(ctx, apikey.ExternalID, time.Now().AddDate(0, 0, -1), true)
+	_, err = store.Impl().UpdateAPIKey(ctx, user, apikey, time.Now().AddDate(0, 0, -1), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +534,7 @@ func TestVerifyTestProperty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	apikey, err := store.Impl().CreateAPIKey(ctx, user, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +597,7 @@ func TestVerifyByOrgMember(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
 		Name:       t.Name(),
 		OrgID:      db.Int(org.ID),
 		CreatorID:  db.Int(owner.ID),
@@ -609,7 +605,7 @@ func TestVerifyByOrgMember(t *testing.T) {
 		Domain:     testPropertyDomain,
 		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
 		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	}, org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -622,7 +618,7 @@ func TestVerifyByOrgMember(t *testing.T) {
 
 	member, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
 
-	apikey, err := store.Impl().CreateAPIKey(ctx, member, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, member, t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,11 +639,11 @@ func TestVerifyByOrgMember(t *testing.T) {
 	}
 
 	// join the org
-	if err := store.Impl().InviteUserToOrg(ctx, org, member); err != nil {
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
 		t.Fatal(err)
 	}
 

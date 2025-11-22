@@ -13,6 +13,8 @@ import (
 
 	"github.com/justinas/alice"
 	"github.com/rs/xid"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -31,6 +33,8 @@ var (
 	errOrgSoftDeleted      = errors.New("organization is deleted")
 	errPropertySoftDeleted = errors.New("property is deleted")
 	errLimitedFeature      = errors.New("feature is limited")
+
+	englishCaser = cases.Title(language.English)
 )
 
 const (
@@ -51,7 +55,12 @@ func funcMap(prefix string) template.FuncMap {
 type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
 
 type Model = any
-type ModelFunc func(http.ResponseWriter, *http.Request) (Model, string, error)
+type ViewModel struct {
+	Model      Model
+	View       string
+	AuditEvent *common.AuditLogEvent
+}
+type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 
 type RequestContext struct {
 	Path        string
@@ -190,11 +199,11 @@ func (s *Server) UpdateConfig(ctx context.Context, cfg common.ConfigStore) {
 	}
 }
 
-func (s *Server) Setup(router *http.ServeMux, domain string, security alice.Constructor) *RouteGenerator {
+func (s *Server) Setup(domain string, security alice.Constructor) *RouteGenerator {
 	prefix := domain + s.RelURL("/")
 	rg := &RouteGenerator{Prefix: prefix}
 	slog.Debug("Setting up the portal routes", "prefix", prefix, "enterprise", s.isEnterprise())
-	s.setupWithPrefix(router, rg, security)
+	s.setupWithPrefix(rg, security)
 	return rg
 }
 
@@ -241,7 +250,7 @@ func (s *Server) MiddlewarePrivateWrite(public alice.Chain) alice.Chain {
 	return public.Append(s.maintenance, defaultMaxBytesHandler, internalTimeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 }
 
-func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, security alice.Constructor) {
+func (s *Server) setupWithPrefix(rg *RouteGenerator, security alice.Constructor) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
@@ -252,11 +261,11 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 	public := s.MiddlewarePublicChain(rg, security)
 	publicTimeout := common.TimeoutHandler(2 * time.Second)
 	openRead := public.Append(s.maintenance, publicTimeout)
-	router.Handle(rg.Get(common.LoginEndpoint), openRead.Then(common.Cached(s.Handler(s.getLogin))))
-	router.Handle(rg.Get(common.RegisterEndpoint), openRead.Then(common.Cached(s.Handler(s.getRegister))))
-	router.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public.ThenFunc(s.error))
-	router.Handle(rg.Get(common.ExpiredEndpoint), public.ThenFunc(s.expired))
-	router.Handle(rg.Get(common.LogoutEndpoint), public.ThenFunc(s.logout))
+	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
+	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
+	rg.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public, http.HandlerFunc(s.error))
+	rg.Handle(rg.Get(common.ExpiredEndpoint), public, http.HandlerFunc(s.expired))
+	rg.Handle(rg.Get(common.LogoutEndpoint), public, http.HandlerFunc(s.logout))
 
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
 	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicTimeout)
@@ -264,44 +273,48 @@ func (s *Server) setupWithPrefix(router *http.ServeMux, rg *RouteGenerator, secu
 	privateWrite := s.MiddlewarePrivateWrite(public)
 	privateRead := s.MiddlewarePrivateRead(public)
 
-	router.Handle(rg.Post(common.LoginEndpoint), openWrite.ThenFunc(s.postLogin))
-	router.Handle(rg.Post(common.RegisterEndpoint), openWrite.ThenFunc(s.postRegister))
-	router.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail.ThenFunc(s.postTwoFactor))
-	router.Handle(rg.Post(common.ResendEndpoint), csrfEmail.ThenFunc(s.resend2fa))
-	router.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrg)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead.ThenFunc(s.getPortal))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead.Then(s.Handler(s.getOrgDashboard)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead.Then(s.Handler(s.getOrgMembers)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead.Then(s.Handler(s.getOrgSettings)))
-	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite.Then(s.Handler(s.putOrg)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead.Then(s.Handler(s.getNewOrgProperty)))
-	router.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite.ThenFunc(s.postNewOrgProperty))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateRead.Then(s.Handler(s.getPropertyDashboard)))
-	router.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWrite.Then(s.Handler(s.putProperty)))
-	router.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite.ThenFunc(s.deleteProperty))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateRead.Then(s.Handler(s.getPropertyReportsTab)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateRead.Then(s.Handler(s.getPropertySettingsTab)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateRead.Then(s.Handler(s.getPropertyIntegrationsTab)))
-	router.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead.ThenFunc(s.getPropertyStats))
+	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
+	rg.Handle(rg.Post(common.RegisterEndpoint), openWrite, http.HandlerFunc(s.postRegister))
+	rg.Handle(rg.Post(common.TwoFactorEndpoint), csrfEmail, http.HandlerFunc(s.postTwoFactor))
+	rg.Handle(rg.Post(common.ResendEndpoint), csrfEmail, http.HandlerFunc(s.resend2fa))
+	rg.Handle(rg.Get(common.OrgEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrg))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg)), privateRead, http.HandlerFunc(s.getPortal))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.DashboardEndpoint), privateRead, s.Handler(s.getOrgDashboard))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead, s.Handler(s.getOrgMembers))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getOrgSettings))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getOrgAuditLogs))
+	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postNewOrgProperty))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty)), privateRead, s.Handler(s.getPropertyDashboard))
+	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.EditEndpoint), privateWrite, s.Handler(s.putProperty))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteProperty))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getPropertyReportsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getPropertySettingsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getPropertyIntegrationsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getPropertyAuditLogsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyStats))
 
-	router.Handle(rg.Get(common.SettingsEndpoint), privateRead.Then(s.Handler(s.getSettings)))
-	router.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, arg(common.ParamTab)), privateRead.Then(s.Handler(s.getSettingsTab)))
-	router.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite.Then(s.Handler(s.editEmail)))
-	router.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite.Then(s.Handler(s.putGeneralSettings)))
-	router.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite.Then(s.Handler(s.postAPIKeySettings)))
+	rg.Handle(rg.Get(common.SettingsEndpoint), privateRead, s.Handler(s.getSettings))
+	rg.Handle(rg.Get(common.SettingsEndpoint, common.TabEndpoint, arg(common.ParamTab)), privateRead, s.Handler(s.getSettingsTab))
+	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite, s.Handler(s.editEmail))
+	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite, s.Handler(s.putGeneralSettings))
+	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postAPIKeySettings))
 
-	router.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead.ThenFunc(s.getAccountStats))
-	router.Handle(rg.Post(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite.Then(s.Handler(s.rotateAPIKey)))
-	router.Handle(rg.Delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite.ThenFunc(s.deleteAPIKey))
-	router.Handle(rg.Delete(common.UserEndpoint), privateWrite.ThenFunc(s.deleteAccount))
-	router.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private).ThenFunc(s.dismissNotification))
-	router.Handle(rg.Post(common.ErrorEndpoint), privateRead.ThenFunc(s.postClientSideError))
-	router.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead.ThenFunc(s.echoPuzzle))
+	rg.Handle(rg.Get(common.AuditLogsEndpoint), privateRead, s.Handler(s.getAuditLogs))
 
-	s.setupEnterprise(router, rg, privateWrite)
+	rg.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead, http.HandlerFunc(s.getAccountStats))
+	rg.Handle(rg.Post(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, s.Handler(s.rotateAPIKey))
+	rg.Handle(rg.Delete(common.APIKeysEndpoint, arg(common.ParamKey)), privateWrite, http.HandlerFunc(s.deleteAPIKey))
+	rg.Handle(rg.Delete(common.UserEndpoint), privateWrite, http.HandlerFunc(s.deleteAccount))
+	rg.Handle(rg.Delete(common.NotificationEndpoint, arg(common.ParamID)), openWrite.Append(s.private), http.HandlerFunc(s.dismissNotification))
+	rg.Handle(rg.Post(common.ErrorEndpoint), privateRead, http.HandlerFunc(s.postClientSideError))
+	rg.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead, http.HandlerFunc(s.echoPuzzle))
+
+	s.setupEnterprise(rg, privateRead, privateWrite)
 
 	// {$} matches the end of the URL
-	router.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead.ThenFunc(s.getPortal))
+	rg.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead, http.HandlerFunc(s.getPortal))
 }
 
 func (s *Server) setupCatchAllWithPrefix(router *http.ServeMux, prefix string, chain alice.Chain) {
@@ -316,11 +329,11 @@ func (s *Server) isMaintenanceMode() bool {
 	return s.maintenanceMode.Load()
 }
 
-func (s *Server) Handler(modelFunc ModelFunc) http.Handler {
+func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// such composition makes business logic and rendering testable separately
-		renderCtx, tpl, err := modelFunc(w, r)
+		mv, err := modelFunc(w, r)
 		if err != nil {
 			switch err {
 			case errInvalidSession:
@@ -355,10 +368,13 @@ func (s *Server) Handler(modelFunc ModelFunc) http.Handler {
 			return
 		}
 		// If tpl is not empty, render the template with the model.
-		if tpl != "" {
-			s.render(w, r, tpl, renderCtx)
+		if mv.View != "" {
+			s.render(w, r, mv.View, mv.Model)
 		}
 		// If tpl is empty, it means modelFunc handled the response (e.g., redirect, error, or manual write).
+		if mv.AuditEvent != nil {
+			s.Store.AuditLog().RecordEvent(ctx, mv.AuditEvent)
+		}
 	})
 }
 

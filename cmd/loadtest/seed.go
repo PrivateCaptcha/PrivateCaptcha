@@ -68,9 +68,10 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 	var user *dbgen.User
 	var org *dbgen.Organization
 
-	err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	_, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var err error
-		user, org, err = impl.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
+		var auditEvents []*common.AuditLogEvent
+		user, org, auditEvents, err = impl.CreateNewAccount(ctx, &dbgen.CreateSubscriptionParams{
 			ExternalProductID:      plan.ProductID(),
 			ExternalPriceID:        priceIDMonthly,
 			ExternalSubscriptionID: db.Text(xid.New().String()),
@@ -80,7 +81,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 			TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
 			NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
 		}, email, name, orgName, -1 /*existingUserID*/)
-		return err
+		return auditEvents, err
 	})
 
 	if err != nil {
@@ -91,7 +92,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 
 	for o := 0; o < orgsCount-1; o++ {
 		extraOrgName := fmt.Sprintf("%s-extra%v", orgName, o)
-		org, err := store.Impl().CreateNewOrganization(ctx, extraOrgName, user.ID)
+		org, _, err := store.Impl().CreateNewOrganization(ctx, extraOrgName, user.ID)
 		if err != nil {
 			return err
 		}
@@ -101,15 +102,13 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 
 	for o, org := range orgs {
 		for p := 0; p < propertiesCount; p++ {
-			_, err = store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-				Name:       fmt.Sprintf("my great property %v", p), // constraint is unique_property_name_per_organization
-				OrgID:      db.Int(org.ID),
-				CreatorID:  db.Int(user.ID),
-				OrgOwnerID: org.UserID,
-				Domain:     fmt.Sprintf("test%v.privatecaptcha.com", (u+1)*(o+1)*(p+1)),
-				Level:      db.Int2(int16(difficultyLevels[randv2.IntN(len(difficultyLevels))])),
-				Growth:     growthLevels[randv2.IntN(len(growthLevels))],
-			})
+			_, _, err = store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+				Name:      fmt.Sprintf("my great property %v", p), // constraint is unique_property_name_per_organization
+				CreatorID: db.Int(user.ID),
+				Domain:    fmt.Sprintf("test%v.privatecaptcha.com", (u+1)*(o+1)*(p+1)),
+				Level:     db.Int2(int16(difficultyLevels[randv2.IntN(len(difficultyLevels))])),
+				Growth:    growthLevels[randv2.IntN(len(growthLevels))],
+			}, org)
 
 			if err != nil {
 				return err
@@ -117,7 +116,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount int, plan b
 		}
 	}
 
-	_, err = store.Impl().CreateAPIKey(ctx, user, "Test API Key", tnow, 30*24*time.Hour, 1000 /*rps*/)
+	_, _, err = store.Impl().CreateAPIKey(ctx, user, "Test API Key", tnow, 30*24*time.Hour, 1000 /*rps*/)
 	if err != nil {
 		return err
 	}

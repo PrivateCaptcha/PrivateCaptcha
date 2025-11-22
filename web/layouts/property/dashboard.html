@@ -89,6 +89,8 @@
                     {{template "integrations.html" .}}
                     {{- else if eq .Params.Tab 2 -}}
                     {{template "settings.html" .}}
+                    {{- else if eq .Params.Tab 3 -}}
+                    {{template "auditlogs.html" .}}
                     {{- else -}}
                     {{template "reports.html" .}}
                     {{- end -}}

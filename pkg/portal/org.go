@@ -27,6 +27,7 @@ const (
 	orgPropertiesTemplate         = "portal/org-dashboard.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
+	orgAuditLogsTemplate          = "portal/org-auditlogs.html"
 	orgWizardTemplate             = "org-wizard/wizard.html"
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
@@ -39,6 +40,13 @@ type orgSettingsRenderContext struct {
 	CurrentOrg *userOrg
 	NameError  string
 	CanEdit    bool
+}
+
+type orgAuditLogsRenderContext struct {
+	AlertRenderContext
+	AuditLogsRenderContext
+	CurrentOrg *userOrg
+	CanView    bool
 }
 
 type orgUser struct {
@@ -121,12 +129,12 @@ func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow, hasher common.Identif
 	return result
 }
 
-func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgWizardRenderContext{
@@ -139,7 +147,7 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (Model, strin
 		renderCtx.WarningMessage = enterpriseOrgError
 	}
 
-	return renderCtx, orgWizardTemplate, nil
+	return &ViewModel{Model: renderCtx, View: orgWizardTemplate}, nil
 }
 
 func (s *Server) validateOrgName(ctx context.Context, name string, user *dbgen.User) string {
@@ -282,21 +290,21 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, portalTemplate, renderCtx)
 }
 
-func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	properties, err := s.Store.Impl().RetrieveOrgProperties(ctx, org)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgPropertiesRenderContext{
@@ -305,19 +313,19 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (Model,
 		Properties:        propertiesToUserProperties(ctx, properties, s.IDHasher),
 	}
 
-	return renderCtx, orgPropertiesTemplate, nil
+	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate}, nil
 }
 
-func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgMemberRenderContext{
@@ -328,30 +336,34 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (Model, s
 
 	if user.ID != org.UserID.Int32 {
 		slog.WarnContext(ctx, "Fetching org members as not an owner", "userID", user.ID)
-		return renderCtx, orgMembersTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
 	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx.Members = usersToOrgUsers(members, s.IDHasher)
 
-	return renderCtx, orgMembersTemplate, nil
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgMembersTemplate,
+		AuditEvent: newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.MembersEndpoint),
+	}, nil
 }
 
-func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgSettingsRenderContext{
@@ -360,24 +372,72 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (Model, 
 		CanEdit:           org.UserID.Int32 == user.ID,
 	}
 
-	return renderCtx, orgSettingsTemplate, nil
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgSettingsTemplate,
+		AuditEvent: newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.SettingsEndpoint),
+	}, nil
 }
 
-func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) newOrganizationAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetOrgAuditLogsRow) []*userAuditLog {
+	result := make([]*userAuditLog, 0, len(logs))
+
+	for _, log := range logs {
+		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {
+			if log.Name.Valid && log.Email.Valid {
+				ul.UserName = log.Name.String
+				ul.UserEmail = common.MaskEmail(log.Email.String, '*')
+			} else {
+				ul.UserName = "Unknown User"
+				ul.UserEmail = "-"
+			}
+
+			result = append(result, ul)
+		}
+	}
+
+	return result
+}
+
+func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
+	}
+
+	org, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx, auditEvent, err := s.createOrgAuditLogsContext(ctx, org, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgAuditLogsTemplate,
+		AuditEvent: auditEvent,
+	}, nil
+}
+
+func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", ErrInvalidRequestArg
+		return nil, ErrInvalidRequestArg
 	}
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgSettingsRenderContext{
@@ -388,17 +448,19 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 
 	if !renderCtx.CanEdit {
 		renderCtx.ErrorMessage = "Insufficient permissions to update settings."
-		return renderCtx, orgSettingsTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgSettingsTemplate}, nil
 	}
 
+	var auditEvent *common.AuditLogEvent
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if name != org.Name {
 		if nameError := s.validateOrgName(ctx, name, user); len(nameError) > 0 {
 			renderCtx.NameError = nameError
-			return renderCtx, orgSettingsTemplate, nil
+			return &ViewModel{Model: renderCtx, View: orgSettingsTemplate}, nil
 		}
 
-		if updatedOrg, err := s.Store.Impl().UpdateOrganization(ctx, org, name); err != nil {
+		var updatedOrg *dbgen.Organization
+		if updatedOrg, auditEvent, err = s.Store.Impl().UpdateOrganization(ctx, user, org, name); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			renderCtx.SuccessMessage = "Settings were updated"
@@ -406,5 +468,5 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (Model, string, 
 		}
 	}
 
-	return renderCtx, orgSettingsTemplate, nil
+	return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, AuditEvent: auditEvent}, nil
 }

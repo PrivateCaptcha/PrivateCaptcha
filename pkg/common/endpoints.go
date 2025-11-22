@@ -35,4 +35,7 @@ const (
 	NotificationEndpoint = "notification"
 	SelfHostedEndpoint   = "selfhosted"
 	ActivationEndpoint   = "activation"
+	AuditLogsEndpoint    = "auditlogs"
+	EventsEndpoint       = "events"
+	ExportEndpoint       = "export"
 )

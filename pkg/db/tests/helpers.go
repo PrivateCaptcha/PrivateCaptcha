@@ -59,10 +59,11 @@ func CreateNewAccountForTestEx(ctx context.Context, store db.Implementor, testNa
 	var user *dbgen.User
 	var org *dbgen.Organization
 
-	if err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	if _, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var err error
-		user, org, err = impl.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existingUserID*/)
-		return err
+		var auditEvents []*common.AuditLogEvent
+		user, org, auditEvents, err = impl.CreateNewAccount(ctx, subscrParams, email, name, orgName, -1 /*existingUserID*/)
+		return auditEvents, err
 	}); err != nil {
 		return nil, nil, err
 	}
@@ -76,11 +77,11 @@ func CreateNewBareAccount(ctx context.Context, store db.Implementor, testName st
 	var user *dbgen.User
 	var org *dbgen.Organization
 
-	if err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	if _, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var err error
-
-		user, org, err = impl.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
-		return err
+		var auditEvents []*common.AuditLogEvent
+		user, org, auditEvents, err = impl.CreateNewAccount(ctx, nil /*create subscription params*/, email, name, orgName, -1 /*existingUserID*/)
+		return auditEvents, err
 	}); err != nil {
 		return nil, nil, err
 	}
@@ -88,13 +89,12 @@ func CreateNewBareAccount(ctx context.Context, store db.Implementor, testName st
 }
 
 func CreatePropertyForOrg(ctx context.Context, store db.Implementor, org *dbgen.Organization) (*dbgen.Property, error) {
-	return store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       fmt.Sprintf("user %v property", org.UserID.Int32),
-		Domain:     fmt.Sprintf("%s.org", strings.ReplaceAll(strings.ToLower(org.Name), " ", "-")),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(org.UserID.Int32),
-		OrgOwnerID: db.Int(org.UserID.Int32),
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      fmt.Sprintf("user %v property", org.UserID.Int32),
+		Domain:    fmt.Sprintf("%s.org", strings.ReplaceAll(strings.ToLower(org.Name), " ", "-")),
+		CreatorID: db.Int(org.UserID.Int32),
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
+	return property, err
 }

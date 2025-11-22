@@ -15,7 +15,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" maxlength="255" value="{{ $.Params.CurrentOrg.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" maxlength="255" value="{{ $.Params.CurrentOrg.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>

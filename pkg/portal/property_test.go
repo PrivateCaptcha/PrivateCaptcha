@@ -30,15 +30,13 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	// Create a new property
-	property, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       "propertyName",
-		OrgID:      db.Int(org1.ID),
-		CreatorID:  org1.UserID,
-		OrgOwnerID: org1.UserID,
-		Domain:     "example.com",
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      "propertyName",
+		CreatorID: org1.UserID,
+		Domain:    "example.com",
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org1)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}
@@ -50,7 +48,7 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user2.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -95,7 +93,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -159,26 +157,24 @@ func TestMoveProperty(t *testing.T) {
 	}
 
 	// Create a new property
-	property, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       "propertyName",
-		OrgID:      db.Int(org1.ID),
-		CreatorID:  org1.UserID,
-		OrgOwnerID: org1.UserID,
-		Domain:     "example.com",
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      "propertyName",
+		CreatorID: org1.UserID,
+		Domain:    "example.com",
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org1)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}
 
-	org2, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
 	if err != nil {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {

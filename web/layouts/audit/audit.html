@@ -1,0 +1,34 @@
+{{template "base.html" .}}
+
+{{define "title"}}Audit logs{{end}}
+
+{{define "html_class"}}h-full bg-gray-100{{end}}
+{{define "body_class"}}h-full min-h-full flex flex-col{{end}}
+
+{{define "footer"}}{{template "footer-signed-in" .}}{{end}}
+
+{{define "header"}}
+<div>
+    {{template "header-signed-in" .}}
+
+    <div class="bg-white shadow-sm">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <h1 class="text-lg font-semibold leading-6 text-gray-900">Audit logs</h1>
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{define "main"}}
+<main class="flex-1">
+    <div id="auditlogs" class="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8 {{ if not $.Platform.Enterprise }}relative{{end}}">
+        {{ template "events.html" . }}
+        {{ if not $.Platform.Enterprise }}
+        <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-b-lg" aria-hidden="true"></div>
+        <div class="absolute inset-0 z-10">
+            {{ template "enterprise.html" "Audit logs are only available in the enterprise edition of Private Captcha." }}
+        </div>
+        {{ end }}
+    </div>
+</main>
+{{end}}

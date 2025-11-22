@@ -35,7 +35,7 @@ func TestGetAnotherUsersOrg(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user2.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -71,7 +71,7 @@ func TestInviteUser(t *testing.T) {
 	}
 
 	// we create extra org to create a difference in auto-incremented IDs for users and orgs
-	org1, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
 	if err != nil {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestInviteUser(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, user1.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {
@@ -127,7 +127,7 @@ func TestDeleteUserFromOrgPermissions(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
@@ -143,17 +143,17 @@ func TestDeleteUserFromOrgPermissions(t *testing.T) {
 	}
 
 	for _, user := range []*dbgen.User{userMember1, userMember2} {
-		if err := store.Impl().InviteUserToOrg(ctx, org, user); err != nil {
+		if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := store.Impl().JoinOrg(ctx, org.ID, user); err != nil {
+		if _, err := store.Impl().JoinOrg(ctx, org.ID, user); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	cookie, err := portal_tests.AuthenticateSuite(ctx, userMember1.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
 	if err != nil {

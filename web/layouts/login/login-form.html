@@ -5,7 +5,7 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" id="emailInput" name="{{ .Const.Email }}" placeholder="Email address" autocomplete="on" class="pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" id="emailInput" name="{{ .Const.Email }}" placeholder="Email address" autocomplete="on" class="w-full pc-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
@@ -27,7 +27,7 @@
 <p class="pc-form-error-text">{{ .Params.CaptchaError }}</p>
 {{- end -}}
 
-<button id="loginSubmit" type="submit" class="pc-form-button" disabled>
+<button id="loginSubmit" type="submit" class="w-full pc-form-button" disabled>
     <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

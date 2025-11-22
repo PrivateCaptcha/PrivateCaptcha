@@ -10,6 +10,7 @@
             <option value="{{ $.Const.ReportsEndpoint }}">Reports</option>
             <option value="{{ $.Const.IntegrationsEndpoint }}">Integrations</option>
             <option value="{{ $.Const.SettingsEndpoint }}" selected>Settings</option>
+            <option value="{{ $.Const.EventsEndpoint }}">Audit logs</option>
         </select>
     </div>
     <div class="hidden sm:block">
@@ -29,6 +30,12 @@
                     hx-swap="innerHTML"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Integrations</a>
                 <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Settings</a>
+                <a href="#"
+                    hx-target="#property-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.EventsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.EventsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
             </nav>
         </div>
     </div>

@@ -110,15 +110,13 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      t.Name(),
+		CreatorID: db.Int(user.ID),
+		Domain:    testPropertyDomain,
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,15 +162,13 @@ func TestGetPuzzle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      t.Name(),
+		CreatorID: db.Int(user.ID),
+		Domain:    testPropertyDomain,
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,15 +231,13 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(user.ID),
-		OrgOwnerID: db.Int(user.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      t.Name(),
+		CreatorID: db.Int(user.ID),
+		Domain:    testPropertyDomain,
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -96,7 +96,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Store.Impl().CreateNewOrganization(ctx, name, user.ID)
+	org, auditEvent, err := s.Store.Impl().CreateNewOrganization(ctx, name, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create organization", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -104,6 +104,8 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 }
 
 // here we know that user is already organization owner
@@ -195,28 +197,28 @@ func (s *Server) validateAddOrgMemberID(ctx context.Context, user *dbgen.User, m
 	return ""
 }
 
-func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", ErrInvalidRequestArg
+		return nil, ErrInvalidRequestArg
 	}
 
 	org, err := s.Org(user, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := &orgMemberRenderContext{
@@ -228,27 +230,28 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 
 	if !renderCtx.CanEdit {
 		renderCtx.ErrorMessage = "Only organization owner can invite other members."
-		return renderCtx, orgMembersTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
 	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if errorMsg := s.validateAddOrgMemberEmail(ctx, user, members, inviteEmail); len(errorMsg) > 0 {
 		renderCtx.ErrorMessage = errorMsg
-		return renderCtx, orgMembersTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
 	inviteUser, err := s.Store.Impl().FindUserByEmail(ctx, inviteEmail)
 	if err != nil {
 		renderCtx.ErrorMessage = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
-		return renderCtx, orgMembersTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
 	if errorMsg := s.validateAddOrgMemberID(ctx, user, members, inviteUser.ID); len(errorMsg) > 0 {
 		renderCtx.ErrorMessage = errorMsg
-		return renderCtx, orgMembersTemplate, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
-	if err = s.Store.Impl().InviteUserToOrg(ctx, org, inviteUser); err != nil {
+	var auditEvent *common.AuditLogEvent
+	if auditEvent, err = s.Store.Impl().InviteUserToOrg(ctx, user, org, inviteUser); err != nil {
 		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
 	} else {
 		ou := userToOrgUser(inviteUser, string(dbgen.AccessLevelInvited), s.IDHasher)
@@ -262,7 +265,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (Model, 
 		})
 	}
 
-	return renderCtx, orgMembersTemplate, nil
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
@@ -303,9 +306,11 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().RemoveUserFromOrg(ctx, org, int32(userID)); err != nil {
+	if auditEvent, err := s.Store.Impl().RemoveUserFromOrg(ctx, user, org, int32(userID)); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
+	} else {
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -325,9 +330,10 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().JoinOrg(ctx, orgID, user); err == nil {
+	if auditEvent, err := s.Store.Impl().JoinOrg(ctx, orgID, user); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(orgID))), http.StatusOK, w, r)
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
@@ -355,9 +361,10 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().LeaveOrg(ctx, orgID, user); err == nil {
+	if auditEvent, err := s.Store.Impl().LeaveOrg(ctx, orgID, user); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(orgID))), http.StatusOK, w, r)
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
@@ -384,11 +391,42 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().SoftDeleteOrganization(ctx, org, user); err != nil {
+	if auditEvent, err := s.Store.Impl().SoftDeleteOrganization(ctx, org, user); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organization", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
+	} else {
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	}
 
 	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
+}
+
+func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &orgAuditLogsRenderContext{
+		AuditLogsRenderContext: AuditLogsRenderContext{},
+		CurrentOrg:             orgToUserOrg(org, user.ID, s.IDHasher),
+		CanView:                org.UserID.Int32 == user.ID,
+	}
+
+	const maxOrgAuditLogs = 10
+
+	var auditEvent *common.AuditLogEvent
+
+	if renderCtx.CanView {
+		auditEvent = newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.AuditLogsEndpoint)
+
+		if logs, err := s.Store.Impl().RetrieveOrganizationAuditLogs(ctx, org, maxOrgAuditLogs); err == nil {
+			renderCtx.AuditLogs = s.newOrganizationAuditLogs(ctx, user, logs)
+			renderCtx.PerPage = perPageEventLogs
+			renderCtx.Count = len(renderCtx.AuditLogs)
+			renderCtx.Page = 0
+		} else {
+			renderCtx.ErrorMessage = "Failed to retrieve organization audit logs. Please try again later."
+		}
+	} else {
+		renderCtx.WarningMessage = "You do not have permissions to view audit logs of this organization."
+	}
+
+	return renderCtx, auditEvent, nil
 }

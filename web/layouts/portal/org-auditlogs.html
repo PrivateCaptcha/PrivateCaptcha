@@ -1,0 +1,75 @@
+<div>
+    <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
+            hx-target="#org-tabs"
+            hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-swap="innerHTML">
+            <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.MembersEndpoint }}">Members</option>
+            {{ end }}
+            <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.EventsEndpoint }}" selected>Audit logs</option>
+            {{ end }}
+        </select>
+    </div>
+    <div class="hidden sm:block">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Audit logs</a>
+            </nav>
+        </div>
+    </div>
+</div>
+
+{{if .Params.ErrorMessage}}
+<div class="pt-5">{{template "error-message.html" .Params.ErrorMessage}}</div>
+{{else if .Params.SuccessMessage}}
+<div class="pt-5">{{template "success-message.html" .Params.SuccessMessage}}</div>
+{{else if .Params.InfoMessage}}
+<div class="pt-5">{{template "info-message.html" .Params.InfoMessage}}</div>
+{{else if .Params.WarningMessage}}
+<div class="pt-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
+{{else}}
+<div class="mt-8 sm:flex sm:items-center">
+    <div class="sm:flex-auto">
+        <p class="mt-2 text-sm text-gray-700">A list of <strong>last {{.Params.Count}} events</strong> that happend with or related to this organization.</p>
+    </div>
+</div>
+{{end}}
+
+<div class="mt-8 flow-root{{ if not $.Platform.Enterprise }} relative{{ end }}">
+    <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            {{ template "auditlog-table.html" . }}
+        </div>
+    </div>
+    {{ if not $.Platform.Enterprise }}
+    <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-b-lg" aria-hidden="true"></div>
+    <div class="absolute inset-0 z-10">
+        {{ template "enterprise.html" "Audit logs are only available in the enterprise edition of Private Captcha." }}
+    </div>
+    {{ end }}
+</div>
+<div class="mt-8 flex justify-center">
+    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-internal-form-button pc-internal-form-button-primary">See all Audit Logs</a>
+</div>

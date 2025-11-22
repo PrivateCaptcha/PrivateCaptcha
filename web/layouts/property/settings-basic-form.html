@@ -15,7 +15,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" placeholder="Registration Page" maxlength="255" value="{{ $.Params.Property.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
@@ -25,7 +25,7 @@
     <div class="col-span-full">
         <label for="{{ .Const.Domain }}" class="pc-internal-form-label" aria-label="Property domain"> Domain </label>
         <div class="mt-2">
-            <input type="text" disabled name="{{ .Const.Domain }}" maxlength="255" value="{{ $.Params.Property.Domain }}" class="pc-internal-form-input-base pc-form-input-disabled" />
+            <input type="text" disabled name="{{ .Const.Domain }}" maxlength="255" value="{{ $.Params.Property.Domain }}" class="w-full pc-internal-form-input-base pc-form-input-disabled" />
         </div>
 
         <div class="mt-2 flex gap-3">
@@ -68,7 +68,7 @@
     <div class="col-span-full" x-data="{replayEnabled: {{ $.Params.Property.AllowReplay }}}">
         <label for="{{ .Const.ValidityInterval }}" class="pc-internal-form-label tooltip" data-tooltip="Period during which a single captcha puzzle can be verified"> Verification window </label>
         <div class="mt-2">
-            <select name="{{ .Const.ValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+            <select name="{{ .Const.ValidityInterval }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.ValidityInterval 0 }}selected="selected"{{end}}>5 minutes</option>
                 <option value="1" {{ if eq $.Params.Property.ValidityInterval 1 }}selected="selected"{{end}}>10 minutes</option>
                 <option value="2" {{ if eq $.Params.Property.ValidityInterval 2 }}selected="selected"{{end}}>30 minutes</option>
@@ -102,14 +102,14 @@
         </div>
 
         <div class="mt-2">
-            <input type="number" :disabled="!replayEnabled" name="{{ .Const.MaxReplayCount }}" min="1" max="1000000" placeholder="2" value="{{ $.Params.Property.MaxReplayCount }}" class="pc-internal-form-input-base" :class="replayEnabled ? 'pc-form-input-normal' : 'pc-form-input-disabled'" />
+            <input type="number" :disabled="!replayEnabled" name="{{ .Const.MaxReplayCount }}" min="1" max="1000000" placeholder="2" value="{{ $.Params.Property.MaxReplayCount }}" class="w-full pc-internal-form-input-base" :class="replayEnabled ? 'pc-form-input-normal' : 'pc-form-input-disabled'" />
         </div>
     </div>
 
     <div class="col-span-full">
         <label for="{{ .Const.Growth }}" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests"> Difficulty growth </label>
         <div class="mt-2">
-            <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+            <select name="{{ .Const.Growth }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                 <option value="0" {{ if eq $.Params.Property.Growth 0 }}selected="selected"{{end}}>Constant (no growth)</option>
                 <option value="1" {{ if eq $.Params.Property.Growth 1 }}selected="selected"{{end}}>Slow</option>
                 <option value="2" {{ if eq $.Params.Property.Growth 2 }}selected="selected"{{end}}>Normal</option>

@@ -42,7 +42,7 @@ type SettingsTab struct {
 	ID             string
 	Name           string
 	TemplatePrefix string
-	ModelHandler   ModelFunc
+	ModelHandler   ViewModelHandler
 }
 
 // SettingsTabViewModel is used for rendering the navigation in templates
@@ -124,7 +124,7 @@ func apiKeysToUserAPIKeys(keys []*dbgen.APIKey, tnow time.Time, hasher common.Id
 	return result
 }
 
-func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	tabParam := r.URL.Query().Get(common.ParamTab)
@@ -132,18 +132,20 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (Model, str
 
 	tab, err := s.findTab(ctx, tabParam)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	model, _, err := tab.ModelHandler(w, r)
+	modelView, err := tab.ModelHandler(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return model, tab.TemplatePrefix + "page.html", nil
+	modelView.View = tab.TemplatePrefix + "page.html"
+
+	return modelView, nil
 }
 
-func (s *Server) getSettingsTab(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getSettingsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	tabID, err := common.StrPathArg(r, common.ParamTab)
@@ -153,15 +155,17 @@ func (s *Server) getSettingsTab(w http.ResponseWriter, r *http.Request) (Model, 
 
 	tab, err := s.findTab(ctx, tabID)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	model, _, err := tab.ModelHandler(w, r)
+	modelView, err := tab.ModelHandler(w, r)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return model, tab.TemplatePrefix + "tab.html", nil
+	modelView.View = tab.TemplatePrefix + "tab.html"
+
+	return modelView, nil
 }
 
 func (s *Server) findTab(ctx context.Context, tabID string) (*SettingsTab, error) {
@@ -224,24 +228,28 @@ func (s *Server) createGeneralSettingsModel(ctx context.Context, user *dbgen.Use
 	}
 }
 
-func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
 
-	return renderCtx, "", nil
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       "",
+		AuditEvent: newAccessAuditLogEvent(user, db.TableNameUsers, int64(user.ID), user.Name, common.SettingsEndpoint),
+	}, nil
 }
 
-func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	sess := s.Session(w, r)
 	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
@@ -258,21 +266,21 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (Model, strin
 		_ = sess.Set(session.KeyTwoFactorCode, code)
 	}
 
-	return renderCtx, settingsGeneralFormTemplate, nil
+	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 }
 
-func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", ErrInvalidRequestArg
+		return nil, ErrInvalidRequestArg
 	}
 
 	formName := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -291,7 +299,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if err := checkmail.ValidateFormat(formEmail); err != nil {
 			slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
-			return renderCtx, settingsGeneralFormTemplate, nil
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 		}
 
 		sentCode, hasSentCode := sess.Get(ctx, session.KeyTwoFactorCode).(int)
@@ -303,7 +311,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, common.ErrAttr(err))
 			renderCtx.TwoFactorError = "Code is not valid."
-			return renderCtx, settingsGeneralFormTemplate, nil
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 		}
 
 		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
@@ -313,24 +321,25 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		if formName != user.Name {
 			if (len(formName) > 0) && (len(formName) < 3) {
 				renderCtx.NameError = "Please use a longer name."
-				return renderCtx, settingsGeneralFormTemplate, nil
+				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 			}
 
 			if !isUserNameValid(formName) {
 				renderCtx.NameError = userNameErrorMessage
-				return renderCtx, settingsGeneralFormTemplate, nil
+				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 			}
 		}
 
 		anyChange = (len(formName) > 0) && (formName != user.Name)
 	}
 
+	var auditEvent *common.AuditLogEvent
 	if anyChange {
 		emailToUpdate := user.Email
 		if renderCtx.EditEmail {
 			emailToUpdate = formEmail
 		}
-		if err := s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, emailToUpdate, user.Email); err == nil {
+		if auditEvent, err = s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, emailToUpdate, user.Email); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
 			_ = sess.Set(session.KeyUserName, renderCtx.Name)
@@ -343,7 +352,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (Mod
 		}
 	}
 
-	return renderCtx, settingsGeneralFormTemplate, nil
+	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -371,11 +380,13 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
-		return impl.SoftDeleteUser(ctx, user)
+	if auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		auditEvent, err := impl.SoftDeleteUser(ctx, user)
+		return []*common.AuditLogEvent{auditEvent}, err
 	}); err == nil {
 		job := s.Jobs.OffboardUser(user)
 		go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
+		s.Store.AuditLog().RecordEvents(ctx, auditEvents)
 
 		s.logout(w, r)
 	} else {
@@ -400,19 +411,22 @@ func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.Use
 	}
 }
 
-func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := s.createAPIKeysSettingsModel(ctx, user)
 
-	return renderCtx, "", nil
+	return &ViewModel{
+		Model:      renderCtx,
+		AuditEvent: newAccessAuditLogEvent(user, db.TableNameAPIKeys, int64(user.ID), user.Name, common.SettingsEndpoint),
+	}, nil
 }
 
-func daysFromParam(ctx context.Context, param string) int {
+func apiKeyDaysFromParam(ctx context.Context, param string) int {
 	i, err := strconv.Atoi(param)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to convert days", "value", param, common.ErrAttr(err))
@@ -500,17 +514,17 @@ func checkAPIKeyNameValid(ctx context.Context, name string) bool {
 	return true
 }
 
-func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		return nil, "", ErrInvalidRequestArg
+		return nil, ErrInvalidRequestArg
 	}
 
 	renderCtx := s.createAPIKeysSettingsModel(ctx, user)
@@ -519,19 +533,19 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 	if len(formName) < 3 {
 		renderCtx.NameError = "Name is too short."
 		renderCtx.CreateOpen = true
-		return renderCtx, settingsAPIKeysContentTemplate, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
 	}
 
 	if !checkAPIKeyNameValid(ctx, formName) {
 		renderCtx.NameError = "Name contains invalid characters."
 		renderCtx.CreateOpen = true
-		return renderCtx, settingsAPIKeysContentTemplate, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
 	}
 
 	if _, err := s.Store.Impl().FindUserAPIKeyByName(ctx, user, formName); err == nil {
 		renderCtx.NameError = "API key with such name already exists."
 		renderCtx.CreateOpen = true
-		return renderCtx, settingsAPIKeysContentTemplate, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
 	}
 
 	apiKeyRequestsPerSecond := 1.0
@@ -544,9 +558,9 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 		}
 	}
 
-	days := daysFromParam(ctx, r.FormValue(common.ParamDays))
+	days := apiKeyDaysFromParam(ctx, r.FormValue(common.ParamDays))
 	tnow := time.Now().UTC()
-	newKey, err := s.Store.Impl().CreateAPIKey(ctx, user, formName, tnow, time.Duration(days)*24*time.Hour, apiKeyRequestsPerSecond)
+	newKey, auditEvent, err := s.Store.Impl().CreateAPIKey(ctx, user, formName, tnow, time.Duration(days)*24*time.Hour, apiKeyRequestsPerSecond)
 	if err == nil {
 		userKey := apiKeyToUserAPIKey(newKey, tnow, s.IDHasher)
 		userKey.Secret = db.UUIDToSecret(newKey.ExternalID)
@@ -561,7 +575,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (Mod
 		renderCtx.ErrorMessage = "Failed to create API key. Please try again."
 	}
 
-	return renderCtx, settingsAPIKeysContentTemplate, nil
+	return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen.APIKey, userKey *userAPIKey) error {
@@ -580,23 +594,23 @@ func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen
 	return anyError
 }
 
-func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	keyID, value, err := common.IntPathArg(r, common.ParamKey, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse key path parameter", "value", value)
-		return nil, "", errInvalidPathArg
+		return nil, errInvalidPathArg
 	}
 
-	key, err := s.Store.Impl().RotateAPIKey(ctx, user, keyID)
+	key, auditEvent, err := s.Store.Impl().RotateAPIKey(ctx, user, keyID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rotate the API key", "keyID", keyID, common.ErrAttr(err))
-		return nil, "", err
+		return nil, err
 	}
 
 	userKey := apiKeyToUserAPIKey(key, time.Now().UTC(), s.IDHasher)
@@ -614,7 +628,7 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (Model, st
 		return anyError
 	})
 
-	return userKey, apiKeyRowTemplate, nil
+	return &ViewModel{Model: userKey, View: apiKeyRowTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -632,10 +646,12 @@ func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Store.Impl().DeleteAPIKey(ctx, user, keyID); err != nil {
+	if auditEvent, err := s.Store.Impl().DeleteAPIKey(ctx, user, keyID); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete the API key", "keyID", keyID, common.ErrAttr(err))
 		http.Error(w, "", http.StatusInternalServerError)
 		return
+	} else {
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	}
 
 	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
@@ -726,15 +742,15 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 	return renderCtx
 }
 
-func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	renderCtx := s.createUsageSettingsModel(ctx, user)
 
-	return renderCtx, "", nil
+	return &ViewModel{Model: renderCtx}, nil
 }

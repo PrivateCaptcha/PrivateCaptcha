@@ -57,14 +57,17 @@ func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context, tnow time.Time)
 	return property.OrgOwnerID.Int32, nil
 }
 
-func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (Model, string, error) {
-	return &loginRenderContext{
-		CsrfRenderContext: CsrfRenderContext{
-			Token: s.XSRF.Token(""),
+func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	return &ViewModel{
+		Model: &loginRenderContext{
+			CsrfRenderContext: CsrfRenderContext{
+				Token: s.XSRF.Token(""),
+			},
+			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
+			CanRegister:          s.canRegister.Load(),
 		},
-		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
-		CanRegister:          s.canRegister.Load(),
-	}, loginTemplate, nil
+		View: loginTemplate,
+	}, nil
 }
 
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {

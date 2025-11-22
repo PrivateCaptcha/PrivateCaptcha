@@ -11,11 +11,18 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+	"github.com/justinas/alice"
 )
 
 // NOTE: this will eventually be replaced by proper OTP
 func twoFactorCode() int {
 	return randv2.IntN(900000) + 100000
+}
+
+type RouteAndHandler struct {
+	pattern string
+	chain   alice.Chain
+	handler http.Handler
 }
 
 // RouteGenerator's point is to passthrough the path correctly to the std.Handler() of slok/go-http-metrics
@@ -24,6 +31,7 @@ func twoFactorCode() int {
 type RouteGenerator struct {
 	Prefix string
 	Path   string
+	routes []*RouteAndHandler
 }
 
 func (rg *RouteGenerator) Route(method string, parts ...string) string {
@@ -53,6 +61,36 @@ func (rg *RouteGenerator) LastPath() string {
 	// side-effect: this will cause go http metrics handler to use handlerID based on request Path
 	rg.Path = ""
 	return result
+}
+
+func (rg *RouteGenerator) Handler(pattern string) (*RouteAndHandler, bool) {
+	for _, route := range rg.routes {
+		if route.pattern == pattern {
+			return route, true
+		}
+	}
+
+	return nil, false
+}
+
+func (rg *RouteGenerator) Handle(pattern string, chain alice.Chain, handler http.Handler) {
+	if route, ok := rg.Handler(pattern); ok {
+		route.chain = chain
+		route.handler = handler
+		return
+	}
+
+	rg.routes = append(rg.routes, &RouteAndHandler{
+		pattern: pattern,
+		chain:   chain,
+		handler: handler,
+	})
+}
+
+func (rg *RouteGenerator) Register(router *http.ServeMux) {
+	for _, route := range rg.routes {
+		router.Handle(route.pattern, route.chain.Then(route.handler))
+	}
 }
 
 func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, error) {
@@ -153,6 +191,12 @@ func (s *Server) SessionUser(ctx context.Context, sess *session.Session) (*dbgen
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sess := s.Session(w, r)
+	if userID, ok := sess.Get(ctx, session.KeyUserID).(int32); ok {
+		s.Store.AuditLog().RecordEvent(ctx, newUserAuthAuditLogEvent(userID, common.AuditLogActionLogout))
+	}
+
 	s.Sessions.SessionDestroy(w, r)
 	common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusOK, w, r)
 }
@@ -172,5 +216,26 @@ func (s *Server) createDemoCaptchaRenderContext(sitekey string) CaptchaRenderCon
 		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: common.ParamPortalSolution,
 		CaptchaSitekey:       sitekey,
+	}
+}
+
+func newAccessAuditLogEvent(user *dbgen.User, tableName string, entityID int64, entityName string, view string) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionAccess,
+		EntityID:  entityID,
+		TableName: tableName,
+		NewValue:  &db.AuditLogAccess{View: view, EntityName: entityName},
+	}
+}
+
+func newUserAuthAuditLogEvent(userID int32, action common.AuditLogAction) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    userID,
+		Action:    action,
+		EntityID:  int64(userID),
+		TableName: db.TableNameUsers,
+		OldValue:  nil,
+		NewValue:  nil,
 	}
 }

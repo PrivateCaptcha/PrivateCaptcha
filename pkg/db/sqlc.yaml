@@ -46,6 +46,17 @@ sql:
           backend_subscription_source_internal: SubscriptionSourceInternal
           backend_notification_template: NotificationTemplate
           backend_user_notification: UserNotification
+          backend_audit_log: AuditLog
+          backend_audit_log_action: AuditLogAction
+          backend_audit_log_action_create: AuditLogActionCreate
+          backend_audit_log_action_update: AuditLogActionUpdate
+          backend_audit_log_action_delete: AuditLogActionDelete
+          backend_audit_log_action_unknown: AuditLogActionUnknown
+          backend_audit_log_action_softdelete: AuditLogActionSoftDelete
+          backend_audit_log_action_recover: AuditLogActionRecover
+          backend_audit_log_action_login: AuditLogActionLogin
+          backend_audit_log_action_logout: AuditLogActionLogout
+          backend_audit_log_action_access: AuditLogActionAccess
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"

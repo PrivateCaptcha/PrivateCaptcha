@@ -141,6 +141,8 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	store.Start(ctx, 1*time.Second)
+
 	if err := server.Init(ctx, templatesBuilder, "", 1*time.Second); err != nil {
 		panic(err)
 	}

@@ -1,0 +1,72 @@
+{{if .Params.ErrorMessage}}
+<div class="pb-5">{{template "error-message.html" .Params.ErrorMessage}}</div>
+{{else if .Params.SuccessMessage}}
+<div class="pb-5">{{template "success-message.html" .Params.SuccessMessage}}</div>
+{{else if .Params.InfoMessage}}
+<div class="pb-5">{{template "info-message.html" .Params.InfoMessage}}</div>
+{{else if .Params.WarningMessage}}
+<div class="pb-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
+{{end}}
+<div class="sm:flex sm:items-center">
+    <div class="sm:flex-auto">
+        <p class="mt-2 text-sm text-gray-700">A list of events that happend with or related to your account.</p>
+    </div>
+    <div class="mt-4 sm:ml-16 sm:mt-0 sm:flex-none">
+        <div class="flex flex-row gap-x-6 items-center">
+            <select name="{{ .Const.Days }}"
+                {{ if $.Platform.Enterprise }}
+                hx-get="{{ partsURL $.Const.AuditLogsEndpoint $.Const.EventsEndpoint }}" hx-target="#auditlogs"
+                {{ else }}
+                disabled
+                {{end}}
+                class="pc-internal-form-select min-w-48 {{ if not $.Platform.Enterprise }}pc-internal-form-select-disabled{{end}}">
+                {{ range list 14 30 90 180 365 }}
+                <option value="{{ . }}" {{ if eq $.Params.Days . }}selected="selected"{{ end }}>{{ . }} days</option>
+                {{ end }}
+            </select>
+            <a href="{{ if $.Platform.Enterprise }}{{ partsURL $.Const.AuditLogsEndpoint $.Const.ExportEndpoint }}?{{ $.Const.Days }}={{ $.Params.Days }}{{else}}#{{end}}"
+                {{ if not $.Platform.Enterprise }}disabled{{end}}
+                class="pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-secondary{{else}}pc-internal-form-button-disabled{{end}}">
+                Export to CSV
+            </a>
+        </div>
+    </div>
+</div>
+<div class="mt-8 flow-root">
+    <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+        <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+            {{ template "auditlog-table.html" . }}
+        </div>
+    </div>
+</div>
+<nav aria-label="Pagination" class="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
+    <div class="hidden sm:block">
+        <p class="text-sm text-gray-700">
+        Showing
+        <span class="font-medium">{{.Params.From}}</span>
+        to
+        <span class="font-medium">{{.Params.To}}</span>
+        of
+        <span class="font-medium">{{ if $.Platform.Enterprise }}{{.Params.Count}}{{else}}?{{end}}</span>
+        results
+        </p>
+    </div>
+    <div class="flex flex-1 justify-between sm:justify-end">
+        <button
+            hx-get="{{ partsURL $.Const.AuditLogsEndpoint $.Const.EventsEndpoint }}"
+            hx-target="#auditlogs"
+            hx-vals='{"{{$.Const.Days}}": {{ .Params.Days }}, "{{$.Const.Page}}": {{if gt .Params.Page 0}}{{sub .Params.Page 1}}{{else}}0{{end}}}'
+            {{if le .Params.Page 0}}disabled{{end}}
+            class="pc-internal-form-button {{if le .Params.Page 0}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
+            Previous
+        </button>
+        <button
+            hx-get="{{ partsURL $.Const.AuditLogsEndpoint $.Const.EventsEndpoint }}"
+            hx-target="#auditlogs"
+            hx-vals='{"{{$.Const.Days}}": {{ .Params.Days }}, "{{$.Const.Page}}": {{if lt .Params.To .Params.Count}}{{plus1 .Params.Page}}{{else}}{{.Params.Page}}{{end}}}'
+            {{if ge .Params.To .Params.Count}}disabled{{end}}
+            class="ml-3 pc-internal-form-button {{if ge .Params.To .Params.Count}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
+            Next
+        </button>
+    </div>
+</nav>

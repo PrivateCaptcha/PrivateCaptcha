@@ -28,18 +28,21 @@ const (
 	userNameErrorMessage     = "Name contains invalid characters."
 )
 
-func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (Model, string, error) {
+func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	if !s.canRegister.Load() {
-		return nil, "", errRegistrationDisabled
+		return nil, errRegistrationDisabled
 	}
 
-	return &loginRenderContext{
-		CsrfRenderContext: CsrfRenderContext{
-			Token: s.XSRF.Token(""),
+	return &ViewModel{
+		Model: &loginRenderContext{
+			CsrfRenderContext: CsrfRenderContext{
+				Token: s.XSRF.Token(""),
+			},
+			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+			IsRegister:           true,
 		},
-		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
-		IsRegister:           true,
-	}, loginTemplate, nil
+		View: loginTemplate,
+	}, nil
 }
 
 func isUserNameValid(name string) bool {
@@ -212,13 +215,16 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 	var user *dbgen.User
 	var org *dbgen.Organization
 
-	if err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	if auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var err error
-		user, org, err = impl.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
-		return err
+		var auditEvents []*common.AuditLogEvent
+		user, org, auditEvents, err = impl.CreateNewAccount(ctx, subscrParams, email, name, common.DefaultOrgName, -1 /*existing user ID*/)
+		return auditEvents, err
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to create user account in Store", common.ErrAttr(err))
 		return nil, nil, err
+	} else {
+		s.Store.AuditLog().RecordEvents(ctx, auditEvents)
 	}
 
 	job := s.Jobs.OnboardUser(user, plan)

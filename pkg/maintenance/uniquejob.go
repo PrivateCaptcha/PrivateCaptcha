@@ -38,16 +38,20 @@ func (j *UniquePeriodicJob) NewParams() any {
 func (j *UniquePeriodicJob) acquireLock(ctx context.Context, lockName string) error {
 	expiration := time.Now().UTC().Add(j.LockDuration)
 
-	return j.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	_, err := j.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		_, err := impl.AcquireLock(ctx, lockName, nil /*data*/, expiration)
-		return err
+		return nil, err
 	})
+	return err
 }
 
 func (j *UniquePeriodicJob) releaseLock(ctx context.Context, lockName string) error {
-	return j.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
-		return impl.ReleaseLock(ctx, lockName)
+	_, err := j.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		err := impl.ReleaseLock(ctx, lockName)
+		return nil, err
 	})
+
+	return err
 }
 
 func (j *UniquePeriodicJob) RunOnce(ctx context.Context, params any) error {

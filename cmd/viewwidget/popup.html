@@ -36,7 +36,7 @@
                                 <div>
                                     <label for="email" class="pc-form-label"> Email </label>
                                     <div class="mt-2.5 relative">
-                                        <input type="email" name="email" placeholder="Email address" class="pc-form-input-base pc-form-input-normal" required />
+                                        <input type="email" name="email" placeholder="Email address" class="w-full pc-form-input-base pc-form-input-normal" required />
                                     </div>
                                 </div>
                             </div>
@@ -54,7 +54,7 @@
                                     {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
                                     {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>
                                 </div>
-                                <button id="formSubmit" type="button" class="pc-form-button" onclick="this.disabled=true; document.getElementById('pcWidget')._privateCaptcha.execute()">
+                                <button id="formSubmit" type="button" class="w-full pc-form-button" onclick="this.disabled=true; document.getElementById('pcWidget')._privateCaptcha.execute()">
                                     Submit
                                 </button>
                             </div>

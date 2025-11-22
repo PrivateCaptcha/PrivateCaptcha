@@ -37,13 +37,16 @@ const (
 	defaultCacheTTL          = 15 * time.Minute
 	defaultCacheRefresh      = 30 * time.Minute
 	negativeCacheTTL         = 5 * time.Minute
+	auditBatchSize           = 100
 )
 
 type BusinessStore struct {
-	Pool          *pgxpool.Pool
-	defaultImpl   *BusinessStoreImpl
-	cacheOnlyImpl *BusinessStoreImpl
-	Cache         common.Cache[CacheKey, any]
+	Pool            *pgxpool.Pool
+	defaultImpl     *BusinessStoreImpl
+	cacheOnlyImpl   *BusinessStoreImpl
+	Cache           common.Cache[CacheKey, any]
+	auditLog        *AuditLog
+	discardAuditLog *DiscardAuditLog
 	// this could have been a bloom/cuckoo filter with expiration, if they existed
 	puzzleCache     *puzzleCache
 	MaintenanceMode atomic.Bool
@@ -51,12 +54,13 @@ type BusinessStore struct {
 
 type Implementor interface {
 	Impl() *BusinessStoreImpl
-	WithTx(ctx context.Context, fn func(*BusinessStoreImpl) error) error
+	WithTx(ctx context.Context, fn func(*BusinessStoreImpl) ([]*common.AuditLogEvent, error)) ([]*common.AuditLogEvent, error)
 	Ping(ctx context.Context) error
 	CheckVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, maxCount uint32) bool
 	CacheVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle, tnow time.Time)
 	CheckUserPropertyAccess(ctx context.Context, property *dbgen.Property, userID int32) bool
 	CacheHitRatio() float64
+	AuditLog() common.AuditLog
 }
 
 var _ Implementor = (*BusinessStore)(nil)
@@ -80,17 +84,29 @@ func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *Busin
 		querier = dbgen.New(pool)
 	}
 
+	auditLog := NewAuditLog(querier, auditBatchSize)
+
 	return &BusinessStore{
-		Pool:          pool,
-		defaultImpl:   &BusinessStoreImpl{cache: cache, querier: querier},
-		cacheOnlyImpl: &BusinessStoreImpl{cache: cache},
-		Cache:         cache,
-		puzzleCache:   newPuzzleCache(puzzle.DefaultValidityPeriod),
+		Pool:            pool,
+		auditLog:        auditLog,
+		discardAuditLog: &DiscardAuditLog{},
+		defaultImpl:     &BusinessStoreImpl{cache: cache, querier: querier},
+		cacheOnlyImpl:   &BusinessStoreImpl{cache: cache},
+		Cache:           cache,
+		puzzleCache:     newPuzzleCache(puzzle.DefaultValidityPeriod),
 	}
 }
 
 func (s *BusinessStore) UpdateConfig(maintenanceMode bool) {
 	s.MaintenanceMode.Store(maintenanceMode)
+}
+
+func (s *BusinessStore) AuditLog() common.AuditLog {
+	if s.MaintenanceMode.Load() {
+		return s.discardAuditLog
+	}
+
+	return s.auditLog
 }
 
 func (s *BusinessStore) Impl() *BusinessStoreImpl {
@@ -101,14 +117,22 @@ func (s *BusinessStore) Impl() *BusinessStoreImpl {
 	return s.defaultImpl
 }
 
-func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) error) error {
+func (s *BusinessStore) Start(ctx context.Context, auditLogInterval time.Duration) {
+	s.auditLog.Start(ctx, auditLogInterval)
+}
+
+func (s *BusinessStore) Shutdown() {
+	s.auditLog.Shutdown()
+}
+
+func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) ([]*common.AuditLogEvent, error)) ([]*common.AuditLogEvent, error) {
 	if s.MaintenanceMode.Load() {
-		return ErrMaintenance
+		return nil, ErrMaintenance
 	}
 
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if err != nil {
@@ -121,21 +145,22 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 	db := dbgen.New(s.Pool)
 	tmpCache := NewTxCache()
 	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx)}
+	var auditEvents []*common.AuditLogEvent
 
-	err = fn(impl)
+	auditEvents, err = fn(impl)
 
 	if err != nil {
-		return err
+		return auditEvents, err
 	}
 
 	err = tx.Commit(ctx)
 	if err != nil {
-		return err
+		return auditEvents, err
 	}
 
 	tmpCache.Commit(ctx, s.Cache)
 
-	return nil
+	return auditEvents, nil
 }
 
 func (s *BusinessStore) Ping(ctx context.Context) error {

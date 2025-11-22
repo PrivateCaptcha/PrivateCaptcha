@@ -182,7 +182,8 @@ func (j *CleanupExpiredTrialUsersJob) RunOnce(ctx context.Context, params any) e
 			time.Sleep(b.Duration())
 		}
 
-		err = j.BusinessDB.Impl().SoftDeleteUser(ctx, u)
+		// NOTE: we don't record audit event because this is not what user did themselves
+		_, err = j.BusinessDB.Impl().SoftDeleteUser(ctx, u)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", u.ID, common.ErrAttr(err))
 		}
@@ -234,4 +235,40 @@ func (j *ExpireInternalTrialsJob) RunOnce(ctx context.Context, params any) error
 	to := time.Now().Add(-p.Age)
 	from := to.Add(-(p.PastInterval + j.Interval() + j.Jitter()))
 	return j.BusinessDB.Impl().ExpireInternalTrials(ctx, from, to, j.PlanService.ActiveTrialStatus(), j.PlanService.ExpiredTrialStatus())
+}
+
+type CleanupAuditLogJob struct {
+	BusinessDB   db.Implementor
+	PastInterval time.Duration
+}
+
+type CleanupAuditLogParams struct {
+	PastInterval time.Duration `json:"past_interval"`
+}
+
+func (j *CleanupAuditLogJob) NewParams() any {
+	return &CleanupAuditLogParams{
+		PastInterval: j.PastInterval,
+	}
+}
+func (j *CleanupAuditLogJob) RunOnce(ctx context.Context, params any) error {
+	p, ok := params.(*CleanupAuditLogParams)
+	if !ok || (p == nil) {
+		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
+		p = j.NewParams().(*CleanupAuditLogParams)
+	}
+
+	return j.BusinessDB.Impl().DeleteOldAuditLogs(ctx, time.Now().UTC().Add(-p.PastInterval))
+}
+
+func (j *CleanupAuditLogJob) Interval() time.Duration {
+	return 1 * time.Hour
+}
+
+func (j *CleanupAuditLogJob) Jitter() time.Duration {
+	return 30 * time.Minute
+}
+
+func (j *CleanupAuditLogJob) Name() string {
+	return "cleanup_audit_log_job"
 }

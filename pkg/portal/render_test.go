@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
@@ -57,6 +58,48 @@ func stubAPIKey(name string) *userAPIKey {
 		Secret:      "",
 		ExpiresSoon: false,
 	}
+}
+
+func stubAuditLogs() []*userAuditLog {
+	tables := []string{
+		db.TableNameOrgUsers,
+		db.TableNameAPIKeys,
+		db.TableNameProperties,
+		db.TableNameOrgs,
+		db.TableNameUsers,
+		db.TableNameAuditLogs,
+	}
+
+	actions := []dbgen.AuditLogAction{
+		dbgen.AuditLogActionUnknown,
+		dbgen.AuditLogActionCreate,
+		dbgen.AuditLogActionUpdate,
+		dbgen.AuditLogActionSoftDelete,
+		dbgen.AuditLogActionDelete,
+		dbgen.AuditLogActionRecover,
+		dbgen.AuditLogActionLogin,
+		dbgen.AuditLogActionLogout,
+		dbgen.AuditLogActionAccess,
+	}
+
+	result := make([]*userAuditLog, 0)
+
+	for _, table := range tables {
+		for _, action := range actions {
+			result = append(result, &userAuditLog{
+				UserName:  "User Name",
+				UserEmail: "foo@bar.com",
+				Action:    string(action),
+				Property:  "Property",
+				Resource:  "Resource",
+				Value:     "Value",
+				TableName: table,
+				Time:      time.Now().Format(auditLogTimeFormat),
+			})
+		}
+	}
+
+	return result
 }
 
 func TestRenderHTML(t *testing.T) {
@@ -146,6 +189,20 @@ func TestRenderHTML(t *testing.T) {
 			},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.EventsEndpoint},
+			template: orgAuditLogsTemplate,
+			model: &orgAuditLogsRenderContext{
+				AuditLogsRenderContext: AuditLogsRenderContext{
+					AuditLogs: stubAuditLogs(),
+					Count:     12345,
+					Page:      10,
+					PerPage:   25,
+				},
+				CurrentOrg: stubOrg("123"),
+				CanView:    true,
+			},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, common.NewEndpoint},
 			template: propertyWizardTemplate,
 			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken()},
@@ -188,6 +245,28 @@ func TestRenderHTML(t *testing.T) {
 					Property:          stubProperty("Foo", "123"),
 					Org:               stubOrg("123"),
 					CanEdit:           true,
+				},
+			},
+		},
+		// same as above, but property audit logs _template_
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
+			template: propertyDashboardAuditLogsTemplate,
+			model: &propertyAuditLogsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					AlertRenderContext: AlertRenderContext{
+						SuccessMessage: "Test",
+					},
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				AuditLogsRenderContext: AuditLogsRenderContext{
+					AuditLogs: stubAuditLogs(),
+					Count:     12345,
+					Page:      10,
+					PerPage:   25,
 				},
 			},
 		},
@@ -241,6 +320,24 @@ func TestRenderHTML(t *testing.T) {
 					Tabs:        CreateTabViewModels(common.UsageEndpoint, server.SettingsTabs),
 				},
 				Limit: 12345,
+			},
+			selector: "",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.AuditLogsEndpoint},
+			template: auditLogsTemplate,
+			model: &mainAuditLogsRenderContext{
+				CsrfRenderContext: stubToken(),
+				AuditLogsRenderContext: AuditLogsRenderContext{
+					AuditLogs: stubAuditLogs(),
+					Count:     12345,
+					Page:      10,
+					PerPage:   25,
+				},
+				From: 1,
+				To:   10,
+				Days: 365,
 			},
 			selector: "",
 			matches:  []string{},

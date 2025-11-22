@@ -44,6 +44,7 @@ const (
 	_shutdownPeriod         = 10 * time.Second
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
+	_auditLogInterval       = 10 * time.Second
 )
 
 const (
@@ -260,7 +261,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	router := http.NewServeMux()
 	apiServer.Setup(router, apiURLConfig.Domain(), verbose, common.NoopMiddleware)
 	portalDomain := portalURLConfig.Domain()
-	_ = portalServer.Setup(router, portalDomain, common.NoopMiddleware)
+	portalServer.Setup(portalDomain, common.NoopMiddleware).Register(router)
 	rateLimiter := ipRateLimiter.RateLimitExFunc(publicLeakyBucketCap, publicLeakInterval)
 	cdnDomain := cdnURLConfig.Domain()
 	cdnChain := alice.New(common.Recovered, metrics.CDNHandler, rateLimiter)
@@ -321,6 +322,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		}
 	}()
 
+	businessDB.Start(ctx, _auditLogInterval)
+
 	jobs.Spawn(healthCheck)
 	// start maintenance jobs
 	jobs.Add(&maintenance.CleanupDBCacheJob{Store: businessDB})
@@ -376,6 +379,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BusinessDB:   businessDB,
 		PlanService:  planService,
 	})
+	jobs.AddLocked(24*time.Hour, &maintenance.CleanupAuditLogJob{
+		PastInterval: 365 * 24 * time.Hour,
+		BusinessDB:   businessDB,
+	})
 	jobs.RunAll()
 
 	var localServer *http.Server
@@ -409,6 +416,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
+		businessDB.Shutdown()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)

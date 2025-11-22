@@ -15,7 +15,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" {{ if .Params.EditEmail }}disabled{{ end }} maxlength="255" value="{{ .Params.Name }}" class="pc-internal-form-input-base {{ if not .Params.EditEmail }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" {{ if .Params.EditEmail }}disabled{{ end }} maxlength="255" value="{{ .Params.Name }}" class="w-full pc-internal-form-input-base {{ if not .Params.EditEmail }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
@@ -29,7 +29,7 @@
             {{- if .Params.TwoFactorError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="pc-internal-form-input-base {{ if .Params.TwoFactorError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9]{6}" required />
+            <input type="text" name="{{ .Const.VerificationCode }}" placeholder="XXXXXX" class="w-full pc-internal-form-input-base {{ if .Params.TwoFactorError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" pattern="[0-9]{6}" required />
         </div>
         {{- if .Params.TwoFactorError -}}
         <p class="pc-form-error-text">{{ .Params.TwoFactorError }}</p>
@@ -42,7 +42,7 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" maxlength="255" placeholder="{{ .Params.Email }}" class="pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="email" name="{{ .Const.Email }}" maxlength="255" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>

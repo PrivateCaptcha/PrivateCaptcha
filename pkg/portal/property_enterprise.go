@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -80,10 +81,53 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if updatedProperty, err := s.Store.Impl().MoveProperty(ctx, property, orgs[idx]); err == nil {
+	if updatedProperty, auditEvent, err := s.Store.Impl().MoveProperty(ctx, user, property, orgs[idx]); err == nil {
 		propertyDashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(updatedProperty.OrgID.Int32)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(updatedProperty.ID)))
 		common.Redirect(propertyDashboardURL, http.StatusOK, w, r)
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}
+}
+
+func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*propertyAuditLogsRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, property, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &propertyAuditLogsRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		AuditLogsRenderContext:         AuditLogsRenderContext{},
+		CanView:                        (property.CreatorID.Int32 == user.ID) || (property.OrgOwnerID.Int32 == user.ID),
+	}
+
+	renderCtx.Tab = propertyAuditLogsTabIndex
+
+	if !renderCtx.CanView {
+		renderCtx.WarningMessage = "You do not have permissions to view audit logs of this property."
+		return renderCtx, nil, nil
+	}
+
+	auditEvent := newAccessAuditLogEvent(user, db.TableNameProperties, int64(property.ID), property.Name, common.AuditLogsEndpoint)
+
+	const maxPropertyAuditLogs = 5
+	logs, err := s.Store.Impl().RetrievePropertyAuditLogs(ctx, property, maxPropertyAuditLogs)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve property audit logs. Please try again later."
+		return renderCtx, auditEvent, nil
+	}
+	renderCtx.AuditLogs = s.newPropertyAuditLogs(ctx, user, logs)
+	renderCtx.PerPage = perPageEventLogs
+	renderCtx.Count = len(renderCtx.AuditLogs)
+	renderCtx.Page = 0
+
+	return renderCtx, auditEvent, nil
 }

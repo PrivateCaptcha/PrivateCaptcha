@@ -91,6 +91,7 @@ func NewTemplatesBuilder() *TemplatesBuilder {
 		templateRootDir: "layouts",
 		functions: template.FuncMap{
 			"qescape":  url.QueryEscape,
+			"title":    englishCaser.String,
 			"safeHTML": func(s string) any { return template.HTML(s) },
 			"safeJS":   func(s string) any { return template.JS(s) },
 			"plus1":    func(x int) int { return x + 1 },
@@ -108,6 +109,17 @@ func NewTemplatesBuilder() *TemplatesBuilder {
 					dict[key] = values[i+1]
 				}
 				return dict, nil
+			},
+			"in": func(val string, list ...string) bool {
+				for _, v := range list {
+					if v == val {
+						return true
+					}
+				}
+				return false
+			},
+			"list": func(values ...interface{}) []interface{} {
+				return values
 			},
 		},
 	}

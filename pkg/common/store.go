@@ -8,7 +8,9 @@ import (
 
 type IdentifierHasher interface {
 	Encrypt(id int) string
+	Encrypt64(id int64) string
 	Decrypt(id string) (int, error)
+	Decrypt64(id string) (int64, error)
 }
 
 // this is an exact copy of otter's Loader
@@ -67,4 +69,9 @@ type PortalMetrics interface {
 	// this method is used for our error page redirects that are not captured by usual monitoring middleware
 	// as we don't actually return an HTTP error out
 	ObserveHttpError(handlerID string, method string, code int)
+}
+
+type AuditLog interface {
+	RecordEvent(ctx context.Context, event *AuditLogEvent)
+	RecordEvents(ctx context.Context, events []*AuditLogEvent)
 }

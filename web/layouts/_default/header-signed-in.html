@@ -44,6 +44,7 @@
                                     x-transition:leave-end="transform opacity-0 scale-95"
                                     class="absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-white py-1 shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none" role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
                                     <!-- Active: "bg-gray-100", Not Active: "" -->
+                                    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-1">Audit logs</a>
                                     <a href="{{ relURL .Const.SettingsEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-1">Settings</a>
                                     <a href="{{ relURL .Const.LogoutEndpoint }}" class="hover:bg-gray-100 block px-4 py-2 text-sm text-gray-700" role="menuitem" tabindex="-1" id="user-menu-item-3">Sign out</a>
                                 </div>
@@ -88,6 +89,7 @@
                     </div>
                 </div>
                 <div class="mt-3 space-y-1 px-2">
+                    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Audit logs</a>
                     <a href="{{ relURL .Const.SettingsEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Settings</a>
                     <a href="{{ relURL .Const.LogoutEndpoint }}" class="block rounded-md px-3 py-2 text-base font-medium text-gray-400 hover:bg-pcteal-700 hover:text-white">Sign out</a>
                 </div>

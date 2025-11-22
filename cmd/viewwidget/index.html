@@ -36,7 +36,7 @@
                                 <div>
                                     <label for="email" class="pc-form-label"> Email </label>
                                     <div class="mt-2.5 relative">
-                                        <input type="email" name="email" placeholder="Email address" class="pc-form-input-base pc-form-input-normal" required />
+                                        <input type="email" name="email" placeholder="Email address" class="w-full pc-form-input-base pc-form-input-normal" required />
                                     </div>
                                 </div>
                             </div>
@@ -52,7 +52,7 @@
                                 {{ if .Debug }}data-debug="{{.Debug}}"{{end}}
                                 {{ if .Mode }}data-start-mode="{{.Mode}}"{{end}}>
                             </div>
-                            <button id="formSubmit" type="submit" class="pc-form-button" disabled>
+                            <button id="formSubmit" type="submit" class="w-full pc-form-button" disabled>
                                 Submit
                             </button>
                         </form>

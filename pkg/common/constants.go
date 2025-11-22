@@ -13,6 +13,7 @@ const (
 	ContentTypeHTML       = "text/html; charset=utf-8"
 	ContentTypeJSON       = "application/json"
 	ContentTypeURLEncoded = "application/x-www-form-urlencoded"
+	ContentTypeCSV        = "text/csv"
 	ParamSiteKey          = "sitekey"
 	ParamSecret           = "secret"
 	ParamResponse         = "response"
@@ -44,6 +45,7 @@ const (
 	ParamPortalSolution   = "pc_portal_solution"
 	ParamTerms            = "terms"
 	ParamMaxReplayCount   = "max_replay_count"
+	ParamPage             = "page"
 )
 
 var (

@@ -34,7 +34,7 @@ func TestSoftDeleteOrganization(t *testing.T) {
 		t.Errorf("Expected to find the created organization, but got: %v", orgs)
 	}
 
-	err = store.Impl().SoftDeleteOrganization(ctx, org, user)
+	_, err = store.Impl().SoftDeleteOrganization(ctx, org, user)
 	if err != nil {
 		t.Fatalf("Failed to soft delete organization: %v", err)
 	}
@@ -55,20 +55,18 @@ func TestSoftDeleteProperty(t *testing.T) {
 
 	ctx := context.TODO()
 
-	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
-	prop, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       "Test Property",
-		OrgID:      db.Int(org.ID),
-		CreatorID:  org.UserID,
-		OrgOwnerID: org.UserID,
-		Domain:     "example.com",
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	})
+	prop, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
+		Name:      "Test Property",
+		CreatorID: org.UserID,
+		Domain:    "example.com",
+		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:    dbgen.DifficultyGrowthMedium,
+	}, org)
 	//propName, org.ID, org.UserID.Int32, domain, level, growth)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
@@ -87,7 +85,7 @@ func TestSoftDeleteProperty(t *testing.T) {
 	}
 
 	// Soft delete the property
-	err = store.Impl().SoftDeleteProperty(ctx, prop, org)
+	_, err = store.Impl().SoftDeleteProperty(ctx, prop, org, user)
 	if err != nil {
 		t.Fatalf("Failed to soft delete property: %v", err)
 	}
@@ -107,10 +105,10 @@ func TestSoftDeleteProperty(t *testing.T) {
 
 func acquireLock(ctx context.Context, store db.Implementor, name string, expiration time.Time) (*dbgen.Lock, error) {
 	var lock *dbgen.Lock
-	err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
+	_, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var err error
 		lock, err = impl.AcquireLock(ctx, name, nil, expiration)
-		return err
+		return nil, err
 	})
 
 	return lock, err
@@ -179,8 +177,8 @@ func TestLockUnlock(t *testing.T) {
 		t.Fatal("Was able to acquire a lock again right away")
 	}
 
-	err = store.WithTx(ctx, func(impl *db.BusinessStoreImpl) error {
-		return impl.ReleaseLock(ctx, lockName)
+	_, err = store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		return nil, impl.ReleaseLock(ctx, lockName)
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -251,7 +249,7 @@ func TestUpdateUserSubscription(t *testing.T) {
 	subscrParams := db_tests.CreateNewSubscriptionParams(testPlan)
 	subscrParams.Source = dbgen.SubscriptionSourceExternal
 
-	newUser, _, err := store.Impl().CreateNewAccount(ctx, subscrParams, user.Email, "", common.DefaultOrgName, user.ID)
+	newUser, _, _, err := store.Impl().CreateNewAccount(ctx, subscrParams, user.Email, "", common.DefaultOrgName, user.ID)
 	if err != nil {
 		t.Fatalf("Failed to update subscription: %v", err)
 	}

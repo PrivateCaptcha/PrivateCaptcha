@@ -36,7 +36,7 @@ func TestPostRegister(t *testing.T) {
 	}
 
 	srv := http.NewServeMux()
-	_ = server.Setup(srv, portalDomain(), common.NoopMiddleware)
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
 	email := t.Name() + "@privatecaptcha.com"
 	name := "Foo Bar"
