@@ -2,7 +2,6 @@ package portal
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,7 +25,7 @@ func TestPostTwoFactor(t *testing.T) {
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -88,7 +87,7 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {

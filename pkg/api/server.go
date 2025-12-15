@@ -24,7 +24,6 @@ import (
 
 const (
 	maxSolutionsBodySize  = 256 * 1024
-	maxAPIPostBodySize    = 128 * 1024
 	VerifyBatchSize       = 100
 	PropertyBucketSize    = 5 * time.Minute
 	updateLimitsBatchSize = 100
@@ -85,6 +84,7 @@ type Server struct {
 	Verifier           *Verifier
 	SubscriptionLimits db.SubscriptionLimits
 	IDHasher           common.IdentifierHasher
+	AsyncTasks         db.AsyncTasks
 }
 
 type apiKeyOwnerSource struct {
@@ -161,6 +161,7 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDela
 
 	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/)
 	s.Auth.StartBackfill(authBackfillDelay)
+	s.RegisterTaskHandlers(ctx)
 
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelVerifyCtx context.Context
@@ -211,9 +212,9 @@ func (s *Server) Shutdown() {
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
 	svc := common.ServiceMiddleware(ApiService)
-	publicChain := alice.New(svc, common.Recovered, security, s.Metrics.Handler)
+	publicChain := alice.New(svc, common.Recovered, security)
 	// NOTE: auth middleware provides rate limiting internally
-	puzzleChain := publicChain.Append(s.RateLimiter.RateLimit, monitoring.Traced, common.TimeoutHandler(1*time.Second))
+	puzzleChain := publicChain.Append(s.Metrics.Handler, s.RateLimiter.RateLimit, monitoring.Traced, common.TimeoutHandler(1*time.Second))
 	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(corsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))
 	rg.Handle(rg.Options(common.PuzzleEndpoint), puzzleChain.Append(common.Cached, corsHandler, s.Auth.SitekeyOptions), http.HandlerFunc(s.puzzlePreFlight))
 
@@ -226,7 +227,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	)
 	apiRateLimiter := s.RateLimiter.RateLimitExFunc(apiKeyLeakyBucketCap, apiKeyLeakInterval)
 
-	verifyChain := publicChain.Append(apiRateLimiter, monitoring.Traced, common.TimeoutHandler(5*time.Second))
+	verifyChain := publicChain.Append(s.Metrics.Handler, apiRateLimiter, monitoring.Traced, common.TimeoutHandler(5*time.Second))
 	// reCAPTCHA compatibility
 	// the difference from our side is _when_ we fetch API key: for reCAPTCHA it comes in form field "secret" and
 	// we want to put it _behind_ the MaxBytesHandler, while for Private Captcha format (header) it can be before
@@ -238,7 +239,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
 	// "root" access
-	rg.Handle(rg.Prefix+"{$}", publicChain, common.HttpStatus(http.StatusForbidden))
+	rg.Handle(rg.Prefix+"{$}", publicChain.Append(s.Metrics.Handler), common.HttpStatus(http.StatusForbidden))
 }
 
 func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {

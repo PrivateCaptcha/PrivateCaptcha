@@ -14,6 +14,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -88,6 +89,7 @@ func TestMain(m *testing.M) {
 		VerifyLogCancel:    func() {},
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
+		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
 	}
 	if err := s.Init(context.TODO(), verifyFlushInterval, authBackfillDelay); err != nil {
 		panic(err)

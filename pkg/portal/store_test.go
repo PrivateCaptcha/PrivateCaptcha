@@ -17,7 +17,7 @@ func TestSoftDeleteOrganization(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	// Create a new user and organization
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
@@ -53,20 +53,14 @@ func TestSoftDeleteProperty(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create new account: %v", err)
 	}
 
-	prop, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      "Test Property",
-		CreatorID: org.UserID,
-		Domain:    "example.com",
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example.com"), org)
 	//propName, org.ID, org.UserID.Int32, domain, level, growth)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
@@ -119,7 +113,7 @@ func TestLockTwice(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	const lockDuration = 2 * time.Second
 	var lockName = t.Name()
 
@@ -162,7 +156,7 @@ func TestLockUnlock(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	const lockDuration = 10 * time.Second
 	var lockName = t.Name()
 	expiration := time.Now().UTC().Add(lockDuration)
@@ -196,7 +190,7 @@ func TestSystemNotification(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	tnow := time.Now().UTC()
 
 	// Create a new user and organization
@@ -237,7 +231,7 @@ func TestUpdateUserSubscription(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {

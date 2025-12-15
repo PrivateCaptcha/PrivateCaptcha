@@ -130,6 +130,14 @@ func UUIDToSecret(uuid pgtype.UUID) string {
 	return APIKeyPrefix + hex.EncodeToString(uuid.Bytes[:])
 }
 
+func UUIDToString(uuid pgtype.UUID) string {
+	if !uuid.Valid {
+		return ""
+	}
+
+	return hex.EncodeToString(uuid.Bytes[:])
+}
+
 func UUIDFromSecret(s string) pgtype.UUID {
 	if !strings.HasPrefix(s, APIKeyPrefix) {
 		return invalidUUID
@@ -139,6 +147,31 @@ func UUIDFromSecret(s string) pgtype.UUID {
 
 	if len(s) != SitekeyLen {
 		return invalidUUID
+	}
+
+	var result pgtype.UUID
+
+	byteArray, err := hex.DecodeString(s)
+
+	if (err == nil) && (len(byteArray) == len(result.Bytes)) {
+		copy(result.Bytes[:], byteArray)
+		result.Valid = true
+		return result
+	}
+
+	return invalidUUID
+}
+
+func UUIDFromString(s string) pgtype.UUID {
+	if len(s) != hex.EncodedLen(len(invalidUUID.Bytes)) {
+		return invalidUUID
+	}
+
+	for _, c := range s {
+		//nolint:staticcheck
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return invalidUUID
+		}
 	}
 
 	var result pgtype.UUID
@@ -199,6 +232,15 @@ func queryKeySecretUUID(key CacheKey) (pgtype.UUID, error) {
 
 func queryKeySitekeyUUID(key CacheKey) (pgtype.UUID, error) {
 	result := UUIDFromSiteKey(key.StrValue)
+	if !result.Valid {
+		return result, ErrInvalidInput
+	}
+
+	return result, nil
+}
+
+func queryKeyStringUUID(key CacheKey) (pgtype.UUID, error) {
+	result := UUIDFromString(key.StrValue)
 	if !result.Valid {
 		return result, ErrInvalidInput
 	}

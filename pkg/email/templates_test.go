@@ -1,7 +1,6 @@
 package email
 
 import (
-	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -50,7 +49,7 @@ func TestEmailTemplates(t *testing.T) {
 
 	for _, tpl := range templates {
 		t.Run(fmt.Sprintf("emailTemplate_%v", tpl.Name()), func(t *testing.T) {
-			ctx := context.TODO()
+			ctx := t.Context()
 
 			if _, err := tpl.RenderHTML(ctx, data); err != nil {
 				t.Fatal(err)

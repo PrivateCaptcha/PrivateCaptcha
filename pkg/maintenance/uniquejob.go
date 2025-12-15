@@ -35,6 +35,8 @@ func (j *UniquePeriodicJob) NewParams() any {
 	return j.Job.NewParams()
 }
 
+func (j *UniquePeriodicJob) Trigger() <-chan struct{} { return j.Job.Trigger() }
+
 func (j *UniquePeriodicJob) acquireLock(ctx context.Context, lockName string) error {
 	tnow := time.Now().UTC()
 	if lock, err := j.Store.Impl().RetrieveLock(ctx, lockName); (err == nil) && lock.ExpiresAt.Valid && lock.ExpiresAt.Time.After(tnow) {

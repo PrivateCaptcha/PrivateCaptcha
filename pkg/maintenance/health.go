@@ -50,6 +50,10 @@ func (j *HealthCheckJob) NewParams() any {
 	return struct{}{}
 }
 
+func (j *HealthCheckJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (hc *HealthCheckJob) RunOnce(ctx context.Context, params any) error {
 	pgStatus := hc.checkPostgres(ctx)
 	hc.postgresFlag.Store(pgStatus)

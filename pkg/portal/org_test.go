@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -22,7 +21,7 @@ func TestGetAnotherUsersOrg(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	_, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
@@ -64,7 +63,7 @@ func TestInviteUser(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
@@ -126,7 +125,7 @@ func TestDeleteUserFromOrgPermissions(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)

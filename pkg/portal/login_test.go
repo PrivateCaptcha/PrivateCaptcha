@@ -2,7 +2,6 @@ package portal
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -111,7 +110,7 @@ func TestPostLogin(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {

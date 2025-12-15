@@ -17,6 +17,8 @@ func NewCheckLicenseJob(db.Implementor, common.ConfigStore, string, func(ctx con
 type checkLicenseNoopJob struct {
 }
 
+func (j *checkLicenseNoopJob) Trigger() <-chan struct{} { return nil }
+
 func (j *checkLicenseNoopJob) RunOnce(ctx context.Context, params any) error {
 	return nil
 }

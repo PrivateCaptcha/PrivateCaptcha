@@ -31,3 +31,4 @@ func (sm *stubMetrics) ObserveHealth(postgres, clickhouse bool) {}
 func (sm *stubMetrics) ObserveCacheHitRatio(ratio float64)      {}
 
 func (sm *stubMetrics) ObserveHttpError(handlerID string, method string, code int) {}
+func (sm *stubMetrics) ObserveApiError(handlerID string, method string, code int)  {}

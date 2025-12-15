@@ -70,7 +70,7 @@ func TestPersistentSession(t *testing.T) {
 	manager.Init("test", "/", 400*time.Millisecond)
 	defer sessionStore.Shutdown()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	sess1, cookie := setupSessionSuite(ctx, manager, t)
 
@@ -109,7 +109,7 @@ func TestDeleteSession(t *testing.T) {
 	manager.Init("test", "/", 400*time.Millisecond)
 	defer sessionStore.Shutdown()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	sess1, cookie := setupSessionSuite(ctx, manager, t)
 

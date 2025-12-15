@@ -1,7 +1,6 @@
 package license
 
 import (
-	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
@@ -44,7 +43,7 @@ func TestLicenseActivation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg, err := VerifyActivation(context.TODO(), js, []*ActivationKey{{keyID, pubKey}}, tnow)
+	msg, err := VerifyActivation(t.Context(), js, []*ActivationKey{{keyID, pubKey}}, tnow)
 	if err != nil {
 		t.Fatal(err)
 	}

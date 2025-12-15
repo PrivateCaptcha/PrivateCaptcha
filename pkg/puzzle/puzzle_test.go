@@ -2,7 +2,6 @@ package puzzle
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -124,7 +123,7 @@ func TestZeroPuzzleMarshalling(t *testing.T) {
 func TestPuzzlePayloadSuffix(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	solution := make([]byte, SolutionLength)
 	for i := 0; i < SolutionLength; i++ {

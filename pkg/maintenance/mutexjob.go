@@ -16,10 +16,11 @@ type mutexPeriodicJob struct {
 
 var _ common.PeriodicJob = (*mutexPeriodicJob)(nil)
 
-func (j *mutexPeriodicJob) Interval() time.Duration { return j.job.Interval() }
-func (j *mutexPeriodicJob) Jitter() time.Duration   { return j.job.Jitter() }
-func (j *mutexPeriodicJob) Name() string            { return j.job.Name() }
-func (j *mutexPeriodicJob) NewParams() any          { return j.job.NewParams() }
+func (j *mutexPeriodicJob) Interval() time.Duration  { return j.job.Interval() }
+func (j *mutexPeriodicJob) Jitter() time.Duration    { return j.job.Jitter() }
+func (j *mutexPeriodicJob) Name() string             { return j.job.Name() }
+func (j *mutexPeriodicJob) NewParams() any           { return j.job.NewParams() }
+func (j *mutexPeriodicJob) Trigger() <-chan struct{} { return j.job.Trigger() }
 
 func (j *mutexPeriodicJob) RunOnce(ctx context.Context, params any) error {
 	slog.DebugContext(ctx, "About to acquire maintenance job mutex", "job", j.Name())

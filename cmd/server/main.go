@@ -165,6 +165,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	subscriptionLimits := db.NewSubscriptionLimits(stage, businessDB, planService)
 	idHasher := common.NewIDHasher(cfg.Get(common.IDHasherSaltKey))
 
+	// special case for async jobs (register handlers before adding)
+	asyncTasksJob := maintenance.NewAsyncTasksJob(businessDB)
+
 	apiServer := &api.Server{
 		Stage:              stage,
 		BusinessDB:         businessDB,
@@ -179,6 +182,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		VerifyLogCancel:    func() {},
 		SubscriptionLimits: subscriptionLimits,
 		IDHasher:           idHasher,
+		AsyncTasks:         asyncTasksJob,
 	}
 	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/); err != nil {
 		return err
@@ -381,6 +385,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		PastInterval: portal.MaxAuditLogsRetention(cfg),
 		BusinessDB:   businessDB,
 	})
+	jobs.AddLocked(24*time.Hour, &maintenance.CleanupAsyncTasksJob{
+		PastInterval: 30 * 24 * time.Hour,
+		BusinessDB:   businessDB,
+	})
+	jobs.AddLocked(10*time.Minute, asyncTasksJob)
+
 	jobs.RunAll()
 
 	var localServer *http.Server

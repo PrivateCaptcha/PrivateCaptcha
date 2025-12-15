@@ -25,6 +25,8 @@ type PeriodicJob interface {
 	// NOTE: if no jitter is needed, return 1, not 0
 	Jitter() time.Duration
 	Name() string
+	// Return nil if manual triggering is not supported.
+	Trigger() <-chan struct{}
 }
 
 type StubOneOffJob struct{}
@@ -84,21 +86,44 @@ func RunPeriodicJob(ctx context.Context, j PeriodicJob) {
 
 	slog.DebugContext(ctx, "Starting periodic job")
 
-	for running := true; running; {
+	// If j.Trigger() returns nil, the case <-trigger below is ignored.
+	trigger := j.Trigger()
+
+	for {
 		interval := j.Interval()
 		jitter := j.Jitter()
 
+		delay := interval + time.Duration(randv2.Int64N(int64(jitter)))
+		timer := time.NewTimer(delay)
+
+		var runJob bool
+
 		select {
 		case <-ctx.Done():
-			running = false
-			// introduction of jitter is supposed to help in case we have multiple workers to distribute the load
-		case <-time.After(interval + time.Duration(randv2.Int64N(int64(jitter)))):
+			_ = timer.Stop()
+			slog.DebugContext(ctx, "Periodic job finished")
+			return
+
+		case <-trigger:
+			// Ensure we clean up the pending timer
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			slog.DebugContext(ctx, "Forcing periodic job run", "reason", "manual_trigger")
+			runJob = true
+
+		case <-timer.C:
 			slog.DebugContext(ctx, "Running periodic job once", "interval", interval.String(), "jitter", jitter.String())
+			runJob = true
+		}
+
+		if runJob {
 			_ = j.RunOnce(ctx, j.NewParams())
 		}
 	}
-
-	slog.DebugContext(ctx, "Periodic job finished")
 }
 
 func RunPeriodicJobOnce(ctx context.Context, j PeriodicJob, params any) error {

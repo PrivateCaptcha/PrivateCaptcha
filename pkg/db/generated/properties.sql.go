@@ -13,19 +13,23 @@ import (
 )
 
 const createProperty = `-- name: CreateProperty :one
-INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
 `
 
 type CreatePropertyParams struct {
-	Name       string           `db:"name" json:"name"`
-	OrgID      pgtype.Int4      `db:"org_id" json:"org_id"`
-	CreatorID  pgtype.Int4      `db:"creator_id" json:"creator_id"`
-	OrgOwnerID pgtype.Int4      `db:"org_owner_id" json:"org_owner_id"`
-	Domain     string           `db:"domain" json:"domain"`
-	Level      pgtype.Int2      `db:"level" json:"level"`
-	Growth     DifficultyGrowth `db:"growth" json:"growth"`
+	Name             string           `db:"name" json:"name"`
+	OrgID            pgtype.Int4      `db:"org_id" json:"org_id"`
+	CreatorID        pgtype.Int4      `db:"creator_id" json:"creator_id"`
+	OrgOwnerID       pgtype.Int4      `db:"org_owner_id" json:"org_owner_id"`
+	Domain           string           `db:"domain" json:"domain"`
+	Level            pgtype.Int2      `db:"level" json:"level"`
+	Growth           DifficultyGrowth `db:"growth" json:"growth"`
+	ValidityInterval time.Duration    `db:"validity_interval" json:"validity_interval"`
+	AllowSubdomains  bool             `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost   bool             `db:"allow_localhost" json:"allow_localhost"`
+	MaxReplayCount   int32            `db:"max_replay_count" json:"max_replay_count"`
 }
 
 func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error) {
@@ -37,6 +41,10 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 		arg.Domain,
 		arg.Level,
 		arg.Growth,
+		arg.ValidityInterval,
+		arg.AllowSubdomains,
+		arg.AllowLocalhost,
+		arg.MaxReplayCount,
 	)
 	var i Property
 	err := row.Scan(

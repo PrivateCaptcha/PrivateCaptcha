@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*APIKey, error)
+	CreateAsyncTask(ctx context.Context, arg *CreateAsyncTaskParams) (pgtype.UUID, error)
 	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
 	CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
@@ -27,6 +28,7 @@ type Querier interface {
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
 	DeleteExpiredCache(ctx context.Context) error
 	DeleteLock(ctx context.Context, name string) error
+	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOrganizations(ctx context.Context, dollar_1 []int32) error
 	DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) error
@@ -38,6 +40,7 @@ type Querier interface {
 	DeleteUsers(ctx context.Context, dollar_1 []int32) error
 	FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameParams) (*Organization, error)
 	GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error)
+	GetAsyncTask(ctx context.Context, id pgtype.UUID) (*AsyncTask, error)
 	GetCachedByKey(ctx context.Context, key string) ([]byte, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
 	GetLock(ctx context.Context, name string) (*Lock, error)
@@ -47,6 +50,7 @@ type Querier interface {
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)
 	GetOrganizationUsers(ctx context.Context, orgID int32) ([]*GetOrganizationUsersRow, error)
 	GetOrganizationWithAccess(ctx context.Context, arg *GetOrganizationWithAccessParams) (*GetOrganizationWithAccessRow, error)
+	GetPendingAsyncTasks(ctx context.Context, arg *GetPendingAsyncTasksParams) ([]*GetPendingAsyncTasksRow, error)
 	GetPendingUserNotifications(ctx context.Context, arg *GetPendingUserNotificationsParams) ([]*GetPendingUserNotificationsRow, error)
 	GetProperties(ctx context.Context, limit int32) ([]*Property, error)
 	GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error)
@@ -79,6 +83,7 @@ type Querier interface {
 	SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error
 	SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error
 	UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error)
+	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error
 	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) error
 	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) error

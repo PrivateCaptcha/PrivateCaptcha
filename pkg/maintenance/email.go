@@ -73,6 +73,10 @@ func (j *UserEmailNotificationsJob) Jitter() time.Duration {
 	return 10 * time.Minute
 }
 
+func (j *UserEmailNotificationsJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (j *UserEmailNotificationsJob) Name() string {
 	return "user_email_notifications_job"
 }
@@ -428,6 +432,10 @@ func (j *CleanupUserNotificationsJob) RunOnce(ctx context.Context, params any) e
 	}
 
 	return anyError
+}
+
+func (j *CleanupUserNotificationsJob) Trigger() <-chan struct{} {
+	return nil
 }
 
 func (j *CleanupUserNotificationsJob) Interval() time.Duration {

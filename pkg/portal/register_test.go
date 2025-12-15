@@ -2,7 +2,6 @@ package portal
 
 import (
 	"bytes"
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -62,7 +61,7 @@ func TestPostRegister(t *testing.T) {
 		t.Errorf("unexpected redirect: %v", location)
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	user, err := store.Impl().FindUserByEmail(ctx, email)
 	if err != nil {
 		t.Fatal(err)

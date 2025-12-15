@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,8 +10,6 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -23,20 +20,14 @@ func TestPutPropertyInsufficientPermissions(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	_, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
 	// Create a new property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      "propertyName",
-		CreatorID: org1.UserID,
-		Domain:    "example.com",
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org1)
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org1.UserID.Int32, "example.com"), org1)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}
@@ -86,7 +77,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
@@ -150,20 +141,14 @@ func TestMoveProperty(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	user, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
 	// Create a new property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      "propertyName",
-		CreatorID: org1.UserID,
-		Domain:    "example.com",
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org1)
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org1.UserID.Int32, "example.com"), org1)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}

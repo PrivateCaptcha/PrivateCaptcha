@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 type stubOneOffJob struct {
@@ -38,8 +40,14 @@ type stubPeriodicJob struct {
 	executed int32
 }
 
+var _ common.PeriodicJob = (*stubPeriodicJob)(nil)
+
 func (j *stubPeriodicJob) Name() string {
 	return "stubPeriodicJob"
+}
+
+func (j *stubPeriodicJob) Trigger() <-chan struct{} {
+	return nil
 }
 
 func (j *stubPeriodicJob) Interval() time.Duration {

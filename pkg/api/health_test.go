@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +20,7 @@ func TestReadyEndpoint(t *testing.T) {
 		Metrics:      monitoring.NewStub(),
 	}
 
-	if err := healthCheck.RunOnce(context.TODO(), healthCheck.NewParams()); err != nil {
+	if err := healthCheck.RunOnce(t.Context(), healthCheck.NewParams()); err != nil {
 		t.Fatal(err)
 	}
 

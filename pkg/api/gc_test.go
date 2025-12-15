@@ -71,7 +71,7 @@ func TestGCPropertyData(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -94,7 +94,7 @@ func TestGCOrganizationData(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -117,7 +117,7 @@ func TestGCUserData(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {

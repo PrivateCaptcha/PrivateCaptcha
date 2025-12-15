@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,9 +21,7 @@ import (
 	"github.com/rs/xid"
 )
 
-func requestResponseAPISuite[T any](request interface{}, method, endpoint, apiKey string) (T, *ResponseMetadata, error) {
-	var zero T
-
+func apiRequestSuite(ctx context.Context, request interface{}, method, endpoint, apiKey string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
@@ -31,14 +31,14 @@ func requestResponseAPISuite[T any](request interface{}, method, endpoint, apiKe
 	if request != nil {
 		data, err := json.Marshal(request)
 		if err != nil {
-			return zero, nil, err
+			return nil, err
 		}
 		reader = bytes.NewReader(data)
 	}
 
 	req, err := http.NewRequest(method, endpoint, reader)
 	if err != nil {
-		return zero, nil, err
+		return nil, err
 	}
 
 	req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
@@ -49,23 +49,38 @@ func requestResponseAPISuite[T any](request interface{}, method, endpoint, apiKe
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
+	return resp, nil
+}
+
+func requestResponseAPISuite[T any](ctx context.Context, request interface{}, method, endpoint, apiKey string) (T, *ResponseMetadata, error) {
+	var zero T
+
+	resp, err := apiRequestSuite(ctx, request, method, endpoint, apiKey)
+	if err != nil {
+		return zero, nil, err
+	}
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read response body", common.ErrAttr(err))
 		return zero, nil, err
 	}
 
 	var envelope APIResponse
 	if err := json.Unmarshal(body, &envelope); err != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal envelope", "body", string(body), common.ErrAttr(err))
 		return zero, nil, err
 	}
 
 	raw, err := json.Marshal(envelope.Data)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to marshal data back", common.ErrAttr(err))
 		return zero, nil, err
 	}
 
 	var out T
 	if err := json.Unmarshal(raw, &out); err != nil {
+		slog.ErrorContext(ctx, "Failed to unmarshal type T", "body", string(raw), common.ErrAttr(err))
 		return zero, nil, err
 	}
 
@@ -75,9 +90,7 @@ func requestResponseAPISuite[T any](request interface{}, method, endpoint, apiKe
 	return out, meta, nil
 }
 
-func setupAPISuite(username string) (*dbgen.User, *dbgen.Organization, string, error) {
-	ctx := context.TODO()
-
+func setupAPISuite(ctx context.Context, username string) (*dbgen.User, *dbgen.Organization, string, error) {
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username, testPlan)
 	if err != nil {
 		return nil, nil, "", err
@@ -98,12 +111,14 @@ func TestAPICreateOrg(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	user, baseOrg, apiKey, err := setupAPISuite(t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, baseOrg, apiKey, err := setupAPISuite(t.Context(), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.BusinessDB.Impl().SoftDeleteOrganization(context.TODO(), baseOrg, user); err != nil {
+	if _, err := s.BusinessDB.Impl().SoftDeleteOrganization(ctx, baseOrg, user); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,7 +126,7 @@ func TestAPICreateOrg(t *testing.T) {
 		Name: t.Name(),
 	}
 
-	org, meta, err := requestResponseAPISuite[*apiOrgOutput](input, http.MethodPost, "/"+common.OrgEndpoint, apiKey)
+	org, meta, err := requestResponseAPISuite[*apiOrgOutput](ctx, input, http.MethodPost, "/"+common.OrgEndpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +149,7 @@ func TestAPIDeleteOrg(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	user, org, apiKey, err := setupAPISuite(t.Name())
+	user, org, apiKey, err := setupAPISuite(t.Context(), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +158,8 @@ func TestAPIDeleteOrg(t *testing.T) {
 		ID: s.IDHasher.Encrypt(int(org.ID)),
 	}
 
-	_, meta, err := requestResponseAPISuite[json.RawMessage](input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
+	ctx := common.TraceContext(t.Context(), t.Name())
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +168,7 @@ func TestAPIDeleteOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if _, err := s.BusinessDB.Impl().RetrieveUserOrganization(context.TODO(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
+	if _, err := s.BusinessDB.Impl().RetrieveUserOrganization(t.Context(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
 		t.Fatalf("Unexpected error when retrieving deleted org: %v", err)
 	}
 }
@@ -162,7 +178,7 @@ func TestAPIUpdateOrg(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	user, org, apiKey, err := setupAPISuite(t.Name())
+	user, org, apiKey, err := setupAPISuite(t.Context(), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +188,8 @@ func TestAPIUpdateOrg(t *testing.T) {
 		Name: "Org Update " + xid.New().String(),
 	}
 
-	_, meta, err := requestResponseAPISuite[json.RawMessage](input, http.MethodPut, "/"+common.OrgEndpoint, apiKey)
+	ctx := common.TraceContext(t.Context(), t.Name())
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodPut, "/"+common.OrgEndpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +198,7 @@ func TestAPIUpdateOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	org, err = s.BusinessDB.Impl().RetrieveUserOrganization(context.TODO(), user, org.ID)
+	org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil {
 		t.Fatalf("Unexpected error when retrieving org: %v", err)
 	}
@@ -196,12 +213,13 @@ func TestAPIGetOrgs(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	_, org, apiKey, err := setupAPISuite(t.Name())
+	_, org, apiKey, err := setupAPISuite(t.Context(), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	orgs, meta, err := requestResponseAPISuite[[]*apiOrgOutput](nil, http.MethodGet, "/"+common.OrganizationsEndpoint, apiKey)
+	ctx := common.TraceContext(t.Context(), t.Name())
+	orgs, meta, err := requestResponseAPISuite[[]*apiOrgOutput](ctx, nil, http.MethodGet, "/"+common.OrganizationsEndpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,5 +230,35 @@ func TestAPIGetOrgs(t *testing.T) {
 
 	if (len(orgs) != 1) || (orgs[0].Name != org.Name) {
 		t.Errorf("Wrong organizations retrieved")
+	}
+}
+
+func TestAPIOrgPermissions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_another", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := apiRequestSuite(ctx, nil,
+		http.MethodDelete,
+		fmt.Sprintf("/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
 	}
 }

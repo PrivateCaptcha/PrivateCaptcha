@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +42,7 @@ func TestCreateAPIKey(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
@@ -88,7 +87,7 @@ func TestDeleteAPIKey(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)
@@ -134,7 +133,7 @@ func TestRotateAPIKey(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create owner account: %v", err)

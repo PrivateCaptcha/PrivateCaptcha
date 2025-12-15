@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -27,25 +26,12 @@ const (
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
-	maxPropertyNameLength                 = 255
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	propertySettingsTabIndex              = 2
 	propertyIntegrationsTabIndex          = 1
 	propertyAuditLogsTabIndex             = 3
 	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
 )
-
-var validityDurations = []time.Duration{
-	5 * time.Minute,
-	10 * time.Minute,
-	30 * time.Minute,
-	1 * time.Hour,
-	6 * time.Hour,
-	12 * time.Hour,
-	24 * time.Hour,
-	2 * 24 * time.Hour,
-	7 * 24 * time.Hour,
-}
 
 type difficultyLevelsRenderContext struct {
 	EasyLevel   int
@@ -143,7 +129,7 @@ func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *
 		Level:            int(p.Level.Int16),
 		Growth:           growthLevelToIndex(p.Growth),
 		Sitekey:          db.UUIDToSiteKey(p.ExternalID),
-		ValidityInterval: validityIntervalToIndex(p.ValidityInterval),
+		ValidityInterval: puzzle.ValidityIntervalToIndex(p.ValidityInterval),
 		AllowReplay:      (p.MaxReplayCount > 1),
 		MaxReplayCount:   max(1, int(p.MaxReplayCount)),
 		AllowSubdomains:  p.AllowSubdomains,
@@ -203,31 +189,6 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
 		return dbgen.DifficultyGrowthMedium
 	}
-}
-
-func validityIntervalToIndex(period time.Duration) int {
-	for i, d := range validityDurations {
-		if d == period {
-			return i
-		}
-	}
-
-	return 3
-}
-
-func validityIntervalFromIndex(ctx context.Context, index string) time.Duration {
-	i, err := strconv.Atoi(index)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to convert validity period", "value", index, common.ErrAttr(err))
-		return puzzle.DefaultValidityPeriod
-	}
-
-	if i >= 0 && i < len(validityDurations) {
-		return validityDurations[i]
-	}
-
-	slog.WarnContext(ctx, "Invalid validity period index", "index", i)
-	return puzzle.DefaultValidityPeriod
 }
 
 func parseMaxReplayCount(ctx context.Context, value string) int32 {
@@ -290,67 +251,28 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 	return &ViewModel{Model: data, View: propertyWizardTemplate}, nil
 }
 
-func (s *Server) validatePropertyName(ctx context.Context, name string, org *dbgen.Organization) string {
-	if (len(name) == 0) || (len(name) > maxPropertyNameLength) {
-		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
-
-		if len(name) == 0 {
-			return "Name cannot be empty."
-		} else {
-			return "Name is too long."
-		}
-	}
-
-	const allowedPunctuation = "'-_.:()[]"
-
-	for i, r := range name {
-		switch {
-		case unicode.IsLetter(r):
-			continue
-		case unicode.IsDigit(r):
-			continue
-		case unicode.IsSpace(r):
-			continue
-		case strings.ContainsRune(allowedPunctuation, r):
-			continue
-		default:
-			slog.WarnContext(ctx, "Name contains invalid characters", "position", i, "rune", r)
-			return "Property name contains invalid characters."
-		}
-	}
-
-	if _, err := s.Store.Impl().FindOrgProperty(ctx, name, org); err != db.ErrRecordNotFound {
-		slog.WarnContext(ctx, "Property already exists", "name", name, common.ErrAttr(err))
-		return "Property with this name already exists."
-	}
-
-	return ""
-}
-
-func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) string {
+func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) common.StatusCode {
 	if len(domain) == 0 {
-		return "Domain name cannot be empty."
+		return common.StatusPropertyDomainEmptyError
 	}
-
-	const localhostError = "Localhost is not allowed as a domain."
 
 	if common.IsLocalhost(domain) {
-		return localhostError
+		return common.StatusPropertyDomainLocalhostError
 	}
 
 	if common.IsIPAddress(domain) {
-		return "IP address cannot be used as a domain."
+		return common.StatusPropertyDomainIPAddrError
 	}
 
 	_, err := idna.Lookup.ToASCII(domain)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to validate domain name", "domain", domain, common.ErrAttr(err))
-		return "Domain name is not valid."
+		slog.WarnContext(ctx, "Failed to convert domain name to ASCII", "domain", domain, common.ErrAttr(err))
+		return common.StatusPropertyDomainNameInvalidError
 	}
 
 	if ignoreResolveError {
 		slog.WarnContext(ctx, "Skipping resolving domain name", "domain", domain)
-		return ""
+		return common.StatusOK
 	}
 
 	const timeout = 3 * time.Second
@@ -369,61 +291,29 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 
 		if !anyNonLocal {
 			slog.WarnContext(ctx, "Only loopback IPs are resolved", "domain", domain, "first", names[0])
-			return localhostError
+			return common.StatusPropertyDomainLocalhostError
 		}
 
 		slog.DebugContext(ctx, "Resolved domain name", "domain", domain, "ips", len(names), "first", names[0])
-		return ""
+		return common.StatusOK
 	}
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to resolve domain name", "domain", domain, common.ErrAttr(err))
 	}
 
-	return "Failed to resolve domain name."
+	return common.StatusPropertyDomainResolveError
 }
 
 func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
-	var subscr *dbgen.Subscription
-	var err error
-
-	isUserOrgOwner := org.UserID.Int32 == sessUser.ID
-	userIDToCheck := sessUser.ID
-
-	if isUserOrgOwner {
-		if sessUser.SubscriptionID.Valid {
-			subscr, err = s.Store.Impl().RetrieveSubscription(ctx, sessUser.SubscriptionID.Int32)
-			if err != nil {
-				slog.ErrorContext(ctx, "Failed to retrieve session user subscription", "userID", sessUser.ID, common.ErrAttr(err))
-				return ""
-			}
-		}
-	} else {
-		slog.DebugContext(ctx, "Session user is not org owner", "userID", sessUser.ID, "orgUserID", org.UserID.Int32)
-
-		orgUser, err := s.Store.Impl().RetrieveUser(ctx, org.UserID.Int32)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve org's owner user by ID", "id", org.UserID.Int32, common.ErrAttr(err))
-			return ""
-		}
-
-		userIDToCheck = orgUser.ID
-		subscr = nil
-
-		if orgUser.SubscriptionID.Valid {
-			subscr, err = s.Store.Impl().RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
-			if err != nil {
-				slog.ErrorContext(ctx, "Failed to retrieve org owner's subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
-				return ""
-			}
-		}
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser)
+	if err != nil {
+		return ""
 	}
 
-	return s.doValidatePropertiesLimit(ctx, subscr, userIDToCheck, isUserOrgOwner)
-}
+	isOrgOwner := org.UserID.Int32 == sessUser.ID
 
-func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Subscription, userID int32, isOrgOwner bool) string {
-	ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, userID, subscr)
+	ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, owner.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
 			if isOrgOwner {
@@ -436,7 +326,7 @@ func (s *Server) doValidatePropertiesLimit(ctx context.Context, subscr *dbgen.Su
 	}
 
 	if !ok {
-		slog.WarnContext(ctx, "Properties limit check failed", "extra", extra, "userID", userID, "subscriptionID", subscr.ID,
+		slog.WarnContext(ctx, "Properties limit check failed", "extra", extra, "userID", owner.ID, "subscriptionID", subscr.ID,
 			"orgOwner", isOrgOwner, "internal", db.IsInternalSubscription(subscr.Source))
 
 		if isOrgOwner {
@@ -501,8 +391,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
-	if nameError := s.validatePropertyName(ctx, renderCtx.Name, org); len(nameError) > 0 {
-		renderCtx.NameError = nameError
+	if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, renderCtx.Name, org); !nameStatus.Success() {
+		renderCtx.NameError = nameStatus.String()
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
@@ -511,14 +401,14 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	domain, err := common.ParseDomainName(renderCtx.Domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
-		renderCtx.DomainError = "Invalid format of domain name."
+		renderCtx.DomainError = common.StatusPropertyDomainFormatError.String()
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
-	if domainError := s.validateDomainName(ctx, domain, ignoreError); len(domainError) > 0 {
-		renderCtx.DomainError = domainError
+	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
+		renderCtx.DomainError = domainStatus.String()
 		s.render(w, r, createPropertyFormTemplate, renderCtx)
 		return
 	}
@@ -530,11 +420,15 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	property, auditEvent, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      renderCtx.Name,
-		CreatorID: db.Int(user.ID),
-		Domain:    domain,
-		Level:     db.Int2(int16(common.DifficultyLevelSmall)),
-		Growth:    dbgen.DifficultyGrowthMedium,
+		Name:             renderCtx.Name,
+		CreatorID:        db.Int(user.ID),
+		Domain:           domain,
+		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
 	}, org)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
@@ -866,8 +760,8 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 
 	name := r.FormValue(common.ParamName)
 	if name != property.Name {
-		if nameError := s.validatePropertyName(ctx, name, org); len(nameError) > 0 {
-			renderCtx.NameError = nameError
+		if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, name, org); !nameStatus.Success() {
+			renderCtx.NameError = nameStatus.String()
 			renderCtx.Property.Name = name
 			return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate}, nil
 		}
@@ -875,7 +769,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
 	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
-	validityInterval := validityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
+	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]
 

@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"context"
 	"fmt"
 	randv2 "math/rand/v2"
 	"net/http"
@@ -357,9 +356,8 @@ func TestRenderHTML(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("render_%s", strings.Join(tc.path, "_")), func(t *testing.T) {
-			ctx := context.TODO()
 			path := server.RelURL(strings.Join(tc.path, "/"))
-			buf, err := server.RenderResponse(ctx, tc.template, tc.model, &RequestContext{Path: server.RelURL(path)})
+			buf, err := server.RenderResponse(t.Context(), tc.template, tc.model, &RequestContext{Path: server.RelURL(path)})
 			if err != nil {
 				t.Fatal(err)
 			}

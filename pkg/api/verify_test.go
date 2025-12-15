@@ -19,7 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -119,21 +119,13 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 	return puzzleStr, solutions.String(), nil
 }
 
-func setupVerifySuite(username string, scope dbgen.ApiKeyScope) (string, string, string, error) {
-	ctx := context.TODO()
-
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username, testPlan)
+func setupVerifySuite(ctx context.Context, username string, scope dbgen.ApiKeyScope) (string, string, string, error) {
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, username, testPlan)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      fmt.Sprintf("%v property", username),
-		CreatorID: db.Int(user.ID),
-		Domain:    testPropertyDomain,
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -159,7 +151,7 @@ func TestVerifyPuzzle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +171,7 @@ func TestVerifyInvalidAPIKeyScope(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePortal)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePortal)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +191,7 @@ func TestVerifyPuzzleWrongExpectedSitekey(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, _, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, _, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +211,7 @@ func TestSiteVerifyPuzzle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +231,7 @@ func TestSiteVerifyWrongExpectedSitekey(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, _, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, _, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +317,7 @@ func TestVerifyPuzzleReplay(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +349,7 @@ func TestSiteVerifyPuzzleReplay(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,12 +379,12 @@ func TestVerifyPuzzleAllowReplay(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().GetCachedPropertyBySitekey(context.TODO(), sitekey, nil)
+	property, err := store.Impl().GetCachedPropertyBySitekey(t.Context(), sitekey, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -436,20 +428,14 @@ func TestVerifyCachePriority(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		CreatorID: db.Int(user.ID),
-		Domain:    testPropertyDomain,
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +468,7 @@ func TestVerifyInvalidKey(t *testing.T) {
 
 	t.Parallel()
 
-	payload, _, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, _, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,7 +490,7 @@ func TestSiteVerifyInvalidKey(t *testing.T) {
 
 	t.Parallel()
 
-	payload, _, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, _, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -526,9 +512,9 @@ func TestVerifyExpiredKey(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -561,13 +547,13 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 	// NOTE: this test cannot be run in parallel as it modifies the global DB state (maintenance mode)
 	// t.Parallel()
 
-	payload, apiKey, sitekey, err := setupVerifySuite(t.Name(), dbgen.ApiKeyScopePuzzle)
+	payload, apiKey, sitekey, err := setupVerifySuite(t.Context(), t.Name(), dbgen.ApiKeyScopePuzzle)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
-	cache.Delete(context.TODO(), cacheKey)
+	cache.Delete(t.Context(), cacheKey)
 
 	store.UpdateConfig(true /*maintenance mode*/)
 	defer store.UpdateConfig(false /*maintenance mode*/)
@@ -587,7 +573,7 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 }
 
 func verifyTestPropertySuite(t *testing.T, verifySitekey string, expectedCode puzzle.VerifyError) {
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.TestPropertySitekey, "localhost")
 	if err != nil {
@@ -595,7 +581,7 @@ func verifyTestPropertySuite(t *testing.T, verifySitekey string, expectedCode pu
 	}
 	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +628,7 @@ func TestVerifyTestShortcut(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	solver := &puzzle.ComputeSolver{}
 	solutions, _ := solver.Solve(s.Verifier.TestPuzzle)
@@ -672,22 +658,14 @@ func TestVerifyByOrgMember(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	owner, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:       t.Name(),
-		OrgID:      db.Int(org.ID),
-		CreatorID:  db.Int(owner.ID),
-		OrgOwnerID: db.Int(owner.ID),
-		Domain:     testPropertyDomain,
-		Level:      db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:     dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, testPropertyDomain), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,7 +676,7 @@ func TestVerifyByOrgMember(t *testing.T) {
 	}
 	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
 
-	member, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
 
 	apikey, _, err := store.Impl().CreateAPIKey(ctx, member, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
 	if err != nil {

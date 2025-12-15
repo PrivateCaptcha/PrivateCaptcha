@@ -23,6 +23,10 @@ func (j *CleanupDBCacheJob) Jitter() time.Duration {
 	return 1
 }
 
+func (j *CleanupDBCacheJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (j *CleanupDBCacheJob) Name() string {
 	return "cleanup_db_cache_job"
 }
@@ -48,6 +52,10 @@ func (j *CleanupDeletedRecordsJob) Interval() time.Duration {
 
 func (j *CleanupDeletedRecordsJob) Jitter() time.Duration {
 	return 1
+}
+
+func (j *CleanupDeletedRecordsJob) Trigger() <-chan struct{} {
+	return nil
 }
 
 func (j *CleanupDeletedRecordsJob) Name() string {

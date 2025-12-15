@@ -1,7 +1,6 @@
 package portal
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func TestExpireInternalTrials(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	// this has to reflect what we actually use instead of db_helpers where we fill external IDs too
 	subscrParams := createInternalTrial(testPlan, server.PlanService.ActiveTrialStatus())

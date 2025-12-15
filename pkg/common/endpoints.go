@@ -14,6 +14,7 @@ const (
 	SettingsEndpoint      = "settings"
 	LogoutEndpoint        = "logout"
 	PropertyEndpoint      = "property"
+	PropertiesEndpoint    = "properties"
 	OrgEndpoint           = "org"
 	OrganizationsEndpoint = "orgs"
 	DashboardEndpoint     = "dashboard"
@@ -39,4 +40,5 @@ const (
 	AuditLogsEndpoint     = "auditlogs"
 	EventsEndpoint        = "events"
 	ExportEndpoint        = "export"
+	AsyncTaskEndpoint     = "asynctask"
 )

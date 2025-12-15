@@ -39,7 +39,7 @@ func TestUserNotificationsJob(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -104,7 +104,7 @@ func TestDeleteSentNotifications(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -152,7 +152,7 @@ func TestDeleteScheduledNotification(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -195,7 +195,7 @@ func TestNotificationMaxAttempts(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -259,7 +259,7 @@ func TestNotificationProcessingAttempts(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
@@ -324,7 +324,7 @@ func TestRequireSubscription(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := common.TraceContext(context.TODO(), t.Name())
+	ctx := common.TraceContext(t.Context(), t.Name())
 
 	// this has to reflect what we actually use instead of db_helpers where we fill external IDs too
 	subscrParams := createInternalTrial(testPlan, server.PlanService.ActiveTrialStatus())

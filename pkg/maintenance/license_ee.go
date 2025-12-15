@@ -293,6 +293,10 @@ func (j *checkLicenseJob) RunOnce(ctx context.Context, params any) error {
 	return nil
 }
 
+func (j *checkLicenseJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (j *checkLicenseJob) NewParams() any {
 	return struct{}{}
 }

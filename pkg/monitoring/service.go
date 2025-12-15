@@ -40,7 +40,8 @@ type Service struct {
 	finePortalMiddleware   middleware.Middleware
 	coarseServerMiddleware middleware.Middleware
 	coarseCDNMiddleware    middleware.Middleware
-	errorCounter           *prometheus.CounterVec
+	portalErrorCounter     *prometheus.CounterVec
+	apiErrorCounter        *prometheus.CounterVec
 	puzzleCounter          *prometheus.CounterVec
 	verifyCounter          *prometheus.CounterVec
 	hitRatioGauge          *prometheus.GaugeVec
@@ -110,7 +111,7 @@ func NewService() *Service {
 	)
 	reg.MustRegister(verifyCounter)
 
-	errorCounter := prometheus.NewCounterVec(
+	portalErrorCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: "fine", // this is the same as fine http metrics below to match go-http-metrics logic
 			Subsystem: "http",
@@ -119,7 +120,18 @@ func NewService() *Service {
 		},
 		[]string{handlerIDLabel, statusCodeLabel, methodLabel, serviceLabel},
 	)
-	reg.MustRegister(errorCounter)
+	reg.MustRegister(portalErrorCounter)
+
+	apiErrorCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "fine", // this is the same as fine http metrics below to match go-http-metrics logic
+			Subsystem: "http",
+			Name:      "error_total",
+			Help:      "Total number of API specific errors",
+		},
+		[]string{handlerIDLabel, statusCodeLabel, methodLabel, serviceLabel},
+	)
+	reg.MustRegister(apiErrorCounter)
 
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -201,7 +213,8 @@ func NewService() *Service {
 		hitRatioGauge:         hitRatioGauge,
 		clickhouseHealthGauge: clickhouseHealthGauge,
 		postgresHealthGauge:   postgresHealthGauge,
-		errorCounter:          errorCounter,
+		portalErrorCounter:    portalErrorCounter,
+		apiErrorCounter:       apiErrorCounter,
 	}
 }
 
@@ -227,8 +240,17 @@ func (s *Service) HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) 
 	}
 }
 
+func (s *Service) ObserveApiError(handlerID string, method string, code int) {
+	s.apiErrorCounter.With(prometheus.Labels{
+		handlerIDLabel:  handlerID,
+		statusCodeLabel: strconv.Itoa(code),
+		methodLabel:     method,
+		serviceLabel:    MetricsNamespaceAPI,
+	}).Inc()
+}
+
 func (s *Service) ObserveHttpError(handlerID string, method string, code int) {
-	s.errorCounter.With(prometheus.Labels{
+	s.portalErrorCounter.With(prometheus.Labels{
 		handlerIDLabel:  handlerID,
 		statusCodeLabel: strconv.Itoa(code),
 		methodLabel:     method,

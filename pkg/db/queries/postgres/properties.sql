@@ -8,8 +8,8 @@ SELECT * from backend.properties WHERE id = ANY($1::INT[]);
 SELECT * from backend.properties WHERE external_id = $1;
 
 -- name: CreateProperty :one
-INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: UpdateProperty :one

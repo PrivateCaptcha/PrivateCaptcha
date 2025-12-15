@@ -36,6 +36,10 @@ func (j *GarbageCollectDataJob) Name() string {
 	return "garbage_collect_data_job"
 }
 
+func (j *GarbageCollectDataJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 type GarbageCollectDataParams struct {
 	Age time.Duration `json:"age"`
 }
@@ -135,6 +139,10 @@ func (j *ExpireInternalTrialsJob) Jitter() time.Duration {
 	return 30 * time.Minute
 }
 
+func (j *ExpireInternalTrialsJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (j *ExpireInternalTrialsJob) Name() string {
 	return "expire_internal_trials_job"
 }
@@ -168,6 +176,8 @@ type CleanupAuditLogJob struct {
 	PastInterval time.Duration
 }
 
+var _ common.PeriodicJob = (*CleanupAuditLogJob)(nil)
+
 type CleanupAuditLogParams struct {
 	PastInterval time.Duration `json:"past_interval"`
 }
@@ -187,6 +197,10 @@ func (j *CleanupAuditLogJob) RunOnce(ctx context.Context, params any) error {
 	return j.BusinessDB.Impl().DeleteOldAuditLogs(ctx, time.Now().UTC().Add(-p.PastInterval))
 }
 
+func (j *CleanupAuditLogJob) Trigger() <-chan struct{} {
+	return nil
+}
+
 func (j *CleanupAuditLogJob) Interval() time.Duration {
 	return 1 * time.Hour
 }
@@ -197,4 +211,46 @@ func (j *CleanupAuditLogJob) Jitter() time.Duration {
 
 func (j *CleanupAuditLogJob) Name() string {
 	return "cleanup_audit_log_job"
+}
+
+type CleanupAsyncTasksJob struct {
+	BusinessDB   db.Implementor
+	PastInterval time.Duration
+}
+
+var _ common.PeriodicJob = (*CleanupAsyncTasksJob)(nil)
+
+type CleanupAsyncTasksParams struct {
+	PastInterval time.Duration `json:"past_interval"`
+}
+
+func (j *CleanupAsyncTasksJob) NewParams() any {
+	return &CleanupAsyncTasksParams{
+		PastInterval: j.PastInterval,
+	}
+}
+func (j *CleanupAsyncTasksJob) RunOnce(ctx context.Context, params any) error {
+	p, ok := params.(*CleanupAsyncTasksParams)
+	if !ok || (p == nil) {
+		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
+		p = j.NewParams().(*CleanupAsyncTasksParams)
+	}
+
+	return j.BusinessDB.Impl().DeleteOldAsyncTasks(ctx, time.Now().UTC().Add(-p.PastInterval))
+}
+
+func (j *CleanupAsyncTasksJob) Trigger() <-chan struct{} {
+	return nil
+}
+
+func (j *CleanupAsyncTasksJob) Interval() time.Duration {
+	return 3 * time.Hour
+}
+
+func (j *CleanupAsyncTasksJob) Jitter() time.Duration {
+	return 1 * time.Hour
+}
+
+func (j *CleanupAsyncTasksJob) Name() string {
+	return "cleanup_async_tasks_job"
 }

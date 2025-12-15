@@ -291,6 +291,19 @@ type APIKey struct {
 	Scope             ApiKeyScope        `db:"scope" json:"scope"`
 }
 
+type AsyncTask struct {
+	ID                 pgtype.UUID        `db:"id" json:"id"`
+	Handler            string             `db:"handler" json:"handler"`
+	Input              []byte             `db:"input" json:"input"`
+	Output             []byte             `db:"output" json:"output"`
+	UserID             pgtype.Int4        `db:"user_id" json:"user_id"`
+	ReferenceID        string             `db:"reference_id" json:"reference_id"`
+	ProcessingAttempts int32              `db:"processing_attempts" json:"processing_attempts"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	ScheduledAt        pgtype.Timestamptz `db:"scheduled_at" json:"scheduled_at"`
+	ProcessedAt        pgtype.Timestamptz `db:"processed_at" json:"processed_at"`
+}
+
 type AuditLog struct {
 	ID          int64              `db:"id" json:"id"`
 	UserID      pgtype.Int4        `db:"user_id" json:"user_id"`

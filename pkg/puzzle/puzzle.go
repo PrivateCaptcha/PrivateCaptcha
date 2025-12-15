@@ -11,6 +11,7 @@ import (
 	"hash/fnv"
 	"io"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -283,4 +284,41 @@ func (pp *PuzzlePayload) IsSuffixFor(data []byte) bool {
 	}
 
 	return true
+}
+
+var ValidityDurations = []time.Duration{
+	5 * time.Minute,
+	10 * time.Minute,
+	30 * time.Minute,
+	1 * time.Hour,
+	6 * time.Hour,
+	12 * time.Hour,
+	24 * time.Hour,
+	2 * 24 * time.Hour,
+	7 * 24 * time.Hour,
+}
+
+func ValidityIntervalToIndex(period time.Duration) int {
+	for i, d := range ValidityDurations {
+		if d == period {
+			return i
+		}
+	}
+
+	return 3
+}
+
+func ValidityIntervalFromIndex(ctx context.Context, index string) time.Duration {
+	i, err := strconv.Atoi(index)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to convert validity period", "value", index, common.ErrAttr(err))
+		return DefaultValidityPeriod
+	}
+
+	if i >= 0 && i < len(ValidityDurations) {
+		return ValidityDurations[i]
+	}
+
+	slog.WarnContext(ctx, "Invalid validity period index", "index", i)
+	return DefaultValidityPeriod
 }

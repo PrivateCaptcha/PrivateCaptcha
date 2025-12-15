@@ -1,7 +1,6 @@
 package puzzle
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -53,7 +52,7 @@ func TestZeroDifficulty(t *testing.T) {
 
 	solutions := &Solutions{Buffer: solution}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 	if count, _ := solutions.Verify(ctx, puzzleBytes, difficulty); count > 0 {
 		t.Fatal("Should have failed with random solutions")
 	}

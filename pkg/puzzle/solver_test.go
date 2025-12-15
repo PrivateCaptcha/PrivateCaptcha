@@ -1,7 +1,6 @@
 package puzzle
 
 import (
-	"context"
 	"fmt"
 	"testing"
 )
@@ -60,7 +59,7 @@ func TestSolver(t *testing.T) {
 
 			puzzleBytes, _ := p.MarshalBinary()
 			puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
-			found, err := solutions.Verify(context.TODO(), puzzleBytes, difficulty)
+			found, err := solutions.Verify(t.Context(), puzzleBytes, difficulty)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -87,7 +86,7 @@ func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 
 		puzzleBytes, _ := p.MarshalBinary()
 		puzzleBytes = normalizePuzzleBuffer(puzzleBytes)
-		_, err = solutions.Verify(context.TODO(), puzzleBytes, difficulty)
+		_, err = solutions.Verify(b.Context(), puzzleBytes, difficulty)
 		if err != nil {
 			b.Fatal(err)
 		}

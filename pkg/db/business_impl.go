@@ -22,8 +22,9 @@ import (
 
 const (
 	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
-	propertyTTL = 1 * time.Hour
-	apiKeyTTL   = 12 * time.Hour
+	propertyTTL  = 1 * time.Hour
+	apiKeyTTL    = 12 * time.Hour
+	asyncTaskTTL = 1 * time.Minute
 )
 
 var (
@@ -753,6 +754,10 @@ func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 	_ = impl.cache.SetWithTTL(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
 }
 
+func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
+	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID))
+}
+
 func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
 	cacheKey := propertyByIDCacheKey(propID)
 
@@ -1236,6 +1241,10 @@ func (impl *BusinessStoreImpl) RetrieveUserAPIKeys(ctx context.Context, userID i
 }
 
 func (impl *BusinessStoreImpl) UpdateAPIKey(ctx context.Context, user *dbgen.User, oldKey *dbgen.APIKey, expiration time.Time, enabled bool) (*common.AuditLogEvent, error) {
+	if expiration.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -1484,6 +1493,10 @@ func (impl *BusinessStoreImpl) ReleaseLock(ctx context.Context, name string) err
 }
 
 func (impl *BusinessStoreImpl) DeleteDeletedRecords(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
@@ -1497,6 +1510,10 @@ func (impl *BusinessStoreImpl) DeleteDeletedRecords(ctx context.Context, before 
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	if before.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -1536,6 +1553,10 @@ func (impl *BusinessStoreImpl) DeleteProperties(ctx context.Context, ids []int32
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
+	if before.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -1575,6 +1596,10 @@ func (impl *BusinessStoreImpl) DeleteOrganizations(ctx context.Context, ids []in
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedUsersRow, error) {
+	if before.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -1654,7 +1679,7 @@ func (impl *BusinessStoreImpl) RetrieveSystemUserNotification(ctx context.Contex
 }
 
 func (impl *BusinessStoreImpl) CreateSystemNotification(ctx context.Context, message string, tnow time.Time, duration *time.Duration, userID *int32) (*dbgen.SystemNotification, error) {
-	if len(message) == 0 {
+	if (len(message) == 0) || tnow.IsZero() {
 		return nil, ErrInvalidInput
 	}
 
@@ -1969,7 +1994,7 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 }
 
 func (impl *BusinessStoreImpl) RetrievePendingUserNotifications(ctx context.Context, since time.Time, maxCount, maxAttempts int) ([]*dbgen.GetPendingUserNotificationsRow, error) {
-	if maxCount <= 0 {
+	if (maxCount <= 0) || since.IsZero() {
 		return nil, ErrInvalidInput
 	}
 
@@ -2018,7 +2043,7 @@ func (impl *BusinessStoreImpl) MarkUserNotificationsAttempted(ctx context.Contex
 }
 
 func (impl *BusinessStoreImpl) MarkUserNotificationsProcessed(ctx context.Context, ids []int32, t time.Time) error {
-	if len(ids) == 0 {
+	if (len(ids) == 0) || t.IsZero() {
 		return nil
 	}
 
@@ -2058,6 +2083,10 @@ func (impl *BusinessStoreImpl) DeleteUnusedNotificationTemplates(ctx context.Con
 }
 
 func (impl *BusinessStoreImpl) DeleteSentUserNotifications(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
@@ -2073,6 +2102,10 @@ func (impl *BusinessStoreImpl) DeleteSentUserNotifications(ctx context.Context, 
 }
 
 func (impl *BusinessStoreImpl) DeleteUnsentUserNotifications(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
@@ -2106,6 +2139,10 @@ func (impl *BusinessStoreImpl) DeletePendingUserNotification(ctx context.Context
 }
 
 func (impl *BusinessStoreImpl) RetrieveTrialUsers(ctx context.Context, from, to time.Time, status string, maxUsers int32, internal bool) ([]*dbgen.User, error) {
+	if from.IsZero() || to.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -2193,6 +2230,10 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 }
 
 func (impl *BusinessStoreImpl) DeleteOldAuditLogs(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
@@ -2208,6 +2249,10 @@ func (impl *BusinessStoreImpl) DeleteOldAuditLogs(ctx context.Context, before ti
 }
 
 func (impl *BusinessStoreImpl) GetCachedAuditLogs(ctx context.Context, user *dbgen.User, limit int, after time.Time, cachedAfter time.Time) ([]*dbgen.GetUserAuditLogsRow, error) {
+	if (limit <= 0) || after.IsZero() || cachedAfter.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if after.Before(cachedAfter) {
 		slog.ErrorContext(ctx, "Audit logs cutoff date should be always after cache key", "after", after, "cachedAfter", cachedAfter)
 		return nil, ErrInvalidInput
@@ -2236,6 +2281,10 @@ func (impl *BusinessStoreImpl) GetCachedAuditLogs(ctx context.Context, user *dbg
 }
 
 func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *dbgen.User, limit int, after time.Time) ([]*dbgen.GetUserAuditLogsRow, error) {
+	if (limit <= 0) || after.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	reader := &StoreArrayReader[*dbgen.GetUserAuditLogsParams, dbgen.GetUserAuditLogsRow]{
 		CacheKey: userAuditLogsCacheKey(user.ID, after.Format(time.DateOnly)),
 		Cache:    impl.cache,
@@ -2258,6 +2307,10 @@ func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *
 }
 
 func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, property *dbgen.Property, limit int) ([]*dbgen.GetPropertyAuditLogsRow, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
 	reader := &StoreArrayReader[*dbgen.GetPropertyAuditLogsParams, dbgen.GetPropertyAuditLogsRow]{
 		CacheKey: propertyAuditLogsCacheKey(property.ID),
 		Cache:    impl.cache,
@@ -2287,6 +2340,10 @@ func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, pr
 }
 
 func (impl *BusinessStoreImpl) RetrieveOrganizationAuditLogs(ctx context.Context, org *dbgen.Organization, limit int) ([]*dbgen.GetOrgAuditLogsRow, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
 	reader := &StoreArrayReader[*dbgen.GetOrgAuditLogsParams, dbgen.GetOrgAuditLogsRow]{
 		CacheKey: orgAuditLogsCacheKey(org.ID),
 		Cache:    impl.cache,
@@ -2348,8 +2405,237 @@ func (impl *BusinessStoreImpl) ValidateOrgName(ctx context.Context, name string,
 
 	if _, err := impl.FindOrg(ctx, name, user); err != ErrRecordNotFound {
 		slog.WarnContext(ctx, "Org already exists", "name", name, common.ErrAttr(err))
-		return common.StatusOrgExistsError
+		return common.StatusOrgNameDuplicateError
 	}
 
 	return common.StatusOK
+}
+
+func (impl *BusinessStoreImpl) ValidatePropertyName(ctx context.Context, name string, org *dbgen.Organization) common.StatusCode {
+	const maxPropertyNameLength = 255
+	if (len(name) == 0) || (len(name) > maxPropertyNameLength) {
+		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
+
+		if len(name) == 0 {
+			return common.StatusPropertyNameEmptyError
+		} else {
+			return common.StatusPropertyNameTooLongError
+		}
+	}
+
+	const allowedPunctuation = "'-_.:()[]"
+
+	for i, r := range name {
+		switch {
+		case unicode.IsLetter(r):
+			continue
+		case unicode.IsDigit(r):
+			continue
+		case unicode.IsSpace(r):
+			continue
+		case strings.ContainsRune(allowedPunctuation, r):
+			continue
+		default:
+			slog.WarnContext(ctx, "Name contains invalid characters", "position", i, "rune", r)
+			return common.StatusPropertyNameInvalidSymbolsError
+		}
+	}
+
+	if org != nil {
+		if _, err := impl.FindOrgProperty(ctx, name, org); err != ErrRecordNotFound {
+			slog.WarnContext(ctx, "Property already exists", "name", name, common.ErrAttr(err))
+			return common.StatusPropertyNameDuplicateError
+		}
+	}
+
+	return common.StatusOK
+}
+
+func (impl *BusinessStoreImpl) CreateNewAsyncTask(ctx context.Context, data interface{}, handler string, user *dbgen.User, scheduledAt time.Time, referenceID string) (*dbgen.AsyncTask, error) {
+	if (data == nil) && (user == nil) {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	payload, err := json.Marshal(data)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to serialize payload for async request", common.ErrAttr(err))
+		return nil, err
+	}
+
+	if scheduledAt.IsZero() {
+		scheduledAt = time.Now().UTC()
+	}
+
+	params := &dbgen.CreateAsyncTaskParams{
+		Input:       payload,
+		Handler:     handler,
+		ReferenceID: referenceID,
+		ScheduledAt: Timestampz(scheduledAt),
+	}
+	if user != nil {
+		params.UserID = Int(user.ID)
+	}
+
+	tnow := time.Now().UTC()
+	uuid, err := impl.querier.CreateAsyncTask(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create async request", common.ErrAttr(err))
+		return nil, err
+	}
+
+	taskIDStr := UUIDToString(uuid)
+
+	slog.DebugContext(ctx, "Created async task", "taskID", taskIDStr)
+
+	// yes, we "fake" the response in order not to make Postgres to send (potentially large) inputs copy back
+	task := &dbgen.AsyncTask{
+		ID:                 uuid,
+		Handler:            handler,
+		Input:              payload,
+		Output:             nil,
+		UserID:             Int(user.ID),
+		ReferenceID:        referenceID,
+		ProcessingAttempts: 0,
+		CreatedAt:          Timestampz(tnow),
+		ScheduledAt:        params.ScheduledAt,
+		ProcessedAt:        pgtype.Timestamptz{},
+	}
+
+	cacheKey := asyncTaskCacheKey(taskIDStr)
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, task, asyncTaskTTL)
+
+	return task, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveAsyncTask(ctx context.Context, uuid pgtype.UUID, user *dbgen.User) (*dbgen.AsyncTask, error) {
+	reader := &StoreOneReader[pgtype.UUID, dbgen.AsyncTask]{
+		CacheKey: asyncTaskCacheKey(UUIDToString(uuid)),
+		Cache:    impl.cache,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetAsyncTask
+		reader.QueryKeyFunc = queryKeyStringUUID
+	}
+
+	task, err := reader.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if task.UserID.Valid && (user != nil) && (task.UserID.Int32 != user.ID) {
+		return nil, ErrPermissions
+	}
+
+	return task, nil
+}
+
+func (impl *BusinessStoreImpl) RetrievePendingAsyncTasks(ctx context.Context, count int, before time.Time, maxProcessingAttempts int) ([]*dbgen.GetPendingAsyncTasksRow, error) {
+	if count <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	tasks, err := impl.querier.GetPendingAsyncTasks(ctx, &dbgen.GetPendingAsyncTasksParams{
+		ScheduledAt:        Timestampz(before),
+		ProcessingAttempts: int32(maxProcessingAttempts),
+		Limit:              int32(count),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return []*dbgen.GetPendingAsyncTasksRow{}, nil
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve async tasks", "before", before, "count", count, "attemps", maxProcessingAttempts, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched pending async tasks", "count", len(tasks))
+
+	return tasks, nil
+}
+
+func (impl *BusinessStoreImpl) DeleteOldAsyncTasks(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	if err := impl.querier.DeleteOldAsyncTasks(ctx, Timestampz(before)); err != nil {
+		slog.ErrorContext(ctx, "Failed to delete old async request", common.ErrAttr(err))
+		return err
+	}
+
+	return nil
+}
+
+func (impl *BusinessStoreImpl) UpdateAsyncTask(ctx context.Context, uuid pgtype.UUID, output []byte, processedAt time.Time) error {
+	if !uuid.Valid {
+		return ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	if err := impl.querier.UpdateAsyncTask(ctx, &dbgen.UpdateAsyncTaskParams{
+		ID:          uuid,
+		Output:      output,
+		ProcessedAt: Timestampz(processedAt), // if processedAt.IsZero(), we set to NULL
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to update async task", "id", UUIDToString(uuid), common.ErrAttr(err))
+		return err
+	}
+
+	cacheKey := asyncTaskCacheKey(UUIDToString(uuid))
+	impl.cache.Delete(ctx, cacheKey)
+
+	return nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Context, org *dbgen.Organization, activeUser *dbgen.User) (owner *dbgen.User, subscr *dbgen.Subscription, err error) {
+	isUserOrgOwner := org.UserID.Valid && (org.UserID.Int32 == activeUser.ID)
+
+	if isUserOrgOwner {
+		owner = activeUser
+		if activeUser.SubscriptionID.Valid {
+			subscr, err = impl.RetrieveSubscription(ctx, activeUser.SubscriptionID.Int32)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve active user subscription", "userID", activeUser.ID, common.ErrAttr(err))
+				return nil, nil, err
+			}
+		}
+	} else {
+		slog.DebugContext(ctx, "Active user is not org owner", "userID", activeUser.ID, "orgUserID", org.UserID.Int32)
+
+		orgUser, err := impl.RetrieveUser(ctx, org.UserID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org's owner user by ID", "id", org.UserID.Int32, common.ErrAttr(err))
+			return nil, nil, err
+		}
+
+		owner = orgUser
+		subscr = nil
+
+		if orgUser.SubscriptionID.Valid {
+			subscr, err = impl.RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to retrieve org owner's subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
+				return nil, nil, err
+			}
+		}
+	}
+
+	return
 }

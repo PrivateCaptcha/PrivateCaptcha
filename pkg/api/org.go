@@ -66,7 +66,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) (bool,
 
 func (s *Server) getUserOrgs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.requestUser(ctx)
+	user, _, err := s.requestUser(ctx)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -75,7 +75,7 @@ func (s *Server) getUserOrgs(w http.ResponseWriter, r *http.Request) {
 	orgs, err := s.BusinessDB.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user organizations", common.ErrAttr(err))
-		s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		return
 	}
 
@@ -85,39 +85,39 @@ func (s *Server) getUserOrgs(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.requestUser(ctx)
+	user, _, err := s.requestUser(ctx)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
 	request := &apiOrgInput{}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.ErrorContext(ctx, "Failed to deserialize post org request", common.ErrAttr(err))
+	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
+		slog.WarnContext(ctx, "Failed to deserialize post org request", common.ErrAttr(err))
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
 
 	if len(request.ID) > 0 {
 		slog.ErrorContext(ctx, "Request org ID is not empty")
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgIDNotEmptyError, r, w)
 		return
 	}
 
 	if nameStatus := s.BusinessDB.Impl().ValidateOrgName(ctx, request.Name, user); !nameStatus.Success() {
-		s.sendAPIErrorResponse(ctx, nameStatus, w)
+		s.sendAPIErrorResponse(ctx, nameStatus, r, w)
 		return
 	}
 
 	if ok, err := s.validateOrgsLimit(ctx, user); !ok || err != nil {
-		s.sendAPIErrorResponse(ctx, common.StatusOrgLimitError, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgLimitError, r, w)
 		return
 	}
 
 	org, auditEvent, err := s.BusinessDB.Impl().CreateNewOrganization(ctx, request.Name, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the organization", common.ErrAttr(err))
-		s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		return
 	}
 
@@ -129,34 +129,40 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.requestUser(ctx)
+	user, _, err := s.requestUser(ctx)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
 	request := &apiOrgInput{}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.ErrorContext(ctx, "Failed to deserialize update org request", common.ErrAttr(err))
+	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
+		slog.WarnContext(ctx, "Failed to deserialize update org request", common.ErrAttr(err))
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
 
-	if (len(request.ID) == 0) || (len(request.Name) == 0) {
-		slog.ErrorContext(ctx, "Empty org ID or name", "orgID", request.ID, "name", request.Name)
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+	if len(request.ID) == 0 {
+		slog.WarnContext(ctx, "Empty org ID")
+		s.sendAPIErrorResponse(ctx, common.StatusOrgIDEmptyError, r, w)
+		return
+	}
+
+	if len(request.Name) == 0 {
+		slog.WarnContext(ctx, "Empty org name")
+		s.sendAPIErrorResponse(ctx, common.StatusOrgNameEmptyError, r, w)
 		return
 	}
 
 	orgID, err := s.IDHasher.Decrypt(request.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt org ID", "value", request.ID, common.ErrAttr(err))
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
 		return
 	}
 
 	if nameStatus := s.BusinessDB.Impl().ValidateOrgName(ctx, request.Name, user); !nameStatus.Success() {
-		s.sendAPIErrorResponse(ctx, nameStatus, w)
+		s.sendAPIErrorResponse(ctx, nameStatus, r, w)
 		return
 	}
 
@@ -164,25 +170,25 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case db.ErrPermissions:
-			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, w)
+			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
 		case db.ErrSoftDeleted:
-			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, w)
+			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, r, w)
 		default:
-			s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+			s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		}
 		return
 	}
 
 	if !oldOrg.UserID.Valid || (oldOrg.UserID.Int32 != user.ID) {
 		slog.ErrorContext(ctx, "Attempt to update a non-owned org", "orgID", orgID, "userID", user.ID, "ownerID", oldOrg.UserID.Int32)
-		s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
 		return
 	}
 
 	newOrg, auditEvent, err := s.BusinessDB.Impl().UpdateOrganization(ctx, user, oldOrg, request.Name)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update the organization", common.ErrAttr(err))
-		s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		return
 	}
 
@@ -194,29 +200,29 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, err := s.requestUser(ctx)
+	user, _, err := s.requestUser(ctx)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
 	request := &apiOrgInput{}
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		slog.ErrorContext(ctx, "Failed to deserialize delete org request", common.ErrAttr(err))
+	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
+		slog.WarnContext(ctx, "Failed to deserialize delete org request", common.ErrAttr(err))
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
 
 	if len(request.ID) == 0 {
 		slog.ErrorContext(ctx, "Org ID is empty for delete request")
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgIDEmptyError, r, w)
 		return
 	}
 
 	orgID, err := s.IDHasher.Decrypt(request.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt org ID", "value", request.ID, common.ErrAttr(err))
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
 		return
 	}
 
@@ -224,25 +230,25 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case db.ErrPermissions:
-			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, w)
+			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
 		case db.ErrSoftDeleted:
-			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, w)
+			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, r, w)
 		default:
-			s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+			s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		}
 		return
 	}
 
 	if !org.UserID.Valid || (org.UserID.Int32 != user.ID) {
 		slog.ErrorContext(ctx, "Attempt to delete a non-owned org", "orgID", orgID, "userID", user.ID, "ownerID", org.UserID.Int32)
-		s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, w)
+		s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
 		return
 	}
 
 	auditEvent, err := s.BusinessDB.Impl().SoftDeleteOrganization(ctx, org, user)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete the organization", common.ErrAttr(err))
-		s.sendAPIErrorResponse(ctx, common.StatusFailure, w)
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
 		return
 	}
 

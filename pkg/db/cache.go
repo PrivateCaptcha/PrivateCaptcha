@@ -216,6 +216,7 @@ const (
 	userPropertiesCountCachePrefix
 	userAccountStatsCachePrefix
 	propertyStatsCachePrefix
+	asyncTaskCachePrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -252,6 +253,7 @@ func init() {
 	cachePrefixToStrings[userPropertiesCountCachePrefix] = "userPropertiesCount/"
 	cachePrefixToStrings[userAccountStatsCachePrefix] = "userAccountStats/"
 	cachePrefixToStrings[propertyStatsCachePrefix] = "propertyStats/"
+	cachePrefixToStrings[asyncTaskCachePrefix] = "asyncTask/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -360,4 +362,7 @@ func userAccountStatsCacheKey(userID int32, key string) CacheKey {
 }
 func propertyStatsCacheKey(propertyID int32, key string) CacheKey {
 	return CacheKey{Prefix: propertyStatsCachePrefix, IntValue: propertyID, StrValue: key}
+}
+func asyncTaskCacheKey(key string) CacheKey {
+	return StringCacheKey(asyncTaskCachePrefix, key)
 }

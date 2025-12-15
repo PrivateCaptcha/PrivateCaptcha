@@ -63,6 +63,20 @@ func CreateNewSubscriptionParams(plan billing.Plan) *dbgen.CreateSubscriptionPar
 	}
 }
 
+func CreateNewPropertyParams(userID int32, domain string) *dbgen.CreatePropertyParams {
+	return &dbgen.CreatePropertyParams{
+		Name:             "Property " + xid.New().String(),
+		CreatorID:        db.Int(userID),
+		Domain:           domain,
+		Level:            db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	}
+}
+
 func CreateNewAccountForTest(ctx context.Context, store db.Implementor, testName string, plan billing.Plan) (*dbgen.User, *dbgen.Organization, error) {
 	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams(plan))
 }

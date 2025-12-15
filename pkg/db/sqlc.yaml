@@ -64,6 +64,7 @@ sql:
           backend_audit_log_source_unknown: AuditLogSourceUnknown
           backend_audit_log_source_portal: AuditLogSourcePortal
           backend_audit_log_source_api: AuditLogSourceApi
+          backend_async_task: AsyncTask
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"

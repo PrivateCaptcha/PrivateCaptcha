@@ -59,14 +59,20 @@ type PlatformMetrics interface {
 	ObserveCacheHitRatio(ratio float64)
 }
 
-type APIMetrics interface {
+type HTTPMetrics interface {
 	Handler(h http.Handler) http.Handler
+	HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
+}
+
+type APIMetrics interface {
+	HTTPMetrics
 	ObservePuzzleCreated(userID int32)
 	ObservePuzzleVerified(userID int32, result string, isStub bool)
+	ObserveApiError(handlerID string, method string, code int)
 }
 
 type PortalMetrics interface {
-	HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
+	HTTPMetrics
 	// this method is used for our error page redirects that are not captured by usual monitoring middleware
 	// as we don't actually return an HTTP error out
 	ObserveHttpError(handlerID string, method string, code int)

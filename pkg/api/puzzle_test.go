@@ -15,8 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -92,7 +91,7 @@ func TestGetPuzzleWithoutAccount(t *testing.T) {
 	t.Parallel()
 
 	sitekey := db.UUIDToSiteKey(*randomUUID())
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	puzzleSuiteWithBackfillWait(t, ctx, sitekey, testPropertyDomain, func() {
 		for i := 0; i < 10; i++ {
@@ -114,20 +113,14 @@ func TestGetPuzzleWithoutSubscription(t *testing.T) {
 
 	t.Parallel()
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	user, org, err := db_test.CreateNewBareAccount(ctx, store, t.Name())
+	user, org, err := db_tests.CreateNewBareAccount(ctx, store, t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		CreatorID: db.Int(user.ID),
-		Domain:    testPropertyDomain,
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,20 +163,14 @@ func TestGetPuzzle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		CreatorID: db.Int(user.ID),
-		Domain:    testPropertyDomain,
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +199,7 @@ func TestGetTestPuzzle(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
 	resp, err := puzzleSuite(ctx, db.TestPropertySitekey, "localhost" /*domain*/)
 	if err != nil {
@@ -239,20 +226,14 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := context.TODO()
+	ctx := t.Context()
 
-	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	property, _, err := store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:      t.Name(),
-		CreatorID: db.Int(user.ID),
-		Domain:    testPropertyDomain,
-		Level:     db.Int2(int16(common.DifficultyLevelMedium)),
-		Growth:    dbgen.DifficultyGrowthMedium,
-	}, org)
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
 	if err != nil {
 		t.Fatal(err)
 	}
