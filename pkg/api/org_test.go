@@ -258,7 +258,7 @@ func TestAPIOrgPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusForbidden {
+	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
 	}
 }
