@@ -66,6 +66,7 @@ type userProperty struct {
 
 type orgPropertiesRenderContext struct {
 	CsrfRenderContext
+	PaginationRenderContext
 	Properties []*userProperty
 	CurrentOrg *userOrg
 }

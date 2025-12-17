@@ -66,6 +66,7 @@ type RenderConstants struct {
 	Scope                string
 	APIKeyScopePuzzle    string
 	APIKeyScopePortal    string
+	PropertiesEndpoint   string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -123,6 +124,7 @@ func NewRenderConstants() *RenderConstants {
 		Scope:                common.ParamScope,
 		APIKeyScopePuzzle:    string(dbgen.ApiKeyScopePuzzle),
 		APIKeyScopePortal:    string(dbgen.ApiKeyScopePortal),
+		PropertiesEndpoint:   common.PropertiesEndpoint,
 	}
 }
 

@@ -90,6 +90,11 @@
     @apply hover:text-gray-900;
 }
 
+.pc-internal-button-smaller {
+    @apply px-3;
+    @apply py-2;
+}
+
 .pc-internal-form-button-disabled {
     @apply disabled:cursor-not-allowed;
     @apply disabled:bg-gray-100;

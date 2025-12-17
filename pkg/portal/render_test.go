@@ -154,6 +154,13 @@ func TestRenderHTML(t *testing.T) {
 				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 				CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
 				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
+				PaginationRenderContext: PaginationRenderContext{
+					From:    1,
+					To:      10,
+					Count:   123,
+					Page:    2,
+					PerPage: 10,
+				},
 			},
 			selector: "p.property-name",
 			matches:  []string{"1", "2"},

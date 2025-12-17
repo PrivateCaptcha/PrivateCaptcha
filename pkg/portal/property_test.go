@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -122,7 +123,7 @@ func TestPostNewOrgProperty(t *testing.T) {
 		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
 	}
 
-	pp, err := store.Impl().RetrieveOrgProperties(ctx, org)
+	pp, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.OrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,8 +183,56 @@ func TestMoveProperty(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	properties, err := store.Impl().RetrieveOrgProperties(ctx, org2)
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org2, 0, db.OrgPropertiesPageSize)
 	if len(properties) != 1 || properties[0].ID != property.ID {
 		t.Errorf("Property was not moved")
+	}
+}
+
+func TestRetrieveProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	for i := 0; i < 3*db.OrgPropertiesPageSize/2; i++ {
+		if _, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
+			t.Fatalf("Failed to create new property: %v", err)
+		}
+	}
+
+	testCases := []struct {
+		offset   int
+		count    int
+		expected int
+		hasMore  bool
+	}{
+		{0, db.OrgPropertiesPageSize, db.OrgPropertiesPageSize, true},
+		{0, 1, 1, true},
+		{0, db.OrgPropertiesPageSize * 100, db.OrgPropertiesPageSize, true},
+		{db.OrgPropertiesPageSize, db.OrgPropertiesPageSize, db.OrgPropertiesPageSize / 2, false},
+		{db.OrgPropertiesPageSize, db.OrgPropertiesPageSize/2 - 1, db.OrgPropertiesPageSize/2 - 1, true},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("properties_offset_%v_count_%v", tc.offset, tc.count), func(t *testing.T) {
+			properties, hasMore, err := server.Store.Impl().RetrieveOrgProperties(ctx, org, tc.offset, tc.count)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if actual := len(properties); actual != tc.expected {
+				t.Errorf("Received %v properties, but expected %v", actual, tc.expected)
+			}
+
+			if hasMore != tc.hasMore {
+				t.Errorf("Received %v more, but expected %v", hasMore, tc.hasMore)
+			}
+		})
 	}
 }

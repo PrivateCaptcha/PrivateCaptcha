@@ -75,6 +75,7 @@ func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiPropert
 
 	namesMap := make(map[string]struct{})
 
+	// NOTE: by design those are (potentially) limited set (max first page) of org properties
 	if properties, err := s.BusinessDB.Impl().GetCachedOrgProperties(ctx, orgID); err == nil {
 		slog.DebugContext(ctx, "Fetched cached org properties", "count", len(properties))
 		for _, property := range properties {

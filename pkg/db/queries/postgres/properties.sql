@@ -29,7 +29,12 @@ SELECT * from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at 
 SELECT * from backend.properties WHERE id = $1;
 
 -- name: GetOrgProperties :many
-SELECT * from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at;
+SELECT *
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL
+ORDER BY created_at
+OFFSET $2
+LIMIT $3;
 
 -- name: SoftDeleteProperty :one
 UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING *;
@@ -56,3 +61,6 @@ SELECT * FROM backend.properties LIMIT $1;
 
 -- name: GetUserPropertiesCount :one
 SELECT COUNT(*) as count FROM backend.properties WHERE org_owner_id = $1 AND deleted_at IS NULL;
+
+-- name: GetOrgPropertiesCount :one
+SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL;

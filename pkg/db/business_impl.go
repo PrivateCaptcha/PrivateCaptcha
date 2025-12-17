@@ -22,9 +22,11 @@ import (
 
 const (
 	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
-	propertyTTL  = 1 * time.Hour
-	apiKeyTTL    = 12 * time.Hour
-	asyncTaskTTL = 1 * time.Minute
+	propertyTTL              = 1 * time.Hour
+	apiKeyTTL                = 12 * time.Hour
+	asyncTaskTTL             = 1 * time.Minute
+	OrgPropertiesPageSize    = 30
+	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
 )
 
 var (
@@ -316,7 +318,7 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey); err == nil {
 		for _, org := range orgs {
 			_ = impl.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
-			_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.Organization.ID))
+			_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.Organization.ID, orgPropertiesCacheKeyStr))
 		}
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
@@ -765,13 +767,14 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
 	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(property.ID))
 	// invalidate org properties in cache as we just deleted a property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 }
 
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
-	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID))
+	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr))
 }
 
 func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
@@ -783,7 +786,7 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 		return nil, ErrNegativeCacheHit
 	}
 
-	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID)); err == nil {
+	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr)); err == nil {
 		if index := slices.IndexFunc(properties, func(p *dbgen.Property) bool { return p.ID == propID }); index != -1 {
 			property := properties[index]
 			impl.cacheProperty(ctx, property)
@@ -900,8 +903,10 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 
 	impl.cacheProperty(ctx, property)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(params.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(params.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
 
 	auditEvent := newCreatePropertyAuditLogEvent(property, org)
 
@@ -923,7 +928,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, oldProperty *
 
 	impl.cacheProperty(ctx, updatedProperty)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
 
 	auditEvent := newUpdatePropertyAuditLogEvent(oldProperty, updatedProperty, org)
@@ -986,18 +991,54 @@ func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []i
 	return deletedIDs, auditEvents, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization) ([]*dbgen.Property, error) {
-	reader := &StoreArrayReader[pgtype.Int4, dbgen.Property]{
-		CacheKey: orgPropertiesCacheKey(org.ID),
-		Cache:    impl.cache,
+func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Property, bool, error) {
+	if (offset < 0) || (limit <= 0) {
+		return nil, false, ErrInvalidInput
 	}
 
-	if impl.querier != nil {
-		reader.QueryKeyFunc = QueryKeyPgInt
-		reader.QueryFunc = impl.querier.GetOrgProperties
+	params := &dbgen.GetOrgPropertiesParams{
+		OrgID:  Int(org.ID),
+		Offset: int32(offset),
+		Limit:  OrgPropertiesPageSize + 1,
 	}
 
-	return reader.Read(ctx)
+	if offset == 0 {
+		reader := &StoreArrayReader[*dbgen.GetOrgPropertiesParams, dbgen.Property]{
+			CacheKey: orgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
+			Cache:    impl.cache,
+		}
+
+		if impl.querier != nil {
+			reader.QueryKeyFunc = func(ck CacheKey) (*dbgen.GetOrgPropertiesParams, error) { return params, nil }
+			reader.QueryFunc = impl.querier.GetOrgProperties
+		}
+
+		properties, err := reader.Read(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		finalProperties := properties[:min(len(properties), limit, OrgPropertiesPageSize)]
+
+		return finalProperties, len(properties) > len(finalProperties), nil
+	}
+
+	if impl.querier == nil {
+		return nil, false, ErrMaintenance
+	}
+
+	actualLimit := min(OrgPropertiesPageSize, limit)
+	params.Limit = int32(actualLimit) + 1
+
+	properties, err := impl.querier.GetOrgProperties(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org properties", "offset", offset, "limit", actualLimit, "orgID", org.ID, common.ErrAttr(err))
+		return nil, false, err
+	}
+
+	slog.DebugContext(ctx, "Retrieved org properties", "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(properties))
+
+	return properties[:min(len(properties), actualLimit)], len(properties) == int(params.Limit), nil
 }
 
 func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, name string) (*dbgen.Organization, *common.AuditLogEvent, error) {
@@ -1046,6 +1087,7 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 
 	// update caches
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(org.ID))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(org.ID))
 	// invalidate user orgs in cache as we just deleted one
 	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
@@ -2682,4 +2724,30 @@ func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Cont
 	}
 
 	return
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgPropertiesCount(ctx context.Context, orgID int32) (int64, error) {
+	if impl.querier == nil {
+		return 0, ErrMaintenance
+	}
+
+	cacheKey := orgPropertiesCountCacheKey(orgID)
+	if count, err := FetchCachedOne[int64](ctx, impl.cache, cacheKey); err == nil {
+		return *count, nil
+	}
+
+	count, err := impl.querier.GetOrgPropertiesCount(ctx, Int(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org properties count", "orgID", orgID, common.ErrAttr(err))
+		return 0, err
+	}
+
+	slog.DebugContext(ctx, "Fetched org properties count", "orgID", orgID, "count", count)
+
+	const propertiesCountTTL = 5 * time.Minute
+	c := new(int64)
+	*c = count
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, propertiesCountTTL)
+
+	return count, nil
 }

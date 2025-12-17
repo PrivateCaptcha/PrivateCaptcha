@@ -79,11 +79,22 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error 
 }
 
 const getOrgProperties = `-- name: GetOrgProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER BY created_at
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
+FROM backend.properties
+WHERE org_id = $1 AND deleted_at IS NULL
+ORDER BY created_at
+OFFSET $2
+LIMIT $3
 `
 
-func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*Property, error) {
-	rows, err := q.db.Query(ctx, getOrgProperties, orgID)
+type GetOrgPropertiesParams struct {
+	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
+	Offset int32       `db:"offset" json:"offset"`
+	Limit  int32       `db:"limit" json:"limit"`
+}
+
+func (q *Queries) GetOrgProperties(ctx context.Context, arg *GetOrgPropertiesParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, getOrgProperties, arg.OrgID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -118,6 +129,17 @@ func (q *Queries) GetOrgProperties(ctx context.Context, orgID pgtype.Int4) ([]*P
 		return nil, err
 	}
 	return items, nil
+}
+
+const getOrgPropertiesCount = `-- name: GetOrgPropertiesCount :one
+SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, getOrgPropertiesCount, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
@@ -446,7 +468,7 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 }
 
 const softDeleteProperties = `-- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND deleted_at IS NULL RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
 `
 
 type SoftDeletePropertiesParams struct {

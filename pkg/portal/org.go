@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,7 +23,8 @@ var (
 )
 
 const (
-	orgPropertiesTemplate         = "portal/org-dashboard.html"
+	orgDashboardTemplate          = "portal/org-dashboard.html"
+	orgPropertiesTemplate         = "portal/properties.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
 	orgAuditLogsTemplate          = "portal/org-auditlogs.html"
@@ -71,6 +73,7 @@ type userOrg struct {
 type orgDashboardRenderContext struct {
 	CsrfRenderContext
 	systemNotificationContext
+	PaginationRenderContext
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
@@ -209,8 +212,22 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 	if (0 <= idx) && (idx < len(orgs)) {
 		if orgs[idx].Level != dbgen.AccessLevelInvited {
-			if properties, err := s.Store.Impl().RetrieveOrgProperties(ctx, &orgs[idx].Organization); err == nil {
+			if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, &orgs[idx].Organization, 0 /*offset*/, db.OrgPropertiesPageSize); err == nil {
 				renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
+
+				renderCtx.PaginationRenderContext = PaginationRenderContext{
+					From:    1,
+					To:      len(properties),
+					Count:   len(properties),
+					Page:    0,
+					PerPage: db.OrgPropertiesPageSize,
+				}
+
+				if hasMore {
+					if count, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, orgs[idx].Organization.ID); err == nil {
+						renderCtx.Count = int(count)
+					}
+				}
 			}
 		}
 	}
@@ -251,6 +268,38 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, portalTemplate, renderCtx)
 }
 
+func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
+	perPage := db.OrgPropertiesPageSize
+
+	properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, page*perPage, perPage)
+	if err != nil {
+		return nil, err
+	}
+
+	from := 1 + page*perPage
+
+	renderCtx := &orgPropertiesRenderContext{
+		CsrfRenderContext: s.CreateCsrfContext(user),
+		PaginationRenderContext: PaginationRenderContext{
+			From:    from,
+			To:      from + len(properties) - 1,
+			Count:   len(properties),
+			Page:    page,
+			PerPage: db.OrgPropertiesPageSize,
+		},
+		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
+		Properties: propertiesToUserProperties(ctx, properties, s.IDHasher),
+	}
+
+	if (page > 0) || hasMore {
+		if count, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, org.ID); err == nil {
+			renderCtx.Count = int(count)
+		}
+	}
+
+	return renderCtx, nil
+}
+
 func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -263,15 +312,38 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	properties, err := s.Store.Impl().RetrieveOrgProperties(ctx, org)
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/)
 	if err != nil {
 		return nil, err
 	}
 
-	renderCtx := &orgPropertiesRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		Properties:        propertiesToUserProperties(ctx, properties, s.IDHasher),
+	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate}, nil
+}
+
+func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	pageParam := r.URL.Query().Get(common.ParamPage)
+	page := 0
+	if len(pageParam) > 0 {
+		if page, err = strconv.Atoi(pageParam); err != nil {
+			slog.ErrorContext(ctx, "Failed to convert page parameter", "page", pageParam, common.ErrAttr(err))
+			page = 0
+		}
+	}
+
+	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, page)
+	if err != nil {
+		return nil, err
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate}, nil

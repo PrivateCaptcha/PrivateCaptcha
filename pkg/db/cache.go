@@ -213,10 +213,11 @@ const (
 	userAuditLogsCacheKeyPrefix
 	propertyAuditLogsCacheKeyPrefix
 	orgAuditLogsCacheKeyPrefix
-	userPropertiesCountCachePrefix
-	userAccountStatsCachePrefix
-	propertyStatsCachePrefix
-	asyncTaskCachePrefix
+	userPropertiesCountCacheKeyPrefix
+	userAccountStatsCacheKeyPrefix
+	propertyStatsCacheKeyPrefix
+	asyncTaskCacheKeyPrefix
+	orgPropertiesCountCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -250,10 +251,11 @@ func init() {
 	cachePrefixToStrings[userAuditLogsCacheKeyPrefix] = "userAuditLogs/"
 	cachePrefixToStrings[propertyAuditLogsCacheKeyPrefix] = "propAuditLogs/"
 	cachePrefixToStrings[orgAuditLogsCacheKeyPrefix] = "orgAuditLogs/"
-	cachePrefixToStrings[userPropertiesCountCachePrefix] = "userPropertiesCount/"
-	cachePrefixToStrings[userAccountStatsCachePrefix] = "userAccountStats/"
-	cachePrefixToStrings[propertyStatsCachePrefix] = "propertyStats/"
-	cachePrefixToStrings[asyncTaskCachePrefix] = "asyncTask/"
+	cachePrefixToStrings[userPropertiesCountCacheKeyPrefix] = "userPropertiesCount/"
+	cachePrefixToStrings[userAccountStatsCacheKeyPrefix] = "userAccountStats/"
+	cachePrefixToStrings[propertyStatsCacheKeyPrefix] = "propertyStats/"
+	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
+	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -328,8 +330,8 @@ func SessionCacheKey(id string) CacheKey { return StringCacheKey(sessionCacheKey
 func UserCacheKey(id int32) CacheKey     { return Int32CacheKey(userCacheKeyPrefix, id) }
 func APIKeyCacheKey(str string) CacheKey { return StringCacheKey(apiKeyCacheKeyPrefix, str) }
 func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefix, orgID) }
-func orgPropertiesCacheKey(orgID int32) CacheKey {
-	return Int32CacheKey(orgPropertiesCacheKeyPrefix, orgID)
+func orgPropertiesCacheKey(orgID int32, key string) CacheKey {
+	return CacheKey{Prefix: orgPropertiesCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }
 func propertyByIDCacheKey(propID int32) CacheKey {
 	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
@@ -355,14 +357,17 @@ func orgAuditLogsCacheKey(orgID int32) CacheKey {
 	return CacheKey{Prefix: orgAuditLogsCacheKeyPrefix, IntValue: orgID}
 }
 func userPropertiesCountCacheKey(userID int32) CacheKey {
-	return Int32CacheKey(userPropertiesCountCachePrefix, userID)
+	return Int32CacheKey(userPropertiesCountCacheKeyPrefix, userID)
 }
 func userAccountStatsCacheKey(userID int32, key string) CacheKey {
-	return CacheKey{Prefix: userAccountStatsCachePrefix, IntValue: userID, StrValue: key}
+	return CacheKey{Prefix: userAccountStatsCacheKeyPrefix, IntValue: userID, StrValue: key}
 }
 func propertyStatsCacheKey(propertyID int32, key string) CacheKey {
-	return CacheKey{Prefix: propertyStatsCachePrefix, IntValue: propertyID, StrValue: key}
+	return CacheKey{Prefix: propertyStatsCacheKeyPrefix, IntValue: propertyID, StrValue: key}
 }
 func asyncTaskCacheKey(key string) CacheKey {
-	return StringCacheKey(asyncTaskCachePrefix, key)
+	return StringCacheKey(asyncTaskCacheKeyPrefix, key)
+}
+func orgPropertiesCountCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(orgPropertiesCountCacheKeyPrefix, orgID)
 }
