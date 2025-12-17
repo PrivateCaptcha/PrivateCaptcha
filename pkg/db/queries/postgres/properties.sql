@@ -34,6 +34,9 @@ SELECT * from backend.properties WHERE org_id = $1 AND deleted_at IS NULL ORDER 
 -- name: SoftDeleteProperty :one
 UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING *;
 
+-- name: SoftDeleteProperties :many
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND deleted_at IS NULL RETURNING *;
+
 -- name: GetSoftDeletedProperties :many
 SELECT sqlc.embed(p)
 FROM backend.properties p

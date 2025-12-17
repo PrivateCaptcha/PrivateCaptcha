@@ -281,3 +281,119 @@ func TestApiPostPropertiesOtherOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
 	}
 }
+
+func TestApiDeleteProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org1, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create another org for the same user
+	org2, _, err := s.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create properties
+	// P1 in Org1
+	p1, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// P2 in Org2
+	p2, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// P3 in Org1 (should not be deleted)
+	p3, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p3.com"), org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Prepare request
+	idsToDelete := []string{
+		s.IDHasher.Encrypt(int(p1.ID)),
+		s.IDHasher.Encrypt(int(p2.ID)),
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
+		http.MethodDelete,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	// Verify P1 deleted
+	props1, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Should contain P3 but not P1
+	foundP1 := false
+	foundP3 := false
+	for _, p := range props1 {
+		if p.ID == p1.ID {
+			foundP1 = true
+		}
+		if p.ID == p3.ID {
+			foundP3 = true
+		}
+	}
+	if foundP1 {
+		t.Error("Property P1 should be deleted")
+	}
+	if !foundP3 {
+		t.Error("Property P3 should exist")
+	}
+
+	// Verify P2 deleted
+	props2, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundP2 := false
+	for _, p := range props2 {
+		if p.ID == p2.ID {
+			foundP2 = true
+		}
+	}
+	if foundP2 {
+		t.Error("Property P2 should be deleted")
+	}
+}

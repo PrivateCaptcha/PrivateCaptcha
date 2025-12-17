@@ -78,6 +78,7 @@ type Querier interface {
 	Ping(ctx context.Context) (int32, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
+	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)
 	SoftDeleteProperty(ctx context.Context, id int32) (*Property, error)
 	SoftDeleteUser(ctx context.Context, id int32) (*User, error)
 	SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error

@@ -22,11 +22,16 @@ import (
 const (
 	maxPropertiesBatchSize    = 128
 	createPropertiesHandlerID = "api-create-properties"
+	deletePropertiesHandlerID = "api-delete-properties"
 )
 
 type asyncTaskCreateProperties struct {
 	Properties []*apiPropertyInput `json:"properties"`
 	OrgID      int32               `json:"org_id"`
+}
+
+type asyncTaskDeleteProperties struct {
+	PropertyIDs []int32 `json:"property_ids"`
 }
 
 func (p *apiPropertyInput) Normalize() {
@@ -317,4 +322,136 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	s.BusinessDB.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourceAPI)
 
 	return common.StatusOK
+}
+
+func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, apiKey, err := s.requestUser(ctx)
+	if err != nil {
+		s.sendHTTPErrorResponse(err, w)
+		return
+	}
+
+	var encryptedIDs []string
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&encryptedIDs); err != nil {
+		slog.WarnContext(ctx, "Failed to parse delete properties request", common.ErrAttr(err))
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	if len(encryptedIDs) == 0 {
+		slog.WarnContext(ctx, "Empty delete properties list")
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	if len(encryptedIDs) > maxPropertiesBatchSize {
+		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(encryptedIDs), "max", maxPropertiesBatchSize)
+		s.sendAPIErrorResponse(ctx, common.StatusPropertiesTooManyError, r, w)
+		return
+	}
+
+	idsToDelete := make(map[int]struct{})
+	propertyIDs := make([]int32, 0, len(encryptedIDs))
+	for _, encID := range encryptedIDs {
+		id, err := s.IDHasher.Decrypt(encID)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to decode property ID", "id", encID, common.ErrAttr(err))
+			s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+			return
+		}
+		if _, ok := idsToDelete[id]; ok {
+			slog.WarnContext(ctx, "Duplicate property ID found", "id", encID)
+			continue
+		}
+		idsToDelete[id] = struct{}{}
+		propertyIDs = append(propertyIDs, int32(id))
+	}
+
+	referenceID := db.UUIDToSecret(apiKey.ExternalID)
+	request := &asyncTaskDeleteProperties{
+		PropertyIDs: propertyIDs,
+	}
+
+	buffer := 5 * time.Minute
+	// we schedule it for later, making "room" for immediate attempt first
+	scheduledAt := time.Now().UTC().Add(buffer)
+	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, deletePropertiesHandlerID, user, scheduledAt, referenceID)
+	if err != nil {
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
+		return
+	}
+
+	output := &apiAsyncTaskOutput{
+		ID: db.UUIDToString(task.ID),
+	}
+
+	s.sendAPISuccessResponse(ctx, output, w)
+
+	go func(bctx context.Context) {
+		handlerCtx, cancel := context.WithTimeout(bctx, buffer)
+		defer cancel()
+		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
+			slog.ErrorContext(bctx, "Failed to execute async task", "taskID", output.ID, common.ErrAttr(err))
+		}
+	}(common.CopyTraceID(ctx, context.Background()))
+}
+
+func (s *Server) handleDeleteProperties(ctx context.Context, task *dbgen.AsyncTask) ([]byte, error) {
+	taskID := db.UUIDToString(task.ID)
+	tlog := slog.With("taskID", taskID)
+
+	tlog.DebugContext(ctx, "Processing delete properties task")
+
+	params := &asyncTaskDeleteProperties{}
+	if err := json.Unmarshal(task.Input, params); err != nil {
+		tlog.ErrorContext(ctx, "Failed to unmarshal delete properties async task input", common.ErrAttr(err))
+		return nil, err
+	}
+
+	user, err := s.BusinessDB.Impl().RetrieveUser(ctx, task.UserID.Int32)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to retrieve user", "userID", task.UserID.Int32, common.ErrAttr(err))
+		return nil, err
+	}
+
+	results, err := s.doDeleteProperties(ctx, tlog, user, params)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to delete properties", common.ErrAttr(err))
+		return nil, err
+	}
+
+	data, err := json.Marshal(results)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to serialize results", common.ErrAttr(err))
+		data = nil
+	}
+
+	return data, nil
+}
+
+func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskDeleteProperties) ([]*operationResult, error) {
+
+	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, params.PropertyIDs, user)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to soft delete properties", common.ErrAttr(err))
+		return nil, err
+	}
+
+	s.BusinessDB.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourceAPI)
+
+	results := make([]*operationResult, 0, len(params.PropertyIDs))
+
+	for i, propertyID := range params.PropertyIDs {
+		ilog := tlog.With("index", i, "propertyID", propertyID)
+		result := &operationResult{Code: common.StatusOK}
+		if _, ok := deletedIDs[propertyID]; !ok {
+			ilog.WarnContext(ctx, "Property was not deleted", "propID", propertyID)
+			result.Code = common.StatusFailure
+		}
+		results = append(results, result)
+	}
+
+	return results, nil
 }

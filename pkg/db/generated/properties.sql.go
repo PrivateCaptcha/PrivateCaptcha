@@ -445,6 +445,53 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 	return &i, err
 }
 
+const softDeleteProperties = `-- name: SoftDeleteProperties :many
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
+`
+
+type SoftDeletePropertiesParams struct {
+	Column1   []int32     `db:"column_1" json:"column_1"`
+	CreatorID pgtype.Int4 `db:"creator_id" json:"creator_id"`
+}
+
+func (q *Queries) SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error) {
+	rows, err := q.db.Query(ctx, softDeleteProperties, arg.Column1, arg.CreatorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Property
+	for rows.Next() {
+		var i Property
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.Domain,
+			&i.Level,
+			&i.Salt,
+			&i.Growth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.ValidityInterval,
+			&i.AllowSubdomains,
+			&i.AllowLocalhost,
+			&i.MaxReplayCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
 UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
 `

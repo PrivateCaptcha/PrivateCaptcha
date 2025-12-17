@@ -754,6 +754,22 @@ func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 	_ = impl.cache.SetWithTTL(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
 }
 
+func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, property *dbgen.Property) {
+	if property == nil {
+		return
+	}
+
+	// update caches
+	sitekey := UUIDToSiteKey(property.ExternalID)
+	// cache mostly used in API server
+	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
+	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(property.ID))
+	// invalidate org properties in cache as we just deleted a property
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+}
+
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID))
 }
@@ -928,18 +944,46 @@ func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbg
 
 	slog.InfoContext(ctx, "Soft-deleted property", "propID", prop.ID)
 
-	// update caches
-	sitekey := UUIDToSiteKey(property.ExternalID)
-	// cache mostly used in API server
-	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
-	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(prop.ID))
-	// invalidate org properties in cache as we just deleted a property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.ID))
-	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
-
+	impl.deleteCachedProperty(ctx, property)
 	auditEvent := newDeletePropertyAuditLogEvent(prop, org, user)
 
 	return auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []int32, user *dbgen.User) (map[int32]struct{}, []*common.AuditLogEvent, error) {
+	if len(ids) == 0 {
+		return map[int32]struct{}{}, []*common.AuditLogEvent{}, nil
+	}
+
+	if user == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	properties, err := impl.querier.SoftDeleteProperties(ctx, &dbgen.SoftDeletePropertiesParams{
+		Column1:   ids,
+		CreatorID: Int(user.ID),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to mark properties as deleted in DB", "count", len(ids), common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Soft-deleted properties", "count", len(properties))
+
+	auditEvents := make([]*common.AuditLogEvent, 0, len(properties))
+	deletedIDs := make(map[int32]struct{})
+
+	for _, property := range properties {
+		impl.deleteCachedProperty(ctx, property)
+		auditEvents = append(auditEvents, newDeletePropertyAuditLogEvent(property, nil /*org*/, user))
+		deletedIDs[property.ID] = struct{}{}
+	}
+
+	return deletedIDs, auditEvents, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *dbgen.Organization) ([]*dbgen.Property, error) {
