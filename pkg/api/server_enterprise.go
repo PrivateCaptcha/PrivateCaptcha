@@ -20,6 +20,7 @@ const (
 	maxAPIPostBodySize          = 128 * 1024
 	maxPostPropertiesBodySize   = 1024 * 1024
 	maxDeletePropertiesBodySize = 128 * 1024
+	maxUpdatePropertiesBodySize = 1024 * 1024
 )
 
 func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Chain, apiRateLimiter func(next http.Handler) http.Handler) {
@@ -40,6 +41,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Ch
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), portalAPIChain, http.HandlerFunc(s.getOrgProperties))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), portalAPIChain, http.MaxBytesHandler(http.HandlerFunc(s.postNewProperties), maxPostPropertiesBodySize))
 	rg.Handle(rg.Delete(common.PropertiesEndpoint), portalAPIChain, http.MaxBytesHandler(http.HandlerFunc(s.deleteProperties), maxDeletePropertiesBodySize))
+	rg.Handle(rg.Patch(common.PropertiesEndpoint), portalAPIChain, http.MaxBytesHandler(http.HandlerFunc(s.updateProperties), maxUpdatePropertiesBodySize))
 }
 
 func (s *Server) RegisterTaskHandlers(ctx context.Context) {
@@ -48,6 +50,9 @@ func (s *Server) RegisterTaskHandlers(ctx context.Context) {
 	}
 	if ok := s.AsyncTasks.Register(deletePropertiesHandlerID, s.handleDeleteProperties); !ok {
 		slog.ErrorContext(ctx, "Failed to register async task handler", "handler", deletePropertiesHandlerID)
+	}
+	if ok := s.AsyncTasks.Register(updatePropertiesHandlerID, s.handleUpdateProperties); !ok {
+		slog.ErrorContext(ctx, "Failed to register async task handler", "handler", updatePropertiesHandlerID)
 	}
 }
 

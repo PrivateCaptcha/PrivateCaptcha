@@ -34,6 +34,9 @@ const (
 	StatusPropertyDomainNameInvalidError  StatusCode = 1208
 	StatusPropertyDomainResolveError      StatusCode = 1209
 	StatusPropertyDomainFormatError       StatusCode = 1210
+	StatusPropertyIDEmptyError            StatusCode = 1211
+	StatusPropertyIDInvalidError          StatusCode = 1212
+	StatusPropertyIDDuplicateError        StatusCode = 1213
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 )
@@ -96,6 +99,12 @@ func (sc StatusCode) String() string {
 		return "Failed to resolve domain name."
 	case StatusPropertyDomainFormatError:
 		return "Invalid format of domain name."
+	case StatusPropertyIDEmptyError:
+		return "Property ID cannot be empty."
+	case StatusPropertyIDInvalidError:
+		return "Property ID is not valid."
+	case StatusPropertyIDDuplicateError:
+		return "Duplicate property ID found in request."
 	case StatusSubscriptionPropertyLimitError:
 		return "Property limit reached for current subscription plan."
 	default:

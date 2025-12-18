@@ -24,6 +24,7 @@ const (
 	maxPropertiesBatchSize    = 128
 	createPropertiesHandlerID = "api-create-properties"
 	deletePropertiesHandlerID = "api-delete-properties"
+	updatePropertiesHandlerID = "api-update-properties"
 )
 
 type asyncTaskCreateProperties struct {
@@ -35,7 +36,11 @@ type asyncTaskDeleteProperties struct {
 	PropertyIDs []int32 `json:"property_ids"`
 }
 
-func (p *apiPropertyInput) Normalize() {
+type asyncTaskUpdateProperties struct {
+	Properties []*apiPropertyUpdateInput `json:"properties"`
+}
+
+func (p *apiPropertySettings) Normalize() {
 	p.Name = strings.TrimSpace(p.Name)
 
 	const (
@@ -124,6 +129,39 @@ func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiPropert
 		if _, err := idna.Lookup.ToASCII(domain); err != nil {
 			ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
 			return common.StatusPropertyDomainNameInvalidError
+		}
+	}
+
+	return common.StatusOK
+}
+
+func (s *Server) validateApiPropertyUpdates(ctx context.Context, inputs []*apiPropertyUpdateInput) common.StatusCode {
+	if len(inputs) > maxPropertiesBatchSize {
+		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
+		return common.StatusPropertiesTooManyError
+	}
+
+	idsMap := make(map[string]struct{})
+
+	for i, input := range inputs {
+		ilog := slog.With("index", i, "id", input.ID, "name", input.Name)
+
+		if len(input.ID) == 0 {
+			ilog.WarnContext(ctx, "Property ID is empty")
+			return common.StatusPropertyIDEmptyError
+		}
+
+		if _, ok := idsMap[input.ID]; ok {
+			ilog.WarnContext(ctx, "Property ID duplicate found")
+			return common.StatusPropertyIDDuplicateError
+		}
+
+		idsMap[input.ID] = struct{}{}
+
+		name := strings.TrimSpace(input.Name)
+		if nameStatus := s.BusinessDB.Impl().ValidatePropertyName(ctx, name, nil /*org*/); !nameStatus.Success() {
+			ilog.WarnContext(ctx, "Property name failed validation", "reason", nameStatus.String())
+			return nameStatus
 		}
 	}
 
@@ -457,6 +495,160 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
+func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, apiKey, err := s.requestUser(ctx)
+	if err != nil {
+		s.sendHTTPErrorResponse(err, w)
+		return
+	}
+
+	var inputs []*apiPropertyUpdateInput
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&inputs); err != nil {
+		slog.WarnContext(ctx, "Failed to parse update properties request", common.ErrAttr(err))
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	if len(inputs) == 0 {
+		slog.WarnContext(ctx, "Empty update properties list")
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	if statusCode := s.validateApiPropertyUpdates(ctx, inputs); !statusCode.Success() {
+		s.sendAPIErrorResponse(ctx, statusCode, r, w)
+		return
+	}
+
+	referenceID := db.UUIDToSecret(apiKey.ExternalID)
+	request := &asyncTaskUpdateProperties{
+		Properties: inputs,
+	}
+
+	buffer := 5 * time.Minute
+	// we schedule it for later, making "room" for immediate attempt first
+	scheduledAt := time.Now().UTC().Add(buffer)
+	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, updatePropertiesHandlerID, user, scheduledAt, referenceID)
+	if err != nil {
+		s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
+		return
+	}
+
+	output := &apiAsyncTaskOutput{
+		ID: db.UUIDToString(task.ID),
+	}
+
+	s.sendAPISuccessResponse(ctx, output, w)
+
+	go func(bctx context.Context) {
+		handlerCtx, cancel := context.WithTimeout(bctx, buffer)
+		defer cancel()
+		if err := s.AsyncTasks.Execute(handlerCtx, task); err != nil {
+			slog.ErrorContext(bctx, "Failed to execute async task", "taskID", output.ID, common.ErrAttr(err))
+		}
+	}(common.CopyTraceID(ctx, context.Background()))
+}
+
+func (s *Server) handleUpdateProperties(ctx context.Context, task *dbgen.AsyncTask) ([]byte, error) {
+	taskID := db.UUIDToString(task.ID)
+	tlog := slog.With("taskID", taskID)
+
+	tlog.DebugContext(ctx, "Processing update properties task")
+
+	params := &asyncTaskUpdateProperties{}
+	if err := json.Unmarshal(task.Input, params); err != nil {
+		tlog.ErrorContext(ctx, "Failed to unmarshal update properties async task input", common.ErrAttr(err))
+		return nil, err
+	}
+
+	user, err := s.BusinessDB.Impl().RetrieveUser(ctx, task.UserID.Int32)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to retrieve user", "userID", task.UserID.Int32, common.ErrAttr(err))
+		return nil, err
+	}
+
+	results, err := s.doUpdateProperties(ctx, tlog, user, params)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to update properties", common.ErrAttr(err))
+		return nil, err
+	}
+
+	data, err := json.Marshal(results)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to serialize results", common.ErrAttr(err))
+		data = nil
+	}
+
+	return data, nil
+}
+
+func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskUpdateProperties) ([]*operationResult, error) {
+	b := &backoff.Backoff{
+		Min:    200 * time.Millisecond,
+		Max:    1 * time.Second,
+		Factor: 1.1,
+		Jitter: true,
+	}
+
+	results := make([]*operationResult, 0, len(params.Properties))
+
+	for i, propertyInput := range params.Properties {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		status := s.doUpdateProperty(ctx, tlog.With("index", i), propertyInput, user)
+		results = append(results, &operationResult{Code: status})
+	}
+
+	return results, nil
+}
+
+func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, propertyInput *apiPropertyUpdateInput, user *dbgen.User) common.StatusCode {
+	propertyID, err := s.IDHasher.Decrypt(propertyInput.ID)
+	if err != nil {
+		tlog.WarnContext(ctx, "Failed to decrypt property ID", "id", propertyInput.ID, common.ErrAttr(err))
+		return common.StatusPropertyIDInvalidError
+	}
+
+	property, err := s.BusinessDB.Impl().RetrieveProperty(ctx, int32(propertyID))
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to retrieve property", "propertyID", propertyID, common.ErrAttr(err))
+		return common.StatusFailure
+	}
+
+	org, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, property.OrgID.Int32)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to retrieve org", "orgID", property.OrgID.Int32, common.ErrAttr(err))
+		return common.StatusFailure
+	}
+
+	propertyInput.Normalize()
+
+	params := &dbgen.UpdatePropertyParams{
+		ID:               property.ID,
+		Name:             propertyInput.Name,
+		Level:            db.Int2(int16(propertyInput.Level)),
+		Growth:           dbgen.DifficultyGrowth(propertyInput.Growth),
+		ValidityInterval: time.Duration(propertyInput.ValiditySeconds) * time.Second,
+		AllowSubdomains:  propertyInput.AllowSubdomains,
+		AllowLocalhost:   propertyInput.AllowLocalhost,
+		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
+	}
+
+	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, property, org, params)
+	if err != nil {
+		tlog.ErrorContext(ctx, "Failed to update the property", common.ErrAttr(err))
+		return common.StatusFailure
+	}
+
+	s.BusinessDB.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourceAPI)
+
+	return common.StatusOK
+}
+
 func propertyToApiOrgProperty(property *dbgen.Property, hasher common.IdentifierHasher) *apiOrgPropertyOutput {
 	return &apiOrgPropertyOutput{
 		ID:      hasher.Encrypt(int(property.ID)),
@@ -468,7 +660,7 @@ func propertyToApiOrgProperty(property *dbgen.Property, hasher common.Identifier
 func propertiesToApiOrgProperties(properties []*dbgen.Property, hasher common.IdentifierHasher) []*apiOrgPropertyOutput {
 	result := make([]*apiOrgPropertyOutput, 0, len(properties))
 	for _, property := range properties {
-		result = append(result, propertyToApiOrgProperty(property, hasher))
+		result =append(result, propertyToApiOrgProperty(property, hasher))
 	}
 	return result
 }
