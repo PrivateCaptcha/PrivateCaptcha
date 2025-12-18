@@ -92,7 +92,7 @@ type Querier interface {
 	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) error
 	UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error)
 	UpdateProcessedUserNotifications(ctx context.Context, arg *UpdateProcessedUserNotificationsParams) error
-	UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*Property, error)
+	UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*UpdatePropertyRow, error)
 	UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error)
 	UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error)
 }

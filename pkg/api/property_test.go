@@ -18,90 +18,106 @@ import (
 func TestNormalizeApiPropertyInput(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    apiPropertyInput
-		expected apiPropertyInput
+		input    apiCreatePropertyInput
+		expected apiCreatePropertyInput
 	}{
 		{
 			name: "normalizes all fields with invalid/out-of-range values",
-			input: apiPropertyInput{
-				Name:            "  Test Property  ",
-				Domain:          "example.com",
-				Level:           999,
-				Growth:          "invalid",
-				ValiditySeconds: -100,
-				MaxReplayCount:  2_000_000,
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "  Test Property  ",
+					Level:           999,
+					Growth:          "invalid",
+					ValiditySeconds: -100,
+					MaxReplayCount:  2_000_000,
+				},
 			},
-			expected: apiPropertyInput{
-				Name:            "Test Property",
-				Domain:          "example.com",
-				Level:           int(common.MaxDifficultyLevel),
-				Growth:          "medium",
-				ValiditySeconds: int((6 * time.Hour).Seconds()),
-				MaxReplayCount:  1_000_000,
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           int(common.MaxDifficultyLevel),
+					Growth:          "medium",
+					ValiditySeconds: int((6 * time.Hour).Seconds()),
+					MaxReplayCount:  1_000_000,
+				},
 			},
 		},
 		{
 			name: "clamps to minimum values",
-			input: apiPropertyInput{
-				Name:            "Test",
-				Domain:          "example.com",
-				Level:           0,
-				Growth:          "medium",
-				ValiditySeconds: 0,
-				MaxReplayCount:  0,
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           0,
+					Growth:          "medium",
+					ValiditySeconds: 0,
+					MaxReplayCount:  0,
+				},
 			},
-			expected: apiPropertyInput{
-				Name:            "Test",
-				Domain:          "example.com",
-				Level:           1,
-				Growth:          "medium",
-				ValiditySeconds: int((6 * time.Hour).Seconds()),
-				MaxReplayCount:  1,
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           1,
+					Growth:          "medium",
+					ValiditySeconds: int((6 * time.Hour).Seconds()),
+					MaxReplayCount:  1,
+				},
 			},
 		},
 		{
 			name: "preserves valid values",
-			input: apiPropertyInput{
-				Name:            "Test Property",
-				Domain:          "example.com",
-				Level:           5,
-				Growth:          "fast",
-				ValiditySeconds: 3600,
-				MaxReplayCount:  100,
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           5,
+					Growth:          "fast",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  100,
+				},
 			},
-			expected: apiPropertyInput{
-				Name:            "Test Property",
-				Domain:          "example.com",
-				Level:           5,
-				Growth:          "fast",
-				ValiditySeconds: 3600,
-				MaxReplayCount:  100,
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test Property",
+					Level:           5,
+					Growth:          "fast",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  100,
+				},
 			},
 		},
 		{
 			name: "accepts all valid growth values",
-			input: apiPropertyInput{
-				Name:            "Test",
-				Domain:          "example.com",
-				Level:           5,
-				Growth:          "constant",
-				ValiditySeconds: 3600,
-				MaxReplayCount:  100,
+			input: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           5,
+					Growth:          "constant",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  100,
+				},
 			},
-			expected: apiPropertyInput{
-				Name:            "Test",
-				Domain:          "example.com",
-				Level:           5,
-				Growth:          "constant",
-				ValiditySeconds: 3600,
-				MaxReplayCount:  100,
+			expected: apiCreatePropertyInput{
+				Domain: "example.com",
+				apiPropertySettings: apiPropertySettings{
+					Name:            "Test",
+					Level:           5,
+					Growth:          "constant",
+					ValiditySeconds: 3600,
+					MaxReplayCount:  100,
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			input := &apiPropertyInput{}
+			input := &apiCreatePropertyInput{}
 			*input = tt.input
 			input.Normalize()
 
@@ -137,10 +153,12 @@ func TestApiPostProperties(t *testing.T) {
 	}
 
 	const count = 10
-	inputs := make([]*apiPropertyInput, 0, count)
+	inputs := make([]*apiCreatePropertyInput, 0, count)
 	for i := 0; i < count; i++ {
-		inputs = append(inputs, &apiPropertyInput{
-			Name:   fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{
+				Name: fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+			},
 			Domain: fmt.Sprintf("example%d.com", i),
 		})
 	}
@@ -221,10 +239,12 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 	}
 
 	const count = 2
-	inputs := make([]*apiPropertyInput, 0, count)
+	inputs := make([]*apiCreatePropertyInput, 0, count)
 	for i := 0; i < count; i++ {
-		inputs = append(inputs, &apiPropertyInput{
-			Name:   fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{
+				Name: fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+			},
 			Domain: fmt.Sprintf("example%d.com", i),
 		})
 	}
@@ -257,10 +277,12 @@ func TestApiPostPropertiesOtherOrg(t *testing.T) {
 	}
 
 	const count = 2
-	inputs := make([]*apiPropertyInput, 0, count)
+	inputs := make([]*apiCreatePropertyInput, 0, count)
 	for i := 0; i < count; i++ {
-		inputs = append(inputs, &apiPropertyInput{
-			Name:   fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{
+				Name: fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+			},
 			Domain: fmt.Sprintf("example%d.com", i),
 		})
 	}

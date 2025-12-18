@@ -613,16 +613,10 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		return common.StatusPropertyIDInvalidError
 	}
 
-	property, err := s.BusinessDB.Impl().RetrieveProperty(ctx, int32(propertyID))
-	if err != nil {
-		tlog.ErrorContext(ctx, "Failed to retrieve property", "propertyID", propertyID, common.ErrAttr(err))
-		return common.StatusFailure
-	}
-
 	propertyInput.Normalize()
 
 	params := &dbgen.UpdatePropertyParams{
-		ID:               property.ID,
+		ID:               int32(propertyID),
 		Name:             propertyInput.Name,
 		Level:            db.Int2(int16(propertyInput.Level)),
 		Growth:           dbgen.DifficultyGrowth(propertyInput.Growth),
@@ -632,7 +626,7 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
 	}
 
-	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, property, nil /*org*/, user, params)
+	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, nil /*org*/, user, params)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to update the property", common.ErrAttr(err))
 		return common.StatusFailure

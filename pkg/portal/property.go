@@ -799,13 +799,13 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 			MaxReplayCount:   maxReplayCount,
 		}
 
-		var updatedProperty *dbgen.Property
-		if updatedProperty, auditEvent, err = s.Store.Impl().UpdateProperty(ctx, property, org, user, params); err != nil {
+		var updatedProperty *dbgen.UpdatePropertyRow
+		if updatedProperty, auditEvent, err = s.Store.Impl().UpdateProperty(ctx, org, user, params); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.InfoContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)
 			renderCtx.SuccessMessage = "Settings were updated"
-			renderCtx.Property = propertyToUserProperty(updatedProperty, s.IDHasher)
+			renderCtx.Property = propertyToUserProperty(&updatedProperty.Property, s.IDHasher)
 		}
 	}
 

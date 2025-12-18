@@ -355,6 +355,32 @@ func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *Aud
 	return event
 }
 
+func newAuditLogOldProperty(updateRow *dbgen.UpdatePropertyRow, org *dbgen.Organization) *AuditLogProperty {
+	if updateRow == nil {
+		return nil
+	}
+
+	event := &AuditLogProperty{
+		Name:                updateRow.OldName,
+		OrgID:               updateRow.Property.OrgID.Int32,
+		OrgOwnerID:          updateRow.Property.OrgOwnerID.Int32,
+		CreatorID:           updateRow.Property.CreatorID.Int32,
+		Domain:              updateRow.Property.Domain,
+		Level:               updateRow.OldLevel.Int16,
+		Growth:              string(updateRow.OldGrowth),
+		ValidityIntervalSec: int(updateRow.OldValidityInterval.Seconds()),
+		MaxReplayCount:      updateRow.OldMaxReplayCount,
+		AllowSubdomains:     updateRow.OldAllowSubdomains,
+		AllowLocalhost:      updateRow.OldAllowLocalhost,
+	}
+
+	if org != nil {
+		event.OrgName = org.Name
+	}
+
+	return event
+}
+
 func newCreatePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organization) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    property.CreatorID.Int32,
@@ -366,14 +392,14 @@ func newCreatePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organiz
 	}
 }
 
-func newUpdatePropertyAuditLogEvent(oldProperty, newProperty *dbgen.Property, org *dbgen.Organization) *common.AuditLogEvent {
+func newUpdatePropertyAuditLogEvent(updateRow *dbgen.UpdatePropertyRow, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
-		UserID:    oldProperty.CreatorID.Int32,
+		UserID:    user.ID,
 		Action:    common.AuditLogActionUpdate,
-		EntityID:  int64(oldProperty.ID),
+		EntityID:  int64(updateRow.Property.ID),
 		TableName: TableNameProperties,
-		OldValue:  newAuditLogProperty(oldProperty, org),
-		NewValue:  newAuditLogProperty(newProperty, org),
+		OldValue:  newAuditLogOldProperty(updateRow, org),
+		NewValue:  newAuditLogProperty(&updateRow.Property, org),
 	}
 }
 

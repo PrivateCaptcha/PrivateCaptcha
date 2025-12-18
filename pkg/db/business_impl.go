@@ -913,7 +913,7 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 	return property, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, oldProperty *dbgen.Property, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.UpdatePropertyRow, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, ErrMaintenance
 	}
@@ -928,12 +928,14 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, oldProperty *
 
 	slog.InfoContext(ctx, "Updated property", "name", params.Name, "propID", params.ID)
 
-	impl.cacheProperty(ctx, updatedProperty)
+	cacheProperty := new(dbgen.Property)
+	*cacheProperty = updatedProperty.Property
+	impl.cacheProperty(ctx, cacheProperty)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
-	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.Property.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.Property.ID))
 
-	auditEvent := newUpdatePropertyAuditLogEvent(oldProperty, updatedProperty, org)
+	auditEvent := newUpdatePropertyAuditLogEvent(updatedProperty, org, user)
 
 	return updatedProperty, auditEvent, nil
 }

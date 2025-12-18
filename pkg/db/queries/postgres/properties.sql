@@ -14,9 +14,11 @@ RETURNING *;
 
 -- name: UpdateProperty :one
 WITH old AS (
-    SELECT * FROM backend.properties WHERE id = $1 AND (creator_id = $9 OR org_owner_id = $9) FOR UPDATE
+    SELECT * FROM backend.properties p
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9)
+    FOR UPDATE
 ),
-new AS (
+upd AS (
     UPDATE backend.properties
     SET name = $2,
         level = $3,
@@ -27,10 +29,10 @@ new AS (
         max_replay_count = $8,
         updated_at = NOW()
     WHERE id = $1 AND (creator_id = $9 OR org_owner_id = $9)
-    RETURNING *
+    RETURNING id -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
-    new.*,
+    sqlc.embed(p),
     old.name AS old_name,
     old.level AS old_level,
     old.growth AS old_growth,
@@ -38,8 +40,9 @@ SELECT
     old.allow_subdomains AS old_allow_subdomains,
     old.allow_localhost AS old_allow_localhost,
     old.max_replay_count AS old_max_replay_count
-FROM old
-JOIN new ON old.id = new.id;
+FROM upd
+JOIN backend.properties p ON p.id = upd.id
+JOIN old ON old.id = p.id;
 
 -- name: MoveProperty :one
 UPDATE backend.properties SET org_id = $2, org_owner_id = $3, updated_at = NOW()

@@ -245,6 +245,10 @@ func (rg *RouteGenerator) Delete(parts ...string) string {
 	return rg.Route(http.MethodDelete, parts...)
 }
 
+func (rg *RouteGenerator) Patch(parts ...string) string {
+	return rg.Route(http.MethodPatch, parts...)
+}
+
 func (rg *RouteGenerator) LastPath() string {
 	result := rg.Path
 	// side-effect: this will cause go http metrics handler to use handlerID based on request Path
