@@ -913,14 +913,16 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 	return property, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, oldProperty *dbgen.Property, org *dbgen.Organization, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, oldProperty *dbgen.Property, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, ErrMaintenance
 	}
 
+	params.CreatorID = Int(user.ID)
+
 	updatedProperty, err := impl.querier.UpdateProperty(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update property in DB", "name", params.Name, "propID", params.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to update property in DB", "name", params.Name, "propID", params.ID, "userID", user.ID, common.ErrAttr(err))
 		return nil, nil, err
 	}
 

@@ -46,15 +46,12 @@ type apiPropertySettings struct {
 	MaxReplayCount  int    `json:"max_replay_count,omitempty"`
 }
 
-type apiPropertyInput struct {
+type apiCreatePropertyInput struct {
 	apiPropertySettings
-	ID      string `json:"id,omitempty"`
-	Sitekey string `json:"sitekey,omitempty"`
-	OrgID   string `json:"org_id,omitempty"`
-	Domain  string `json:"domain"`
+	Domain string `json:"domain"`
 }
 
-type apiPropertyUpdateInput struct {
+type apiUpdatePropertyInput struct {
 	apiPropertySettings
 	ID string `json:"id"`
 }

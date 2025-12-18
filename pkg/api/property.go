@@ -28,8 +28,8 @@ const (
 )
 
 type asyncTaskCreateProperties struct {
-	Properties []*apiPropertyInput `json:"properties"`
-	OrgID      int32               `json:"org_id"`
+	Properties []*apiCreatePropertyInput `json:"properties"`
+	OrgID      int32                     `json:"org_id"`
 }
 
 type asyncTaskDeleteProperties struct {
@@ -37,7 +37,7 @@ type asyncTaskDeleteProperties struct {
 }
 
 type asyncTaskUpdateProperties struct {
-	Properties []*apiPropertyUpdateInput `json:"properties"`
+	Properties []*apiUpdatePropertyInput `json:"properties"`
 }
 
 func (p *apiPropertySettings) Normalize() {
@@ -73,7 +73,7 @@ func (p *apiPropertySettings) Normalize() {
 	}
 }
 
-func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiPropertyInput, orgID int32) common.StatusCode {
+func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiCreatePropertyInput, orgID int32) common.StatusCode {
 	if len(inputs) > maxPropertiesBatchSize {
 		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
 		return common.StatusPropertiesTooManyError
@@ -135,7 +135,7 @@ func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiPropert
 	return common.StatusOK
 }
 
-func (s *Server) validateApiPropertyUpdates(ctx context.Context, inputs []*apiPropertyUpdateInput) common.StatusCode {
+func (s *Server) validateApiPropertyUpdates(ctx context.Context, inputs []*apiUpdatePropertyInput) common.StatusCode {
 	if len(inputs) > maxPropertiesBatchSize {
 		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
 		return common.StatusPropertiesTooManyError
@@ -176,7 +176,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var inputs []*apiPropertyInput
+	var inputs []*apiCreatePropertyInput
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&inputs); err != nil {
 		slog.WarnContext(ctx, "Failed to parse new properties request", common.ErrAttr(err))
@@ -328,7 +328,7 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
-func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiPropertyInput, user *dbgen.User, org *dbgen.Organization) common.StatusCode {
+func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiCreatePropertyInput, user *dbgen.User, org *dbgen.Organization) common.StatusCode {
 	// this should have been filtered out when we validated user request
 	// but we repeat this here because we save to DB _exact_ user request
 	domain, err := common.ParseDomainName(property.Domain)
@@ -503,7 +503,7 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var inputs []*apiPropertyUpdateInput
+	var inputs []*apiUpdatePropertyInput
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&inputs); err != nil {
 		slog.WarnContext(ctx, "Failed to parse update properties request", common.ErrAttr(err))
@@ -606,7 +606,7 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
-func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, propertyInput *apiPropertyUpdateInput, user *dbgen.User) common.StatusCode {
+func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, propertyInput *apiUpdatePropertyInput, user *dbgen.User) common.StatusCode {
 	propertyID, err := s.IDHasher.Decrypt(propertyInput.ID)
 	if err != nil {
 		tlog.WarnContext(ctx, "Failed to decrypt property ID", "id", propertyInput.ID, common.ErrAttr(err))
@@ -616,12 +616,6 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 	property, err := s.BusinessDB.Impl().RetrieveProperty(ctx, int32(propertyID))
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to retrieve property", "propertyID", propertyID, common.ErrAttr(err))
-		return common.StatusFailure
-	}
-
-	org, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, property.OrgID.Int32)
-	if err != nil {
-		tlog.ErrorContext(ctx, "Failed to retrieve org", "orgID", property.OrgID.Int32, common.ErrAttr(err))
 		return common.StatusFailure
 	}
 
@@ -638,7 +632,7 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
 	}
 
-	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, property, org, params)
+	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, property, nil /*org*/, user, params)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to update the property", common.ErrAttr(err))
 		return common.StatusFailure
@@ -660,7 +654,7 @@ func propertyToApiOrgProperty(property *dbgen.Property, hasher common.Identifier
 func propertiesToApiOrgProperties(properties []*dbgen.Property, hasher common.IdentifierHasher) []*apiOrgPropertyOutput {
 	result := make([]*apiOrgPropertyOutput, 0, len(properties))
 	for _, property := range properties {
-		result =append(result, propertyToApiOrgProperty(property, hasher))
+		result = append(result, propertyToApiOrgProperty(property, hasher))
 	}
 	return result
 }

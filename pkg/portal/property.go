@@ -800,7 +800,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		}
 
 		var updatedProperty *dbgen.Property
-		if updatedProperty, auditEvent, err = s.Store.Impl().UpdateProperty(ctx, property, org, params); err != nil {
+		if updatedProperty, auditEvent, err = s.Store.Impl().UpdateProperty(ctx, property, org, user, params); err != nil {
 			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
 		} else {
 			slog.InfoContext(ctx, "Edited property", "propID", property.ID, "orgID", org.ID)

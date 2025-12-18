@@ -545,7 +545,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 
 const updateProperty = `-- name: UpdateProperty :one
 UPDATE backend.properties SET name = $2, level = $3, growth = $4, validity_interval = $5, allow_subdomains = $6, allow_localhost = $7, max_replay_count = $8, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND (creator_id = $9 OR org_owner_id = $9)
 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
 `
 
@@ -558,6 +558,7 @@ type UpdatePropertyParams struct {
 	AllowSubdomains  bool             `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost   bool             `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount   int32            `db:"max_replay_count" json:"max_replay_count"`
+	CreatorID        pgtype.Int4      `db:"creator_id" json:"creator_id"`
 }
 
 func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*Property, error) {
@@ -570,6 +571,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		arg.AllowSubdomains,
 		arg.AllowLocalhost,
 		arg.MaxReplayCount,
+		arg.CreatorID,
 	)
 	var i Property
 	err := row.Scan(
