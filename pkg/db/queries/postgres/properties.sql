@@ -19,7 +19,7 @@ WITH old AS (
     FOR UPDATE
 ),
 upd AS (
-    UPDATE backend.properties
+    UPDATE backend.properties p
     SET name = $2,
         level = $3,
         growth = $4,
@@ -28,11 +28,11 @@ upd AS (
         allow_localhost = $7,
         max_replay_count = $8,
         updated_at = NOW()
-    WHERE id = $1 AND (creator_id = $9 OR org_owner_id = $9)
-    RETURNING id -- This ensures the final SELECT only returns data if the update actually happened
+    WHERE p.id = (SELECT id FROM old)
+    RETURNING * -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
-    sqlc.embed(p),
+    upd.*,
     old.name AS old_name,
     old.level AS old_level,
     old.growth AS old_growth,
@@ -41,8 +41,7 @@ SELECT
     old.allow_localhost AS old_allow_localhost,
     old.max_replay_count AS old_max_replay_count
 FROM upd
-JOIN backend.properties p ON p.id = upd.id
-JOIN old ON old.id = p.id;
+CROSS JOIN old;
 
 -- name: MoveProperty :one
 UPDATE backend.properties SET org_id = $2, org_owner_id = $3, updated_at = NOW()

@@ -594,12 +594,12 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	results := make([]*operationResult, 0, len(params.Properties))
 
-	for i, propertyInput := range params.Properties {
+	for i, property := range params.Properties {
 		if i > 0 {
 			time.Sleep(b.Duration())
 		}
 
-		status := s.doUpdateProperty(ctx, tlog.With("index", i), propertyInput, user)
+		status := s.doUpdateProperty(ctx, tlog.With("index", i), property, user)
 		results = append(results, &operationResult{Code: status})
 	}
 
@@ -628,6 +628,9 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 
 	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, nil /*org*/, user, params)
 	if err != nil {
+		if err == db.ErrPermissions {
+			return common.StatusOrgPermissionsError
+		}
 		tlog.ErrorContext(ctx, "Failed to update the property", common.ErrAttr(err))
 		return common.StatusFailure
 	}

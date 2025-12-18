@@ -13,6 +13,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 func TestNormalizeApiPropertyInput(t *testing.T) {
@@ -502,9 +503,9 @@ func TestApiUpdateProperties(t *testing.T) {
 			ID: s.IDHasher.Encrypt(int(p1.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 1",
-				Level:           7,
-				Growth:          "fast",
-				ValiditySeconds: 7200,
+				Level:           int(common.DifficultyLevelHigh),
+				Growth:          string(dbgen.DifficultyGrowthMedium),
+				ValiditySeconds: int(puzzle.ValidityDurations[7].Seconds()),
 				AllowSubdomains: true,
 				AllowLocalhost:  false,
 				MaxReplayCount:  500,
@@ -514,9 +515,9 @@ func TestApiUpdateProperties(t *testing.T) {
 			ID: s.IDHasher.Encrypt(int(p2.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 2",
-				Level:           3,
-				Growth:          "slow",
-				ValiditySeconds: 3600,
+				Level:           int(common.DifficultyLevelSmall),
+				Growth:          string(dbgen.DifficultyGrowthFast),
+				ValiditySeconds: int(puzzle.ValidityDurations[1].Seconds()),
 				AllowSubdomains: false,
 				AllowLocalhost:  true,
 				MaxReplayCount:  200,
@@ -561,7 +562,7 @@ func TestApiUpdateProperties(t *testing.T) {
 	}
 
 	// Verify P1 updated
-	updatedP1, err := s.BusinessDB.Impl().RetrieveProperty(ctx, p1.ID)
+	updatedP1, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org1, p1.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +590,7 @@ func TestApiUpdateProperties(t *testing.T) {
 	}
 
 	// Verify P2 updated
-	updatedP2, err := s.BusinessDB.Impl().RetrieveProperty(ctx, p2.ID)
+	updatedP2, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org2, p2.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

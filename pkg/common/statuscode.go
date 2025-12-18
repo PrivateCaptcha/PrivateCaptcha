@@ -37,6 +37,7 @@ const (
 	StatusPropertyIDEmptyError            StatusCode = 1211
 	StatusPropertyIDInvalidError          StatusCode = 1212
 	StatusPropertyIDDuplicateError        StatusCode = 1213
+	StatusPropertyPermissionsError        StatusCode = 1214
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 )
@@ -107,6 +108,8 @@ func (sc StatusCode) String() string {
 		return "Duplicate property ID found in request."
 	case StatusSubscriptionPropertyLimitError:
 		return "Property limit reached for current subscription plan."
+	case StatusPropertyPermissionsError:
+		return "Insufficient permissions to update settings."
 	default:
 		return strconv.Itoa(int(sc))
 	}

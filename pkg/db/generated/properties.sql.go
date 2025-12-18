@@ -550,7 +550,7 @@ WITH old AS (
     FOR UPDATE
 ),
 upd AS (
-    UPDATE backend.properties
+    UPDATE backend.properties p
     SET name = $2,
         level = $3,
         growth = $4,
@@ -559,11 +559,11 @@ upd AS (
         allow_localhost = $7,
         max_replay_count = $8,
         updated_at = NOW()
-    WHERE id = $1 AND (creator_id = $9 OR org_owner_id = $9)
-    RETURNING id -- This ensures the final SELECT only returns data if the update actually happened
+    WHERE p.id = (SELECT id FROM old)
+    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
-    p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.salt, p.growth, p.created_at, p.updated_at, p.deleted_at, p.validity_interval, p.allow_subdomains, p.allow_localhost, p.max_replay_count,
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.domain, upd.level, upd.salt, upd.growth, upd.created_at, upd.updated_at, upd.deleted_at, upd.validity_interval, upd.allow_subdomains, upd.allow_localhost, upd.max_replay_count,
     old.name AS old_name,
     old.level AS old_level,
     old.growth AS old_growth,
@@ -572,8 +572,7 @@ SELECT
     old.allow_localhost AS old_allow_localhost,
     old.max_replay_count AS old_max_replay_count
 FROM upd
-JOIN backend.properties p ON p.id = upd.id
-JOIN old ON old.id = p.id
+CROSS JOIN old
 `
 
 type UpdatePropertyParams struct {
@@ -589,14 +588,30 @@ type UpdatePropertyParams struct {
 }
 
 type UpdatePropertyRow struct {
-	Property            Property         `db:"property" json:"property"`
-	OldName             string           `db:"old_name" json:"old_name"`
-	OldLevel            pgtype.Int2      `db:"old_level" json:"old_level"`
-	OldGrowth           DifficultyGrowth `db:"old_growth" json:"old_growth"`
-	OldValidityInterval time.Duration    `db:"old_validity_interval" json:"old_validity_interval"`
-	OldAllowSubdomains  bool             `db:"old_allow_subdomains" json:"old_allow_subdomains"`
-	OldAllowLocalhost   bool             `db:"old_allow_localhost" json:"old_allow_localhost"`
-	OldMaxReplayCount   int32            `db:"old_max_replay_count" json:"old_max_replay_count"`
+	ID                  int32              `db:"id" json:"id"`
+	Name                string             `db:"name" json:"name"`
+	ExternalID          pgtype.UUID        `db:"external_id" json:"external_id"`
+	OrgID               pgtype.Int4        `db:"org_id" json:"org_id"`
+	CreatorID           pgtype.Int4        `db:"creator_id" json:"creator_id"`
+	OrgOwnerID          pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
+	Domain              string             `db:"domain" json:"domain"`
+	Level               pgtype.Int2        `db:"level" json:"level"`
+	Salt                []byte             `db:"salt" json:"salt"`
+	Growth              DifficultyGrowth   `db:"growth" json:"growth"`
+	CreatedAt           pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt           pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	ValidityInterval    time.Duration      `db:"validity_interval" json:"validity_interval"`
+	AllowSubdomains     bool               `db:"allow_subdomains" json:"allow_subdomains"`
+	AllowLocalhost      bool               `db:"allow_localhost" json:"allow_localhost"`
+	MaxReplayCount      int32              `db:"max_replay_count" json:"max_replay_count"`
+	OldName             string             `db:"old_name" json:"old_name"`
+	OldLevel            pgtype.Int2        `db:"old_level" json:"old_level"`
+	OldGrowth           DifficultyGrowth   `db:"old_growth" json:"old_growth"`
+	OldValidityInterval time.Duration      `db:"old_validity_interval" json:"old_validity_interval"`
+	OldAllowSubdomains  bool               `db:"old_allow_subdomains" json:"old_allow_subdomains"`
+	OldAllowLocalhost   bool               `db:"old_allow_localhost" json:"old_allow_localhost"`
+	OldMaxReplayCount   int32              `db:"old_max_replay_count" json:"old_max_replay_count"`
 }
 
 func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*UpdatePropertyRow, error) {
@@ -613,23 +628,23 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 	)
 	var i UpdatePropertyRow
 	err := row.Scan(
-		&i.Property.ID,
-		&i.Property.Name,
-		&i.Property.ExternalID,
-		&i.Property.OrgID,
-		&i.Property.CreatorID,
-		&i.Property.OrgOwnerID,
-		&i.Property.Domain,
-		&i.Property.Level,
-		&i.Property.Salt,
-		&i.Property.Growth,
-		&i.Property.CreatedAt,
-		&i.Property.UpdatedAt,
-		&i.Property.DeletedAt,
-		&i.Property.ValidityInterval,
-		&i.Property.AllowSubdomains,
-		&i.Property.AllowLocalhost,
-		&i.Property.MaxReplayCount,
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.Domain,
+		&i.Level,
+		&i.Salt,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ValidityInterval,
+		&i.AllowSubdomains,
+		&i.AllowLocalhost,
+		&i.MaxReplayCount,
 		&i.OldName,
 		&i.OldLevel,
 		&i.OldGrowth,
