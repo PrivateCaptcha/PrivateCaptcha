@@ -140,6 +140,51 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 	}
 }
 
+func TestNormalizeApiUpdatePropertyInput(t *testing.T) {
+	input := apiUpdatePropertyInput{
+		ID: "test-id",
+		apiPropertySettings: apiPropertySettings{
+			Name:            "  Test Property  ",
+			Level:           999,
+			Growth:          "invalid",
+			ValiditySeconds: -100,
+			MaxReplayCount:  2_000_000,
+		},
+	}
+
+	expected := apiUpdatePropertyInput{
+		ID: "test-id",
+		apiPropertySettings: apiPropertySettings{
+			Name:            "Test Property",
+			Level:           int(common.MaxDifficultyLevel),
+			Growth:          "medium",
+			ValiditySeconds: int((6 * time.Hour).Seconds()),
+			MaxReplayCount:  1_000_000,
+		},
+	}
+
+	input.Normalize()
+
+	if input.ID != expected.ID {
+		t.Errorf("ID: got %q, want %q", input.ID, expected.ID)
+	}
+	if input.Name != expected.Name {
+		t.Errorf("Name: got %q, want %q", input.Name, expected.Name)
+	}
+	if input.Level != expected.Level {
+		t.Errorf("Level: got %d, want %d", input.Level, expected.Level)
+	}
+	if input.Growth != expected.Growth {
+		t.Errorf("Growth: got %q, want %q", input.Growth, expected.Growth)
+	}
+	if input.MaxReplayCount != expected.MaxReplayCount {
+		t.Errorf("MaxReplayCount: got %d, want %d", input.MaxReplayCount, expected.MaxReplayCount)
+	}
+	if input.ValiditySeconds != expected.ValiditySeconds {
+		t.Errorf("ValiditySeconds: got %d, want %d", input.ValiditySeconds, expected.ValiditySeconds)
+	}
+}
+
 func TestApiPostProperties(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -418,6 +463,157 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 	if foundP2 {
 		t.Error("Property P2 should be deleted")
+	}
+}
+
+func TestApiUpdateProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org1, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create another org for the same user
+	org2, _, err := s.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create properties
+	// P1 in Org1
+	p1, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// P2 in Org2
+	p2, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Prepare update request
+	updates := []*apiUpdatePropertyInput{
+		{
+			ID: s.IDHasher.Encrypt(int(p1.ID)),
+			apiPropertySettings: apiPropertySettings{
+				Name:            "Updated Property 1",
+				Level:           7,
+				Growth:          "fast",
+				ValiditySeconds: 7200,
+				AllowSubdomains: true,
+				AllowLocalhost:  false,
+				MaxReplayCount:  500,
+			},
+		},
+		{
+			ID: s.IDHasher.Encrypt(int(p2.ID)),
+			apiPropertySettings: apiPropertySettings{
+				Name:            "Updated Property 2",
+				Level:           3,
+				Growth:          "slow",
+				ValiditySeconds: 3600,
+				AllowSubdomains: false,
+				AllowLocalhost:  true,
+				MaxReplayCount:  200,
+			},
+		},
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, updates,
+		http.MethodPatch,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	// Verify P1 updated
+	updatedP1, err := s.BusinessDB.Impl().RetrieveProperty(ctx, p1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updatedP1.Name != updates[0].Name {
+		t.Errorf("P1 Name: got %q, want %q", updatedP1.Name, updates[0].Name)
+	}
+	if int(updatedP1.Level.Int16) != updates[0].Level {
+		t.Errorf("P1 Level: got %d, want %d", updatedP1.Level.Int16, updates[0].Level)
+	}
+	if string(updatedP1.Growth) != updates[0].Growth {
+		t.Errorf("P1 Growth: got %q, want %q", updatedP1.Growth, updates[0].Growth)
+	}
+	if int(updatedP1.ValidityInterval.Seconds()) != updates[0].ValiditySeconds {
+		t.Errorf("P1 ValiditySeconds: got %d, want %d", int(updatedP1.ValidityInterval.Seconds()), updates[0].ValiditySeconds)
+	}
+	if updatedP1.AllowSubdomains != updates[0].AllowSubdomains {
+		t.Errorf("P1 AllowSubdomains: got %v, want %v", updatedP1.AllowSubdomains, updates[0].AllowSubdomains)
+	}
+	if updatedP1.AllowLocalhost != updates[0].AllowLocalhost {
+		t.Errorf("P1 AllowLocalhost: got %v, want %v", updatedP1.AllowLocalhost, updates[0].AllowLocalhost)
+	}
+	if int(updatedP1.MaxReplayCount) != updates[0].MaxReplayCount {
+		t.Errorf("P1 MaxReplayCount: got %d, want %d", updatedP1.MaxReplayCount, updates[0].MaxReplayCount)
+	}
+
+	// Verify P2 updated
+	updatedP2, err := s.BusinessDB.Impl().RetrieveProperty(ctx, p2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updatedP2.Name != updates[1].Name {
+		t.Errorf("P2 Name: got %q, want %q", updatedP2.Name, updates[1].Name)
+	}
+	if int(updatedP2.Level.Int16) != updates[1].Level {
+		t.Errorf("P2 Level: got %d, want %d", updatedP2.Level.Int16, updates[1].Level)
+	}
+	if string(updatedP2.Growth) != updates[1].Growth {
+		t.Errorf("P2 Growth: got %q, want %q", updatedP2.Growth, updates[1].Growth)
+	}
+	if int(updatedP2.ValidityInterval.Seconds()) != updates[1].ValiditySeconds {
+		t.Errorf("P2 ValiditySeconds: got %d, want %d", int(updatedP2.ValidityInterval.Seconds()), updates[1].ValiditySeconds)
+	}
+	if updatedP2.AllowSubdomains != updates[1].AllowSubdomains {
+		t.Errorf("P2 AllowSubdomains: got %v, want %v", updatedP2.AllowSubdomains, updates[1].AllowSubdomains)
+	}
+	if updatedP2.AllowLocalhost != updates[1].AllowLocalhost {
+		t.Errorf("P2 AllowLocalhost: got %v, want %v", updatedP2.AllowLocalhost, updates[1].AllowLocalhost)
+	}
+	if int(updatedP2.MaxReplayCount) != updates[1].MaxReplayCount {
+		t.Errorf("P2 MaxReplayCount: got %d, want %d", updatedP2.MaxReplayCount, updates[1].MaxReplayCount)
 	}
 }
 
