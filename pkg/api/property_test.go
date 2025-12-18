@@ -467,6 +467,32 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 }
 
+func verifyPropertyUpdate(t *testing.T, property *dbgen.Property, expected *apiUpdatePropertyInput) {
+	t.Helper()
+
+	if property.Name != expected.Name {
+		t.Errorf("Name: got %q, want %q", property.Name, expected.Name)
+	}
+	if int(property.Level.Int16) != expected.Level {
+		t.Errorf("Level: got %d, want %d", property.Level.Int16, expected.Level)
+	}
+	if string(property.Growth) != expected.Growth {
+		t.Errorf("Growth: got %q, want %q", property.Growth, expected.Growth)
+	}
+	if int(property.ValidityInterval.Seconds()) != expected.ValiditySeconds {
+		t.Errorf("ValiditySeconds: got %d, want %d", int(property.ValidityInterval.Seconds()), expected.ValiditySeconds)
+	}
+	if property.AllowSubdomains != expected.AllowSubdomains {
+		t.Errorf("AllowSubdomains: got %v, want %v", property.AllowSubdomains, expected.AllowSubdomains)
+	}
+	if property.AllowLocalhost != expected.AllowLocalhost {
+		t.Errorf("AllowLocalhost: got %v, want %v", property.AllowLocalhost, expected.AllowLocalhost)
+	}
+	if int(property.MaxReplayCount) != expected.MaxReplayCount {
+		t.Errorf("MaxReplayCount: got %d, want %d", property.MaxReplayCount, expected.MaxReplayCount)
+	}
+}
+
 func TestApiUpdateProperties(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -566,56 +592,14 @@ func TestApiUpdateProperties(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if updatedP1.Name != updates[0].Name {
-		t.Errorf("P1 Name: got %q, want %q", updatedP1.Name, updates[0].Name)
-	}
-	if int(updatedP1.Level.Int16) != updates[0].Level {
-		t.Errorf("P1 Level: got %d, want %d", updatedP1.Level.Int16, updates[0].Level)
-	}
-	if string(updatedP1.Growth) != updates[0].Growth {
-		t.Errorf("P1 Growth: got %q, want %q", updatedP1.Growth, updates[0].Growth)
-	}
-	if int(updatedP1.ValidityInterval.Seconds()) != updates[0].ValiditySeconds {
-		t.Errorf("P1 ValiditySeconds: got %d, want %d", int(updatedP1.ValidityInterval.Seconds()), updates[0].ValiditySeconds)
-	}
-	if updatedP1.AllowSubdomains != updates[0].AllowSubdomains {
-		t.Errorf("P1 AllowSubdomains: got %v, want %v", updatedP1.AllowSubdomains, updates[0].AllowSubdomains)
-	}
-	if updatedP1.AllowLocalhost != updates[0].AllowLocalhost {
-		t.Errorf("P1 AllowLocalhost: got %v, want %v", updatedP1.AllowLocalhost, updates[0].AllowLocalhost)
-	}
-	if int(updatedP1.MaxReplayCount) != updates[0].MaxReplayCount {
-		t.Errorf("P1 MaxReplayCount: got %d, want %d", updatedP1.MaxReplayCount, updates[0].MaxReplayCount)
-	}
+	verifyPropertyUpdate(t, updatedP1, updates[0])
 
 	// Verify P2 updated
 	updatedP2, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org2, p2.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if updatedP2.Name != updates[1].Name {
-		t.Errorf("P2 Name: got %q, want %q", updatedP2.Name, updates[1].Name)
-	}
-	if int(updatedP2.Level.Int16) != updates[1].Level {
-		t.Errorf("P2 Level: got %d, want %d", updatedP2.Level.Int16, updates[1].Level)
-	}
-	if string(updatedP2.Growth) != updates[1].Growth {
-		t.Errorf("P2 Growth: got %q, want %q", updatedP2.Growth, updates[1].Growth)
-	}
-	if int(updatedP2.ValidityInterval.Seconds()) != updates[1].ValiditySeconds {
-		t.Errorf("P2 ValiditySeconds: got %d, want %d", int(updatedP2.ValidityInterval.Seconds()), updates[1].ValiditySeconds)
-	}
-	if updatedP2.AllowSubdomains != updates[1].AllowSubdomains {
-		t.Errorf("P2 AllowSubdomains: got %v, want %v", updatedP2.AllowSubdomains, updates[1].AllowSubdomains)
-	}
-	if updatedP2.AllowLocalhost != updates[1].AllowLocalhost {
-		t.Errorf("P2 AllowLocalhost: got %v, want %v", updatedP2.AllowLocalhost, updates[1].AllowLocalhost)
-	}
-	if int(updatedP2.MaxReplayCount) != updates[1].MaxReplayCount {
-		t.Errorf("P2 MaxReplayCount: got %d, want %d", updatedP2.MaxReplayCount, updates[1].MaxReplayCount)
-	}
+	verifyPropertyUpdate(t, updatedP2, updates[1])
 }
 
 func TestApiGetProperties(t *testing.T) {
