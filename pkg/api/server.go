@@ -105,7 +105,7 @@ func (a *apiKeyOwnerSource) apiKey(ctx context.Context) (*dbgen.APIKey, error) {
 		// this is the "postponed" DB access mentioned in APIKey() middleware
 		// NOTE: here we do NOT verify user's subscription validity, it's done only in middleware
 		key, err := a.Store.Impl().RetrieveAPIKey(ctx, secret)
-		if err != nil {
+		if key != nil {
 			a.cachedKey = key
 		}
 		return key, err
@@ -117,6 +117,9 @@ func (a *apiKeyOwnerSource) apiKey(ctx context.Context) (*dbgen.APIKey, error) {
 func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, error) {
 	apiKey, err := a.apiKey(ctx)
 	if err != nil {
+		if (err == db.ErrSetMissing) || (err == db.ErrNegativeCacheHit) {
+			return -1, errInvalidAPIKey
+		}
 		return -1, err
 	}
 

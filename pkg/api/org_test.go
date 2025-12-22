@@ -266,3 +266,92 @@ func TestAPIOrgPermissions(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
 	}
 }
+
+func TestAPICreateOrgInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	input := &apiOrgInput{
+		Name: t.Name(),
+	}
+
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodPost, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIDeleteOrgInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	input := &apiOrgInput{
+		ID: "some-id",
+	}
+
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIUpdateOrgInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	input := &apiOrgInput{
+		ID:   "some-id",
+		Name: "Org Update",
+	}
+
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodPut, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIGetOrgsInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, "/"+common.OrganizationsEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}

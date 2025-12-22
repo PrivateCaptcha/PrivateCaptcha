@@ -740,3 +740,136 @@ func TestApiGetPropertyPermissions(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
 	}
 }
+
+func TestApiPostPropertiesInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	inputs := []*apiCreatePropertyInput{
+		{
+			apiPropertySettings: apiPropertySettings{
+				Name: "Property",
+			},
+			Domain: "example.com",
+		},
+	}
+
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	// We need a valid path structure even if auth fails, usually.
+	// The route is /org/{org}/properties.
+	// We can use a dummy org ID.
+	dummyOrgID := s.IDHasher.Encrypt(123)
+
+	resp, err := apiRequestSuite(ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, dummyOrgID, common.PropertiesEndpoint),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiDeletePropertiesInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	idsToDelete := []string{"some-id"}
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, idsToDelete,
+		http.MethodDelete,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiUpdatePropertiesInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	updates := []*apiUpdatePropertyInput{
+		{
+			ID: "some-id",
+			apiPropertySettings: apiPropertySettings{
+				Name: "Updated Property",
+			},
+		},
+	}
+	apiKey := db.UUIDToSecret(*randomUUID())
+
+	resp, err := apiRequestSuite(ctx, updates,
+		http.MethodPut,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiGetPropertiesInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	apiKey := db.UUIDToSecret(*randomUUID())
+	dummyOrgID := s.IDHasher.Encrypt(123)
+
+	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, dummyOrgID, common.PropertiesEndpoint)
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiGetPropertyInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	apiKey := db.UUIDToSecret(*randomUUID())
+	dummyOrgID := s.IDHasher.Encrypt(123)
+	dummyPropID := s.IDHasher.Encrypt(456)
+
+	resp, err := apiRequestSuite(ctx, nil,
+		http.MethodGet,
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, dummyOrgID,
+			common.PropertyEndpoint, dummyPropID),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}

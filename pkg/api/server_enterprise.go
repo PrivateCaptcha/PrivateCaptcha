@@ -58,8 +58,8 @@ func (s *Server) RegisterTaskHandlers(ctx context.Context) {
 }
 
 func (s *Server) requestUser(ctx context.Context) (*dbgen.User, *dbgen.APIKey, error) {
-	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePortal}
-	id, err := ownerSource.OwnerID(ctx, time.Now().UTC())
+	portalOwnerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePortal}
+	id, err := portalOwnerSource.OwnerID(ctx, time.Now().UTC())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -73,7 +73,7 @@ func (s *Server) requestUser(ctx context.Context) (*dbgen.User, *dbgen.APIKey, e
 		return nil, nil, db.ErrNoActiveSubscription
 	}
 
-	return user, ownerSource.cachedKey, nil
+	return user, portalOwnerSource.cachedKey, nil
 }
 
 func (s *Server) requestOrg(user *dbgen.User, r *http.Request, onlyOwner bool) (*dbgen.Organization, error) {

@@ -54,3 +54,22 @@ func TestGetAsyncTaskPermissions(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 }
+
+func TestGetAsyncTaskInvalidKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	apiKey := db.UUIDToSecret(*randomUUID())
+	taskID := "some-task-id"
+
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+taskID, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}

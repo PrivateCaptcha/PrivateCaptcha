@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -73,10 +74,9 @@ func (p *apiPropertySettings) Normalize() {
 	}
 }
 
-func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiCreatePropertyInput, orgID int32) common.StatusCode {
-	if len(inputs) > maxPropertiesBatchSize {
-		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
-		return common.StatusPropertiesTooManyError
+func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Request, orgID int32) ([]*apiCreatePropertyInput, common.StatusCode, error) {
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		return nil, 0, db.ErrInvalidInput
 	}
 
 	namesMap := make(map[string]struct{})
@@ -89,91 +89,82 @@ func (s *Server) validateApiProperties(ctx context.Context, inputs []*apiCreateP
 		}
 	}
 
-	for i, input := range inputs {
-		ilog := slog.With("index", i, "domain", input.Domain, "name", input.Name)
+	var inputs []*apiCreatePropertyInput
+	decoder := json.NewDecoder(r.Body)
+
+	if t, err := decoder.Token(); err != nil || t != json.Delim('[') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse new properties request: expected '['", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	for decoder.More() {
+		if len(inputs) >= maxPropertiesBatchSize {
+			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
+			return nil, common.StatusPropertiesTooManyError, nil
+		}
+
+		var input apiCreatePropertyInput
+		if err := decoder.Decode(&input); err != nil {
+			if err != io.EOF {
+				slog.WarnContext(ctx, "Failed to parse new properties request", common.ErrAttr(err))
+			}
+			return nil, 0, db.ErrInvalidInput
+		}
+
+		ilog := slog.With("index", len(inputs), "domain", input.Domain, "name", input.Name)
 
 		name := strings.TrimSpace(input.Name)
 		if _, ok := namesMap[name]; ok {
 			ilog.WarnContext(ctx, "Property name duplicate found")
-			return common.StatusPropertyNameDuplicateError
+			return nil, common.StatusPropertyNameDuplicateError, nil
 		}
 
 		if nameStatus := s.BusinessDB.Impl().ValidatePropertyName(ctx, name, nil /*org*/); !nameStatus.Success() {
 			ilog.WarnContext(ctx, "Property name failed validation", "reason", nameStatus.String())
-			return nameStatus
+			return nil, nameStatus, nil
 		}
 
 		namesMap[name] = struct{}{}
 
 		if len(input.Domain) == 0 {
 			ilog.WarnContext(ctx, "Property domain name is empty")
-			return common.StatusPropertyDomainEmptyError
+			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
 
 		domain, err := common.ParseDomainName(input.Domain)
 		if err != nil {
 			ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))
-			return common.StatusPropertyDomainFormatError
+			return nil, common.StatusPropertyDomainFormatError, nil
 		}
 
 		if common.IsLocalhost(domain) {
 			ilog.WarnContext(ctx, "Property domain name is localhost")
-			return common.StatusPropertyDomainLocalhostError
+			return nil, common.StatusPropertyDomainLocalhostError, nil
 		}
 
 		if common.IsIPAddress(domain) {
 			ilog.WarnContext(ctx, "Property domain name is IP")
-			return common.StatusPropertyDomainIPAddrError
+			return nil, common.StatusPropertyDomainIPAddrError, nil
 		}
 
 		if _, err := idna.Lookup.ToASCII(domain); err != nil {
 			ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
-			return common.StatusPropertyDomainNameInvalidError
+			return nil, common.StatusPropertyDomainNameInvalidError, nil
 		}
+
+		inputs = append(inputs, &input)
 	}
 
-	return common.StatusOK
-}
-
-func (s *Server) validateApiPropertyUpdates(ctx context.Context, inputs []*apiUpdatePropertyInput) common.StatusCode {
-	if len(inputs) > maxPropertiesBatchSize {
-		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
-		return common.StatusPropertiesTooManyError
+	if t, err := decoder.Token(); err != nil || t != json.Delim(']') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse new properties request: expected ']'", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
 	}
 
-	idsMap := make(map[string]struct{})
-	nameMap := make(map[string]struct{})
-
-	for i, input := range inputs {
-		ilog := slog.With("index", i, "id", input.ID, "name", input.Name)
-
-		if len(input.ID) == 0 {
-			ilog.WarnContext(ctx, "Property ID is empty")
-			return common.StatusPropertyIDEmptyError
-		}
-
-		if _, ok := idsMap[input.ID]; ok {
-			ilog.WarnContext(ctx, "Property ID duplicate found")
-			return common.StatusPropertyIDDuplicateError
-		}
-
-		idsMap[input.ID] = struct{}{}
-
-		name := strings.TrimSpace(input.Name)
-		if _, ok := nameMap[name]; ok {
-			ilog.WarnContext(ctx, "Property name duplicate found")
-			return common.StatusPropertyNameDuplicateError
-		}
-
-		if nameStatus := s.BusinessDB.Impl().ValidatePropertyName(ctx, name, nil /*org*/); !nameStatus.Success() {
-			ilog.WarnContext(ctx, "Property name failed validation", "reason", nameStatus.String())
-			return nameStatus
-		}
-
-		nameMap[name] = struct{}{}
-	}
-
-	return common.StatusOK
+	return inputs, common.StatusOK, nil
 }
 
 func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
@@ -181,14 +172,6 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 	user, apiKey, err := s.requestUser(ctx)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
-		return
-	}
-
-	var inputs []*apiCreatePropertyInput
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&inputs); err != nil {
-		slog.WarnContext(ctx, "Failed to parse new properties request", common.ErrAttr(err))
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
 
@@ -202,8 +185,13 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if statusCode := s.validateApiProperties(ctx, inputs, org.ID); !statusCode.Success() {
-		s.sendAPIErrorResponse(ctx, statusCode, r, w)
+	inputs, status, err := s.readCreatePropertiesRequest(ctx, r, org.ID)
+	if err != nil {
+		s.sendHTTPErrorResponse(err, w)
+		return
+	}
+	if status != common.StatusOK {
+		s.sendAPIErrorResponse(ctx, status, r, w)
 		return
 	}
 
@@ -372,6 +360,67 @@ func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, proper
 	return common.StatusOK
 }
 
+func (s *Server) readDeletePropertiesRequest(ctx context.Context, r *http.Request) ([]int32, common.StatusCode, error) {
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	decoder := json.NewDecoder(r.Body)
+
+	if t, err := decoder.Token(); err != nil || t != json.Delim('[') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse delete properties request: expected '['", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	idsToDelete := make(map[int]struct{})
+	var propertyIDs []int32
+
+	for decoder.More() {
+		if len(propertyIDs) >= maxPropertiesBatchSize {
+			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(propertyIDs), "max", maxPropertiesBatchSize)
+			return nil, common.StatusPropertiesTooManyError, nil
+		}
+
+		var encID string
+		if err := decoder.Decode(&encID); err != nil {
+			if err != io.EOF {
+				slog.WarnContext(ctx, "Failed to parse delete properties request", common.ErrAttr(err))
+			}
+			return nil, 0, db.ErrInvalidInput
+		}
+
+		id, err := s.IDHasher.Decrypt(encID)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to decode property ID", "id", encID, common.ErrAttr(err))
+			return nil, 0, db.ErrInvalidInput
+		}
+
+		if _, ok := idsToDelete[id]; ok {
+			slog.WarnContext(ctx, "Duplicate property ID found", "id", encID)
+			continue
+		}
+
+		idsToDelete[id] = struct{}{}
+		propertyIDs = append(propertyIDs, int32(id))
+	}
+
+	if t, err := decoder.Token(); err != nil || t != json.Delim(']') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse delete properties request: expected ']'", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	if len(propertyIDs) == 0 {
+		slog.WarnContext(ctx, "Empty delete properties list")
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	return propertyIDs, common.StatusOK, nil
+}
+
 func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, apiKey, err := s.requestUser(ctx)
@@ -380,41 +429,14 @@ func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var encryptedIDs []string
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&encryptedIDs); err != nil {
-		slog.WarnContext(ctx, "Failed to parse delete properties request", common.ErrAttr(err))
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+	propertyIDs, status, err := s.readDeletePropertiesRequest(ctx, r)
+	if err != nil {
+		s.sendHTTPErrorResponse(err, w)
 		return
 	}
-
-	if len(encryptedIDs) == 0 {
-		slog.WarnContext(ctx, "Empty delete properties list")
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+	if status != common.StatusOK {
+		s.sendAPIErrorResponse(ctx, status, r, w)
 		return
-	}
-
-	if len(encryptedIDs) > maxPropertiesBatchSize {
-		slog.WarnContext(ctx, "Too many properties in a batch", "count", len(encryptedIDs), "max", maxPropertiesBatchSize)
-		s.sendAPIErrorResponse(ctx, common.StatusPropertiesTooManyError, r, w)
-		return
-	}
-
-	idsToDelete := make(map[int]struct{})
-	propertyIDs := make([]int32, 0, len(encryptedIDs))
-	for _, encID := range encryptedIDs {
-		id, err := s.IDHasher.Decrypt(encID)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to decode property ID", "id", encID, common.ErrAttr(err))
-			s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
-			return
-		}
-		if _, ok := idsToDelete[id]; ok {
-			slog.WarnContext(ctx, "Duplicate property ID found", "id", encID)
-			continue
-		}
-		idsToDelete[id] = struct{}{}
-		propertyIDs = append(propertyIDs, int32(id))
 	}
 
 	referenceID := db.UUIDToSecret(apiKey.ExternalID)
@@ -480,7 +502,6 @@ func (s *Server) handleDeleteProperties(ctx context.Context, task *dbgen.AsyncTa
 }
 
 func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskDeleteProperties) ([]*operationResult, error) {
-
 	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, params.PropertyIDs, user)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to soft delete properties", common.ErrAttr(err))
@@ -503,6 +524,83 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 	return results, nil
 }
 
+func (s *Server) readUpdatePropertiesRequest(ctx context.Context, r *http.Request) ([]*apiUpdatePropertyInput, common.StatusCode, error) {
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	decoder := json.NewDecoder(r.Body)
+
+	if t, err := decoder.Token(); err != nil || t != json.Delim('[') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse update properties request: expected '['", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	var inputs []*apiUpdatePropertyInput
+	idsMap := make(map[string]struct{})
+	nameMap := make(map[string]struct{})
+
+	for decoder.More() {
+		if len(inputs) >= maxPropertiesBatchSize {
+			slog.WarnContext(ctx, "Too many properties in a batch", "count", len(inputs), "max", maxPropertiesBatchSize)
+			return nil, common.StatusPropertiesTooManyError, nil
+		}
+
+		var input apiUpdatePropertyInput
+		if err := decoder.Decode(&input); err != nil {
+			if err != io.EOF {
+				slog.WarnContext(ctx, "Failed to parse update properties request", common.ErrAttr(err))
+			}
+			return nil, 0, db.ErrInvalidInput
+		}
+
+		ilog := slog.With("index", len(inputs), "id", input.ID, "name", input.Name)
+
+		if len(input.ID) == 0 {
+			ilog.WarnContext(ctx, "Property ID is empty")
+			return nil, common.StatusPropertyIDEmptyError, nil
+		}
+
+		if _, ok := idsMap[input.ID]; ok {
+			ilog.WarnContext(ctx, "Property ID duplicate found")
+			return nil, common.StatusPropertyIDDuplicateError, nil
+		}
+
+		idsMap[input.ID] = struct{}{}
+
+		name := strings.TrimSpace(input.Name)
+		if _, ok := nameMap[name]; ok {
+			ilog.WarnContext(ctx, "Property name duplicate found")
+			return nil, common.StatusPropertyNameDuplicateError, nil
+		}
+
+		if nameStatus := s.BusinessDB.Impl().ValidatePropertyName(ctx, name, nil /*org*/); !nameStatus.Success() {
+			ilog.WarnContext(ctx, "Property name failed validation", "reason", nameStatus.String())
+			return nil, nameStatus, nil
+		}
+
+		nameMap[name] = struct{}{}
+
+		inputs = append(inputs, &input)
+	}
+
+	if t, err := decoder.Token(); err != nil || t != json.Delim(']') {
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to parse update properties request: expected ']'", common.ErrAttr(err))
+		}
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	if len(inputs) == 0 {
+		slog.WarnContext(ctx, "Empty update properties list")
+		return nil, 0, db.ErrInvalidInput
+	}
+
+	return inputs, common.StatusOK, nil
+}
+
 func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, apiKey, err := s.requestUser(ctx)
@@ -511,22 +609,13 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var inputs []*apiUpdatePropertyInput
-	decoder := json.NewDecoder(r.Body)
-	if err := decoder.Decode(&inputs); err != nil {
-		slog.WarnContext(ctx, "Failed to parse update properties request", common.ErrAttr(err))
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+	inputs, status, err := s.readUpdatePropertiesRequest(ctx, r)
+	if err != nil {
+		s.sendHTTPErrorResponse(err, w)
 		return
 	}
-
-	if len(inputs) == 0 {
-		slog.WarnContext(ctx, "Empty update properties list")
-		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
-		return
-	}
-
-	if statusCode := s.validateApiPropertyUpdates(ctx, inputs); !statusCode.Success() {
-		s.sendAPIErrorResponse(ctx, statusCode, r, w)
+	if status != common.StatusOK {
+		s.sendAPIErrorResponse(ctx, status, r, w)
 		return
 	}
 

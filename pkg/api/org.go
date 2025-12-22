@@ -5,6 +5,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -91,9 +92,16 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
 	request := &apiOrgInput{}
 	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
-		slog.WarnContext(ctx, "Failed to deserialize post org request", common.ErrAttr(err))
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to deserialize post org request", common.ErrAttr(err))
+		}
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
@@ -135,9 +143,16 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
 	request := &apiOrgInput{}
 	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
-		slog.WarnContext(ctx, "Failed to deserialize update org request", common.ErrAttr(err))
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to deserialize update org request", common.ErrAttr(err))
+		}
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
@@ -206,9 +221,16 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
+		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
 	request := &apiOrgInput{}
 	if err := json.NewDecoder(r.Body).Decode(request); err != nil {
-		slog.WarnContext(ctx, "Failed to deserialize delete org request", common.ErrAttr(err))
+		if err != io.EOF {
+			slog.WarnContext(ctx, "Failed to deserialize delete org request", common.ErrAttr(err))
+		}
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
 		return
 	}
