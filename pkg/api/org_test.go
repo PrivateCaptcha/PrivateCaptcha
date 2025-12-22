@@ -92,10 +92,10 @@ func requestResponseAPISuite[T any](ctx context.Context, request interface{}, me
 }
 
 func setupAPISuite(ctx context.Context, username string) (*dbgen.User, *dbgen.Organization, string, error) {
-	return setupAPISuiteEx(ctx, username, dbgen.ApiKeyScopePortal, false /*read-only*/)
+	return setupAPISuiteEx(ctx, username, dbgen.ApiKeyScopePortal, false /*read-only*/, false /*org scope*/)
 }
 
-func setupAPISuiteEx(ctx context.Context, username string, scope dbgen.ApiKeyScope, readOnly bool) (*dbgen.User, *dbgen.Organization, string, error) {
+func setupAPISuiteEx(ctx context.Context, username string, scope dbgen.ApiKeyScope, readOnly bool, orgScope bool) (*dbgen.User, *dbgen.Organization, string, error) {
 	user, org, err := db_test.CreateNewAccountForTest(ctx, store, username, testPlan)
 	if err != nil {
 		return nil, nil, "", err
@@ -104,6 +104,9 @@ func setupAPISuiteEx(ctx context.Context, username string, scope dbgen.ApiKeySco
 	keyParams := tests.CreateNewPuzzleAPIKeyParams(username+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	keyParams.Scope = scope
 	keyParams.Readonly = readOnly
+	if orgScope {
+		keyParams.OrgID = db.Int(org.ID)
+	}
 	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
 	if err != nil {
 		return nil, nil, "", err
@@ -279,7 +282,7 @@ func TestAPICreateOrgReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	_, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	_, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*org scope*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +354,7 @@ func TestAPIDeleteOrgReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*org scope*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +404,7 @@ func TestAPIUpdateOrgReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*org scope*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,6 +434,126 @@ func TestAPIGetOrgsInvalidKey(t *testing.T) {
 	apiKey := db.UUIDToSecret(*randomUUID())
 
 	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, "/"+common.OrganizationsEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIGetOrgsAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	orgs, meta, err := requestResponseAPISuite[[]*apiOrgOutput](ctx, nil, http.MethodGet, "/"+common.OrganizationsEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	if (len(orgs) != 1) || (orgs[0].Name != org.Name) {
+		t.Errorf("Wrong organizations retrieved")
+	}
+}
+
+func TestAPICreateOrgAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := &apiOrgInput{
+		Name: t.Name(),
+	}
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodPost, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIDeleteOrgAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	input := &apiOrgInput{
+		ID: s.IDHasher.Encrypt(int(org2.ID)),
+	}
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestAPIUpdateOrgAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	input := &apiOrgInput{
+		ID:   s.IDHasher.Encrypt(int(org2.ID)),
+		Name: "Org Update",
+	}
+
+	resp, err := apiRequestSuite(ctx, input, http.MethodPut, "/"+common.OrgEndpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
 	}

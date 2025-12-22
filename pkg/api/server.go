@@ -115,24 +115,30 @@ func (a *apiKeyOwnerSource) apiKey(ctx context.Context) (*dbgen.APIKey, error) {
 	return nil, errAPIKeyNotSet
 }
 
-func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, error) {
+func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, *int32, error) {
 	apiKey, err := a.apiKey(ctx)
 	if err != nil {
 		if (err == db.ErrSetMissing) || (err == db.ErrNegativeCacheHit) {
-			return -1, errInvalidAPIKey
+			return -1, nil, errInvalidAPIKey
 		}
-		return -1, err
+		return -1, nil, err
 	}
 
 	if !isAPIKeyValid(ctx, apiKey, tnow) {
-		return -1, errInvalidAPIKey
+		return -1, nil, errInvalidAPIKey
 	}
 
 	if apiKey.Scope != a.scope {
-		return -1, errAPIKeyScope
+		return -1, nil, errAPIKeyScope
 	}
 
-	return apiKey.UserID.Int32, nil
+	var orgID *int32
+	if apiKey.OrgID.Valid {
+		orgID = new(int32)
+		*orgID = apiKey.OrgID.Int32
+	}
+
+	return apiKey.UserID.Int32, orgID, nil
 }
 
 type VerificationResponse struct {

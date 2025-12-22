@@ -22,9 +22,17 @@
                 {{ end }}
             {{ end }}
             {{ if and (ne .Params.Scope .Const.APIKeyScopePuzzle) .Params.ReadOnly }}
-            <p class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">scope: {{ .Params.Scope }} (read)</p>
+            <p class="inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10" title="read-only scope for {{.Params.Scope}}">scope: {{ .Params.Scope }} (read)</p>
             {{ else }}
-            <p class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-gray-900 ring-1 ring-inset ring-gray-200">scope: {{ .Params.Scope }}</p>
+            <p class="inline-flex items-center rounded-md px-2 py-1 text-xs font-medium text-gray-900 ring-1 ring-inset ring-gray-200" title="read-write scope for {{.Params.Scope}}">scope: {{ .Params.Scope }}</p>
+            {{ end }}
+            {{ if .Params.OrgName }}
+            <p class="inline-flex items-center gap-x-1.5 rounded-md bg-pcslate-50 px-2 py-1 text-xs font-medium text-pclime-600" title="for {{ .Params.OrgName }} Organization">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3 fill-pclime-500" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clip-rule="evenodd" />
+                </svg>
+                {{ .Params.OrgName }}
+            </p>
             {{ end }}
         </div>
         <div class="mt-1 flex items-center gap-x-2 text-xs leading-5 text-gray-500">

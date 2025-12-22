@@ -286,6 +286,7 @@ type APIKey struct {
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	ExpiresAt         pgtype.Timestamptz `db:"expires_at" json:"expires_at"`
 	Notes             pgtype.Text        `db:"notes" json:"notes"`
+	OrgID             pgtype.Int4        `db:"org_id" json:"org_id"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	Period            time.Duration      `db:"period" json:"period"`
 	Scope             ApiKeyScope        `db:"scope" json:"scope"`

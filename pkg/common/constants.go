@@ -48,6 +48,7 @@ const (
 	ParamPage             = "page"
 	ParamPerPage          = "per_page"
 	ParamScope            = "scope"
+	All                   = "all"
 )
 
 var (

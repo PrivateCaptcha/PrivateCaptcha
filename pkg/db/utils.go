@@ -24,6 +24,7 @@ const (
 
 var (
 	invalidUUID = pgtype.UUID{Valid: false}
+	InvalidInt  = pgtype.Int4{Valid: false}
 )
 
 func IsInternalSubscription(source dbgen.SubscriptionSource) bool {

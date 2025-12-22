@@ -47,14 +47,17 @@ type portalPropertyOwnerSource struct {
 
 var _ puzzle.OwnerIDSource = (*portalPropertyOwnerSource)(nil)
 
-func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, error) {
+func (s *portalPropertyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, *int32, error) {
 	property, err := s.Store.Impl().RetrievePropertyBySitekey(ctx, s.Sitekey)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to fetch login property", common.ErrAttr(err))
-		return -1, errPortalPropertyNotFound
+		return -1, nil, errPortalPropertyNotFound
 	}
 
-	return property.OrgOwnerID.Int32, nil
+	orgID := new(int32)
+	*orgID = property.OrgID.Int32
+
+	return property.OrgOwnerID.Int32, orgID, nil
 }
 
 func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

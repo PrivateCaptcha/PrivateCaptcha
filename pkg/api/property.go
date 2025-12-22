@@ -34,11 +34,13 @@ type asyncTaskCreateProperties struct {
 }
 
 type asyncTaskDeleteProperties struct {
-	PropertyIDs []int32 `json:"property_ids"`
+	PropertyIDs  []int32 `json:"property_ids"`
+	AllowedOrgID int32   `json:"allowed_org_id,omitempty"`
 }
 
 type asyncTaskUpdateProperties struct {
-	Properties []*apiUpdatePropertyInput `json:"properties"`
+	AllowedOrgID int32                     `json:"allowed_org_id,omitempty"`
+	Properties   []*apiUpdatePropertyInput `json:"properties"`
 }
 
 func (p *apiPropertySettings) Normalize() {
@@ -175,7 +177,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.requestOrg(user, r, true /*only owner*/)
+	org, err := s.requestOrg(user, r, true /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
@@ -444,6 +446,10 @@ func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 		PropertyIDs: propertyIDs,
 	}
 
+	if apiKey.OrgID.Valid {
+		request.AllowedOrgID = apiKey.OrgID.Int32
+	}
+
 	buffer := 5 * time.Minute
 	// we schedule it for later, making "room" for immediate attempt first
 	scheduledAt := time.Now().UTC().Add(buffer)
@@ -502,7 +508,16 @@ func (s *Server) handleDeleteProperties(ctx context.Context, task *dbgen.AsyncTa
 }
 
 func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskDeleteProperties) ([]*operationResult, error) {
-	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, params.PropertyIDs, user)
+	var org *dbgen.Organization
+	if params.AllowedOrgID != 0 {
+		slog.DebugContext(ctx, "Delete task is scoped for org", "orgID", params.AllowedOrgID)
+		var err error
+		if org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+			return nil, err
+		}
+	}
+
+	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, params.PropertyIDs, user, org)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to soft delete properties", common.ErrAttr(err))
 		return nil, err
@@ -624,6 +639,10 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 		Properties: inputs,
 	}
 
+	if apiKey.OrgID.Valid {
+		request.AllowedOrgID = apiKey.OrgID.Int32
+	}
+
 	buffer := 5 * time.Minute
 	// we schedule it for later, making "room" for immediate attempt first
 	scheduledAt := time.Now().UTC().Add(buffer)
@@ -691,19 +710,28 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	results := make([]*operationResult, 0, len(params.Properties))
 
+	var org *dbgen.Organization
+	if params.AllowedOrgID != 0 {
+		slog.DebugContext(ctx, "Update task is scoped for org", "orgID", params.AllowedOrgID)
+		var err error
+		if org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+			return nil, err
+		}
+	}
+
 	for i, property := range params.Properties {
 		if i > 0 {
 			time.Sleep(b.Duration())
 		}
 
-		status := s.doUpdateProperty(ctx, tlog.With("index", i), property, user)
+		status := s.doUpdateProperty(ctx, tlog.With("index", i), property, user, org)
 		results = append(results, &operationResult{Code: status})
 	}
 
 	return results, nil
 }
 
-func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, propertyInput *apiUpdatePropertyInput, user *dbgen.User) common.StatusCode {
+func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, propertyInput *apiUpdatePropertyInput, user *dbgen.User, org *dbgen.Organization) common.StatusCode {
 	propertyID, err := s.IDHasher.Decrypt(propertyInput.ID)
 	if err != nil {
 		tlog.WarnContext(ctx, "Failed to decrypt property ID", "id", propertyInput.ID, common.ErrAttr(err))
@@ -723,7 +751,7 @@ func (s *Server) doUpdateProperty(ctx context.Context, tlog *slog.Logger, proper
 		MaxReplayCount:   int32(propertyInput.MaxReplayCount),
 	}
 
-	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, nil /*org*/, user, params)
+	_, auditEvent, err := s.BusinessDB.Impl().UpdateProperty(ctx, org, user, params)
 	if err != nil {
 		if err == db.ErrPermissions {
 			return common.StatusOrgPermissionsError
@@ -755,13 +783,13 @@ func propertiesToApiOrgProperties(properties []*dbgen.Property, hasher common.Id
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, true /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, true /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
-	org, err := s.requestOrg(user, r, true /*only owner*/)
+	org, err := s.requestOrg(user, r, true /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
@@ -834,13 +862,13 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, true /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, true /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
-	org, err := s.requestOrg(user, r, false /*only owner*/)
+	org, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)

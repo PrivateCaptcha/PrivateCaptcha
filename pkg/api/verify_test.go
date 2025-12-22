@@ -166,6 +166,59 @@ func TestVerifyPuzzle(t *testing.T) {
 	}
 }
 
+func TestVerifyAnotherOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := t.Context()
+
+	user, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	params := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	params.OrgID = db.Int(org2.ID)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := db.UUIDToSecret(apikey.ExternalID)
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	resp, err := verifySuite(payload, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected verify status code %d", resp.StatusCode)
+	}
+
+	if err := checkVerifyError(resp, puzzle.OrgScopeError); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestVerifyInvalidAPIKeyScope(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -678,7 +731,9 @@ func TestVerifyByOrgMember(t *testing.T) {
 
 	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
 
-	apikey, _, err := store.Impl().CreateAPIKey(ctx, member, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	params := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	params.OrgID = db.Int(org.ID)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, member, params)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -741,6 +742,44 @@ func TestApiGetPropertyPermissions(t *testing.T) {
 	}
 }
 
+func TestApiGetPropertyAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	propertyID := s.IDHasher.Encrypt(int(property.ID))
+
+	resp, err := apiRequestSuite(ctx, nil,
+		http.MethodGet,
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)),
+			common.PropertyEndpoint, propertyID),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
 func TestApiPostPropertiesInvalidKey(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -793,7 +832,7 @@ func TestApiPostPropertiesReadOnlyKey(t *testing.T) {
 		},
 	}
 
-	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	_, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*scope org*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -841,7 +880,7 @@ func TestApiDeletePropertiesReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*scope org*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -905,7 +944,7 @@ func TestApiUpdatePropertiesReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	user, org, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*scope org*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -984,5 +1023,224 @@ func TestApiGetPropertyInvalidKey(t *testing.T) {
 
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiGetPropertiesAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint)
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiPostPropertiesAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	inputs := []*apiCreatePropertyInput{
+		{
+			apiPropertySettings: apiPropertySettings{
+				Name: "Property",
+			},
+			Domain: "example.com",
+		},
+	}
+
+	resp, err := apiRequestSuite(ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	}
+}
+
+func TestApiDeletePropertiesAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idsToDelete := []string{
+		s.IDHasher.Encrypt(int(property.ID)),
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
+		http.MethodDelete,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	var results []*operationResult
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		var result *apiAsyncTaskResultOutput
+		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			b, _ := json.Marshal(result.Result)
+			json.Unmarshal(b, &results)
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	if results[0].Code != common.StatusFailure {
+		t.Errorf("Expected StatusFailure, got %v", results[0].Code)
+	}
+}
+
+func TestApiUpdatePropertiesAPIKeyOrgScope(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, false /*read-only*/, true /*org scope*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updates := []*apiUpdatePropertyInput{
+		{
+			ID: s.IDHasher.Encrypt(int(property.ID)),
+			apiPropertySettings: apiPropertySettings{
+				Name: "Updated Property",
+			},
+		},
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, updates,
+		http.MethodPut,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	var results []*operationResult
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		var result *apiAsyncTaskResultOutput
+		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			b, _ := json.Marshal(result.Result)
+			json.Unmarshal(b, &results)
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results))
+	}
+
+	if results[0].Code != common.StatusOrgPermissionsError {
+		t.Errorf("Expected StatusOrgPermissionsError, got %v", results[0].Code)
 	}
 }

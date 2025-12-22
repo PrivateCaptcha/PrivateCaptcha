@@ -39,6 +39,7 @@ const (
 	MaintenanceModeError    VerifyError = 9
 	TestPropertyError       VerifyError = 10
 	IntegrityError          VerifyError = 11
+	OrgScopeError           VerifyError = 12
 	// Add new fields _above_
 	VERIFY_ERRORS_COUNT
 )
@@ -61,6 +62,8 @@ func (verr VerifyError) String() string {
 		return "property-invalid"
 	case WrongOwnerError:
 		return "property-owner-mismatch"
+	case OrgScopeError:
+		return "property-org-scope"
 	case VerifiedBeforeError:
 		return "solution-verified-before"
 	case MaintenanceModeError:
@@ -75,7 +78,7 @@ func (verr VerifyError) String() string {
 }
 
 type OwnerIDSource interface {
-	OwnerID(ctx context.Context, tnow time.Time) (int32, error)
+	OwnerID(ctx context.Context, tnow time.Time) (int32, *int32, error)
 }
 
 type VerifyPayload struct {

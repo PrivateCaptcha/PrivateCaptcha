@@ -21,10 +21,11 @@ func orgToAPIOrg(org *dbgen.Organization, hasher common.IdentifierHasher) *apiOr
 	}
 }
 
-func orgsToAPIOrgs(orgs []*dbgen.GetUserOrganizationsRow, hasher common.IdentifierHasher, onlyOwned bool) []*apiOrgOutput {
+func orgsToAPIOrgs(orgs []*dbgen.GetUserOrganizationsRow, hasher common.IdentifierHasher, onlyOwned bool, orgID *int32) []*apiOrgOutput {
 	result := make([]*apiOrgOutput, 0, len(orgs))
 	for _, org := range orgs {
-		if !onlyOwned || (org.Level == dbgen.AccessLevelOwner) {
+		if (!onlyOwned || (org.Level == dbgen.AccessLevelOwner)) &&
+			((orgID == nil) || (org.Organization.ID == *orgID)) {
 			result = append(result, &apiOrgOutput{
 				Name: org.Organization.Name,
 				ID:   hasher.Encrypt(int(org.Organization.ID)),
@@ -67,7 +68,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) (bool,
 
 func (s *Server) getUserOrgs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, true /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, true /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -80,13 +81,18 @@ func (s *Server) getUserOrgs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgsOutput := orgsToAPIOrgs(orgs, s.IDHasher, true /*only owned*/)
+	var orgID *int32
+	if apiKey.OrgID.Valid {
+		orgID = &apiKey.OrgID.Int32
+	}
+
+	orgsOutput := orgsToAPIOrgs(orgs, s.IDHasher, true /*only owned*/, orgID)
 	s.sendAPISuccessResponseEx(ctx, &APIResponse{Data: orgsOutput}, w, common.NoCacheHeaders)
 }
 
 func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, false /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, false /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -94,6 +100,12 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get(common.HeaderContentType) != common.ContentTypeJSON {
 		s.sendHTTPErrorResponse(db.ErrInvalidInput, w)
+		return
+	}
+
+	if apiKey.OrgID.Valid {
+		slog.WarnContext(ctx, "API key is scoped to the organization", "orgID", apiKey.OrgID.Int32)
+		s.sendHTTPErrorResponse(db.ErrPermissions, w)
 		return
 	}
 
@@ -137,7 +149,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, false /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, false /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -173,6 +185,12 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt org ID", "value", request.ID, common.ErrAttr(err))
 		s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
+		return
+	}
+
+	if apiKey.OrgID.Valid && (int32(orgID) != apiKey.OrgID.Int32) {
+		slog.WarnContext(ctx, "API key org scope mismatch", "actualOrgID", orgID, "apiOrgID", apiKey.OrgID.Int32)
+		s.sendHTTPErrorResponse(db.ErrPermissions, w)
 		return
 	}
 
@@ -215,7 +233,7 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUser(ctx, false /*read-only*/)
+	user, apiKey, err := s.requestUser(ctx, false /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
@@ -245,6 +263,12 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to decrypt org ID", "value", request.ID, common.ErrAttr(err))
 		s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
+		return
+	}
+
+	if apiKey.OrgID.Valid && (int32(orgID) != apiKey.OrgID.Int32) {
+		slog.WarnContext(ctx, "API key org scope mismatch", "actualOrgID", orgID, "apiOrgID", apiKey.OrgID.Int32)
+		s.sendHTTPErrorResponse(db.ErrPermissions, w)
 		return
 	}
 

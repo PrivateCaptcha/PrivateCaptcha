@@ -216,9 +216,16 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 	if property != nil {
 		// position in code where expected owner is checked is a tradeoff between compute for verifying solutions (below)
 		// and IO for accessing DB of potentially malicious request (in case not-yet-checked API key turns out invalid)
-		if ownerID, err := expectedOwner.OwnerID(ctx, tnow); err == nil {
+		if ownerID, ownerOrgID, err := expectedOwner.OwnerID(ctx, tnow); err == nil {
 			if !v.checkUserPermissions(ctx, property, ownerID) {
 				result.SetError(puzzle.WrongOwnerError)
+				return result, nil
+			}
+
+			// for scoped API keys, we want to take org ID into account
+			if (ownerOrgID != nil) && (property.OrgID.Int32 != *ownerOrgID) {
+				slog.WarnContext(ctx, "Owner org scope does not match property org", "propertyOrgID", property.OrgID.Int32, "ownerOrgID", *ownerOrgID)
+				result.SetError(puzzle.OrgScopeError)
 				return result, nil
 			}
 		} else {

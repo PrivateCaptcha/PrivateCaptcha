@@ -468,16 +468,17 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 }
 
 const softDeleteProperties = `-- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND deleted_at IS NULL RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count
 `
 
 type SoftDeletePropertiesParams struct {
 	Column1   []int32     `db:"column_1" json:"column_1"`
 	CreatorID pgtype.Int4 `db:"creator_id" json:"creator_id"`
+	OrgID     pgtype.Int4 `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error) {
-	rows, err := q.db.Query(ctx, softDeleteProperties, arg.Column1, arg.CreatorID)
+	rows, err := q.db.Query(ctx, softDeleteProperties, arg.Column1, arg.CreatorID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +547,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 const updateProperty = `-- name: UpdateProperty :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count FROM backend.properties p
-    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9)
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL)
     FOR UPDATE
 ),
 upd AS (
@@ -585,6 +586,7 @@ type UpdatePropertyParams struct {
 	AllowLocalhost   bool             `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount   int32            `db:"max_replay_count" json:"max_replay_count"`
 	CreatorID        pgtype.Int4      `db:"creator_id" json:"creator_id"`
+	OrgID            pgtype.Int4      `db:"org_id" json:"org_id"`
 }
 
 type UpdatePropertyRow struct {
@@ -625,6 +627,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		arg.AllowLocalhost,
 		arg.MaxReplayCount,
 		arg.CreatorID,
+		arg.OrgID,
 	)
 	var i UpdatePropertyRow
 	err := row.Scan(

@@ -15,7 +15,7 @@ RETURNING *;
 -- name: UpdateProperty :one
 WITH old AS (
     SELECT * FROM backend.properties p
-    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9)
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL)
     FOR UPDATE
 ),
 upd AS (
@@ -66,7 +66,7 @@ LIMIT $3;
 UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING *;
 
 -- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND deleted_at IS NULL RETURNING *;
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL RETURNING *;
 
 -- name: GetSoftDeletedProperties :many
 SELECT sqlc.embed(p)

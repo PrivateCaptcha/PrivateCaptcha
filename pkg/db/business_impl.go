@@ -945,6 +945,9 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	}
 
 	params.CreatorID = Int(user.ID)
+	if org != nil {
+		params.OrgID = Int(org.ID)
+	}
 
 	updatedProperty, err := impl.querier.UpdateProperty(ctx, params)
 	if err != nil {
@@ -994,7 +997,8 @@ func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbg
 	return auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []int32, user *dbgen.User) (map[int32]struct{}, []*common.AuditLogEvent, error) {
+// NOTE: permissions check is bleeding into SQL query here as we're optimizing round trips to DB
+func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []int32, user *dbgen.User, org *dbgen.Organization) (map[int32]struct{}, []*common.AuditLogEvent, error) {
 	if len(ids) == 0 {
 		return map[int32]struct{}{}, []*common.AuditLogEvent{}, nil
 	}
@@ -1007,11 +1011,22 @@ func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []i
 		return nil, nil, ErrMaintenance
 	}
 
-	properties, err := impl.querier.SoftDeleteProperties(ctx, &dbgen.SoftDeletePropertiesParams{
+	params := &dbgen.SoftDeletePropertiesParams{
 		Column1:   ids,
 		CreatorID: Int(user.ID),
-	})
+	}
+
+	if org != nil {
+		params.OrgID = Int(org.ID)
+	}
+
+	properties, err := impl.querier.SoftDeleteProperties(ctx, params)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			slog.WarnContext(ctx, "Failed to mark properties as deleted in DB", "count", len(ids), common.ErrAttr(err))
+			return nil, nil, ErrPermissions
+		}
+
 		slog.ErrorContext(ctx, "Failed to mark properties as deleted in DB", "count", len(ids), common.ErrAttr(err))
 		return nil, nil, err
 	}

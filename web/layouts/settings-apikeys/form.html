@@ -40,6 +40,20 @@
                             </select>
                         </div>
                     </div>
+                    <div>
+                        <label for="{{ .Const.Org }}" class="pc-internal-form-label"> Organization </label>
+                        <div class="mt-2">
+                            <select name="{{ .Const.Org }}" class="w-full pc-internal-form-select">
+                                <option value="{{ .Const.All }}" selected="selected">All</option>
+                            {{ range $org := $.Params.Orgs }}
+                                <option value="{{$org.ID}}">{{ $org.Name }}</option>
+                            {{ end }}
+                            </select>
+                        </div>
+                        {{- if .Params.OrgError -}}
+                        <p class="pc-form-error-text">{{ .Params.OrgError }}</p>
+                        {{- end -}}
+                    </div>
                 </div>
             </div>
         </div>

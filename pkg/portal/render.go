@@ -68,6 +68,7 @@ type RenderConstants struct {
 	APIKeyScopePortalReadWrite string
 	APIKeyScopePortalReadOnly  string
 	PropertiesEndpoint         string
+	All                        string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -127,6 +128,7 @@ func NewRenderConstants() *RenderConstants {
 		APIKeyScopePortalReadWrite: string(dbgen.ApiKeyScopePortal) + apiKeyReadWriteSuffix,
 		APIKeyScopePortalReadOnly:  string(dbgen.ApiKeyScopePortal) + apiKeyReadOnlySuffix,
 		PropertiesEndpoint:         common.PropertiesEndpoint,
+		All:                        common.All,
 	}
 }
 

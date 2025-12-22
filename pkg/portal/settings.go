@@ -96,6 +96,7 @@ type userAPIKey struct {
 	Secret            string
 	Scope             string
 	RequestsPerMinute int
+	OrgName           string
 	ExpiresSoon       bool
 	ReadOnly          bool
 }
@@ -104,7 +105,9 @@ type settingsAPIKeysRenderContext struct {
 	SettingsCommonRenderContext
 	Name       string
 	NameError  string
+	OrgError   string
 	Keys       []*userAPIKey
+	Orgs       []*userOrg
 	CreateOpen bool
 }
 
@@ -420,10 +423,31 @@ func (s *Server) createAPIKeysSettingsModel(ctx context.Context, user *dbgen.Use
 		commonCtx.ErrorMessage = "Could not load API keys."
 	}
 
-	return &settingsAPIKeysRenderContext{
+	renderCtx := &settingsAPIKeysRenderContext{
 		SettingsCommonRenderContext: commonCtx,
 		Keys:                        apiKeysToUserAPIKeys(keys, time.Now().UTC(), s.IDHasher),
 	}
+
+	if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID); err == nil {
+		renderCtx.Orgs = orgsToUserOrgs(orgs, s.IDHasher)
+
+		orgNameMap := make(map[int32]string, len(orgs))
+		for _, org := range orgs {
+			orgNameMap[org.Organization.ID] = org.Organization.Name
+		}
+		for i, key := range keys {
+			if key.OrgID.Valid {
+				if name, ok := orgNameMap[key.OrgID.Int32]; ok {
+					renderCtx.Keys[i].OrgName = name
+				} else {
+					// if this shows up in monitoring, rewrite RetrieveUserAPIKeys() to JOIN with Orgs
+					slog.ErrorContext(ctx, "Organization name not found for API key", "keyID", key.ID, "orgID", key.OrgID.Int32)
+				}
+			}
+		}
+	}
+
+	return renderCtx
 }
 
 func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -600,6 +624,27 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		}
 	}
 
+	pgOrgID := db.InvalidInt
+	var orgName string
+	orgIDStr := strings.TrimSpace(r.FormValue(common.ParamOrg))
+	if (orgIDStr != common.All) && (len(orgIDStr) > 0) {
+		var orgID int
+		var oerr error
+		if orgID, oerr = s.IDHasher.Decrypt(orgIDStr); oerr == nil {
+			var org *dbgen.Organization
+			if org, oerr = s.Store.Impl().RetrieveUserOrganization(ctx, user, int32(orgID)); err == nil {
+				pgOrgID = db.Int(org.ID)
+				orgName = org.Name
+			}
+		}
+		if oerr != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve user org", "orgID", orgIDStr, common.ErrAttr(oerr))
+			renderCtx.OrgError = "Selected organization does not exist."
+			renderCtx.CreateOpen = true
+			return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		}
+	}
+
 	// current logic is that initial values will be set per plan and adjusted manually in DB if requested by customer
 	burst := max(minAPIKeyRequestsBurst, int32(apiKeyRequestsPerSecond*5))
 	days := apiKeyDaysFromParam(ctx, r.FormValue(common.ParamDays))
@@ -613,10 +658,12 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		Period:            period,
 		Scope:             scope,
 		Readonly:          readOnly,
+		OrgID:             pgOrgID,
 	}
 	newKey, auditEvent, err := s.Store.Impl().CreateAPIKey(ctx, user, params)
 	if err == nil {
 		userKey := apiKeyToUserAPIKey(newKey, tnow, s.IDHasher)
+		userKey.OrgName = orgName
 		userKey.Secret = db.UUIDToSecret(newKey.ExternalID)
 		renderCtx.Keys = append(renderCtx.Keys, userKey)
 		renderCtx.SuccessMessage = "API Key created successfully."
@@ -673,6 +720,12 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewMode
 
 	userKey := apiKeyToUserAPIKey(key, time.Now().UTC(), s.IDHasher)
 	userKey.Secret = db.UUIDToSecret(key.ExternalID)
+
+	if key.OrgID.Valid {
+		if org, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, key.OrgID.Int32); err == nil {
+			userKey.OrgName = org.Name
+		}
+	}
 
 	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 		var anyError error

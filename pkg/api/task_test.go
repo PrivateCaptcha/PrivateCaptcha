@@ -82,7 +82,7 @@ func TestGetAsyncTaskReadOnlyKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/)
+	user, _, apiKey, err := setupAPISuiteEx(ctx, t.Name(), dbgen.ApiKeyScopePortal, true /*read-only*/, false /*scope org*/)
 	if err != nil {
 		t.Fatal(err)
 	}
