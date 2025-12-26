@@ -2706,7 +2706,7 @@ func (impl *BusinessStoreImpl) RetrievePendingAsyncTasks(ctx context.Context, co
 			return []*dbgen.GetPendingAsyncTasksRow{}, nil
 		}
 
-		slog.ErrorContext(ctx, "Failed to retrieve async tasks", "before", before, "count", count, "attemps", maxProcessingAttempts, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve async tasks", "before", before, "count", count, "attempts", maxProcessingAttempts, common.ErrAttr(err))
 
 		return nil, err
 	}
