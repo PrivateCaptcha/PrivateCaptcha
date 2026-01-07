@@ -2382,6 +2382,51 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	return updatedProperty, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, newOwnerID int32) (*common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	if org.UserID.Int32 == newOwnerID {
+		slog.WarnContext(ctx, "Organization is already owned by this user", "orgID", org.ID, "userID", newOwnerID)
+		return nil, ErrInvalidInput
+	}
+
+	// Transfer organization ownership
+	if err := impl.querier.TransferOrganization(ctx, &dbgen.TransferOrganizationParams{
+		ID:       org.ID,
+		UserID:   Int(newOwnerID),
+		UserID_2: Int(user.ID),
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to transfer organization ownership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwnerID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	// Transfer all property ownerships in this organization
+	if err := impl.querier.TransferOrgProperties(ctx, &dbgen.TransferOrgPropertiesParams{
+		OrgID:      Int(org.ID),
+		OrgOwnerID: Int(newOwnerID),
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to transfer property ownerships", "orgID", org.ID, "newUserID", newOwnerID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Transferred organization", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwnerID)
+
+	// Invalidate caches for both old and new users
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(newOwnerID))
+	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
+	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwnerID))
+
+	auditEvent := newTransferOrgAuditLogEvent(user, org, newOwnerID)
+
+	return auditEvent, nil
+}
+
 func (impl *BusinessStoreImpl) DeleteOldAuditLogs(ctx context.Context, before time.Time) error {
 	if before.IsZero() {
 		return ErrInvalidInput

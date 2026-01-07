@@ -756,3 +756,85 @@ func TestDeleteOrg(t *testing.T) {
 		}
 	}
 }
+
+func TestTransferOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create the owner account
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create the new owner account
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_new_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new owner account: %v", err)
+	}
+
+	// Invite and join the new owner as a member
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, newOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(newOwner.ID)))
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify the organization has been transferred
+	newOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, newOwner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hasOrgAsOwner := false
+	for _, o := range newOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			hasOrgAsOwner = true
+			break
+		}
+	}
+
+	if !hasOrgAsOwner {
+		t.Error("New owner should be the owner of the transferred org")
+	}
+
+	// Verify old owner no longer owns the org
+	oldOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range oldOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			t.Error("Old owner should no longer be the owner of the transferred org")
+		}
+	}
+}

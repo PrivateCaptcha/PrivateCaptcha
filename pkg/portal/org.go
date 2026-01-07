@@ -38,9 +38,11 @@ const (
 type orgSettingsRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
-	CurrentOrg *userOrg
-	NameError  string
-	CanEdit    bool
+	CurrentOrg  *userOrg
+	NameError   string
+	CanEdit     bool
+	CanTransfer bool
+	Members     []*orgUser
 }
 
 type orgAuditLogsRenderContext struct {
@@ -406,6 +408,23 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		CsrfRenderContext: s.CreateCsrfContext(user),
 		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
 		CanEdit:           org.UserID.Int32 == user.ID,
+		CanTransfer:       false,
+		Members:           []*orgUser{},
+	}
+
+	// Fetch org members for transfer dropdown (only for owners and enterprise)
+	if renderCtx.CanEdit && s.isEnterprise() {
+		if members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID); err == nil {
+			// Filter to only include accepted members (not pending invites)
+			acceptedMembers := make([]*orgUser, 0, len(members))
+			for _, m := range members {
+				if m.Level == dbgen.AccessLevelMember {
+					acceptedMembers = append(acceptedMembers, userToOrgUser(&m.User, string(m.Level), s.IDHasher))
+				}
+			}
+			renderCtx.Members = acceptedMembers
+			renderCtx.CanTransfer = len(acceptedMembers) > 0
+		}
 	}
 
 	return &ViewModel{

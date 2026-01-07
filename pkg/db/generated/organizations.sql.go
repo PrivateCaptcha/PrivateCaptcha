@@ -212,6 +212,21 @@ func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype
 	return err
 }
 
+const transferOrganization = `-- name: TransferOrganization :exec
+UPDATE backend.organizations SET user_id = $2, updated_at = NOW() WHERE id = $1 AND user_id = $3
+`
+
+type TransferOrganizationParams struct {
+	ID       int32       `db:"id" json:"id"`
+	UserID   pgtype.Int4 `db:"user_id" json:"user_id"`
+	UserID_2 pgtype.Int4 `db:"user_id_2" json:"user_id_2"`
+}
+
+func (q *Queries) TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) error {
+	_, err := q.db.Exec(ctx, transferOrganization, arg.ID, arg.UserID, arg.UserID_2)
+	return err
+}
+
 const updateOrganization = `-- name: UpdateOrganization :one
 UPDATE backend.organizations SET name = $1, updated_at = NOW()
 WHERE id = $2

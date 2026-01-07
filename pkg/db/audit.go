@@ -283,8 +283,9 @@ func newUpdateUserAuditLogEvent(oldUser *dbgen.User, newUser *dbgen.User) *commo
 }
 
 type AuditLogOrg struct {
-	ID   int32  `json:"id"`
-	Name string `json:"name"`
+	ID         int32  `json:"id"`
+	Name       string `json:"name"`
+	NewOwnerID int32  `json:"new_owner_id,omitempty"`
 }
 
 func NewAuditLogOrg(org *dbgen.Organization) *AuditLogOrg {
@@ -422,6 +423,17 @@ func newUpdateOrgAuditLogEvent(user *dbgen.User, org *dbgen.Organization, oldNam
 		TableName: TableNameOrgs,
 		OldValue:  &AuditLogOrg{Name: oldName},
 		NewValue:  &AuditLogOrg{Name: org.Name},
+	}
+}
+
+func newTransferOrgAuditLogEvent(user *dbgen.User, org *dbgen.Organization, newOwnerID int32) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(org.ID),
+		TableName: TableNameOrgs,
+		OldValue:  NewAuditLogOrg(org),
+		NewValue:  &AuditLogOrg{ID: org.ID, Name: org.Name, NewOwnerID: newOwnerID},
 	}
 }
 
