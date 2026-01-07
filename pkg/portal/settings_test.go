@@ -181,3 +181,178 @@ func TestRotateAPIKey(t *testing.T) {
 		t.Error("Key external ID was not rotated")
 	}
 }
+
+func TestGetSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if !strings.HasSuffix(viewModel.View, "page.html") {
+		t.Errorf("Expected view to end with page.html, got %s", viewModel.View)
+	}
+}
+
+func TestGetGeneralSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/general", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getGeneralSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsGeneralRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.Name != user.Name {
+		t.Errorf("Expected Name to be %s, got %s", user.Name, renderCtx.Name)
+	}
+
+	if viewModel.AuditEvent == nil {
+		t.Error("Expected AuditEvent to be populated")
+	}
+}
+
+func TestGetAPIKeysSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/apikeys", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getAPIKeysSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsAPIKeysRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsAPIKeysRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.Keys == nil {
+		t.Error("Expected Keys to be initialized (even if empty)")
+	}
+
+	if viewModel.AuditEvent == nil {
+		t.Error("Expected AuditEvent to be populated")
+	}
+}
+
+func TestGetUsageSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/usage", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getUsageSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsUsageRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsUsageRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.OrgsCount == 0 {
+		t.Error("Expected OrgsCount to be at least 1")
+	}
+}

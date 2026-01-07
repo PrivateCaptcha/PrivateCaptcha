@@ -413,3 +413,384 @@ func TestGetPropertyStats(t *testing.T) {
 		t.Errorf("Expected 2 total verified, got %d", totalVerified)
 	}
 }
+
+func TestGetOrgProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	renderCtx, dbProperty, err := server.getOrgProperty(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if renderCtx == nil {
+		t.Fatal("Expected render context to be populated, got nil")
+	}
+
+	if dbProperty == nil {
+		t.Fatal("Expected property to be populated, got nil")
+	}
+
+	if dbProperty.ID != property.ID {
+		t.Errorf("Expected property ID to be %d, got %d", property.ID, dbProperty.ID)
+	}
+
+	if renderCtx.Property == nil {
+		t.Fatal("Expected Property in render context to be populated, got nil")
+	}
+
+	if !renderCtx.CanEdit {
+		t.Error("Expected CanEdit to be true for property creator")
+	}
+}
+
+func TestGetOrgPropertySettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/tab/settings", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	renderCtx, auditEvent, err := server.getOrgPropertySettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if renderCtx == nil {
+		t.Fatal("Expected render context to be populated, got nil")
+	}
+
+	if renderCtx.Tab != propertySettingsTabIndex {
+		t.Errorf("Expected tab to be %d, got %d", propertySettingsTabIndex, renderCtx.Tab)
+	}
+
+	if auditEvent == nil {
+		t.Error("Expected audit event to be populated")
+	}
+}
+
+func TestGetPropertyDashboard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyDashboard(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != propertyDashboardTemplate {
+		t.Errorf("Expected view to be %s, got %s", propertyDashboardTemplate, viewModel.View)
+	}
+}
+
+func TestGetPropertyReportsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/tab/reports", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyReportsTab(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != propertyDashboardReportsTemplate {
+		t.Errorf("Expected view to be %s, got %s", propertyDashboardReportsTemplate, viewModel.View)
+	}
+}
+
+func TestGetPropertySettingsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/tab/settings", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertySettingsTab(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != propertyDashboardSettingsTemplate {
+		t.Errorf("Expected view to be %s, got %s", propertyDashboardSettingsTemplate, viewModel.View)
+	}
+
+	if viewModel.AuditEvent == nil {
+		t.Error("Expected AuditEvent to be populated")
+	}
+}
+
+func TestGetPropertyIntegrationsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/tab/integrations", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyIntegrationsTab(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != propertyDashboardIntegrationsTemplate {
+		t.Errorf("Expected view to be %s, got %s", propertyDashboardIntegrationsTemplate, viewModel.View)
+	}
+}
+
+func TestGetPropertyAuditLogsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/tab/events", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyAuditLogsTab(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != propertyDashboardAuditLogsTemplate {
+		t.Errorf("Expected view to be %s, got %s", propertyDashboardAuditLogsTemplate, viewModel.View)
+	}
+}
+
+func TestDeleteProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/property/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(properties) != 0 {
+		t.Error("Property should have been deleted")
+	}
+}

@@ -3,6 +3,8 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -10,6 +12,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
 func TestUserAuditLogInitFromUser(t *testing.T) {
@@ -483,4 +488,75 @@ func mustMarshalJSON(v interface{}) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func TestGetAuditLogs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/events", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getAuditLogs(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != auditLogsTemplate {
+		t.Errorf("Expected view to be %s, got %s", auditLogsTemplate, viewModel.View)
+	}
+
+	if viewModel.AuditEvent == nil {
+		t.Error("Expected AuditEvent to be populated")
+	}
+}
+
+func TestCreateAuditLogsContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	renderCtx, err := server.CreateAuditLogsContext(ctx, user, 14, 0)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if renderCtx == nil {
+		t.Fatal("Expected render context to be populated, got nil")
+	}
+
+	if renderCtx.Days != 14 {
+		t.Errorf("Expected Days to be 14, got %d", renderCtx.Days)
+	}
+
+	if renderCtx.AuditLogs == nil {
+		t.Error("Expected AuditLogs to be initialized")
+	}
 }
