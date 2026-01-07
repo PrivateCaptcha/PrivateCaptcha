@@ -8,6 +8,8 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/rs/xid"
 )
 
@@ -103,5 +105,92 @@ func TestGetAsyncTaskReadOnlyKey(t *testing.T) {
 
 	if !meta.Code.Success() {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+}
+
+func TestGetAsyncTaskNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	handlerID := xid.New().String()
+	request := struct{}{}
+	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, handlerID, user, time.Now().UTC().Add(24*time.Hour), t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskID := db.UUIDToString(task.ID)
+
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+taskID, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	}
+}
+
+func TestGetAsyncTaskInvalidIDFormat(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		taskID     string
+		wantStatus int
+	}{
+		{
+			name:       "Invalid UUID Format",
+			taskID:     "not-a-valid-uuid",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "Empty Task ID",
+			taskID:     "",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:       "Non-existent Task",
+			taskID:     "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+			wantStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			endpoint := "/" + common.AsyncTaskEndpoint + "/" + tt.taskID
+			resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
+			}
+		})
 	}
 }
