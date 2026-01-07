@@ -501,7 +501,7 @@ func TestDeleteAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest("DELETE", "/settings/tab/general/delete", nil)
+	req := httptest.NewRequest("DELETE", "/user", nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 
@@ -533,7 +533,7 @@ func TestGetAccountStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest("GET", "/settings/tab/usage/stats", nil)
+	req := httptest.NewRequest("GET", "/user/stats", nil)
 	req.AddCookie(cookie)
 
 	w := httptest.NewRecorder()

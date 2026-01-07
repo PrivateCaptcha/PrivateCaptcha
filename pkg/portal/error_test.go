@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
 func TestErrorPage(t *testing.T) {
@@ -77,12 +80,24 @@ func TestPostClientSideError(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	body := `{"error": "test error", "stack": "test stack trace"}`
-	req := httptest.NewRequest("POST", "/error/report", strings.NewReader(body))
+	req := httptest.NewRequest("POST", "/error", strings.NewReader(body))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
+	req.AddCookie(cookie)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

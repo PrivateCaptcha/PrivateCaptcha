@@ -1,11 +1,29 @@
 package common
 
 import (
+	"os"
 	"testing"
 )
 
 func TestNewEnvMapFromFile(t *testing.T) {
-	envMap, err := NewEnvMap("../../docker/pc.env.example")
+	tmpFile, err := os.CreateTemp("", "env_test_*.env")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	envContent := `STAGE=dev
+PC_LOCAL_ADDRESS=localhost:9090
+PC_PORTAL_BASE_URL=portal.privatecaptcha.local
+PC_API_BASE_URL=api.privatecaptcha.local
+PC_ADMIN_EMAIL=admin@privatecaptcha.local`
+
+	if _, err := tmpFile.WriteString(envContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	envMap, err := NewEnvMap(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("Failed to create env map from file: %v", err)
 	}
@@ -32,7 +50,20 @@ func TestNewEnvMapFromFile(t *testing.T) {
 }
 
 func TestEnvMapGetEx(t *testing.T) {
-	envMap, err := NewEnvMap("../../docker/pc.env.example")
+	tmpFile, err := os.CreateTemp("", "env_test_*.env")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	envContent := `STAGE=dev`
+
+	if _, err := tmpFile.WriteString(envContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	envMap, err := NewEnvMap(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("Failed to create env map from file: %v", err)
 	}
@@ -57,7 +88,20 @@ func TestEnvMapGetEx(t *testing.T) {
 }
 
 func TestEnvMapUpdate(t *testing.T) {
-	envMap, err := NewEnvMap("../../docker/pc.env.example")
+	tmpFile, err := os.CreateTemp("", "env_test_*.env")
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	envContent := `STAGE=dev`
+
+	if _, err := tmpFile.WriteString(envContent); err != nil {
+		t.Fatalf("Failed to write to temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	envMap, err := NewEnvMap(tmpFile.Name())
 	if err != nil {
 		t.Fatalf("Failed to create env map from file: %v", err)
 	}
