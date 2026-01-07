@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 )
 
 type stubOneOffJob struct {
@@ -114,37 +115,13 @@ func TestPeriodicJobExecution(t *testing.T) {
 	}
 }
 
-type stubConfigStore struct {
-	items map[common.ConfigKey]common.ConfigItem
-}
-
-func (s *stubConfigStore) Get(key common.ConfigKey) common.ConfigItem {
-	if item, ok := s.items[key]; ok {
-		return item
-	}
-	return &stubConfigItem{value: ""}
-}
-
-func (s *stubConfigStore) Update(ctx context.Context) {}
-
-type stubConfigItem struct {
-	key   common.ConfigKey
-	value string
-}
-
-func (s *stubConfigItem) Key() common.ConfigKey { return s.key }
-func (s *stubConfigItem) Value() string         { return s.value }
-
 func TestJobsSetup(t *testing.T) {
 	jobsManager := NewJobs(nil)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 
 	jobsManager.Setup(mux, cfg)
 
@@ -163,11 +140,8 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 	jobsManager.Add(stubJob)
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
@@ -189,11 +163,8 @@ func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
@@ -210,11 +181,8 @@ func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
@@ -232,11 +200,8 @@ func TestHandlePeriodicJobNotFound(t *testing.T) {
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/nonexistent", nil)
@@ -257,11 +222,8 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 	jobsManager.AddOneOff(stubJob)
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/oneoff/stubOneOffJob", nil)
@@ -283,11 +245,8 @@ func TestHandleOneOffJobNotFound(t *testing.T) {
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "test-api-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/oneoff/nonexistent", nil)
@@ -305,11 +264,8 @@ func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: ""},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, ""))
 	jobsManager.Setup(mux, cfg)
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/test", nil)
@@ -326,11 +282,8 @@ func TestJobsUpdateConfig(t *testing.T) {
 	jobsManager := NewJobs(nil)
 	defer jobsManager.Shutdown()
 
-	cfg := &stubConfigStore{
-		items: map[common.ConfigKey]common.ConfigItem{
-			common.LocalAPIKeyKey: &stubConfigItem{key: common.LocalAPIKeyKey, value: "updated-key"},
-		},
-	}
+	cfg := config.NewBaseConfig(nil)
+	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "updated-key"))
 
 	jobsManager.UpdateConfig(cfg)
 

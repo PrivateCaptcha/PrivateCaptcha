@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -512,6 +513,11 @@ func TestDeleteAccount(t *testing.T) {
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
+
+	_, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != db.ErrSoftDeleted {
+		t.Errorf("Expected ErrSoftDeleted after deleting user, got: %v", err)
+	}
 }
 
 func TestGetAccountStats(t *testing.T) {
@@ -520,9 +526,14 @@ func TestGetAccountStats(t *testing.T) {
 	}
 
 	ctx := common.TraceContext(t.Context(), t.Name())
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "stats-example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
 	}
 
 	srv := http.NewServeMux()
@@ -533,6 +544,34 @@ func TestGetAccountStats(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	now := time.Now()
+	accessRecords := []*common.AccessRecord{
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-1 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-2 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-3 * time.Hour),
+		},
+	}
+
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessRecords); err != nil {
+		t.Fatalf("Failed to write access log batch: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
 	req := httptest.NewRequest("GET", "/user/stats", nil)
 	req.AddCookie(cookie)
 
@@ -541,6 +580,32 @@ func TestGetAccountStats(t *testing.T) {
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Unexpected status code %v", resp.StatusCode)
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	type point struct {
+		Date  int64 `json:"x"`
+		Value int   `json:"y"`
+	}
+
+	var stats struct {
+		Data []*point `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(stats.Data) == 0 {
+		t.Error("Expected data but got none")
+	}
+
+	totalCount := 0
+	for _, p := range stats.Data {
+		totalCount += p.Value
+	}
+
+	if totalCount != 3 {
+		t.Errorf("Expected 3 total requests, got %d", totalCount)
 	}
 }
