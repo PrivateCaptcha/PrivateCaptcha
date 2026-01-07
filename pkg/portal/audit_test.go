@@ -90,7 +90,7 @@ func TestUserAuditLogInitFromOrg(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "org creation",
+			name:     "org creation",
 			oldValue: nil,
 			newValue: &db.AuditLogOrg{
 				ID:   1,
@@ -142,7 +142,7 @@ func TestUserAuditLogInitFromSubscription(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "subscription creation",
+			name:     "subscription creation",
 			oldValue: nil,
 			newValue: &db.AuditLogSubscription{
 				Source:            "external",
@@ -176,7 +176,7 @@ func TestUserAuditLogInitFromOrgUser(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "org user creation",
+			name:     "org user creation",
 			oldValue: nil,
 			newValue: &db.AuditLogOrgUser{
 				OrgName: "Test Org",
@@ -249,7 +249,7 @@ func TestUserAuditLogInitFromProperty(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "property creation",
+			name:     "property creation",
 			oldValue: nil,
 			newValue: &db.AuditLogProperty{
 				Name:   "New Property",
@@ -294,7 +294,7 @@ func TestUserAuditLogInitFromAPIKey(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "api key creation",
+			name:     "api key creation",
 			oldValue: nil,
 			newValue: &db.AuditLogAPIKey{
 				Name:      "New Key",
@@ -785,5 +785,54 @@ func TestInitFromAPIKeyPeriodChange(t *testing.T) {
 
 	if ul.Property != "Period" {
 		t.Errorf("Expected Property to be 'Period', got '%s'", ul.Property)
+	}
+}
+
+func TestAuditLogsDaysFromParam(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		input    string
+		expected int
+	}{
+		{"14", 14},
+		{"30", 30},
+		{"90", 90},
+		{"180", 180},
+		{"365", 365},
+		{"", 14},
+		{"invalid", 14},
+		{"7", 14},
+		{"100", 14},
+		{"-1", 14},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := auditLogsDaysFromParam(ctx, tc.input)
+			if result != tc.expected {
+				t.Errorf("auditLogsDaysFromParam(%q) = %d, want %d", tc.input, result, tc.expected)
+			}
+		})
+	}
+}
+
+func TestMaxAuditLogsForDays(t *testing.T) {
+	tests := []struct {
+		days     int
+		expected int
+	}{
+		{14, 1400},
+		{30, 3000},
+		{90, 9000},
+		{180, 18000},
+		{365, 36500},
+	}
+
+	for _, tc := range tests {
+		result := maxAuditLogsForDays(tc.days)
+		if result != tc.expected {
+			t.Errorf("maxAuditLogsForDays(%d) = %d, want %d", tc.days, result, tc.expected)
+		}
 	}
 }

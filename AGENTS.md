@@ -32,6 +32,12 @@
 - handlers and routes for Portal part of the server are setup in `pkg/portal/server.go` and `pkg/portal/server_enterprise.go`
 - maintenance jobs are defined in `pkg/maintenance/` package and scheduled in `cmd/server/main.go`
 
+### Frontend
+
+- All frontend code (HTML, CSS, JavaScript) for Portal is in `web/` directory
+- We use htmx and Alpine.js libraries for frontend. For styles we use Tailwind CSS v3.4 (config is in `web/tailwind.config.js`)
+- Frontend code is formatted using Golang templates (with our additional functions) with entrypoint in `web/portal/templates.go`. Our templates use a similar system to Hugo static site generator where custom pages always get used with "base" templates in `web/layouts/_default` for rendering, so we can reuse functionality.
+
 ## Environment setup
 
 - Use `make init` to initialize everything for development
@@ -44,7 +50,7 @@
 
 ## Testing instructions
 
-- To run all Go unit tests, run `make test-unit`
+- To run all Go unit tests, run `make test-unit` (unit tests always run with "enterprise" tag)
 - To run JS widget tests, run `make test-widget-unit`
 - To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
 - To run all Go integration tests, run `make test-docker-light`. Docker is required.
