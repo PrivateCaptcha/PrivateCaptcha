@@ -1,8 +1,10 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestRelURL(t *testing.T) {
@@ -209,5 +211,25 @@ func TestEnvToBool(t *testing.T) {
 				t.Errorf("EnvToBool(%q) = %v; want %v", tc.input, actual, tc.expected)
 			}
 		})
+	}
+}
+
+func TestChunkedCleanup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var calls int
+	deleter := func(ctx context.Context, before time.Time, chunkSize int) int {
+		calls++
+		if calls == 1 {
+			return 5
+		}
+		return 0
+	}
+
+	ChunkedCleanup(ctx, 10*time.Millisecond, 50*time.Millisecond, 10, deleter)
+
+	if calls < 2 {
+		t.Errorf("Expected deleter to be called at least twice, got %d calls", calls)
 	}
 }
