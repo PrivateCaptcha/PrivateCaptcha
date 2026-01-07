@@ -20,7 +20,7 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build the Container image
         run: make build-docker DOCKER_IMAGE='localbuild/testimage'

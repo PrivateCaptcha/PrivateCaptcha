@@ -20,7 +20,7 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # Setup .npmrc file to publish to GitHub Packages
       - uses: actions/setup-node@v4
