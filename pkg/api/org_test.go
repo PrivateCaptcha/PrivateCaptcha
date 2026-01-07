@@ -695,3 +695,167 @@ func TestAPIOrgInvalidRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIOrgValidationErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		method     string
+		input      *apiOrgInput
+		wantCode   common.StatusCode
+	}{
+		{
+			name:     "Create Org - ID Not Empty",
+			method:   http.MethodPost,
+			input:    &apiOrgInput{ID: "some-id", Name: "Valid Name"},
+			wantCode: common.StatusOrgIDNotEmptyError,
+		},
+		{
+			name:     "Create Org - Empty Name",
+			method:   http.MethodPost,
+			input:    &apiOrgInput{Name: ""},
+			wantCode: common.StatusOrgNameEmptyError,
+		},
+		{
+			name:     "Create Org - Name Too Long",
+			method:   http.MethodPost,
+			input:    &apiOrgInput{Name: string(make([]byte, 300))},
+			wantCode: common.StatusOrgNameTooLongError,
+		},
+		{
+			name:     "Update Org - Empty Name",
+			method:   http.MethodPut,
+			input:    &apiOrgInput{ID: s.IDHasher.Encrypt(1), Name: ""},
+			wantCode: common.StatusOrgNameEmptyError,
+		},
+		{
+			name:     "Update Org - Invalid ID Format",
+			method:   http.MethodPut,
+			input:    &apiOrgInput{ID: "invalid-id-format!", Name: "Valid Name"},
+			wantCode: common.StatusOrgIDInvalidError,
+		},
+		{
+			name:     "Delete Org - Invalid ID Format",
+			method:   http.MethodDelete,
+			input:    &apiOrgInput{ID: "invalid-id-format!"},
+			wantCode: common.StatusOrgIDInvalidError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, meta, err := requestResponseAPISuite[APIResponse](ctx, tt.input, tt.method, "/"+common.OrgEndpoint, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if meta.Code != tt.wantCode {
+				t.Errorf("expected code %v, got %v (%s)", tt.wantCode, meta.Code, meta.Description)
+			}
+		})
+	}
+}
+
+func TestAPIOrgNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	tests := []struct {
+		name       string
+		method     string
+		endpoint   string
+		input      interface{}
+		wantStatus int
+	}{
+		{
+			name:       "Get Orgs - No Subscription",
+			method:     http.MethodGet,
+			endpoint:   "/" + common.OrganizationsEndpoint,
+			wantStatus: http.StatusPaymentRequired,
+		},
+		{
+			name:       "Create Org - No Subscription",
+			method:     http.MethodPost,
+			endpoint:   "/" + common.OrgEndpoint,
+			input:      &apiOrgInput{Name: "New Org"},
+			wantStatus: http.StatusPaymentRequired,
+		},
+		{
+			name:       "Update Org - No Subscription",
+			method:     http.MethodPut,
+			endpoint:   "/" + common.OrgEndpoint,
+			input:      &apiOrgInput{ID: s.IDHasher.Encrypt(int(org.ID)), Name: "Updated"},
+			wantStatus: http.StatusPaymentRequired,
+		},
+		{
+			name:       "Delete Org - No Subscription",
+			method:     http.MethodDelete,
+			endpoint:   "/" + common.OrgEndpoint,
+			input:      &apiOrgInput{ID: s.IDHasher.Encrypt(int(org.ID))},
+			wantStatus: http.StatusPaymentRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp, err := apiRequestSuite(ctx, tt.input, tt.method, tt.endpoint, apiKeyStr)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if resp.StatusCode != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, resp.StatusCode)
+			}
+		})
+	}
+}
+
+func TestAPIDeleteOrgEmptyID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := &apiOrgInput{ID: ""}
+
+	_, meta, err := requestResponseAPISuite[APIResponse](ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if meta.Code != common.StatusOrgIDEmptyError {
+		t.Fatalf("expected code %v, got %v", common.StatusOrgIDEmptyError, meta.Code)
+	}
+}

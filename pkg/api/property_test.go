@@ -1410,3 +1410,309 @@ func TestAPIPropertyInvalidRequests(t *testing.T) {
 		})
 	}
 }
+
+func TestApiPostPropertiesValidationErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+
+	tests := []struct {
+		name     string
+		input    []*apiCreatePropertyInput
+		wantCode common.StatusCode
+	}{
+		{
+			name: "Empty Domain",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Valid Name"}, Domain: ""},
+			},
+			wantCode: common.StatusPropertyDomainEmptyError,
+		},
+		{
+			name: "Localhost Domain",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Valid Name"}, Domain: "localhost"},
+			},
+			wantCode: common.StatusPropertyDomainLocalhostError,
+		},
+		{
+			name: "IP Address Domain",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Valid Name"}, Domain: "192.168.1.1"},
+			},
+			wantCode: common.StatusPropertyDomainIPAddrError,
+		},
+		{
+			name: "Empty Property Name",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: ""}, Domain: "example.com"},
+			},
+			wantCode: common.StatusPropertyNameEmptyError,
+		},
+		{
+			name: "Duplicate Property Names",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Same Name"}, Domain: "example1.com"},
+				{apiPropertySettings: apiPropertySettings{Name: "Same Name"}, Domain: "example2.com"},
+			},
+			wantCode: common.StatusPropertyNameDuplicateError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, tt.input, http.MethodPost, endpoint, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if meta.Code != tt.wantCode {
+				t.Errorf("expected code %v, got %v (%s)", tt.wantCode, meta.Code, meta.Description)
+			}
+		})
+	}
+}
+
+func TestApiUpdatePropertiesValidationErrors(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name     string
+		input    []*apiUpdatePropertyInput
+		wantCode common.StatusCode
+	}{
+		{
+			name: "Empty Property ID",
+			input: []*apiUpdatePropertyInput{
+				{ID: "", apiPropertySettings: apiPropertySettings{Name: "Valid Name"}},
+			},
+			wantCode: common.StatusPropertyIDEmptyError,
+		},
+		{
+			name: "Duplicate Property IDs",
+			input: []*apiUpdatePropertyInput{
+				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 1"}},
+				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 2"}},
+			},
+			wantCode: common.StatusPropertyIDDuplicateError,
+		},
+		{
+			name: "Duplicate Property Names",
+			input: []*apiUpdatePropertyInput{
+				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
+				{ID: s.IDHasher.Encrypt(2), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
+			},
+			wantCode: common.StatusPropertyNameDuplicateError,
+		},
+		{
+			name: "Empty Property Name",
+			input: []*apiUpdatePropertyInput{
+				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: ""}},
+			},
+			wantCode: common.StatusPropertyNameEmptyError,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, tt.input, http.MethodPut, "/"+common.PropertiesEndpoint, apiKey)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if meta.Code != tt.wantCode {
+				t.Errorf("expected code %v, got %v (%s)", tt.wantCode, meta.Code, meta.Description)
+			}
+		})
+	}
+}
+
+func TestApiGetPropertiesNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	}
+}
+
+func TestApiGetPropertyNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	endpoint := fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(1))
+	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	}
+}
+
+func TestApiGetPropertiesInvalidOrgID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, "invalid-org-id!", common.PropertiesEndpoint)
+	_, meta, err := requestResponseAPISuite[APIResponse](ctx, nil, http.MethodGet, endpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if meta.Code != common.StatusOrgIDInvalidError {
+		t.Errorf("expected code %v, got %v (%s)", common.StatusOrgIDInvalidError, meta.Code, meta.Description)
+	}
+}
+
+func TestApiDeletePropertiesNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	input := []string{s.IDHasher.Encrypt(1)}
+	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.PropertiesEndpoint, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	}
+}
+
+func TestApiUpdatePropertiesNoSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
+
+	input := []*apiUpdatePropertyInput{
+		{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Updated Name"}},
+	}
+	resp, err := apiRequestSuite(ctx, input, http.MethodPut, "/"+common.PropertiesEndpoint, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusPaymentRequired {
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+	}
+}
+
+func TestApiDeletePropertiesInvalidPropertyID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, _, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	input := []string{"invalid-id-format!"}
+	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.PropertiesEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
+	}
+}
