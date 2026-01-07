@@ -269,3 +269,185 @@ func TestUpdateUserSubscription(t *testing.T) {
 		t.Errorf("Unexpected subscription source: %v", subscr.Source)
 	}
 }
+
+func TestRetrievePropertiesByID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	prop1, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example1.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	prop2, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example2.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	batch := map[int32]uint{
+		prop1.ID: 1,
+		prop2.ID: 1,
+	}
+
+	properties, err := store.Impl().RetrievePropertiesByID(ctx, batch)
+	if err != nil {
+		t.Fatalf("Failed to retrieve properties by ID: %v", err)
+	}
+
+	if len(properties) != 2 {
+		t.Errorf("Expected 2 properties, got %d", len(properties))
+	}
+}
+
+func TestStoreInCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	key := t.Name() + "_cache_key"
+	data := []byte("test data")
+	ttl := 1 * time.Hour
+
+	err := store.Impl().StoreInCache(ctx, key, data, ttl)
+	if err != nil {
+		t.Fatalf("Failed to store in cache: %v", err)
+	}
+
+	retrieved, err := store.Impl().RetrieveFromCache(ctx, key)
+	if err != nil {
+		t.Fatalf("Failed to retrieve from cache: %v", err)
+	}
+
+	if string(retrieved) != string(data) {
+		t.Errorf("Retrieved data doesn't match: got %s, want %s", retrieved, data)
+	}
+}
+
+func TestRetrieveOrgProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	retrieved, err := store.Impl().RetrieveOrgProperty(ctx, org, prop.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org property: %v", err)
+	}
+
+	if retrieved.ID != prop.ID {
+		t.Errorf("Retrieved property ID doesn't match: got %d, want %d", retrieved.ID, prop.ID)
+	}
+}
+
+func TestUpdateUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	newName := "Updated Name"
+	// Keep the same email - only change the name
+	_, err = store.Impl().UpdateUser(ctx, user, newName, user.Email, user.Email)
+	if err != nil {
+		t.Fatalf("Failed to update user: %v", err)
+	}
+
+	// Clear user cache to get fresh data from DB
+	if deleted := cache.Delete(ctx, db.UserCacheKey(user.ID)); !deleted {
+		t.Log("User cache entry not found")
+	}
+
+	updated, err := store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve user: %v", err)
+	}
+
+	if updated.Name != newName {
+		t.Errorf("User name was not updated: got %s, want %s", updated.Name, newName)
+	}
+}
+
+func TestRetrievePropertiesAll(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	properties, err := store.Impl().RetrieveProperties(ctx, 10)
+	if err != nil {
+		t.Fatalf("Failed to retrieve properties: %v", err)
+	}
+
+	if len(properties) == 0 {
+		t.Error("Expected at least 1 property")
+	}
+}
+
+func TestRetrieveOrgPropertiesCount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example1.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example2.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	count, err := store.Impl().RetrieveOrgPropertiesCount(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org properties count: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("Expected 2, got %d", count)
+	}
+}

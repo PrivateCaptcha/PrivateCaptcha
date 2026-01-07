@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -354,5 +355,257 @@ func TestGetUsageSettings(t *testing.T) {
 
 	if renderCtx.OrgsCount == 0 {
 		t.Error("Expected OrgsCount to be at least 1")
+	}
+}
+
+func TestGetSettingsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/general", nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamTab, "general")
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getSettingsTab(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if !strings.HasSuffix(viewModel.View, "tab.html") {
+		t.Errorf("Expected view to end with tab.html, got %s", viewModel.View)
+	}
+}
+
+func TestEditEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("POST", "/settings/tab/general/email", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.editEmail(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsGeneralRenderContext, got %T", viewModel.Model)
+	}
+
+	if !renderCtx.EditEmail {
+		t.Error("Expected EditEmail to be true")
+	}
+
+	if len(renderCtx.TwoFactorEmail) == 0 {
+		t.Error("Expected TwoFactorEmail to be populated")
+	}
+}
+
+func TestPutGeneralSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, user.Name)
+
+	req := httptest.NewRequest("PUT", "/settings/tab/general", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.putGeneralSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+}
+
+func TestDeleteAccount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("DELETE", "/user", nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	_, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != db.ErrSoftDeleted {
+		t.Errorf("Expected ErrSoftDeleted after deleting user, got: %v", err)
+	}
+}
+
+func TestGetAccountStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "stats-example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	accessRecords := []*common.AccessRecord{
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-1 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-2 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-3 * time.Hour),
+		},
+	}
+
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessRecords); err != nil {
+		t.Fatalf("Failed to write access log batch: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	req := httptest.NewRequest("GET", "/user/stats", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	type point struct {
+		Date  int64 `json:"x"`
+		Value int   `json:"y"`
+	}
+
+	var stats struct {
+		Data []*point `json:"data"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(stats.Data) == 0 {
+		t.Error("Expected data but got none")
+	}
+
+	totalCount := 0
+	for _, p := range stats.Data {
+		totalCount += p.Value
+	}
+
+	if totalCount != 3 {
+		t.Errorf("Expected 3 total requests, got %d", totalCount)
 	}
 }

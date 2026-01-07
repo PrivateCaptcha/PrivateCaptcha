@@ -1,8 +1,10 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 )
 
 func TestRelURL(t *testing.T) {
@@ -147,5 +149,87 @@ func TestGuessFirstName(t *testing.T) {
 		if actual != tt.expected {
 			t.Errorf("GuessFirstName(%q) = %q; want %q", tt.username, actual, tt.expected)
 		}
+	}
+}
+
+func TestParseBoolean(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"1", true},
+		{"Y", true},
+		{"y", true},
+		{"yes", true},
+		{"Yes", true},
+		{"true", true},
+		{"0", false},
+		{"N", false},
+		{"n", false},
+		{"no", false},
+		{"No", false},
+		{"false", false},
+		{"", false},
+		{"random", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("parseBoolean_%s", tc.input), func(t *testing.T) {
+			actual := ParseBoolean(tc.input)
+			if actual != tc.expected {
+				t.Errorf("ParseBoolean(%q) = %v; want %v", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestEnvToBool(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"1", true},
+		{"Y", true},
+		{"y", true},
+		{"yes", true},
+		{"true", true},
+		{"YES", true},
+		{"TRUE", true},
+		{"0", false},
+		{"N", false},
+		{"n", false},
+		{"no", false},
+		{"false", false},
+		{"", false},
+		{"random", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("envToBool_%s", tc.input), func(t *testing.T) {
+			actual := EnvToBool(tc.input)
+			if actual != tc.expected {
+				t.Errorf("EnvToBool(%q) = %v; want %v", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestChunkedCleanup(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	var calls int
+	deleter := func(ctx context.Context, before time.Time, chunkSize int) int {
+		calls++
+		if calls == 1 {
+			return 5
+		}
+		return 0
+	}
+
+	ChunkedCleanup(ctx, 10*time.Millisecond, 50*time.Millisecond, 10, deleter)
+
+	if calls < 2 {
+		t.Errorf("Expected deleter to be called at least twice, got %d calls", calls)
 	}
 }

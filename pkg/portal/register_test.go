@@ -71,3 +71,41 @@ func TestPostRegister(t *testing.T) {
 		t.Errorf("Unexpected user email")
 	}
 }
+
+func TestGetRegister(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	req := httptest.NewRequest("GET", "/"+common.RegisterEndpoint, nil)
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getRegister(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != loginTemplate {
+		t.Errorf("Expected view to be %s, got %s", loginTemplate, viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*loginRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *loginRenderContext, got %T", viewModel.Model)
+	}
+
+	if !renderCtx.IsRegister {
+		t.Error("Expected IsRegister to be true")
+	}
+
+	if len(renderCtx.Token) == 0 {
+		t.Error("Expected CSRF token to be populated")
+	}
+}

@@ -560,3 +560,230 @@ func TestCreateAuditLogsContext(t *testing.T) {
 		t.Error("Expected AuditLogs to be initialized")
 	}
 }
+
+func TestInitFromSubscriptionPlan(t *testing.T) {
+	planService := billing.NewPlanService(nil)
+	ul := &userAuditLog{}
+
+	sub := &db.AuditLogSubscription{
+		Source:            "internal",
+		ExternalProductID: "test-product",
+		ExternalPriceID:   "test-price",
+	}
+
+	ul.initFromSubscriptionPlan(sub, planService, "production")
+
+	if ul.Property != "Product" {
+		t.Errorf("Expected Property to be 'Product', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromPropertyOrgChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:  "Test Property",
+		OrgID: 1,
+	}
+	newValue := &db.AuditLogProperty{
+		Name:    "Test Property",
+		OrgID:   2,
+		OrgName: "New Org",
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Organization" {
+		t.Errorf("Expected Property to be 'Organization', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromPropertyGrowthChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:   "Test Property",
+		Growth: "slow",
+	}
+	newValue := &db.AuditLogProperty{
+		Name:   "Test Property",
+		Growth: "fast",
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Growth" {
+		t.Errorf("Expected Property to be 'Growth', got '%s'", ul.Property)
+	}
+
+	if ul.Value != "fast" {
+		t.Errorf("Expected Value to be 'fast', got '%s'", ul.Value)
+	}
+}
+
+func TestInitFromPropertyMaxReplayCountChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:           "Test Property",
+		MaxReplayCount: 10,
+	}
+	newValue := &db.AuditLogProperty{
+		Name:           "Test Property",
+		MaxReplayCount: 20,
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Replay count" {
+		t.Errorf("Expected Property to be 'Replay count', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromPropertyValidityChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:                "Test Property",
+		ValidityIntervalSec: 3600,
+	}
+	newValue := &db.AuditLogProperty{
+		Name:                "Test Property",
+		ValidityIntervalSec: 7200,
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Validity" {
+		t.Errorf("Expected Property to be 'Validity', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromPropertyAllowSubdomainsChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:            "Test Property",
+		AllowSubdomains: false,
+	}
+	newValue := &db.AuditLogProperty{
+		Name:            "Test Property",
+		AllowSubdomains: true,
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Subdomains" {
+		t.Errorf("Expected Property to be 'Subdomains', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromPropertyAllowLocalhostChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogProperty{
+		Name:           "Test Property",
+		AllowLocalhost: false,
+	}
+	newValue := &db.AuditLogProperty{
+		Name:           "Test Property",
+		AllowLocalhost: true,
+	}
+
+	err := ul.initFromProperty(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Localhost" {
+		t.Errorf("Expected Property to be 'Localhost', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromSubscriptionSourceChange(t *testing.T) {
+	planService := billing.NewPlanService(nil)
+	ul := &userAuditLog{}
+
+	oldValue := &db.AuditLogSubscription{
+		Source: "internal",
+	}
+	newValue := &db.AuditLogSubscription{
+		Source: "external",
+	}
+
+	err := ul.initFromSubscription(oldValue, newValue, planService, "production")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Type" {
+		t.Errorf("Expected Property to be 'Type', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromSubscriptionCancelAtChange(t *testing.T) {
+	planService := billing.NewPlanService(nil)
+	ul := &userAuditLog{}
+
+	now := time.Now()
+	later := now.Add(24 * time.Hour)
+
+	oldValue := &db.AuditLogSubscription{
+		Source:   "external",
+		CancelAt: common.JSONTime(now),
+	}
+	newValue := &db.AuditLogSubscription{
+		Source:   "external",
+		CancelAt: common.JSONTime(later),
+	}
+
+	err := ul.initFromSubscription(oldValue, newValue, planService, "production")
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Cancel" {
+		t.Errorf("Expected Property to be 'Cancel', got '%s'", ul.Property)
+	}
+}
+
+func TestInitFromAPIKeyPeriodChange(t *testing.T) {
+	ul := &userAuditLog{}
+
+	now := time.Now()
+
+	oldValue := &db.AuditLogAPIKey{
+		Name:      "Test Key",
+		Period:    24 * time.Hour,
+		ExpiresAt: common.JSONTime(now),
+	}
+	newValue := &db.AuditLogAPIKey{
+		Name:      "Test Key",
+		Period:    48 * time.Hour,
+		ExpiresAt: common.JSONTime(now),
+	}
+
+	err := ul.initFromAPIKey(oldValue, newValue)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul.Property != "Period" {
+		t.Errorf("Expected Property to be 'Period', got '%s'", ul.Property)
+	}
+}

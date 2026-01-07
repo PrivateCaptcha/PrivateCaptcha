@@ -13,9 +13,10 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
@@ -792,5 +793,137 @@ func TestDeleteProperty(t *testing.T) {
 
 	if len(properties) != 0 {
 		t.Error("Property should have been deleted")
+	}
+}
+
+func TestGrowthLevelToIndex(t *testing.T) {
+	tests := []struct {
+		level    dbgen.DifficultyGrowth
+		expected int
+	}{
+		{dbgen.DifficultyGrowthConstant, 0},
+		{dbgen.DifficultyGrowthSlow, 1},
+		{dbgen.DifficultyGrowthMedium, 2},
+		{dbgen.DifficultyGrowthFast, 3},
+		{dbgen.DifficultyGrowth("unknown"), 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.level), func(t *testing.T) {
+			result := growthLevelToIndex(tt.level)
+			if result != tt.expected {
+				t.Errorf("growthLevelToIndex(%s) = %d, want %d", tt.level, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGrowthLevelFromIndex(t *testing.T) {
+	ctx := t.Context()
+	tests := []struct {
+		index    string
+		expected dbgen.DifficultyGrowth
+	}{
+		{"0", dbgen.DifficultyGrowthConstant},
+		{"1", dbgen.DifficultyGrowthSlow},
+		{"2", dbgen.DifficultyGrowthMedium},
+		{"3", dbgen.DifficultyGrowthFast},
+		{"99", dbgen.DifficultyGrowthMedium},
+		{"-1", dbgen.DifficultyGrowthMedium},
+		{"invalid", dbgen.DifficultyGrowthMedium},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.index, func(t *testing.T) {
+			result := growthLevelFromIndex(ctx, tt.index)
+			if result != tt.expected {
+				t.Errorf("growthLevelFromIndex(%s) = %s, want %s", tt.index, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseMaxReplayCount(t *testing.T) {
+	ctx := t.Context()
+	tests := []struct {
+		value    string
+		expected int32
+	}{
+		{"1", 1},
+		{"100", 100},
+		{"1000000", 1000000},
+		{"0", 1},
+		{"-1", 1},
+		{"2000000", 1000000},
+		{"invalid", 1},
+		{"", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.value, func(t *testing.T) {
+			result := parseMaxReplayCount(ctx, tt.value)
+			if result != tt.expected {
+				t.Errorf("parseMaxReplayCount(%s) = %d, want %d", tt.value, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDifficultyLevelFromValue(t *testing.T) {
+	ctx := t.Context()
+	tests := []struct {
+		value    string
+		minLevel int
+		maxLevel int
+		expected common.DifficultyLevel
+	}{
+		{"5", 1, 10, 5},
+		{"1", 1, 10, 1},
+		{"10", 1, 10, 10},
+		{"0", 1, 10, common.DifficultyLevelMedium},
+		{"-1", 1, 10, common.DifficultyLevelMedium},
+		{"invalid", 1, 10, common.DifficultyLevelMedium},
+		{"3", 5, 10, 5},
+		{"15", 1, 10, 10},
+		{"50", 1, 10, 10},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+			result := difficultyLevelFromValue(ctx, tt.value, tt.minLevel, tt.maxLevel)
+			if result != tt.expected {
+				t.Errorf("difficultyLevelFromValue(%s, %d, %d) = %d, want %d", tt.value, tt.minLevel, tt.maxLevel, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEchoPuzzle(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/echopuzzle/5", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 }
