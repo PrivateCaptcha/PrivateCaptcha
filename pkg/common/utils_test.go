@@ -149,3 +149,65 @@ func TestGuessFirstName(t *testing.T) {
 		}
 	}
 }
+
+func TestParseBoolean(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"1", true},
+		{"Y", true},
+		{"y", true},
+		{"yes", true},
+		{"Yes", true},
+		{"true", true},
+		{"0", false},
+		{"N", false},
+		{"n", false},
+		{"no", false},
+		{"No", false},
+		{"false", false},
+		{"", false},
+		{"random", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("parseBoolean_%s", tc.input), func(t *testing.T) {
+			actual := ParseBoolean(tc.input)
+			if actual != tc.expected {
+				t.Errorf("ParseBoolean(%q) = %v; want %v", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestEnvToBool(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected bool
+	}{
+		{"1", true},
+		{"Y", true},
+		{"y", true},
+		{"yes", true},
+		{"true", true},
+		{"YES", true},
+		{"TRUE", true},
+		{"0", false},
+		{"N", false},
+		{"n", false},
+		{"no", false},
+		{"false", false},
+		{"", false},
+		{"random", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("envToBool_%s", tc.input), func(t *testing.T) {
+			actual := EnvToBool(tc.input)
+			if actual != tc.expected {
+				t.Errorf("EnvToBool(%q) = %v; want %v", tc.input, actual, tc.expected)
+			}
+		})
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"io"
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func randInit(data []byte) {
@@ -185,4 +186,63 @@ func TestPuzzlePayloadSuffix(t *testing.T) {
 		t.Error("Is suffix for modified signature")
 	}
 	puzzleRef[len(puzzleData.puzzleBase64)+1]--
+}
+
+func TestValidityIntervalFromIndex(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		index    string
+		expected time.Duration
+	}{
+		{"0", 5 * time.Minute},
+		{"1", 10 * time.Minute},
+		{"2", 30 * time.Minute},
+		{"3", 1 * time.Hour},
+		{"4", 6 * time.Hour},
+		{"5", 12 * time.Hour},
+		{"6", 24 * time.Hour},
+		{"7", 2 * 24 * time.Hour},
+		{"8", 7 * 24 * time.Hour},
+		{"-1", DefaultValidityPeriod},
+		{"99", DefaultValidityPeriod},
+		{"invalid", DefaultValidityPeriod},
+		{"", DefaultValidityPeriod},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.index, func(t *testing.T) {
+			result := ValidityIntervalFromIndex(ctx, tt.index)
+			if result != tt.expected {
+				t.Errorf("ValidityIntervalFromIndex(%s) = %v, want %v", tt.index, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestValidityIntervalToIndex(t *testing.T) {
+	tests := []struct {
+		duration time.Duration
+		expected int
+	}{
+		{5 * time.Minute, 0},
+		{10 * time.Minute, 1},
+		{30 * time.Minute, 2},
+		{1 * time.Hour, 3},
+		{6 * time.Hour, 4},
+		{12 * time.Hour, 5},
+		{24 * time.Hour, 6},
+		{2 * 24 * time.Hour, 7},
+		{7 * 24 * time.Hour, 8},
+		{99 * time.Hour, 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.duration.String(), func(t *testing.T) {
+			result := ValidityIntervalToIndex(tt.duration)
+			if result != tt.expected {
+				t.Errorf("ValidityIntervalToIndex(%v) = %d, want %d", tt.duration, result, tt.expected)
+			}
+		})
+	}
 }

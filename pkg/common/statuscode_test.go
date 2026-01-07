@@ -1,0 +1,72 @@
+package common
+
+import (
+	"testing"
+)
+
+func TestStatusCodeString(t *testing.T) {
+	statusCodes := []StatusCode{
+		StatusOK,
+		StatusFailure,
+		StatusUndefined,
+		StatusNotImplemented,
+		StatusApiDeprecated,
+		StatusOrgNameEmptyError,
+		StatusOrgNameTooLongError,
+		StatusOrgNameInvalidSymbolsError,
+		StatusOrgNameDuplicateError,
+		StatusOrgLimitError,
+		StatusOrgNotFoundError,
+		StatusOrgPermissionsError,
+		StatusOrgIDNotEmptyError,
+		StatusOrgIDEmptyError,
+		StatusOrgIDInvalidError,
+		StatusPropertiesTooManyError,
+		StatusPropertyNameEmptyError,
+		StatusPropertyNameTooLongError,
+		StatusPropertyNameInvalidSymbolsError,
+		StatusPropertyNameDuplicateError,
+		StatusPropertyDomainEmptyError,
+		StatusPropertyDomainLocalhostError,
+		StatusPropertyDomainIPAddrError,
+		StatusPropertyDomainNameInvalidError,
+		StatusPropertyDomainResolveError,
+		StatusPropertyDomainFormatError,
+		StatusPropertyIDEmptyError,
+		StatusPropertyIDInvalidError,
+		StatusPropertyIDDuplicateError,
+		StatusPropertyPermissionsError,
+		StatusSubscriptionPropertyLimitError,
+	}
+
+	for _, sc := range statusCodes {
+		t.Run(sc.String(), func(t *testing.T) {
+			str := sc.String()
+			if len(str) == 0 {
+				t.Errorf("String() returned empty string for status code %d", sc)
+			}
+		})
+	}
+}
+
+func TestStatusCodeSuccess(t *testing.T) {
+	if !StatusOK.Success() {
+		t.Error("StatusOK.Success() should return true")
+	}
+
+	if StatusFailure.Success() {
+		t.Error("StatusFailure.Success() should return false")
+	}
+
+	if StatusOrgNameEmptyError.Success() {
+		t.Error("StatusOrgNameEmptyError.Success() should return false")
+	}
+}
+
+func TestUnknownStatusCode(t *testing.T) {
+	unknown := StatusCode(99999)
+	str := unknown.String()
+	if str != "99999" {
+		t.Errorf("Unknown status code should return numeric string, got %s", str)
+	}
+}
