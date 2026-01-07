@@ -1572,7 +1572,7 @@ func TestApiGetPropertiesNoSubscription(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Errorf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
 	}
 }
 
@@ -1603,7 +1603,7 @@ func TestApiGetPropertyNoSubscription(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Errorf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
 	}
 }
 
@@ -1657,7 +1657,7 @@ func TestApiDeletePropertiesNoSubscription(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Errorf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
 	}
 }
 
@@ -1690,7 +1690,7 @@ func TestApiUpdatePropertiesNoSubscription(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Errorf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
+		t.Fatalf("expected status %d, got %d", http.StatusPaymentRequired, resp.StatusCode)
 	}
 }
 
@@ -1713,6 +1713,6 @@ func TestApiDeletePropertiesInvalidPropertyID(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
 	}
 }
