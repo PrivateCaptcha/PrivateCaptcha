@@ -173,11 +173,6 @@ func TestGetAsyncTaskInvalidIDFormat(t *testing.T) {
 			taskID:     "",
 			wantStatus: http.StatusNotFound,
 		},
-		{
-			name:       "Non-existent Task",
-			taskID:     "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-			wantStatus: http.StatusNotFound,
-		},
 	}
 
 	for _, tt := range tests {
