@@ -201,13 +201,25 @@ func TestTemplateFSMultipleReads(t *testing.T) {
 	tfs := NewTemplateFS(testFS, data)
 
 	// First read
-	file1, _ := tfs.Open("data.txt")
-	content1, _ := io.ReadAll(file1)
+	file1, err := tfs.Open("data.txt")
+	if err != nil {
+		t.Fatalf("First open failed: %v", err)
+	}
+	content1, err := io.ReadAll(file1)
+	if err != nil {
+		t.Fatalf("First read failed: %v", err)
+	}
 	file1.Close()
 
 	// Second read
-	file2, _ := tfs.Open("data.txt")
-	content2, _ := io.ReadAll(file2)
+	file2, err := tfs.Open("data.txt")
+	if err != nil {
+		t.Fatalf("Second open failed: %v", err)
+	}
+	content2, err := io.ReadAll(file2)
+	if err != nil {
+		t.Fatalf("Second read failed: %v", err)
+	}
 	file2.Close()
 
 	if string(content1) != string(content2) {

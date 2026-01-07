@@ -216,8 +216,13 @@ func TestUniqueJobLockPreventsExecution(t *testing.T) {
 		LockDuration: 5 * time.Minute,
 	}
 
-	// This should not execute because lock is held
-	_ = job2.RunOnce(ctx, job2.NewParams())
+	// This should not execute because lock is held - the error is expected (lock not acquired)
+	// We don't check the error because the lock acquisition failure is an expected case
+	err2 := job2.RunOnce(ctx, job2.NewParams())
+	if err2 != nil {
+		// Expected - lock could not be acquired
+		t.Logf("Second job returned expected error: %v", err2)
+	}
 
 	// Wait for first job to complete
 	<-doneCh
