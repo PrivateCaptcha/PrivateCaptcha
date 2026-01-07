@@ -3,6 +3,7 @@ package portal
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,8 +33,9 @@ func TestErrorPage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(http.StatusText(tc.code), func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/error/"+string(rune('0'+tc.code/100))+string(rune('0'+(tc.code/10)%10))+string(rune('0'+tc.code%10)), nil)
-			req.SetPathValue(common.ParamCode, string(rune('0'+tc.code/100))+string(rune('0'+(tc.code/10)%10))+string(rune('0'+tc.code%10)))
+			codeStr := strconv.Itoa(tc.code)
+			req := httptest.NewRequest("GET", "/error/"+codeStr, nil)
+			req.SetPathValue(common.ParamCode, codeStr)
 
 			w := httptest.NewRecorder()
 			server.error(w, req)
