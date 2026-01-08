@@ -66,21 +66,22 @@ build-puzzledbg:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/puzzledbg cmd/puzzledbg/*.go
 
 deploy:
-	echo "Nothing here"
+	@echo "Deploy target is not implemented. Please use your CI/CD pipeline or add deployment steps here."
+	@false
 
 build-docker:
 	$(DOCKER) build -f ./docker/Dockerfile --build-arg GIT_COMMIT=$(GIT_COMMIT) -t $(DOCKER_IMAGE):latest .
 
 build-js:
-	rm -v web/static/js/* || echo 'Nothing to remove'
+	rm -fv web/static/js/* || echo 'Nothing to remove'
 	cd web && env STAGE="$(STAGE)" npm run build
 
 build-widget-script:
-	rm -v widget/static/js/* || echo 'Nothing to remove'
+	rm -fv widget/static/js/* || echo 'Nothing to remove'
 	cd widget && env STAGE="$(STAGE)" npm run build
 
 build-widget-library:
-	rm -v widget/lib/*.js widget/lib/*.js.map || echo 'Nothing to remove'
+	rm -fv widget/lib/*.js widget/lib/*.js.map || echo 'Nothing to remove'
 	cd widget && env STAGE="$(STAGE)" BUILD_TARGET="library" npm run build
 
 publish-widget-library: EXTRA_PUBLISH_FLAGS = --access public
