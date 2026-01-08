@@ -280,8 +280,9 @@ func TestOrgEndpointsMissingSubscription(t *testing.T) {
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
+		// Form validation errors are returned with 200 OK and the form re-rendered with error message
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status OK with error message, got %d", w.Code)
+			t.Errorf("Expected status OK with re-rendered form, got %d", w.Code)
 		}
 
 		body := w.Body.String()
@@ -327,8 +328,9 @@ func TestPropertyEndpointsMissingSubscription(t *testing.T) {
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
+		// Form validation errors are returned with 200 OK and the form re-rendered with error message
 		if w.Code != http.StatusOK {
-			t.Errorf("Expected status OK with error message, got %d", w.Code)
+			t.Errorf("Expected status OK with re-rendered form, got %d", w.Code)
 		}
 
 		body := w.Body.String()
