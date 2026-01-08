@@ -16,6 +16,7 @@ type Mailer interface {
 	SendTwoFactor(ctx context.Context, email string, code int, ua string, location string) error
 	SendWelcome(ctx context.Context, email, name string) error
 	SendOrgInvite(ctx context.Context, email, name string, orgName, orgOwnerEmail, orgOwnerName, orgURL string) error
+	SendOrgRegisterInvite(ctx context.Context, email string, orgName, orgOwnerEmail, orgOwnerName, registerURL string) error
 }
 
 type NotificationCondition int

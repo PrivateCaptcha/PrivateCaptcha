@@ -37,7 +37,7 @@ func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-func (s *Server) setupEnterprise(rg *common.RouteGenerator, privateRead, privateWrite alice.Chain) {
+func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRead, privateWrite alice.Chain) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
@@ -53,4 +53,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, privateRead, private
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
+
+	// Register-invite route (public endpoint for users invited by email)
+	rg.Handle(rg.Get(common.RegisterInviteEndpoint, arg(common.ParamID)), openRead, s.Handler(s.getRegisterInvite))
 }

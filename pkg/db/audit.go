@@ -467,6 +467,18 @@ func newOrgInviteAuditLogEvent(user *dbgen.User, org *dbgen.Organization, invite
 	}
 }
 
+func newOrgEmailInviteAuditLogEvent(user *dbgen.User, org *dbgen.Organization, inviteEmail string) *common.AuditLogEvent {
+	// Similar to newOrgInviteAuditLogEvent but for email-only invites where user doesn't exist yet
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionCreate,
+		EntityID:  int64(org.ID),
+		TableName: TableNameOrgUsers,
+		OldValue:  nil,
+		NewValue:  &AuditLogOrgUser{OrgName: org.Name, Email: inviteEmail, Level: string(dbgen.AccessLevelInvited)},
+	}
+}
+
 func newOrgMemberDeleteAuditLogEvent(user *dbgen.User, org *dbgen.Organization, userID int32, email string) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    user.ID,

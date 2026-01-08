@@ -43,7 +43,7 @@ func (s *Server) checkUserOrgsLimit(ctx context.Context, user *dbgen.User, count
 	return true
 }
 
-func (s *Server) setupEnterprise(*common.RouteGenerator, alice.Chain, alice.Chain) {
+func (s *Server) setupEnterprise(*common.RouteGenerator, alice.Chain, alice.Chain, alice.Chain) {
 	// BUMP
 }
 

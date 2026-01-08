@@ -361,10 +361,12 @@ type Organization struct {
 
 type OrganizationUser struct {
 	OrgID     int32              `db:"org_id" json:"org_id"`
-	UserID    int32              `db:"user_id" json:"user_id"`
+	UserID    pgtype.Int4        `db:"user_id" json:"user_id"`
 	Level     AccessLevel        `db:"level" json:"level"`
 	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	ID        int32              `db:"id" json:"id"`
+	Email     pgtype.Text        `db:"email" json:"email"`
 }
 
 type Property struct {

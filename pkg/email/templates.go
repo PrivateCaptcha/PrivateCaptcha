@@ -11,6 +11,7 @@ var (
 		WelcomeEmailTemplate,
 		TwoFactorEmailTemplate,
 		OrgInvitationTemplate,
+		OrgRegisterInvitationTemplate,
 	}
 )
 

@@ -209,6 +209,9 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		return nil, nil, errIncompleteSession
 	}
 
+	// Check for org invite ID in session (optional)
+	orgInviteID, _ := sess.Get(ctx, session.KeyOrgInviteID).(int32)
+
 	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.ActiveTrialStatus())
 
@@ -227,7 +230,7 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 	}
 
-	job := s.Jobs.OnboardUser(user, plan)
+	job := s.Jobs.OnboardUser(user, plan, orgInviteID)
 	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 
 	return user, org, nil

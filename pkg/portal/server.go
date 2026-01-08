@@ -326,7 +326,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.ErrorEndpoint), privateRead, http.HandlerFunc(s.postClientSideError))
 	rg.Handle(rg.Get(common.EchoPuzzleEndpoint, arg(common.ParamDifficulty)), privateRead, http.HandlerFunc(s.echoPuzzle))
 
-	s.setupEnterprise(rg, privateRead, privateWrite)
+	s.setupEnterprise(rg, openRead, privateRead, privateWrite)
 
 	// {$} matches the end of the URL
 	rg.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead, http.HandlerFunc(s.getPortal))

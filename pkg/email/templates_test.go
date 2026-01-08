@@ -18,6 +18,8 @@ func TestEmailTemplates(t *testing.T) {
 		CurrentYear int
 		CDNURL      string
 		UserName    string
+		// for OrgRegisterInvitationContext
+		RegisterURL string
 	}{
 		APIKeyExpirationContext: APIKeyExpirationContext{
 			APIKeyContext: APIKeyContext{
@@ -45,6 +47,7 @@ func TestEmailTemplates(t *testing.T) {
 		CDNURL:      "https://cdn.privatecaptcha.com",
 		PortalURL:   "https://portal.privatecaptcha.com",
 		CurrentYear: time.Now().Year(),
+		RegisterURL: "https://portal.privatecaptcha.com/signup-invite/abc123",
 	}
 
 	for _, tpl := range templates {

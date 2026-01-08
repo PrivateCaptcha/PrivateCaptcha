@@ -99,6 +99,19 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Delete(session.KeyUserEmail)
 	_ = sess.Set(session.KeyPersistent, true)
 
+	// Check if there's an org invite ID in session - if so, redirect to the org
+	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
+		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
+		_ = sess.Delete(session.KeyOrgInviteID)
+		// Look up the invite to get the org ID
+		if invite, err := s.Store.Impl().GetOrgInviteByID(ctx, orgInviteID); err == nil {
+			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
+			common.Redirect(redirectURL, http.StatusOK, w, r)
+			return
+		}
+		slog.WarnContext(ctx, "Failed to look up org invite, redirecting to root", "inviteID", orgInviteID)
+	}
+
 	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
 		_ = sess.Delete(session.KeyReturnURL)

@@ -54,6 +54,7 @@ type orgAuditLogsRenderContext struct {
 
 type orgUser struct {
 	Name      string
+	Email     string
 	ID        string
 	Level     string
 	CreatedAt string

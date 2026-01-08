@@ -7,7 +7,52 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const getOrgInviteByEmail = `-- name: GetOrgInviteByEmail :one
+SELECT org_id, user_id, level, created_at, updated_at, id, email FROM backend.organization_users WHERE org_id = $1 AND email = $2 AND user_id IS NULL
+`
+
+type GetOrgInviteByEmailParams struct {
+	OrgID int32       `db:"org_id" json:"org_id"`
+	Email pgtype.Text `db:"email" json:"email"`
+}
+
+func (q *Queries) GetOrgInviteByEmail(ctx context.Context, arg *GetOrgInviteByEmailParams) (*OrganizationUser, error) {
+	row := q.db.QueryRow(ctx, getOrgInviteByEmail, arg.OrgID, arg.Email)
+	var i OrganizationUser
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.Level,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Email,
+	)
+	return &i, err
+}
+
+const getOrgInviteByID = `-- name: GetOrgInviteByID :one
+SELECT org_id, user_id, level, created_at, updated_at, id, email FROM backend.organization_users WHERE id = $1
+`
+
+func (q *Queries) GetOrgInviteByID(ctx context.Context, id int32) (*OrganizationUser, error) {
+	row := q.db.QueryRow(ctx, getOrgInviteByID, id)
+	var i OrganizationUser
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.Level,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Email,
+	)
+	return &i, err
+}
 
 const getOrganizationUsers = `-- name: GetOrganizationUsers :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, ou.level
@@ -50,13 +95,89 @@ func (q *Queries) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*Get
 	return items, nil
 }
 
+const getOrganizationUsersWithPending = `-- name: GetOrganizationUsersWithPending :many
+SELECT ou.id, ou.org_id, ou.user_id, ou.email, ou.level, ou.created_at, ou.updated_at,
+       u.id AS user_id_joined, u.name AS user_name, u.email AS user_email
+FROM backend.organization_users ou
+LEFT JOIN backend.users u ON ou.user_id = u.id AND u.deleted_at IS NULL
+WHERE ou.org_id = $1
+`
+
+type GetOrganizationUsersWithPendingRow struct {
+	ID           int32              `db:"id" json:"id"`
+	OrgID        int32              `db:"org_id" json:"org_id"`
+	UserID       pgtype.Int4        `db:"user_id" json:"user_id"`
+	Email        pgtype.Text        `db:"email" json:"email"`
+	Level        AccessLevel        `db:"level" json:"level"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	UserIDJoined pgtype.Int4        `db:"user_id_joined" json:"user_id_joined"`
+	UserName     pgtype.Text        `db:"user_name" json:"user_name"`
+	UserEmail    pgtype.Text        `db:"user_email" json:"user_email"`
+}
+
+func (q *Queries) GetOrganizationUsersWithPending(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithPendingRow, error) {
+	rows, err := q.db.Query(ctx, getOrganizationUsersWithPending, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetOrganizationUsersWithPendingRow
+	for rows.Next() {
+		var i GetOrganizationUsersWithPendingRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.UserID,
+			&i.Email,
+			&i.Level,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserIDJoined,
+			&i.UserName,
+			&i.UserEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const inviteEmailToOrg = `-- name: InviteEmailToOrg :one
+INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at, id, email
+`
+
+type InviteEmailToOrgParams struct {
+	OrgID int32       `db:"org_id" json:"org_id"`
+	Email pgtype.Text `db:"email" json:"email"`
+}
+
+func (q *Queries) InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error) {
+	row := q.db.QueryRow(ctx, inviteEmailToOrg, arg.OrgID, arg.Email)
+	var i OrganizationUser
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.Level,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Email,
+	)
+	return &i, err
+}
+
 const inviteUserToOrg = `-- name: InviteUserToOrg :one
-INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at
+INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `
 
 type InviteUserToOrgParams struct {
-	OrgID  int32 `db:"org_id" json:"org_id"`
-	UserID int32 `db:"user_id" json:"user_id"`
+	OrgID  int32       `db:"org_id" json:"org_id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
 func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error) {
@@ -68,8 +189,35 @@ func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParam
 		&i.Level,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ID,
+		&i.Email,
 	)
 	return &i, err
+}
+
+const linkOrgInviteToUser = `-- name: LinkOrgInviteToUser :exec
+UPDATE backend.organization_users 
+SET user_id = $1, email = NULL, updated_at = NOW() 
+WHERE id = $2 AND user_id IS NULL
+`
+
+type LinkOrgInviteToUserParams struct {
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+	ID     int32       `db:"id" json:"id"`
+}
+
+func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) error {
+	_, err := q.db.Exec(ctx, linkOrgInviteToUser, arg.UserID, arg.ID)
+	return err
+}
+
+const removeOrgInviteByID = `-- name: RemoveOrgInviteByID :exec
+DELETE FROM backend.organization_users WHERE id = $1
+`
+
+func (q *Queries) RemoveOrgInviteByID(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, removeOrgInviteByID, id)
+	return err
 }
 
 const removeUserFromOrg = `-- name: RemoveUserFromOrg :exec
@@ -77,8 +225,8 @@ DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2
 `
 
 type RemoveUserFromOrgParams struct {
-	OrgID  int32 `db:"org_id" json:"org_id"`
-	UserID int32 `db:"user_id" json:"user_id"`
+	OrgID  int32       `db:"org_id" json:"org_id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
 func (q *Queries) RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error {
@@ -90,17 +238,24 @@ const swapOrgOwnership = `-- name: SwapOrgOwnership :exec
 WITH delete_new_owner AS (
     DELETE FROM backend.organization_users ou WHERE ou.org_id = $1 AND ou.user_id = $2
 ),
+upsert_old_owner AS (
+    UPDATE backend.organization_users ou2
+    SET level = 'member', updated_at = NOW() 
+    WHERE ou2.org_id = $1 AND ou2.user_id = $3
+    RETURNING ou2.id
+),
 insert_old_owner AS (
-    INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $3, 'member')
-    ON CONFLICT (org_id, user_id) DO UPDATE SET level = 'member', updated_at = NOW()
+    INSERT INTO backend.organization_users (org_id, user_id, level) 
+    SELECT $1, $3, 'member'
+    WHERE NOT EXISTS (SELECT 1 FROM upsert_old_owner)
 )
 SELECT 1
 `
 
 type SwapOrgOwnershipParams struct {
-	OrgID    int32 `db:"org_id" json:"org_id"`
-	UserID   int32 `db:"user_id" json:"user_id"`
-	UserID_2 int32 `db:"user_id_2" json:"user_id_2"`
+	OrgID    int32       `db:"org_id" json:"org_id"`
+	UserID   pgtype.Int4 `db:"user_id" json:"user_id"`
+	UserID_2 pgtype.Int4 `db:"user_id_2" json:"user_id_2"`
 }
 
 func (q *Queries) SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) error {
@@ -115,7 +270,7 @@ UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_i
 type UpdateOrgMembershipLevelParams struct {
 	Level   AccessLevel `db:"level" json:"level"`
 	OrgID   int32       `db:"org_id" json:"org_id"`
-	UserID  int32       `db:"user_id" json:"user_id"`
+	UserID  pgtype.Int4 `db:"user_id" json:"user_id"`
 	Level_2 AccessLevel `db:"level_2" json:"level_2"`
 }
 

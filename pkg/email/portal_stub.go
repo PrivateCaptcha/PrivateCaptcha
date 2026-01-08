@@ -30,3 +30,8 @@ func (sm *StubMailer) SendOrgInvite(ctx context.Context, email, name string, org
 	slog.InfoContext(ctx, "Sent org invite email", "email", email, "name", name)
 	return nil
 }
+
+func (sm *StubMailer) SendOrgRegisterInvite(ctx context.Context, email string, orgName, orgOwnerEmail, orgOwnerName, registerURL string) error {
+	slog.InfoContext(ctx, "Sent org register invite email", "email", email, "orgName", orgName, "registerURL", registerURL)
+	return nil
+}

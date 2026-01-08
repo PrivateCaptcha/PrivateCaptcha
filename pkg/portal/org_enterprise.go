@@ -4,7 +4,6 @@ package portal
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -13,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
 )
 
@@ -230,7 +230,20 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 
 	inviteUser, err := s.Store.Impl().FindUserByEmail(ctx, inviteEmail)
 	if err != nil {
-		renderCtx.ErrorMessage = fmt.Sprintf("Cannot find user account with email '%s'.", inviteEmail)
+		// User not found - check if we have a valid email and invite by email
+		if err == db.ErrRecordNotFound {
+			// Verify email format
+			if err := s.EmailVerifier.VerifyEmail(ctx, inviteEmail); err != nil {
+				slog.WarnContext(ctx, "Failed to validate email format for invite", common.ErrAttr(err))
+				renderCtx.ErrorMessage = "Email address is not valid."
+				return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+			}
+
+			// Invite by email
+			return s.inviteEmailToOrg(ctx, user, org, inviteEmail, renderCtx)
+		}
+		slog.ErrorContext(ctx, "Error finding user by email", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
 		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
@@ -253,6 +266,33 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 				org.Name, user.Email, common.GuessFirstName(user.Name), orgURLPath)
 		})
 	}
+
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
+}
+
+// inviteEmailToOrg handles inviting a non-existing user by email
+func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, email string, renderCtx *orgMemberRenderContext) (*ViewModel, error) {
+	inviteRecord, auditEvent, err := s.Store.Impl().InviteEmailToOrg(ctx, user, org, email)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create email invite", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+	}
+
+	// Add pending invite to the list (with email only, no user info)
+	ou := &orgUser{
+		ID:    s.IDHasher.Encrypt(int(inviteRecord.ID)),
+		Email: email,
+		Level: string(dbgen.AccessLevelInvited),
+	}
+	renderCtx.Members = append(renderCtx.Members, ou)
+	renderCtx.SuccessMessage = "Invite is sent."
+
+	// Send invite email with registration link
+	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
+		registerInviteURL := s.PartsURL(common.RegisterInviteEndpoint, s.IDHasher.Encrypt(int(inviteRecord.ID)))
+		return s.Mailer.SendOrgRegisterInvite(bctx, email, org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL)
+	})
 
 	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
 }
@@ -494,4 +534,50 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organ
 	}
 
 	return renderCtx, auditEvent, nil
+}
+
+// getRegisterInvite handles the register-invite URL for users invited by email
+func (s *Server) getRegisterInvite(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+
+	// Validate invite ID from URL
+	inviteIDStr := r.PathValue(common.ParamID)
+	inviteID, err := s.IDHasher.Decrypt(inviteIDStr)
+	if err != nil || inviteID < 0 {
+		slog.WarnContext(ctx, "Invalid invite ID in URL", "idStr", inviteIDStr, common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	// Fetch the invite record
+	invite, err := s.Store.Impl().GetOrgInviteByID(ctx, int32(inviteID))
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to retrieve org invite", "inviteID", inviteID, common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	// Verify this is an email-only invite (no user_id set yet)
+	if invite.UserID.Valid {
+		slog.WarnContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
+		return nil, ErrInvalidRequestArg
+	}
+
+	if !s.canRegister.Load() {
+		return nil, errRegistrationDisabled
+	}
+
+	// Store invite ID in session so we can link it after registration
+	sess := s.Sessions.SessionStart(w, r)
+	_ = sess.Set(session.KeyOrgInviteID, int32(inviteID))
+
+	// Return the register page view (same as regular register)
+	return &ViewModel{
+		Model: &loginRenderContext{
+			CsrfRenderContext: CsrfRenderContext{
+				Token: s.XSRF.Token(""),
+			},
+			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+			IsRegister:           true,
+		},
+		View: loginTemplate,
+	}, nil
 }

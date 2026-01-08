@@ -46,10 +46,13 @@ type Querier interface {
 	GetLock(ctx context.Context, name string) (*Lock, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)
 	GetOrgAuditLogs(ctx context.Context, arg *GetOrgAuditLogsParams) ([]*GetOrgAuditLogsRow, error)
+	GetOrgInviteByEmail(ctx context.Context, arg *GetOrgInviteByEmailParams) (*OrganizationUser, error)
+	GetOrgInviteByID(ctx context.Context, id int32) (*OrganizationUser, error)
 	GetOrgProperties(ctx context.Context, arg *GetOrgPropertiesParams) ([]*Property, error)
 	GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error)
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)
 	GetOrganizationUsers(ctx context.Context, orgID int32) ([]*GetOrganizationUsersRow, error)
+	GetOrganizationUsersWithPending(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithPendingRow, error)
 	GetOrganizationWithAccess(ctx context.Context, arg *GetOrganizationWithAccessParams) (*GetOrganizationWithAccessRow, error)
 	GetPendingAsyncTasks(ctx context.Context, arg *GetPendingAsyncTasksParams) ([]*GetPendingAsyncTasksRow, error)
 	GetPendingUserNotifications(ctx context.Context, arg *GetPendingUserNotificationsParams) ([]*GetPendingUserNotificationsRow, error)
@@ -74,9 +77,12 @@ type Querier interface {
 	GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error)
 	GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error)
 	InsertLock(ctx context.Context, arg *InsertLockParams) (*Lock, error)
+	InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error)
 	InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error)
+	LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) error
 	MoveProperty(ctx context.Context, arg *MovePropertyParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
+	RemoveOrgInviteByID(ctx context.Context, id int32) error
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)

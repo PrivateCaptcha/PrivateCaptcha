@@ -33,6 +33,7 @@ const (
 	KeyNotificationID
 	KeyReturnURL
 	KeyTwoFactorCodeTimestamp
+	KeyOrgInviteID
 	// Add new fields _above_
 	SESSION_KEYS_COUNT
 )
@@ -57,6 +58,8 @@ func (key SessionKey) String() string {
 		return "NotificationID"
 	case KeyReturnURL:
 		return "ReturnURL"
+	case KeyOrgInviteID:
+		return "OrgInviteID"
 	default:
 		return "SessionKey"
 	}
