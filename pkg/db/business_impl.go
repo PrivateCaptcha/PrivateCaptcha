@@ -2382,49 +2382,64 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	return updatedProperty, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, newOwnerID int32) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, newOwner *dbgen.User) ([]*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	if org.UserID.Int32 == newOwnerID {
-		slog.WarnContext(ctx, "Organization is already owned by this user", "orgID", org.ID, "userID", newOwnerID)
+	if org.UserID.Int32 == newOwner.ID {
+		slog.WarnContext(ctx, "Organization is already owned by this user", "orgID", org.ID, "userID", newOwner.ID)
 		return nil, ErrInvalidInput
 	}
 
 	// Transfer organization ownership
 	if err := impl.querier.TransferOrganization(ctx, &dbgen.TransferOrganizationParams{
 		ID:       org.ID,
-		UserID:   Int(newOwnerID),
+		UserID:   Int(newOwner.ID),
 		UserID_2: Int(user.ID),
 	}); err != nil {
-		slog.ErrorContext(ctx, "Failed to transfer organization ownership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwnerID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to transfer organization ownership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
 	// Transfer all property ownerships in this organization
 	if err := impl.querier.TransferOrgProperties(ctx, &dbgen.TransferOrgPropertiesParams{
-		OrgID:      Int(org.ID),
-		OrgOwnerID: Int(newOwnerID),
+		OrgID:        Int(org.ID),
+		OrgOwnerID:   Int(newOwner.ID),
+		OrgOwnerID_2: Int(user.ID),
 	}); err != nil {
-		slog.ErrorContext(ctx, "Failed to transfer property ownerships", "orgID", org.ID, "newUserID", newOwnerID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to transfer property ownerships", "orgID", org.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Transferred organization", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwnerID)
+	// Swap organization membership: remove new owner's membership (they are owner now),
+	// add old owner as a confirmed member
+	if err := impl.querier.SwapOrgOwnership(ctx, &dbgen.SwapOrgOwnershipParams{
+		OrgID:    org.ID,
+		UserID:   newOwner.ID,
+		UserID_2: user.ID,
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to swap organization membership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Transferred organization", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID)
 
 	// Invalidate caches for both old and new users
 	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(newOwnerID))
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
-	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwnerID))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
 
-	auditEvent := newTransferOrgAuditLogEvent(user, org, newOwnerID)
+	auditEvents := []*common.AuditLogEvent{
+		newTransferOrgAuditLogEvent(user, org, newOwner),
+		newOrgOwnershipSwapAuditLogEvent(org.ID, org.Name, user, user, newOwner),
+	}
 
-	return auditEvent, nil
+	return auditEvents, nil
 }
 
 func (impl *BusinessStoreImpl) DeleteOldAuditLogs(ctx context.Context, before time.Time) error {

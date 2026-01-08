@@ -84,6 +84,7 @@ type Querier interface {
 	SoftDeleteUser(ctx context.Context, id int32) (*User, error)
 	SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error
 	SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error
+	SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) error
 	TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) error
 	TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) error
 	UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error)

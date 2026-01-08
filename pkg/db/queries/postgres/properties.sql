@@ -92,4 +92,4 @@ SELECT COUNT(*) as count FROM backend.properties WHERE org_owner_id = $1 AND del
 SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL;
 
 -- name: TransferOrgProperties :exec
-UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1;
+UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3;

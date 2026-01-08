@@ -77,7 +77,7 @@ func (ul *userAuditLog) initFromOrg(oldValue, newValue *db.AuditLogOrg) error {
 			ul.Value = newValue.Name
 		} else if newValue.NewOwnerID != 0 {
 			ul.Property = "Owner"
-			ul.Value = "Transferred"
+			ul.Value = common.MaskEmail(newValue.NewOwnerEmail, '*')
 		}
 	} else if (oldValue != nil) || (newValue != nil) {
 		org := newValue

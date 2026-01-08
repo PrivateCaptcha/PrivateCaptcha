@@ -445,13 +445,11 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	newOwner := &members[idx].User
+
 	// Execute the transfer in a transaction
 	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
-		auditEvent, err := impl.TransferOrganization(ctx, user, org, int32(newOwnerID))
-		if err != nil {
-			return nil, err
-		}
-		return []*common.AuditLogEvent{auditEvent}, nil
+		return impl.TransferOrganization(ctx, user, org, newOwner)
 	})
 
 	if err != nil {

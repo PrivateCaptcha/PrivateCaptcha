@@ -545,16 +545,17 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 }
 
 const transferOrgProperties = `-- name: TransferOrgProperties :exec
-UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1
+UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3
 `
 
 type TransferOrgPropertiesParams struct {
-	OrgID      pgtype.Int4 `db:"org_id" json:"org_id"`
-	OrgOwnerID pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+	OrgID        pgtype.Int4 `db:"org_id" json:"org_id"`
+	OrgOwnerID   pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+	OrgOwnerID_2 pgtype.Int4 `db:"org_owner_id_2" json:"org_owner_id_2"`
 }
 
 func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) error {
-	_, err := q.db.Exec(ctx, transferOrgProperties, arg.OrgID, arg.OrgOwnerID)
+	_, err := q.db.Exec(ctx, transferOrgProperties, arg.OrgID, arg.OrgOwnerID, arg.OrgOwnerID_2)
 	return err
 }
 
