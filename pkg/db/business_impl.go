@@ -2387,6 +2387,11 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 		return nil, ErrMaintenance
 	}
 
+	if org.UserID.Int32 != user.ID {
+		slog.WarnContext(ctx, "Organization is not owned by user", "orgID", org.ID, "userID", user.ID)
+		return nil, ErrInvalidInput
+	}
+
 	if org.UserID.Int32 == newOwner.ID {
 		slog.WarnContext(ctx, "Organization is already owned by this user", "orgID", org.ID, "userID", newOwner.ID)
 		return nil, ErrInvalidInput

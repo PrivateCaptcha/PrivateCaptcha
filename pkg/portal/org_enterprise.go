@@ -447,11 +447,9 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 
 	newOwner := &members[idx].User
 
-	// Execute the transfer in a transaction
 	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		return impl.TransferOrganization(ctx, user, org, newOwner)
 	})
-
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to transfer organization", common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)

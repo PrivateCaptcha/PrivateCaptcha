@@ -40,9 +40,9 @@ type orgSettingsRenderContext struct {
 	CsrfRenderContext
 	CurrentOrg  *userOrg
 	NameError   string
+	Members     []*orgUser
 	CanEdit     bool
 	CanTransfer bool
-	Members     []*orgUser
 }
 
 type orgAuditLogsRenderContext struct {
