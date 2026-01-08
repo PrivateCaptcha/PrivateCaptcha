@@ -79,7 +79,7 @@ func TestAsyncJob(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, handlerID, user, time.Now().UTC().Add(-1*time.Second), t.Name()); err != nil {
+	if _, err := server.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, handlerID, user, time.Now().UTC().Add(-1*time.Second), t.Name()); err != nil {
 		t.Fatal(err)
 	}
 

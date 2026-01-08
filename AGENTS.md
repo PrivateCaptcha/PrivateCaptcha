@@ -50,12 +50,13 @@
 
 ## Testing instructions
 
-- To run all Go unit tests, run `make test-unit` (unit tests always run with "enterprise" tag)
+- To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
 - To run JS widget tests, run `make test-widget-unit`
 - To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
 - To run all Go integration tests, run `make test-docker-light`. Docker is required.
 - Do not use underscores in Golang test names
 - To get unit tests code coverage, run `make test-unit-cover`
 - To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
+- Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
 - For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
 - Always make sure all unit and integration tests pass before sending a PR

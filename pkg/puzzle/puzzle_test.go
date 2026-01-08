@@ -189,6 +189,8 @@ func TestPuzzlePayloadSuffix(t *testing.T) {
 }
 
 func TestValidityIntervalFromIndex(t *testing.T) {
+	t.Parallel()
+
 	ctx := t.Context()
 
 	tests := []struct {
@@ -221,6 +223,8 @@ func TestValidityIntervalFromIndex(t *testing.T) {
 }
 
 func TestValidityIntervalToIndex(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		duration time.Duration
 		expected int

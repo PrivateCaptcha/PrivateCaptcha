@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	s          *Server
+	server     *Server
 	cfg        common.ConfigStore
 	cache      common.Cache[db.CacheKey, any]
 	timeSeries common.TimeSeriesStore
@@ -80,7 +80,7 @@ func TestMain(m *testing.M) {
 	planService := billing.NewPlanService(nil)
 	testPlan = planService.GetInternalTrialPlan()
 
-	s = &Server{
+	server = &Server{
 		Stage:              common.StageTest,
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
@@ -96,10 +96,10 @@ func TestMain(m *testing.M) {
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
 	}
-	if err := s.Init(context.TODO(), verifyFlushInterval, authBackfillDelay); err != nil {
+	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay); err != nil {
 		panic(err)
 	}
-	defer s.Shutdown()
+	defer server.Shutdown()
 
 	// TODO: seed data
 

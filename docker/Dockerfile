@@ -14,6 +14,7 @@ RUN --mount=type=cache,target=/cache/web npm install --verbose --ignore-scripts
 # copy the rest
 COPY ./web /app/web
 
+ENV NPM_CONFIG_CACHE=/cache/web
 RUN --mount=type=cache,target=/cache/web,sharing=locked npm run build
 
 
@@ -32,6 +33,7 @@ COPY ./widget /app/widget
 
 ARG STAGE
 ENV STAGE=${STAGE}
+ENV NPM_CONFIG_CACHE=/cache/widget
 RUN --mount=type=cache,target=/cache/widget,sharing=locked npm run build
 
 ################################################
