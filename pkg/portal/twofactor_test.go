@@ -159,7 +159,7 @@ func TestResend2FA(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	// Login to get into 2FA verification state
+	// Login to get into 2FA verification state (this sends the original 2FA code)
 	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
@@ -174,21 +174,27 @@ func TestResend2FA(t *testing.T) {
 	stubMailer := server.Mailer.(*email.StubMailer)
 	originalCode := stubMailer.LastCode
 
-	// Call resend 2FA
+	// Try to use the original code first (but don't complete login)
+	// This simulates a user who received the code but wants to resend
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), 999999, cookie)
+	// Using wrong code should fail
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Should not have succeeded with wrong code")
+	}
+
+	// Now call resend 2FA to get a new code
 	resp = resend2faSuite(srv, cookie)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected resend2fa status code: %v", resp.StatusCode)
 	}
 
-	// The code should have been reissued (different code)
+	// The code should have been reissued
 	newCode := stubMailer.LastCode
 	if newCode == 0 {
 		t.Error("New 2FA code was not generated")
 	}
 
-	// Codes should be different (due to random generation)
-	// But there's a small chance they could be the same
-	// So we just verify a new code was sent
+	// Codes may be the same due to random generation, so we just verify a code was sent
 	if newCode == originalCode {
 		t.Log("New code is same as original - this can happen randomly")
 	}

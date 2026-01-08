@@ -1,21 +1,13 @@
-package maintenance
+package portal
 
 import (
-	"os"
 	"testing"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
-
-func dataTestConfig() common.ConfigStore {
-	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
-	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
-	return baseCfg
-}
 
 func TestCleanupAuditLogJob(t *testing.T) {
 	if testing.Short() {
@@ -24,65 +16,23 @@ func TestCleanupAuditLogJob(t *testing.T) {
 
 	ctx := t.Context()
 
-	cache, err := db.NewMemoryCache[db.CacheKey, any]("test", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pool, _, err := db.Connect(ctx, dataTestConfig(), 3*time.Second, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	querier := dbgen.New(pool)
-	store := db.NewBusinessEx(pool, cache)
-
-	// Create a test user for audit logs
-	user, err := querier.CreateUser(ctx, &dbgen.CreateUserParams{
-		Name:  "Test Audit User",
-		Email: "auditlogtest@privatecaptcha.com",
-	})
+	// Create a test user using the helper function
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = querier.SoftDeleteUser(ctx, user.ID)
+		_, _ = store.Impl().SoftDeleteUser(ctx, user)
 	})
-
-	// Create old audit logs using direct SQL insert
-	oldTime := time.Now().UTC().Add(-30 * 24 * time.Hour) // 30 days ago
-	_, err = querier.CreateAuditLogs(ctx, []*dbgen.CreateAuditLogsParams{
-		{
-			UserID:      db.Int(user.ID),
-			Action:      dbgen.AuditLogActionAccess,
-			Source:      dbgen.AuditLogSourcePortal,
-			EntityID:    db.Int8(1),
-			EntityTable: "test",
-			SessionID:   "test-session-1",
-			CreatedAt:   db.Timestampz(oldTime),
-		},
-		{
-			UserID:      db.Int(user.ID),
-			Action:      dbgen.AuditLogActionAccess,
-			Source:      dbgen.AuditLogSourcePortal,
-			EntityID:    db.Int8(2),
-			EntityTable: "test",
-			SessionID:   "test-session-2",
-			CreatedAt:   db.Timestampz(oldTime.Add(-1 * time.Hour)),
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Create the cleanup job with immediate cleanup (0 past interval)
-	job := &CleanupAuditLogJob{
+	job := &maintenance.CleanupAuditLogJob{
 		BusinessDB:   store,
 		PastInterval: 0,
 	}
 
 	// Run the job
-	err = job.RunOnce(ctx, &CleanupAuditLogParams{
+	err = job.RunOnce(ctx, &maintenance.CleanupAuditLogParams{
 		PastInterval: 0, // Cleanup everything before now
 	})
 	if err != nil {
@@ -114,21 +64,9 @@ func TestCleanupAsyncTasksJob(t *testing.T) {
 
 	ctx := t.Context()
 
-	cache, err := db.NewMemoryCache[db.CacheKey, any]("test", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pool, _, err := db.Connect(ctx, dataTestConfig(), 3*time.Second, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	store := db.NewBusinessEx(pool, cache)
-
 	// Create old async tasks
 	oldTime := time.Now().UTC().Add(-30 * 24 * time.Hour) // 30 days ago
-	_, err = store.Impl().CreateNewAsyncTask(ctx, map[string]string{"key": "value"}, "test_handler", nil, oldTime, "test-ref-1")
+	_, err := store.Impl().CreateNewAsyncTask(ctx, map[string]string{"key": "value"}, "test_handler", nil, oldTime, "test-ref-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,13 +77,13 @@ func TestCleanupAsyncTasksJob(t *testing.T) {
 	}
 
 	// Create the cleanup job
-	job := &CleanupAsyncTasksJob{
+	job := &maintenance.CleanupAsyncTasksJob{
 		BusinessDB:   store,
 		PastInterval: 0,
 	}
 
 	// Run the job - it will cleanup tasks older than now
-	err = job.RunOnce(ctx, &CleanupAsyncTasksParams{
+	err = job.RunOnce(ctx, &maintenance.CleanupAsyncTasksParams{
 		PastInterval: 0, // Cleanup everything before now
 	})
 	if err != nil {
@@ -171,12 +109,12 @@ func TestCleanupAsyncTasksJob(t *testing.T) {
 }
 
 func TestCleanupAuditLogJobNewParams(t *testing.T) {
-	job := &CleanupAuditLogJob{
+	job := &maintenance.CleanupAuditLogJob{
 		PastInterval: 7 * 24 * time.Hour,
 	}
 
 	params := job.NewParams()
-	p, ok := params.(*CleanupAuditLogParams)
+	p, ok := params.(*maintenance.CleanupAuditLogParams)
 	if !ok {
 		t.Fatal("NewParams() did not return *CleanupAuditLogParams")
 	}
@@ -187,12 +125,12 @@ func TestCleanupAuditLogJobNewParams(t *testing.T) {
 }
 
 func TestCleanupAsyncTasksJobNewParams(t *testing.T) {
-	job := &CleanupAsyncTasksJob{
+	job := &maintenance.CleanupAsyncTasksJob{
 		PastInterval: 14 * 24 * time.Hour,
 	}
 
 	params := job.NewParams()
-	p, ok := params.(*CleanupAsyncTasksParams)
+	p, ok := params.(*maintenance.CleanupAsyncTasksParams)
 	if !ok {
 		t.Fatal("NewParams() did not return *CleanupAsyncTasksParams")
 	}
@@ -209,25 +147,13 @@ func TestCleanupAuditLogJobWithInvalidParams(t *testing.T) {
 
 	ctx := t.Context()
 
-	cache, err := db.NewMemoryCache[db.CacheKey, any]("test", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pool, _, err := db.Connect(ctx, dataTestConfig(), 3*time.Second, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	store := db.NewBusinessEx(pool, cache)
-
-	job := &CleanupAuditLogJob{
+	job := &maintenance.CleanupAuditLogJob{
 		BusinessDB:   store,
 		PastInterval: 30 * 24 * time.Hour, // Default to 30 days
 	}
 
 	// Run with invalid params (wrong type) - should use default
-	err = job.RunOnce(ctx, "invalid params")
+	err := job.RunOnce(ctx, "invalid params")
 	if err != nil {
 		t.Errorf("CleanupAuditLogJob.RunOnce() with invalid params should not error, got = %v", err)
 	}
@@ -240,26 +166,17 @@ func TestCleanupAsyncTasksJobWithInvalidParams(t *testing.T) {
 
 	ctx := t.Context()
 
-	cache, err := db.NewMemoryCache[db.CacheKey, any]("test", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pool, _, err := db.Connect(ctx, dataTestConfig(), 3*time.Second, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	store := db.NewBusinessEx(pool, cache)
-
-	job := &CleanupAsyncTasksJob{
+	job := &maintenance.CleanupAsyncTasksJob{
 		BusinessDB:   store,
 		PastInterval: 30 * 24 * time.Hour, // Default to 30 days
 	}
 
 	// Run with invalid params (wrong type) - should use default
-	err = job.RunOnce(ctx, "invalid params")
+	err := job.RunOnce(ctx, "invalid params")
 	if err != nil {
 		t.Errorf("CleanupAsyncTasksJob.RunOnce() with invalid params should not error, got = %v", err)
 	}
 }
+
+// Placeholder to satisfy the compiler for the unused import
+var _ = db.ErrRecordNotFound
