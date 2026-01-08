@@ -391,6 +391,79 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
 }
 
+func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	newOwnerParam := strings.TrimSpace(r.FormValue(common.ParamUser))
+	newOwnerID, err := s.IDHasher.Decrypt(newOwnerParam)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse new owner ID", "value", newOwnerParam, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	// Only the current owner can transfer the organization
+	if org.UserID.Int32 != user.ID {
+		slog.ErrorContext(ctx, "Not enough permissions to transfer org", "userID", user.ID, "orgUserID", org.UserID.Int32)
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	// Verify that the new owner is a member of this organization (not just invited)
+	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org members", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	idx := slices.IndexFunc(members, func(m *dbgen.GetOrganizationUsersRow) bool {
+		return (m.User.ID == int32(newOwnerID)) && (m.Level == dbgen.AccessLevelMember)
+	})
+	if idx == -1 {
+		slog.ErrorContext(ctx, "New owner is not an accepted member of the org", "newOwnerID", newOwnerID, "orgID", org.ID)
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	newOwner := &members[idx].User
+
+	// Execute the transfer in a transaction
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		return impl.TransferOrganization(ctx, user, org, newOwner)
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to transfer organization", common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+
+	// Redirect to portal root - existing handlers will take care of the rest
+	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
+}
+
 func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgAuditLogsRenderContext{
 		AuditLogsRenderContext: AuditLogsRenderContext{

@@ -86,6 +86,28 @@ func (q *Queries) RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgP
 	return err
 }
 
+const swapOrgOwnership = `-- name: SwapOrgOwnership :exec
+WITH delete_new_owner AS (
+    DELETE FROM backend.organization_users ou WHERE ou.org_id = $1 AND ou.user_id = $2
+),
+insert_old_owner AS (
+    INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $3, 'member')
+    ON CONFLICT (org_id, user_id) DO UPDATE SET level = 'member', updated_at = NOW()
+)
+SELECT 1
+`
+
+type SwapOrgOwnershipParams struct {
+	OrgID    int32 `db:"org_id" json:"org_id"`
+	UserID   int32 `db:"user_id" json:"user_id"`
+	UserID_2 int32 `db:"user_id_2" json:"user_id_2"`
+}
+
+func (q *Queries) SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) error {
+	_, err := q.db.Exec(ctx, swapOrgOwnership, arg.OrgID, arg.UserID, arg.UserID_2)
+	return err
+}
+
 const updateOrgMembershipLevel = `-- name: UpdateOrgMembershipLevel :exec
 UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4
 `

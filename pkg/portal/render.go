@@ -58,7 +58,9 @@ type RenderConstants struct {
 	Terms                      string
 	MaxReplayCount             string
 	MoveEndpoint               string
+	TransferEndpoint           string
 	Org                        string
+	User                       string
 	AuditLogsEndpoint          string
 	EventsEndpoint             string
 	Page                       string
@@ -118,7 +120,9 @@ func NewRenderConstants() *RenderConstants {
 		Terms:                      common.ParamTerms,
 		MaxReplayCount:             common.ParamMaxReplayCount,
 		MoveEndpoint:               common.MoveEndpoint,
+		TransferEndpoint:           common.TransferEndpoint,
 		Org:                        common.ParamOrg,
+		User:                       common.ParamUser,
 		AuditLogsEndpoint:          common.AuditLogsEndpoint,
 		EventsEndpoint:             common.EventsEndpoint,
 		Page:                       common.ParamPage,

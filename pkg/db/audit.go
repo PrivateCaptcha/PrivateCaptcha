@@ -283,8 +283,10 @@ func newUpdateUserAuditLogEvent(oldUser *dbgen.User, newUser *dbgen.User) *commo
 }
 
 type AuditLogOrg struct {
-	ID   int32  `json:"id"`
-	Name string `json:"name"`
+	ID            int32  `json:"id"`
+	Name          string `json:"name"`
+	NewOwnerID    int32  `json:"new_owner_id,omitempty"`
+	NewOwnerEmail string `json:"new_owner_email,omitempty"`
 }
 
 func NewAuditLogOrg(org *dbgen.Organization) *AuditLogOrg {
@@ -425,6 +427,17 @@ func newUpdateOrgAuditLogEvent(user *dbgen.User, org *dbgen.Organization, oldNam
 	}
 }
 
+func newTransferOrgAuditLogEvent(user *dbgen.User, org *dbgen.Organization, newOwner *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(org.ID),
+		TableName: TableNameOrgs,
+		OldValue:  NewAuditLogOrg(org),
+		NewValue:  &AuditLogOrg{ID: org.ID, Name: org.Name, NewOwnerID: newOwner.ID, NewOwnerEmail: newOwner.Email},
+	}
+}
+
 type AuditLogOrgUser struct {
 	OrgName string `json:"org_name,omitempty"`
 	UserID  int32  `json:"user_id,omitempty"`
@@ -473,6 +486,17 @@ func newOrgMemberAuditLogEvent(orgID int32, orgName string, user *dbgen.User, ac
 		TableName: TableNameOrgUsers,
 		OldValue:  nil,
 		NewValue:  newAuditLogOrgUser(user, orgName, level),
+	}
+}
+
+func newOrgOwnershipSwapAuditLogEvent(orgID int32, orgName string, actor *dbgen.User, oldOwner *dbgen.User, newOwner *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    actor.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(orgID),
+		TableName: TableNameOrgUsers,
+		OldValue:  newAuditLogOrgUser(newOwner, orgName, string(dbgen.AccessLevelMember)),
+		NewValue:  newAuditLogOrgUser(oldOwner, orgName, string(dbgen.AccessLevelMember)),
 	}
 }
 

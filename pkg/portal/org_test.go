@@ -756,3 +756,285 @@ func TestDeleteOrg(t *testing.T) {
 		}
 	}
 }
+
+func TestTransferOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create the owner account
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create the new owner account
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_new_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new owner account: %v", err)
+	}
+
+	// Invite and join the new owner as a member
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, newOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(newOwner.ID)))
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify the organization has been transferred
+	newOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, newOwner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hasOrgAsOwner := false
+	for _, o := range newOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			hasOrgAsOwner = true
+			break
+		}
+	}
+
+	if !hasOrgAsOwner {
+		t.Error("New owner should be the owner of the transferred org")
+	}
+
+	// Verify old owner no longer owns the org
+	oldOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range oldOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			t.Error("Old owner should no longer be the owner of the transferred org")
+		}
+	}
+}
+
+func TestTransferOrgInvalidParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with invalid user parameter
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, "invalid-id")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for invalid params, got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestTransferOrgNotOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a non-owner member
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	// Invite and join member
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as the member (not the owner)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to transfer org as non-owner
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(owner.ID)))
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for unauthorized user, got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestTransferOrgToNonMember(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a user who is not a member
+	nonMember, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonmember", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to transfer to non-member
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(nonMember.ID)))
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for non-member, got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestTransferOrgToInvitedMember(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a user who is only invited (not accepted)
+	invitedUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_invited", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create invited user account: %v", err)
+	}
+
+	// Invite user but do NOT have them join
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, invitedUser); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to transfer to invited (but not accepted) member
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(invitedUser.ID)))
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for invited member, got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}

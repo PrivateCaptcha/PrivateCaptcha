@@ -72,10 +72,12 @@ func TestUserAuditLogInitFromUser(t *testing.T) {
 
 func TestUserAuditLogInitFromOrg(t *testing.T) {
 	tests := []struct {
-		name     string
-		oldValue *db.AuditLogOrg
-		newValue *db.AuditLogOrg
-		wantErr  bool
+		name         string
+		oldValue     *db.AuditLogOrg
+		newValue     *db.AuditLogOrg
+		wantErr      bool
+		wantProperty string
+		wantValue    string
 	}{
 		{
 			name: "org name change",
@@ -87,7 +89,9 @@ func TestUserAuditLogInitFromOrg(t *testing.T) {
 				ID:   1,
 				Name: "New Org",
 			},
-			wantErr: false,
+			wantErr:      false,
+			wantProperty: "Name",
+			wantValue:    "New Org",
 		},
 		{
 			name:     "org creation",
@@ -107,6 +111,22 @@ func TestUserAuditLogInitFromOrg(t *testing.T) {
 			newValue: nil,
 			wantErr:  false,
 		},
+		{
+			name: "org transfer",
+			oldValue: &db.AuditLogOrg{
+				ID:   1,
+				Name: "Test Org",
+			},
+			newValue: &db.AuditLogOrg{
+				ID:            1,
+				Name:          "Test Org",
+				NewOwnerID:    2,
+				NewOwnerEmail: "newowner@example.com",
+			},
+			wantErr:      false,
+			wantProperty: "Owner",
+			wantValue:    "newo****@example.com",
+		},
 	}
 
 	for _, tt := range tests {
@@ -115,6 +135,12 @@ func TestUserAuditLogInitFromOrg(t *testing.T) {
 			err := ul.initFromOrg(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromOrg() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantProperty != "" && ul.Property != tt.wantProperty {
+				t.Errorf("initFromOrg() Property = %v, want %v", ul.Property, tt.wantProperty)
+			}
+			if tt.wantValue != "" && ul.Value != tt.wantValue {
+				t.Errorf("initFromOrg() Value = %v, want %v", ul.Value, tt.wantValue)
 			}
 		})
 	}

@@ -43,3 +43,6 @@ LIMIT $2;
 
 -- name: DeleteOrganizations :exec
 DELETE FROM backend.organizations WHERE id = ANY($1::INT[]);
+
+-- name: TransferOrganization :exec
+UPDATE backend.organizations SET user_id = $2, updated_at = NOW() WHERE id = $1 AND user_id = $3;

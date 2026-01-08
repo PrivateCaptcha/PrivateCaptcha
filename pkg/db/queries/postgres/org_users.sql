@@ -12,3 +12,13 @@ UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_i
 
 -- name: RemoveUserFromOrg :exec
 DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2;
+
+-- name: SwapOrgOwnership :exec
+WITH delete_new_owner AS (
+    DELETE FROM backend.organization_users ou WHERE ou.org_id = $1 AND ou.user_id = $2
+),
+insert_old_owner AS (
+    INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $3, 'member')
+    ON CONFLICT (org_id, user_id) DO UPDATE SET level = 'member', updated_at = NOW()
+)
+SELECT 1;
