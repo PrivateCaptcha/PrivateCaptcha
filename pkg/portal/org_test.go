@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
@@ -1036,5 +1037,231 @@ func TestTransferOrgToInvitedMember(t *testing.T) {
 	location, _ := resp.Location()
 	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
 		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestInviteNonExistingUserByEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user1.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a non-existing email address for invitation
+	nonExistingEmail := "non-existing-user-" + t.Name() + "@example.com"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user1.ID))))
+	form.Set(common.ParamEmail, nonExistingEmail)
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org1.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify invite was created with email (no user_id)
+	invite, err := store.Impl().Querier().GetOrgInviteByEmail(ctx, &dbgen.GetOrgInviteByEmailParams{
+		OrgID: org1.ID,
+		Email: db.Text(nonExistingEmail),
+	})
+	if err != nil {
+		t.Fatalf("Failed to find email invite: %v", err)
+	}
+
+	if invite.Email.String != nonExistingEmail {
+		t.Errorf("Unexpected invite email: %s", invite.Email.String)
+	}
+
+	if invite.UserID.Valid {
+		t.Error("Expected invite to have NULL user_id")
+	}
+
+	if invite.Level != dbgen.AccessLevelInvited {
+		t.Errorf("Expected invite level to be 'invited', got: %s", invite.Level)
+	}
+}
+
+func TestRegisterInviteInvalidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Test with invalid ID
+	req := httptest.NewRequest("GET", "/signup-invite/invalid-id", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestRegisterInviteNonExistentID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Test with valid format but non-existent ID
+	nonExistentID := server.IDHasher.Encrypt(999999)
+	req := httptest.NewRequest("GET", "/signup-invite/"+nonExistentID, nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestRegisterInviteAlreadyLinked(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Create another user and invite them (this creates an invite with user_id set)
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create invitee account: %v", err)
+	}
+
+	_, err = store.Impl().InviteUserToOrg(ctx, user1, org1, user2)
+	if err != nil {
+		t.Fatalf("Failed to invite user: %v", err)
+	}
+
+	// Get the invite ID - we need to get the org users to find it
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org1.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org users: %v", err)
+	}
+
+	// Find the invite for user2 - we need to get it via the generated querier
+	invites, err := store.Impl().Querier().GetOrganizationUsersWithPending(ctx, org1.ID)
+	if err != nil {
+		t.Fatalf("Failed to get org users with pending: %v", err)
+	}
+
+	var inviteID int32
+	for _, inv := range invites {
+		if inv.UserID.Valid && inv.UserID.Int32 == user2.ID {
+			inviteID = inv.ID
+			break
+		}
+	}
+
+	if inviteID == 0 {
+		t.Fatalf("Failed to find invite ID, members: %v, invites: %v", members, invites)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Try to access register-invite with an already linked invite
+	req := httptest.NewRequest("GET", "/signup-invite/"+server.IDHasher.Encrypt(int(inviteID)), nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestRegisterInviteValidEmailInvite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Create an email-only invite
+	testEmail := "test-email-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, user1, org1, testEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Access register-invite with a valid email invite
+	req := httptest.NewRequest("GET", "/signup-invite/"+server.IDHasher.Encrypt(int(inviteRecord.ID)), nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should return 200 with the register page
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK for valid email invite, got status code %v", resp.StatusCode)
 	}
 }

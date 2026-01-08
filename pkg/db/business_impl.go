@@ -1234,6 +1234,34 @@ func (impl *BusinessStoreImpl) GetOrgInviteByID(ctx context.Context, inviteID in
 	return invite, nil
 }
 
+func (impl *BusinessStoreImpl) GetOrgInviteByEmail(ctx context.Context, orgID int32, email string) (*dbgen.OrganizationUser, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	invite, err := impl.querier.GetOrgInviteByEmail(ctx, &dbgen.GetOrgInviteByEmailParams{
+		OrgID: orgID,
+		Email: Text(email),
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrRecordNotFound
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve org invite by email", "orgID", orgID, "email", email, common.ErrAttr(err))
+		return nil, err
+	}
+
+	return invite, nil
+}
+
+func (impl *BusinessStoreImpl) GetOrganizationUsersWithPending(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersWithPendingRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetOrganizationUsersWithPending(ctx, orgID)
+}
+
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
 	if impl.querier == nil {
 		return ErrMaintenance
