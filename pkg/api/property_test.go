@@ -215,7 +215,7 @@ func TestApiPostProperties(t *testing.T) {
 
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
 		http.MethodPost,
-		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -249,7 +249,7 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
-	properties, _, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 
 	resp, err := apiRequestSuite(ctx, inputs,
 		http.MethodPost,
-		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
@@ -344,7 +344,7 @@ func TestApiPostPropertiesOtherOrg(t *testing.T) {
 
 	resp, err := apiRequestSuite(ctx, inputs,
 		http.MethodPost,
-		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -368,32 +368,32 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Create another org for the same user
-	org2, _, err := s.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
+	org2, _, err := server.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create properties
 	// P1 in Org1
-	p1, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
+	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// P2 in Org2
-	p2, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
+	p2, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// P3 in Org1 (should not be deleted)
-	p3, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p3.com"), org1)
+	p3, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p3.com"), org1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Prepare request
 	idsToDelete := []string{
-		s.IDHasher.Encrypt(int(p1.ID)),
-		s.IDHasher.Encrypt(int(p2.ID)),
+		server.IDHasher.Encrypt(int(p1.ID)),
+		server.IDHasher.Encrypt(int(p2.ID)),
 	}
 
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
@@ -433,7 +433,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P1 deleted
-	props1, _, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
+	props1, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestApiDeleteProperties(t *testing.T) {
 	}
 
 	// Verify P2 deleted
-	props2, _, err := s.BusinessDB.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	props2, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,19 +510,19 @@ func TestApiUpdateProperties(t *testing.T) {
 	}
 
 	// Create another org for the same user
-	org2, _, err := s.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
+	org2, _, err := server.BusinessDB.Impl().CreateNewOrganization(ctx, t.Name()+"_org2", user.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create properties
 	// P1 in Org1
-	p1, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
+	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p1.com"), org1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// P2 in Org2
-	p2, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
+	p2, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "p2.com"), org2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestApiUpdateProperties(t *testing.T) {
 	// Prepare update request
 	updates := []*apiUpdatePropertyInput{
 		{
-			ID: s.IDHasher.Encrypt(int(p1.ID)),
+			ID: server.IDHasher.Encrypt(int(p1.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 1",
 				Level:           int(common.DifficultyLevelHigh),
@@ -542,7 +542,7 @@ func TestApiUpdateProperties(t *testing.T) {
 			},
 		},
 		{
-			ID: s.IDHasher.Encrypt(int(p2.ID)),
+			ID: server.IDHasher.Encrypt(int(p2.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 2",
 				Level:           int(common.DifficultyLevelSmall),
@@ -592,14 +592,14 @@ func TestApiUpdateProperties(t *testing.T) {
 	}
 
 	// Verify P1 updated
-	updatedP1, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org1, p1.ID)
+	updatedP1, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org1, p1.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	verifyPropertyUpdate(t, updatedP1, updates[0])
 
 	// Verify P2 updated
-	updatedP2, err := s.BusinessDB.Impl().RetrieveOrgProperty(ctx, org2, p2.ID)
+	updatedP2, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org2, p2.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -618,13 +618,13 @@ func TestApiGetProperties(t *testing.T) {
 	}
 
 	for i := 0; i < 3*db.MaxOrgPropertiesPageSize/2; i++ {
-		if _, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
 			t.Fatalf("Failed to create new property: %v", err)
 		}
 	}
 
 	// with api key 1 it should work
-	endpoint := fmt.Sprintf("/%s/%v/%s?page=1&per_page=%d", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint, db.MaxOrgPropertiesPageSize/2-1)
+	endpoint := fmt.Sprintf("/%s/%v/%s?page=1&per_page=%d", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint, db.MaxOrgPropertiesPageSize/2-1)
 	properties, meta, err := requestResponseAPISuite[[]*apiOrgPropertyOutput](ctx, nil, http.MethodGet, endpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -651,12 +651,12 @@ func TestApiGetPropertyInvalidOrgID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	propertyID := s.IDHasher.Encrypt(int(property.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
 	_, meta, err := requestResponseAPISuite[APIResponse](ctx, nil,
 		http.MethodGet,
 		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, "qwerty123",
@@ -683,14 +683,14 @@ func TestApiGetPropertyInvalidPropertyID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org); err != nil {
+	if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org); err != nil {
 		t.Fatal(err)
 	}
 
 	propertyID := "qwerty123"
 	_, meta, err := requestResponseAPISuite[APIResponse](ctx, nil,
 		http.MethodGet,
-		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)),
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)),
 			common.PropertyEndpoint, propertyID),
 		apiKey)
 	if err != nil {
@@ -714,15 +714,15 @@ func TestApiGetProperty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	propertyID := s.IDHasher.Encrypt(int(property.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
 	output, meta, err := requestResponseAPISuite[*apiPropertyOutput](ctx, nil,
 		http.MethodGet,
-		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)),
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)),
 			common.PropertyEndpoint, propertyID),
 		apiKey)
 	if err != nil {
@@ -782,7 +782,7 @@ func TestApiGetPropertyPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(owner.ID, "example.com"), org)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(owner.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -792,11 +792,11 @@ func TestApiGetPropertyPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	propertyID := s.IDHasher.Encrypt(int(property.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
 
 	resp, err := apiRequestSuite(ctx, nil,
 		http.MethodGet,
-		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)),
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)),
 			common.PropertyEndpoint, propertyID),
 		apiKey)
 	if err != nil {
@@ -825,16 +825,16 @@ func TestApiGetPropertyAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	propertyID := s.IDHasher.Encrypt(int(property.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
 
 	resp, err := apiRequestSuite(ctx, nil,
 		http.MethodGet,
-		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org2.ID)),
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org2.ID)),
 			common.PropertyEndpoint, propertyID),
 		apiKey)
 	if err != nil {
@@ -867,7 +867,7 @@ func TestApiPostPropertiesInvalidKey(t *testing.T) {
 	// We need a valid path structure even if auth fails, usually.
 	// The route is /org/{org}/properties.
 	// We can use a dummy org ID.
-	dummyOrgID := s.IDHasher.Encrypt(123)
+	dummyOrgID := server.IDHasher.Encrypt(123)
 
 	resp, err := apiRequestSuite(ctx, inputs,
 		http.MethodPost,
@@ -905,7 +905,7 @@ func TestApiPostPropertiesReadOnlyKey(t *testing.T) {
 
 	resp, err := apiRequestSuite(ctx, inputs,
 		http.MethodPost,
-		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -951,13 +951,13 @@ func TestApiDeletePropertiesReadOnlyKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	idsToDelete := []string{
-		s.IDHasher.Encrypt(int(property.ID)),
+		server.IDHasher.Encrypt(int(property.ID)),
 	}
 
 	resp, err := apiRequestSuite(ctx, idsToDelete,
@@ -1015,14 +1015,14 @@ func TestApiUpdatePropertiesReadOnlyKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	updates := []*apiUpdatePropertyInput{
 		{
-			ID: s.IDHasher.Encrypt(int(property.ID)),
+			ID: server.IDHasher.Encrypt(int(property.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name:            "Updated Property 1",
 				Level:           int(common.DifficultyLevelHigh),
@@ -1055,7 +1055,7 @@ func TestApiGetPropertiesInvalidKey(t *testing.T) {
 
 	ctx := t.Context()
 	apiKey := db.UUIDToSecret(*randomUUID())
-	dummyOrgID := s.IDHasher.Encrypt(123)
+	dummyOrgID := server.IDHasher.Encrypt(123)
 
 	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, dummyOrgID, common.PropertiesEndpoint)
 	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKey)
@@ -1075,8 +1075,8 @@ func TestApiGetPropertyInvalidKey(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 	apiKey := db.UUIDToSecret(*randomUUID())
-	dummyOrgID := s.IDHasher.Encrypt(123)
-	dummyPropID := s.IDHasher.Encrypt(456)
+	dummyOrgID := server.IDHasher.Encrypt(123)
+	dummyPropID := server.IDHasher.Encrypt(456)
 
 	resp, err := apiRequestSuite(ctx, nil,
 		http.MethodGet,
@@ -1108,7 +1108,7 @@ func TestApiGetPropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
-	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint)
+	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint)
 	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1147,7 +1147,7 @@ func TestApiPostPropertiesAPIKeyOrgScope(t *testing.T) {
 
 	resp, err := apiRequestSuite(ctx, inputs,
 		http.MethodPost,
-		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint),
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org2.ID)), common.PropertiesEndpoint),
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -1175,13 +1175,13 @@ func TestApiDeletePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	idsToDelete := []string{
-		s.IDHasher.Encrypt(int(property.ID)),
+		server.IDHasher.Encrypt(int(property.ID)),
 	}
 
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
@@ -1249,14 +1249,14 @@ func TestApiUpdatePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
-	property, _, err := s.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	updates := []*apiUpdatePropertyInput{
 		{
-			ID: s.IDHasher.Encrypt(int(property.ID)),
+			ID: server.IDHasher.Encrypt(int(property.ID)),
 			apiPropertySettings: apiPropertySettings{
 				Name: "Updated Property",
 			},
@@ -1323,7 +1323,7 @@ func TestAPIPropertyInvalidRequests(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	orgID := s.IDHasher.Encrypt(int(org.ID))
+	orgID := server.IDHasher.Encrypt(int(org.ID))
 	createEndpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, orgID, common.PropertiesEndpoint)
 
 	tests := []struct {
@@ -1387,7 +1387,7 @@ func TestAPIPropertyInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := http.NewServeMux()
-			s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 			req, err := http.NewRequestWithContext(ctx, tt.method, tt.endpoint, bytes.NewReader(tt.body))
 			if err != nil {

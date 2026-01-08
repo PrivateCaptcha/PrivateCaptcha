@@ -23,7 +23,7 @@ import (
 
 func apiRequestSuite(ctx context.Context, request interface{}, method, endpoint, apiKey string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 	//srv.HandleFunc("/", catchAll)
 
@@ -127,7 +127,7 @@ func TestAPICreateOrg(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.BusinessDB.Impl().SoftDeleteOrganization(ctx, baseOrg, user); err != nil {
+	if _, err := server.BusinessDB.Impl().SoftDeleteOrganization(ctx, baseOrg, user); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,7 +166,7 @@ func TestAPIDeleteOrg(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID: s.IDHasher.Encrypt(int(org.ID)),
+		ID: server.IDHasher.Encrypt(int(org.ID)),
 	}
 
 	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
@@ -178,7 +178,7 @@ func TestAPIDeleteOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if _, err := s.BusinessDB.Impl().RetrieveUserOrganization(t.Context(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
+	if _, err := server.BusinessDB.Impl().RetrieveUserOrganization(t.Context(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
 		t.Fatalf("Unexpected error when retrieving deleted org: %v", err)
 	}
 }
@@ -196,7 +196,7 @@ func TestAPIUpdateOrg(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID:   s.IDHasher.Encrypt(int(org.ID)),
+		ID:   server.IDHasher.Encrypt(int(org.ID)),
 		Name: "Org Update " + xid.New().String(),
 	}
 
@@ -209,7 +209,7 @@ func TestAPIUpdateOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
+	org, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil {
 		t.Fatalf("Unexpected error when retrieving org: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAPIUpdateOrgEmptyID(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
+	org, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil {
 		t.Fatalf("Unexpected error when retrieving org: %v", err)
 	}
@@ -300,7 +300,7 @@ func TestAPIOrgPermissions(t *testing.T) {
 
 	resp, err := apiRequestSuite(ctx, nil,
 		http.MethodDelete,
-		fmt.Sprintf("/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))),
+		fmt.Sprintf("/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID))),
 		apiKey)
 	if err != nil {
 		t.Fatal(err)
@@ -396,7 +396,7 @@ func TestAPIDeleteOrgReadOnlyKey(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID: s.IDHasher.Encrypt(int(org.ID)),
+		ID: server.IDHasher.Encrypt(int(org.ID)),
 	}
 
 	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
@@ -446,7 +446,7 @@ func TestAPIUpdateOrgReadOnlyKey(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID:   s.IDHasher.Encrypt(int(org.ID)),
+		ID:   server.IDHasher.Encrypt(int(org.ID)),
 		Name: "Org Update " + xid.New().String(),
 	}
 
@@ -554,7 +554,7 @@ func TestAPIDeleteOrgAPIKeyOrgScope(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID: s.IDHasher.Encrypt(int(org2.ID)),
+		ID: server.IDHasher.Encrypt(int(org2.ID)),
 	}
 
 	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
@@ -585,7 +585,7 @@ func TestAPIUpdateOrgAPIKeyOrgScope(t *testing.T) {
 	}
 
 	input := &apiOrgInput{
-		ID:   s.IDHasher.Encrypt(int(org2.ID)),
+		ID:   server.IDHasher.Encrypt(int(org2.ID)),
 		Name: "Org Update",
 	}
 
@@ -672,7 +672,7 @@ func TestAPIOrgInvalidRequests(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := http.NewServeMux()
-			s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 			req, err := http.NewRequestWithContext(ctx, tt.method, tt.endpoint, bytes.NewReader(tt.body))
 			if err != nil {

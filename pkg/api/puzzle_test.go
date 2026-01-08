@@ -31,7 +31,7 @@ func puzzleSuite(ctx context.Context, sitekey, domain string) (*http.Response, e
 func puzzleSuiteEx(ctx context.Context, method, sitekey, domain string) (*http.Response, error) {
 	slog.Log(ctx, common.LevelTrace, "Running puzzle suite", "domain", domain, "sitekey", sitekey)
 	srv := http.NewServeMux()
-	s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 	//srv.HandleFunc("/", catchAll)
 

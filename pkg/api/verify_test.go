@@ -44,7 +44,7 @@ func TestSerializeResponse(t *testing.T) {
 
 func verifySuite(response, secret, sitekey string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 	//srv.HandleFunc("/", catchAll)
 
@@ -68,7 +68,7 @@ func verifySuite(response, secret, sitekey string) (*http.Response, error) {
 
 func siteVerifySuite(response, secret, sitekey string, headers ...map[string][]string) (*http.Response, error) {
 	srv := http.NewServeMux()
-	s.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
 	//srv.HandleFunc("/", catchAll)
 
@@ -760,24 +760,24 @@ func TestVerifyTestShortcut(t *testing.T) {
 	ctx := t.Context()
 
 	solver := &puzzle.ComputeSolver{}
-	solutions, _ := solver.Solve(s.Verifier.TestPuzzle)
+	solutions, _ := solver.Solve(server.Verifier.TestPuzzle)
 
 	var buf bytes.Buffer
 
 	buf.WriteString(solutions.String())
 	buf.Write([]byte("."))
-	s.Verifier.WriteTestPuzzle(&buf)
+	server.Verifier.WriteTestPuzzle(&buf)
 
-	payload, err := s.Verifier.ParseSolutionPayload(ctx, buf.Bytes())
+	payload, err := server.Verifier.ParseSolutionPayload(ctx, buf.Bytes())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if payload.Puzzle() != s.Verifier.TestPuzzle {
+	if payload.Puzzle() != server.Verifier.TestPuzzle {
 		t.Fatal("verify result is not short circuited")
 	}
 
-	if result, _ := s.Verifier.Verify(ctx, payload, nil /*expectedOwner*/, time.Now().UTC()); result.Error != puzzle.TestPropertyError {
+	if result, _ := server.Verifier.Verify(ctx, payload, nil /*expectedOwner*/, time.Now().UTC()); result.Error != puzzle.TestPropertyError {
 		t.Errorf("Unexpected verification result: %v", result.Error.String())
 	}
 }
