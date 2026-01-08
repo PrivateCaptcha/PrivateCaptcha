@@ -135,8 +135,11 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 	}
 }
 
-func resend2faSuite(srv *http.ServeMux, cookie *http.Cookie) *http.Response {
-	req := httptest.NewRequest("POST", "/"+common.ResendEndpoint, nil)
+func resend2faSuite(srv *http.ServeMux, email, token string, cookie *http.Cookie) *http.Response {
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, token)
+
+	req := httptest.NewRequest("POST", "/"+common.ResendEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.AddCookie(cookie)
 	w := httptest.NewRecorder()
@@ -174,7 +177,7 @@ func TestResend2FA(t *testing.T) {
 	stubMailer := server.Mailer.(*email.StubMailer)
 	originalCode := stubMailer.LastCode
 
-	// Try to use the original code first (but don't complete login)
+	// Try to use a wrong code first (but don't complete login)
 	// This simulates a user who received the code but wants to resend
 	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), 999999, cookie)
 	// Using wrong code should fail
@@ -182,21 +185,21 @@ func TestResend2FA(t *testing.T) {
 		t.Fatal("Should not have succeeded with wrong code")
 	}
 
-	// Now call resend 2FA to get a new code
-	resp = resend2faSuite(srv, cookie)
+	// Now call resend 2FA to get a new code - note: CSRF token uses email as key
+	resp = resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected resend2fa status code: %v", resp.StatusCode)
 	}
 
-	// The code should have been reissued
+	// The code should have been reissued and should be different
 	newCode := stubMailer.LastCode
 	if newCode == 0 {
 		t.Error("New 2FA code was not generated")
 	}
 
-	// Codes may be the same due to random generation, so we just verify a code was sent
+	// Verify that the new code is different from the original
 	if newCode == originalCode {
-		t.Log("New code is same as original - this can happen randomly")
+		t.Errorf("New 2FA code should be different from original code (both were %d)", newCode)
 	}
 
 	// Verify we can use the new code to complete login
@@ -214,16 +217,20 @@ func TestResend2FAWithoutSession(t *testing.T) {
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-	// Try to resend 2FA without a valid session
-	req := httptest.NewRequest("POST", "/"+common.ResendEndpoint, nil)
+	// Try to resend 2FA without a valid session - should fail due to CSRF
+	// (the CSRF middleware requires a session with email to verify the token)
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, "invalid-token")
+
+	req := httptest.NewRequest("POST", "/"+common.ResendEndpoint, bytes.NewBufferString(form.Encode()))
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	resp := w.Result()
 
-	// Should redirect to login
+	// Should redirect to expired page due to CSRF failure
 	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect to login, got status code: %v", resp.StatusCode)
+		t.Errorf("Expected redirect, got status code: %v", resp.StatusCode)
 	}
 
 	location, err := resp.Location()
@@ -231,8 +238,9 @@ func TestResend2FAWithoutSession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if location.Path != "/"+common.LoginEndpoint {
-		t.Errorf("Expected redirect to login, got: %v", location.Path)
+	// Without valid session, CSRF will fail and redirect to expired endpoint
+	if location.Path != "/"+common.ExpiredEndpoint {
+		t.Errorf("Expected redirect to expired, got: %v", location.Path)
 	}
 }
 
@@ -258,9 +266,10 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 	}
 
 	// Try to resend 2FA with an already completed session
-	resp := resend2faSuite(srv, cookie)
+	// After authentication, the session no longer has the email key, so CSRF will fail
+	resp := resend2faSuite(srv, user.Email, server.XSRF.Token(user.Email), cookie)
 
-	// Should redirect to login since session is already completed (not in verify state)
+	// Should redirect to expired since session is already completed (no email in session)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect, got status code: %v", resp.StatusCode)
 	}

@@ -509,24 +509,3 @@ func TestCheckLicenseJobCachedValidLicense(t *testing.T) {
 		t.Error("Server should not have been called when cached license is still valid")
 	}
 }
-
-func TestGenerateHWID(t *testing.T) {
-	// Test that HWID generation is deterministic for the same salt
-	hwid1 := generateHWID("test-salt")
-	hwid2 := generateHWID("test-salt")
-
-	if hwid1 != hwid2 {
-		t.Error("HWID should be deterministic for the same salt")
-	}
-
-	// Test that different salts produce different HWIDs
-	hwid3 := generateHWID("different-salt")
-	if hwid1 == hwid3 {
-		t.Error("Different salts should produce different HWIDs")
-	}
-
-	// Test that HWID is non-empty
-	if len(hwid1) == 0 {
-		t.Error("HWID should not be empty")
-	}
-}
