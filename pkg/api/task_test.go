@@ -130,7 +130,7 @@ func TestGetAsyncTaskNoSubscription(t *testing.T) {
 
 	handlerID := xid.New().String()
 	request := struct{}{}
-	task, err := s.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, handlerID, user, time.Now().UTC().Add(24*time.Hour), t.Name())
+	task, err := server.BusinessDB.Impl().CreateNewAsyncTask(ctx, request, handlerID, user, time.Now().UTC().Add(24*time.Hour), t.Name())
 	if err != nil {
 		t.Fatal(err)
 	}

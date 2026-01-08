@@ -709,10 +709,10 @@ func TestAPIOrgValidationErrors(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		method     string
-		input      *apiOrgInput
-		wantCode   common.StatusCode
+		name     string
+		method   string
+		input    *apiOrgInput
+		wantCode common.StatusCode
 	}{
 		{
 			name:     "Create Org - ID Not Empty",
@@ -735,7 +735,7 @@ func TestAPIOrgValidationErrors(t *testing.T) {
 		{
 			name:     "Update Org - Empty Name",
 			method:   http.MethodPut,
-			input:    &apiOrgInput{ID: s.IDHasher.Encrypt(1), Name: ""},
+			input:    &apiOrgInput{ID: server.IDHasher.Encrypt(1), Name: ""},
 			wantCode: common.StatusOrgNameEmptyError,
 		},
 		{
@@ -810,14 +810,14 @@ func TestAPIOrgNoSubscription(t *testing.T) {
 			name:       "Update Org - No Subscription",
 			method:     http.MethodPut,
 			endpoint:   "/" + common.OrgEndpoint,
-			input:      &apiOrgInput{ID: s.IDHasher.Encrypt(int(org.ID)), Name: "Updated"},
+			input:      &apiOrgInput{ID: server.IDHasher.Encrypt(int(org.ID)), Name: "Updated"},
 			wantStatus: http.StatusPaymentRequired,
 		},
 		{
 			name:       "Delete Org - No Subscription",
 			method:     http.MethodDelete,
 			endpoint:   "/" + common.OrgEndpoint,
-			input:      &apiOrgInput{ID: s.IDHasher.Encrypt(int(org.ID))},
+			input:      &apiOrgInput{ID: server.IDHasher.Encrypt(int(org.ID))},
 			wantStatus: http.StatusPaymentRequired,
 		},
 	}

@@ -1423,7 +1423,7 @@ func TestApiPostPropertiesValidationErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
 
 	tests := []struct {
 		name     string
@@ -1509,23 +1509,23 @@ func TestApiUpdatePropertiesValidationErrors(t *testing.T) {
 		{
 			name: "Duplicate Property IDs",
 			input: []*apiUpdatePropertyInput{
-				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 1"}},
-				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 2"}},
+				{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 1"}},
+				{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Name 2"}},
 			},
 			wantCode: common.StatusPropertyIDDuplicateError,
 		},
 		{
 			name: "Duplicate Property Names",
 			input: []*apiUpdatePropertyInput{
-				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
-				{ID: s.IDHasher.Encrypt(2), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
+				{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
+				{ID: server.IDHasher.Encrypt(2), apiPropertySettings: apiPropertySettings{Name: "Same Name"}},
 			},
 			wantCode: common.StatusPropertyNameDuplicateError,
 		},
 		{
 			name: "Empty Property Name",
 			input: []*apiUpdatePropertyInput{
-				{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: ""}},
+				{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: ""}},
 			},
 			wantCode: common.StatusPropertyNameEmptyError,
 		},
@@ -1565,7 +1565,7 @@ func TestApiGetPropertiesNoSubscription(t *testing.T) {
 	}
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
-	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	endpoint := fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
 	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
@@ -1596,7 +1596,7 @@ func TestApiGetPropertyNoSubscription(t *testing.T) {
 	}
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
-	endpoint := fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(1))
+	endpoint := fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, server.IDHasher.Encrypt(1))
 	resp, err := apiRequestSuite(ctx, nil, http.MethodGet, endpoint, apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
@@ -1650,7 +1650,7 @@ func TestApiDeletePropertiesNoSubscription(t *testing.T) {
 	}
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
-	input := []string{s.IDHasher.Encrypt(1)}
+	input := []string{server.IDHasher.Encrypt(1)}
 	resp, err := apiRequestSuite(ctx, input, http.MethodDelete, "/"+common.PropertiesEndpoint, apiKeyStr)
 	if err != nil {
 		t.Fatal(err)
@@ -1682,7 +1682,7 @@ func TestApiUpdatePropertiesNoSubscription(t *testing.T) {
 	apiKeyStr := db.UUIDToSecret(apikey.ExternalID)
 
 	input := []*apiUpdatePropertyInput{
-		{ID: s.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Updated Name"}},
+		{ID: server.IDHasher.Encrypt(1), apiPropertySettings: apiPropertySettings{Name: "Updated Name"}},
 	}
 	resp, err := apiRequestSuite(ctx, input, http.MethodPut, "/"+common.PropertiesEndpoint, apiKeyStr)
 	if err != nil {
