@@ -423,7 +423,7 @@ func TestAPIKeyEndpointsWrongOwnership(t *testing.T) {
 		path     string
 		wantCode int
 	}{
-		{"RotateAPIKeyWrongOwner", "POST", fmt.Sprintf("/apikeys/%s", keyID), http.StatusInternalServerError},
+		{"RotateAPIKeyWrongOwner", "POST", fmt.Sprintf("/apikeys/%s", keyID), http.StatusSeeOther},
 		{"DeleteAPIKeyWrongOwner", "DELETE", fmt.Sprintf("/apikeys/%s", keyID), http.StatusInternalServerError},
 	}
 
