@@ -4,7 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
@@ -177,6 +176,3 @@ func TestCleanupAsyncTasksJobWithInvalidParams(t *testing.T) {
 		t.Errorf("CleanupAsyncTasksJob.RunOnce() with invalid params should not error, got = %v", err)
 	}
 }
-
-// Placeholder to satisfy the compiler for the unused import
-var _ = db.ErrRecordNotFound

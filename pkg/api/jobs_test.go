@@ -36,12 +36,19 @@ type stubJobWithError struct {
 	shouldFail    bool
 	errToReturn   error
 	executionTime time.Duration
+	name          string
 }
 
 var _ common.PeriodicJob = (*stubJobWithError)(nil)
 
+func newStubJobWithError() *stubJobWithError {
+	return &stubJobWithError{
+		name: "stubJobWithError_" + xid.New().String(),
+	}
+}
+
 func (j *stubJobWithError) Name() string {
-	return "stubJobWithError_" + xid.New().String()
+	return j.name
 }
 
 func (j *stubJobWithError) Trigger() <-chan struct{} {
@@ -152,10 +159,10 @@ func TestUniqueJobReleasesLockOnError(t *testing.T) {
 	ctx := t.Context()
 
 	expectedError := errors.New("inner job failed")
-	innerJob := &stubJobWithError{
-		shouldFail:  true,
-		errToReturn: expectedError,
-	}
+	innerJob := newStubJobWithError()
+	innerJob.shouldFail = true
+	innerJob.errToReturn = expectedError
+
 	job := &maintenance.UniquePeriodicJob{
 		Job:          innerJob,
 		Store:        store,
@@ -179,7 +186,7 @@ func TestUniqueJobReleasesLockOnError(t *testing.T) {
 	}
 
 	// Second run should be able to acquire the lock and run
-	innerJob2 := &stubJobWithError{}
+	innerJob2 := newStubJobWithError()
 	job2 := &maintenance.UniquePeriodicJob{
 		Job:          innerJob2,
 		Store:        store,
@@ -207,12 +214,12 @@ func TestUniqueJobLockPreventsExecution(t *testing.T) {
 	jobName := "test_lock_prevents_" + xid.New().String()
 
 	// Create inner job with longer execution time
-	innerJob1 := &stubJobWithError{
-		executionTime: 100 * time.Millisecond,
-	}
-	// Override the Name method for this test
+	innerJob1 := newStubJobWithError()
+	innerJob1.executionTime = 100 * time.Millisecond
+	innerJob1.name = jobName
+
 	job1 := &maintenance.UniquePeriodicJob{
-		Job:          &namedJob{stubJobWithError: innerJob1, name: jobName},
+		Job:          innerJob1,
 		Store:        store,
 		LockDuration: 5 * time.Minute,
 	}
@@ -227,9 +234,11 @@ func TestUniqueJobLockPreventsExecution(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 
 	// Second job should fail to acquire lock
-	innerJob2 := &stubJobWithError{}
+	innerJob2 := newStubJobWithError()
+	innerJob2.name = jobName
+
 	job2 := &maintenance.UniquePeriodicJob{
-		Job:          &namedJob{stubJobWithError: innerJob2, name: jobName},
+		Job:          innerJob2,
 		Store:        store,
 		LockDuration: 5 * time.Minute,
 	}
@@ -250,14 +259,4 @@ func TestUniqueJobLockPreventsExecution(t *testing.T) {
 	if innerJob2.wasExecuted() {
 		t.Error("Second inner job should NOT have been executed due to lock")
 	}
-}
-
-// namedJob wraps stubJobWithError with a custom name
-type namedJob struct {
-	*stubJobWithError
-	name string
-}
-
-func (j *namedJob) Name() string {
-	return j.name
 }
