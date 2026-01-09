@@ -11,30 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getOrgInviteByEmail = `-- name: GetOrgInviteByEmail :one
-SELECT org_id, user_id, level, created_at, updated_at, id, email FROM backend.organization_users WHERE org_id = $1 AND email = $2 AND user_id IS NULL
-`
-
-type GetOrgInviteByEmailParams struct {
-	OrgID int32       `db:"org_id" json:"org_id"`
-	Email pgtype.Text `db:"email" json:"email"`
-}
-
-func (q *Queries) GetOrgInviteByEmail(ctx context.Context, arg *GetOrgInviteByEmailParams) (*OrganizationUser, error) {
-	row := q.db.QueryRow(ctx, getOrgInviteByEmail, arg.OrgID, arg.Email)
-	var i OrganizationUser
-	err := row.Scan(
-		&i.OrgID,
-		&i.UserID,
-		&i.Level,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ID,
-		&i.Email,
-	)
-	return &i, err
-}
-
 const getOrgInviteByID = `-- name: GetOrgInviteByID :one
 SELECT org_id, user_id, level, created_at, updated_at, id, email FROM backend.organization_users WHERE id = $1
 `
@@ -84,58 +60,6 @@ func (q *Queries) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*Get
 			&i.User.UpdatedAt,
 			&i.User.DeletedAt,
 			&i.Level,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getOrganizationUsersWithPending = `-- name: GetOrganizationUsersWithPending :many
-SELECT ou.id, ou.org_id, ou.user_id, ou.email, ou.level, ou.created_at, ou.updated_at,
-       u.id AS user_id_joined, u.name AS user_name, u.email AS user_email
-FROM backend.organization_users ou
-LEFT JOIN backend.users u ON ou.user_id = u.id AND u.deleted_at IS NULL
-WHERE ou.org_id = $1
-`
-
-type GetOrganizationUsersWithPendingRow struct {
-	ID           int32              `db:"id" json:"id"`
-	OrgID        int32              `db:"org_id" json:"org_id"`
-	UserID       pgtype.Int4        `db:"user_id" json:"user_id"`
-	Email        pgtype.Text        `db:"email" json:"email"`
-	Level        AccessLevel        `db:"level" json:"level"`
-	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
-	UserIDJoined pgtype.Int4        `db:"user_id_joined" json:"user_id_joined"`
-	UserName     pgtype.Text        `db:"user_name" json:"user_name"`
-	UserEmail    pgtype.Text        `db:"user_email" json:"user_email"`
-}
-
-func (q *Queries) GetOrganizationUsersWithPending(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithPendingRow, error) {
-	rows, err := q.db.Query(ctx, getOrganizationUsersWithPending, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*GetOrganizationUsersWithPendingRow
-	for rows.Next() {
-		var i GetOrganizationUsersWithPendingRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.OrgID,
-			&i.UserID,
-			&i.Email,
-			&i.Level,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.UserIDJoined,
-			&i.UserName,
-			&i.UserEmail,
 		); err != nil {
 			return nil, err
 		}

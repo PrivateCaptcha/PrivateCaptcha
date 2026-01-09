@@ -13,12 +13,12 @@ import (
 )
 
 type Jobs interface {
-	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID int32) common.OneOffJob
+	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob
 	OffboardUser(user *dbgen.User) common.OneOffJob
 	LoginUser(sess *session.Session) common.OneOffJob
 }
 
-func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID int32) common.OneOffJob {
+func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob {
 	return &onboardUserJob{user: user, mailer: s.Mailer, store: s.Store, orgInviteID: orgInviteID}
 }
 
@@ -37,7 +37,7 @@ type onboardUserJob struct {
 	user        *dbgen.User
 	mailer      common.Mailer
 	store       db.Implementor
-	orgInviteID int32
+	orgInviteID *int32
 }
 
 func (j *onboardUserJob) Name() string {
@@ -54,12 +54,12 @@ func (j *onboardUserJob) NewParams() any {
 
 func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
 	// Link org invite if present
-	if j.orgInviteID > 0 {
-		if err := j.store.Impl().LinkOrgInviteToUser(ctx, j.orgInviteID, j.user); err != nil {
-			slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", j.orgInviteID, "userID", j.user.ID, common.ErrAttr(err))
+	if j.orgInviteID != nil && *j.orgInviteID > 0 {
+		if err := j.store.Impl().LinkOrgInviteToUser(ctx, *j.orgInviteID, j.user); err != nil {
+			slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", *j.orgInviteID, "userID", j.user.ID, common.ErrAttr(err))
 			// Don't return error - this is a non-critical failure
 		} else {
-			slog.InfoContext(ctx, "Linked org invite to user", "inviteID", j.orgInviteID, "userID", j.user.ID)
+			slog.InfoContext(ctx, "Linked org invite to user", "inviteID", *j.orgInviteID, "userID", j.user.ID)
 		}
 	}
 

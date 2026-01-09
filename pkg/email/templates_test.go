@@ -18,8 +18,6 @@ func TestEmailTemplates(t *testing.T) {
 		CurrentYear int
 		CDNURL      string
 		UserName    string
-		// for OrgRegisterInvitationContext
-		RegisterURL string
 	}{
 		APIKeyExpirationContext: APIKeyExpirationContext{
 			APIKeyContext: APIKeyContext{
@@ -30,11 +28,12 @@ func TestEmailTemplates(t *testing.T) {
 			ExpireDays: 7,
 		},
 		OrgInvitationContext: OrgInvitationContext{
-			//UserName:      "John Doe",
-			OrgName:       "My Organization",
-			OrgOwnerName:  "Pat Smith",
-			OrgOwnerEmail: "john.doe@example.com",
-			OrgURL:        "https://portal.privatecaptcha.com/org/5",
+			//UserName:         "John Doe",
+			OrgName:          "My Organization",
+			OrgOwnerName:     "Pat Smith",
+			OrgOwnerEmail:    "john.doe@example.com",
+			OrgURL:           "https://portal.privatecaptcha.com/org/5",
+			RequiresRegister: false,
 		},
 		TwoFactorEmailContext: TwoFactorEmailContext{
 			Code:     "123456",
@@ -47,7 +46,6 @@ func TestEmailTemplates(t *testing.T) {
 		CDNURL:      "https://cdn.privatecaptcha.com",
 		PortalURL:   "https://portal.privatecaptcha.com",
 		CurrentYear: time.Now().Year(),
-		RegisterURL: "https://portal.privatecaptcha.com/signup-invite/abc123",
 	}
 
 	for _, tpl := range templates {

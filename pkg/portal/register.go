@@ -210,7 +210,10 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 	}
 
 	// Check for org invite ID in session (optional)
-	orgInviteID, _ := sess.Get(ctx, session.KeyOrgInviteID).(int32)
+	var orgInviteID *int32
+	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
+		orgInviteID = &inviteID
+	}
 
 	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.ActiveTrialStatus())

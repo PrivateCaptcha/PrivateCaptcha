@@ -1214,12 +1214,22 @@ func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen
 
 	auditEvent := newOrgEmailInviteAuditLogEvent(user, org, email)
 
+	// Set cache for the invite
+	_ = impl.cache.Set(ctx, orgInviteCacheKey(inviteRecord.ID), inviteRecord)
+
 	return inviteRecord, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) GetOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
+func (impl *BusinessStoreImpl) RetrieveOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
+	}
+
+	cacheKey := orgInviteCacheKey(inviteID)
+
+	// Try to get from cache first
+	if invite, err := FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, cacheKey); err == nil {
+		return invite, nil
 	}
 
 	invite, err := impl.querier.GetOrgInviteByID(ctx, inviteID)
@@ -1231,35 +1241,10 @@ func (impl *BusinessStoreImpl) GetOrgInviteByID(ctx context.Context, inviteID in
 		return nil, err
 	}
 
-	return invite, nil
-}
-
-func (impl *BusinessStoreImpl) GetOrgInviteByEmail(ctx context.Context, orgID int32, email string) (*dbgen.OrganizationUser, error) {
-	if impl.querier == nil {
-		return nil, ErrMaintenance
-	}
-
-	invite, err := impl.querier.GetOrgInviteByEmail(ctx, &dbgen.GetOrgInviteByEmailParams{
-		OrgID: orgID,
-		Email: Text(email),
-	})
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, ErrRecordNotFound
-		}
-		slog.ErrorContext(ctx, "Failed to retrieve org invite by email", "orgID", orgID, "email", email, common.ErrAttr(err))
-		return nil, err
-	}
+	// Cache the result
+	_ = impl.cache.Set(ctx, cacheKey, invite)
 
 	return invite, nil
-}
-
-func (impl *BusinessStoreImpl) GetOrganizationUsersWithPending(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersWithPendingRow, error) {
-	if impl.querier == nil {
-		return nil, ErrMaintenance
-	}
-
-	return impl.querier.GetOrganizationUsersWithPending(ctx, orgID)
 }
 
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {

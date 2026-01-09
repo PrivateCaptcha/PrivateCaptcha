@@ -4,13 +4,6 @@ FROM backend.organization_users ou
 JOIN backend.users u ON ou.user_id = u.id
 WHERE ou.org_id = $1 AND u.deleted_at IS NULL;
 
--- name: GetOrganizationUsersWithPending :many
-SELECT ou.id, ou.org_id, ou.user_id, ou.email, ou.level, ou.created_at, ou.updated_at,
-       u.id AS user_id_joined, u.name AS user_name, u.email AS user_email
-FROM backend.organization_users ou
-LEFT JOIN backend.users u ON ou.user_id = u.id AND u.deleted_at IS NULL
-WHERE ou.org_id = $1;
-
 -- name: InviteUserToOrg :one
 INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING *;
 
@@ -19,9 +12,6 @@ INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'i
 
 -- name: GetOrgInviteByID :one
 SELECT * FROM backend.organization_users WHERE id = $1;
-
--- name: GetOrgInviteByEmail :one
-SELECT * FROM backend.organization_users WHERE org_id = $1 AND email = $2 AND user_id IS NULL;
 
 -- name: LinkOrgInviteToUser :exec
 UPDATE backend.organization_users 

@@ -104,7 +104,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
 		_ = sess.Delete(session.KeyOrgInviteID)
 		// Look up the invite to get the org ID
-		if invite, err := s.Store.Impl().GetOrgInviteByID(ctx, orgInviteID); err == nil {
+		if invite, err := s.Store.Impl().RetrieveOrgInviteByID(ctx, orgInviteID); err == nil {
 			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
 			common.Redirect(redirectURL, http.StatusOK, w, r)
 			return
