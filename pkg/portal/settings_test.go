@@ -609,3 +609,206 @@ func TestGetAccountStats(t *testing.T) {
 		t.Errorf("Expected 3 total requests, got %d", totalCount)
 	}
 }
+
+func TestAPIKeyEndpointsInvalidPathArg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		wantCode int
+	}{
+		{"RotateAPIKeyInvalidID", "POST", "/apikeys/invalid-id", http.StatusSeeOther},
+		{"DeleteAPIKeyInvalidID", "DELETE", "/apikeys/invalid-id", http.StatusSeeOther},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestAPIKeyEndpointsWrongOwnership(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	key, _, err := store.Impl().CreateAPIKey(ctx, owner, tests.CreateNewPuzzleAPIKeyParams("OwnerKey", time.Now(), 24*time.Hour, 10.0))
+	if err != nil {
+		t.Fatalf("Failed to create API key: %v", err)
+	}
+
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_intruder", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create intruder account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user2.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyID := server.IDHasher.Encrypt(int(key.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user2.ID)))
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		wantCode int
+	}{
+		{"RotateAPIKeyWrongOwner", "POST", fmt.Sprintf("/apikeys/%s", keyID), http.StatusSeeOther},
+		{"DeleteAPIKeyWrongOwner", "DELETE", fmt.Sprintf("/apikeys/%s", keyID), http.StatusInternalServerError},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	tests := []struct {
+		name     string
+		path     string
+		formBody url.Values
+		checkErr string
+	}{
+		{
+			name: "PostAPIKeyInvalidName",
+			path: "/settings/tab/apikeys/new",
+			formBody: url.Values{
+				common.ParamName:  {"ab"},
+				common.ParamDays:  {"90"},
+				common.ParamScope: {apiKeyScopePuzzle},
+			},
+			checkErr: "too short",
+		},
+		{
+			name: "PostAPIKeyInvalidScope",
+			path: "/settings/tab/apikeys/new",
+			formBody: url.Values{
+				common.ParamName:  {"ValidName"},
+				common.ParamDays:  {"90"},
+				common.ParamScope: {"invalid-scope"},
+			},
+			checkErr: "scope",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.formBody.Set(common.ParamCSRFToken, csrfToken)
+
+			req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.formBody.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			body := w.Body.String()
+			if !strings.Contains(strings.ToLower(body), tc.checkErr) {
+				t.Errorf("%s: expected response to contain '%s'", tc.name, tc.checkErr)
+			}
+		})
+	}
+}
+
+func TestSettingsTabInvalidTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/nonexistent-tab", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK (fallback to default tab), got %d", w.Code)
+	}
+}
