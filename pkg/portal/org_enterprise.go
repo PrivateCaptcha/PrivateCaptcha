@@ -548,7 +548,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	// Validate invite ID from URL
 	inviteIDStr := r.PathValue(common.ParamID)
 	inviteID, err := s.IDHasher.Decrypt(inviteIDStr)
-	if err != nil || inviteID < 0 {
+	if err != nil || inviteID <= 0 {
 		slog.WarnContext(ctx, "Invalid invite ID in URL", "idStr", inviteIDStr, common.ErrAttr(err))
 		return nil, ErrInvalidRequestArg
 	}

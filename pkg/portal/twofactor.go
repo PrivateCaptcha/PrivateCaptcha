@@ -43,6 +43,18 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// During HTMX flow, the browser URL stays at the org invite URL even when we POST to 2FA
+	// If org invite ID is not in session, check the Referer header to extract it
+	if _, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32); !hasOrgInvite {
+		if referer := r.Header.Get("Referer"); len(referer) > 0 {
+			// Try to parse org invite ID from referer URL: /orginvite/{id}/signup
+			if inviteID := s.parseOrgInviteIDFromURL(referer); inviteID > 0 {
+				slog.DebugContext(ctx, "Parsed org invite ID from Referer header", "inviteID", inviteID)
+				_ = sess.Set(session.KeyOrgInviteID, inviteID)
+			}
+		}
+	}
+
 	email, ok := sess.Get(ctx, session.KeyUserEmail).(string)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get email from session")
@@ -151,4 +163,33 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(session.KeyTwoFactorCode, code)
 	_ = sess.Set(session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	s.render(w, r, "login/resend.html", renderContextNothing)
+}
+
+// parseOrgInviteIDFromURL extracts org invite ID from a URL path like /orginvite/{id}/signup
+func (s *Server) parseOrgInviteIDFromURL(rawURL string) int32 {
+	// URL pattern: /orginvite/{encoded_id}/signup
+	prefix := "/" + common.OrgInviteEndpoint + "/"
+	suffix := "/" + common.RegisterEndpoint
+
+	idx := strings.Index(rawURL, prefix)
+	if idx < 0 {
+		return 0
+	}
+
+	// Extract the path after the prefix
+	path := rawURL[idx+len(prefix):]
+
+	// Find where the path segment ends
+	endIdx := strings.Index(path, suffix)
+	if endIdx <= 0 {
+		return 0
+	}
+
+	idStr := path[:endIdx]
+	inviteID, err := s.IDHasher.Decrypt(idStr)
+	if err != nil || inviteID <= 0 {
+		return 0
+	}
+
+	return int32(inviteID)
 }
