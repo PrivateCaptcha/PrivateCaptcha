@@ -927,3 +927,320 @@ func TestEchoPuzzle(t *testing.T) {
 		t.Errorf("Expected status 200, got %d", w.Code)
 	}
 }
+
+func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		wantCode int
+	}{
+		{"GetPropertyDashboardInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id", orgID), http.StatusSeeOther},
+		{"GetPropertySettingsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/settings", orgID), http.StatusSeeOther},
+		{"GetPropertyReportsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/reports", orgID), http.StatusSeeOther},
+		{"GetPropertyIntegrationsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/integrations", orgID), http.StatusSeeOther},
+		{"GetPropertyAuditLogsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/events", orgID), http.StatusSeeOther},
+		{"GetPropertyStatsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/stats/24h", orgID), http.StatusBadRequest},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestPropertyEndpointsWrongOwnership(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, "example-wrong-owner.com"), org1)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_intruder", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create intruder account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user2.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	org1ID := server.IDHasher.Encrypt(int(org1.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user2.ID)))
+
+	tests := []struct {
+		name     string
+		method   string
+		path     string
+		wantCode int
+		useCSRF  bool
+	}{
+		{"GetPropertyDashboardWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s", org1ID, propertyID), http.StatusSeeOther, false},
+		{"GetPropertySettingsWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s/tab/settings", org1ID, propertyID), http.StatusSeeOther, false},
+		{"GetPropertyReportsWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s/tab/reports", org1ID, propertyID), http.StatusSeeOther, false},
+		{"DeletePropertyWrongOwner", "DELETE", fmt.Sprintf("/org/%s/property/%s/delete", org1ID, propertyID), http.StatusSeeOther, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.AddCookie(cookie)
+			if tc.useCSRF {
+				req.Header.Set(common.HeaderCSRFToken, csrfToken)
+			}
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestPropertyEndpointsMissingSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewBareAccount(ctx, store, t.Name())
+	if err != nil {
+		t.Fatalf("Failed to create account without subscription: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	t.Run("PostNewPropertyMissingSubscription", func(t *testing.T) {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "NewPropertyNoSubscription")
+		form.Set(common.ParamDomain, "nosub.example.com")
+		form.Set(common.ParamIgnoreError, "true")
+
+		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK with re-rendered form, got %d", w.Code)
+		}
+
+		body := w.Body.String()
+		if !strings.Contains(body, "You need an active subscription to create new properties") {
+			t.Error("Expected response to contain subscription requirement message")
+		}
+	})
+}
+
+func TestPropertyEndpointsInvalidFormArgs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example-form-test.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	t.Run("PutPropertyInvalidName", func(t *testing.T) {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "")
+		form.Set(common.ParamDifficulty, "5")
+		form.Set(common.ParamGrowth, "2")
+
+		req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/property/%s/edit", orgID, propertyID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", w.Code)
+		}
+	})
+
+	t.Run("PostNewPropertyInvalidDomain", func(t *testing.T) {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "ValidName")
+		form.Set(common.ParamDomain, "localhost")
+
+		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		body := w.Body.String()
+		if !strings.Contains(strings.ToLower(body), "localhost") {
+			t.Error("Expected response to mention localhost validation error")
+		}
+	})
+
+	t.Run("PostNewPropertyEmptyName", func(t *testing.T) {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "")
+		form.Set(common.ParamDomain, "valid.example.com")
+		form.Set(common.ParamIgnoreError, "true")
+
+		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", w.Code)
+		}
+	})
+}
+
+func TestMovePropertyInvalidPathArgs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "move-invalid.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	tests := []struct {
+		name     string
+		path     string
+		formBody url.Values
+		wantCode int
+	}{
+		{
+			name: "MovePropertyInvalidOrgParam",
+			path: fmt.Sprintf("/org/%s/property/%s/move", orgID, propertyID),
+			formBody: url.Values{
+				common.ParamOrg: {"invalid-org-id"},
+			},
+			wantCode: http.StatusSeeOther,
+		},
+		{
+			name: "MovePropertyToSameOrg",
+			path: fmt.Sprintf("/org/%s/property/%s/move", orgID, propertyID),
+			formBody: url.Values{
+				common.ParamOrg: {orgID},
+			},
+			wantCode: http.StatusBadRequest,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.formBody.Set(common.ParamCSRFToken, csrfToken)
+
+			req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.formBody.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
