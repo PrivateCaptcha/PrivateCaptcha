@@ -18,6 +18,7 @@
 - We use sqlc (config in `pkg/db/sqlc.yaml`) to codegen plain SQL into golang source code. After changing queries or migrations, run `make sqlc` in the root to regenerate the Go source code.
 - you can verify the sqlc queries/migrations using `make vet-docker`
 - we use generated Go code for Postgres via `pkg/db/business_impl.go`
+- for `business_impl.go` methods naming convention for getters is to use `Retrieve` prefix instead of `Get` and to use `GetCached` prefix for cache-only data (sql queries in `pkg/db/queries/` can still use `Get`)
 
 #### ClickHouse
 
@@ -55,6 +56,7 @@
 - To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
 - To run all Go integration tests, run `make test-docker-light`. Docker is required.
 - Do not use underscores in Golang test names
+- Prefer to not add any new DB methods for tests only, first try to reuse existing DB methods with some tests-only helpers (even if not optimal)
 - To get unit tests code coverage, run `make test-unit-cover`
 - To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
 - Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
