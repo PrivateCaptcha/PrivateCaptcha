@@ -263,7 +263,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 			orgURLPath := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))
 			return s.Mailer.SendOrgInvite(bctx, inviteUser.Email, common.GuessFirstName(inviteUser.Name),
-				org.Name, user.Email, common.GuessFirstName(user.Name), orgURLPath, false)
+				org.Name, user.Email, common.GuessFirstName(user.Name), orgURLPath, false /* register*/)
 		})
 	}
 
@@ -291,7 +291,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 	// Send invite email with registration link
 	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 		registerInviteURL := s.PartsURL(common.OrgInviteEndpoint, s.IDHasher.Encrypt(int(inviteRecord.ID)), common.RegisterEndpoint)
-		return s.Mailer.SendOrgInvite(bctx, email, "", org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL, true)
+		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL, true)
 	})
 
 	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
@@ -540,7 +540,7 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organ
 func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
-	// Check registration availability first (moved to beginning per feedback)
+	// Check registration availability first
 	if !s.canRegister.Load() {
 		return nil, errRegistrationDisabled
 	}
@@ -555,19 +555,17 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 
 	// For security, try cached lookup first. If not found, still render register page
 	// The actual invite validation will happen after 2FA in the background job
-	invite, err := s.Store.Impl().RetrieveOrgInviteByID(ctx, int32(inviteID))
-	if err != nil {
-		// On cache miss or error, still render the register page (security: don't reveal if invite exists)
-		slog.DebugContext(ctx, "Org invite not in cache or error", "inviteID", inviteID)
-	} else if invite.UserID.Valid {
-		// Invite already linked to a user - this is an error
-		slog.WarnContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
-		return nil, ErrInvalidRequestArg
-	}
+	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
+		if invite.UserID.Valid {
+			// Invite already linked to a user - this is an error
+			slog.ErrorContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
+			return nil, ErrInvalidRequestArg
+		}
 
-	// Store invite ID in session so we can link it after registration
-	sess := s.Sessions.SessionStart(w, r)
-	_ = sess.Set(session.KeyOrgInviteID, int32(inviteID))
+		// Store invite ID in session so we can link it after registration
+		sess := s.Sessions.SessionStart(w, r)
+		_ = sess.Set(session.KeyOrgInviteID, int32(inviteID))
+	}
 
 	// Return the register page view (same as regular register)
 	return &ViewModel{

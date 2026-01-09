@@ -119,10 +119,11 @@ func (q *Queries) InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParam
 	return &i, err
 }
 
-const linkOrgInviteToUser = `-- name: LinkOrgInviteToUser :exec
+const linkOrgInviteToUser = `-- name: LinkOrgInviteToUser :one
 UPDATE backend.organization_users 
 SET user_id = $1, email = NULL, updated_at = NOW() 
 WHERE id = $2 AND user_id IS NULL
+RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `
 
 type LinkOrgInviteToUserParams struct {
@@ -130,9 +131,19 @@ type LinkOrgInviteToUserParams struct {
 	ID     int32       `db:"id" json:"id"`
 }
 
-func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) error {
-	_, err := q.db.Exec(ctx, linkOrgInviteToUser, arg.UserID, arg.ID)
-	return err
+func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) (*OrganizationUser, error) {
+	row := q.db.QueryRow(ctx, linkOrgInviteToUser, arg.UserID, arg.ID)
+	var i OrganizationUser
+	err := row.Scan(
+		&i.OrgID,
+		&i.UserID,
+		&i.Level,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ID,
+		&i.Email,
+	)
+	return &i, err
 }
 
 const removeOrgInviteByID = `-- name: RemoveOrgInviteByID :exec

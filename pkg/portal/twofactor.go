@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -46,8 +47,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	// During HTMX flow, the browser URL stays at the org invite URL even when we POST to 2FA
 	// If org invite ID is not in session, check the Referer header to extract it
 	if _, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32); !hasOrgInvite {
-		if referer := r.Header.Get("Referer"); len(referer) > 0 {
-			// Try to parse org invite ID from referer URL: /orginvite/{id}/signup
+		if referer := r.Header.Get(common.HeaderReferer); len(referer) > 0 {
 			if inviteID := s.parseOrgInviteIDFromURL(referer); inviteID > 0 {
 				slog.DebugContext(ctx, "Parsed org invite ID from Referer header", "inviteID", inviteID)
 				_ = sess.Set(session.KeyOrgInviteID, inviteID)
@@ -111,17 +111,16 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Delete(session.KeyUserEmail)
 	_ = sess.Set(session.KeyPersistent, true)
 
-	// Check if there's an org invite ID in session - if so, redirect to the org
 	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
 		_ = sess.Delete(session.KeyOrgInviteID)
-		// Look up the invite to get the org ID
-		if invite, err := s.Store.Impl().RetrieveOrgInviteByID(ctx, orgInviteID); err == nil {
+		// we can only rely on cache because if the user is redirected to portal root, they still can join the org later
+		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, orgInviteID); err == nil {
 			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
 			common.Redirect(redirectURL, http.StatusOK, w, r)
 			return
 		}
-		slog.WarnContext(ctx, "Failed to look up org invite, redirecting to root", "inviteID", orgInviteID)
+		slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
 	}
 
 	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
@@ -173,7 +172,7 @@ func (s *Server) parseOrgInviteIDFromURL(rawURL string) int32 {
 
 	idx := strings.Index(rawURL, prefix)
 	if idx < 0 {
-		return 0
+		return -1
 	}
 
 	// Extract the path after the prefix
@@ -182,13 +181,17 @@ func (s *Server) parseOrgInviteIDFromURL(rawURL string) int32 {
 	// Find where the path segment ends
 	endIdx := strings.Index(path, suffix)
 	if endIdx <= 0 {
-		return 0
+		return -1
 	}
 
 	idStr := path[:endIdx]
 	inviteID, err := s.IDHasher.Decrypt(idStr)
 	if err != nil || inviteID <= 0 {
-		return 0
+		return -1
+	}
+
+	if inviteID > math.MaxInt32 {
+		return -1
 	}
 
 	return int32(inviteID)

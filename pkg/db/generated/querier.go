@@ -77,7 +77,7 @@ type Querier interface {
 	InsertLock(ctx context.Context, arg *InsertLockParams) (*Lock, error)
 	InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error)
 	InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error)
-	LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) error
+	LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) (*OrganizationUser, error)
 	MoveProperty(ctx context.Context, arg *MovePropertyParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
 	RemoveOrgInviteByID(ctx context.Context, id int32) error

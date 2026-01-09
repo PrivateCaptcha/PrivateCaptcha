@@ -13,10 +13,11 @@ INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'i
 -- name: GetOrgInviteByID :one
 SELECT * FROM backend.organization_users WHERE id = $1;
 
--- name: LinkOrgInviteToUser :exec
+-- name: LinkOrgInviteToUser :one
 UPDATE backend.organization_users 
 SET user_id = $1, email = NULL, updated_at = NOW() 
-WHERE id = $2 AND user_id IS NULL;
+WHERE id = $2 AND user_id IS NULL
+RETURNING *;
 
 -- name: UpdateOrgMembershipLevel :exec
 UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4;

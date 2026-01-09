@@ -1220,31 +1220,22 @@ func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen
 	return inviteRecord, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
+	return FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(inviteID))
+}
+
 func (impl *BusinessStoreImpl) RetrieveOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
-	if impl.querier == nil {
-		return nil, ErrMaintenance
+	reader := &StoreOneReader[int32, dbgen.OrganizationUser]{
+		CacheKey: orgInviteCacheKey(inviteID),
+		Cache:    impl.cache,
 	}
 
-	cacheKey := orgInviteCacheKey(inviteID)
-
-	// Try to get from cache first
-	if invite, err := FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, cacheKey); err == nil {
-		return invite, nil
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetOrgInviteByID
+		reader.QueryKeyFunc = QueryKeyInt
 	}
 
-	invite, err := impl.querier.GetOrgInviteByID(ctx, inviteID)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, ErrRecordNotFound
-		}
-		slog.ErrorContext(ctx, "Failed to retrieve org invite by ID", "inviteID", inviteID, common.ErrAttr(err))
-		return nil, err
-	}
-
-	// Cache the result
-	_ = impl.cache.Set(ctx, cacheKey, invite)
-
-	return invite, nil
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
@@ -1252,19 +1243,19 @@ func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID
 		return ErrMaintenance
 	}
 
-	err := impl.querier.LinkOrgInviteToUser(ctx, &dbgen.LinkOrgInviteToUserParams{
+	orgUser, err := impl.querier.LinkOrgInviteToUser(ctx, &dbgen.LinkOrgInviteToUserParams{
 		ID:     inviteID,
 		UserID: Int(user.ID),
 	})
-
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", inviteID, "userID", user.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email, common.ErrAttr(err))
 		return err
 	}
 
-	slog.InfoContext(ctx, "Linked org invite to user", "inviteID", inviteID, "userID", user.ID)
+	slog.InfoContext(ctx, "Linked org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email)
 
-	// invalidate relevant caches
+	// update relevant caches
+	_ = impl.cache.Set(ctx, orgInviteCacheKey(orgUser.ID), orgUser)
 	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
 
 	return nil

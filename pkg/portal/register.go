@@ -209,12 +209,6 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		return nil, nil, errIncompleteSession
 	}
 
-	// Check for org invite ID in session (optional)
-	var orgInviteID *int32
-	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
-		orgInviteID = &inviteID
-	}
-
 	plan := s.PlanService.GetInternalTrialPlan()
 	subscrParams := createInternalTrial(plan, s.PlanService.ActiveTrialStatus())
 
@@ -231,6 +225,12 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		return nil, nil, err
 	} else {
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+	}
+
+	// Check for org invite ID in session (optional)
+	var orgInviteID *int32
+	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
+		orgInviteID = &inviteID
 	}
 
 	job := s.Jobs.OnboardUser(user, plan, orgInviteID)

@@ -54,7 +54,5 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
-	// Org invite register route (public endpoint for users invited by email)
-	// URL: /orginvite/{id}/signup
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
 }
