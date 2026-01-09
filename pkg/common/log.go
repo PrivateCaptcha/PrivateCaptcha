@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 )
 
 const (
@@ -100,20 +99,6 @@ func SetupTraceLogs() {
 	}
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
-}
-
-func FindHeader(headers map[string]string, header string) (string, bool) {
-	requestID, ok := headers[header]
-	if ok {
-		return requestID, ok
-	}
-
-	requestID, ok = headers[strings.ToLower(header)]
-	if ok {
-		return requestID, ok
-	}
-
-	return "", false
 }
 
 func ErrAttr(err error) slog.Attr {

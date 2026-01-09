@@ -117,13 +117,6 @@ func Cached(next http.Handler) http.Handler {
 	})
 }
 
-func NoCache(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		WriteHeaders(w, NoCacheHeaders)
-		next.ServeHTTP(w, r)
-	})
-}
-
 func HttpStatus(code int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(code)
