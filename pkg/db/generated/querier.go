@@ -51,6 +51,7 @@ type Querier interface {
 	GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error)
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)
 	GetOrganizationUsers(ctx context.Context, orgID int32) ([]*GetOrganizationUsersRow, error)
+	GetOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithEmailInvitesRow, error)
 	GetOrganizationWithAccess(ctx context.Context, arg *GetOrganizationWithAccessParams) (*GetOrganizationWithAccessRow, error)
 	GetPendingAsyncTasks(ctx context.Context, arg *GetPendingAsyncTasksParams) ([]*GetPendingAsyncTasksRow, error)
 	GetPendingUserNotifications(ctx context.Context, arg *GetPendingUserNotificationsParams) ([]*GetPendingUserNotificationsRow, error)

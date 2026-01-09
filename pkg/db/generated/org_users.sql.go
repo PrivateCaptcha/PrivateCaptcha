@@ -71,6 +71,56 @@ func (q *Queries) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*Get
 	return items, nil
 }
 
+const getOrganizationUsersWithEmailInvites = `-- name: GetOrganizationUsersWithEmailInvites :many
+SELECT ou.id, ou.org_id, ou.user_id, ou.email, ou.level, ou.created_at,
+       u.id AS linked_user_id, u.name AS user_name, u.email AS user_email
+FROM backend.organization_users ou
+LEFT JOIN backend.users u ON ou.user_id = u.id AND u.deleted_at IS NULL
+WHERE ou.org_id = $1
+`
+
+type GetOrganizationUsersWithEmailInvitesRow struct {
+	ID           int32              `db:"id" json:"id"`
+	OrgID        int32              `db:"org_id" json:"org_id"`
+	UserID       pgtype.Int4        `db:"user_id" json:"user_id"`
+	Email        pgtype.Text        `db:"email" json:"email"`
+	Level        AccessLevel        `db:"level" json:"level"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	LinkedUserID pgtype.Int4        `db:"linked_user_id" json:"linked_user_id"`
+	UserName     pgtype.Text        `db:"user_name" json:"user_name"`
+	UserEmail    pgtype.Text        `db:"user_email" json:"user_email"`
+}
+
+func (q *Queries) GetOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*GetOrganizationUsersWithEmailInvitesRow, error) {
+	rows, err := q.db.Query(ctx, getOrganizationUsersWithEmailInvites, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetOrganizationUsersWithEmailInvitesRow
+	for rows.Next() {
+		var i GetOrganizationUsersWithEmailInvitesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.UserID,
+			&i.Email,
+			&i.Level,
+			&i.CreatedAt,
+			&i.LinkedUserID,
+			&i.UserName,
+			&i.UserEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const inviteEmailToOrg = `-- name: InviteEmailToOrg :one
 INSERT INTO backend.organization_users (org_id, email, level) VALUES ($1, $2, 'invited') RETURNING org_id, user_id, level, created_at, updated_at, id, email
 `

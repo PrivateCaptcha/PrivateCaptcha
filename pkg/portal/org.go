@@ -109,6 +109,32 @@ func usersToOrgUsers(users []*dbgen.GetOrganizationUsersRow, hasher common.Ident
 	return result
 }
 
+func usersWithEmailInvitesToOrgUsers(users []*dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) []*orgUser {
+	result := make([]*orgUser, 0, len(users))
+
+	for _, row := range users {
+		ou := &orgUser{
+			Level:     string(row.Level),
+			CreatedAt: row.CreatedAt.Time.Format("02 Jan 2006"),
+		}
+
+		if row.LinkedUserID.Valid {
+			// Linked user invite
+			ou.ID = hasher.Encrypt(int(row.LinkedUserID.Int32))
+			ou.Name = row.UserName.String
+			ou.Email = row.UserEmail.String
+		} else if row.Email.Valid {
+			// Email-only invite (not yet linked to a user)
+			ou.ID = hasher.Encrypt(int(row.ID))
+			ou.Email = row.Email.String
+		}
+
+		result = append(result, ou)
+	}
+
+	return result
+}
+
 func orgToUserOrg(org *dbgen.Organization, userID int32, hasher common.IdentifierHasher) *userOrg {
 	uo := &userOrg{
 		Name: org.Name,
@@ -378,13 +404,13 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
-	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	members, err := s.Store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return nil, err
 	}
 
-	renderCtx.Members = usersToOrgUsers(members, s.IDHasher)
+	renderCtx.Members = usersWithEmailInvitesToOrgUsers(members, s.IDHasher)
 
 	return &ViewModel{
 		Model:      renderCtx,

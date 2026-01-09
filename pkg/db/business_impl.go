@@ -1166,6 +1166,15 @@ func (impl *BusinessStoreImpl) RetrieveOrganizationUsers(ctx context.Context, or
 	return reader.Read(ctx)
 }
 
+// RetrieveOrganizationUsersWithEmailInvites returns all org members including email-only invites (where user_id is NULL)
+func (impl *BusinessStoreImpl) RetrieveOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersWithEmailInvitesRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetOrganizationUsersWithEmailInvites(ctx, orgID)
+}
+
 func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteUser *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance

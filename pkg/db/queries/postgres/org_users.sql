@@ -4,6 +4,13 @@ FROM backend.organization_users ou
 JOIN backend.users u ON ou.user_id = u.id
 WHERE ou.org_id = $1 AND u.deleted_at IS NULL;
 
+-- name: GetOrganizationUsersWithEmailInvites :many
+SELECT ou.id, ou.org_id, ou.user_id, ou.email, ou.level, ou.created_at,
+       u.id AS linked_user_id, u.name AS user_name, u.email AS user_email
+FROM backend.organization_users ou
+LEFT JOIN backend.users u ON ou.user_id = u.id AND u.deleted_at IS NULL
+WHERE ou.org_id = $1;
+
 -- name: InviteUserToOrg :one
 INSERT INTO backend.organization_users (org_id, user_id, level) VALUES ($1, $2, 'invited') RETURNING *;
 
