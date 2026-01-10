@@ -491,3 +491,39 @@ func TestRetrieveOrgPropertiesCount(t *testing.T) {
 		t.Errorf("Expected 2, got %d", count)
 	}
 }
+
+func TestRetrieveTrialUsers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create a trial user
+	subParams := db_tests.CreateNewSubscriptionParams(nil)
+	subParams.Status = "trialing"
+
+	user, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), subParams)
+	if err != nil {
+		t.Fatalf("Failed to create trial account: %v", err)
+	}
+
+	// Retrieve trial users
+	trialUsers, err := store.Impl().RetrieveTrialUsers(ctx)
+	if err != nil {
+		t.Fatalf("Failed to retrieve trial users: %v", err)
+	}
+
+	// Check that our trial user is in the list
+	found := false
+	for _, tu := range trialUsers {
+		if tu.ID == user.ID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("Expected to find trial user %d in list, but didn't", user.ID)
+	}
+}
