@@ -509,3 +509,60 @@ func TestCheckLicenseJobCachedValidLicense(t *testing.T) {
 		t.Error("Server should not have been called when cached license is still valid")
 	}
 }
+
+func TestGenerateHWID(t *testing.T) {
+	t.Parallel()
+
+	// Test that generateHWID returns non-empty results
+	salt := "test-salt-123"
+	hwid1 := generateHWID(salt)
+
+	if len(hwid1) == 0 {
+		t.Error("Expected non-empty HWID")
+	}
+
+	// Test that the HWID is a valid hex string (64 chars for SHA256)
+	if len(hwid1) != 64 {
+		t.Errorf("Expected HWID length of 64, got %d", len(hwid1))
+	}
+
+	// Test that different salts produce different HWIDs
+	// Note: we cannot test consistency because runtime.ReadMemStats may change between calls
+	hwid3 := generateHWID("different-salt")
+	if hwid1 == hwid3 {
+		t.Error("Expected different HWIDs for different salts")
+	}
+}
+
+func TestGenerateHWIDWithEmptySalt(t *testing.T) {
+	t.Parallel()
+
+	hwid := generateHWID("")
+
+	// Should still generate a valid HWID even with empty salt
+	if len(hwid) == 0 {
+		t.Error("Expected non-empty HWID even with empty salt")
+	}
+}
+
+func TestGetMacAddress(t *testing.T) {
+	t.Parallel()
+
+	mac, err := getMacAddress()
+
+	// In most environments, we should be able to get a MAC address
+	// In Docker, there should be at least a bridge interface
+	// If not available, error is expected
+	if err != nil {
+		if err != errNoMacAddress {
+			t.Errorf("Expected errNoMacAddress or success, got %v", err)
+		}
+		// It's OK if there's no MAC in some test environments
+		return
+	}
+
+	// If MAC is available, it should be non-empty
+	if len(mac) == 0 {
+		t.Error("Expected non-empty MAC address")
+	}
+}

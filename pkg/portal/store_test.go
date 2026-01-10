@@ -10,6 +10,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -359,6 +360,48 @@ func TestRetrieveOrgProperty(t *testing.T) {
 	}
 }
 
+func TestRetrieveOrgPropertyNotCached(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "uncached-example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	sitekey := db.UUIDToSiteKey(prop.ExternalID)
+
+	// Delete property from cache to ensure it's not cached
+	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
+	if deleted := cache.Delete(ctx, cacheKey); !deleted {
+		t.Log("Property was not in cache before deletion attempt")
+	}
+
+	// Verify property is NOT cached using GetCachedPropertyBySitekey
+	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, nil)
+	if err != db.ErrCacheMiss {
+		t.Fatalf("Expected ErrCacheMiss for uncached property, got: %v", err)
+	}
+
+	// Now retrieve the property (this should fetch from DB)
+	retrieved, err := store.Impl().RetrieveOrgProperty(ctx, org, prop.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org property: %v", err)
+	}
+
+	if retrieved.ID != prop.ID {
+		t.Errorf("Retrieved property ID doesn't match: got %d, want %d", retrieved.ID, prop.ID)
+	}
+}
+
 func TestUpdateUser(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -449,5 +492,106 @@ func TestRetrieveOrgPropertiesCount(t *testing.T) {
 
 	if count != 2 {
 		t.Errorf("Expected 2, got %d", count)
+	}
+}
+
+func TestRetrieveTrialUsers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create a trial user
+	subParams := db_tests.CreateNewSubscriptionParams(testPlan)
+
+	user, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), subParams)
+	if err != nil {
+		t.Fatalf("Failed to create trial account: %v", err)
+	}
+
+	from := subParams.TrialEndsAt.Time.Add(-1 * time.Second)
+	to := from.Add(1 * time.Hour)
+	// this test can (silently) fail if we have more than {maxUsers} tests
+	const maxUsers = 10_000
+	trialUsers, err := store.Impl().RetrieveTrialUsers(ctx, from, to, subParams.Status, maxUsers+1, db.IsInternalSubscription(subParams.Source))
+	if err != nil {
+		t.Fatalf("Failed to retrieve trial users: %v", err)
+	}
+
+	// Check that our trial user is in the list
+	found := false
+	for _, tu := range trialUsers {
+		if tu.ID == user.ID {
+			found = true
+			break
+		}
+	}
+
+	if !found && (len(trialUsers) <= maxUsers) {
+		t.Errorf("Expected to find trial user %d in list, but didn't", user.ID)
+	}
+}
+
+func TestWarmupPortalAuthJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	job := &maintenance.WarmupPortalAuthJob{
+		Store:               store,
+		RegistrationAllowed: true,
+	}
+
+	// Run the job - it will try to cache portal login/register properties
+	// Note: This may fail if the portal properties don't exist in test DB,
+	// but that's expected - we just want to verify the job runs
+	err := job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Error(err)
+	}
+
+	// If portal properties exist, check if they're cached
+	loginSitekey := db.PortalLoginSitekey
+	if _, err = store.Impl().GetCachedPropertyBySitekey(ctx, loginSitekey, nil); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCleanupDBCacheJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Add some cache records with past expiration
+	cacheKey := "test_cleanup_" + t.Name()
+	cacheData := []byte("test data")
+
+	// Store with very short TTL (1 millisecond)
+	err := store.Impl().StoreInCache(ctx, cacheKey, cacheData, 1*time.Millisecond)
+	if err != nil {
+		t.Fatalf("Failed to store in cache: %v", err)
+	}
+
+	// Wait for the TTL to expire
+	time.Sleep(10 * time.Millisecond)
+
+	// Run the cleanup job
+	job := &maintenance.CleanupDBCacheJob{
+		Store: store,
+	}
+
+	err = job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Fatalf("CleanupDBCacheJob failed: %v", err)
+	}
+
+	// After cleanup, the expired record should be gone
+	if _, err = store.Impl().RetrieveFromCache(ctx, cacheKey); err == nil {
+		t.Error("Item not deleted from cache")
 	}
 }

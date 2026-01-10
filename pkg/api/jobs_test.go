@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/rs/xid"
 )
@@ -133,7 +134,7 @@ func TestAsyncJob(t *testing.T) {
 
 	request := struct{}{}
 
-	user, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,5 +259,84 @@ func TestUniqueJobLockPreventsExecution(t *testing.T) {
 
 	if innerJob2.wasExecuted() {
 		t.Error("Second inner job should NOT have been executed due to lock")
+	}
+}
+
+func TestWarmupAPICacheJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create a user and org to have API keys
+	plan := db_tests.CreateNewSubscriptionParams(testPlan)
+	plan.Status = "trialing"
+
+	user, org, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), plan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create a property for this user
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "api-warmup-test.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Create an API key for this user
+	apiKeyParams := db_tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-key", time.Now(), 1*time.Hour, 10.0)
+	apiKey, _, err := store.Impl().CreateAPIKey(ctx, user, apiKeyParams)
+	if err != nil {
+		t.Fatalf("Failed to create API key: %v", err)
+	}
+
+	// Seed some activity in time series (similar to TestGetPropertyStats)
+	records := []*common.VerifyRecord{
+		{
+			PropertyID: property.ID,
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			Timestamp:  time.Now().UTC(),
+		},
+	}
+	timeSeries.WriteVerifyLogBatch(ctx, records)
+
+	// Clear cache for the API key before running the job
+	apiSecret := db.UUIDToSecret(apiKey.ExternalID)
+	cache.Delete(ctx, db.APIKeyCacheKey(apiSecret))
+
+	// Run the warmup job
+	job := &maintenance.WarmupAPICacheJob{
+		Store:      store,
+		TimeSeries: timeSeries,
+		Backoff:    1 * time.Millisecond,
+		Limit:      100,
+	}
+
+	err = job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Fatalf("WarmupAPICacheJob failed: %v", err)
+	}
+
+	// Verify that API key is now cached
+	cachedKey, err := store.Impl().GetCachedAPIKey(ctx, apiSecret)
+	if err != nil {
+		t.Errorf("Expected API key to be cached after warmup, got error: %v", err)
+	}
+
+	if cachedKey == nil {
+		t.Error("Expected non-nil cached API key")
+	} else if cachedKey.ID != apiKey.ID {
+		t.Errorf("Cached API key ID mismatch: got %d, want %d", cachedKey.ID, apiKey.ID)
+	}
+
+	// Verify job metadata
+	if job.Name() != "warmup_api_cache_job" {
+		t.Errorf("Expected job name 'warmup_api_cache_job', got %s", job.Name())
+	}
+
+	if job.InitialPause() != 5*time.Second {
+		t.Errorf("Expected initial pause 5s, got %v", job.InitialPause())
 	}
 }

@@ -1714,3 +1714,88 @@ func TestOrgMemberBecomesMemberAfterJoining(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteOrgMembers(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create owner account
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create member account
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	// Invite member to org
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member: %v", err)
+	}
+
+	// Member joins org
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed to join org: %v", err)
+	}
+
+	// Verify member is in org
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve members: %v", err)
+	}
+
+	foundMember := false
+	for _, m := range members {
+		if m.User.ID == member.ID {
+			foundMember = true
+			break
+		}
+	}
+	if !foundMember {
+		t.Fatal("Member should be in org before deletion")
+	}
+
+	// Setup server
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as owner
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete member from org
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	memberID := server.IDHasher.Encrypt(int(member.ID))
+
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", orgID, memberID), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	// Verify member is no longer in org
+	members, err = store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve members after deletion: %v", err)
+	}
+
+	for _, m := range members {
+		if m.User.ID == member.ID {
+			t.Error("Member should no longer be in org after deletion")
+		}
+	}
+}

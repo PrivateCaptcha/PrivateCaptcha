@@ -1244,3 +1244,81 @@ func TestMovePropertyInvalidPathArgs(t *testing.T) {
 		})
 	}
 }
+
+func TestMovePropertyInvalidForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "move-form-invalid.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	tests := []struct {
+		name     string
+		path     string
+		formBody url.Values
+		wantCode int
+	}{
+		{
+			name: "MovePropertyMissingOrgParam",
+			path: fmt.Sprintf("/org/%s/property/%s/move", orgID, propertyID),
+			formBody: url.Values{
+				// Missing org param
+			},
+			wantCode: http.StatusSeeOther,
+		},
+		{
+			name: "MovePropertyEmptyOrgParam",
+			path: fmt.Sprintf("/org/%s/property/%s/move", orgID, propertyID),
+			formBody: url.Values{
+				common.ParamOrg: {""},
+			},
+			wantCode: http.StatusSeeOther,
+		},
+		{
+			name: "MovePropertyNonexistentOrg",
+			path: fmt.Sprintf("/org/%s/property/%s/move", orgID, propertyID),
+			formBody: url.Values{
+				common.ParamOrg: {server.IDHasher.Encrypt(999999)},
+			},
+			wantCode: http.StatusSeeOther,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.formBody.Set(common.ParamCSRFToken, csrfToken)
+
+			req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.formBody.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}

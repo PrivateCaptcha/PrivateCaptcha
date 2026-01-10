@@ -274,3 +274,96 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 		t.Errorf("Expected redirect, got status code: %v", resp.StatusCode)
 	}
 }
+
+func TestParseOrgInviteIDFromURLValid(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Use the server's IDHasher
+	encodedID := server.IDHasher.Encrypt(123)
+	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/" + encodedID + "/" + common.RegisterEndpoint
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != 123 {
+		t.Errorf("Expected 123, got %d", result)
+	}
+}
+
+func TestParseOrgInviteIDFromURLNoPrefixMatch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// URL without orginvite prefix
+	rawURL := "https://portal.example.com/other/path/" + common.RegisterEndpoint
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != -1 {
+		t.Errorf("Expected -1, got %d", result)
+	}
+}
+
+func TestParseOrgInviteIDFromURLNoSuffix(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	encodedID := server.IDHasher.Encrypt(123)
+	// URL without /signup suffix
+	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/" + encodedID
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != -1 {
+		t.Errorf("Expected -1, got %d", result)
+	}
+}
+
+func TestParseOrgInviteIDFromURLInvalidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Use an invalid encoded ID
+	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/invalid-id/" + common.RegisterEndpoint
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != -1 {
+		t.Errorf("Expected -1 for invalid ID, got %d", result)
+	}
+}
+
+func TestParseOrgInviteIDFromURLEmptyPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Path with empty ID segment
+	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "//" + common.RegisterEndpoint
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != -1 {
+		t.Errorf("Expected -1 for empty ID, got %d", result)
+	}
+}
+
+func TestParseOrgInviteIDFromURLRelativePath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	encodedID := server.IDHasher.Encrypt(456)
+	// Relative URL
+	rawURL := "/" + common.OrgInviteEndpoint + "/" + encodedID + "/" + common.RegisterEndpoint
+
+	result := server.parseOrgInviteIDFromURL(rawURL)
+
+	if result != 456 {
+		t.Errorf("Expected 456, got %d", result)
+	}
+}

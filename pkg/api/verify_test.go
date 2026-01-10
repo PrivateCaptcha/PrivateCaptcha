@@ -21,6 +21,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -851,5 +852,286 @@ func TestVerifyByOrgMember(t *testing.T) {
 
 	if err := checkVerifyError(resp, puzzle.VerifyNoError); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Negative test cases for pcVerifyHandler with invalid/empty form data
+func TestVerifyEmptyPayload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send empty payload
+	resp, err := verifySuite("", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for empty payload, got %d", resp.StatusCode)
+	}
+}
+
+func TestVerifyPayloadWithNullBytes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send payload with null bytes
+	resp, err := verifySuite("solution.\x00.signature", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail with bad request or return error in response
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		if err := checkVerifyError(resp, puzzle.ParseResponseError); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestVerifyMalformedPayload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send payload without proper dots separators
+	resp, err := verifySuite("invalid-payload-without-dots", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for malformed payload, got %d", resp.StatusCode)
+	}
+}
+
+// Negative test cases for siteVerify (reCAPTCHA compatible) endpoint
+func TestSiteVerifyEmptyResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send empty response
+	resp, err := siteVerifySuite("", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestSiteVerifyMalformedResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send malformed response (no dots)
+	resp, err := siteVerifySuite("malformed-response", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestSiteVerifyWithNullBytesInResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send response with null bytes embedded
+	resp, err := siteVerifySuite("test\x00.data\x00.here", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail parsing or return an error
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestReportingVerifierCallsReportFunc(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create a mock verifier result with all required fields for Valid() to return true
+	result := &puzzle.VerifyResult{
+		PropertyID: 123,
+		UserID:     1,
+		OrgID:      1,
+		CreatedAt:  time.Now(),
+		Domain:     "example.com",
+		Error:      puzzle.VerifyNoError,
+	}
+
+	// Track if report function was called
+	reportCalled := false
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+		reportCalled = true
+		if res.PropertyID != result.PropertyID {
+			t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+		}
+	}
+
+	// Create stub puzzle engine
+	stubEngine := &portal_tests.StubPuzzleEngine{
+		Result: result,
+	}
+
+	// Create reporting verifier
+	rv := &reportingVerifier{
+		verifier:   stubEngine,
+		reportFunc: reportFunc,
+	}
+
+	// Create a stub payload
+	stubPayload := puzzle.NewStubPayload(puzzle.NewComputePuzzle(0, [puzzle.PropertyIDSize]byte{}, 0))
+
+	// Call Verify
+	res, err := rv.Verify(ctx, stubPayload, nil, time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify the result is returned
+	if res.PropertyID != result.PropertyID {
+		t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+	}
+
+	// Verify report function was called for valid result
+	if !reportCalled {
+		t.Error("Expected report function to be called for valid result")
+	}
+}
+
+func TestReportingVerifierNoReportOnError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create a mock verifier result with error
+	result := &puzzle.VerifyResult{
+		PropertyID: 123,
+		Error:      puzzle.InvalidSolutionError,
+	}
+
+	// Track if report function was called
+	reportCalled := false
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+		reportCalled = true
+	}
+
+	// Create stub puzzle engine
+	stubEngine := &portal_tests.StubPuzzleEngine{
+		Result: result,
+	}
+
+	// Create reporting verifier
+	rv := &reportingVerifier{
+		verifier:   stubEngine,
+		reportFunc: reportFunc,
+	}
+
+	// Create a stub payload
+	stubPayload := puzzle.NewStubPayload(puzzle.NewComputePuzzle(0, [puzzle.PropertyIDSize]byte{}, 0))
+
+	// Call Verify
+	res, err := rv.Verify(ctx, stubPayload, nil, time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify the result is returned
+	if res.PropertyID != result.PropertyID {
+		t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+	}
+
+	// Verify report function was NOT called for invalid result
+	if reportCalled {
+		t.Error("Expected report function NOT to be called for invalid result")
 	}
 }
