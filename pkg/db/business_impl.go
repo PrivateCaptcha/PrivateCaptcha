@@ -719,7 +719,7 @@ func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	// left join and embed() do not work together in sqlc (https://github.com/sqlc-dev/sqlc/issues/2348)
 	orgAndAccess, err := impl.querier.GetOrganizationWithAccess(ctx, &dbgen.GetOrganizationWithAccessParams{
 		ID:     orgID,
-		UserID: userID,
+		UserID: Int(userID),
 	})
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -1166,6 +1166,15 @@ func (impl *BusinessStoreImpl) RetrieveOrganizationUsers(ctx context.Context, or
 	return reader.Read(ctx)
 }
 
+// RetrieveOrganizationUsersWithEmailInvites returns all org members including email-only invites (where user_id is NULL)
+func (impl *BusinessStoreImpl) RetrieveOrganizationUsersWithEmailInvites(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersWithEmailInvitesRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetOrganizationUsersWithEmailInvites(ctx, orgID)
+}
+
 func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteUser *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
@@ -1173,7 +1182,7 @@ func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.
 
 	_, err := impl.querier.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
 		OrgID:  org.ID,
-		UserID: inviteUser.ID,
+		UserID: Int(inviteUser.ID),
 	})
 
 	if err != nil {
@@ -1192,6 +1201,75 @@ func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.
 	return auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, email string) (*dbgen.OrganizationUser, *common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	inviteRecord, err := impl.querier.InviteEmailToOrg(ctx, &dbgen.InviteEmailToOrgParams{
+		OrgID: org.ID,
+		Email: Text(email),
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to invite email to org", "orgID", org.ID, "email", email, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Added org membership invite for email", "orgID", org.ID, "email", email, "inviteID", inviteRecord.ID)
+
+	// invalidate org users cache
+	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+
+	auditEvent := newOrgEmailInviteAuditLogEvent(user, org, email)
+
+	// Set cache for the invite
+	_ = impl.cache.Set(ctx, orgInviteCacheKey(inviteRecord.ID), inviteRecord)
+
+	return inviteRecord, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
+	return FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(inviteID))
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
+	reader := &StoreOneReader[int32, dbgen.OrganizationUser]{
+		CacheKey: orgInviteCacheKey(inviteID),
+		Cache:    impl.cache,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetOrgInviteByID
+		reader.QueryKeyFunc = QueryKeyInt
+	}
+
+	return reader.Read(ctx)
+}
+
+func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	orgUser, err := impl.querier.LinkOrgInviteToUser(ctx, &dbgen.LinkOrgInviteToUserParams{
+		ID:     inviteID,
+		UserID: Int(user.ID),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to link org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email, common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Linked org invite to user", "inviteID", inviteID, "userID", user.ID, "email", user.Email)
+
+	// update relevant caches
+	_ = impl.cache.Set(ctx, orgInviteCacheKey(orgUser.ID), orgUser)
+	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+
+	return nil
+}
+
 func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
@@ -1199,7 +1277,7 @@ func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *d
 
 	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
-		UserID:  user.ID,
+		UserID:  Int(user.ID),
 		Level:   dbgen.AccessLevelMember,
 		Level_2: dbgen.AccessLevelInvited,
 	})
@@ -1232,7 +1310,7 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 
 	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
-		UserID:  user.ID,
+		UserID:  Int(user.ID),
 		Level:   dbgen.AccessLevelInvited,
 		Level_2: dbgen.AccessLevelMember,
 	})
@@ -1265,7 +1343,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 
 	err := impl.querier.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
 		OrgID:  org.ID,
-		UserID: userID,
+		UserID: Int(userID),
 	})
 
 	if err != nil {
@@ -2421,8 +2499,8 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	// add old owner as a confirmed member
 	if err := impl.querier.SwapOrgOwnership(ctx, &dbgen.SwapOrgOwnershipParams{
 		OrgID:    org.ID,
-		UserID:   newOwner.ID,
-		UserID_2: user.ID,
+		UserID:   Int(newOwner.ID),
+		UserID_2: Int(user.ID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to swap organization membership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err

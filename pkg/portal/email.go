@@ -160,7 +160,7 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email, name string) err
 	return nil
 }
 
-func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, orgName, orgOwnerEmail, orgOwnerName, orgURLPath string) error {
+func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, orgName, orgOwnerEmail, orgOwnerName, orgURLPath string, requiresRegister bool) error {
 	if len(email) == 0 {
 		return errInvalidEmail
 	}
@@ -173,11 +173,12 @@ func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, o
 		CDNURL:      pm.CDNURL,
 		CurrentYear: time.Now().Year(),
 		OrgInvitationContext: emailpkg.OrgInvitationContext{
-			UserName:      name,
-			OrgName:       orgName,
-			OrgOwnerName:  orgOwnerName,
-			OrgOwnerEmail: orgOwnerEmail,
-			OrgURL:        pm.PortalURL + orgURLPath,
+			UserName:         name,
+			OrgName:          orgName,
+			OrgOwnerName:     orgOwnerName,
+			OrgOwnerEmail:    orgOwnerEmail,
+			OrgURL:           pm.PortalURL + orgURLPath,
+			RequiresRegister: requiresRegister,
 		},
 	}
 

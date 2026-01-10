@@ -26,7 +26,7 @@ func (sm *StubMailer) SendWelcome(ctx context.Context, email, name string) error
 	return nil
 }
 
-func (sm *StubMailer) SendOrgInvite(ctx context.Context, email, name string, orgName, orgOwnerEmail, orgOwnerName, orgURL string) error {
-	slog.InfoContext(ctx, "Sent org invite email", "email", email, "name", name)
+func (sm *StubMailer) SendOrgInvite(ctx context.Context, email, name string, orgName, orgOwnerEmail, orgOwnerName, orgURL string, requiresRegister bool) error {
+	slog.InfoContext(ctx, "Sent org invite email", "email", email, "name", name, "requiresRegister", requiresRegister)
 	return nil
 }

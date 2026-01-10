@@ -1298,13 +1298,6 @@ func TestOrgMemberEndpointsInvalidForm(t *testing.T) {
 			},
 			checkErr: "not valid",
 		},
-		{
-			name: "InviteNonExistentUser",
-			formBody: url.Values{
-				common.ParamEmail: {"nonexistent@example.com"},
-			},
-			checkErr: "Cannot find user",
-		},
 	}
 
 	for _, tc := range tests {
@@ -1372,5 +1365,352 @@ func TestOrgMemberEndpointsInvalidPathArg(t *testing.T) {
 				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
 			}
 		})
+	}
+}
+
+func TestInviteNonExistingUserByEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user1.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Use a non-existing email address for invitation
+	nonExistingEmail := "non-existing-user-" + t.Name() + "@example.com"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user1.ID))))
+	form.Set(common.ParamEmail, nonExistingEmail)
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org1.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// The HTTP 200 response indicates the invite was created successfully
+	// The actual invite is verified by the org members page response
+}
+
+func TestOrgInviteRegisterInvalidID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Test with invalid ID - URL pattern: /orginvite/{id}/signup
+	req := httptest.NewRequest("GET", "/orginvite/invalid-id/signup", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestOrgInviteRegisterNonExistentID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Test with valid format but non-existent ID - should still show register page (security: don't reveal if invite exists)
+	nonExistentID := server.IDHasher.Encrypt(999999)
+	req := httptest.NewRequest("GET", "/orginvite/"+nonExistentID+"/signup", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Per security requirements, we show register page even if invite doesn't exist
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK (security: don't reveal if invite exists), got status code %v", resp.StatusCode)
+	}
+}
+
+func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Create a user who is NOT in the org yet - we'll use them to link the email invite
+	user3, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_3", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create user3 account: %v", err)
+	}
+
+	// Create an email invite and then link it to user3
+	testEmail := "linked-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, user1, org1, testEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	// Link the email invite to user3 (who is not yet in the org)
+	err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, user3)
+	if err != nil {
+		t.Fatalf("Failed to link invite to user: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Try to access org invite register with an already linked invite
+	req := httptest.NewRequest("GET", "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/signup", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestOrgInviteRegisterValidEmailInvite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Create an email-only invite
+	testEmail := "test-email-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, user1, org1, testEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Access org invite register with a valid email invite
+	req := httptest.NewRequest("GET", "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/signup", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should return 200 with the register page
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK for valid email invite, got status code %v", resp.StatusCode)
+	}
+}
+
+// TestOrgMembersShowsEmailInvites tests that after inviting someone by email,
+// the invited email appears in the org members list along with existing user invites
+func TestOrgMembersShowsEmailInvites(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create another user with an existing account and invite them
+	existingUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_existinguser", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create existing user account: %v", err)
+	}
+
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, existingUser)
+	if err != nil {
+		t.Fatalf("Failed to invite existing user: %v", err)
+	}
+
+	// Invite someone by email who doesn't have an account
+	emailInvite := "email-only-" + t.Name() + "@example.com"
+	_, _, err = store.Impl().InviteEmailToOrg(ctx, owner, org, emailInvite)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/tab/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgMembers(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *orgMemberRenderContext, got %T", viewModel.Model)
+	}
+
+	// Should have 2 members: existing user invite + email invite
+	if len(renderCtx.Members) != 2 {
+		t.Errorf("Expected 2 members (1 user invite + 1 email invite), got %d", len(renderCtx.Members))
+	}
+
+	// Check that both invites are present
+	foundExistingUser := false
+	foundEmailInvite := false
+	for _, m := range renderCtx.Members {
+		if m.Email == existingUser.Email {
+			foundExistingUser = true
+		}
+		if m.Email == emailInvite {
+			foundEmailInvite = true
+		}
+	}
+
+	if !foundExistingUser {
+		t.Errorf("Expected to find existing user %s in members list", existingUser.Email)
+	}
+	if !foundEmailInvite {
+		t.Errorf("Expected to find email invite %s in members list", emailInvite)
+	}
+}
+
+// TestOrgMemberBecomesMemberAfterJoining tests that after a user joins via email invitation,
+// they appear as a full member (not invited) in the owner's list
+func TestOrgMemberBecomesMemberAfterJoining(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create an email-only invite
+	testEmail := "joining-user-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, testEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	// Create a new user (simulating registration after receiving the email invite)
+	newUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_newuser", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new user account: %v", err)
+	}
+
+	// Link the email invite to the new user (simulating the onboard job)
+	err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, newUser)
+	if err != nil {
+		t.Fatalf("Failed to link invite to user: %v", err)
+	}
+
+	// User joins the org (changes status from 'invited' to 'member')
+	_, err = store.Impl().JoinOrg(ctx, org.ID, newUser)
+	if err != nil {
+		t.Fatalf("Failed to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/tab/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgMembers(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *orgMemberRenderContext, got %T", viewModel.Model)
+	}
+
+	// Should have 1 member (the user who joined)
+	if len(renderCtx.Members) != 1 {
+		t.Errorf("Expected 1 member, got %d", len(renderCtx.Members))
+	}
+
+	// Check that the user appears as 'member' not 'invited'
+	if len(renderCtx.Members) > 0 {
+		member := renderCtx.Members[0]
+		if member.Level != string(dbgen.AccessLevelMember) {
+			t.Errorf("Expected member level to be 'member', got '%s'", member.Level)
+		}
+		if member.Name != newUser.Name {
+			t.Errorf("Expected member name to be '%s', got '%s'", newUser.Name, member.Name)
+		}
 	}
 }

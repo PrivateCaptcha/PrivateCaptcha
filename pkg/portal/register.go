@@ -227,7 +227,13 @@ func (s *Server) doRegister(ctx context.Context, sess *session.Session) (*dbgen.
 		s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 	}
 
-	job := s.Jobs.OnboardUser(user, plan)
+	// Check for org invite ID in session (optional)
+	var orgInviteID *int32
+	if inviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && inviteID > 0 {
+		orgInviteID = &inviteID
+	}
+
+	job := s.Jobs.OnboardUser(user, plan, orgInviteID)
 	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 
 	return user, org, nil

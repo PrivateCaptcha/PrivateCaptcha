@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,6 +42,17 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
+	}
+
+	// During HTMX flow, the browser URL stays at the org invite URL even when we POST to 2FA
+	// If org invite ID is not in session, check the Referer header to extract it
+	if _, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32); !hasOrgInvite {
+		if referer := r.Header.Get(common.HeaderReferer); len(referer) > 0 {
+			if inviteID := s.parseOrgInviteIDFromURL(referer); inviteID > 0 {
+				slog.DebugContext(ctx, "Parsed org invite ID from Referer header", "inviteID", inviteID)
+				_ = sess.Set(session.KeyOrgInviteID, inviteID)
+			}
+		}
 	}
 
 	email, ok := sess.Get(ctx, session.KeyUserEmail).(string)
@@ -99,6 +111,18 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Delete(session.KeyUserEmail)
 	_ = sess.Set(session.KeyPersistent, true)
 
+	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
+		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
+		_ = sess.Delete(session.KeyOrgInviteID)
+		// we can only rely on cache because if the user is redirected to portal root, they still can join the org later
+		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, orgInviteID); err == nil {
+			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
+			common.Redirect(redirectURL, http.StatusOK, w, r)
+			return
+		}
+		slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
+	}
+
 	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
 		_ = sess.Delete(session.KeyReturnURL)
@@ -138,4 +162,37 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(session.KeyTwoFactorCode, code)
 	_ = sess.Set(session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	s.render(w, r, "login/resend.html", renderContextNothing)
+}
+
+// parseOrgInviteIDFromURL extracts org invite ID from a URL path like /orginvite/{id}/signup
+func (s *Server) parseOrgInviteIDFromURL(rawURL string) int32 {
+	// URL pattern: /orginvite/{encoded_id}/signup
+	prefix := "/" + common.OrgInviteEndpoint + "/"
+	suffix := "/" + common.RegisterEndpoint
+
+	idx := strings.Index(rawURL, prefix)
+	if idx < 0 {
+		return -1
+	}
+
+	// Extract the path after the prefix
+	path := rawURL[idx+len(prefix):]
+
+	// Find where the path segment ends
+	endIdx := strings.Index(path, suffix)
+	if endIdx <= 0 {
+		return -1
+	}
+
+	idStr := path[:endIdx]
+	inviteID, err := s.IDHasher.Decrypt(idStr)
+	if err != nil || inviteID <= 0 {
+		return -1
+	}
+
+	if inviteID > math.MaxInt32 {
+		return -1
+	}
+
+	return int32(inviteID)
 }

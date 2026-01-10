@@ -3,11 +3,12 @@ package email
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
 type OrgInvitationContext struct {
-	UserName      string
-	OrgName       string
-	OrgOwnerName  string
-	OrgOwnerEmail string
-	OrgURL        string
+	UserName         string
+	OrgName          string
+	OrgOwnerName     string
+	OrgOwnerEmail    string
+	OrgURL           string
+	RequiresRegister bool
 }
 
 var (
@@ -39,11 +40,14 @@ const (
           <td>
             <img alt="Private Captcha" height="40" src="{{.CDNURL}}/portal/img/pc-logo-dark.png" style="display:block;outline:none;border:none;text-decoration:none" />
             <p style="font-size:16px;line-height:26px;margin:32px 0 16px">
-            Hello {{.UserName}},
+            Hello{{if .UserName}} {{.UserName}}{{end}},
             </p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
             <strong>{{.OrgOwnerName}}</strong> (<a href="mailto:{{.OrgOwnerEmail}}">{{.OrgOwnerEmail}}</a>) has invited you to the <strong>{{.OrgName}}</strong> organization in Private Captcha.
             </p>
+            {{if .RequiresRegister}}<p style="font-size:16px;line-height:26px;margin:16px 0">
+            To accept this invitation, you'll need to create an account first.
+            </p>{{end}}
             <table
               border="0"
               cellpadding="0"
@@ -61,7 +65,7 @@ const (
                         ><!--[if mso]><i style="mso-font-width:500%;mso-text-raise:18" hidden>&#8202;&#8202;</i><![endif]--></span
                       ><span
                         style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px"
-                        >Join the organization</span
+                        >{{if .RequiresRegister}}Create account &amp; join{{else}}Join the organization{{end}}</span
                       ><span
                         ><!--[if mso]><i style="mso-font-width:500%" hidden>&#8202;&#8202;&#8203;</i><![endif]--></span
                       ></a
@@ -83,11 +87,13 @@ const (
     </table>
   </body>
 </html>`
-	orgInvitationTextTemplate = `Hello {{.UserName}},
+	orgInvitationTextTemplate = `Hello{{if .UserName}} {{.UserName}}{{end}},
 
 {{.OrgOwnerName}} ({{.OrgOwnerEmail}}) has invited you to the '{{.OrgName}}' organization in Private Captcha.
-
-Join the organization by following this link: {{.OrgURL}}
+{{if .RequiresRegister}}
+To accept this invitation, you'll need to create an account first.
+{{end}}
+{{if .RequiresRegister}}Create account & join{{else}}Join the organization{{end}} by following this link: {{.OrgURL}}
 
 Warmly,
 The Private Captcha team

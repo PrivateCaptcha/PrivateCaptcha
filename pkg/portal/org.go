@@ -33,6 +33,7 @@ const (
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
 	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
+	orgUserCreatedAtFormat        = "02 Jan 2006"
 )
 
 type orgSettingsRenderContext struct {
@@ -54,6 +55,7 @@ type orgAuditLogsRenderContext struct {
 
 type orgUser struct {
 	Name      string
+	Email     string
 	ID        string
 	Level     string
 	CreatedAt string
@@ -93,7 +95,7 @@ func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHashe
 	return &orgUser{
 		Name:      user.Name,
 		ID:        hasher.Encrypt(int(user.ID)),
-		CreatedAt: user.CreatedAt.Time.Format("02 Jan 2006"),
+		CreatedAt: user.CreatedAt.Time.Format(orgUserCreatedAtFormat),
 		Level:     level,
 	}
 }
@@ -103,6 +105,32 @@ func usersToOrgUsers(users []*dbgen.GetOrganizationUsersRow, hasher common.Ident
 
 	for _, user := range users {
 		result = append(result, userToOrgUser(&user.User, string(user.Level), hasher))
+	}
+
+	return result
+}
+
+func usersWithEmailInvitesToOrgUsers(users []*dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) []*orgUser {
+	result := make([]*orgUser, 0, len(users))
+
+	for _, row := range users {
+		ou := &orgUser{
+			Level:     string(row.OrganizationUser.Level),
+			CreatedAt: row.OrganizationUser.CreatedAt.Time.Format(orgUserCreatedAtFormat),
+		}
+
+		if row.LinkedUserID.Valid {
+			// Linked user invite
+			ou.ID = hasher.Encrypt(int(row.LinkedUserID.Int32))
+			ou.Name = row.UserName.String
+			ou.Email = row.UserEmail.String
+		} else if row.OrganizationUser.Email.Valid {
+			// Email-only invite (not yet linked to a user)
+			ou.ID = hasher.Encrypt(int(row.OrganizationUser.ID))
+			ou.Email = row.OrganizationUser.Email.String
+		}
+
+		result = append(result, ou)
 	}
 
 	return result
@@ -377,13 +405,13 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 	}
 
-	members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	members, err := s.Store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return nil, err
 	}
 
-	renderCtx.Members = usersToOrgUsers(members, s.IDHasher)
+	renderCtx.Members = usersWithEmailInvitesToOrgUsers(members, s.IDHasher)
 
 	return &ViewModel{
 		Model:      renderCtx,

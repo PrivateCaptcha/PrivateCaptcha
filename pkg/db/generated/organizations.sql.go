@@ -77,8 +77,8 @@ const getOrganizationWithAccess = `-- name: GetOrganizationWithAccess :one
 `
 
 type GetOrganizationWithAccessParams struct {
-	ID     int32 `db:"id" json:"id"`
-	UserID int32 `db:"user_id" json:"user_id"`
+	ID     int32       `db:"id" json:"id"`
+	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
 type GetOrganizationWithAccessRow struct {

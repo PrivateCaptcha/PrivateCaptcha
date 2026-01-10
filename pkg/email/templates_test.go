@@ -28,11 +28,12 @@ func TestEmailTemplates(t *testing.T) {
 			ExpireDays: 7,
 		},
 		OrgInvitationContext: OrgInvitationContext{
-			//UserName:      "John Doe",
-			OrgName:       "My Organization",
-			OrgOwnerName:  "Pat Smith",
-			OrgOwnerEmail: "john.doe@example.com",
-			OrgURL:        "https://portal.privatecaptcha.com/org/5",
+			//UserName:         "John Doe",
+			OrgName:          "My Organization",
+			OrgOwnerName:     "Pat Smith",
+			OrgOwnerEmail:    "john.doe@example.com",
+			OrgURL:           "https://portal.privatecaptcha.com/org/5",
+			RequiresRegister: false,
 		},
 		TwoFactorEmailContext: TwoFactorEmailContext{
 			Code:     "123456",
