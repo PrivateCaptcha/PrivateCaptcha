@@ -8,7 +8,7 @@
             hx-on::config-request="event.detail.path += '/'+this.value"
             hx-swap="innerHTML">
             <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
-            <option value="{{ $.Const.SettingsEndpoint }}" selected>Members</option>
+            <option value="{{ $.Const.MembersEndpoint }}" selected>Members</option>
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
             <option value="{{ $.Const.EventsEndpoint }}">Audit logs</option>
         </select>

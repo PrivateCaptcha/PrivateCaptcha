@@ -131,7 +131,7 @@ func Redirect(url string, code int, w http.ResponseWriter, r *http.Request) {
 	} else {
 		slog.Log(r.Context(), LevelTrace, "Redirecting using location header", "url", url)
 		w.Header().Set("Location", url)
-		http.Redirect(w, r, url, http.StatusSeeOther)
+		http.Redirect(w, r, url, code)
 	}
 }
 
