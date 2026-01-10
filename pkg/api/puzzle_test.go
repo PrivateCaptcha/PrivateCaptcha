@@ -285,3 +285,42 @@ func TestPuzzleCachePriority(t *testing.T) {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 }
+
+// Test puzzle endpoint with invalid origin (mismatched domain)
+func TestGetPuzzleInvalidOrigin(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create property for one domain
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "correct-domain.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	// Ensure property is cached first
+	_, err = store.Impl().RetrievePropertyBySitekey(ctx, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access puzzle with wrong origin (different domain)
+	resp, err := puzzleSuite(ctx, sitekey, "wrong-domain.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should be forbidden because origin doesn't match property domain
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("Expected status forbidden for invalid origin, got %d", resp.StatusCode)
+	}
+}

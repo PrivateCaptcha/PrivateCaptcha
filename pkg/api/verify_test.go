@@ -853,3 +853,181 @@ func TestVerifyByOrgMember(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Negative test cases for pcVerifyHandler with invalid/empty form data
+func TestVerifyEmptyPayload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send empty payload
+	resp, err := verifySuite("", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for empty payload, got %d", resp.StatusCode)
+	}
+}
+
+func TestVerifyPayloadWithNullBytes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send payload with null bytes
+	resp, err := verifySuite("solution.\x00.signature", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail with bad request or return error in response
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		if err := checkVerifyError(resp, puzzle.ParseResponseError); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestVerifyMalformedPayload(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send payload without proper dots separators
+	resp, err := verifySuite("invalid-payload-without-dots", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for malformed payload, got %d", resp.StatusCode)
+	}
+}
+
+// Negative test cases for siteVerify (reCAPTCHA compatible) endpoint
+func TestSiteVerifyEmptyResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send empty response
+	resp, err := siteVerifySuite("", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestSiteVerifyMalformedResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send malformed response (no dots)
+	resp, err := siteVerifySuite("malformed-response", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestSiteVerifyWithNullBytesInResponse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send response with null bytes embedded
+	resp, err := siteVerifySuite("test\x00.data\x00.here", db.UUIDToSecret(apikey.ExternalID), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail parsing or return an error
+	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}

@@ -359,6 +359,46 @@ func TestRetrieveOrgProperty(t *testing.T) {
 	}
 }
 
+func TestRetrieveOrgPropertyNotCached(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "uncached-example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Delete property from cache to ensure it's not cached
+	cacheKey := db.PropertyCacheKey(prop.Sitekey)
+	if deleted := cache.Delete(ctx, cacheKey); !deleted {
+		t.Log("Property was not in cache before deletion attempt")
+	}
+
+	// Verify property is NOT cached using GetCachedPropertyBySitekey
+	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, prop.Sitekey)
+	if err != db.ErrCacheMiss {
+		t.Fatalf("Expected ErrCacheMiss for uncached property, got: %v", err)
+	}
+
+	// Now retrieve the property (this should fetch from DB)
+	retrieved, err := store.Impl().RetrieveOrgProperty(ctx, org, prop.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org property: %v", err)
+	}
+
+	if retrieved.ID != prop.ID {
+		t.Errorf("Retrieved property ID doesn't match: got %d, want %d", retrieved.ID, prop.ID)
+	}
+}
+
 func TestUpdateUser(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
