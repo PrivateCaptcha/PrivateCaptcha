@@ -56,6 +56,7 @@
 - To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
 - To run all Go integration tests, run `make test-docker-light`. Docker is required.
 - Do not use underscores in Golang test names
+- Put any new integration test for maintenance jobs to either Portal tests or API tests
 - Prefer to not add any new DB methods for tests only, first try to reuse existing DB methods with some tests-only helpers (even if not optimal)
 - To get unit tests code coverage, run `make test-unit-cover`
 - To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
