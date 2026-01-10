@@ -282,7 +282,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 	// Add pending invite to the list (with email only, no user info)
 	ou := &orgUser{
 		ID:    s.IDHasher.Encrypt(int(inviteRecord.ID)),
-		Email: email,
+		Email: common.MaskEmail(email, '*'),
 		Level: string(dbgen.AccessLevelInvited),
 	}
 	renderCtx.Members = append(renderCtx.Members, ou)
@@ -291,7 +291,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 	// Send invite email with registration link
 	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 		registerInviteURL := s.PartsURL(common.OrgInviteEndpoint, s.IDHasher.Encrypt(int(inviteRecord.ID)), common.RegisterEndpoint)
-		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL, true)
+		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL, true /*register*/)
 	})
 
 	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
@@ -538,7 +538,6 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organ
 func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
-	// Check registration availability first
 	if !s.canRegister.Load() {
 		return nil, errRegistrationDisabled
 	}
@@ -551,6 +550,14 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 		return nil, ErrInvalidRequestArg
 	}
 
+	model := &loginRenderContext{
+		CsrfRenderContext: CsrfRenderContext{
+			Token: s.XSRF.Token(""),
+		},
+		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+		IsRegister:           true,
+	}
+
 	// For security, try cached lookup first. If not found, still render register page
 	// The actual invite validation will happen after 2FA in the background job
 	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
@@ -560,20 +567,13 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 			return nil, ErrInvalidRequestArg
 		}
 
+		model.Email = invite.Email.String
+
 		// Store invite ID in session so we can link it after registration
 		sess := s.Sessions.SessionStart(w, r)
 		_ = sess.Set(session.KeyOrgInviteID, int32(inviteID))
 	}
 
 	// Return the register page view (same as regular register)
-	return &ViewModel{
-		Model: &loginRenderContext{
-			CsrfRenderContext: CsrfRenderContext{
-				Token: s.XSRF.Token(""),
-			},
-			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
-			IsRegister:           true,
-		},
-		View: loginTemplate,
-	}, nil
+	return &ViewModel{Model: model, View: loginTemplate}, nil
 }

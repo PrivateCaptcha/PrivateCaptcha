@@ -110,27 +110,31 @@ func usersToOrgUsers(users []*dbgen.GetOrganizationUsersRow, hasher common.Ident
 	return result
 }
 
+func userWithEmailInviteToOrgUser(row *dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) *orgUser {
+	ou := &orgUser{
+		Level:     string(row.OrganizationUser.Level),
+		CreatedAt: row.OrganizationUser.CreatedAt.Time.Format(orgUserCreatedAtFormat),
+	}
+
+	if row.LinkedUserID.Valid {
+		// Linked user invite
+		ou.ID = hasher.Encrypt(int(row.LinkedUserID.Int32))
+		ou.Name = row.UserName.String
+		ou.Email = common.MaskEmail(row.UserEmail.String, '*')
+	} else if row.OrganizationUser.Email.Valid {
+		// Email-only invite (not yet linked to a user)
+		ou.ID = hasher.Encrypt(int(row.OrganizationUser.ID))
+		ou.Email = common.MaskEmail(row.OrganizationUser.Email.String, '*')
+	}
+
+	return ou
+}
+
 func usersWithEmailInvitesToOrgUsers(users []*dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) []*orgUser {
 	result := make([]*orgUser, 0, len(users))
 
 	for _, row := range users {
-		ou := &orgUser{
-			Level:     string(row.OrganizationUser.Level),
-			CreatedAt: row.OrganizationUser.CreatedAt.Time.Format(orgUserCreatedAtFormat),
-		}
-
-		if row.LinkedUserID.Valid {
-			// Linked user invite
-			ou.ID = hasher.Encrypt(int(row.LinkedUserID.Int32))
-			ou.Name = row.UserName.String
-			ou.Email = row.UserEmail.String
-		} else if row.OrganizationUser.Email.Valid {
-			// Email-only invite (not yet linked to a user)
-			ou.ID = hasher.Encrypt(int(row.OrganizationUser.ID))
-			ou.Email = row.OrganizationUser.Email.String
-		}
-
-		result = append(result, ou)
+		result = append(result, userWithEmailInviteToOrgUser(row, hasher))
 	}
 
 	return result

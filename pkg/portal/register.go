@@ -83,11 +83,14 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
+
 	data := &loginRenderContext{
 		CsrfRenderContext: CsrfRenderContext{
 			Token: s.XSRF.Token(""),
 		},
 		CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
+		Email:                email,
 		IsRegister:           true,
 	}
 
@@ -135,9 +138,9 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	email := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if err := s.EmailVerifier.VerifyEmail(ctx, email); err != nil {
 		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
+		data.Email = ""
 		data.EmailError = "Email address is not valid."
 		s.render(w, r, registerContentsTemplate, data)
 		return
@@ -145,6 +148,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := s.Store.Impl().FindUserByEmail(ctx, email); err == nil {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
+		data.Email = ""
 		data.EmailError = "Such email is already registered. Login instead?"
 		s.render(w, r, registerContentsTemplate, data)
 		return
@@ -155,7 +159,8 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		data.EmailError = "Failed to send a confirmation email. Please try again."
+		s.render(w, r, registerContentsTemplate, data)
 		return
 	}
 
