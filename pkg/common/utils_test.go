@@ -3,6 +3,8 @@ package common
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
@@ -231,5 +233,52 @@ func TestChunkedCleanup(t *testing.T) {
 
 	if calls < 2 {
 		t.Errorf("Expected deleter to be called at least twice, got %d calls", calls)
+	}
+}
+
+type unserializableType struct {
+	Ch chan int
+}
+
+func TestSendJSONResponseSerializationError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	w := httptest.NewRecorder()
+
+	// Channels cannot be serialized to JSON
+	data := unserializableType{Ch: make(chan int)}
+
+	SendJSONResponse(ctx, w, data)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status code %d, got %d", http.StatusInternalServerError, w.Code)
+	}
+}
+
+func TestSendJSONResponseSuccess(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	w := httptest.NewRecorder()
+
+	data := struct {
+		Name string `json:"name"`
+	}{Name: "test"}
+
+	SendJSONResponse(ctx, w, data)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code %d, got %d", http.StatusOK, w.Code)
+	}
+
+	contentType := w.Header().Get(HeaderContentType)
+	if contentType != ContentTypeJSON {
+		t.Errorf("Expected Content-Type %q, got %q", ContentTypeJSON, contentType)
+	}
+
+	expected := `{"name":"test"}`
+	if w.Body.String() != expected {
+		t.Errorf("Expected body %q, got %q", expected, w.Body.String())
 	}
 }
