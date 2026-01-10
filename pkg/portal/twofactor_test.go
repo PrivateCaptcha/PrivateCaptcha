@@ -276,7 +276,9 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLValid(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	// Use the server's IDHasher
 	encodedID := server.IDHasher.Encrypt(123)
@@ -290,7 +292,9 @@ func TestParseOrgInviteIDFromURLValid(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLNoPrefixMatch(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	// URL without orginvite prefix
 	rawURL := "https://portal.example.com/other/path/" + common.RegisterEndpoint
@@ -303,7 +307,9 @@ func TestParseOrgInviteIDFromURLNoPrefixMatch(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLNoSuffix(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	encodedID := server.IDHasher.Encrypt(123)
 	// URL without /signup suffix
@@ -317,7 +323,9 @@ func TestParseOrgInviteIDFromURLNoSuffix(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLInvalidID(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	// Use an invalid encoded ID
 	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "/invalid-id/" + common.RegisterEndpoint
@@ -330,7 +338,9 @@ func TestParseOrgInviteIDFromURLInvalidID(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLEmptyPath(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	// Path with empty ID segment
 	rawURL := "https://portal.example.com/" + common.OrgInviteEndpoint + "//" + common.RegisterEndpoint
@@ -343,7 +353,9 @@ func TestParseOrgInviteIDFromURLEmptyPath(t *testing.T) {
 }
 
 func TestParseOrgInviteIDFromURLRelativePath(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
 	encodedID := server.IDHasher.Encrypt(456)
 	// Relative URL

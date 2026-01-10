@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -107,5 +108,191 @@ func TestGetRegister(t *testing.T) {
 
 	if len(renderCtx.Token) == 0 {
 		t.Error("Expected CSRF token to be populated")
+	}
+}
+
+func TestPostRegisterEmptyName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Empty name
+	email := t.Name() + "@privatecaptcha.com"
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, email)
+	form.Add(common.ParamName, "")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	// Should show error about name being too short
+	body := w.Body.String()
+	if !strings.Contains(body, "name") && !strings.Contains(body, "longer") {
+		t.Error("Expected error message about name")
+	}
+}
+
+func TestPostRegisterShortName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Very short name (less than 3 chars)
+	email := t.Name() + "@privatecaptcha.com"
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, email)
+	form.Add(common.ParamName, "AB")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "longer") {
+		t.Error("Expected error message about name being too short")
+	}
+}
+
+func TestPostRegisterInvalidNameChars(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Name with invalid characters
+	email := t.Name() + "@privatecaptcha.com"
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, email)
+	form.Add(common.ParamName, "Test@User#123")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "invalid") {
+		t.Error("Expected error message about invalid name characters")
+	}
+}
+
+func TestPostRegisterMalformedEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Malformed email
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, "not-an-email")
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "not valid") {
+		t.Error("Expected error message about invalid email")
+	}
+}
+
+func TestPostRegisterMissingTerms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// No terms accepted
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+	// No terms
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Missing terms should redirect to bad request
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect status, got %v", w.Code)
+	}
+}
+
+func TestPostRegisterMissingCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// No captcha solution
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamTerms, "true")
+	// No captcha solution
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "captcha") {
+		t.Error("Expected error message about captcha")
 	}
 }

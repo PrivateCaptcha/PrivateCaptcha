@@ -155,6 +155,155 @@ func TestPostLogin(t *testing.T) {
 	}
 }
 
+func TestPostLoginEmptyEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data with empty email
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, "")
+	form.Add(common.ParamPortalSolution, "captcha solution")
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	// Empty email should fail validation
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	// Response body should contain an error message
+	body := rr.Body.String()
+	if !strings.Contains(body, "not valid") && !strings.Contains(body, "error") {
+		t.Error("Expected error message for invalid email")
+	}
+}
+
+func TestPostLoginMalformedEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data with malformed email
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, "not-an-email")
+	form.Add(common.ParamPortalSolution, "captcha solution")
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	// Malformed email should fail validation
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "not valid") {
+		t.Error("Expected error message for malformed email")
+	}
+}
+
+func TestPostLoginNonexistentUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data with email that doesn't exist
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, "nonexistent-user-42@example.com")
+	form.Add(common.ParamPortalSolution, "captcha solution")
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	// Nonexistent user should fail
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "does not exist") {
+		t.Error("Expected error message for nonexistent user")
+	}
+}
+
+func TestPostLoginMissingCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data WITHOUT captcha solution
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, "test@example.com")
+	// No captcha solution
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	// Missing captcha should fail
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "captcha") {
+		t.Error("Expected error message for missing captcha")
+	}
+}
+
 func TestLogout(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
