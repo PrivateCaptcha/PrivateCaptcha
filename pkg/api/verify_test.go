@@ -1167,17 +1167,15 @@ func TestWarmupAPICacheJob(t *testing.T) {
 	}
 
 	// Seed some activity in time series (similar to TestGetPropertyStats)
-	if memTS, ok := timeSeries.(*db.MemoryTimeSeries); ok {
-		records := []*common.VerifyRecord{
-			{
-				PropertyID: property.ID,
-				UserID:     user.ID,
-				OrgID:      org.ID,
-				Timestamp:  time.Now().UTC(),
-			},
-		}
-		memTS.WriteVerifyLogBatch(ctx, records)
+	records := []*common.VerifyRecord{
+		{
+			PropertyID: property.ID,
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			Timestamp:  time.Now().UTC(),
+		},
 	}
+	timeSeries.WriteVerifyLogBatch(ctx, records)
 
 	// Clear cache for the API key before running the job
 	apiSecret := db.UUIDToSecret(apiKey.ExternalID)
