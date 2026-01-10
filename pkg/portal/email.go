@@ -16,7 +16,8 @@ import (
 )
 
 var (
-	errInvalidEmail = errors.New("email is not valid")
+	errInvalidEmail       = errors.New("email is not valid")
+	errInvalidEmailDomain = errors.New("email domain is unlikely valid")
 )
 
 type PortalEmailVerifier struct{}
@@ -24,7 +25,19 @@ type PortalEmailVerifier struct{}
 var _ common.EmailVerifier = (*PortalEmailVerifier)(nil)
 
 func (ev *PortalEmailVerifier) VerifyEmail(ctx context.Context, email string) error {
-	return checkmail.ValidateFormat(email)
+	if err := checkmail.ValidateFormat(email); err != nil {
+		return err
+	}
+
+	if at := strings.LastIndex(email, "@"); at != -1 {
+		domain := email[at+1:]
+
+		if !emailpkg.IsLikelyValidDomain(domain) {
+			return errInvalidEmailDomain
+		}
+	}
+
+	return nil
 }
 
 type PortalMailer struct {
