@@ -1620,10 +1620,10 @@ func TestOrgMembersShowsEmailInvites(t *testing.T) {
 	foundExistingUser := false
 	foundEmailInvite := false
 	for _, m := range renderCtx.Members {
-		if m.Email == existingUser.Email {
+		if m.Email == common.MaskEmail(existingUser.Email, '*') {
 			foundExistingUser = true
 		}
-		if m.Email == emailInvite {
+		if m.Email == common.MaskEmail(emailInvite, '*') {
 			foundEmailInvite = true
 		}
 	}
