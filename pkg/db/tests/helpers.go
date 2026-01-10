@@ -45,7 +45,7 @@ func CreateNewPuzzleAPIKeyParams(name string, tnow time.Time, period time.Durati
 }
 
 func CreateNewSubscriptionParams(plan billing.Plan) *dbgen.CreateSubscriptionParams {
-	tnow := time.Now()
+	tnow := time.Now().UTC()
 	priceIDMonthly, priceIDYearly := plan.PriceIDs()
 	priceID := priceIDMonthly
 	if len(priceID) == 0 {
@@ -59,7 +59,7 @@ func CreateNewSubscriptionParams(plan billing.Plan) *dbgen.CreateSubscriptionPar
 		ExternalCustomerID:     db.Text(xid.New().String()),
 		Status:                 string(billing.InternalStatusTrialing),
 		Source:                 dbgen.SubscriptionSourceInternal,
-		TrialEndsAt:            db.Timestampz(tnow.AddDate(0, 1, 0)),
+		TrialEndsAt:            db.Timestampz(tnow.Add(24 * time.Duration(plan.TrialDays()))),
 		NextBilledAt:           db.Timestampz(tnow.AddDate(0, 1, 0)),
 	}
 }

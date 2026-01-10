@@ -1774,14 +1774,11 @@ func TestDeleteOrgMembers(t *testing.T) {
 	// Delete member from org
 	orgID := server.IDHasher.Encrypt(int(org.ID))
 	memberID := server.IDHasher.Encrypt(int(member.ID))
-	csrfToken := server.XSRF.Token(strconv.Itoa(int(owner.ID)))
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, csrfToken)
-
-	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", orgID, memberID), strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", orgID, memberID), nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
