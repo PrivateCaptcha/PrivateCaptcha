@@ -54,7 +54,7 @@ func TestDismissNotification(t *testing.T) {
 	}
 
 	// Store notification ID in session
-	sess.Set(ctx, session.KeyNotificationID, notification.ID)
+	sess.Set(session.KeyNotificationID, notification.ID)
 
 	// Create encoded notification ID
 	encodedID := server.IDHasher.Encrypt(int(notification.ID))

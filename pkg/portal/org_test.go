@@ -1745,14 +1745,14 @@ func TestDeleteOrgMembers(t *testing.T) {
 	}
 
 	// Verify member is in org
-	members, err := store.Impl().RetrieveOrgMembers(ctx, org.ID)
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve members: %v", err)
 	}
 
 	foundMember := false
 	for _, m := range members {
-		if m.UserID == member.ID {
+		if m.User.ID == member.ID {
 			foundMember = true
 			break
 		}
@@ -1791,13 +1791,13 @@ func TestDeleteOrgMembers(t *testing.T) {
 	}
 
 	// Verify member is no longer in org
-	members, err = store.Impl().RetrieveOrgMembers(ctx, org.ID)
+	members, err = store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve members after deletion: %v", err)
 	}
 
 	for _, m := range members {
-		if m.UserID == member.ID {
+		if m.User.ID == member.ID {
 			t.Error("Member should no longer be in org after deletion")
 		}
 	}

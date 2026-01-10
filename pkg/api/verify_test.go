@@ -21,6 +21,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -1029,5 +1030,108 @@ func TestSiteVerifyWithNullBytesInResponse(t *testing.T) {
 	// Should fail parsing or return an error
 	if resp.StatusCode != http.StatusBadRequest && resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status BadRequest or OK with error, got %d", resp.StatusCode)
+	}
+}
+
+func TestReportingVerifierCallsReportFunc(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create a mock verifier result with all required fields for Valid() to return true
+	result := &puzzle.VerifyResult{
+		PropertyID: 123,
+		UserID:     1,
+		OrgID:      1,
+		CreatedAt:  time.Now(),
+		Domain:     "example.com",
+		Error:      puzzle.VerifyNoError,
+	}
+
+	// Track if report function was called
+	reportCalled := false
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+		reportCalled = true
+		if res.PropertyID != result.PropertyID {
+			t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+		}
+	}
+
+	// Create stub puzzle engine
+	stubEngine := &portal_tests.StubPuzzleEngine{
+		Result: result,
+	}
+
+	// Create reporting verifier
+	rv := &reportingVerifier{
+		verifier:   stubEngine,
+		reportFunc: reportFunc,
+	}
+
+	// Create a stub payload
+	stubPayload := puzzle.NewStubPayload(puzzle.NewComputePuzzle(0, [puzzle.PropertyIDSize]byte{}, 0))
+
+	// Call Verify
+	res, err := rv.Verify(ctx, stubPayload, nil, time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify the result is returned
+	if res.PropertyID != result.PropertyID {
+		t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+	}
+
+	// Verify report function was called for valid result
+	if !reportCalled {
+		t.Error("Expected report function to be called for valid result")
+	}
+}
+
+func TestReportingVerifierNoReportOnError(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+
+	// Create a mock verifier result with error
+	result := &puzzle.VerifyResult{
+		PropertyID: 123,
+		Error:      puzzle.InvalidSolutionError,
+	}
+
+	// Track if report function was called
+	reportCalled := false
+	reportFunc := func(ctx context.Context, res *puzzle.VerifyResult) {
+		reportCalled = true
+	}
+
+	// Create stub puzzle engine
+	stubEngine := &portal_tests.StubPuzzleEngine{
+		Result: result,
+	}
+
+	// Create reporting verifier
+	rv := &reportingVerifier{
+		verifier:   stubEngine,
+		reportFunc: reportFunc,
+	}
+
+	// Create a stub payload
+	stubPayload := puzzle.NewStubPayload(puzzle.NewComputePuzzle(0, [puzzle.PropertyIDSize]byte{}, 0))
+
+	// Call Verify
+	res, err := rv.Verify(ctx, stubPayload, nil, time.Now())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+
+	// Verify the result is returned
+	if res.PropertyID != result.PropertyID {
+		t.Errorf("Expected PropertyID %d, got %d", result.PropertyID, res.PropertyID)
+	}
+
+	// Verify report function was NOT called for invalid result
+	if reportCalled {
+		t.Error("Expected report function NOT to be called for invalid result")
 	}
 }

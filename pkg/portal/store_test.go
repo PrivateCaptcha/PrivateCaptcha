@@ -376,14 +376,16 @@ func TestRetrieveOrgPropertyNotCached(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
+	sitekey := db.UUIDToSiteKey(prop.ExternalID)
+
 	// Delete property from cache to ensure it's not cached
-	cacheKey := db.PropertyCacheKey(prop.Sitekey)
+	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
 	if deleted := cache.Delete(ctx, cacheKey); !deleted {
 		t.Log("Property was not in cache before deletion attempt")
 	}
 
 	// Verify property is NOT cached using GetCachedPropertyBySitekey
-	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, prop.Sitekey)
+	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, nil)
 	if err != db.ErrCacheMiss {
 		t.Fatalf("Expected ErrCacheMiss for uncached property, got: %v", err)
 	}
@@ -508,8 +510,12 @@ func TestRetrieveTrialUsers(t *testing.T) {
 		t.Fatalf("Failed to create trial account: %v", err)
 	}
 
-	// Retrieve trial users
-	trialUsers, err := store.Impl().RetrieveTrialUsers(ctx)
+	// Retrieve trial users with proper params
+	// from, to times span the trial period, status is "trialing"
+	tnow := time.Now().UTC()
+	from := tnow.Add(-30 * 24 * time.Hour)
+	to := tnow
+	trialUsers, err := store.Impl().RetrieveTrialUsers(ctx, from, to, "trialing", 100, true)
 	if err != nil {
 		t.Fatalf("Failed to retrieve trial users: %v", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -904,5 +905,78 @@ func TestAuditLogEndpointsInvalidParams(t *testing.T) {
 				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
 			}
 		})
+	}
+}
+
+func TestExportAuditLogsCSV(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create some audit logs by creating properties
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test1.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test2.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Request CSV export
+	req := httptest.NewRequest("GET", "/auditlogs/export?days=14", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	// Check content type
+	contentType := w.Header().Get(common.HeaderContentType)
+	if contentType != common.ContentTypeCSV {
+		t.Errorf("Expected Content-Type %s, got %s", common.ContentTypeCSV, contentType)
+	}
+
+	// Check content disposition
+	contentDisposition := w.Header().Get("Content-Disposition")
+	if contentDisposition == "" {
+		t.Error("Expected Content-Disposition header to be set")
+	}
+
+	// Check CSV content
+	body := w.Body.String()
+	if body == "" {
+		t.Error("Expected non-empty CSV content")
+	}
+
+	// Verify CSV has header row
+	if len(body) > 0 {
+		lines := strings.Split(body, "\n")
+		if len(lines) < 1 {
+			t.Error("Expected at least one line in CSV (header)")
+		}
+		// Check header columns
+		header := lines[0]
+		if !strings.Contains(header, "id") || !strings.Contains(header, "action") {
+			t.Error("Expected CSV header to contain 'id' and 'action' columns")
+		}
 	}
 }

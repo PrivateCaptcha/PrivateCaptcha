@@ -99,11 +99,13 @@ func TestWarmupAPICacheJob(t *testing.T) {
 	if memTS, ok := timeSeries.(*db.MemoryTimeSeries); ok {
 		records := []*common.VerifyRecord{
 			{
-				PropertyID:  property.ID,
-				RequestTime: time.Now().UTC(),
+				PropertyID: property.ID,
+				UserID:     user.ID,
+				OrgID:      org.ID,
+				Timestamp:  time.Now().UTC(),
 			},
 		}
-		memTS.InsertVerifyRecords(ctx, records)
+		memTS.WriteVerifyLogBatch(ctx, records)
 	}
 
 	// Clear cache for the API key before running the job
@@ -176,8 +178,8 @@ func TestWarmupPortalAuthJob(t *testing.T) {
 	}
 
 	// If portal properties exist, check if they're cached
-	loginSitekey := db.UUIDToSiteKey(db.PortalLoginPropertyUUID)
-	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, loginSitekey)
+	loginSitekey := db.PortalLoginSitekey
+	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, loginSitekey, nil)
 	// This may return ErrCacheMiss if property doesn't exist - that's OK
 	if err != nil && err != db.ErrCacheMiss && err != db.ErrRecordNotFound {
 		t.Logf("GetCachedPropertyBySitekey returned: %v (may be expected if portal property not seeded)", err)
