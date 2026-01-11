@@ -201,3 +201,40 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  coverage-html:
+    name: Coverage HTML Report
+    runs-on: ubuntu-latest
+    needs: tests
+    if: success()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+
+      - name: Restore unit coverage report
+        uses: actions/cache/restore@v4
+        with:
+          path: coverage_unit.cov
+          key: unit-coverage-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Restore integration coverage report
+        uses: actions/cache/restore@v4
+        with:
+          path: coverage_reports
+          key: integration-coverage-${{ github.run_id }}
+          fail-on-cache-miss: true
+
+      - name: Generate HTML coverage report
+        run: ./docker/generate-coverage-html.sh coverage_html
+
+      - name: Upload coverage HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage_html/coverage.html
+          retention-days: 30

@@ -41,5 +41,6 @@ fullcode.txt
 coverage_*.out
 coverage_*.cov
 coverage_integration/
+coverage_html/
 
 *.keys
