@@ -90,19 +90,7 @@ func ServiceMiddleware(svc string) func(next http.Handler) http.Handler {
 
 func TimeoutHandler(timeout time.Duration) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		h := func(w http.ResponseWriter, r *http.Request) {
-			ctx, cancel := context.WithTimeout(r.Context(), timeout)
-			defer func() {
-				cancel()
-				if ctx.Err() == context.DeadlineExceeded {
-					w.WriteHeader(http.StatusGatewayTimeout)
-				}
-			}()
-
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
-		}
-		return http.HandlerFunc(h)
+		return http.TimeoutHandler(next, timeout, "")
 	}
 }
 
