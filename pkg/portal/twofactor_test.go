@@ -13,7 +13,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
@@ -32,7 +31,7 @@ func TestPostTwoFactor(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,8 +122,12 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 		t.Fatal("Didn't delete cached session")
 	}
 
-	stubMailer := server.Mailer.(*email.StubMailer)
-	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), stubMailer.LastCode, cookie)
+	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, cookie)
 
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
@@ -174,8 +177,10 @@ func TestResend2FA(t *testing.T) {
 	}
 	cookie := resp.Cookies()[idx]
 
-	stubMailer := server.Mailer.(*email.StubMailer)
-	originalCode := stubMailer.LastCode
+	originalCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Try to use a wrong code first (but don't complete login)
 	// This simulates a user who received the code but wants to resend
@@ -192,9 +197,9 @@ func TestResend2FA(t *testing.T) {
 	}
 
 	// The code should have been reissued and should be different
-	newCode := stubMailer.LastCode
-	if newCode == 0 {
-		t.Error("New 2FA code was not generated")
+	newCode, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Verify that the new code is different from the original
@@ -260,7 +265,7 @@ func TestResend2FAWithCompletedSession(t *testing.T) {
 	}
 
 	// Complete the full authentication
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatal(err)
 	}

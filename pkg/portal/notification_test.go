@@ -8,7 +8,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
@@ -36,7 +35,7 @@ func TestDismissNotification(t *testing.T) {
 		t.Fatalf("Failed to create notification: %v", err)
 	}
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatalf("Failed to authenticate: %v", err)
 	}
@@ -92,7 +91,7 @@ func TestDismissNotificationInvalidID(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatalf("Failed to authenticate: %v", err)
 	}

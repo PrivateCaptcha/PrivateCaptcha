@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	emailpkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
 func registerSuite(srv *http.ServeMux, name, email, token string) *http.Response {
@@ -51,8 +51,13 @@ func TestPostRegister(t *testing.T) {
 	}
 	cookie := resp.Cookies()[idx]
 
-	stubMailer := server.Mailer.(*emailpkg.StubMailer)
-	resp = twoFactorSuite(srv, email, server.XSRF.Token(email), stubMailer.LastCode, cookie)
+	ctx := t.Context()
+	code, err := portal_tests.TwoFactorCodeFromSession(ctx, cookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp = twoFactorSuite(srv, email, server.XSRF.Token(email), code, cookie)
 
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
@@ -62,7 +67,6 @@ func TestPostRegister(t *testing.T) {
 		t.Errorf("unexpected redirect: %v", location)
 	}
 
-	ctx := t.Context()
 	user, err := store.Impl().FindUserByEmail(ctx, email)
 	if err != nil {
 		t.Fatal(err)

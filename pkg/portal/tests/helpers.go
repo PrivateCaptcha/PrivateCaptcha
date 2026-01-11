@@ -19,8 +19,8 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	emailpkg "github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
 )
@@ -116,7 +116,30 @@ func Text(node *html.Node) string {
 	return strings.TrimSpace(sel.Text())
 }
 
-func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xsrf *common.XSRFMiddleware, cookieName string, stubMailer *emailpkg.StubMailer) (*http.Cookie, error) {
+func TwoFactorCodeFromResponse(ctx context.Context, resp *http.Response, sessions *session.Manager) (int, error) {
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == sessions.CookieName })
+	if idx == -1 {
+		return 0, errors.New("failed to find a cookie " + sessions.CookieName)
+	}
+	cookie := resp.Cookies()[idx]
+
+	return TwoFactorCodeFromSession(ctx, cookie.Value, sessions.Store)
+}
+
+func TwoFactorCodeFromSession(ctx context.Context, cookie string, store session.Store) (int, error) {
+	sess, err := store.Read(ctx, cookie, false /*skip cache*/)
+	if err != nil {
+		return 0, err
+	}
+
+	if code, ok := sess.Get(ctx, session.KeyTwoFactorCode).(int); ok {
+		return code, nil
+	}
+
+	return 0, errors.New("2FA code not found in session")
+}
+
+func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xsrf *common.XSRFMiddleware, sessions *session.Manager) (*http.Cookie, error) {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, xsrf.Token(""))
 	form.Add(common.ParamEmail, email)
@@ -129,16 +152,27 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == cookieName })
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == sessions.CookieName })
 	if idx == -1 {
 		return nil, errors.New("cannot find session cookie in response")
 	}
 	cookie := resp.Cookies()[idx]
 
+	sess, err := sessions.Store.Read(ctx, cookie.Value, false /*skip cache*/)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read server session from session cookie", common.ErrAttr(err))
+		return cookie, err
+	}
+
+	code, ok := sess.Get(ctx, session.KeyTwoFactorCode).(int)
+	if !ok {
+		return nil, errors.New("2FA code not found in session")
+	}
+
 	form = url.Values{}
 	form.Add(common.ParamCSRFToken, xsrf.Token(email))
 	form.Add(common.ParamEmail, email)
-	form.Add(common.ParamVerificationCode, strconv.Itoa(stubMailer.LastCode))
+	form.Add(common.ParamVerificationCode, strconv.Itoa(code))
 
 	// now send the 2fa request
 	req = httptest.NewRequest("POST", "/"+common.TwoFactorEndpoint, bytes.NewBufferString(form.Encode()))

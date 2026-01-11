@@ -13,7 +13,6 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
@@ -140,18 +139,14 @@ func TestPostLogin(t *testing.T) {
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	rr = httptest.NewRecorder()
 	server.postLogin(rr, req)
+	resp := rr.Result()
 
-	if rr.Code != http.StatusOK {
-		t.Errorf("Unexpected post login code: %v", rr.Code)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected post login code: %v", resp.StatusCode)
 	}
 
-	// Check if the two-factor code is set in the StubMailer
-	stubMailer, ok := server.Mailer.(*email.StubMailer)
-	if !ok {
-		t.Fatal("failed to cast Mailer to StubMailer")
-	}
-	if stubMailer.LastCode == 0 {
-		t.Error("two-factor code not set in StubMailer")
+	if _, err := portal_tests.TwoFactorCodeFromResponse(ctx, resp, server.Sessions); err != nil {
+		t.Error(err)
 	}
 }
 
@@ -319,7 +314,7 @@ func TestLogout(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions.CookieName, server.Mailer.(*email.StubMailer))
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatal(err)
 	}

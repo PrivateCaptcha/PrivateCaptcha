@@ -119,6 +119,11 @@ func TestMain(m *testing.M) {
 
 	sessionStore := db.NewSessionStore(store, session.KeyPersistent)
 
+	ctx := context.TODO()
+	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
+	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
+	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, cfg)
+
 	server = &Server{
 		Stage:      common.StageTest,
 		Store:      store,
@@ -130,7 +135,7 @@ func TestMain(m *testing.M) {
 			Store:       sessionStore,
 			MaxLifetime: sessionStore.TTL(),
 		},
-		Mailer:             &email.StubMailer{},
+		Mailer:             mailer,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
 		PuzzleEngine:       puzzleEngine,
 		Metrics:            monitoring.NewStub(),
@@ -144,7 +149,6 @@ func TestMain(m *testing.M) {
 		EmailVerifier:      &PortalEmailVerifier{},
 	}
 
-	ctx := context.TODO()
 	templatesBuilder := NewTemplatesBuilder()
 	if err := templatesBuilder.AddFS(ctx, web.Templates(), "core"); err != nil {
 		panic(err)
