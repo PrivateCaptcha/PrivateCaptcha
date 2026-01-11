@@ -69,7 +69,7 @@ echo "$mode" > "$MERGED_COV"
 
 # Merge all coverage data (excluding mode lines)
 # For duplicate entries (same location and statement count), take max hit count
-cat "${coverage_files[@]}" | grep -v "^mode:" | sort | awk '
+grep -h -v "^mode:" "${coverage_files[@]}" | sort | awk '
 {
     # Format: file:startLine.startCol,endLine.endCol stmtCount hitCount
     location = $1

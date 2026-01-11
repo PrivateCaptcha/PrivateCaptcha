@@ -207,6 +207,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: tests
     if: success()
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
