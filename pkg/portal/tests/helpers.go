@@ -158,15 +158,9 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	}
 	cookie := resp.Cookies()[idx]
 
-	sess, err := sessions.Store.Read(ctx, cookie.Value, false /*skip cache*/)
+	code, err := TwoFactorCodeFromSession(ctx, cookie.Value, sessions.Store)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read server session from session cookie", common.ErrAttr(err))
 		return cookie, err
-	}
-
-	code, ok := sess.Get(ctx, session.KeyTwoFactorCode).(int)
-	if !ok {
-		return nil, errors.New("2FA code not found in session")
 	}
 
 	form = url.Values{}
