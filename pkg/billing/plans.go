@@ -46,7 +46,7 @@ func (plan *basePlan) Equals(productID string, priceID string) bool {
 func (p *basePlan) Name() string                  { return p.name }
 func (p *basePlan) ProductID() string             { return p.productID }
 func (p *basePlan) PriceIDs() (string, string)    { return p.priceIDMonthly, p.priceIDYearly }
-func (p *basePlan) TrialDays() int                { return 14 }
+func (p *basePlan) TrialDays() int                { return p.trialDays }
 func (p *basePlan) RequestsLimit() int64          { return p.requestsLimit }
 func (p *basePlan) APIRequestsPerSecond() float64 { return p.apiRequestsPerSecond }
 func (p *basePlan) PropertiesLimit() int          { return 50 }
