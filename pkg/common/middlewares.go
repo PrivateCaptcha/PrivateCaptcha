@@ -62,6 +62,8 @@ func NoopMiddleware(next http.Handler) http.Handler {
 
 func Recovered(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		recorder := &statusRecorder{ResponseWriter: w}
+
 		defer func() {
 			if rvr := recover(); rvr != nil {
 				if rvr == http.ErrAbortHandler {
@@ -70,13 +72,13 @@ func Recovered(next http.Handler) http.Handler {
 
 				slog.ErrorContext(r.Context(), "Crash", "panic", rvr, "stack", string(debug.Stack()))
 
-				if r.Header.Get("Connection") != "Upgrade" {
+				if r.Header.Get("Connection") != "Upgrade" && !recorder.wroteHeader.Load() {
 					w.WriteHeader(http.StatusInternalServerError)
 				}
 			}
 		}()
 
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(recorder, r)
 	})
 }
 
