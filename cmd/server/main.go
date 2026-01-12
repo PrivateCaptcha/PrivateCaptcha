@@ -40,8 +40,8 @@ const (
 	modeRollback            = "rollback"
 	modeServer              = "server"
 	modeAuto                = "auto"
-	_readinessDrainDelay    = 1 * time.Second
-	_shutdownHardPeriod     = 3 * time.Second
+	_readinessDrainDelay    = 5 * time.Second
+	_shutdownHardPeriod     = 5 * time.Second
 	_shutdownPeriod         = 10 * time.Second
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
