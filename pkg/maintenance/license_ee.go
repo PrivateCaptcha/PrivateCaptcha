@@ -94,7 +94,7 @@ func doFetchActivation(ctx context.Context, licenseURL, licenseKey, hwid, versio
 	form.Set(common.ParamHardwareID, hwid)
 	form.Set(common.ParamVersion, version)
 
-	req, err := http.NewRequest(http.MethodPost, licenseURL, bytes.NewBufferString(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, licenseURL, bytes.NewBufferString(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
