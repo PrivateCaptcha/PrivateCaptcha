@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"maps"
@@ -88,7 +89,45 @@ func ServiceMiddleware(svc string) func(next http.Handler) http.Handler {
 	}
 }
 
-func TimeoutHandler(timeout time.Duration) func(next http.Handler) http.Handler {
+type statusRecorder struct {
+	http.ResponseWriter
+	wroteHeader atomic.Bool
+}
+
+func (w *statusRecorder) WriteHeader(code int) {
+	// Swap returns true if it was already true;
+	// we only call the underlying WriteHeader if it was false.
+	if w.wroteHeader.CompareAndSwap(false, true) {
+		w.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (w *statusRecorder) Write(b []byte) (int, error) {
+	w.wroteHeader.Store(true)
+	return w.ResponseWriter.Write(b)
+}
+
+func SoftTimeoutHandler(timeout time.Duration) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			recorder := &statusRecorder{ResponseWriter: w}
+
+			ctx, cancel := context.WithTimeout(r.Context(), timeout)
+			defer func() {
+				cancel()
+				if ctx.Err() == context.DeadlineExceeded && !recorder.wroteHeader.Load() {
+					w.WriteHeader(http.StatusGatewayTimeout)
+				}
+			}()
+
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(recorder, r)
+		})
+	}
+}
+
+func HardTimeoutHandler(timeout time.Duration) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.TimeoutHandler(next, timeout, "")
 	}

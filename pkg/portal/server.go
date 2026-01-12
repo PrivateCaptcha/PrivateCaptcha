@@ -255,12 +255,12 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 }
 
 func (s *Server) MiddlewarePrivateRead(public alice.Chain) alice.Chain {
-	internalTimeout := common.TimeoutHandler(10 * time.Second)
+	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	return public.Append(s.maintenance, internalTimeout, s.private)
 }
 
 func (s *Server) MiddlewarePrivateWrite(public alice.Chain) alice.Chain {
-	internalTimeout := common.TimeoutHandler(10 * time.Second)
+	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	return public.Append(s.maintenance, defaultMaxBytesHandler, internalTimeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 }
 
@@ -273,7 +273,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 
 	// separately configured "public" ones
 	public := s.MiddlewarePublicChain(rg, security)
-	publicTimeout := common.TimeoutHandler(2 * time.Second)
+	publicTimeout := common.SoftTimeoutHandler(2 * time.Second)
 	openRead := public.Append(s.maintenance, publicTimeout)
 	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
 	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
