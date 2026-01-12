@@ -11,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/jpillora/backoff"
 )
 
 type HealthCheckJob struct {
@@ -72,23 +73,59 @@ func (hc *HealthCheckJob) RunOnce(ctx context.Context, params any) error {
 }
 
 func (hc *HealthCheckJob) checkClickHouse(ctx context.Context) int32 {
-	result := int32(FlagFalse)
-	if err := hc.TimeSeriesDB.Ping(ctx); err == nil {
-		result = FlagTrue
-	} else {
-		slog.ErrorContext(ctx, "Failed to ping ClickHouse", common.ErrAttr(err))
+	b := &backoff.Backoff{
+		Min:    100 * time.Millisecond,
+		Max:    400 * time.Millisecond,
+		Factor: 1.5,
+		Jitter: true,
 	}
-	return result
+
+	const maxAttempts = 3
+	var err error
+
+	for i := 0; i < maxAttempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		if err = hc.TimeSeriesDB.Ping(ctx); err == nil {
+			return int32(FlagTrue)
+		} else {
+			slog.WarnContext(ctx, "ClickHouse ping attempt failed", "attempt", i+1, common.ErrAttr(err))
+		}
+	}
+
+	slog.ErrorContext(ctx, "Failed to ping ClickHouse", "attempts", maxAttempts, common.ErrAttr(err))
+
+	return int32(FlagFalse)
 }
 
 func (hc *HealthCheckJob) checkPostgres(ctx context.Context) int32 {
-	result := int32(FlagFalse)
-	if err := hc.BusinessDB.Ping(ctx); err == nil {
-		result = FlagTrue
-	} else {
-		slog.ErrorContext(ctx, "Failed to ping Postgres", common.ErrAttr(err))
+	b := &backoff.Backoff{
+		Min:    100 * time.Millisecond,
+		Max:    400 * time.Millisecond,
+		Factor: 1.5,
+		Jitter: true,
 	}
-	return result
+
+	const maxAttempts = 3
+	var err error
+
+	for i := 0; i < maxAttempts; i++ {
+		if i > 0 {
+			time.Sleep(b.Duration())
+		}
+
+		if err = hc.BusinessDB.Ping(ctx); err == nil {
+			return int32(FlagTrue)
+		} else {
+			slog.WarnContext(ctx, "Postgres ping attempt failed", "attempt", i+1, common.ErrAttr(err))
+		}
+	}
+
+	slog.ErrorContext(ctx, "Failed to ping Postgres", "attempts", maxAttempts, common.ErrAttr(err))
+
+	return int32(FlagFalse)
 }
 
 func (hc *HealthCheckJob) isPostgresHealthy() bool {
