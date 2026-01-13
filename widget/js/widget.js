@@ -5,7 +5,7 @@ import { WorkersPool } from './workerspool.js'
 import { CaptchaElement, STATE_EMPTY, STATE_ERROR, STATE_READY, STATE_IN_PROGRESS, STATE_VERIFIED, STATE_LOADING, STATE_INVALID, DISPLAY_POPUP, DISPLAY_WIDGET } from './html.js';
 import * as errors from './errors.js';
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && window.customElements && !window.customElements.get('private-captcha')) {
     window.customElements.define('private-captcha', CaptchaElement);
 }
 
