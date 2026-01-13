@@ -297,6 +297,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BaseContext: func(_ net.Listener) context.Context {
 			return ongoingCtx
 		},
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 	}
 
 	go func(ctx context.Context) {
