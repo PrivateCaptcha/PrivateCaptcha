@@ -6,7 +6,7 @@ import styles from "./styles.css" with { type: 'css' };
 import * as i18n from './strings.js';
 import * as errors from './errors.js';
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && window.customElements && !window.customElements.get('progress-ring')) {
     window.customElements.define('progress-ring', ProgressRing);
 }
 
