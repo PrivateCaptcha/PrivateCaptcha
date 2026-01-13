@@ -69,7 +69,7 @@ function errorDescription(code, strings) {
             return strings[i18n.TESTING];
         default:
             return strings[i18n.ERROR];
-    };
+    }
 }
 
 export class CaptchaElement extends SafeHTMLElement {
@@ -196,7 +196,7 @@ export class CaptchaElement extends SafeHTMLElement {
                 break;
             case DISPLAY_WIDGET:
                 break;
-        };
+        }
 
         this.classList.remove('hidden', 'floating');
         if (hostClass) { this.classList.add(hostClass); }
@@ -299,7 +299,10 @@ export class CaptchaElement extends SafeHTMLElement {
      */
     attributeChangedCallback(name, oldValue, newValue) {
         if ('progress' === name) {
-            this.setProgress(newValue);
+            const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
+            if (!Number.isNaN(progressValue)) {
+                this.setProgress(progressValue);
+            }
         } else if ('extra-styles' === name) {
             if (oldValue !== newValue) {
                 this.updateStyles(newValue);
