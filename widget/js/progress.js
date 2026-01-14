@@ -86,6 +86,8 @@ export class ProgressRing extends SafeHTMLElement {
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
+        if (oldValue === newValue) return;
+
         if (name === 'progress') {
             this.setProgress(newValue);
         }
