@@ -75,9 +75,23 @@ function errorDescription(code, strings) {
 export class CaptchaElement extends SafeHTMLElement {
     constructor() {
         super();
+
         this._state = '';
-        // create shadow dom root
         this._root = this.attachShadow({ mode: 'open' });
+
+        this._debug = false;
+        this._error = null;
+        this._displayMode = DISPLAY_HIDDEN;
+        this._lang = 'en';
+
+        // Add CSS
+        const sheet = new CSSStyleSheet();
+        sheet.replaceSync(styles);
+        this._root.adoptedStyleSheets = [sheet];
+        this._overridesSheet = null;
+    }
+
+    connectedCallback() {
         this._debug = this.getAttribute('debug');
         this._error = null;
         this._displayMode = this.getAttribute('display-mode');
@@ -87,19 +101,10 @@ export class CaptchaElement extends SafeHTMLElement {
             this._lang = 'en';
         }
 
-        // add CSS
-        const sheet = new CSSStyleSheet();
-        sheet.replaceSync(styles);
-        this._root.adoptedStyleSheets.push(sheet);
-        this._overridesSheet = null;
         // add CSS overrides
         const extraStyles = this.getAttribute('extra-styles');
-        if (extraStyles) {
-            this._overridesSheet = new CSSStyleSheet();
-            const cssText = `@layer custom { :host { ${extraStyles} } }`;
-            this._overridesSheet.replaceSync(cssText);
-            this._root.adoptedStyleSheets.push(this._overridesSheet);
-        }
+        this.updateStyles(extraStyles);
+
         // init
         const canShow = (this._displayMode == DISPLAY_WIDGET);
         this.setState(STATE_EMPTY, canShow);
@@ -261,7 +266,7 @@ export class CaptchaElement extends SafeHTMLElement {
             } else {
                 debugText = `[${text}]`;
             }
-            debugElement.innerHTML = debugText;
+            debugElement.textContent = debugText;
             if (error || this._error) {
                 debugElement.classList.add(DEBUG_ERROR_CLASS);
             } else {
@@ -298,15 +303,18 @@ export class CaptchaElement extends SafeHTMLElement {
      * @param {string} newValue
      */
     attributeChangedCallback(name, oldValue, newValue) {
-        if ('progress' === name) {
-            const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
-            if (!Number.isNaN(progressValue)) {
-                this.setProgress(progressValue);
-            }
-        } else if ('extra-styles' === name) {
-            if (oldValue !== newValue) {
+        if (oldValue === newValue) return;
+
+        switch (name) {
+            case 'progress':
+                const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
+                if (!Number.isNaN(progressValue)) {
+                    this.setProgress(progressValue);
+                }
+                break;
+            case 'extra-styles':
                 this.updateStyles(newValue);
-            }
-        }
+                break;
+        };
     }
 }

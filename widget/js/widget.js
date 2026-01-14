@@ -57,7 +57,7 @@ export class CaptchaWidget {
             // NOTE: this does not work on Safari by (Apple) design if we click a button
             // "passive" - cannot use preventDefault()
             form.addEventListener('focusin', this.onFocusIn.bind(this), { passive: true });
-            this._element.innerHTML = `<private-captcha display-mode="${this._options.displayMode}" lang="${this._options.lang}" theme="${this._options.theme}" extra-styles="${this._options.styles}"${this._options.debug ? ' debug="true"' : ''}></private-captcha>`;
+            this._element.replaceChildren(this._createCaptchaElement());
             this._element.addEventListener('privatecaptcha:checked', this.onChecked.bind(this));
 
             if (this._options.storeVariable) {
@@ -77,6 +77,22 @@ export class CaptchaWidget {
         } else {
             console.warn('[privatecaptcha] cannot find form element');
         }
+    }
+
+    _createCaptchaElement() {
+        const captchaEl = document.createElement('private-captcha');
+
+        captchaEl.setAttribute('lang', this._options.lang);
+        captchaEl.setAttribute('theme', this._options.theme);
+        captchaEl.setAttribute('extra-styles', this._options.styles);
+
+        if (this._options.debug) {
+            captchaEl.setAttribute('debug', 'true');
+        }
+
+        captchaEl.setAttribute('display-mode', this._options.displayMode);
+
+        return captchaEl;
     }
 
     /**
