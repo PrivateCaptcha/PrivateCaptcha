@@ -1337,15 +1337,6 @@ func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *db
 		t.Fatalf("Failed to create member account: %v", err)
 	}
 
-	// Invite and join the org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
-		t.Fatalf("Failed to invite member to org: %v", err)
-	}
-
-	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
-		t.Fatalf("Failed for member to join org: %v", err)
-	}
-
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
@@ -1363,6 +1354,15 @@ func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *db
 	form.Set(common.ParamName, propertyName)
 	form.Set(common.ParamDomain, "google.com")
 	form.Set(common.ParamIgnoreError, "true")
+
+	// Invite and join org first
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
 
 	// Member should be able to create properties in org where owner has subscription
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))

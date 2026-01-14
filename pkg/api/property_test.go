@@ -225,27 +225,7 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -408,27 +388,7 @@ func TestApiDeleteProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -567,27 +527,7 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -1196,32 +1136,14 @@ func TestApiDeletePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	var results []*operationResult
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		var result *apiAsyncTaskResultOutput
-		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			b, _ := json.Marshal(result.Result)
-			json.Unmarshal(b, &results)
-			break
-		}
-	}
-
-	if !finished {
+	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
+	if taskResult == nil {
 		t.Fatal("Async task did not complete within timeout")
 	}
+
+	var results []*operationResult
+	b, _ := json.Marshal(taskResult.Result)
+	json.Unmarshal(b, &results)
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1275,32 +1197,14 @@ func TestApiUpdatePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	var results []*operationResult
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		var result *apiAsyncTaskResultOutput
-		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			b, _ := json.Marshal(result.Result)
-			json.Unmarshal(b, &results)
-			break
-		}
-	}
-
-	if !finished {
+	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
+	if taskResult == nil {
 		t.Fatal("Async task did not complete within timeout")
 	}
+
+	var results []*operationResult
+	b, _ := json.Marshal(taskResult.Result)
+	json.Unmarshal(b, &results)
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1752,6 +1656,29 @@ func waitForAsyncTaskCompletion(ctx context.Context, t *testing.T, taskID string
 		}
 	}
 	return false
+}
+
+// waitForAsyncTaskCompletionWithResult waits for async task completion and returns the result
+func waitForAsyncTaskCompletionWithResult(ctx context.Context, t *testing.T, taskID string, apiKeyStr string) *apiAsyncTaskResultOutput {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+taskID, apiKeyStr)
+		if err != nil {
+			t.Fatalf("Failed to poll async task: %v", err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			return result
+		}
+	}
+	return nil
 }
 
 // waitForAsyncTaskCompletionDirect waits for async task completion by checking the database directly
