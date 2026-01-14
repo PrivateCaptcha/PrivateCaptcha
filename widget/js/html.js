@@ -232,7 +232,9 @@ export class CaptchaElement extends SafeHTMLElement {
         link.className = 'pc-link';
         link.rel = 'noopener nofollow';
         link.target = '_blank';
-        link.innerHTML = 'Private<br />Captcha';
+        link.appendChild(document.createTextNode('Private'));
+        link.appendChild(document.createElement('br'));
+        link.appendChild(document.createTextNode('Captcha'));
         info.appendChild(link);
         widget.appendChild(info);
 
