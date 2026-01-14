@@ -13,6 +13,8 @@ import (
 )
 
 func gcDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, t *testing.T) {
+	t.Helper()
+
 	const requests = 1000
 	tnow := time.Now()
 

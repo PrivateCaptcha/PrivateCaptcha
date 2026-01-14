@@ -703,6 +703,8 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 }
 
 func verifyTestPropertySuite(t *testing.T, verifySitekey string, expectedCode puzzle.VerifyError) {
+	t.Helper()
+
 	ctx := t.Context()
 
 	puzzleStr, solutionsStr, err := solutionsSuite(ctx, db.TestPropertySitekey, "localhost")

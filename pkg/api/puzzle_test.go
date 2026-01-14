@@ -65,6 +65,8 @@ func randomUUID() *pgtype.UUID {
 }
 
 func puzzleSuiteWithBackfillWait(t *testing.T, ctx context.Context, sitekey, domain string, waiter func()) {
+	t.Helper()
+
 	resp, err := puzzleSuite(ctx, sitekey, domain)
 	if err != nil {
 		t.Fatal(err)
