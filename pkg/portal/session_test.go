@@ -14,6 +14,8 @@ import (
 )
 
 func setupSessionSuite(ctx context.Context, manager *session.Manager, t *testing.T) (*session.Session, *http.Cookie) {
+	t.Helper()
+
 	req := httptest.NewRequest("GET", "/settings", nil)
 	w := httptest.NewRecorder()
 

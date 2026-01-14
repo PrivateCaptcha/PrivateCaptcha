@@ -29,6 +29,8 @@ func licenseTestConfig(licenseKey string) common.ConfigStore {
 }
 
 func createValidLicense(t *testing.T, keyID int, pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) []byte {
+	t.Helper()
+
 	lm := &license.LicenseMessage{
 		KeyID:      uint32(keyID),
 		UserID:     "test-user-id",
@@ -57,6 +59,8 @@ func createValidLicense(t *testing.T, keyID int, pubKey ed25519.PublicKey, privK
 }
 
 func createExpiredLicense(t *testing.T, keyID int, pubKey ed25519.PublicKey, privKey ed25519.PrivateKey) []byte {
+	t.Helper()
+
 	lm := &license.LicenseMessage{
 		KeyID:      uint32(keyID),
 		UserID:     "test-user-id",

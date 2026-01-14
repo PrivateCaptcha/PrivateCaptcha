@@ -41,6 +41,8 @@ func TestPuzzleUnmarshalFail(t *testing.T) {
 }
 
 func checkPuzzles(oldPuzzle, newPuzzle *ComputePuzzle, t *testing.T) {
+	t.Helper()
+
 	if !bytes.Equal(oldPuzzle.propertyID[:], newPuzzle.propertyID[:]) {
 		t.Errorf("PropertyID does not match")
 	}
