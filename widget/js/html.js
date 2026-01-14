@@ -34,24 +34,73 @@ const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" xm
 const verifiedSVG = `<svg class="verified" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 154 154">
 <g fill="none"><circle cx="77" cy="77" r="76"></circle>
 <polyline class="st0" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
-</svg>
-`;
+</svg>`;
 
-/**
- * @param {string} cls
- * @returns {string} checkbox input definition string
- */
-function checkbox(cls) {
-    return `<input type="checkbox" id="${CHECKBOX_ID}" class="${cls}" required>`
+function htmlToElement(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    return template.content.firstChild;
 }
 
-/**
- * @param {string} text
- * @param {string} forElement
- * @returns {string} checkbox label definition string
- */
+function checkbox(cls) {
+    const el = document.createElement('input');
+    el.type = 'checkbox';
+    el.id = CHECKBOX_ID;
+    el.className = cls;
+    el.required = true;
+    return el;
+}
+
 function label(text, forElement) {
-    return `<label for="${forElement}">${text}</label>`;
+    const el = document.createElement('label');
+    el.htmlFor = forElement;
+    el.textContent = text;
+    return el;
+}
+
+function progressRing() {
+    const el = document.createElement('progress-ring');
+    el.id = PROGRESS_ID;
+    el.setAttribute('stroke', '12');
+    el.setAttribute('progress', '0');
+    return el;
+}
+
+function progressLabel(text) {
+    const el = label(text, PROGRESS_ID);
+    const dots = document.createElement('span');
+    dots.className = 'dots';
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.textContent = '.';
+        dots.appendChild(dot);
+    }
+    el.appendChild(dots);
+    return el;
+}
+
+function debugSpan(text, isError) {
+    const el = document.createElement('span');
+    el.id = DEBUG_ID;
+    if (isError) { el.className = DEBUG_ERROR_CLASS; }
+    el.textContent = text;
+    return el;
+}
+
+function infoSection() {
+    const info = document.createElement('div');
+    info.className = 'pc-info';
+    info.appendChild(htmlToElement(privateCaptchaSVG));
+    const link = document.createElement('a');
+    link.href = 'https://privatecaptcha.com';
+    link.className = 'pc-link';
+    link.rel = 'noopener nofollow';
+    link.target = '_blank';
+    link.appendChild(document.createTextNode('Private'));
+    link.appendChild(document.createElement('br'));
+    link.appendChild(document.createTextNode('Captcha'));
+    info.appendChild(link);
+    return info;
 }
 
 /**
@@ -125,7 +174,8 @@ export class CaptchaElement extends SafeHTMLElement {
 
         if (this._debug) { console.debug(`[privatecaptcha][progress] change state. old=${this._state} new=${state}`); }
 
-        let activeArea = '';
+        const activeArea = document.createElement('div');
+        activeArea.className = 'pc-interactive-area';
         let bindCheckEvent = false;
         let showPopupIfNeeded = false;
         const strings = i18n.STRINGS[this._lang];
@@ -133,28 +183,33 @@ export class CaptchaElement extends SafeHTMLElement {
         switch (state) {
             case STATE_EMPTY:
                 bindCheckEvent = true;
-                activeArea = checkbox('') + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
+                activeArea.appendChild(checkbox(''));
+                activeArea.appendChild(label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID));
                 break;
             case STATE_LOADING:
                 bindCheckEvent = true;
-                activeArea = checkbox('loading') + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
+                activeArea.appendChild(checkbox('loading'));
+                activeArea.appendChild(label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID));
                 break;
             case STATE_READY:
                 bindCheckEvent = true;
-                activeArea = checkbox('ready') + label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID);
+                activeArea.appendChild(checkbox('ready'));
+                activeArea.appendChild(label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID));
                 showPopupIfNeeded = canShow;
                 break;
             case STATE_IN_PROGRESS:
-                const text = strings[i18n.VERIFYING];
-                activeArea = `<progress-ring id="${PROGRESS_ID}" stroke="12" progress="0"></progress-ring><label for="${PROGRESS_ID}">${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span></label>`;
+                activeArea.appendChild(progressRing());
+                activeArea.appendChild(progressLabel(strings[i18n.VERIFYING]));
                 showPopupIfNeeded = canShow;
                 break;
             case STATE_VERIFIED:
-                activeArea = verifiedSVG + label(strings[i18n.SUCCESS], PROGRESS_ID);
+                activeArea.appendChild(htmlToElement(verifiedSVG));
+                activeArea.appendChild(label(strings[i18n.SUCCESS], PROGRESS_ID));
                 showPopupIfNeeded = canShow;
                 break;
             case STATE_INVALID:
-                activeArea = checkbox('invalid') + label(strings[i18n.UNAVAILABLE], CHECKBOX_ID);
+                activeArea.appendChild(checkbox('invalid'));
+                activeArea.appendChild(label(strings[i18n.UNAVAILABLE], CHECKBOX_ID));
                 break;
             default:
                 console.error(`[privatecaptcha][progress] unknown state: ${state}`);
@@ -162,28 +217,28 @@ export class CaptchaElement extends SafeHTMLElement {
         }
 
         if (this._debug || this._error) {
-            const debugText = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            activeArea += `<span id="${DEBUG_ID}" class="${this._error ? DEBUG_ERROR_CLASS : ''}">${debugText}</span>`;
+            const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
+            activeArea.appendChild(debugSpan(text, this._error));
         }
 
         this._syncHostClass(showPopupIfNeeded);
 
         this._state = state;
-        this._root.innerHTML = `<div class="pc-captcha-widget">
-            <div class="pc-interactive-area">
-                ${activeArea}
-            </div>
-            <div class="pc-spacer"></div>
-            <div class="pc-info">
-                ${privateCaptchaSVG}
-                <a href="https://privatecaptcha.com" class="pc-link" rel="noopener nofollow" target="_blank">Private<br />Captcha</a>
-            </div>
-        </div>`;
+
+        const widget = document.createElement('div');
+        widget.className = 'pc-captcha-widget';
+        widget.appendChild(activeArea);
+        const spacer = document.createElement('div');
+        spacer.className = 'pc-spacer';
+        widget.appendChild(spacer);
+        widget.appendChild(infoSection());
+
+        this._root.replaceChildren(widget);
 
         if (bindCheckEvent) {
-            const checkbox = this._root.getElementById(CHECKBOX_ID);
-            if (checkbox) {
-                checkbox.addEventListener('change', this.onCheckboxClicked.bind(this));
+            const checkboxEl = this._root.getElementById(CHECKBOX_ID);
+            if (checkboxEl) {
+                checkboxEl.addEventListener('change', this.onCheckboxClicked.bind(this));
             } else {
                 console.warn('[privatecaptcha][progress] checkbox not found in the Shadow DOM');
             }
@@ -303,7 +358,7 @@ export class CaptchaElement extends SafeHTMLElement {
      * @param {string} newValue
      */
     attributeChangedCallback(name, oldValue, newValue) {
-        if (oldValue === newValue) return;
+        if (oldValue === newValue) { return; }
 
         switch (name) {
             case 'progress':
