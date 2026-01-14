@@ -1322,11 +1322,9 @@ func TestMovePropertyInvalidForm(t *testing.T) {
 	}
 }
 
-func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
+// runOrgMemberPropertyCreationPortalTest is the common test logic for portal property creation by org member
+func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *dbgen.CreateSubscriptionParams) {
+	t.Helper()
 	ctx := t.Context()
 
 	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
@@ -1334,11 +1332,12 @@ func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
-	member, _, err := db_tests.CreateNewBareAccount(ctx, store, t.Name()+"_member")
+	member, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name()+"_member", memberSubscrParams)
 	if err != nil {
-		t.Fatalf("Failed to create member account without subscription: %v", err)
+		t.Fatalf("Failed to create member account: %v", err)
 	}
 
+	// Invite and join the org
 	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatalf("Failed to invite member to org: %v", err)
 	}
@@ -1365,6 +1364,7 @@ func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
 	form.Set(common.ParamDomain, "google.com")
 	form.Set(common.ParamIgnoreError, "true")
 
+	// Member should be able to create properties in org where owner has subscription
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
@@ -1374,7 +1374,7 @@ func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
+		t.Fatalf("Expected redirect status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
 	}
 
 	location, err := resp.Location()
@@ -1387,6 +1387,7 @@ func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
 		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
 	}
 
+	// Verify properties were created by the member
 	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
@@ -1402,4 +1403,24 @@ func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
 			t.Errorf("Property was not created by member: creatorID=%v, memberID=%v", properties[0].CreatorID.Int32, member.ID)
 		}
 	}
+}
+
+func TestOrgMemberWithExpiredTrialCanCreateProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create subscription params with expired trial
+	subscrParams := db_tests.CreateNewSubscriptionParams(testPlan)
+	subscrParams.TrialEndsAt = db.Timestampz(time.Now().UTC().AddDate(0, 0, -7)) // Trial ended 7 days ago
+
+	runOrgMemberPropertyCreationPortalTest(t, subscrParams)
+}
+
+func TestOrgMemberWithNilSubscriptionCanCreateProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	runOrgMemberPropertyCreationPortalTest(t, nil)
 }

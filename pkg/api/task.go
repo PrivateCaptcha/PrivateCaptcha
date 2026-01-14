@@ -13,7 +13,7 @@ import (
 
 func (s *Server) getAsyncTask(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, _, err := s.requestUserEx(ctx, true /*read-only*/, false /*requiresSubscription*/)
+	user, _, err := s.requestUser(ctx, true /*read-only*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
