@@ -301,7 +301,7 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 
 	apiKeyStr := db.UUIDToSecret(apiKey.ExternalID)
 
-	resp, err := apiRequestSuite(ctx, inputs,
+	_, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
 		http.MethodPost,
 		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKeyStr)
@@ -309,8 +309,8 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	if meta.Code != common.StatusSubscriptionPropertyLimitError {
+		t.Fatalf("expected code %v, got %v (%s)", common.StatusSubscriptionPropertyLimitError, meta.Code, meta.Description)
 	}
 }
 
