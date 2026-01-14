@@ -393,7 +393,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, err := s.OrgMember(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return

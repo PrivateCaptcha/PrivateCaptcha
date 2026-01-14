@@ -115,6 +115,35 @@ func (s *Server) requestOrg(user *dbgen.User, r *http.Request, onlyOwner bool, a
 	return org, nil
 }
 
+// requestOrgMember is like requestOrg but requires the user to be a full member (not just invited)
+func (s *Server) requestOrgMember(user *dbgen.User, r *http.Request, onlyOwner bool, allowedOrgID *pgtype.Int4) (*dbgen.Organization, error) {
+	ctx := r.Context()
+
+	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
+		return nil, db.ErrInvalidInput
+	}
+
+	if (allowedOrgID != nil) && allowedOrgID.Valid && (allowedOrgID.Int32 != orgID) {
+		slog.WarnContext(ctx, "Requested organization is not allowed for this requester", "allowedOrgID", allowedOrgID.Int32, "requestedOrgID", orgID)
+		return nil, db.ErrPermissions
+	}
+
+	org, err := s.BusinessDB.Impl().RetrieveUserOrganizationMember(ctx, user, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if onlyOwner {
+		if !org.UserID.Valid || (org.UserID.Int32 != user.ID) {
+			return nil, db.ErrPermissions
+		}
+	}
+
+	return org, nil
+}
+
 func (s *Server) requestProperty(org *dbgen.Organization, r *http.Request) (*dbgen.Property, error) {
 	ctx := r.Context()
 

@@ -59,6 +59,38 @@ func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, er
 	return org, nil
 }
 
+// OrgMember is like Org but requires the user to be a full member (not just invited)
+func (s *Server) OrgMember(user *dbgen.User, r *http.Request) (*dbgen.Organization, error) {
+	ctx := r.Context()
+
+	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	org, err := s.Store.Impl().RetrieveUserOrganizationMember(ctx, user, orgID)
+	if err != nil {
+		if err == db.ErrSoftDeleted {
+			return nil, errOrgSoftDeleted
+		}
+
+		if err == db.ErrPermissions {
+			return nil, db.ErrPermissions
+		}
+
+		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
+		return nil, err
+	}
+
+	if !s.checkUserOrgAccess(user, org) {
+		slog.ErrorContext(ctx, "User cannot use this org", "userID", user.ID, "orgID", orgID, "enterprise", s.isEnterprise())
+		return nil, errLimitedFeature
+	}
+
+	return org, nil
+}
+
 func (s *Server) OrgID(r *http.Request) (int32, error) {
 	ctx := r.Context()
 

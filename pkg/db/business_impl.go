@@ -2040,6 +2040,33 @@ func (impl *BusinessStoreImpl) RetrieveUserOrganization(ctx context.Context, use
 	return org, nil
 }
 
+// RetrieveUserOrganizationMember retrieves an organization that the user is a full member of (not just invited).
+// Owners and members are allowed, but invited users are denied.
+func (impl *BusinessStoreImpl) RetrieveUserOrganizationMember(ctx context.Context, user *dbgen.User, orgID int32) (*dbgen.Organization, error) {
+	org, level, err := impl.retrieveOrganizationWithAccess(ctx, user.ID, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !level.Valid {
+		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", user.ID)
+		return nil, ErrPermissions
+	}
+
+	// Invited users are not allowed - they must join the org first
+	if level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", orgID, "userID", user.ID)
+		return nil, ErrPermissions
+	}
+
+	if org.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
+		return org, ErrSoftDeleted
+	}
+
+	return org, nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveOrgProperty(ctx context.Context, org *dbgen.Organization, propID int32) (*dbgen.Property, error) {
 	property, err := impl.retrieveOrgProperty(ctx, org.ID, propID)
 	if err != nil {

@@ -177,7 +177,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
+	org, err := s.requestOrgMember(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)

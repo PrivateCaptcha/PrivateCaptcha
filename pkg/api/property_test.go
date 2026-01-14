@@ -1744,12 +1744,25 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 		t.Fatalf("Failed to invite member to org: %v", err)
 	}
 
-	// Step 3: Member joins the org
+	// Step 3: Verify that invited (but not joined) member cannot create properties
+	resp, err = apiRequestSuite(ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Expected forbidden status for invited but not joined member, got: %v", resp.StatusCode)
+	}
+
+	// Step 4: Member joins the org
 	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
 		t.Fatalf("Failed for member to join org: %v", err)
 	}
 
-	// Step 4: Now member should be able to create properties
+	// Step 5: Now member should be able to create properties
 	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
 		http.MethodPost,
 		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
@@ -1762,7 +1775,7 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 		t.Fatalf("Expected success after joining org, got: %v (%s)", meta.Code, meta.Description)
 	}
 
-	// Step 5: Wait for async task completion
+	// Step 6: Wait for async task completion
 	// If member has subscription, poll via API; otherwise, check DB directly
 	if memberSubscrParams != nil {
 		if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKeyStr) {
@@ -1774,7 +1787,7 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 		}
 	}
 
-	// Step 6: Verify properties were created by the member
+	// Step 7: Verify properties were created by the member
 	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
