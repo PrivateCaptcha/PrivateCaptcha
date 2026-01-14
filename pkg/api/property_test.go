@@ -17,7 +17,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -619,7 +618,7 @@ func TestApiGetProperties(t *testing.T) {
 	}
 
 	for i := 0; i < 3*db.MaxOrgPropertiesPageSize/2; i++ {
-		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
 			t.Fatalf("Failed to create new property: %v", err)
 		}
 	}
@@ -1871,7 +1870,7 @@ func TestApiOrgMemberWithExpiredTrialCanCreateProperties(t *testing.T) {
 	}
 
 	// Create subscription params with expired trial
-	subscrParams := db_tests.CreateNewSubscriptionParams(testPlan)
+	subscrParams := db_test.CreateNewSubscriptionParams(testPlan)
 	subscrParams.TrialEndsAt = db.Timestampz(time.Now().UTC().AddDate(0, 0, -7)) // Trial ended 7 days ago
 
 	runOrgMemberPropertyCreationTest(t, subscrParams)
