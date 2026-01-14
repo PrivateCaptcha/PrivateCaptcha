@@ -27,7 +27,11 @@ const PROGRESS_ID = 'pc-progress';
 const DEBUG_ID = 'pc-debug';
 const DEBUG_ERROR_CLASS = 'warn';
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+function htmlToElement(html) {
+    const template = document.createElement('template');
+    template.innerHTML = html.trim();
+    return template.content.firstChild;
+}
 
 function checkbox(cls) {
     const el = document.createElement('input');
@@ -46,37 +50,61 @@ function label(text, forElement) {
 }
 
 function privateCaptchaSVG() {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 39.4 41.99');
-    svg.setAttribute('xml:space', 'preserve');
-    svg.setAttribute('class', 'pc-logo');
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    const path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', 'M0 0v30.62l4.29 2.48V4.85h30.83v23.29l-15.41 8.9-6.83-3.94v-4.95l6.83 3.94 11.12-6.42V9.91H8.58v25.66l11.12 6.42 19.7-11.37V0Zm12.87 14.86h13.66v8.32l-6.83 3.94-6.83-3.94z');
-    path.setAttribute('fill', 'currentColor');
-    svg.appendChild(path);
-    return svg;
+    return htmlToElement(`<svg viewBox="0 0 39.4 41.99" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" class="pc-logo" preserveAspectRatio="xMidYMid meet">
+        <path d="M0 0v30.62l4.29 2.48V4.85h30.83v23.29l-15.41 8.9-6.83-3.94v-4.95l6.83 3.94 11.12-6.42V9.91H8.58v25.66l11.12 6.42 19.7-11.37V0Zm12.87 14.86h13.66v8.32l-6.83 3.94-6.83-3.94z" fill="currentColor"/>
+    </svg>`);
 }
 
 function verifiedSVG() {
-    const svg = document.createElementNS(SVG_NS, 'svg');
-    svg.setAttribute('class', 'verified');
-    svg.setAttribute('viewBox', '0 0 154 154');
-    const g = document.createElementNS(SVG_NS, 'g');
-    g.setAttribute('fill', 'none');
-    const circle = document.createElementNS(SVG_NS, 'circle');
-    circle.setAttribute('cx', '77');
-    circle.setAttribute('cy', '77');
-    circle.setAttribute('r', '76');
-    const polyline = document.createElementNS(SVG_NS, 'polyline');
-    polyline.setAttribute('class', 'st0');
-    polyline.setAttribute('stroke-width', '12');
-    polyline.setAttribute('points', '43.5,77.8 63.7,97.9 112.2,49.4');
-    polyline.setAttribute('style', 'stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;');
-    g.appendChild(circle);
-    g.appendChild(polyline);
-    svg.appendChild(g);
-    return svg;
+    return htmlToElement(`<svg class="verified" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 154 154">
+        <g fill="none"><circle cx="77" cy="77" r="76"></circle>
+        <polyline class="st0" stroke-width="12" points="43.5,77.8 63.7,97.9 112.2,49.4" style="stroke-dasharray:100px, 100px; stroke-dashoffset: 200px;"/></g>
+    </svg>`);
+}
+
+function progressRing() {
+    const el = document.createElement('progress-ring');
+    el.id = PROGRESS_ID;
+    el.setAttribute('stroke', '12');
+    el.setAttribute('progress', '0');
+    return el;
+}
+
+function progressLabel(text) {
+    const el = label(text, PROGRESS_ID);
+    const dots = document.createElement('span');
+    dots.className = 'dots';
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.textContent = '.';
+        dots.appendChild(dot);
+    }
+    el.appendChild(dots);
+    return el;
+}
+
+function debugSpan(text, isError) {
+    const el = document.createElement('span');
+    el.id = DEBUG_ID;
+    if (isError) el.className = DEBUG_ERROR_CLASS;
+    el.textContent = text;
+    return el;
+}
+
+function infoSection() {
+    const info = document.createElement('div');
+    info.className = 'pc-info';
+    info.appendChild(privateCaptchaSVG());
+    const link = document.createElement('a');
+    link.href = 'https://privatecaptcha.com';
+    link.className = 'pc-link';
+    link.rel = 'noopener nofollow';
+    link.target = '_blank';
+    link.appendChild(document.createTextNode('Private'));
+    link.appendChild(document.createElement('br'));
+    link.appendChild(document.createTextNode('Captcha'));
+    info.appendChild(link);
+    return info;
 }
 
 /**
@@ -173,25 +201,11 @@ export class CaptchaElement extends SafeHTMLElement {
                 activeArea.appendChild(label(strings[i18n.CLICK_TO_VERIFY], CHECKBOX_ID));
                 showPopupIfNeeded = canShow;
                 break;
-            case STATE_IN_PROGRESS: {
-                const progressRing = document.createElement('progress-ring');
-                progressRing.id = PROGRESS_ID;
-                progressRing.setAttribute('stroke', '12');
-                progressRing.setAttribute('progress', '0');
-                const progressLabel = label(strings[i18n.VERIFYING], PROGRESS_ID);
-                const dots = document.createElement('span');
-                dots.className = 'dots';
-                for (let i = 0; i < 3; i++) {
-                    const dot = document.createElement('span');
-                    dot.textContent = '.';
-                    dots.appendChild(dot);
-                }
-                progressLabel.appendChild(dots);
-                activeArea.appendChild(progressRing);
-                activeArea.appendChild(progressLabel);
+            case STATE_IN_PROGRESS:
+                activeArea.appendChild(progressRing());
+                activeArea.appendChild(progressLabel(strings[i18n.VERIFYING]));
                 showPopupIfNeeded = canShow;
                 break;
-            }
             case STATE_VERIFIED:
                 activeArea.appendChild(verifiedSVG());
                 activeArea.appendChild(label(strings[i18n.SUCCESS], PROGRESS_ID));
@@ -207,11 +221,8 @@ export class CaptchaElement extends SafeHTMLElement {
         }
 
         if (this._debug || this._error) {
-            const debugSpan = document.createElement('span');
-            debugSpan.id = DEBUG_ID;
-            if (this._error) debugSpan.className = DEBUG_ERROR_CLASS;
-            debugSpan.textContent = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            activeArea.appendChild(debugSpan);
+            const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
+            activeArea.appendChild(debugSpan(text, this._error));
         }
 
         this._syncHostClass(showPopupIfNeeded);
@@ -224,19 +235,7 @@ export class CaptchaElement extends SafeHTMLElement {
         const spacer = document.createElement('div');
         spacer.className = 'pc-spacer';
         widget.appendChild(spacer);
-        const info = document.createElement('div');
-        info.className = 'pc-info';
-        info.appendChild(privateCaptchaSVG());
-        const link = document.createElement('a');
-        link.href = 'https://privatecaptcha.com';
-        link.className = 'pc-link';
-        link.rel = 'noopener nofollow';
-        link.target = '_blank';
-        link.appendChild(document.createTextNode('Private'));
-        link.appendChild(document.createElement('br'));
-        link.appendChild(document.createTextNode('Captcha'));
-        info.appendChild(link);
-        widget.appendChild(info);
+        widget.appendChild(infoSection());
 
         this._root.replaceChildren(widget);
 
