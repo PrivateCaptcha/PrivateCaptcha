@@ -1716,3 +1716,100 @@ func TestApiDeletePropertiesInvalidPropertyID(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
 	}
 }
+
+func TestApiOrgMemberWithoutSubscriptionCanCreateProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	owner, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	member, _, err := db_test.CreateNewBareAccount(ctx, store, t.Name()+"_member")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apiKey, _, err := store.Impl().CreateAPIKey(ctx, member, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apiKeyStr := db.UUIDToSecret(apiKey.ExternalID)
+
+	const count = 3
+	inputs := make([]*apiCreatePropertyInput, 0, count)
+	for i := 0; i < count; i++ {
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{
+				Name: fmt.Sprintf("%s %s %d", t.Name(), "Property", i),
+			},
+			Domain: fmt.Sprintf("example%d.com", i),
+		})
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKeyStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(properties) != len(inputs) {
+		t.Fatalf("Unexpected number of properties: %v, expected %v", len(properties), len(inputs))
+	}
+
+	for _, p := range properties {
+		if p.CreatorID.Int32 != member.ID {
+			t.Errorf("Property was not created by member: creatorID=%v, memberID=%v", p.CreatorID.Int32, member.ID)
+		}
+	}
+}

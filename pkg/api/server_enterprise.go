@@ -59,6 +59,10 @@ func (s *Server) RegisterTaskHandlers(ctx context.Context) {
 }
 
 func (s *Server) requestUser(ctx context.Context, readOnly bool) (*dbgen.User, *dbgen.APIKey, error) {
+	return s.requestUserEx(ctx, readOnly, true /*requiresSubscription*/)
+}
+
+func (s *Server) requestUserEx(ctx context.Context, readOnly bool, requiresSubscription bool) (*dbgen.User, *dbgen.APIKey, error) {
 	portalOwnerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePortal}
 	id, _, err := portalOwnerSource.OwnerID(ctx, time.Now().UTC())
 	if err != nil {
@@ -76,7 +80,7 @@ func (s *Server) requestUser(ctx context.Context, readOnly bool) (*dbgen.User, *
 		return nil, nil, err
 	}
 
-	if !user.SubscriptionID.Valid {
+	if requiresSubscription && !user.SubscriptionID.Valid {
 		return nil, nil, db.ErrNoActiveSubscription
 	}
 

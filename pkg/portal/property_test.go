@@ -1321,3 +1321,85 @@ func TestMovePropertyInvalidForm(t *testing.T) {
 		})
 	}
 }
+
+func TestOrgMemberWithoutSubscriptionCanCreateProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewBareAccount(ctx, store, t.Name()+"_member")
+	if err != nil {
+		t.Fatalf("Failed to create member account without subscription: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+	propertyName := t.Name() + "Property"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, propertyName)
+	form.Set(common.ParamDomain, "google.com")
+	form.Set(common.ParamIgnoreError, "true")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
+	}
+
+	location, err := resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect response but got error: %v", err)
+	}
+
+	expectedPrefix := fmt.Sprintf("/org/%s/property/", orgID)
+	if path := location.String(); !strings.HasPrefix(path, expectedPrefix) {
+		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if count := len(properties); count != 1 {
+		t.Errorf("Unexpected number of properties in org: %v", count)
+	} else {
+		if properties[0].Name != propertyName {
+			t.Errorf("Unexpected property name: %v", properties[0].Name)
+		}
+		if properties[0].CreatorID.Int32 != member.ID {
+			t.Errorf("Property was not created by member: creatorID=%v, memberID=%v", properties[0].CreatorID.Int32, member.ID)
+		}
+	}
+}

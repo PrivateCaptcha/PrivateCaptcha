@@ -171,13 +171,13 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 
 func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	user, apiKey, err := s.requestUser(ctx, false /*read-only*/)
+	user, apiKey, err := s.requestUserEx(ctx, false /*read-only*/, false /*requiresSubscription*/)
 	if err != nil {
 		s.sendHTTPErrorResponse(err, w)
 		return
 	}
 
-	org, err := s.requestOrg(user, r, true /*only owner*/, &apiKey.OrgID)
+	org, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
