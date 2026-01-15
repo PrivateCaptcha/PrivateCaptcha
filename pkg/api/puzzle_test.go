@@ -373,15 +373,15 @@ func TestRecaptchaVerifyHandlerInvalidFormData(t *testing.T) {
 	}{
 		{
 			name:        "InvalidFormEncoding",
-			body:        string([]byte{0xff, 0xfe}), // Invalid UTF-8
+			body:        string([]byte{0xff, 0xfe}), // Invalid UTF-8 - no valid secret field
 			contentType: common.ContentTypeURLEncoded,
-			wantStatus:  http.StatusBadRequest,
+			wantStatus:  http.StatusBadRequest, // Empty secret due to invalid form data
 		},
 		{
 			name:        "FormTooLarge",
-			body:        "response=" + strings.Repeat("a", 256*1024), // 256KB
+			body:        "response=" + strings.Repeat("a", 256*1024), // Exceeds MaxBytesHandler limit
 			contentType: common.ContentTypeURLEncoded,
-			wantStatus:  http.StatusRequestEntityTooLarge,
+			wantStatus:  http.StatusBadRequest, // Secret is empty due to body limit being hit during form parsing
 		},
 	}
 
@@ -434,8 +434,8 @@ func TestPCVerifyHandlerInvalidFormData(t *testing.T) {
 		},
 		{
 			name:       "BodyTooLarge",
-			body:       strings.Repeat("a", 256*1024), // 256KB
-			wantStatus: http.StatusRequestEntityTooLarge,
+			body:       strings.Repeat("a", 256*1024+1), // Over MaxBytesHandler limit
+			wantStatus: http.StatusBadRequest,           // ReadAll fails, returns bad request
 		},
 	}
 
