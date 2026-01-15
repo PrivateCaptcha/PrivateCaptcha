@@ -888,8 +888,8 @@ func TestAPIUpdateOrgSoftDeleted(t *testing.T) {
 	}
 
 	// Should fail because org is soft-deleted
-	if meta.Code.Success() {
-		t.Error("Expected error when updating soft-deleted org")
+	if meta.Code != common.StatusOrgNotFoundError {
+		t.Errorf("Expected StatusOrgNotFoundError, got %v", meta.Code)
 	}
 }
 
@@ -920,8 +920,8 @@ func TestAPIDeleteOrgSoftDeleted(t *testing.T) {
 	}
 
 	// Should fail because org is already soft-deleted
-	if meta.Code.Success() {
-		t.Error("Expected error when deleting already soft-deleted org")
+	if meta.Code != common.StatusOrgNotFoundError {
+		t.Errorf("Expected StatusOrgNotFoundError, got %v", meta.Code)
 	}
 }
 
@@ -956,8 +956,8 @@ func TestAPIUpdateOrgNotOwner(t *testing.T) {
 	}
 
 	// Should fail because user2 is not the owner
-	if meta.Code.Success() {
-		t.Error("Expected error when user tries to update org they don't own")
+	if meta.Code != common.StatusOrgPermissionsError {
+		t.Errorf("Expected StatusOrgPermissionsError, got %v", meta.Code)
 	}
 }
 
@@ -991,7 +991,7 @@ func TestAPIDeleteOrgNotOwner(t *testing.T) {
 	}
 
 	// Should fail because user2 is not the owner
-	if meta.Code.Success() {
-		t.Error("Expected error when user tries to delete org they don't own")
+	if meta.Code != common.StatusOrgPermissionsError {
+		t.Errorf("Expected StatusOrgPermissionsError, got %v", meta.Code)
 	}
 }

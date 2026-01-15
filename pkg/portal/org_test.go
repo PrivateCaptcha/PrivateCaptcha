@@ -2108,12 +2108,13 @@ func TestRetrieveOrgPropertyDeletedFromCache(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	// Clear cache by retrieving a different property ID (cache will be populated with the correct one)
-	// and then we'll verify that RetrieveOrgProperty works correctly
-	// The actual cache manipulation is internal, so we just verify the function works
+	// Delete property from cache using the public wrapper
+	store.Impl().DeleteCachedProperty(ctx, property)
+
+	// Now try to retrieve the property - should still work since it's in DB
 	retrievedProperty, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
 	if err != nil {
-		t.Fatalf("Failed to retrieve org property: %v", err)
+		t.Fatalf("Failed to retrieve org property after cache delete: %v", err)
 	}
 
 	if retrievedProperty.ID != property.ID {

@@ -374,10 +374,10 @@ func TestGetPropertyStats(t *testing.T) {
 		endpoint string
 		period   common.TimePeriod
 	}{
-		{"24h", common.TimePeriodToday},
-		{"7d", common.TimePeriodWeek},
-		{"30d", common.TimePeriodMonth},
-		{"1y", common.TimePeriodYear},
+		{PeriodEndpointToday, common.TimePeriodToday},
+		{PeriodEndpointWeek, common.TimePeriodWeek},
+		{PeriodEndpointMonth, common.TimePeriodMonth},
+		{PeriodEndpointYear, common.TimePeriodYear},
 	}
 
 	for _, p := range periods {
@@ -401,33 +401,31 @@ func TestGetPropertyStats(t *testing.T) {
 				t.Fatalf("Failed to decode response for period %s: %v", p.endpoint, err)
 			}
 
-			// For today's period, we expect data since records are recent
-			if p.period == common.TimePeriodToday {
-				if len(stats.Requested) == 0 {
-					t.Error("Expected requested data but got none for 24h period")
-				}
+			// All periods should have data since records are recent and included in all periods
+			if len(stats.Requested) == 0 {
+				t.Errorf("Expected requested data but got none for %s period", p.endpoint)
+			}
 
-				if len(stats.Verified) == 0 {
-					t.Error("Expected verified data but got none for 24h period")
-				}
+			if len(stats.Verified) == 0 {
+				t.Errorf("Expected verified data but got none for %s period", p.endpoint)
+			}
 
-				totalRequested := 0
-				for _, pt := range stats.Requested {
-					totalRequested += pt.Value
-				}
+			totalRequested := 0
+			for _, pt := range stats.Requested {
+				totalRequested += pt.Value
+			}
 
-				totalVerified := 0
-				for _, pt := range stats.Verified {
-					totalVerified += pt.Value
-				}
+			totalVerified := 0
+			for _, pt := range stats.Verified {
+				totalVerified += pt.Value
+			}
 
-				if totalRequested != 2 {
-					t.Errorf("Expected 2 total requested, got %d", totalRequested)
-				}
+			if totalRequested != 2 {
+				t.Errorf("Expected 2 total requested for %s period, got %d", p.endpoint, totalRequested)
+			}
 
-				if totalVerified != 2 {
-					t.Errorf("Expected 2 total verified, got %d", totalVerified)
-				}
+			if totalVerified != 2 {
+				t.Errorf("Expected 2 total verified for %s period, got %d", p.endpoint, totalVerified)
 			}
 		})
 	}

@@ -773,6 +773,11 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 }
 
+// DeleteCachedProperty is a public wrapper for deleteCachedProperty for test access
+func (impl *BusinessStoreImpl) DeleteCachedProperty(ctx context.Context, property *dbgen.Property) {
+	impl.deleteCachedProperty(ctx, property)
+}
+
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
 	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr))
 }

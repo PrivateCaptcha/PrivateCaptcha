@@ -1760,7 +1760,7 @@ func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
 			name:        "DeletePropertiesTooManyItems",
 			method:      http.MethodDelete,
 			endpoint:    "/" + common.PropertiesEndpoint,
-			body:        buildManyPropertiesJSON(t, 1001), // over the limit
+			body:        buildManyPropertiesJSON(t, maxPropertiesBatchSize+1), // over the limit
 			contentType: common.ContentTypeJSON,
 			wantStatus:  http.StatusBadRequest,
 		},
