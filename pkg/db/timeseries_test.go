@@ -241,3 +241,136 @@ func TestMemoryTimeSeriesDeleteAccountData(t *testing.T) {
 		t.Errorf("After DeleteUsersData, stats count = %d, want 0", len(stats3))
 	}
 }
+
+func TestMemoryTimeSeriesRetrievePropertyStatsByPeriodAllPeriods(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	// Add records at various times to test different period aggregations
+	accessRecords := []*common.AccessRecord{
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-30 * time.Minute)},  // Today
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-2 * time.Hour)},     // Today
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-3 * 24 * time.Hour)}, // This week
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-15 * 24 * time.Hour)}, // This month
+	}
+	ts.WriteAccessLogBatch(ctx, accessRecords)
+
+	verifyRecords := []*common.VerifyRecord{
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-30 * time.Minute), Status: 1},
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-3 * 24 * time.Hour), Status: 1},
+	}
+	ts.WriteVerifyLogBatch(ctx, verifyRecords)
+
+	tests := []struct {
+		period           common.TimePeriod
+		expectedMinStats int
+	}{
+		{common.TimePeriodToday, 1},
+		{common.TimePeriodWeek, 1},
+		{common.TimePeriodMonth, 1},
+		{common.TimePeriodYear, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.period.String(), func(t *testing.T) {
+			stats, err := ts.RetrievePropertyStatsByPeriod(ctx, 1, 1, tt.period)
+			if err != nil {
+				t.Errorf("RetrievePropertyStatsByPeriod(%v) error = %v", tt.period, err)
+				return
+			}
+
+			if len(stats) < tt.expectedMinStats {
+				t.Errorf("RetrievePropertyStatsByPeriod(%v) got %d stats, want at least %d", tt.period, len(stats), tt.expectedMinStats)
+			}
+		})
+	}
+}
+
+func TestMemoryTimeSeriesRecentTopPropertiesLimit(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// Create verify records for multiple properties
+	records := []*common.VerifyRecord{
+		{PropertyID: 1, Timestamp: now},
+		{PropertyID: 1, Timestamp: now},
+		{PropertyID: 1, Timestamp: now},
+		{PropertyID: 2, Timestamp: now},
+		{PropertyID: 2, Timestamp: now},
+		{PropertyID: 3, Timestamp: now},
+		{PropertyID: 4, Timestamp: now},
+		{PropertyID: 5, Timestamp: now},
+	}
+
+	ts.WriteVerifyLogBatch(ctx, records)
+
+	// Test with limit = 2
+	top, err := ts.RetrieveRecentTopProperties(ctx, 2)
+	if err != nil {
+		t.Errorf("RetrieveRecentTopProperties error = %v", err)
+		return
+	}
+
+	// Should return at most 2 properties (or all if less than limit)
+	if len(top) > 2 {
+		t.Errorf("RetrieveRecentTopProperties(2) got %d properties, want at most 2", len(top))
+	}
+
+	// Test with limit = 10 (more than available)
+	topAll, err := ts.RetrieveRecentTopProperties(ctx, 10)
+	if err != nil {
+		t.Errorf("RetrieveRecentTopProperties error = %v", err)
+		return
+	}
+
+	if len(topAll) != 5 {
+		t.Errorf("RetrieveRecentTopProperties(10) got %d properties, want 5", len(topAll))
+	}
+
+	// Verify property 1 has highest count
+	if topAll[1] != 3 {
+		t.Errorf("Property 1 count = %d, want 3", topAll[1])
+	}
+
+	// Test with limit = 0
+	topZero, err := ts.RetrieveRecentTopProperties(ctx, 0)
+	if err != nil {
+		t.Errorf("RetrieveRecentTopProperties(0) error = %v", err)
+		return
+	}
+
+	if len(topZero) != 0 {
+		t.Errorf("RetrieveRecentTopProperties(0) got %d properties, want 0", len(topZero))
+	}
+}
+
+func TestMemoryTimeSeriesEmptyBatches(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+
+	// Test with empty access log batch
+	if err := ts.WriteAccessLogBatch(ctx, []*common.AccessRecord{}); err != nil {
+		t.Errorf("WriteAccessLogBatch with empty slice error = %v", err)
+	}
+
+	// Test with empty verify log batch
+	if err := ts.WriteVerifyLogBatch(ctx, []*common.VerifyRecord{}); err != nil {
+		t.Errorf("WriteVerifyLogBatch with empty slice error = %v", err)
+	}
+
+	// Test delete methods with empty slices
+	if err := ts.DeletePropertiesData(ctx, []int32{}); err != nil {
+		t.Errorf("DeletePropertiesData with empty slice error = %v", err)
+	}
+
+	if err := ts.DeleteOrganizationsData(ctx, []int32{}); err != nil {
+		t.Errorf("DeleteOrganizationsData with empty slice error = %v", err)
+	}
+
+	if err := ts.DeleteUsersData(ctx, []int32{}); err != nil {
+		t.Errorf("DeleteUsersData with empty slice error = %v", err)
+	}
+}

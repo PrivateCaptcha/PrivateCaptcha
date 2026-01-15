@@ -1798,3 +1798,372 @@ func TestDeleteOrgMembers(t *testing.T) {
 		}
 	}
 }
+
+func TestJoinOrgNotInvited(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a user who is NOT invited to the org
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create user account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to join org without being invited
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with error redirect since user is not invited
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+
+	// Verify user is NOT in the org
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range members {
+		if m.User.ID == user.ID {
+			t.Error("User should NOT be a member of the org since they were not invited")
+		}
+	}
+}
+
+func TestLeaveOrgNotMember(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	_, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a user who is NOT a member of the org
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_2", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create user account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to leave org without being a member
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with error redirect since user is not a member
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	location, _ := resp.Location()
+	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestDeleteOrgMemberNonExistent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a random user who is NOT a member
+	nonMember, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonmember", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as the owner
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to delete a user who is not a member
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(nonMember.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// The endpoint should return an error status since the user is not a member
+	if resp.StatusCode == http.StatusOK {
+		t.Error("Expected error status when trying to delete a non-member, got OK")
+	}
+}
+
+func TestGetOrgSoftDeleted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Use admin plan to allow creating extra org
+	adminPlan := server.PlanService.GetInternalAdminPlan()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), adminPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create an org to soft delete
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-delete-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Soft delete the org
+	if _, err := store.Impl().SoftDeleteOrganization(ctx, org, user); err != nil {
+		t.Fatalf("Failed to soft delete org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access the soft-deleted org dashboard
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/tab/dashboard", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect to portal root or error when accessing soft-deleted org
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for soft-deleted org, got status code %v", resp.StatusCode)
+	}
+}
+
+func TestGetPropertySoftDeleted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create a property to soft delete
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, t.Name()+".com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Soft delete the property
+	if _, err := store.Impl().SoftDeleteProperty(ctx, property, org, user); err != nil {
+		t.Fatalf("Failed to soft delete property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access the soft-deleted property
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect when accessing soft-deleted property
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect for soft-deleted property, got status code %v", resp.StatusCode)
+	}
+}
+
+func TestHandlerSwitchCase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+
+	testCases := []struct {
+		name         string
+		path         string
+		expectStatus int
+	}{
+		{
+			name:         "InvalidOrgPathArg",
+			path:         "/org/invalid-id/tab/dashboard",
+			expectStatus: http.StatusSeeOther, // redirect to error
+		},
+		{
+			name:         "ValidOrgDashboard",
+			path:         fmt.Sprintf("/org/%s/tab/dashboard", orgID),
+			expectStatus: http.StatusOK,
+		},
+		{
+			name:         "InvalidPropertyPathArg",
+			path:         fmt.Sprintf("/org/%s/property/invalid-id", orgID),
+			expectStatus: http.StatusSeeOther, // redirect to error
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", tc.path, nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.expectStatus {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.expectStatus)
+			}
+		})
+	}
+}
+
+func TestRetrieveOrgPropertyDeletedFromCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create a property
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, t.Name()+".com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Delete property from cache using the public wrapper
+	store.Impl().InvalidatePropertyCache(ctx, property)
+
+	// Now try to retrieve the property - should still work since it's in DB
+	retrievedProperty, err := store.Impl().RetrieveOrgProperty(ctx, org, property.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org property after cache delete: %v", err)
+	}
+
+	if retrievedProperty.ID != property.ID {
+		t.Errorf("Retrieved property ID %d, want %d", retrievedProperty.ID, property.ID)
+	}
+
+	if retrievedProperty.Name != property.Name {
+		t.Errorf("Retrieved property Name %s, want %s", retrievedProperty.Name, property.Name)
+	}
+}
+
+func TestRetrieveOrgOwnerWithSubscriptionNonOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a second user who is NOT the org owner
+	nonOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonowner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-owner account: %v", err)
+	}
+
+	// Invite and add non-owner as a member
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, nonOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, nonOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to retrieve org owner with subscription using non-owner as session user
+	retrievedOwner, subscription, err := store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, nonOwner)
+	if err != nil {
+		t.Fatalf("RetrieveOrgOwnerWithSubscription failed: %v", err)
+	}
+
+	// Should return the actual org owner, not the non-owner
+	if retrievedOwner.ID != owner.ID {
+		t.Errorf("Retrieved owner ID %d, want %d (the actual org owner)", retrievedOwner.ID, owner.ID)
+	}
+
+	if subscription == nil {
+		t.Error("Expected subscription to be returned for org owner")
+	}
+}

@@ -335,3 +335,122 @@ func TestGetPuzzleInvalidOrigin(t *testing.T) {
 		t.Errorf("Expected status OK for correct origin, got %d", resp.StatusCode)
 	}
 }
+
+func TestGetPuzzleInvalidSitekeyLength(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Valid sitekey length is db.SitekeyLen. Truncate one character to make it invalid.
+	validSitekey := db.UUIDToSiteKey(*randomUUID())
+	truncatedSitekey := validSitekey[:len(validSitekey)-1]
+
+	resp, err := puzzleSuite(ctx, truncatedSitekey, testPropertyDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for invalid sitekey length, got %d", resp.StatusCode)
+	}
+}
+
+func TestRecaptchaVerifyHandlerInvalidFormData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	tests := []struct {
+		name        string
+		body        string
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "InvalidFormEncoding",
+			body:        string([]byte{0xff, 0xfe}), // Invalid UTF-8 - no valid secret field
+			contentType: common.ContentTypeURLEncoded,
+			wantStatus:  http.StatusBadRequest, // Empty secret due to invalid form data
+		},
+		{
+			name:        "FormTooLarge",
+			body:        "response=" + strings.Repeat("a", maxSolutionsBodySize), // 9 + 262144 = 262153 bytes, exceeds 262144 limit
+			contentType: common.ContentTypeURLEncoded,
+			wantStatus:  http.StatusBadRequest, // Secret is empty due to body limit being hit during form parsing
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/"+common.SiteVerifyEndpoint, strings.NewReader(tt.body))
+			req.Header.Set(common.HeaderContentType, tt.contentType)
+			req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("Expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}
+
+func TestPCVerifyHandlerInvalidFormData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, db_tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret := db.UUIDToSecret(apikey.ExternalID)
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+	}{
+		{
+			name:       "EmptyBody",
+			body:       "",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "BodyTooLarge",
+			body:       strings.Repeat("a", maxSolutionsBodySize+1), // Over MaxBytesHandler limit
+			wantStatus: http.StatusBadRequest,                       // ReadAll fails, returns bad request
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, "/"+common.VerifyEndpoint, strings.NewReader(tt.body))
+			req.Header.Set(common.HeaderAPIKey, secret)
+			req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("Expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}

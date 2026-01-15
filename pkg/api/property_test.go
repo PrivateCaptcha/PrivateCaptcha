@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -225,7 +227,27 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -281,7 +303,7 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 
 	apiKeyStr := db.UUIDToSecret(apiKey.ExternalID)
 
-	_, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, inputs,
 		http.MethodPost,
 		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKeyStr)
@@ -290,7 +312,7 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 	}
 
 	if meta.Code != common.StatusSubscriptionPropertyLimitError {
-		t.Fatalf("expected code %v, got %v (%s)", common.StatusSubscriptionPropertyLimitError, meta.Code, meta.Description)
+		t.Fatalf("Unexpected status code: %v", meta.Code.String())
 	}
 }
 
@@ -388,7 +410,27 @@ func TestApiDeleteProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -527,7 +569,27 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			break
+		}
+	}
+
+	if !finished {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -558,7 +620,7 @@ func TestApiGetProperties(t *testing.T) {
 	}
 
 	for i := 0; i < 3*db.MaxOrgPropertiesPageSize/2; i++ {
-		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
 			t.Fatalf("Failed to create new property: %v", err)
 		}
 	}
@@ -1136,14 +1198,32 @@ func TestApiDeletePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
-	if taskResult == nil {
-		t.Fatal("Async task did not complete within timeout")
+	finished := false
+	var results []*operationResult
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		var result *apiAsyncTaskResultOutput
+		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			b, _ := json.Marshal(result.Result)
+			json.Unmarshal(b, &results)
+			break
+		}
 	}
 
-	var results []*operationResult
-	b, _ := json.Marshal(taskResult.Result)
-	json.Unmarshal(b, &results)
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1197,14 +1277,32 @@ func TestApiUpdatePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
-	if taskResult == nil {
-		t.Fatal("Async task did not complete within timeout")
+	finished := false
+	var results []*operationResult
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		var result *apiAsyncTaskResultOutput
+		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			b, _ := json.Marshal(result.Result)
+			json.Unmarshal(b, &results)
+			break
+		}
 	}
 
-	var results []*operationResult
-	b, _ := json.Marshal(taskResult.Result)
-	json.Unmarshal(b, &results)
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1822,4 +1920,146 @@ func TestApiOrgMemberWithNilSubscriptionCanCreateProperties(t *testing.T) {
 	}
 
 	runOrgMemberPropertyCreationTest(t, nil)
+}
+
+func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+
+	tests := []struct {
+		name        string
+		method      string
+		endpoint    string
+		body        []byte
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "DeletePropertiesInvalidJSON",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "DeletePropertiesEmptyList",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "DeletePropertiesTooManyItems",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        buildManyPropertiesJSON(t, maxPropertiesBatchSize+1), // over the limit
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusOK, // returns API error StatusPropertiesTooManyError, not HTTP error
+		},
+		{
+			name:        "CreatePropertiesInvalidJSON",
+			method:      http.MethodPost,
+			endpoint:    fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "CreatePropertiesEmptyList",
+			method:      http.MethodPost,
+			endpoint:    fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "UpdatePropertiesInvalidJSON",
+			method:      http.MethodPut,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "UpdatePropertiesEmptyList",
+			method:      http.MethodPut,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "GetOrgPropertiesInvalidPage",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=invalid", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusOK, // page defaults to 1 on invalid
+		},
+		{
+			name:        "GetOrgPropertiesNegativePage",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=-1", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusBadRequest, // negative page is rejected
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := http.NewServeMux()
+			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+			var reader io.Reader
+			if tt.body != nil {
+				reader = bytes.NewReader(tt.body)
+			}
+
+			req, err := http.NewRequestWithContext(ctx, tt.method, tt.endpoint, reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.Header.Set(common.HeaderAPIKey, apiKey)
+			if tt.contentType != "" {
+				req.Header.Set(common.HeaderContentType, tt.contentType)
+			}
+			req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}
+
+func buildManyPropertiesJSON(t *testing.T, count int) []byte {
+	t.Helper()
+
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		ids[i] = server.IDHasher.Encrypt(i + 1)
+	}
+
+	data, err := json.Marshal(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

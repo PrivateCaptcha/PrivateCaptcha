@@ -166,6 +166,11 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 		return nil, 0, db.ErrInvalidInput
 	}
 
+	if len(inputs) == 0 {
+		slog.WarnContext(ctx, "Empty create properties list")
+		return nil, 0, db.ErrInvalidInput
+	}
+
 	return inputs, common.StatusOK, nil
 }
 

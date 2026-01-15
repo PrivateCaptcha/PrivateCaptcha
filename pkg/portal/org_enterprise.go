@@ -353,15 +353,21 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID, err := s.OrgID(r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
-	if auditEvent, err := s.Store.Impl().JoinOrg(ctx, orgID, user); err == nil {
+	if !level.Valid || level.AccessLevel != dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User not invited to this org", "orgID", org.ID, "userID", user.ID)
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if auditEvent, err := s.Store.Impl().JoinOrg(ctx, org.ID, user); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
-		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(orgID))), http.StatusOK, w, r)
+		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -384,15 +390,21 @@ func (s *Server) leaveOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgID, err := s.OrgID(r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
 
-	if auditEvent, err := s.Store.Impl().LeaveOrg(ctx, orgID, user); err == nil {
+	if !level.Valid || level.AccessLevel != dbgen.AccessLevelMember {
+		slog.WarnContext(ctx, "User not a member of this org", "orgID", org.ID, "userID", user.ID)
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if auditEvent, err := s.Store.Impl().LeaveOrg(ctx, org.ID, user); err == nil {
 		// NOTE: we don't want to htmx-swap anything as we need to update the org dropdown
-		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(orgID))), http.StatusOK, w, r)
+		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)

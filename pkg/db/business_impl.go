@@ -767,6 +767,14 @@ func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, propert
 	_ = impl.cache.SetMissing(ctx, PropertyBySitekeyCacheKey(sitekey))
 	_ = impl.cache.SetMissing(ctx, propertyByIDCacheKey(property.ID))
 	// invalidate org properties in cache as we just deleted a property
+	impl.InvalidatePropertyCache(ctx, property)
+}
+
+func (impl *BusinessStoreImpl) InvalidatePropertyCache(ctx context.Context, property *dbgen.Property) {
+	if property == nil {
+		return
+	}
+
 	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
@@ -1339,6 +1347,15 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, userID int32) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
+	}
+
+	if _, level, err := impl.retrieveOrganizationWithAccess(ctx, userID, org.ID); err == nil {
+		if !level.Valid || ((level.AccessLevel != dbgen.AccessLevelInvited) && (level.AccessLevel != dbgen.AccessLevelMember)) {
+			slog.WarnContext(ctx, "User is not in the organization", "orgID", org.ID, "userID", userID)
+			return nil, ErrPermissions
+		}
+	} else {
+		return nil, err
 	}
 
 	err := impl.querier.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{

@@ -204,7 +204,7 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case db.ErrPermissions:
 			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
-		case db.ErrSoftDeleted:
+		case db.ErrSoftDeleted, db.ErrNegativeCacheHit, db.ErrRecordNotFound:
 			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, r, w)
 		default:
 			s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)
@@ -277,7 +277,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		switch err {
 		case db.ErrPermissions:
 			s.sendAPIErrorResponse(ctx, common.StatusOrgPermissionsError, r, w)
-		case db.ErrSoftDeleted:
+		case db.ErrSoftDeleted, db.ErrNegativeCacheHit, db.ErrRecordNotFound:
 			s.sendAPIErrorResponse(ctx, common.StatusOrgNotFoundError, r, w)
 		default:
 			s.sendAPIErrorResponse(ctx, common.StatusFailure, r, w)

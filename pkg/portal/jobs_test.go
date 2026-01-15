@@ -176,3 +176,83 @@ func TestCleanupAsyncTasksJobWithInvalidParams(t *testing.T) {
 		t.Errorf("CleanupAsyncTasksJob.RunOnce() with invalid params should not error, got = %v", err)
 	}
 }
+
+func TestCleanupDeletedRecordsJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create the cleanup job
+	job := &maintenance.CleanupDeletedRecordsJob{
+		Store: store,
+		Age:   30 * 24 * time.Hour, // 30 days
+	}
+
+	// Run the job - it should not fail even with no deleted records
+	err := job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Errorf("CleanupDeletedRecordsJob.RunOnce() error = %v", err)
+	}
+}
+
+func TestCleanupDeletedRecordsJobWithInvalidParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	job := &maintenance.CleanupDeletedRecordsJob{
+		Store: store,
+		Age:   30 * 24 * time.Hour, // Default to 30 days
+	}
+
+	// Run with invalid params (wrong type) - should use default
+	err := job.RunOnce(ctx, "invalid params")
+	if err != nil {
+		t.Errorf("CleanupDeletedRecordsJob.RunOnce() with invalid params should not error, got = %v", err)
+	}
+}
+
+func TestCleanupUserNotificationsJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create the cleanup job
+	job := &maintenance.CleanupUserNotificationsJob{
+		Store:              store,
+		NotificationMonths: 1, // Cleanup notifications older than 1 month
+		TemplateMonths:     6,
+	}
+
+	// Run the job - it should not fail even with no notifications to clean
+	err := job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Errorf("CleanupUserNotificationsJob.RunOnce() error = %v", err)
+	}
+}
+
+func TestCleanupUserNotificationsJobWithInvalidParams(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	job := &maintenance.CleanupUserNotificationsJob{
+		Store:              store,
+		NotificationMonths: 3,
+		TemplateMonths:     6,
+	}
+
+	// Run with invalid params (wrong type) - should use default
+	err := job.RunOnce(ctx, "invalid params")
+	if err != nil {
+		t.Errorf("CleanupUserNotificationsJob.RunOnce() with invalid params should not error, got = %v", err)
+	}
+}

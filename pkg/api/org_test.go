@@ -859,3 +859,139 @@ func TestAPIDeleteOrgEmptyID(t *testing.T) {
 		t.Fatalf("expected code %v, got %v", common.StatusOrgIDEmptyError, meta.Code)
 	}
 }
+
+func TestAPIUpdateOrgSoftDeleted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Soft delete the org
+	if _, err := server.BusinessDB.Impl().SoftDeleteOrganization(ctx, org, user); err != nil {
+		t.Fatalf("Failed to soft delete org: %v", err)
+	}
+
+	input := &apiOrgInput{
+		ID:   server.IDHasher.Encrypt(int(org.ID)),
+		Name: "Updated Name",
+	}
+
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodPut, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail because org is soft-deleted
+	if meta.Code != common.StatusOrgNotFoundError {
+		t.Errorf("Expected StatusOrgNotFoundError, got %v", meta.Code)
+	}
+}
+
+func TestAPIDeleteOrgSoftDeleted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Soft delete the org
+	if _, err := server.BusinessDB.Impl().SoftDeleteOrganization(ctx, org, user); err != nil {
+		t.Fatalf("Failed to soft delete org: %v", err)
+	}
+
+	input := &apiOrgInput{
+		ID: server.IDHasher.Encrypt(int(org.ID)),
+	}
+
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail because org is already soft-deleted
+	if meta.Code != common.StatusOrgNotFoundError {
+		t.Errorf("Expected StatusOrgNotFoundError, got %v", meta.Code)
+	}
+}
+
+func TestAPIUpdateOrgNotOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	// Create first user with org
+	_, org, _, err := setupAPISuite(ctx, t.Name()+"_owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create another user with their own API key
+	_, _, apiKey2, err := setupAPISuite(ctx, t.Name()+"_other")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to update org1 with user2's API key
+	input := &apiOrgInput{
+		ID:   server.IDHasher.Encrypt(int(org.ID)),
+		Name: "Malicious Update",
+	}
+
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodPut, "/"+common.OrgEndpoint, apiKey2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail because user2 is not the owner
+	if meta.Code != common.StatusOrgPermissionsError {
+		t.Errorf("Expected StatusOrgPermissionsError, got %v", meta.Code)
+	}
+}
+
+func TestAPIDeleteOrgNotOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	// Create first user with org
+	_, org, _, err := setupAPISuite(ctx, t.Name()+"_owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create another user with their own API key
+	_, _, apiKey2, err := setupAPISuite(ctx, t.Name()+"_other")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to delete org1 with user2's API key
+	input := &apiOrgInput{
+		ID: server.IDHasher.Encrypt(int(org.ID)),
+	}
+
+	_, meta, err := requestResponseAPISuite[json.RawMessage](ctx, input, http.MethodDelete, "/"+common.OrgEndpoint, apiKey2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should fail because user2 is not the owner
+	if meta.Code != common.StatusOrgPermissionsError {
+		t.Errorf("Expected StatusOrgPermissionsError, got %v", meta.Code)
+	}
+}

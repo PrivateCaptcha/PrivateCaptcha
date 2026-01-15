@@ -811,3 +811,111 @@ func TestSettingsTabInvalidTab(t *testing.T) {
 		t.Errorf("Expected status OK (fallback to default tab), got %d", w.Code)
 	}
 }
+
+func TestAPIKeyDaysFromParam(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		param    string
+		expected int
+	}{
+		{"1", 1},
+		{"30", 30},
+		{"90", 90},
+		{"180", 180},
+		{"365", 365},
+		{"invalid", 30},
+		{"", 30},
+		{"0", 30},
+		{"999", 30},
+		{"-1", 30},
+		{"60", 30},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.param, func(t *testing.T) {
+			result := apiKeyDaysFromParam(ctx, tt.param)
+			if result != tt.expected {
+				t.Errorf("apiKeyDaysFromParam(%q) = %d, want %d", tt.param, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCheckAPIKeyNameValid(t *testing.T) {
+	ctx := t.Context()
+
+	tests := []struct {
+		name     string
+		input    string
+		expected bool
+	}{
+		{"ValidAlphanumeric", "MyAPIKey123", true},
+		{"ValidWithSpaces", "My API Key", true},
+		{"ValidWithDash", "my-api-key", true},
+		{"ValidWithUnderscore", "my_api_key", true},
+		{"ValidWithDots", "api.key.name", true},
+		{"ValidWithParens", "my(key)", true},
+		{"ValidWithBrackets", "my[key]", true},
+		{"InvalidWithAmpersand", "my&key", false},
+		{"InvalidWithAtSign", "my@key", false},
+		{"InvalidWithPercent", "my%key", false},
+		{"InvalidWithDollar", "my$key", false},
+		{"EmptyString", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := checkAPIKeyNameValid(ctx, tt.input)
+			if result != tt.expected {
+				t.Errorf("checkAPIKeyNameValid(%q) = %v, want %v", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseAPIKeyScope(t *testing.T) {
+	tests := []struct {
+		scope        string
+		wantScope    string
+		wantReadOnly bool
+		wantError    bool
+	}{
+		{"portal_read_write", "portal", false, false},
+		{"portal_read_only", "portal", true, false},
+		{"captcha", "puzzle", false, false},
+		{"invalid", "", false, true},
+		{"", "", false, true},
+		{"portal", "", false, true},
+		{"puzzle_read_write", "", false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.scope, func(t *testing.T) {
+			scope, readOnly, err := parseAPIKeyScope(tt.scope)
+			if tt.wantError {
+				if err == nil {
+					t.Errorf("parseAPIKeyScope(%q) expected error, got nil", tt.scope)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("parseAPIKeyScope(%q) unexpected error: %v", tt.scope, err)
+				return
+			}
+
+			if readOnly != tt.wantReadOnly {
+				t.Errorf("parseAPIKeyScope(%q) readOnly = %v, want %v", tt.scope, readOnly, tt.wantReadOnly)
+			}
+
+			if tt.wantScope == "portal" && scope != "portal" {
+				t.Errorf("parseAPIKeyScope(%q) scope = %v, want portal", tt.scope, scope)
+			}
+
+			if tt.wantScope == "puzzle" && scope != "puzzle" {
+				t.Errorf("parseAPIKeyScope(%q) scope = %v, want puzzle", tt.scope, scope)
+			}
+		})
+	}
+}

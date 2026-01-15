@@ -31,6 +31,11 @@ const (
 	propertyIntegrationsTabIndex          = 1
 	propertyAuditLogsTabIndex             = 3
 	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
+	// Period endpoint constants
+	PeriodEndpointToday = "24h"
+	PeriodEndpointWeek  = "7d"
+	PeriodEndpointMonth = "30d"
+	PeriodEndpointYear  = "1y"
 )
 
 type difficultyLevelsRenderContext struct {
@@ -491,13 +496,13 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	periodStr := r.PathValue(common.ParamPeriod)
 	var period common.TimePeriod
 	switch periodStr {
-	case "24h":
+	case PeriodEndpointToday:
 		period = common.TimePeriodToday
-	case "7d":
+	case PeriodEndpointWeek:
 		period = common.TimePeriodWeek
-	case "30d":
+	case PeriodEndpointMonth:
 		period = common.TimePeriodMonth
-	case "1y":
+	case PeriodEndpointYear:
 		period = common.TimePeriodYear
 	default:
 		slog.ErrorContext(ctx, "Incorrect period argument", "period", periodStr)
