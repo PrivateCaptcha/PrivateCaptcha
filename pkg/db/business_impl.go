@@ -1241,20 +1241,6 @@ func (impl *BusinessStoreImpl) GetCachedOrgInviteByID(ctx context.Context, invit
 	return FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(inviteID))
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgInviteByID(ctx context.Context, inviteID int32) (*dbgen.OrganizationUser, error) {
-	reader := &StoreOneReader[int32, dbgen.OrganizationUser]{
-		CacheKey: orgInviteCacheKey(inviteID),
-		Cache:    impl.cache,
-	}
-
-	if impl.querier != nil {
-		reader.QueryFunc = impl.querier.GetOrgInviteByID
-		reader.QueryKeyFunc = QueryKeyInt
-	}
-
-	return reader.Read(ctx)
-}
-
 func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID int32, user *dbgen.User) error {
 	if impl.querier == nil {
 		return ErrMaintenance

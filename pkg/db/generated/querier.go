@@ -46,7 +46,6 @@ type Querier interface {
 	GetLock(ctx context.Context, name string) (*Lock, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)
 	GetOrgAuditLogs(ctx context.Context, arg *GetOrgAuditLogsParams) ([]*GetOrgAuditLogsRow, error)
-	GetOrgInviteByID(ctx context.Context, id int32) (*OrganizationUser, error)
 	GetOrgProperties(ctx context.Context, arg *GetOrgPropertiesParams) ([]*Property, error)
 	GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) (int64, error)
 	GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyByNameParams) (*Property, error)

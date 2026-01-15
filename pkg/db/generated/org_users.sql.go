@@ -11,25 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getOrgInviteByID = `-- name: GetOrgInviteByID :one
-SELECT org_id, user_id, level, created_at, updated_at, id, email FROM backend.organization_users WHERE id = $1
-`
-
-func (q *Queries) GetOrgInviteByID(ctx context.Context, id int32) (*OrganizationUser, error) {
-	row := q.db.QueryRow(ctx, getOrgInviteByID, id)
-	var i OrganizationUser
-	err := row.Scan(
-		&i.OrgID,
-		&i.UserID,
-		&i.Level,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ID,
-		&i.Email,
-	)
-	return &i, err
-}
-
 const getOrganizationUsers = `-- name: GetOrganizationUsers :many
 SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, ou.level
 FROM backend.organization_users ou
