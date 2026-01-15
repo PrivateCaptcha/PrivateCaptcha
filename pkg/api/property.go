@@ -177,13 +177,20 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.requestOrgMember(user, r, false /*only owner*/, &apiKey.OrgID)
+	org, level, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
 		} else {
 			s.sendHTTPErrorResponse(err, w)
 		}
+		return
+	}
+
+	// Invited users cannot create properties - must join the org first
+	if level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		s.sendHTTPErrorResponse(db.ErrPermissions, w)
 		return
 	}
 
@@ -275,7 +282,7 @@ func (s *Server) handleCreateProperties(ctx context.Context, task *dbgen.AsyncTa
 }
 
 func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskCreateProperties) ([]*operationResult, error) {
-	org, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.OrgID)
+	org, _, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.OrgID)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to retrieve org", common.ErrAttr(err))
 		return nil, err
@@ -512,7 +519,7 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Delete task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
-		if org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
 		}
 	}
@@ -714,7 +721,7 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Update task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
-		if org, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
 		}
 	}
@@ -789,7 +796,7 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.requestOrg(user, r, true /*only owner*/, &apiKey.OrgID)
+	org, _, err := s.requestOrg(user, r, true /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)
@@ -868,7 +875,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
+	org, _, err := s.requestOrg(user, r, false /*only owner*/, &apiKey.OrgID)
 	if err != nil {
 		if err == db.ErrInvalidInput {
 			s.sendAPIErrorResponse(ctx, common.StatusOrgIDInvalidError, r, w)

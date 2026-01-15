@@ -28,67 +28,35 @@ func twoFactorCode(ctx context.Context) int {
 	return int(n.Int64()) + start
 }
 
-func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, error) {
+func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	ctx := r.Context()
 
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
+		return nil, dbgen.NullAccessLevel{}, errInvalidPathArg
 	}
 
-	org, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, orgID)
+	org, level, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, orgID)
 	if err != nil {
 		if err == db.ErrSoftDeleted {
-			return nil, errOrgSoftDeleted
+			return nil, dbgen.NullAccessLevel{}, errOrgSoftDeleted
 		}
 
 		if err == db.ErrPermissions {
-			return nil, db.ErrPermissions
+			return nil, dbgen.NullAccessLevel{}, db.ErrPermissions
 		}
 
 		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		return nil, err
+		return nil, dbgen.NullAccessLevel{}, err
 	}
 
 	if !s.checkUserOrgAccess(user, org) {
 		slog.ErrorContext(ctx, "User cannot use this org", "userID", user.ID, "orgID", orgID, "enterprise", s.isEnterprise())
-		return nil, errLimitedFeature
+		return nil, dbgen.NullAccessLevel{}, errLimitedFeature
 	}
 
-	return org, nil
-}
-
-// OrgMember is like Org but requires the user to be a full member (not just invited)
-func (s *Server) OrgMember(user *dbgen.User, r *http.Request) (*dbgen.Organization, error) {
-	ctx := r.Context()
-
-	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
-	}
-
-	org, err := s.Store.Impl().RetrieveUserOrganizationMember(ctx, user, orgID)
-	if err != nil {
-		if err == db.ErrSoftDeleted {
-			return nil, errOrgSoftDeleted
-		}
-
-		if err == db.ErrPermissions {
-			return nil, db.ErrPermissions
-		}
-
-		slog.ErrorContext(ctx, "Failed to find org by ID", common.ErrAttr(err))
-		return nil, err
-	}
-
-	if !s.checkUserOrgAccess(user, org) {
-		slog.ErrorContext(ctx, "User cannot use this org", "userID", user.ID, "orgID", orgID, "enterprise", s.isEnterprise())
-		return nil, errLimitedFeature
-	}
-
-	return org, nil
+	return org, level, nil
 }
 
 func (s *Server) OrgID(r *http.Request) (int32, error) {

@@ -240,7 +240,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -393,8 +393,15 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.OrgMember(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	// Invited users cannot create properties - must join the org first
+	if level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
@@ -469,7 +476,7 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -546,7 +553,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		return nil, nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -748,7 +755,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}
 
 	// should hit cache right away
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -827,7 +834,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
