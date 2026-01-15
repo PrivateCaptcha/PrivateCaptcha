@@ -128,12 +128,12 @@ func TestIsOriginAllowed(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name          string
-		origin        string
-		domain        string
-		allowLocal    bool
-		allowSubdoms  bool
-		expected      bool
+		name         string
+		origin       string
+		domain       string
+		allowLocal   bool
+		allowSubdoms bool
+		expected     bool
 	}{
 		{
 			name:         "ExactDomainMatch",
@@ -190,6 +190,30 @@ func TestIsOriginAllowed(t *testing.T) {
 			allowLocal:   true,
 			allowSubdoms: false,
 			expected:     true,
+		},
+		{
+			name:         "LocalhostSubdomainOneLevelAllowed",
+			origin:       "captcha.localhost",
+			domain:       "example.com",
+			allowLocal:   true,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "LocalhostSubdomainTwoLevelsAllowed",
+			origin:       "my.captcha.localhost",
+			domain:       "example.com",
+			allowLocal:   true,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "LocalhostSubdomainNotAllowed",
+			origin:       "my.captcha.localhost",
+			domain:       "example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     false,
 		},
 		{
 			name:         "LocalhostIP127Allowed",
