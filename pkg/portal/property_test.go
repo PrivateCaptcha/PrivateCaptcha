@@ -369,48 +369,67 @@ func TestGetPropertyStats(t *testing.T) {
 	// Give the time series database a moment to process the writes
 	time.Sleep(100 * time.Millisecond)
 
-	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/stats/24h",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID))), nil)
-	req.AddCookie(cookie)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	// Test all time periods
+	periods := []struct {
+		endpoint string
+		period   common.TimePeriod
+	}{
+		{"24h", common.TimePeriodToday},
+		{"7d", common.TimePeriodWeek},
+		{"30d", common.TimePeriodMonth},
+		{"1y", common.TimePeriodYear},
 	}
 
-	var stats propertyStatsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+	for _, p := range periods {
+		t.Run(p.endpoint, func(t *testing.T) {
+			req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/stats/%s",
+				server.IDHasher.Encrypt(int(org.ID)),
+				server.IDHasher.Encrypt(int(property.ID)),
+				p.endpoint), nil)
+			req.AddCookie(cookie)
 
-	if len(stats.Requested) == 0 {
-		t.Error("Expected requested data but got none")
-	}
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
 
-	if len(stats.Verified) == 0 {
-		t.Error("Expected verified data but got none")
-	}
+			resp := w.Result()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Unexpected status code %v for period %s", resp.StatusCode, p.endpoint)
+			}
 
-	totalRequested := 0
-	for _, p := range stats.Requested {
-		totalRequested += p.Value
-	}
+			var stats propertyStatsResponse
+			if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+				t.Fatalf("Failed to decode response for period %s: %v", p.endpoint, err)
+			}
 
-	totalVerified := 0
-	for _, p := range stats.Verified {
-		totalVerified += p.Value
-	}
+			// For today's period, we expect data since records are recent
+			if p.period == common.TimePeriodToday {
+				if len(stats.Requested) == 0 {
+					t.Error("Expected requested data but got none for 24h period")
+				}
 
-	if totalRequested != 2 {
-		t.Errorf("Expected 2 total requested, got %d", totalRequested)
-	}
+				if len(stats.Verified) == 0 {
+					t.Error("Expected verified data but got none for 24h period")
+				}
 
-	if totalVerified != 2 {
-		t.Errorf("Expected 2 total verified, got %d", totalVerified)
+				totalRequested := 0
+				for _, pt := range stats.Requested {
+					totalRequested += pt.Value
+				}
+
+				totalVerified := 0
+				for _, pt := range stats.Verified {
+					totalVerified += pt.Value
+				}
+
+				if totalRequested != 2 {
+					t.Errorf("Expected 2 total requested, got %d", totalRequested)
+				}
+
+				if totalVerified != 2 {
+					t.Errorf("Expected 2 total verified, got %d", totalVerified)
+				}
+			}
+		})
 	}
 }
 
