@@ -1137,3 +1137,41 @@ func TestReportingVerifierNoReportOnError(t *testing.T) {
 		t.Error("Expected report function NOT to be called for invalid result")
 	}
 }
+
+func TestVerifyInvalidAPIKeyLength(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Truncate the API key to an invalid length
+	validKey := db.UUIDToSecret(*randomUUID())
+	truncatedKey := validKey[:len(validKey)-1]
+
+	resp, err := verifySuite("test.solution.payload", truncatedKey, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for invalid API key length, got %d", resp.StatusCode)
+	}
+}
+
+func TestSiteVerifyInvalidAPIKeyLength(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Truncate the API key to an invalid length
+	validKey := db.UUIDToSecret(*randomUUID())
+	truncatedKey := validKey[:len(validKey)-1]
+
+	resp, err := siteVerifySuite("test.solution.payload", truncatedKey, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for invalid API key length, got %d", resp.StatusCode)
+	}
+}

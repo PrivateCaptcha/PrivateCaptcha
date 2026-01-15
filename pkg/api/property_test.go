@@ -1716,3 +1716,145 @@ func TestApiDeletePropertiesInvalidPropertyID(t *testing.T) {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
 	}
 }
+
+func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+
+	tests := []struct {
+		name        string
+		method      string
+		endpoint    string
+		body        []byte
+		contentType string
+		wantStatus  int
+	}{
+		{
+			name:        "DeletePropertiesInvalidJSON",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "DeletePropertiesEmptyList",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "DeletePropertiesTooManyItems",
+			method:      http.MethodDelete,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        buildManyPropertiesJSON(t, 1001), // over the limit
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "CreatePropertiesInvalidJSON",
+			method:      http.MethodPost,
+			endpoint:    fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "CreatePropertiesEmptyList",
+			method:      http.MethodPost,
+			endpoint:    fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "UpdatePropertiesInvalidJSON",
+			method:      http.MethodPut,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("{invalid-json"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "UpdatePropertiesEmptyList",
+			method:      http.MethodPut,
+			endpoint:    "/" + common.PropertiesEndpoint,
+			body:        []byte("[]"),
+			contentType: common.ContentTypeJSON,
+			wantStatus:  http.StatusBadRequest,
+		},
+		{
+			name:        "GetOrgPropertiesInvalidPage",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=invalid", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusOK, // page defaults to 1 on invalid
+		},
+		{
+			name:        "GetOrgPropertiesNegativePage",
+			method:      http.MethodGet,
+			endpoint:    fmt.Sprintf("/%s/%s/%s?page=-1", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
+			body:        nil,
+			contentType: "",
+			wantStatus:  http.StatusOK, // page defaults to 1 on invalid
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := http.NewServeMux()
+			server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+			var reader io.Reader
+			if tt.body != nil {
+				reader = bytes.NewReader(tt.body)
+			}
+
+			req, err := http.NewRequestWithContext(ctx, tt.method, tt.endpoint, reader)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			req.Header.Set(common.HeaderAPIKey, apiKey)
+			if tt.contentType != "" {
+				req.Header.Set(common.HeaderContentType, tt.contentType)
+			}
+			req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}
+
+func buildManyPropertiesJSON(t *testing.T, count int) []byte {
+	t.Helper()
+
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		ids[i] = server.IDHasher.Encrypt(i + 1)
+	}
+
+	data, err := json.Marshal(ids)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
+}

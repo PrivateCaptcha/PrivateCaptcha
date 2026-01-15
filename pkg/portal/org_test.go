@@ -2090,3 +2090,81 @@ func TestHandlerSwitchCase(t *testing.T) {
 		})
 	}
 }
+
+func TestRetrieveOrgPropertyDeletedFromCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create a property
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, t.Name()+".com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Delete property and org from cache
+	cache := server.Store.GetCache()
+	cache.Delete(ctx, property.ID)
+
+	// Now try to retrieve the property - should still work since it's in DB
+	retrievedProperty, err := store.Impl().RetrieveOrgProperty(ctx, org, int(property.ID))
+	if err != nil {
+		t.Fatalf("Failed to retrieve org property after cache delete: %v", err)
+	}
+
+	if retrievedProperty.ID != property.ID {
+		t.Errorf("Retrieved property ID %d, want %d", retrievedProperty.ID, property.ID)
+	}
+
+	if retrievedProperty.Name != property.Name {
+		t.Errorf("Retrieved property Name %s, want %s", retrievedProperty.Name, property.Name)
+	}
+}
+
+func TestRetrieveOrgOwnerWithSubscriptionNonOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create a second user who is NOT the org owner
+	nonOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonowner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-owner account: %v", err)
+	}
+
+	// Invite and add non-owner as a member
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, nonOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, nonOwner); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to retrieve org owner with subscription using non-owner as session user
+	retrievedOwner, subscription, err := store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, nonOwner)
+	if err != nil {
+		t.Fatalf("RetrieveOrgOwnerWithSubscription failed: %v", err)
+	}
+
+	// Should return the actual org owner, not the non-owner
+	if retrievedOwner.ID != owner.ID {
+		t.Errorf("Retrieved owner ID %d, want %d (the actual org owner)", retrievedOwner.ID, owner.ID)
+	}
+
+	if subscription == nil {
+		t.Error("Expected subscription to be returned for org owner")
+	}
+}
