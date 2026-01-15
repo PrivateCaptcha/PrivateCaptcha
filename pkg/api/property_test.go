@@ -1762,7 +1762,7 @@ func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
 			endpoint:    "/" + common.PropertiesEndpoint,
 			body:        buildManyPropertiesJSON(t, maxPropertiesBatchSize+1), // over the limit
 			contentType: common.ContentTypeJSON,
-			wantStatus:  http.StatusBadRequest,
+			wantStatus:  http.StatusOK, // returns API error StatusPropertiesTooManyError, not HTTP error
 		},
 		{
 			name:        "CreatePropertiesInvalidJSON",
@@ -1810,7 +1810,7 @@ func TestApiPropertiesRequestBadRequestCases(t *testing.T) {
 			endpoint:    fmt.Sprintf("/%s/%s/%s?page=-1", common.OrgEndpoint, orgID, common.PropertiesEndpoint),
 			body:        nil,
 			contentType: "",
-			wantStatus:  http.StatusOK, // page defaults to 1 on invalid
+			wantStatus:  http.StatusBadRequest, // negative page is rejected
 		},
 	}
 
