@@ -59,6 +59,10 @@ func (s *Server) RegisterTaskHandlers(ctx context.Context) {
 }
 
 func (s *Server) requestUser(ctx context.Context, readOnly bool) (*dbgen.User, *dbgen.APIKey, error) {
+	return s.requestUserEx(ctx, readOnly, true /*requiresSubscription*/)
+}
+
+func (s *Server) requestUserEx(ctx context.Context, readOnly bool, requiresSubscription bool) (*dbgen.User, *dbgen.APIKey, error) {
 	portalOwnerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePortal}
 	id, _, err := portalOwnerSource.OwnerID(ctx, time.Now().UTC())
 	if err != nil {
@@ -76,39 +80,39 @@ func (s *Server) requestUser(ctx context.Context, readOnly bool) (*dbgen.User, *
 		return nil, nil, err
 	}
 
-	if !user.SubscriptionID.Valid {
+	if requiresSubscription && !user.SubscriptionID.Valid {
 		return nil, nil, db.ErrNoActiveSubscription
 	}
 
 	return user, portalOwnerSource.cachedKey, nil
 }
 
-func (s *Server) requestOrg(user *dbgen.User, r *http.Request, onlyOwner bool, allowedOrgID *pgtype.Int4) (*dbgen.Organization, error) {
+func (s *Server) requestOrg(user *dbgen.User, r *http.Request, onlyOwner bool, allowedOrgID *pgtype.Int4) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	ctx := r.Context()
 
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
-		return nil, db.ErrInvalidInput
+		return nil, dbgen.NullAccessLevel{}, db.ErrInvalidInput
 	}
 
 	if (allowedOrgID != nil) && allowedOrgID.Valid && (allowedOrgID.Int32 != orgID) {
 		slog.WarnContext(ctx, "Requested organization is not allowed for this requester", "allowedOrgID", allowedOrgID.Int32, "requestedOrgID", orgID)
-		return nil, db.ErrPermissions
+		return nil, dbgen.NullAccessLevel{}, db.ErrPermissions
 	}
 
-	org, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, orgID)
+	org, level, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, orgID)
 	if err != nil {
-		return nil, err
+		return nil, dbgen.NullAccessLevel{}, err
 	}
 
 	if onlyOwner {
 		if !org.UserID.Valid || (org.UserID.Int32 != user.ID) {
-			return nil, db.ErrPermissions
+			return nil, dbgen.NullAccessLevel{}, db.ErrPermissions
 		}
 	}
 
-	return org, nil
+	return org, level, nil
 }
 
 func (s *Server) requestProperty(org *dbgen.Organization, r *http.Request) (*dbgen.Property, error) {

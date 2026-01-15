@@ -649,7 +649,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		var oerr error
 		if orgID, oerr = s.IDHasher.Decrypt(orgIDStr); oerr == nil {
 			var org *dbgen.Organization
-			if org, oerr = s.Store.Impl().RetrieveUserOrganization(ctx, user, int32(orgID)); oerr == nil {
+			if org, _, oerr = s.Store.Impl().RetrieveUserOrganization(ctx, user, int32(orgID)); oerr == nil {
 				pgOrgID = db.Int(org.ID)
 				orgName = org.Name
 			}
@@ -739,7 +739,7 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewMode
 	userKey.Secret = db.UUIDToSecret(key.ExternalID)
 
 	if key.OrgID.Valid {
-		if org, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, key.OrgID.Int32); err == nil {
+		if org, _, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, key.OrgID.Int32); err == nil {
 			userKey.OrgName = org.Name
 		}
 	}

@@ -1321,3 +1321,149 @@ func TestMovePropertyInvalidForm(t *testing.T) {
 		})
 	}
 }
+
+// runOrgMemberPropertyCreationPortalTest is the common test logic for portal property creation by org member
+func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *dbgen.CreateSubscriptionParams) {
+	t.Helper()
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name()+"_member", memberSubscrParams)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+	propertyName := t.Name() + "Property"
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, propertyName)
+	form.Set(common.ParamDomain, "google.com")
+	form.Set(common.ParamIgnoreError, "true")
+
+	// Step 1: Verify that non-member cannot create properties in the org
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Portal redirects to error page on failure
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect status for non-member, got %v. Body: %s", resp.StatusCode, w.Body.String())
+	}
+	location, err := resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect response but got error: %v", err)
+	}
+	if !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for non-member, got: %s", location.String())
+	}
+
+	// Step 2: Invite member to org
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	// Step 3: Verify that invited (but not joined) member cannot create properties
+	req = httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp = w.Result()
+	// Portal redirects to error page on failure
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect status for invited but not joined member, got %v. Body: %s", resp.StatusCode, w.Body.String())
+	}
+	location, err = resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect response but got error: %v", err)
+	}
+	if !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for invited but not joined member, got: %s", location.String())
+	}
+
+	// Step 4: Member joins the org
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	// Step 5: Now member should be able to create properties in org where owner has subscription
+	req = httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp = w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
+	}
+
+	location, err = resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect response but got error: %v", err)
+	}
+
+	expectedPrefix := fmt.Sprintf("/org/%s/property/", orgID)
+	if path := location.String(); !strings.HasPrefix(path, expectedPrefix) {
+		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
+	}
+
+	// Step 6: Verify properties were created by the member
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if count := len(properties); count != 1 {
+		t.Errorf("Unexpected number of properties in org: %v", count)
+	} else {
+		if properties[0].Name != propertyName {
+			t.Errorf("Unexpected property name: %v", properties[0].Name)
+		}
+		if properties[0].CreatorID.Int32 != member.ID {
+			t.Errorf("Property was not created by member: creatorID=%v, memberID=%v", properties[0].CreatorID.Int32, member.ID)
+		}
+	}
+}
+
+func TestOrgMemberWithExpiredTrialCanCreateProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create subscription params with expired trial
+	subscrParams := db_tests.CreateNewSubscriptionParams(testPlan)
+	subscrParams.TrialEndsAt = db.Timestampz(time.Now().UTC().AddDate(0, 0, -7)) // Trial ended 7 days ago
+
+	runOrgMemberPropertyCreationPortalTest(t, subscrParams)
+}
+
+func TestOrgMemberWithNilSubscriptionCanCreateProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	runOrgMemberPropertyCreationPortalTest(t, nil)
+}

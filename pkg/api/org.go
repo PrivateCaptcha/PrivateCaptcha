@@ -199,7 +199,7 @@ func (s *Server) updateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	oldOrg, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, int32(orgID))
+	oldOrg, _, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, int32(orgID))
 	if err != nil {
 		switch err {
 		case db.ErrPermissions:
@@ -272,7 +272,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, int32(orgID))
+	org, _, err := s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, int32(orgID))
 	if err != nil {
 		switch err {
 		case db.ErrPermissions:

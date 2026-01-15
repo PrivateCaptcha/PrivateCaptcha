@@ -178,7 +178,7 @@ func TestAPIDeleteOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	if _, err := server.BusinessDB.Impl().RetrieveUserOrganization(t.Context(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
+	if _, _, err := server.BusinessDB.Impl().RetrieveUserOrganization(t.Context(), user, org.ID); (err != db.ErrSoftDeleted) && (err != db.ErrNegativeCacheHit) {
 		t.Fatalf("Unexpected error when retrieving deleted org: %v", err)
 	}
 }
@@ -209,7 +209,7 @@ func TestAPIUpdateOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	org, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
+	org, _, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil {
 		t.Fatalf("Unexpected error when retrieving org: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestAPIUpdateOrgEmptyID(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	org, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
+	org, _, err = server.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, org.ID)
 	if err != nil {
 		t.Fatalf("Unexpected error when retrieving org: %v", err)
 	}

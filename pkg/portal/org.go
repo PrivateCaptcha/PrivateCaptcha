@@ -344,7 +344,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -393,7 +393,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -431,7 +431,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +493,7 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +522,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, ErrInvalidRequestArg
 	}
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}

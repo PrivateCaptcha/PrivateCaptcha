@@ -2021,23 +2021,23 @@ func (impl *BusinessStoreImpl) RetrieveUser(ctx context.Context, id int32) (*dbg
 	return user, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUserOrganization(ctx context.Context, user *dbgen.User, orgID int32) (*dbgen.Organization, error) {
+func (impl *BusinessStoreImpl) RetrieveUserOrganization(ctx context.Context, user *dbgen.User, orgID int32) (*dbgen.Organization, dbgen.NullAccessLevel, error) {
 	org, level, err := impl.retrieveOrganizationWithAccess(ctx, user.ID, orgID)
 	if err != nil {
-		return nil, err
+		return nil, dbgen.NullAccessLevel{}, err
 	}
 
 	if !level.Valid {
 		slog.WarnContext(ctx, "User cannot access this org", "orgID", orgID, "userID", user.ID)
-		return nil, ErrPermissions
+		return nil, dbgen.NullAccessLevel{}, ErrPermissions
 	}
 
 	if org.DeletedAt.Valid {
 		slog.WarnContext(ctx, "Organization is soft-deleted", "orgID", orgID, "deletedAt", org.DeletedAt.Time)
-		return org, ErrSoftDeleted
+		return org, level, ErrSoftDeleted
 	}
 
-	return org, nil
+	return org, level, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveOrgProperty(ctx context.Context, org *dbgen.Organization, propID int32) (*dbgen.Property, error) {

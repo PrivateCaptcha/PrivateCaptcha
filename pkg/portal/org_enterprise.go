@@ -199,7 +199,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, ErrInvalidRequestArg
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		code := http.StatusInternalServerError
 		if err == db.ErrPermissions {
@@ -408,7 +408,7 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
@@ -455,7 +455,7 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return

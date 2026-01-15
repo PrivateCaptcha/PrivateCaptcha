@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -16,7 +17,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
@@ -225,27 +225,7 @@ func TestApiPostProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -301,7 +281,7 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 
 	apiKeyStr := db.UUIDToSecret(apiKey.ExternalID)
 
-	resp, err := apiRequestSuite(ctx, inputs,
+	_, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
 		http.MethodPost,
 		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
 		apiKeyStr)
@@ -309,8 +289,8 @@ func TestApiPostPropertiesNoSubscription(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if resp.StatusCode != http.StatusPaymentRequired {
-		t.Fatalf("Unexpected status code: %v", resp.StatusCode)
+	if meta.Code != common.StatusSubscriptionPropertyLimitError {
+		t.Fatalf("expected code %v, got %v (%s)", common.StatusSubscriptionPropertyLimitError, meta.Code, meta.Description)
 	}
 }
 
@@ -408,27 +388,7 @@ func TestApiDeleteProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -567,27 +527,7 @@ func TestApiUpdateProperties(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
-			break
-		}
-	}
-
-	if !finished {
+	if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKey) {
 		t.Fatal("Async task did not complete within timeout")
 	}
 
@@ -618,7 +558,7 @@ func TestApiGetProperties(t *testing.T) {
 	}
 
 	for i := 0; i < 3*db.MaxOrgPropertiesPageSize/2; i++ {
-		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
+		if _, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, fmt.Sprintf("example%v.com", i)), org); err != nil {
 			t.Fatalf("Failed to create new property: %v", err)
 		}
 	}
@@ -1196,32 +1136,14 @@ func TestApiDeletePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	var results []*operationResult
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		var result *apiAsyncTaskResultOutput
-		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			b, _ := json.Marshal(result.Result)
-			json.Unmarshal(b, &results)
-			break
-		}
-	}
-
-	if !finished {
+	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
+	if taskResult == nil {
 		t.Fatal("Async task did not complete within timeout")
 	}
+
+	var results []*operationResult
+	b, _ := json.Marshal(taskResult.Result)
+	json.Unmarshal(b, &results)
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1275,32 +1197,14 @@ func TestApiUpdatePropertiesAPIKeyOrgScope(t *testing.T) {
 		t.Fatalf("Unexpected status code: %v", meta.Description)
 	}
 
-	finished := false
-	var results []*operationResult
-	for i := 0; i < 20; i++ {
-		time.Sleep(500 * time.Millisecond)
-
-		var result *apiAsyncTaskResultOutput
-		result, meta, err = requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if !meta.Code.Success() {
-			t.Fatalf("Unexpected status code: %v", meta.Description)
-		}
-
-		if result.Finished {
-			finished = true
-			b, _ := json.Marshal(result.Result)
-			json.Unmarshal(b, &results)
-			break
-		}
-	}
-
-	if !finished {
+	taskResult := waitForAsyncTaskCompletionWithResult(ctx, t, output.ID, apiKey)
+	if taskResult == nil {
 		t.Fatal("Async task did not complete within timeout")
 	}
+
+	var results []*operationResult
+	b, _ := json.Marshal(taskResult.Result)
+	json.Unmarshal(b, &results)
 
 	if len(results) != 1 {
 		t.Fatalf("Expected 1 result, got %d", len(results))
@@ -1715,4 +1619,207 @@ func TestApiDeletePropertiesInvalidPropertyID(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, resp.StatusCode)
 	}
+}
+
+// createPropertyInputs creates test property inputs for API property creation
+func createPropertyInputs(prefix string, count int) []*apiCreatePropertyInput {
+	inputs := make([]*apiCreatePropertyInput, 0, count)
+	for i := 0; i < count; i++ {
+		inputs = append(inputs, &apiCreatePropertyInput{
+			apiPropertySettings: apiPropertySettings{
+				Name: fmt.Sprintf("%s Property %d", prefix, i),
+			},
+			Domain: fmt.Sprintf("example%d.com", i),
+		})
+	}
+	return inputs
+}
+
+// waitForAsyncTaskCompletion polls for async task completion
+func waitForAsyncTaskCompletion(ctx context.Context, t *testing.T, taskID string, apiKeyStr string) bool {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+taskID, apiKeyStr)
+		if err != nil {
+			t.Fatalf("Failed to poll async task: %v", err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			return true
+		}
+	}
+	return false
+}
+
+// waitForAsyncTaskCompletionWithResult waits for async task completion and returns the result
+func waitForAsyncTaskCompletionWithResult(ctx context.Context, t *testing.T, taskID string, apiKeyStr string) *apiAsyncTaskResultOutput {
+	t.Helper()
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+taskID, apiKeyStr)
+		if err != nil {
+			t.Fatalf("Failed to poll async task: %v", err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			return result
+		}
+	}
+	return nil
+}
+
+// waitForAsyncTaskCompletionDirect waits for async task completion by checking the database directly
+// This is used when the user doesn't have a subscription and can't poll via API
+func waitForAsyncTaskCompletionDirect(ctx context.Context, t *testing.T, taskID string) bool {
+	t.Helper()
+	uuid := db.UUIDFromString(taskID)
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		task, err := store.Impl().RetrieveAsyncTask(ctx, uuid, nil)
+		if err != nil {
+			t.Fatalf("Failed to retrieve async task: %v", err)
+		}
+
+		if task.ProcessedAt.Valid {
+			slog.DebugContext(ctx, "Async task is finished", "attempt", i)
+			return true
+		}
+	}
+	return false
+}
+
+// runOrgMemberPropertyCreationTest is the common test logic for org member property creation
+func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.CreateSubscriptionParams) {
+	t.Helper()
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	owner, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	member, _, err := db_test.CreateNewAccountForTestEx(ctx, store, t.Name()+"_member", memberSubscrParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	apiKey, _, err := store.Impl().CreateAPIKey(ctx, member, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apiKey.ExternalID)
+
+	// Step 1: Verify that non-member cannot create properties in the org
+	inputs := createPropertyInputs(t.Name(), 3)
+	resp, err := apiRequestSuite(ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Expected forbidden status for non-member, got: %v", resp.StatusCode)
+	}
+
+	// Step 2: Invite member to org
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	// Step 3: Verify that invited (but not joined) member cannot create properties
+	resp, err = apiRequestSuite(ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Expected forbidden status for invited but not joined member, got: %v", resp.StatusCode)
+	}
+
+	// Step 4: Member joins the org
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	// Step 5: Now member should be able to create properties
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Expected success after joining org, got: %v (%s)", meta.Code, meta.Description)
+	}
+
+	// Step 6: Wait for async task completion
+	// If member has subscription, poll via API; otherwise, check DB directly
+	if memberSubscrParams != nil {
+		if !waitForAsyncTaskCompletion(ctx, t, output.ID, apiKeyStr) {
+			t.Fatal("Async task did not complete within timeout")
+		}
+	} else {
+		if !waitForAsyncTaskCompletionDirect(ctx, t, output.ID) {
+			t.Fatal("Async task did not complete within timeout")
+		}
+	}
+
+	// Step 7: Verify properties were created by the member
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(properties) != len(inputs) {
+		t.Fatalf("Unexpected number of properties: %v, expected %v", len(properties), len(inputs))
+	}
+
+	for _, p := range properties {
+		if p.CreatorID.Int32 != member.ID {
+			t.Errorf("Property was not created by member: creatorID=%v, memberID=%v", p.CreatorID.Int32, member.ID)
+		}
+	}
+}
+
+func TestApiOrgMemberWithExpiredTrialCanCreateProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Create subscription params with expired trial
+	subscrParams := db_test.CreateNewSubscriptionParams(testPlan)
+	subscrParams.TrialEndsAt = db.Timestampz(time.Now().UTC().AddDate(0, 0, -7)) // Trial ended 7 days ago
+
+	runOrgMemberPropertyCreationTest(t, subscrParams)
+}
+
+func TestApiOrgMemberWithNilSubscriptionCanCreateProperties(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	runOrgMemberPropertyCreationTest(t, nil)
 }

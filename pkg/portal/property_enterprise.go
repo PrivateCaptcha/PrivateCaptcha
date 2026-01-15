@@ -37,7 +37,7 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, err := s.Org(user, r)
+	org, _, err := s.Org(user, r)
 	if err != nil {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
