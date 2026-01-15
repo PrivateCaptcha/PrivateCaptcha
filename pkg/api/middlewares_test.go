@@ -192,6 +192,22 @@ func TestIsOriginAllowed(t *testing.T) {
 			expected:     true,
 		},
 		{
+			name:         "LocalhostSubdomainAllowed",
+			origin:       "my.captcha.localhost",
+			domain:       "example.com",
+			allowLocal:   true,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
+			name:         "LocalhostSubdomainNotAllowed",
+			origin:       "my.captcha.localhost",
+			domain:       "example.com",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     false,
+		},
+		{
 			name:         "LocalhostIP127Allowed",
 			origin:       "127.0.0.1",
 			domain:       "example.com",
