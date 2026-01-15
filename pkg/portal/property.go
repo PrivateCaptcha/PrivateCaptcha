@@ -400,9 +400,9 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Invited users cannot create properties - must join the org first
-	if level.AccessLevel == dbgen.AccessLevelInvited {
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
 		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
