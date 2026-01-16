@@ -36,3 +36,9 @@ type TimeCount struct {
 	Timestamp time.Time
 	Count     uint32
 }
+
+type OrgTimeCount struct {
+	OrgID     int32
+	Timestamp time.Time
+	Count     uint32
+}

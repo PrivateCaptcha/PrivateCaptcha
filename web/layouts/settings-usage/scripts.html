@@ -9,11 +9,26 @@
                 // Constants
                 this.yTicksCount = 7;
                 this.maxBarWidth = 7;
+                this.legendItemWidth = 160;
+                this.legendItemHeight = 20;
+                this.legendPadding = 20;
+                this.yAxisScaleFactor = 1.2;
 
                 this.backgroundColor = '#e4e4e7';
-                this.requestedColor = '#188B8B'; // pcteal-600
-                this.verifiedColor = '#F45D5D'; // pcred-300
+                this.limitColor = '#F45D5D'; // pcred-300
                 this.grayColor = "#6b7280";
+                this.seriesColors = [
+                    '#188B8B',
+                    '#3B82F6',
+                    '#F59E0B',
+                    '#10B981',
+                    '#8B5CF6',
+                    '#F97316',
+                    '#EC4899',
+                    '#14B8A6',
+                    '#6366F1',
+                    '#E11D48'
+                ];
 
                 this.monthlyFormat = d3.timeFormat("%b");
             }
@@ -88,20 +103,28 @@
                     .style("fill", this.grayColor);
             }
 
-            setBarAttributes(bars, x, y, height, color) {
-                bars.enter().append("rect")
+            stackValue(segment) {
+                return segment[1] - segment[0];
+            }
+
+            setStackedBars(layer, x, y, height, color) {
+                const barWidth = Math.min(x.bandwidth(), this.maxBarWidth);
+                const barOffset = (x.bandwidth() - barWidth) / 2;
+                layer.selectAll("rect")
+                    .data(d => d)
+                    .enter().append("rect")
                     .attr("class", "bar")
-                    .attr("x", d => x(d.x) + x.bandwidth() / 2)
-                    .attr("width", () => Math.min(x.bandwidth(), this.maxBarWidth))
-                    .attr("y", d => y(d.y))
-                    .attr("height", d => (d.y > 1e-6 ? height - y(d.y) : 0))
+                    .attr("x", d => x(d.data.x) + barOffset)
+                    .attr("width", barWidth)
+                    .attr("y", d => y(d[1]))
+                    .attr("height", d => (this.stackValue(d) > 1e-6 ? y(d[0]) - y(d[1]) : 0))
                     .attr("rx", 3)
                     .attr("ry", 3)
                     .attr("fill", color)
                     .attr("opacity", 1)
                     .on("mouseover", function () { d3.select(this).attr("opacity", 0.8); })
                     .on("mouseout", function () { d3.select(this).attr("opacity", 1); })
-                    .append("title").text(d => d.y);
+                    .append("title").text(d => this.stackValue(d));
             }
 
             setLegend(legend, text, color) {
@@ -122,14 +145,20 @@
             }
 
             setChartData(element, data, xTickFormat) {
-                const requested = data.data;
-                requested.forEach(d => { d.x = new Date(d.x * 1000); });
+                const points = data.data;
+                const series = data.series;
+                points.forEach(d => { d.x = new Date(d.x * 1000); });
 
-                const legendHeight = 50;
                 const margin = { top: 20, right: 30, bottom: 30, left: 30 };
                 const rect = element.getBoundingClientRect();
-
                 const width = rect.width - margin.left - margin.right;
+
+                const legendItemWidth = this.legendItemWidth;
+                const legendItemHeight = this.legendItemHeight;
+                const legendItemsPerRow = Math.max(1, Math.floor(width / legendItemWidth));
+                const legendRows = Math.ceil(series.length / legendItemsPerRow);
+                const legendHeight = legendRows * legendItemHeight + this.legendPadding;
+
                 const height = rect.height - legendHeight - margin.top - margin.bottom;
 
                 const d3Selection = d3.select(element);
@@ -143,11 +172,23 @@
                     .attr('class', 'charts')
                     .attr("transform", `translate(${margin.left},${margin.top})`);
 
+                const seriesKeys = series.map(item => item.index.toString());
+                const grouped = d3.group(points, d => d.x.getTime());
+                const chartData = Array.from(grouped, ([timestamp, values]) => {
+                    const row = { x: new Date(Number(timestamp)) };
+                    seriesKeys.forEach(key => { row[key] = 0; });
+                    values.forEach(value => { row[value.s.toString()] = value.y; });
+                    return row;
+                }).sort((a, b) => a.x - b.x);
+
+                const totals = chartData.map(row => seriesKeys.reduce((sum, key) => sum + row[key], 0));
+                const maxTotal = d3.max(totals) || 0;
+
                 const x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
                 const y = d3.scaleLinear().range([height, 0]);
 
-                x.domain(requested.map(d => d.x));
-                y.domain([0, d3.max(requested, d => d.y) * 1.2]);
+                x.domain(chartData.map(d => d.x));
+                y.domain([0, Math.max(maxTotal, this.usageLimit || 0) * this.yAxisScaleFactor]);
 
                 const xTickValues = x.domain();
 
@@ -169,7 +210,7 @@
                 yGrid.selectAll(".domain").remove();
 
                 if (this.usageLimit) {
-                    const closeToLimit = requested.some(d => (1.1 * d.y) >= this.usageLimit);
+                    const closeToLimit = totals.some(total => (1.1 * total) >= this.usageLimit);
                     if (closeToLimit) {
                         svg.append('line')
                             .attr('x1', 0)
@@ -177,14 +218,31 @@
                             .attr('y1', y(this.usageLimit))
                             .attr('y2', y(this.usageLimit))
                             .attr("transform", `translate(${margin.left},${margin.top})`)
-                            .attr('stroke', this.verifiedColor)
+                            .attr('stroke', this.limitColor)
                             .attr('stroke-width', 1)
                             .attr('stroke-dasharray', '5,5');
                     }
                 }
 
-                const barsRequested = chartElement.selectAll("bar-requested").data(requested);
-                this.setBarAttributes(barsRequested, x, y, height, this.requestedColor);
+                const palette = this.seriesColors.concat(d3.schemeSet3 || []);
+                const colorRange = seriesKeys.map((_, index) => palette[index % palette.length]);
+                const color = d3.scaleOrdinal()
+                    .domain(seriesKeys)
+                    .range(colorRange);
+
+                const stack = d3.stack().keys(seriesKeys);
+                const stackedData = stack(chartData);
+
+                const layers = chartElement.selectAll(".layer")
+                    .data(stackedData)
+                    .enter()
+                    .append("g")
+                    .attr("class", "layer")
+                    .attr("fill", d => color(d.key));
+
+                layers.each((d, i, nodes) => {
+                    this.setStackedBars(d3.select(nodes[i]), x, y, height, color(d.key));
+                });
 
                 chartElement.append("g")
                     .attr("class", "x axis")
@@ -199,14 +257,25 @@
                     .attr("dy", "-.55em")
                     .attr("transform", "rotate(-90)");
 
+                const legendStartX = Math.max(0, (width - (legendItemsPerRow * legendItemWidth)) / 2);
                 const legendParent = chartElement.append("g")
                     .attr("class", "legendParent")
-                    .attr("transform", `translate(${width / 2},${height + 30 + legendHeight / 2})`);
+                    .attr("transform", `translate(${legendStartX},${height + 30})`);
 
-                const legend1 = legendParent.append("g")
-                    .attr("class", "legend-requested");
+                const legends = legendParent.selectAll(".legend-item")
+                    .data(series)
+                    .enter()
+                    .append("g")
+                    .attr("class", "legend-item")
+                    .attr("transform", (d, i) => {
+                        const row = Math.floor(i / legendItemsPerRow);
+                        const col = i % legendItemsPerRow;
+                        return `translate(${col * legendItemWidth},${row * legendItemHeight})`;
+                    });
 
-                this.setLegend(legend1, 'Requests', this.requestedColor);
+                legends.each((d, i, nodes) => {
+                    this.setLegend(d3.select(nodes[i]), d.name, color(d.index.toString()));
+                });
             }
 
             async fetchChartData(spinnerElement, maxRetries = 3, baseDelay = 1000) {
@@ -237,7 +306,10 @@
 
             async updateChart(chartElement, spinnerElement) {
                 const response = await this.fetchChartData(spinnerElement);
-                if (response && response.data && response.data.length > 0) {
+                const hasData = response &&
+                    Array.isArray(response.data) && response.data.length > 0 &&
+                    Array.isArray(response.series) && response.series.length > 0;
+                if (hasData) {
                     this.setChartData(chartElement, response, this.monthlyTicks.bind(this));
 
                     const totalElement = document.getElementById("totalRequests");

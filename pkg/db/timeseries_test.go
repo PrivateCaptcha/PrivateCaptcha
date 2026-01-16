@@ -85,9 +85,10 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 	ctx := context.Background()
 	fixedTime := time.Date(2023, 10, 15, 12, 0, 0, 0, time.UTC)
 	records := []*common.AccessRecord{
-		{UserID: 1, Timestamp: fixedTime},
-		{UserID: 1, Timestamp: fixedTime.Add(24 * time.Hour)},
-		{UserID: 2, Timestamp: fixedTime},
+		{UserID: 1, OrgID: 10, Timestamp: fixedTime},
+		{UserID: 1, OrgID: 10, Timestamp: fixedTime.Add(24 * time.Hour)},
+		{UserID: 1, OrgID: 20, Timestamp: fixedTime.Add(48 * time.Hour)},
+		{UserID: 2, OrgID: 10, Timestamp: fixedTime},
 	}
 	ts.WriteAccessLogBatch(ctx, records)
 
@@ -96,16 +97,24 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 		t.Error(err)
 	}
 
-	if len(accountStats) != 1 {
-		t.Errorf("RetrieveAccountStats() got %d stats, want 1", len(accountStats))
-	} else {
-		if accountStats[0].Count != 2 {
-			t.Errorf("RetrieveAccountStats() count = %d, want 2", accountStats[0].Count)
+	if len(accountStats) != 2 {
+		t.Errorf("RetrieveAccountStats() got %d stats, want 2", len(accountStats))
+	}
+
+	expectedTs := time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)
+	counts := map[int32]uint32{}
+	for _, stat := range accountStats {
+		if !stat.Timestamp.Equal(expectedTs) {
+			t.Errorf("RetrieveAccountStats() timestamp = %v, want %v", stat.Timestamp, expectedTs)
 		}
-		expectedTs := time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)
-		if !accountStats[0].Timestamp.Equal(expectedTs) {
-			t.Errorf("RetrieveAccountStats() timestamp = %v, want %v", accountStats[0].Timestamp, expectedTs)
-		}
+		counts[stat.OrgID] = stat.Count
+	}
+
+	if counts[10] != 2 {
+		t.Errorf("RetrieveAccountStats() org 10 count = %d, want 2", counts[10])
+	}
+	if counts[20] != 1 {
+		t.Errorf("RetrieveAccountStats() org 20 count = %d, want 1", counts[20])
 	}
 }
 

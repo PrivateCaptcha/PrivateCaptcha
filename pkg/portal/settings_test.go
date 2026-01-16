@@ -583,12 +583,19 @@ func TestGetAccountStats(t *testing.T) {
 	}
 
 	type point struct {
-		Date  int64 `json:"x"`
-		Value int   `json:"y"`
+		Date   int64 `json:"x"`
+		Value  int   `json:"y"`
+		Series int   `json:"s"`
+	}
+
+	type series struct {
+		Name  string `json:"name"`
+		Index int    `json:"index"`
 	}
 
 	var stats struct {
-		Data []*point `json:"data"`
+		Series []*series `json:"series"`
+		Data   []*point  `json:"data"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
@@ -599,9 +606,20 @@ func TestGetAccountStats(t *testing.T) {
 		t.Error("Expected data but got none")
 	}
 
+	if len(stats.Series) != 1 {
+		t.Fatalf("Expected 1 series, got %d", len(stats.Series))
+	}
+
+	if stats.Series[0].Name != org.Name {
+		t.Errorf("Expected series name %q, got %q", org.Name, stats.Series[0].Name)
+	}
+
 	totalCount := 0
 	for _, p := range stats.Data {
 		totalCount += p.Value
+		if p.Series != stats.Series[0].Index {
+			t.Errorf("Unexpected series index %d, want %d", p.Series, stats.Series[0].Index)
+		}
 	}
 
 	if totalCount != 3 {

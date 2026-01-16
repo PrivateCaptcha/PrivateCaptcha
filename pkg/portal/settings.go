@@ -40,6 +40,8 @@ const (
 
 	apiKeyScopePuzzle = "captcha"
 	apiKeyScopePortal = "portal"
+
+	unknownOrgNameFormat = "Unknown Organization #%d"
 )
 
 var (
@@ -817,11 +819,27 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 	timeFrom := time.Now().UTC().AddDate(-1 /*years*/, 0 /*months*/, 0 /*days*/).Truncate(24 * time.Hour)
 
 	type point struct {
-		Date  int64 `json:"x"`
-		Value int   `json:"y"`
+		Date   int64 `json:"x"`
+		Value  int   `json:"y"`
+		Series int   `json:"s"`
 	}
 
-	data := []*point{}
+	type rawPoint struct {
+		OrgID int32
+		Date  int64
+		Value int
+	}
+
+	type series struct {
+		Name  string `json:"name"`
+		Index int    `json:"index"`
+	}
+
+	dataRaw := []*rawPoint{}
+	orgIDs := make(map[int32]struct{})
+	orgNames := make(map[int32]string)
+	seriesIndex := make(map[int32]int)
+	seriesList := []*series{}
 
 	if stats, err := s.TimeSeries.RetrieveAccountStats(ctx, user.ID, timeFrom); err == nil {
 		anyNonZero := false
@@ -829,21 +847,73 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 			if st.Count > 0 {
 				anyNonZero = true
 			}
-			data = append(data, &point{Date: st.Timestamp.Unix(), Value: int(st.Count)})
+			dataRaw = append(dataRaw, &rawPoint{OrgID: st.OrgID, Date: st.Timestamp.Unix(), Value: int(st.Count)})
+			orgIDs[st.OrgID] = struct{}{}
+		}
+
+		if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID); err == nil {
+			for _, org := range orgs {
+				orgID := org.Organization.ID
+				orgName := org.Organization.Name
+				orgNames[orgID] = orgName
+				if _, ok := orgIDs[orgID]; ok {
+					index := len(seriesList)
+					seriesIndex[orgID] = index
+					seriesList = append(seriesList, &series{Name: orgName, Index: index})
+				}
+			}
+		} else {
+			slog.ErrorContext(ctx, "Failed to retrieve user organizations for account stats; will use placeholder organization names", common.ErrAttr(err))
+		}
+
+		unknownCount := 0
+		for orgID := range orgIDs {
+			if _, ok := seriesIndex[orgID]; ok {
+				continue
+			}
+			unknownCount++
+			name := orgNames[orgID]
+			if name == "" {
+				name = fmt.Sprintf(unknownOrgNameFormat, unknownCount)
+			}
+			index := len(seriesList)
+			seriesIndex[orgID] = index
+			seriesList = append(seriesList, &series{Name: name, Index: index})
+		}
+
+		data := make([]*point, 0, len(dataRaw))
+		for _, pt := range dataRaw {
+			if index, ok := seriesIndex[pt.OrgID]; ok {
+				data = append(data, &point{Date: pt.Date, Value: pt.Value, Series: index})
+			}
 		}
 
 		// we want to show "No data available" on the client
 		if !anyNonZero {
 			data = []*point{}
+			seriesList = []*series{}
 		}
+
+		response := struct {
+			Series []*series `json:"series"`
+			Data   []*point  `json:"data"`
+		}{
+			Series: seriesList,
+			Data:   data,
+		}
+
+		common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
+		return
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve account stats", common.ErrAttr(err))
 	}
 
 	response := struct {
-		Data []*point `json:"data"`
+		Series []*series `json:"series"`
+		Data   []*point  `json:"data"`
 	}{
-		Data: data,
+		Series: []*series{},
+		Data:   []*point{},
 	}
 
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
