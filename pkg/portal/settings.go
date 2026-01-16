@@ -888,7 +888,7 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 				seriesIndex[orgID] = index
 				seriesList = append(seriesList, &accountStatsSeries{Name: orgName, Index: index})
 			} else {
-				slog.WarnContext(ctx, "Account stats org missing from stats", "orgID", orgID)
+				slog.WarnContext(ctx, "Organization found in user data but missing from usage statistics", "orgID", orgID)
 			}
 		}
 	} else {

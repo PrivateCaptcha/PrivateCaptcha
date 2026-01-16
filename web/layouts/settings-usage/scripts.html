@@ -21,10 +21,11 @@
                 this.legendItemGap = 12; // Horizontal gap between legend items in pixels.
                 this.legendLeftMargin = 4; // Left offset from the y-axis in pixels.
                 this.legendEllipsis = '…'; // Ellipsis character for truncated names.
+                this.legendFont = '14px sans-serif'; // Font used for legend measurements.
                 // Reuse a canvas context to measure legend text widths.
                 this.legendMeasureContext = document.createElement('canvas').getContext('2d');
                 if (this.legendMeasureContext) {
-                    this.legendMeasureContext.font = '14px sans-serif';
+                    this.legendMeasureContext.font = this.legendFont;
                 }
 
                 this.backgroundColor = '#e4e4e7';
@@ -171,8 +172,10 @@
                 // Truncate long org names and estimate widths so legend items fit without overlap.
                 const legendMeasureContext = this.legendMeasureContext;
                 const legendItems = series.map(item => {
+                    // Trim labels to account for the ellipsis length.
+                    const truncationLength = Math.max(0, this.legendTextMaxLength - this.legendEllipsis.length);
                     const displayName = item.name.length > this.legendTextMaxLength
-                        ? `${item.name.slice(0, this.legendTextMaxLength - 1)}${this.legendEllipsis}`
+                        ? `${item.name.slice(0, truncationLength)}${this.legendEllipsis}`
                         : item.name;
                     // Measure text width so we can size legend items more accurately.
                     const textWidth = legendMeasureContext
