@@ -14,6 +14,11 @@
                 this.legendPadding = 20;
                 this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
+                // Legend sizing constants keep labels readable and prevent overlap.
+                this.legendTextMaxLength = 18;
+                this.legendTextWidth = 7;
+                this.legendItemPadding = 26;
+                this.legendItemGap = 12;
 
                 this.backgroundColor = '#e4e4e7';
                 this.limitColor = '#F45D5D'; // pcred-300
@@ -157,22 +162,18 @@
                 const legendMaxItemWidth = this.legendItemWidth;
 
                 // Truncate long org names and estimate widths so legend items fit without overlap.
-                const legendTextMaxLength = 18;
-                const legendTextWidth = 7;
-                const legendItemPadding = 26;
                 const legendItems = series.map(item => {
-                    const displayName = item.name.length > legendTextMaxLength
-                        ? `${item.name.slice(0, legendTextMaxLength - 1)}…`
+                    const displayName = item.name.length > this.legendTextMaxLength
+                        ? `${item.name.slice(0, this.legendTextMaxLength - 1)}…`
                         : item.name;
                     const estimatedWidth = Math.min(
                         legendMaxItemWidth,
-                        legendItemPadding + (displayName.length * legendTextWidth)
+                        this.legendItemPadding + (displayName.length * this.legendTextWidth)
                     );
                     return { ...item, displayName, width: estimatedWidth };
                 });
 
                 // Lay out legend items row-by-row so short labels take less space.
-                const legendItemGap = 12;
                 let legendRow = 0;
                 let legendOffsetX = 0;
                 const legendLayout = legendItems.map(item => {
@@ -181,7 +182,7 @@
                         legendOffsetX = 0;
                     }
                     const layout = { ...item, x: legendOffsetX, y: legendRow * legendItemHeight };
-                    legendOffsetX += item.width + legendItemGap;
+                    legendOffsetX += item.width + this.legendItemGap;
                     return layout;
                 });
 
