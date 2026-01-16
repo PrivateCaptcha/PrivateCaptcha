@@ -14,7 +14,6 @@
                 this.legendPadding = 20;
                 this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
-                this.limitProximityFactor = 1.1;
 
                 this.backgroundColor = '#e4e4e7';
                 this.limitColor = '#F45D5D'; // pcred-300
@@ -153,10 +152,41 @@
                 const rect = element.getBoundingClientRect();
                 const width = rect.width - margin.left - margin.right;
 
-                const legendItemWidth = this.legendItemWidth;
                 const legendItemHeight = this.legendItemHeight;
-                const legendItemsPerRow = Math.max(1, Math.floor(width / legendItemWidth));
-                const legendRows = Math.ceil(series.length / legendItemsPerRow);
+                // Cap legend widths so long names do not push other labels too far.
+                const legendMaxItemWidth = this.legendItemWidth;
+
+                // Truncate long org names and estimate widths so legend items fit without overlap.
+                const legendTextMaxLength = 18;
+                const legendTextWidth = 7;
+                const legendItemPadding = 26;
+                const legendItems = series.map(item => {
+                    const displayName = item.name.length > legendTextMaxLength
+                        ? `${item.name.slice(0, legendTextMaxLength - 1)}…`
+                        : item.name;
+                    const estimatedWidth = Math.min(
+                        legendMaxItemWidth,
+                        legendItemPadding + (displayName.length * legendTextWidth)
+                    );
+                    return { ...item, displayName, width: estimatedWidth };
+                });
+
+                // Lay out legend items row-by-row so short labels take less space.
+                const legendItemGap = 12;
+                let legendRow = 0;
+                let legendOffsetX = 0;
+                const legendLayout = legendItems.map(item => {
+                    if (legendOffsetX + item.width > width && legendOffsetX > 0) {
+                        legendRow += 1;
+                        legendOffsetX = 0;
+                    }
+                    const layout = { ...item, x: legendOffsetX, y: legendRow * legendItemHeight };
+                    legendOffsetX += item.width + legendItemGap;
+                    return layout;
+                });
+
+                // Reserve extra height for legend rows plus the rotated x-axis labels.
+                const legendRows = legendLayout.length === 0 ? 0 : (legendRow + 1);
                 const legendHeight = legendRows * legendItemHeight + this.legendPadding + this.xAxisLabelHeight;
 
                 const height = rect.height - legendHeight - margin.top - margin.bottom;
@@ -189,7 +219,7 @@
 
                 x.domain(chartData.map(d => d.x));
                 const limitValue = this.usageLimit || 0;
-                const closeToLimit = limitValue > 0 && totals.some(total => (this.limitProximityFactor * total) >= limitValue);
+                const closeToLimit = limitValue > 0 && totals.some(total => (1.1 * total) >= limitValue);
                 const yMax = closeToLimit ? Math.max(maxTotal, limitValue) : maxTotal;
                 y.domain([0, yMax * this.yAxisScaleFactor]);
 
@@ -257,24 +287,21 @@
                     .attr("dy", "-.55em")
                     .attr("transform", "rotate(-90)");
 
-                const legendStartX = Math.max(0, (width - (legendItemsPerRow * legendItemWidth)) / 2);
+                // Align the legend closer to the y-axis instead of centering it.
+                const legendStartX = 4;
                 const legendParent = chartElement.append("g")
                     .attr("class", "legendParent")
                     .attr("transform", `translate(${legendStartX},${height + this.xAxisLabelHeight})`);
 
                 const legends = legendParent.selectAll(".legend-item")
-                    .data(series)
+                    .data(legendLayout)
                     .enter()
                     .append("g")
                     .attr("class", "legend-item")
-                    .attr("transform", (d, i) => {
-                        const row = Math.floor(i / legendItemsPerRow);
-                        const col = i % legendItemsPerRow;
-                        return `translate(${col * legendItemWidth},${row * legendItemHeight})`;
-                    });
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
 
                 legends.each((d, i, nodes) => {
-                    this.setLegend(d3.select(nodes[i]), d.name, color(d.index.toString()));
+                    this.setLegend(d3.select(nodes[i]), d.displayName, color(d.index.toString()));
                 });
             }
 

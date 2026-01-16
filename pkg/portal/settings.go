@@ -856,16 +856,13 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*accountStatsResponse, error) {
-	dataRaw := []*accountStatsRawPoint{}
-	orgIDs := make(map[int32]struct{})
-	orgNames := make(map[int32]string)
-	seriesIndex := make(map[int32]int)
-	seriesList := []*accountStatsSeries{}
-
 	stats, err := s.TimeSeries.RetrieveAccountStats(ctx, userID, timeFrom)
 	if err != nil {
 		return nil, err
 	}
+
+	dataRaw := make([]*accountStatsRawPoint, 0, len(stats))
+	orgIDs := make(map[int32]struct{}, len(stats))
 
 	anyNonZero := false
 	for _, st := range stats {
@@ -876,7 +873,12 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 		orgIDs[st.OrgID] = struct{}{}
 	}
 
+	seriesIndex := make(map[int32]int, len(orgIDs))
+	seriesList := make([]*accountStatsSeries, 0, len(orgIDs))
+
+	var orgNames map[int32]string
 	if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, userID); err == nil {
+		orgNames = make(map[int32]string, len(orgs))
 		for _, org := range orgs {
 			orgID := org.Organization.ID
 			orgName := org.Organization.Name
@@ -885,10 +887,12 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 				index := len(seriesList)
 				seriesIndex[orgID] = index
 				seriesList = append(seriesList, &accountStatsSeries{Name: orgName, Index: index})
+			} else {
+				slog.WarnContext(ctx, "Account stats org missing from stats", "orgID", orgID)
 			}
 		}
 	} else {
-		slog.ErrorContext(ctx, "Failed to retrieve user organizations for account stats; will use placeholder organization names", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve user organizations for account stats", common.ErrAttr(err))
 	}
 
 	unknownCount := 0
@@ -911,7 +915,7 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 		if index, ok := seriesIndex[pt.OrgID]; ok {
 			data = append(data, &accountStatsPoint{Date: pt.Date, Value: pt.Value, Series: index})
 		} else {
-			slog.WarnContext(ctx, "Skipping account stats point without series mapping; data might be inconsistent", "orgID", pt.OrgID, "date", pt.Date, "value", pt.Value)
+			slog.WarnContext(ctx, "Skipping account stats point without series mapping", "orgID", pt.OrgID, "date", pt.Date, "value", pt.Value)
 		}
 	}
 
