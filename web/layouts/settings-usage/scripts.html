@@ -15,10 +15,11 @@
                 this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
                 // Legend sizing constants keep labels readable and prevent overlap.
-                this.legendTextMaxLength = 18;
-                this.legendTextWidth = 7;
-                this.legendItemPadding = 26;
-                this.legendItemGap = 12;
+                this.legendTextMaxLength = 18; // Max characters before truncation.
+                this.legendTextWidth = 7; // Approximate character width in pixels.
+                this.legendItemPadding = 26; // Marker and text padding in pixels.
+                this.legendItemGap = 12; // Horizontal gap between legend items in pixels.
+                this.legendLeftMargin = 4; // Left offset from the y-axis in pixels.
 
                 this.backgroundColor = '#e4e4e7';
                 this.limitColor = '#F45D5D'; // pcred-300
@@ -162,13 +163,21 @@
                 const legendMaxItemWidth = this.legendItemWidth;
 
                 // Truncate long org names and estimate widths so legend items fit without overlap.
+                const legendMeasureContext = document.createElement('canvas').getContext('2d');
+                if (legendMeasureContext) {
+                    legendMeasureContext.font = '14px sans-serif';
+                }
                 const legendItems = series.map(item => {
                     const displayName = item.name.length > this.legendTextMaxLength
                         ? `${item.name.slice(0, this.legendTextMaxLength - 1)}…`
                         : item.name;
+                    // Measure text width so we can size legend items more accurately.
+                    const textWidth = legendMeasureContext
+                        ? legendMeasureContext.measureText(displayName).width
+                        : (displayName.length * this.legendTextWidth);
                     const estimatedWidth = Math.min(
                         legendMaxItemWidth,
-                        this.legendItemPadding + (displayName.length * this.legendTextWidth)
+                        this.legendItemPadding + textWidth
                     );
                     return { ...item, displayName, width: estimatedWidth };
                 });
@@ -289,7 +298,7 @@
                     .attr("transform", "rotate(-90)");
 
                 // Align the legend closer to the y-axis instead of centering it.
-                const legendStartX = 4;
+                const legendStartX = this.legendLeftMargin;
                 const legendParent = chartElement.append("g")
                     .attr("class", "legendParent")
                     .attr("transform", `translate(${legendStartX},${height + this.xAxisLabelHeight})`);
