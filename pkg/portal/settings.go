@@ -911,7 +911,7 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 		if index, ok := seriesIndex[pt.OrgID]; ok {
 			data = append(data, &accountStatsPoint{Date: pt.Date, Value: pt.Value, Series: index})
 		} else {
-			slog.WarnContext(ctx, "Account stats series not found for point", "orgID", pt.OrgID, "date", pt.Date)
+			slog.WarnContext(ctx, "Account stats series not found for point", "orgID", pt.OrgID, "date", pt.Date, "value", pt.Value)
 		}
 	}
 

@@ -14,6 +14,7 @@
                 this.legendPadding = 20;
                 this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
+                this.limitProximityFactor = 1.1;
 
                 this.backgroundColor = '#e4e4e7';
                 this.limitColor = '#F45D5D'; // pcred-300
@@ -188,7 +189,7 @@
 
                 x.domain(chartData.map(d => d.x));
                 const limitValue = this.usageLimit || 0;
-                const closeToLimit = limitValue > 0 && totals.some(total => (1.1 * total) >= limitValue);
+                const closeToLimit = limitValue > 0 && totals.some(total => (this.limitProximityFactor * total) >= limitValue);
                 const yMax = closeToLimit ? Math.max(maxTotal, limitValue) : maxTotal;
                 y.domain([0, yMax * this.yAxisScaleFactor]);
 
