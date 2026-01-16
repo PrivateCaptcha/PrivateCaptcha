@@ -4,6 +4,29 @@
         <default>
             <log_queries>0</log_queries>
             <log_query_threads>0</log_query_threads>
+            <!-- This is needed so that toStartOfMonth() returned DateTime instead of Date -->
+            <enable_extended_results_for_datetime_functions>1</enable_extended_results_for_datetime_functions>
+            <!-- Wait up to 1000ms. -->
+            <queue_max_wait_ms>1000</queue_max_wait_ms>
+            <!-- Abort query after 10 seconds. -->
+            <max_execution_time>10</max_execution_time>
+            <!--
+            Choose a value between (1 - 2) * number of CPU cores.
+            The default is 16.
+            -->
+            <background_pool_size>2</background_pool_size>
+            <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_threads -->
+            <!--<max_threads>1</max_threads>-->
+            <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_block_size -->
+            <max_block_size>8192</max_block_size>
+            <!-- https://clickhouse.com/docs/en/operations/settings/settings#max_download_threads -->
+            <max_download_threads>1</max_download_threads>
+            <!--
+            https://clickhouse.com/docs/en/operations/settings/settings#input_format_parallel_parsing -->
+            <input_format_parallel_parsing>0</input_format_parallel_parsing>
+            <!--
+            https://clickhouse.com/docs/en/operations/settings/settings#output_format_parallel_formatting -->
+            <output_format_parallel_formatting>0</output_format_parallel_formatting>
         </default>
     </profiles>
     <users>
