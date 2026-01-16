@@ -582,21 +582,7 @@ func TestGetAccountStats(t *testing.T) {
 		t.Fatalf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	type point struct {
-		Date   int64 `json:"x"`
-		Value  int   `json:"y"`
-		Series int   `json:"s"`
-	}
-
-	type series struct {
-		Name  string `json:"name"`
-		Index int    `json:"index"`
-	}
-
-	var stats struct {
-		Series []*series `json:"series"`
-		Data   []*point  `json:"data"`
-	}
+	var stats accountStatsResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)

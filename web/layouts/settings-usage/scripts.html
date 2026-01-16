@@ -12,6 +12,7 @@
                 this.legendItemWidth = 160;
                 this.legendItemHeight = 20;
                 this.legendPadding = 20;
+                this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
 
                 this.backgroundColor = '#e4e4e7';
@@ -118,8 +119,6 @@
                     .attr("width", barWidth)
                     .attr("y", d => y(d[1]))
                     .attr("height", d => (this.stackValue(d) > 1e-6 ? y(d[0]) - y(d[1]) : 0))
-                    .attr("rx", 3)
-                    .attr("ry", 3)
                     .attr("fill", color)
                     .attr("opacity", 1)
                     .on("mouseover", function () { d3.select(this).attr("opacity", 0.8); })
@@ -157,7 +156,7 @@
                 const legendItemHeight = this.legendItemHeight;
                 const legendItemsPerRow = Math.max(1, Math.floor(width / legendItemWidth));
                 const legendRows = Math.ceil(series.length / legendItemsPerRow);
-                const legendHeight = legendRows * legendItemHeight + this.legendPadding;
+                const legendHeight = legendRows * legendItemHeight + this.legendPadding + this.xAxisLabelHeight;
 
                 const height = rect.height - legendHeight - margin.top - margin.bottom;
 
@@ -188,7 +187,10 @@
                 const y = d3.scaleLinear().range([height, 0]);
 
                 x.domain(chartData.map(d => d.x));
-                y.domain([0, Math.max(maxTotal, this.usageLimit || 0) * this.yAxisScaleFactor]);
+                const limitValue = this.usageLimit || 0;
+                const closeToLimit = limitValue > 0 && totals.some(total => (1.1 * total) >= limitValue);
+                const yMax = closeToLimit ? Math.max(maxTotal, limitValue) : maxTotal;
+                y.domain([0, yMax * this.yAxisScaleFactor]);
 
                 const xTickValues = x.domain();
 
@@ -209,19 +211,16 @@
                 yGrid.selectAll("text").style("color", this.grayColor);
                 yGrid.selectAll(".domain").remove();
 
-                if (this.usageLimit) {
-                    const closeToLimit = totals.some(total => (1.1 * total) >= this.usageLimit);
-                    if (closeToLimit) {
-                        svg.append('line')
-                            .attr('x1', 0)
-                            .attr('x2', width)
-                            .attr('y1', y(this.usageLimit))
-                            .attr('y2', y(this.usageLimit))
-                            .attr("transform", `translate(${margin.left},${margin.top})`)
-                            .attr('stroke', this.limitColor)
-                            .attr('stroke-width', 1)
-                            .attr('stroke-dasharray', '5,5');
-                    }
+                if (closeToLimit) {
+                    svg.append('line')
+                        .attr('x1', 0)
+                        .attr('x2', width)
+                        .attr('y1', y(limitValue))
+                        .attr('y2', y(limitValue))
+                        .attr("transform", `translate(${margin.left},${margin.top})`)
+                        .attr('stroke', this.limitColor)
+                        .attr('stroke-width', 1)
+                        .attr('stroke-dasharray', '5,5');
                 }
 
                 const palette = this.seriesColors.concat(d3.schemeSet3 || []);
@@ -260,7 +259,7 @@
                 const legendStartX = Math.max(0, (width - (legendItemsPerRow * legendItemWidth)) / 2);
                 const legendParent = chartElement.append("g")
                     .attr("class", "legendParent")
-                    .attr("transform", `translate(${legendStartX},${height + 30})`);
+                    .attr("transform", `translate(${legendStartX},${height + this.xAxisLabelHeight})`);
 
                 const legends = legendParent.selectAll(".legend-item")
                     .data(series)
