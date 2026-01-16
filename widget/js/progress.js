@@ -6,6 +6,13 @@ export class ProgressRing extends SafeHTMLElement {
     constructor() {
         super();
 
+        this._circumference = 0;
+
+        // create shadow dom root
+        this._root = this.attachShadow({ mode: 'open' });
+    }
+
+    connectedCallback() {
         // NOTE: stroke is sized with regards to {size} variable below
         // not to the scaled (external) size of SVG (yes, it's a bit confusing)
         const stroke = this.getAttribute('stroke');
@@ -14,8 +21,6 @@ export class ProgressRing extends SafeHTMLElement {
         const normalizedRadius = radius - stroke / 2;
         this._circumference = normalizedRadius * 2 * Math.PI;
 
-        // create shadow dom root
-        this._root = this.attachShadow({ mode: 'open' });
         this._root.innerHTML = `
           <svg preserveAspectRatio="xMidYMid meet" viewBox="0 0 ${size} ${size}">
             <circle
