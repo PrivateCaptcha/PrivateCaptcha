@@ -14,14 +14,13 @@
                 this.legendPadding = 20;
                 this.xAxisLabelHeight = 45;
                 this.yAxisScaleFactor = 1.2;
-                // Legend sizing constants keep labels readable and prevent overlap.
                 this.legendTextMaxLength = 18; // Max characters before truncation.
                 this.legendTextWidth = 7; // Fallback character width in pixels when canvas is unavailable.
                 this.legendItemPadding = 26; // Marker and text padding in pixels.
-                this.legendItemGap = 12; // Horizontal gap between legend items in pixels.
-                this.legendLeftMargin = 4; // Left offset from the y-axis in pixels.
-                this.legendEllipsis = '…'; // Ellipsis character for truncated names.
-                this.legendFont = '14px sans-serif'; // Font used for legend measurements.
+                this.legendItemGap = 16; // Horizontal gap between legend items in pixels.
+                this.legendLeftMargin = 16; // Left offset from the y-axis in pixels.
+                this.legendEllipsis = '…';
+                this.legendFont = '14px sans-serif';
                 // Reuse a canvas context to measure legend text widths.
                 this.legendMeasureContext = document.createElement('canvas').getContext('2d');
                 if (this.legendMeasureContext) {
