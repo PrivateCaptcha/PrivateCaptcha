@@ -155,28 +155,17 @@
                     .style("font-size", "14px");
             }
 
-            setChartData(element, data, xTickFormat) {
-                const points = data.data;
-                const series = data.series;
-                points.forEach(d => { d.x = new Date(d.x * 1000); });
-
-                const margin = { top: 20, right: 30, bottom: 30, left: 30 };
-                const rect = element.getBoundingClientRect();
-                const width = rect.width - margin.left - margin.right;
-
+            // Prepare legend layout so labels fit into rows with truncation where needed.
+            buildLegendLayout(series, width) {
                 const legendItemHeight = this.legendItemHeight;
-                // Cap legend widths so long names do not push other labels too far.
                 const legendMaxItemWidth = this.legendItemWidth;
-
-                // Truncate long org names and estimate widths so legend items fit without overlap.
                 const legendMeasureContext = this.legendMeasureContext;
+                const truncationLength = Math.max(0, this.legendTextMaxLength - this.legendEllipsis.length);
+
                 const legendItems = series.map(item => {
-                    // Trim labels to account for the ellipsis length.
-                    const truncationLength = Math.max(0, this.legendTextMaxLength - this.legendEllipsis.length);
                     const displayName = item.name.length > this.legendTextMaxLength
                         ? `${item.name.slice(0, truncationLength)}${this.legendEllipsis}`
                         : item.name;
-                    // Measure text width so we can size legend items more accurately.
                     const textWidth = legendMeasureContext
                         ? legendMeasureContext.measureText(displayName).width
                         : (displayName.length * this.legendTextWidth);
@@ -188,21 +177,88 @@
                 });
 
                 // Lay out legend items row-by-row so short labels take less space.
-                let legendRow = 0;
-                let legendOffsetX = 0;
-                const legendLayout = legendItems.map(item => {
-                    if (legendOffsetX + item.width > width && legendOffsetX > 0) {
-                        legendRow += 1;
-                        legendOffsetX = 0;
+                const legendRows = [];
+                let rowWidth = 0;
+                let rowItems = [];
+                legendItems.forEach(item => {
+                    if (rowWidth + item.width > width && rowWidth > 0) {
+                        legendRows.push(rowItems);
+                        rowItems = [];
+                        rowWidth = 0;
                     }
-                    const layout = { ...item, x: legendOffsetX, y: legendRow * legendItemHeight };
-                    legendOffsetX += item.width + this.legendItemGap;
-                    return layout;
+                    rowItems.push(item);
+                    rowWidth += item.width + this.legendItemGap;
+                });
+                if (rowItems.length > 0) {
+                    legendRows.push(rowItems);
+                }
+
+                // Center single-item rows and show full names without truncation.
+                const legendLayout = [];
+                legendRows.forEach((row, rowIndex) => {
+                    if (row.length === 1) {
+                        const item = row[0];
+                        const fullText = item.name;
+                        const fullTextWidth = legendMeasureContext
+                            ? legendMeasureContext.measureText(fullText).width
+                            : (fullText.length * this.legendTextWidth);
+                        const itemWidth = this.legendItemPadding + fullTextWidth;
+                        legendLayout.push({
+                            ...item,
+                            displayName: fullText,
+                            width: itemWidth,
+                            x: (width - itemWidth) / 2,
+                            y: rowIndex * legendItemHeight
+                        });
+                        return;
+                    }
+
+                    let legendOffsetX = 0;
+                    row.forEach(item => {
+                        legendLayout.push({
+                            ...item,
+                            x: legendOffsetX,
+                            y: rowIndex * legendItemHeight
+                        });
+                        legendOffsetX += item.width + this.legendItemGap;
+                    });
                 });
 
-                // Reserve extra height for legend rows plus the rotated x-axis labels.
-                const legendRows = legendLayout.length === 0 ? 0 : (legendRow + 1);
-                const legendHeight = legendRows * legendItemHeight + this.legendPadding + this.xAxisLabelHeight;
+                const legendHeight = legendRows.length * legendItemHeight + this.legendPadding + this.xAxisLabelHeight;
+
+                return { legendLayout, legendHeight };
+            }
+
+            // Render the legend items below the chart using the calculated layout.
+            renderLegend(chartElement, legendLayout, height, color) {
+                const legendStartX = this.legendLeftMargin;
+                const legendParent = chartElement.append("g")
+                    .attr("class", "legendParent")
+                    .attr("transform", `translate(${legendStartX},${height + this.xAxisLabelHeight})`);
+
+                const legends = legendParent.selectAll(".legend-item")
+                    .data(legendLayout)
+                    .enter()
+                    .append("g")
+                    .attr("class", "legend-item")
+                    .attr("transform", d => `translate(${d.x},${d.y})`);
+
+                legends.each((d, i, nodes) => {
+                    this.setLegend(d3.select(nodes[i]), d.displayName, color(d.index.toString()));
+                });
+            }
+
+            setChartData(element, data, xTickFormat) {
+                const points = data.data;
+                const series = data.series;
+                points.forEach(d => { d.x = new Date(d.x * 1000); });
+
+                const margin = { top: 20, right: 30, bottom: 30, left: 30 };
+                const rect = element.getBoundingClientRect();
+                const width = rect.width - margin.left - margin.right;
+
+                // Reserve space for the legend rows and x-axis labels.
+                const { legendLayout, legendHeight } = this.buildLegendLayout(series, width);
 
                 const height = rect.height - legendHeight - margin.top - margin.bottom;
 
@@ -302,22 +358,8 @@
                     .attr("dy", "-.55em")
                     .attr("transform", "rotate(-90)");
 
-                // Align the legend closer to the y-axis instead of centering it.
-                const legendStartX = this.legendLeftMargin;
-                const legendParent = chartElement.append("g")
-                    .attr("class", "legendParent")
-                    .attr("transform", `translate(${legendStartX},${height + this.xAxisLabelHeight})`);
-
-                const legends = legendParent.selectAll(".legend-item")
-                    .data(legendLayout)
-                    .enter()
-                    .append("g")
-                    .attr("class", "legend-item")
-                    .attr("transform", d => `translate(${d.x},${d.y})`);
-
-                legends.each((d, i, nodes) => {
-                    this.setLegend(d3.select(nodes[i]), d.displayName, color(d.index.toString()));
-                });
+                // Render legend after the axes so it sits under the chart.
+                this.renderLegend(chartElement, legendLayout, height, color);
             }
 
             async fetchChartData(spinnerElement, maxRetries = 3, baseDelay = 1000) {
