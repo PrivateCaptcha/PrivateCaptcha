@@ -181,13 +181,15 @@
                 let rowWidth = 0;
                 let rowItems = [];
                 legendItems.forEach(item => {
-                    if (rowWidth + item.width > width && rowWidth > 0) {
+                    // Only add a gap when the row already has items.
+                    const itemGap = rowItems.length > 0 ? this.legendItemGap : 0;
+                    if (rowWidth + itemGap + item.width > width && rowWidth > 0) {
                         legendRows.push(rowItems);
                         rowItems = [];
                         rowWidth = 0;
                     }
                     rowItems.push(item);
-                    rowWidth += item.width + this.legendItemGap;
+                    rowWidth += itemGap + item.width;
                 });
                 if (rowItems.length > 0) {
                     legendRows.push(rowItems);
@@ -198,14 +200,13 @@
                 legendRows.forEach((row, rowIndex) => {
                     if (row.length === 1) {
                         const item = row[0];
-                        const fullText = item.name;
                         const fullTextWidth = legendMeasureContext
-                            ? legendMeasureContext.measureText(fullText).width
-                            : (fullText.length * this.legendTextWidth);
+                            ? legendMeasureContext.measureText(item.name).width
+                            : (item.name.length * this.legendTextWidth);
                         const itemWidth = this.legendItemPadding + fullTextWidth;
                         legendLayout.push({
                             ...item,
-                            displayName: fullText,
+                            displayName: item.name,
                             width: itemWidth,
                             x: (width - itemWidth) / 2,
                             y: rowIndex * legendItemHeight
