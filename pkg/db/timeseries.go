@@ -234,7 +234,7 @@ ORDER BY timestamp`
 	return results, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
+func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.OrgTimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -242,16 +242,16 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 	fromStr := from.Format(time.DateTime)
 
 	cacheKey := userAccountStatsCacheKey(userID, fromStr)
-	if stats, err := FetchCachedArray[common.TimeCount](ctx, ts.Cache, cacheKey); (err == nil) && (len(stats) > 0) {
+	if stats, err := FetchCachedArray[common.OrgTimeCount](ctx, ts.Cache, cacheKey); (err == nil) && (len(stats) > 0) {
 		slog.DebugContext(ctx, "User account stats were cached", "userID", userID, "key", cacheKey, "count", len(stats))
 		return stats, nil
 	}
 
-	query := `SELECT timestamp, sum(count) as count
+	query := `SELECT org_id, timestamp, sum(count) as count
 FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
-GROUP BY timestamp
-ORDER BY timestamp`
+GROUP BY org_id, timestamp
+ORDER BY org_id, timestamp`
 	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", fromStr))
@@ -262,11 +262,11 @@ ORDER BY timestamp`
 
 	defer rows.Close()
 
-	results := make([]*common.TimeCount, 0)
+	results := make([]*common.OrgTimeCount, 0)
 
 	for rows.Next() {
-		bc := &common.TimeCount{}
-		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
+		bc := &common.OrgTimeCount{}
+		if err := rows.Scan(&bc.OrgID, &bc.Timestamp, &bc.Count); err != nil {
 			slog.ErrorContext(ctx, "Failed to read row from account stats query", common.ErrAttr(err))
 			return nil, err
 		}
@@ -545,21 +545,37 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsSince(ctx context.Context, r *co
 	return mapToTimeCount(counts), nil
 }
 
-func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.TimeCount, error) {
+func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*common.OrgTimeCount, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	counts := make(map[time.Time]uint32)
+	counts := make(map[int32]map[time.Time]uint32)
 	for _, log := range m.accessLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) {
 			// Real DB uses request_logs_1mo which is aggregated by month
 			y, month, _ := log.Timestamp.Date()
 			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
-			counts[ts]++
+			if _, ok := counts[log.OrgID]; !ok {
+				counts[log.OrgID] = make(map[time.Time]uint32)
+			}
+			counts[log.OrgID][ts]++
 		}
 	}
 
-	return mapToTimeCount(counts), nil
+	results := make([]*common.OrgTimeCount, 0)
+	for orgID, orgCounts := range counts {
+		for ts, count := range orgCounts {
+			results = append(results, &common.OrgTimeCount{OrgID: orgID, Timestamp: ts, Count: count})
+		}
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].OrgID == results[j].OrgID {
+			return results[i].Timestamp.Before(results[j].Timestamp)
+		}
+		return results[i].OrgID < results[j].OrgID
+	})
+
+	return results, nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {

@@ -40,6 +40,8 @@ const (
 
 	apiKeyScopePuzzle = "captcha"
 	apiKeyScopePortal = "portal"
+
+	unknownOrgNameFormat = "Unknown Organization #%d"
 )
 
 var (
@@ -80,6 +82,28 @@ type settingsUsageRenderContext struct {
 	IncludedPropertiesCount int
 	IncludedOrgsCount       int
 	Limit                   int64
+}
+
+type accountStatsPoint struct {
+	Date   int64 `json:"x"`
+	Value  int   `json:"y"`
+	Series int   `json:"s"`
+}
+
+type accountStatsRawPoint struct {
+	OrgID int32
+	Date  int64
+	Value int
+}
+
+type accountStatsSeries struct {
+	Name  string `json:"name"`
+	Index int    `json:"index"`
+}
+
+type accountStatsResponse struct {
+	Series []*accountStatsSeries `json:"series"`
+	Data   []*accountStatsPoint  `json:"data"`
 }
 
 type settingsGeneralRenderContext struct {
@@ -816,37 +840,95 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 
 	timeFrom := time.Now().UTC().AddDate(-1 /*years*/, 0 /*months*/, 0 /*days*/).Truncate(24 * time.Hour)
 
-	type point struct {
-		Date  int64 `json:"x"`
-		Value int   `json:"y"`
-	}
-
-	data := []*point{}
-
-	if stats, err := s.TimeSeries.RetrieveAccountStats(ctx, user.ID, timeFrom); err == nil {
-		anyNonZero := false
-		for _, st := range stats {
-			if st.Count > 0 {
-				anyNonZero = true
-			}
-			data = append(data, &point{Date: st.Timestamp.Unix(), Value: int(st.Count)})
-		}
-
-		// we want to show "No data available" on the client
-		if !anyNonZero {
-			data = []*point{}
-		}
-	} else {
+	response, err := s.buildAccountStatsResponse(ctx, user.ID, timeFrom)
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve account stats", common.ErrAttr(err))
 	}
 
-	response := struct {
-		Data []*point `json:"data"`
-	}{
-		Data: data,
+	if response == nil {
+		response = &accountStatsResponse{
+			Series: []*accountStatsSeries{},
+			Data:   []*accountStatsPoint{},
+		}
 	}
 
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
+}
+
+func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*accountStatsResponse, error) {
+	stats, err := s.TimeSeries.RetrieveAccountStats(ctx, userID, timeFrom)
+	if err != nil {
+		return nil, err
+	}
+
+	dataRaw := make([]*accountStatsRawPoint, 0, len(stats))
+	orgIDs := make(map[int32]struct{}, len(stats))
+
+	anyNonZero := false
+	for _, st := range stats {
+		if st.Count > 0 {
+			anyNonZero = true
+		}
+		dataRaw = append(dataRaw, &accountStatsRawPoint{OrgID: st.OrgID, Date: st.Timestamp.Unix(), Value: int(st.Count)})
+		orgIDs[st.OrgID] = struct{}{}
+	}
+
+	seriesIndex := make(map[int32]int, len(orgIDs))
+	seriesList := make([]*accountStatsSeries, 0, len(orgIDs))
+
+	var orgNames map[int32]string
+	if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, userID); err == nil {
+		orgNames = make(map[int32]string, len(orgs))
+		for _, org := range orgs {
+			orgID := org.Organization.ID
+			orgName := org.Organization.Name
+			orgNames[orgID] = orgName
+			if _, ok := orgIDs[orgID]; ok {
+				index := len(seriesList)
+				seriesIndex[orgID] = index
+				seriesList = append(seriesList, &accountStatsSeries{Name: orgName, Index: index})
+			} else {
+				slog.WarnContext(ctx, "Organization found in user data but missing from usage statistics", "orgID", orgID)
+			}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve user organizations for account stats", common.ErrAttr(err))
+	}
+
+	unknownCount := 0
+	for orgID := range orgIDs {
+		if _, ok := seriesIndex[orgID]; ok {
+			continue
+		}
+		unknownCount++
+		name := orgNames[orgID]
+		if name == "" {
+			name = fmt.Sprintf(unknownOrgNameFormat, unknownCount)
+		}
+		index := len(seriesList)
+		seriesIndex[orgID] = index
+		seriesList = append(seriesList, &accountStatsSeries{Name: name, Index: index})
+	}
+
+	data := make([]*accountStatsPoint, 0, len(dataRaw))
+	for _, pt := range dataRaw {
+		if index, ok := seriesIndex[pt.OrgID]; ok {
+			data = append(data, &accountStatsPoint{Date: pt.Date, Value: pt.Value, Series: index})
+		} else {
+			slog.WarnContext(ctx, "Skipping account stats point without series mapping", "orgID", pt.OrgID, "date", pt.Date, "value", pt.Value)
+		}
+	}
+
+	// we want to show "No data available" on the client
+	if !anyNonZero {
+		data = []*accountStatsPoint{}
+		seriesList = []*accountStatsSeries{}
+	}
+
+	return &accountStatsResponse{
+		Series: seriesList,
+		Data:   data,
+	}, nil
 }
 
 func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User) *settingsUsageRenderContext {
