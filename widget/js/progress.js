@@ -80,10 +80,14 @@ export class ProgressRing extends SafeHTMLElement {
         const progress = (percent / 100 * this._circumference)
         const offset = this._circumference - progress;
         const circle = this._root.getElementById('progress');
-        circle.style.strokeDashoffset = offset;
+        if (circle) {
+            circle.style.strokeDashoffset = offset;
+        }
 
         const pie = this._root.getElementById('pie');
-        pie.style.strokeDasharray = progress / 2 + ' ' + this._circumference;
+        if (pie) {
+            pie.style.strokeDasharray = progress / 2 + ' ' + this._circumference;
+        }
     }
 
     static get observedAttributes() {
@@ -91,10 +95,13 @@ export class ProgressRing extends SafeHTMLElement {
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-        if (oldValue === newValue) return;
+        if (oldValue === newValue) { return; }
 
         if (name === 'progress') {
-            this.setProgress(newValue);
+            const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
+            if (!Number.isNaN(progressValue)) {
+                this.setProgress(progressValue);
+            }
         }
     }
 }
