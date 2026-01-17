@@ -205,7 +205,8 @@
                             : (item.name.length * this.legendTextWidth);
                         const itemWidth = this.legendItemPadding + fullTextWidth;
                         legendLayout.push({
-                            ...item,
+                            index: item.index,
+                            name: item.name,
                             displayName: item.name,
                             width: itemWidth,
                             x: (width - itemWidth) / 2,
@@ -217,7 +218,10 @@
                     let legendOffsetX = 0;
                     row.forEach(item => {
                         legendLayout.push({
-                            ...item,
+                            index: item.index,
+                            name: item.name,
+                            displayName: item.displayName,
+                            width: item.width,
                             x: legendOffsetX,
                             y: rowIndex * legendItemHeight
                         });
