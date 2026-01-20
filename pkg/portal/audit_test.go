@@ -513,14 +513,13 @@ func TestAuditLogParserExtension(t *testing.T) {
 	planService := billing.NewPlanService(nil)
 
 	// Create a custom parser that handles a custom table type
-	customParser := func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) (bool, error) {
+	customParser := func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) error {
 		if log.EntityTable == "custom_table" {
 			ul.Resource = "Custom Resource"
 			ul.Property = "Custom Property"
 			ul.Value = "custom_value"
-			return true, nil
 		}
-		return false, nil
+		return nil
 	}
 
 	// Test with custom parser set

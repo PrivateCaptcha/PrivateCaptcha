@@ -65,11 +65,11 @@ type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, erro
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
 
 // AuditLogParser is a function type for parsing custom audit log types.
-// It receives the context, the raw audit log, and a pointer to the userAuditLog to populate.
-// If the parser handles the log, it should return true. If it returns false,
-// the default parsing logic will be used.
+// It receives the context, the raw audit log, and a pointer to the UserAuditLog to populate.
+// Extensions should populate the fields of UserAuditLog (Resource, Property, Value) as needed.
+// Return an error only if there was a problem parsing the log.
 // This allows extensions to add custom audit log types without modifying core code.
-type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) (handled bool, err error)
+type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) error
 
 type RequestContext struct {
 	Path        string

@@ -331,7 +331,7 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 		default:
 			// Allow extensions to handle custom audit log types
 			if s.AuditLogParser != nil {
-				_, err = s.AuditLogParser(ctx, log, ul)
+				err = s.AuditLogParser(ctx, log, ul)
 			}
 		}
 	}
