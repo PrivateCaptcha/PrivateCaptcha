@@ -140,7 +140,7 @@ export class CaptchaElement extends SafeHTMLElement {
         this._overridesSheet = null;
     }
 
-    connectedCallback() {
+    update() {
         this._debug = this.getAttribute('debug');
         this._error = null;
         this._displayMode = this.getAttribute('display-mode');
@@ -154,6 +154,11 @@ export class CaptchaElement extends SafeHTMLElement {
         const extraStyles = this.getAttribute('extra-styles');
         this.updateStyles(extraStyles);
 
+    }
+
+    connectedCallback() {
+        this.update();
+
         // init
         const canShow = (this._displayMode == DISPLAY_WIDGET);
         this.setState(STATE_EMPTY, canShow);
@@ -162,6 +167,7 @@ export class CaptchaElement extends SafeHTMLElement {
     /**
      * @param {string} state
      * @param {boolean} canShow
+     * @returns {boolean} if changed
      */
     setState(state, canShow) {
         if (state == this._state) {
@@ -169,11 +175,18 @@ export class CaptchaElement extends SafeHTMLElement {
             if (DISPLAY_POPUP === this._displayMode) {
                 this._syncHostClass(canShow);
             }
-            return;
+            return false;
         }
 
         if (this._debug) { console.debug(`[privatecaptcha][progress] change state. old=${this._state} new=${state}`); }
 
+        this.render(state, canShow);
+        this._state = state;
+
+        return true;
+    }
+
+    render(state, canShow) {
         const activeArea = document.createElement('div');
         activeArea.className = 'pc-interactive-area';
         let bindCheckEvent = false;
@@ -222,8 +235,6 @@ export class CaptchaElement extends SafeHTMLElement {
         }
 
         this._syncHostClass(showPopupIfNeeded);
-
-        this._state = state;
 
         const widget = document.createElement('div');
         widget.className = 'pc-captcha-widget';
