@@ -317,7 +317,11 @@ test('CaptchaWidget checkConfigured() shows invalid state without sitekey', asyn
 
     // The widget should be in invalid state when no sitekey is provided
     // The checkConfigured() is called in constructor and sets the state to invalid
-    assert.strictEqual(pcElement.classList.contains('hidden') || true, true, 'Element should handle invalid state');
+    // In invalid state, the checkbox should have class 'invalid'
+    const shadowRoot = pcElement.shadowRoot;
+    assert.ok(shadowRoot, 'Should have shadow root');
+    const checkboxEl = shadowRoot.querySelector('input[type="checkbox"].invalid');
+    assert.ok(checkboxEl, 'Should have invalid checkbox in invalid state');
 
     console.log('✓ Widget checkConfigured test passed');
 });
