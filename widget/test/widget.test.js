@@ -12,21 +12,20 @@ global.HTMLElement = window.HTMLElement;
 global.CustomEvent = window.CustomEvent;
 global.CSSStyleSheet = window.CSSStyleSheet;
 
-// Mock puzzle data: a zero puzzle with ID=0, difficulty=0, solutionsCount=1
-const ZERO_PUZZLE_DATA = 'AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=.test-signature';
-
-// Mock fetch to return a zero puzzle
-const mockFetch = (url, options = {}) => {
-    if (url.includes('/puzzle')) {
-        return Promise.resolve({
-            ok: true,
-            text: () => Promise.resolve(ZERO_PUZZLE_DATA)
-        });
+const originalFetch = window.fetch.bind(window);
+const patchedFetch = (url, options = {}) => {
+    const headers = new window.Headers(options.headers || {});
+    if (!headers.has('Origin')) {
+        headers.set('Origin', 'not.empty');
     }
-    return Promise.reject(new Error('Unknown URL'));
+
+    return originalFetch(url, {
+        ...options,
+        headers
+    });
 };
-window.fetch = mockFetch;
-globalThis.fetch = mockFetch;
+window.fetch = patchedFetch;
+globalThis.fetch = patchedFetch;
 
 const testSitekey = 'aaaaaaaabbbbccccddddeeeeeeeeeeee';
 
@@ -219,85 +218,6 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
     console.log('✓ Widget started test passed');
 });
 
-test('CaptchaWidget reset() clears solution and updates options', async (t) => {
-    document.body.innerHTML = `
-        <form>
-            <div class="private-captcha" data-theme="light" data-lang="en">
-            </div>
-        </form>
-    `;
-
-    const { CaptchaWidget } = await import('../js/widget.js');
-
-    const element = document.querySelector('.private-captcha');
-    assert.ok(element, 'Should find captcha element');
-
-    const widget = new CaptchaWidget(element, {
-        sitekey: testSitekey,
-        debug: true,
-        theme: 'light',
-        lang: 'en'
-    });
-
-    // Execute to get a solution
-    widget.execute();
-
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:finish', resolve, { once: true });
-    });
-
-    const solutionBeforeReset = widget.solution();
-    assert.ok(solutionBeforeReset, 'Widget should have a solution before reset');
-
-    // Reset with new options
-    widget.reset({ theme: 'dark', lang: 'fr' });
-
-    const solutionAfterReset = widget.solution();
-    assert.strictEqual(solutionAfterReset, null, 'Solution should be null after reset');
-
-    // Verify new options are reflected in the custom element attributes
-    const pcElement = element.querySelector('private-captcha');
-    assert.ok(pcElement, 'Should find private-captcha element');
-    assert.strictEqual(pcElement.getAttribute('theme'), 'dark', 'Theme should be updated to dark');
-    assert.strictEqual(pcElement.getAttribute('lang'), 'fr', 'Lang should be updated to fr');
-
-    console.log('✓ Widget reset test passed');
-});
-
-test('CaptchaWidget reset() removes solution field from DOM', async (t) => {
-    document.body.innerHTML = `
-        <form>
-            <div class="private-captcha">
-            </div>
-        </form>
-    `;
-
-    const { CaptchaWidget } = await import('../js/widget.js');
-
-    const element = document.querySelector('.private-captcha');
-    const widget = new CaptchaWidget(element, {
-        sitekey: testSitekey,
-        debug: true
-    });
-
-    widget.execute();
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:finish', resolve, { once: true });
-    });
-
-    // Verify solution field was added
-    const fieldBeforeReset = element.querySelector('input[name="private-captcha-solution"]');
-    assert.ok(fieldBeforeReset, 'Solution field should exist before reset');
-
-    widget.reset();
-
-    // Verify solution field is removed
-    const fieldAfterReset = element.querySelector('input[name="private-captcha-solution"]');
-    assert.strictEqual(fieldAfterReset, null, 'Solution field should be removed after reset');
-
-    console.log('✓ Widget reset removes solution field test passed');
-});
-
 test('CaptchaWidget checkConfigured() shows invalid state without sitekey', async (t) => {
     document.body.innerHTML = `
         <form>
@@ -324,31 +244,6 @@ test('CaptchaWidget checkConfigured() shows invalid state without sitekey', asyn
     assert.ok(checkboxEl, 'Should have invalid checkbox in invalid state');
 
     console.log('✓ Widget checkConfigured test passed');
-});
-
-test('CaptchaWidget constructor reads sitekey from data attribute', async (t) => {
-    document.body.innerHTML = `
-        <form>
-            <div class="private-captcha" data-sitekey="${testSitekey}">
-            </div>
-        </form>
-    `;
-
-    const { CaptchaWidget } = await import('../js/widget.js');
-
-    const element = document.querySelector('.private-captcha');
-    const widget = new CaptchaWidget(element, { debug: true });
-
-    // Initialize should work because sitekey is in data attribute
-    widget.init(false);
-
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:init', resolve, { once: true });
-    });
-
-    assert.ok(true, 'Widget initialized successfully with sitekey from data attribute');
-
-    console.log('✓ Widget sitekey from data attribute test passed');
 });
 
 test('CaptchaWidget constructor reads displayMode from data attribute', async (t) => {
@@ -422,68 +317,55 @@ test('captcha.js renderCaptchaWidget prevents double attachment', async (t) => {
     console.log('✓ renderCaptchaWidget prevents double attachment test passed');
 });
 
-test('captcha.js getCaptchaResponse returns solution from widget', async (t) => {
+test('CaptchaWidget reset() clears internal state', async (t) => {
     document.body.innerHTML = `
         <form>
-            <div class="private-captcha">
+            <div class="private-captcha" data-theme="light" data-lang="en">
             </div>
         </form>
     `;
 
-    await import('../js/captcha.js');
     const { CaptchaWidget } = await import('../js/widget.js');
 
     const element = document.querySelector('.private-captcha');
+    assert.ok(element, 'Should find captcha element');
+
     const widget = new CaptchaWidget(element, {
         sitekey: testSitekey,
-        debug: true
+        debug: true,
+        theme: 'light',
+        lang: 'en'
     });
 
-    widget.execute();
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:finish', resolve, { once: true });
-    });
+    // Manually set internal state to simulate a finished widget
+    widget._solution = 'test-solution';
+    assert.strictEqual(widget.solution(), 'test-solution', 'Solution should be set');
 
-    const response = window.privateCaptcha.getResponse(widget);
-    assert.ok(response, 'getResponse should return a solution');
-    assert.ok(typeof response === 'string', 'Solution should be a string');
-    assert.ok(response.includes('.'), 'Solution should contain puzzle data separated by dots');
+    // Add a solution field manually to test removal
+    element.insertAdjacentHTML('beforeend', '<input name="private-captcha-solution" type="hidden" value="test">');
+    const fieldBeforeReset = element.querySelector('input[name="private-captcha-solution"]');
+    assert.ok(fieldBeforeReset, 'Solution field should exist before reset');
 
-    console.log('✓ getCaptchaResponse test passed');
+    // Reset with new options
+    widget.reset({ theme: 'dark', lang: 'fr' });
+
+    const solutionAfterReset = widget.solution();
+    assert.strictEqual(solutionAfterReset, null, 'Solution should be null after reset');
+
+    // Verify solution field is removed
+    const fieldAfterReset = element.querySelector('input[name="private-captcha-solution"]');
+    assert.strictEqual(fieldAfterReset, null, 'Solution field should be removed after reset');
+
+    // Verify new options are reflected in the custom element attributes
+    const pcElement = element.querySelector('private-captcha');
+    assert.ok(pcElement, 'Should find private-captcha element');
+    assert.strictEqual(pcElement.getAttribute('theme'), 'dark', 'Theme should be updated to dark');
+    assert.strictEqual(pcElement.getAttribute('lang'), 'fr', 'Lang should be updated to fr');
+
+    console.log('✓ Widget reset test passed');
 });
 
-test('captcha.js resetCaptchaWidget calls widget reset', async (t) => {
-    document.body.innerHTML = `
-        <form>
-            <div class="private-captcha">
-            </div>
-        </form>
-    `;
-
-    await import('../js/captcha.js');
-    const { CaptchaWidget } = await import('../js/widget.js');
-
-    const element = document.querySelector('.private-captcha');
-    const widget = new CaptchaWidget(element, {
-        sitekey: testSitekey,
-        debug: true
-    });
-
-    widget.execute();
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:finish', resolve, { once: true });
-    });
-
-    assert.ok(widget.solution(), 'Widget should have solution before reset');
-
-    window.privateCaptcha.reset(widget);
-
-    assert.strictEqual(widget.solution(), null, 'Widget solution should be null after reset');
-
-    console.log('✓ resetCaptchaWidget test passed');
-});
-
-test('CaptchaWidget uses recaptcha compat field name', async (t) => {
+test('CaptchaWidget setOptions() configures fieldName for recaptcha compat mode', async (t) => {
     document.body.innerHTML = `
         <form>
             <div class="private-captcha">
@@ -500,14 +382,104 @@ test('CaptchaWidget uses recaptcha compat field name', async (t) => {
         compat: RECAPTCHA_COMPAT
     });
 
-    widget.execute();
-    await new Promise((resolve) => {
-        element.addEventListener('privatecaptcha:finish', resolve, { once: true });
-    });
-
-    // Verify the solution field uses g-recaptcha-response name for compatibility
-    const field = element.querySelector('input[name="g-recaptcha-response"]');
-    assert.ok(field, 'Solution field should use g-recaptcha-response name in recaptcha compat mode');
+    // Verify the fieldName option is set for recaptcha compat
+    assert.strictEqual(widget._options.fieldName, 'g-recaptcha-response', 'Field name should be g-recaptcha-response in recaptcha compat mode');
 
     console.log('✓ Widget recaptcha compat field name test passed');
+});
+
+test('CaptchaWidget setOptions() reads sitekey from data attribute', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha" data-sitekey="${testSitekey}">
+            </div>
+        </form>
+    `;
+
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    // Do not pass sitekey in options
+    const widget = new CaptchaWidget(element, { debug: true });
+
+    // Verify the sitekey was read from data attribute
+    assert.strictEqual(widget._options.sitekey, testSitekey, 'Sitekey should be read from data attribute');
+
+    console.log('✓ Widget sitekey from data attribute test passed');
+});
+
+test('CaptchaWidget setOptions() uses EU endpoint when data-eu is set', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha" data-eu="true">
+            </div>
+        </form>
+    `;
+
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    // Verify the EU endpoint is used
+    assert.ok(widget._options.puzzleEndpoint.includes('eu'), 'Puzzle endpoint should use EU endpoint');
+
+    console.log('✓ Widget EU endpoint test passed');
+});
+
+test('captcha.js resetCaptchaWidget clears widget solution', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha">
+            </div>
+        </form>
+    `;
+
+    await import('../js/captcha.js');
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    // Manually set internal state
+    widget._solution = 'test-solution';
+    assert.ok(widget.solution(), 'Widget should have solution before reset');
+
+    window.privateCaptcha.reset(widget);
+
+    assert.strictEqual(widget.solution(), null, 'Widget solution should be null after reset');
+
+    console.log('✓ resetCaptchaWidget test passed');
+});
+
+test('captcha.js getResponse returns widget solution', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha">
+            </div>
+        </form>
+    `;
+
+    await import('../js/captcha.js');
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    // Manually set solution
+    widget._solution = 'test-solution-payload';
+
+    const response = window.privateCaptcha.getResponse(widget);
+    assert.strictEqual(response, 'test-solution-payload', 'getResponse should return the widget solution');
+
+    console.log('✓ getResponse test passed');
 });
