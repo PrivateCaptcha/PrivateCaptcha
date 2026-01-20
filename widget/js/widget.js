@@ -81,7 +81,11 @@ export class CaptchaWidget {
 
     _createCaptchaElement() {
         const captchaEl = document.createElement('private-captcha');
+        this._updateCaptchaElement(captchaEl);
+        return captchaEl;
+    }
 
+    _updateCaptchaElement(captchaEl) {
         captchaEl.setAttribute('lang', this._options.lang);
         captchaEl.setAttribute('theme', this._options.theme);
         captchaEl.setAttribute('extra-styles', this._options.styles);
@@ -91,8 +95,6 @@ export class CaptchaWidget {
         }
 
         captchaEl.setAttribute('display-mode', this._options.displayMode);
-
-        return captchaEl;
     }
 
     /**
@@ -311,12 +313,18 @@ export class CaptchaWidget {
         this._puzzle = null;
         this._solution = null;
         this._errorCode = errors.ERROR_NO_ERROR;
+        this.setOptions(options);
         this.setState(STATE_EMPTY);
-        this.setProgressState(STATE_EMPTY);
+        const pcElement = this._element.querySelector('private-captcha');
+        if (pcElement) {
+            this._updateCaptchaElement(pcElement);
+            // propagate the styles
+            pcElement.update();
+        }
+        this.setProgressState(STATE_EMPTY, true /*force refresh*/);
         this.ensureNoSolutionField();
         this._userStarted = false;
         this._apiTriggered = false;
-        this.setOptions(options);
     }
 
     updateStyles() {
@@ -520,8 +528,10 @@ export class CaptchaWidget {
     /**
      * Updates the "UI" state of the widget.
      * @param {string} state
+     * @param {boolean} forceRefresh
+     * @returns {boolean} if changed
      */
-    setProgressState(state) {
+    setProgressState(state, forceRefresh = false) {
         // NOTE: hidden display mode is taken care of inside setState() even when (_userStarted == true)
         const canShow = this._userStarted ||
             (DISPLAY_WIDGET === this._options.displayMode) ||
@@ -529,10 +539,14 @@ export class CaptchaWidget {
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
             pcElement.setError(this._errorCode);
-            pcElement.setState(state, canShow);
-        }
-        else {
+            const changed = pcElement.setState(state, canShow);
+            if (!changed && forceRefresh) {
+                pcElement.render(state, canShow);
+            }
+            return changed;
+        } else {
             console.error('[privatecaptcha] component not found when changing state');
+            return false;
         }
     }
 

@@ -19,6 +19,17 @@
         function onCaptchaErrored() {
             console.log("Errored callback called!");
         }
+        function changeWidget() {
+            let autoWidget = window.privateCaptcha.autoWidget;
+            if (autoWidget) {
+                const options = {
+                    theme: 'dark',
+                    lang: 'fr',
+                    debug: true,
+                };
+                autoWidget.reset(options);
+            }
+        }
     </script>
 </head>
 <body class='h-full pc-vertical-stretch'>
@@ -56,6 +67,11 @@
                             </button>
                         </form>
                     </div>
+                </div>
+                <div class="mt-8">
+                    <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary pc-internal-button-smaller" onclick="changeWidget()">
+                        Change
+                    </button>
                 </div>
             </div>
         </div>
