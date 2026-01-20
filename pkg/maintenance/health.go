@@ -85,7 +85,12 @@ func (hc *HealthCheckJob) checkClickHouse(ctx context.Context) int32 {
 
 	for i := 0; i < maxAttempts; i++ {
 		if i > 0 {
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "ClickHouse ping context cancelled", common.ErrAttr(ctx.Err()))
+				return int32(FlagFalse)
+			case <-time.After(b.Duration()):
+			}
 		}
 
 		if err = hc.TimeSeriesDB.Ping(ctx); err == nil {
@@ -113,7 +118,12 @@ func (hc *HealthCheckJob) checkPostgres(ctx context.Context) int32 {
 
 	for i := 0; i < maxAttempts; i++ {
 		if i > 0 {
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "Postgres ping context cancelled", common.ErrAttr(ctx.Err()))
+				return int32(FlagFalse)
+			case <-time.After(b.Duration()):
+			}
 		}
 
 		if err = hc.BusinessDB.Ping(ctx); err == nil {

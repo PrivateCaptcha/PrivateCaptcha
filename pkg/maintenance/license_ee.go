@@ -201,7 +201,11 @@ func (j *checkLicenseJob) fetchActivation(ctx context.Context) ([]byte, error) {
 
 	for i := 0; i < activationAPIAttempts; i++ {
 		if i > 0 {
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				return data, ctx.Err()
+			case <-time.After(b.Duration()):
+			}
 		}
 
 		data, err = doFetchActivation(ctx, j.url, licenseKey, hwid, j.version)

@@ -314,7 +314,12 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 	for _, n := range notifications {
 		if currSentCount := len(processedNotificationIDs); currSentCount > lastSentCount {
 			// backoff a little not to overwhelm transactional email provider
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "Job context cancelled", common.ErrAttr(ctx.Err()))
+				return processedNotificationIDs
+			case <-time.After(b.Duration()):
+			}
 			lastSentCount = currSentCount
 		}
 

@@ -311,7 +311,11 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	for i, property := range params.Properties {
 		if i > 0 {
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				return results, ctx.Err()
+			case <-time.After(b.Duration()):
+			}
 		}
 
 		// TODO: Create properties in batches instead of one by one
@@ -733,7 +737,11 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 
 	for i, property := range params.Properties {
 		if i > 0 {
-			time.Sleep(b.Duration())
+			select {
+			case <-ctx.Done():
+				return results, ctx.Err()
+			case <-time.After(b.Duration()):
+			}
 		}
 
 		status := s.doUpdateProperty(ctx, tlog.With("index", i), property, user, org)
