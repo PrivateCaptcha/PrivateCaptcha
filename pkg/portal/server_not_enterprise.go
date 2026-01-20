@@ -59,13 +59,13 @@ func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
 	return 14 * 24 * time.Hour
 }
 
-func newStubAuditLog() *userAuditLog {
+func newStubAuditLog() *UserAuditLog {
 	actions := []dbgen.AuditLogAction{dbgen.AuditLogActionAccess, dbgen.AuditLogActionCreate, dbgen.AuditLogActionUpdate,
 		dbgen.AuditLogActionDelete, dbgen.AuditLogActionUnknown}
 	tables := []string{db.TableNameProperties, db.TableNameOrgs, db.TableNameAPIKeys, db.TableNameUsers, db.TableNameOrgUsers}
 	sources := []string{string(dbgen.AuditLogSourcePortal), strings.ToUpper(string(dbgen.AuditLogSourceApi))}
 
-	return &userAuditLog{
+	return &UserAuditLog{
 		UserName:  "User",
 		UserEmail: "***@***.com",
 		Action:    string(actions[randv2.IntN(len(actions))]),
@@ -127,7 +127,7 @@ func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*
 }
 
 func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, days int, page int) (*MainAuditLogsRenderContext, error) {
-	logs := make([]*userAuditLog, 0)
+	logs := make([]*UserAuditLog, 0)
 	const maxAuditLogs = 8
 	for i := 0; i < maxAuditLogs; i++ {
 		logs = append(logs, newStubAuditLog())

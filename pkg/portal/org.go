@@ -466,8 +466,8 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}, nil
 }
 
-func (s *Server) newOrganizationAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetOrgAuditLogsRow) []*userAuditLog {
-	result := make([]*userAuditLog, 0, len(logs))
+func (s *Server) newOrganizationAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetOrgAuditLogsRow) []*UserAuditLog {
+	result := make([]*UserAuditLog, 0, len(logs))
 
 	for _, log := range logs {
 		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {

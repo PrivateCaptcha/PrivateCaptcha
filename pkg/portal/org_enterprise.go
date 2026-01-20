@@ -517,7 +517,7 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgAuditLogsRenderContext{
 		AuditLogsRenderContext: AuditLogsRenderContext{
-			AuditLogs: []*userAuditLog{},
+			AuditLogs: []*UserAuditLog{},
 			SeeMore:   true,
 		},
 		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),

@@ -25,14 +25,16 @@ const (
 )
 
 type AuditLogsRenderContext struct {
-	AuditLogs []*userAuditLog
+	AuditLogs []*UserAuditLog
 	Count     int
 	Page      int
 	PerPage   int
 	SeeMore   bool
 }
 
-type userAuditLog struct {
+// UserAuditLog represents a single audit log entry for display in the UI.
+// Extensions can use this type to populate custom audit log types via AuditLogParser.
+type UserAuditLog struct {
 	UserName  string
 	UserEmail string
 	Action    string
@@ -48,7 +50,7 @@ var (
 	errUnexpectedAuditLogPayload = errors.New("unexpected audit log payload")
 )
 
-func (ul *userAuditLog) initFromUser(oldValue, newValue *db.AuditLogUser) error {
+func (ul *UserAuditLog) initFromUser(oldValue, newValue *db.AuditLogUser) error {
 	ul.Resource = "User"
 
 	if (oldValue != nil) && (newValue != nil) {
@@ -66,7 +68,7 @@ func (ul *userAuditLog) initFromUser(oldValue, newValue *db.AuditLogUser) error 
 	return nil
 }
 
-func (ul *userAuditLog) initFromOrg(oldValue, newValue *db.AuditLogOrg) error {
+func (ul *UserAuditLog) initFromOrg(oldValue, newValue *db.AuditLogOrg) error {
 	ul.Resource = "Organization"
 
 	if (oldValue != nil) && (newValue != nil) {
@@ -90,7 +92,7 @@ func (ul *userAuditLog) initFromOrg(oldValue, newValue *db.AuditLogOrg) error {
 	return nil
 }
 
-func (ul *userAuditLog) initFromSubscriptionPlan(sub *db.AuditLogSubscription, planService billing.PlanService, stage string) {
+func (ul *UserAuditLog) initFromSubscriptionPlan(sub *db.AuditLogSubscription, planService billing.PlanService, stage string) {
 	ul.Property = "Product"
 
 	internal := db.IsInternalSubscription(dbgen.SubscriptionSource(sub.Source))
@@ -106,7 +108,7 @@ func (ul *userAuditLog) initFromSubscriptionPlan(sub *db.AuditLogSubscription, p
 	}
 }
 
-func (ul *userAuditLog) initFromSubscription(oldValue, newValue *db.AuditLogSubscription, planService billing.PlanService, stage string) error {
+func (ul *UserAuditLog) initFromSubscription(oldValue, newValue *db.AuditLogSubscription, planService billing.PlanService, stage string) error {
 	ul.Resource = "Subscription"
 
 	if (oldValue != nil) && (newValue != nil) {
@@ -136,7 +138,7 @@ func (ul *userAuditLog) initFromSubscription(oldValue, newValue *db.AuditLogSubs
 	return nil
 }
 
-func (ul *userAuditLog) initFromOrgUser(oldValue, newValue *db.AuditLogOrgUser) error {
+func (ul *UserAuditLog) initFromOrgUser(oldValue, newValue *db.AuditLogOrgUser) error {
 	ul.Resource = "Organization"
 
 	// for org users we don't have "classic" updates - we only create or delete
@@ -156,7 +158,7 @@ func (ul *userAuditLog) initFromOrgUser(oldValue, newValue *db.AuditLogOrgUser) 
 	return nil
 }
 
-func (ul *userAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty) error {
+func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty) error {
 	ul.Resource = "Property"
 
 	if (oldValue != nil) && (newValue != nil) {
@@ -201,7 +203,7 @@ func (ul *userAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 	return nil
 }
 
-func (ul *userAuditLog) initFromAPIKey(oldValue, newValue *db.AuditLogAPIKey) error {
+func (ul *UserAuditLog) initFromAPIKey(oldValue, newValue *db.AuditLogAPIKey) error {
 	ul.Resource = "API key"
 
 	if (oldValue != nil) && (newValue != nil) {
@@ -224,7 +226,7 @@ func (ul *userAuditLog) initFromAPIKey(oldValue, newValue *db.AuditLogAPIKey) er
 	return nil
 }
 
-func (ul *userAuditLog) initFromAccess(log *dbgen.AuditLog, payload *db.AuditLogAccess) error {
+func (ul *UserAuditLog) initFromAccess(log *dbgen.AuditLog, payload *db.AuditLogAccess) error {
 	if payload == nil {
 		return errUnexpectedAuditLogPayload
 	}
@@ -275,8 +277,8 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}, nil
 }
 
-func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*userAuditLog, error) {
-	ul := &userAuditLog{
+func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*UserAuditLog, error) {
+	ul := &UserAuditLog{
 		Time:      log.CreatedAt.Time.Format(auditLogTimeFormat),
 		Action:    string(log.Action),
 		TableName: log.EntityTable,
@@ -326,6 +328,11 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*use
 			if oldOrgUser, newOrgUser, err = db.ParseAuditLogPayloads[db.AuditLogOrgUser](ctx, log); err == nil {
 				err = ul.initFromOrgUser(oldOrgUser, newOrgUser)
 			}
+		default:
+			// Allow extensions to handle custom audit log types
+			if s.AuditLogParser != nil {
+				err = s.AuditLogParser(ctx, log, ul)
+			}
 		}
 	}
 
@@ -336,8 +343,8 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*use
 	return ul, nil
 }
 
-func (s *Server) newUserAuditLogs(ctx context.Context, logs []*dbgen.GetUserAuditLogsRow) []*userAuditLog {
-	result := make([]*userAuditLog, 0, len(logs))
+func (s *Server) newUserAuditLogs(ctx context.Context, logs []*dbgen.GetUserAuditLogsRow) []*UserAuditLog {
+	result := make([]*UserAuditLog, 0, len(logs))
 
 	for _, log := range logs {
 		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {
