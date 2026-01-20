@@ -27,7 +27,7 @@ jobs:
           path-to-document: 'https://github.com/PrivateCaptcha/PrivateCaptcha/blob/main/CLA.md'
           # branch should not be protected
           branch: 'main'
-          allowlist: dependabot,github-actions,renovate[bot],ribtoks,renovate-bot,dependabot[bot],copilot,copilot-swe-agent[bot]
+          allowlist: dependabot,github-actions,renovate[bot],ribtoks,renovate-bot,dependabot[bot],Copilot,copilot-swe-agent[bot]
           remote-organization-name: PrivateCaptcha
           remote-repository-name: cla-signatures
           lock-pullrequest-aftermerge: true
