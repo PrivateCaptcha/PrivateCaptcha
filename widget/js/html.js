@@ -186,6 +186,16 @@ export class CaptchaElement extends SafeHTMLElement {
         return true;
     }
 
+    /**
+     * Rebuilds the widget UI inside the shadow DOM based on the given state and
+     * visibility settings. This updates the interactive area contents, applies
+     * host element CSS classes (including popup-related behavior), and binds
+     * the checkbox event handler when needed.
+     *
+     * @param {string} state - The new widget state (for example, empty, loading, or error).
+     * @param {boolean} canShow - Whether the widget is allowed to be shown / expanded to the user.
+     * @returns {void}
+     */
     render(state, canShow) {
         const activeArea = document.createElement('div');
         activeArea.className = 'pc-interactive-area';
