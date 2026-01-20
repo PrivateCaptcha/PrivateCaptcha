@@ -58,7 +58,7 @@ func TestUserAuditLogInitFromUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromUser(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromUser() error = %v, wantErr %v", err, tt.wantErr)
@@ -131,7 +131,7 @@ func TestUserAuditLogInitFromOrg(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromOrg(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromOrg() error = %v, wantErr %v", err, tt.wantErr)
@@ -182,7 +182,7 @@ func TestUserAuditLogInitFromSubscription(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromSubscription(tt.oldValue, tt.newValue, planService, "production")
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromSubscription() error = %v, wantErr %v", err, tt.wantErr)
@@ -227,7 +227,7 @@ func TestUserAuditLogInitFromOrgUser(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromOrgUser(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromOrgUser() error = %v, wantErr %v", err, tt.wantErr)
@@ -288,7 +288,7 @@ func TestUserAuditLogInitFromProperty(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromProperty(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromProperty() error = %v, wantErr %v", err, tt.wantErr)
@@ -341,7 +341,7 @@ func TestUserAuditLogInitFromAPIKey(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromAPIKey(tt.oldValue, tt.newValue)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromAPIKey() error = %v, wantErr %v", err, tt.wantErr)
@@ -393,7 +393,7 @@ func TestUserAuditLogInitFromAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul := &userAuditLog{}
+			ul := &UserAuditLog{}
 			err := ul.initFromAccess(tt.log, tt.payload)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("initFromAccess() error = %v, wantErr %v", err, tt.wantErr)
@@ -508,6 +508,86 @@ func TestNewUserAuditLog(t *testing.T) {
 	}
 }
 
+func TestAuditLogParserExtension(t *testing.T) {
+	ctx := context.Background()
+	planService := billing.NewPlanService(nil)
+
+	// Create a custom parser that handles a custom table type
+	customParser := func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) (bool, error) {
+		if log.EntityTable == "custom_table" {
+			ul.Resource = "Custom Resource"
+			ul.Property = "Custom Property"
+			ul.Value = "custom_value"
+			return true, nil
+		}
+		return false, nil
+	}
+
+	// Test with custom parser set
+	serverWithParser := &Server{
+		PlanService:    planService,
+		Stage:          "production",
+		AuditLogParser: customParser,
+	}
+
+	// Test that custom table type is handled by the parser
+	customLog := &dbgen.AuditLog{
+		ID:          1,
+		UserID:      db.Int(1),
+		Action:      dbgen.AuditLogActionCreate,
+		EntityTable: "custom_table",
+		CreatedAt:   db.Timestampz(time.Now()),
+		Source:      dbgen.AuditLogSourcePortal,
+	}
+
+	ul, err := serverWithParser.newUserAuditLog(ctx, customLog)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if ul.Resource != "Custom Resource" {
+		t.Errorf("Expected Resource to be 'Custom Resource', got '%s'", ul.Resource)
+	}
+	if ul.Property != "Custom Property" {
+		t.Errorf("Expected Property to be 'Custom Property', got '%s'", ul.Property)
+	}
+	if ul.Value != "custom_value" {
+		t.Errorf("Expected Value to be 'custom_value', got '%s'", ul.Value)
+	}
+
+	// Test that standard table types still work with custom parser
+	standardLog := &dbgen.AuditLog{
+		ID:          2,
+		UserID:      db.Int(1),
+		Action:      dbgen.AuditLogActionCreate,
+		EntityTable: db.TableNameUsers,
+		CreatedAt:   db.Timestampz(time.Now()),
+		Source:      dbgen.AuditLogSourcePortal,
+		NewValue:    mustMarshalJSON(&db.AuditLogUser{Name: "Test User", Email: "test@example.com"}),
+	}
+
+	ul2, err := serverWithParser.newUserAuditLog(ctx, standardLog)
+	if err != nil {
+		t.Fatalf("Expected no error for standard table, got: %v", err)
+	}
+	if ul2.Resource != "User" {
+		t.Errorf("Expected Resource to be 'User', got '%s'", ul2.Resource)
+	}
+
+	// Test without custom parser - custom table types should return empty fields
+	serverWithoutParser := &Server{
+		PlanService: planService,
+		Stage:       "production",
+	}
+
+	ul3, err := serverWithoutParser.newUserAuditLog(ctx, customLog)
+	if err != nil {
+		t.Fatalf("Expected no error without parser, got: %v", err)
+	}
+	if ul3.Resource != "" {
+		t.Errorf("Expected Resource to be empty without parser, got '%s'", ul3.Resource)
+	}
+}
+
 func mustMarshalJSON(v interface{}) []byte {
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -589,7 +669,7 @@ func TestCreateAuditLogsContext(t *testing.T) {
 
 func TestInitFromSubscriptionPlan(t *testing.T) {
 	planService := billing.NewPlanService(nil)
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	sub := &db.AuditLogSubscription{
 		Source:            "internal",
@@ -605,7 +685,7 @@ func TestInitFromSubscriptionPlan(t *testing.T) {
 }
 
 func TestInitFromPropertyOrgChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:  "Test Property",
@@ -628,7 +708,7 @@ func TestInitFromPropertyOrgChange(t *testing.T) {
 }
 
 func TestInitFromPropertyGrowthChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:   "Test Property",
@@ -654,7 +734,7 @@ func TestInitFromPropertyGrowthChange(t *testing.T) {
 }
 
 func TestInitFromPropertyMaxReplayCountChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:           "Test Property",
@@ -676,7 +756,7 @@ func TestInitFromPropertyMaxReplayCountChange(t *testing.T) {
 }
 
 func TestInitFromPropertyValidityChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:                "Test Property",
@@ -698,7 +778,7 @@ func TestInitFromPropertyValidityChange(t *testing.T) {
 }
 
 func TestInitFromPropertyAllowSubdomainsChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:            "Test Property",
@@ -720,7 +800,7 @@ func TestInitFromPropertyAllowSubdomainsChange(t *testing.T) {
 }
 
 func TestInitFromPropertyAllowLocalhostChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogProperty{
 		Name:           "Test Property",
@@ -743,7 +823,7 @@ func TestInitFromPropertyAllowLocalhostChange(t *testing.T) {
 
 func TestInitFromSubscriptionSourceChange(t *testing.T) {
 	planService := billing.NewPlanService(nil)
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	oldValue := &db.AuditLogSubscription{
 		Source: "internal",
@@ -764,7 +844,7 @@ func TestInitFromSubscriptionSourceChange(t *testing.T) {
 
 func TestInitFromSubscriptionCancelAtChange(t *testing.T) {
 	planService := billing.NewPlanService(nil)
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	now := time.Now()
 	later := now.Add(24 * time.Hour)
@@ -789,7 +869,7 @@ func TestInitFromSubscriptionCancelAtChange(t *testing.T) {
 }
 
 func TestInitFromAPIKeyPeriodChange(t *testing.T) {
-	ul := &userAuditLog{}
+	ul := &UserAuditLog{}
 
 	now := time.Now()
 

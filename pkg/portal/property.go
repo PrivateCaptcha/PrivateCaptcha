@@ -712,8 +712,8 @@ func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Reque
 	return &ViewModel{Model: ctx, View: propertyDashboardIntegrationsTemplate}, nil
 }
 
-func (s *Server) newPropertyAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetPropertyAuditLogsRow) []*userAuditLog {
-	result := make([]*userAuditLog, 0, len(logs))
+func (s *Server) newPropertyAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetPropertyAuditLogsRow) []*UserAuditLog {
+	result := make([]*UserAuditLog, 0, len(logs))
 
 	for _, log := range logs {
 		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {

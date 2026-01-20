@@ -64,6 +64,13 @@ type ViewModel struct {
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
 
+// AuditLogParser is a function type for parsing custom audit log types.
+// It receives the context, the raw audit log, and a pointer to the userAuditLog to populate.
+// If the parser handles the log, it should return true. If it returns false,
+// the default parsing logic will be used.
+// This allows extensions to add custom audit log types without modifying core code.
+type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) (handled bool, err error)
+
 type RequestContext struct {
 	Path        string
 	LoggedIn    bool
@@ -143,6 +150,7 @@ type Server struct {
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
 	AuditLogsFunc      AuditLogsConstructor
+	AuditLogParser     AuditLogParser
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
 }

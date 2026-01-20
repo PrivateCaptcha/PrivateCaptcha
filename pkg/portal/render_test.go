@@ -60,7 +60,7 @@ func stubAPIKey(name string) *userAPIKey {
 	}
 }
 
-func stubAuditLogs() []*userAuditLog {
+func stubAuditLogs() []*UserAuditLog {
 	tables := []string{
 		db.TableNameOrgUsers,
 		db.TableNameAPIKeys,
@@ -87,11 +87,11 @@ func stubAuditLogs() []*userAuditLog {
 		dbgen.AuditLogSourceApi,
 	}
 
-	result := make([]*userAuditLog, 0)
+	result := make([]*UserAuditLog, 0)
 
 	for _, table := range tables {
 		for _, action := range actions {
-			result = append(result, &userAuditLog{
+			result = append(result, &UserAuditLog{
 				UserName:  "User Name",
 				UserEmail: "foo@bar.com",
 				Action:    string(action),
