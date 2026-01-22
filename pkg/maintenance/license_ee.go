@@ -106,7 +106,7 @@ func doFetchActivation(ctx context.Context, licenseURL, licenseKey, hwid, versio
 	rlog := slog.With("requestID", rid)
 	rlog.DebugContext(ctx, "Sending license request", "URL", licenseURL)
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, common.NewRetriableError(err)
