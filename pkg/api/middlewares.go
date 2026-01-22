@@ -30,14 +30,16 @@ type UserLimiter interface {
 }
 
 type AuthMiddleware struct {
-	Store                 db.Implementor
-	PlanService           billing.PlanService
-	SitekeyChan           chan string
-	UsersChan             chan int32
-	BatchSize             int
-	SitekeyBackfillCancel context.CancelFunc
-	UsersBackfillCancel   context.CancelFunc
-	Limiter               UserLimiter
+	Store                       db.Implementor
+	PlanService                 billing.PlanService
+	SitekeyChan                 chan string
+	UsersChan                   chan int32
+	APIKeyLastUsedChan          chan int32
+	BatchSize                   int
+	SitekeyBackfillCancel       context.CancelFunc
+	UsersBackfillCancel         context.CancelFunc
+	APIKeyLastUsedBackfillCancel context.CancelFunc
+	Limiter                     UserLimiter
 	// this is a simple way to control negative cache spam, disabled by default
 	NegativeSitekeyThreshold uint
 }
@@ -136,16 +138,19 @@ func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService) *AuthMiddleware {
 	const batchSize = 10
+	const apiKeyLastUsedBatchSize = 100
 
 	am := &AuthMiddleware{
-		Store:                 store,
-		Limiter:               userLimiter,
-		PlanService:           planService,
-		SitekeyChan:           make(chan string, 100*batchSize),
-		UsersChan:             make(chan int32, 10*batchSize),
-		BatchSize:             batchSize,
-		SitekeyBackfillCancel: func() {},
-		UsersBackfillCancel:   func() {},
+		Store:                        store,
+		Limiter:                      userLimiter,
+		PlanService:                  planService,
+		SitekeyChan:                  make(chan string, 100*batchSize),
+		UsersChan:                    make(chan int32, 10*batchSize),
+		APIKeyLastUsedChan:           make(chan int32, 100*apiKeyLastUsedBatchSize),
+		BatchSize:                    batchSize,
+		SitekeyBackfillCancel:        func() {},
+		UsersBackfillCancel:          func() {},
+		APIKeyLastUsedBackfillCancel: func() {},
 	}
 
 	return am
@@ -164,14 +169,27 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay time.Duration) {
 		context.WithValue(userBackfillBaseCtx, common.TraceIDContextKey, "users_backfill"))
 	// NOTE: we use the same backfill delay because users processing is slower and sitekey channel will block on it
 	go common.ProcessBatchMap(usersBackfillCtx, am.UsersChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillUsersImpl)
+
+	// API key last used backfill - use generous timeouts and batch sizes since we don't need to update too often
+	const apiKeyLastUsedBatchSize = 100
+	const apiKeyLastUsedMaxBatchSize = 1000
+	var apiKeyLastUsedBackfillCtx context.Context
+	apiKeyLastUsedBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
+	apiKeyLastUsedBackfillCtx, am.APIKeyLastUsedBackfillCancel = context.WithCancel(
+		context.WithValue(apiKeyLastUsedBackfillBaseCtx, common.TraceIDContextKey, "apikey_lastused_backfill"))
+	// Use a more generous delay (5x the regular backfill delay) since we don't need frequent updates
+	apiKeyLastUsedDelay := backfillDelay * 5
+	go common.ProcessBatchMap(apiKeyLastUsedBackfillCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
 }
 
 func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	am.SitekeyBackfillCancel()
 	am.UsersBackfillCancel()
+	am.APIKeyLastUsedBackfillCancel()
 	close(am.SitekeyChan)
 	close(am.UsersChan)
+	close(am.APIKeyLastUsedChan)
 }
 
 // we cache properties and send owners down the background pipeline
@@ -231,6 +249,25 @@ func (am *AuthMiddleware) backfillUsersImpl(ctx context.Context, batch map[int32
 	}
 
 	// we ignore errors as both of the above are not critical to retry the batch
+	return nil
+}
+
+// we update last_used_at for API keys that were used
+func (am *AuthMiddleware) backfillAPIKeyLastUsedImpl(ctx context.Context, batch map[int32]uint) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	apiKeyIDs := make([]int32, 0, len(batch))
+	for apiKeyID := range batch {
+		apiKeyIDs = append(apiKeyIDs, apiKeyID)
+	}
+
+	if err := am.Store.Impl().UpdateAPIKeysLastUsedAt(ctx, apiKeyIDs); err != nil {
+		slog.ErrorContext(ctx, "Failed to update API keys last used at", common.ErrAttr(err))
+		return err
+	}
+
 	return nil
 }
 
@@ -421,6 +458,9 @@ func (am *AuthMiddleware) APIKey(keyFunc func(r *http.Request) string, scope dbg
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 					return
 				}
+
+				// track API key usage for last_used_at updates in background
+				am.APIKeyLastUsedChan <- apiKey.ID
 
 				ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
 			} else {

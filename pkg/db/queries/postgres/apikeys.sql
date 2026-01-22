@@ -21,3 +21,6 @@ DELETE FROM backend.apikeys WHERE user_id = $1;
 
 -- name: DeleteAPIKey :one
 DELETE FROM backend.apikeys WHERE id=$1 AND user_id = $2 RETURNING *;
+
+-- name: UpdateAPIKeysLastUsedAt :exec
+UPDATE backend.apikeys SET last_used_at = NOW() WHERE id = ANY($1::int[]);

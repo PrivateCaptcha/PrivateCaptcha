@@ -1175,3 +1175,78 @@ func TestSiteVerifyInvalidAPIKeyLength(t *testing.T) {
 		t.Errorf("Expected status BadRequest for invalid API key length, got %d", resp.StatusCode)
 	}
 }
+
+func TestAPIKeyLastUsedAtUpdatedOnVerify(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify last_used_at is initially NULL
+	if apikey.LastUsedAt.Valid {
+		t.Fatalf("Expected last_used_at to be NULL initially, got %v", apikey.LastUsedAt.Time)
+	}
+
+	secret := db.UUIDToSecret(apikey.ExternalID)
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+
+	// Clear cache to ensure we test the actual DB value
+	cache.Delete(ctx, db.APIKeyCacheKey(secret))
+	cache.Delete(ctx, db.UserAPIKeysCacheKey(user.ID))
+
+	// Make a verify request
+	resp, err := verifySuite(payload, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	// Wait for the backfill to process (generous timeout for batch processing)
+	time.Sleep(2 * time.Second)
+
+	// Clear cache again to fetch fresh value from DB
+	cache.Delete(ctx, db.APIKeyCacheKey(secret))
+	cache.Delete(ctx, db.UserAPIKeysCacheKey(user.ID))
+
+	// Retrieve the API key from the database
+	updatedKey, err := store.Impl().RetrieveAPIKey(ctx, secret)
+	if err != nil {
+		t.Fatalf("Failed to retrieve API key: %v", err)
+	}
+
+	// Verify last_used_at is now set
+	if !updatedKey.LastUsedAt.Valid {
+		t.Fatal("Expected last_used_at to be set after API key usage")
+	}
+
+	// Verify the timestamp is recent (within last 10 seconds)
+	if time.Since(updatedKey.LastUsedAt.Time) > 10*time.Second {
+		t.Errorf("last_used_at timestamp is too old: %v", updatedKey.LastUsedAt.Time)
+	}
+}

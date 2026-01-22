@@ -13,7 +13,7 @@ import (
 )
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO backend.apikeys (name, user_id, expires_at, requests_per_second, requests_burst, period, scope, readonly, org_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly
+INSERT INTO backend.apikeys (name, user_id, expires_at, requests_per_second, requests_burst, period, scope, readonly, org_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type CreateAPIKeyParams struct {
@@ -57,12 +57,13 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*A
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
 }
 
 const deleteAPIKey = `-- name: DeleteAPIKey :one
-DELETE FROM backend.apikeys WHERE id=$1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly
+DELETE FROM backend.apikeys WHERE id=$1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type DeleteAPIKeyParams struct {
@@ -89,6 +90,7 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*A
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
 }
@@ -103,7 +105,7 @@ func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) err
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly FROM backend.apikeys WHERE external_id = $1
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at FROM backend.apikeys WHERE external_id = $1
 `
 
 func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error) {
@@ -125,12 +127,13 @@ func (q *Queries) GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.U
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
 }
 
 const getUserAPIKeyByName = `-- name: GetUserAPIKeyByName :one
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly FROM backend.apikeys WHERE user_id = $1 AND name = $2 AND expires_at > NOW()
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at FROM backend.apikeys WHERE user_id = $1 AND name = $2 AND expires_at > NOW()
 `
 
 type GetUserAPIKeyByNameParams struct {
@@ -157,12 +160,13 @@ func (q *Queries) GetUserAPIKeyByName(ctx context.Context, arg *GetUserAPIKeyByN
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
 }
 
 const getUserAPIKeys = `-- name: GetUserAPIKeys :many
-SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly FROM backend.apikeys WHERE user_id = $1 AND expires_at > NOW()
+SELECT id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at FROM backend.apikeys WHERE user_id = $1 AND expires_at > NOW()
 `
 
 func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error) {
@@ -190,6 +194,7 @@ func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*AP
 			&i.Period,
 			&i.Scope,
 			&i.Readonly,
+			&i.LastUsedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -202,7 +207,7 @@ func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*AP
 }
 
 const rotateAPIKey = `-- name: RotateAPIKey :one
-UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly
+UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type RotateAPIKeyParams struct {
@@ -229,12 +234,13 @@ func (q *Queries) RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*A
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
 }
 
 const updateAPIKey = `-- name: UpdateAPIKey :one
-UPDATE backend.apikeys SET expires_at = $1, enabled = $2, updated_at = NOW() WHERE external_id = $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly
+UPDATE backend.apikeys SET expires_at = $1, enabled = $2, updated_at = NOW() WHERE external_id = $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type UpdateAPIKeyParams struct {
@@ -262,6 +268,16 @@ func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*A
 		&i.Period,
 		&i.Scope,
 		&i.Readonly,
+		&i.LastUsedAt,
 	)
 	return &i, err
+}
+
+const updateAPIKeysLastUsedAt = `-- name: UpdateAPIKeysLastUsedAt :exec
+UPDATE backend.apikeys SET last_used_at = NOW() WHERE id = ANY($1::int[])
+`
+
+func (q *Queries) UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) error {
+	_, err := q.db.Exec(ctx, updateAPIKeysLastUsedAt, dollar_1)
+	return err
 }

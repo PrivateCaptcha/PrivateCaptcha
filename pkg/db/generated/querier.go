@@ -92,6 +92,7 @@ type Querier interface {
 	TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) error
 	TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) error
 	UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error)
+	UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) error
 	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error
 	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) error
