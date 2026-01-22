@@ -138,7 +138,7 @@ func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService) *AuthMiddleware {
 	const batchSize = 10
-	const apiKeyLastUsedBatchSize = 100
+	const apiKeyLastUsedChannelSize = 10000
 
 	am := &AuthMiddleware{
 		Store:                        store,
@@ -146,7 +146,7 @@ func NewAuthMiddleware(store db.Implementor,
 		PlanService:                  planService,
 		SitekeyChan:                  make(chan string, 100*batchSize),
 		UsersChan:                    make(chan int32, 10*batchSize),
-		APIKeyLastUsedChan:           make(chan int32, 100*apiKeyLastUsedBatchSize),
+		APIKeyLastUsedChan:           make(chan int32, apiKeyLastUsedChannelSize),
 		BatchSize:                    batchSize,
 		SitekeyBackfillCancel:        func() {},
 		UsersBackfillCancel:          func() {},
