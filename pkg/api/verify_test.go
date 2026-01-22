@@ -1194,10 +1194,6 @@ func TestAPIKeyLastUsedAtUpdatedOnVerify(t *testing.T) {
 	}
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
-	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
 	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
@@ -1211,26 +1207,41 @@ func TestAPIKeyLastUsedAtUpdatedOnVerify(t *testing.T) {
 	}
 
 	secret := db.UUIDToSecret(apikey.ExternalID)
-	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
 
-	// Clear cache to ensure we test the actual DB value
-	cache.Delete(ctx, db.APIKeyCacheKey(secret))
-	cache.Delete(ctx, db.UserAPIKeysCacheKey(user.ID))
-
-	// Make a verify request
-	resp, err := verifySuite(payload, secret, sitekey)
+	// First request - this will populate the cache (but won't trigger backfill since key wasn't in cache)
+	puzzleStr1, solutionsStr1, err := solutionsSuite(ctx, sitekey, property.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}
+	payload1 := fmt.Sprintf("%s.%s", solutionsStr1, puzzleStr1)
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
+	resp1, err := verifySuite(payload1, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp1.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d for first request", resp1.StatusCode)
+	}
+
+	// Now the API key should be in cache, make a second request to trigger the backfill
+	puzzleStr2, solutionsStr2, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload2 := fmt.Sprintf("%s.%s", solutionsStr2, puzzleStr2)
+
+	resp2, err := verifySuite(payload2, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d for second request", resp2.StatusCode)
 	}
 
 	// Wait for the backfill to process (generous timeout for batch processing)
 	time.Sleep(2 * time.Second)
 
-	// Clear cache again to fetch fresh value from DB
+	// Clear cache to fetch fresh value from DB
 	cache.Delete(ctx, db.APIKeyCacheKey(secret))
 	cache.Delete(ctx, db.UserAPIKeysCacheKey(user.ID))
 
