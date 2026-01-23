@@ -1175,3 +1175,89 @@ func TestSiteVerifyInvalidAPIKeyLength(t *testing.T) {
 		t.Errorf("Expected status BadRequest for invalid API key length, got %d", resp.StatusCode)
 	}
 }
+
+func TestAPIKeyLastUsedAtUpdatedOnVerify(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify last_used_at is initially NULL
+	if apikey.LastUsedAt.Valid {
+		t.Fatalf("Expected last_used_at to be NULL initially, got %v", apikey.LastUsedAt.Time)
+	}
+
+	secret := db.UUIDToSecret(apikey.ExternalID)
+
+	// First request - this will populate the cache (but won't trigger backfill since key wasn't in cache)
+	puzzleStr1, solutionsStr1, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload1 := fmt.Sprintf("%s.%s", solutionsStr1, puzzleStr1)
+
+	resp1, err := verifySuite(payload1, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp1.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d for first request", resp1.StatusCode)
+	}
+
+	// Now the API key should be in cache, make a second request to trigger the backfill
+	puzzleStr2, solutionsStr2, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload2 := fmt.Sprintf("%s.%s", solutionsStr2, puzzleStr2)
+
+	resp2, err := verifySuite(payload2, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp2.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected submit status code %d for second request", resp2.StatusCode)
+	}
+
+	// Wait for the backfill to process (generous timeout for batch processing)
+	time.Sleep(2 * time.Second)
+
+	// Clear cache to fetch fresh value from DB
+	cache.Delete(ctx, db.APIKeyCacheKey(secret))
+	cache.Delete(ctx, db.UserAPIKeysCacheKey(user.ID))
+
+	// Retrieve the API key from the database
+	updatedKey, err := store.Impl().RetrieveAPIKey(ctx, secret)
+	if err != nil {
+		t.Fatalf("Failed to retrieve API key: %v", err)
+	}
+
+	// Verify last_used_at is now set
+	if !updatedKey.LastUsedAt.Valid {
+		t.Fatal("Expected last_used_at to be set after API key usage")
+	}
+
+	// Verify the timestamp is recent (within last 10 seconds)
+	if time.Since(updatedKey.LastUsedAt.Time) > 10*time.Second {
+		t.Errorf("last_used_at timestamp is too old: %v", updatedKey.LastUsedAt.Time)
+	}
+}

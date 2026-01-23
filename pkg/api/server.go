@@ -91,8 +91,10 @@ type Server struct {
 
 type apiKeyOwnerSource struct {
 	Store     db.Implementor
+	Auth      *AuthMiddleware
 	cachedKey *dbgen.APIKey
 	scope     dbgen.ApiKeyScope
+	wasCached bool
 }
 
 var _ puzzle.OwnerIDSource = (*apiKeyOwnerSource)(nil)
@@ -100,6 +102,7 @@ var _ puzzle.OwnerIDSource = (*apiKeyOwnerSource)(nil)
 func (a *apiKeyOwnerSource) apiKey(ctx context.Context) (*dbgen.APIKey, error) {
 	if apiKey, ok := ctx.Value(common.APIKeyContextKey).(*dbgen.APIKey); ok && (apiKey != nil) {
 		a.cachedKey = apiKey
+		a.wasCached = true
 		return apiKey, nil
 	}
 
@@ -109,6 +112,7 @@ func (a *apiKeyOwnerSource) apiKey(ctx context.Context) (*dbgen.APIKey, error) {
 		key, err := a.Store.Impl().RetrieveAPIKey(ctx, secret)
 		if key != nil {
 			a.cachedKey = key
+			a.wasCached = false
 		}
 		return key, err
 	}
@@ -131,6 +135,12 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 
 	if apiKey.Scope != a.scope {
 		return -1, nil, errAPIKeyScope
+	}
+
+	// Track API key usage for last_used_at updates in background
+	// Only track if key was not cached (retrieved from DB) and Auth is available
+	if !a.wasCached && (a.Auth != nil) && (apiKey != nil) {
+		a.Auth.refreshAPIKeyLastUsed(ctx, apiKey.ID)
 	}
 
 	var orgID *int32
@@ -339,7 +349,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePuzzle}
+	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
 	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
 	if err != nil {
 		switch err {
@@ -410,7 +420,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, scope: dbgen.ApiKeyScopePuzzle}
+	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
 	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
 	if err != nil {
 		switch err {

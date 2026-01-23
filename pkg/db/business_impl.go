@@ -1629,6 +1629,26 @@ func (impl *BusinessStoreImpl) DeleteAPIKey(ctx context.Context, user *dbgen.Use
 	return auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) UpdateAPIKeysLastUsedAt(ctx context.Context, apiKeyIDs []int32) error {
+	if len(apiKeyIDs) == 0 {
+		return nil
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	err := impl.querier.UpdateAPIKeysLastUsedAt(ctx, apiKeyIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update API keys last used at", "count", len(apiKeyIDs), common.ErrAttr(err))
+		return err
+	}
+
+	slog.DebugContext(ctx, "Updated API keys last used at", "count", len(apiKeyIDs))
+
+	return nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Context, userIDs []int32) ([]*dbgen.User, error) {
 	if len(userIDs) == 0 {
 		return []*dbgen.User{}, nil

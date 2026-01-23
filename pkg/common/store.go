@@ -72,6 +72,7 @@ const (
 	UserLimitEventType MetricEventType = "user_limit"
 	SessionEventType   MetricEventType = "session"
 	SitekeyEventType   MetricEventType = "sitekey"
+	APIKeyEventType    MetricEventType = "apikey"
 )
 
 type BaseMetrics interface {

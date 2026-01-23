@@ -126,6 +126,7 @@ type userAPIKey struct {
 	OrgName           string
 	ExpiresSoon       bool
 	ReadOnly          bool
+	LastUsedAt        string
 }
 
 type settingsAPIKeysRenderContext struct {
@@ -155,6 +156,11 @@ func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.Identif
 		scope = apiKeyScopePuzzle
 	}
 
+	var lastUsedAt string
+	if key.LastUsedAt.Valid {
+		lastUsedAt = key.LastUsedAt.Time.Format("02 Jan 2006")
+	}
+
 	return &userAPIKey{
 		ID:                hasher.Encrypt(int(key.ID)),
 		Name:              key.Name,
@@ -163,6 +169,7 @@ func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.Identif
 		RequestsPerMinute: int(requestsPerMinute),
 		Scope:             scope,
 		ReadOnly:          key.Readonly,
+		LastUsedAt:        lastUsedAt,
 	}
 }
 

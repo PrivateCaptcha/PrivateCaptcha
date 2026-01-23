@@ -35,9 +35,11 @@ type AuthMiddleware struct {
 	PlanService           billing.PlanService
 	SitekeyChan           chan string
 	UsersChan             chan int32
+	APIKeyLastUsedChan    chan int32
 	BatchSize             int
 	SitekeyBackfillCancel context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
+	APIKeyLastUsedCancel  context.CancelFunc
 	Limiter               UserLimiter
 	backpressureTimeout   time.Duration
 	Metrics               common.BaseMetrics
@@ -140,6 +142,7 @@ func NewAuthMiddleware(store db.Implementor,
 	planService billing.PlanService,
 	metrics common.BaseMetrics) *AuthMiddleware {
 	const batchSize = 10
+	const apiKeyLastUsedChannelSize = 250
 
 	am := &AuthMiddleware{
 		Store:                 store,
@@ -147,10 +150,12 @@ func NewAuthMiddleware(store db.Implementor,
 		PlanService:           planService,
 		SitekeyChan:           make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
+		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
 		BatchSize:             batchSize,
 		Metrics:               metrics,
 		SitekeyBackfillCancel: func() {},
 		UsersBackfillCancel:   func() {},
+		APIKeyLastUsedCancel:  func() {},
 		backpressureTimeout:   defaultBackpressureTimeout,
 	}
 
@@ -172,14 +177,27 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 		context.WithValue(userBackfillBaseCtx, common.TraceIDContextKey, "users_backfill"))
 	// NOTE: we use the same backfill delay because users processing is slower and sitekey channel will block on it
 	go common.ProcessBatchMap(usersBackfillCtx, am.UsersChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillUsersImpl)
+
+	// API key last used - use generous timeouts and batch sizes since we don't need to update too often
+	const apiKeyLastUsedBatchSize = 100
+	const apiKeyLastUsedMaxBatchSize = 1000
+	var apiKeyLastUsedCtx context.Context
+	apiKeyLastUsedBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
+	apiKeyLastUsedCtx, am.APIKeyLastUsedCancel = context.WithCancel(
+		context.WithValue(apiKeyLastUsedBaseCtx, common.TraceIDContextKey, "apikey_lastused"))
+	// Use a more generous delay (5x the regular backfill delay) since we don't need frequent updates
+	apiKeyLastUsedDelay := backfillDelay * 5
+	go common.ProcessBatchMap(apiKeyLastUsedCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
 }
 
 func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	am.SitekeyBackfillCancel()
 	am.UsersBackfillCancel()
+	am.APIKeyLastUsedCancel()
 	close(am.SitekeyChan)
 	close(am.UsersChan)
+	close(am.APIKeyLastUsedChan)
 }
 
 // we cache properties and send owners down the background pipeline
@@ -263,6 +281,25 @@ func (am *AuthMiddleware) backfillUsersImpl(ctx context.Context, batch map[int32
 	return nil
 }
 
+// we update last_used_at for API keys that were used
+func (am *AuthMiddleware) backfillAPIKeyLastUsedImpl(ctx context.Context, batch map[int32]uint) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	apiKeyIDs := make([]int32, 0, len(batch))
+	for apiKeyID := range batch {
+		apiKeyIDs = append(apiKeyIDs, apiKeyID)
+	}
+
+	if err := am.Store.Impl().UpdateAPIKeysLastUsedAt(ctx, apiKeyIDs); err != nil {
+		slog.ErrorContext(ctx, "Failed to update API keys last used at", common.ErrAttr(err))
+		return err
+	}
+
+	return nil
+}
+
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
 	return len(origin) > 0, nil
 }
@@ -308,6 +345,19 @@ func (am *AuthMiddleware) refreshPropertyBySitekey(ctx context.Context, sitekey 
 		slog.WarnContext(ctx, "Context cancelled for property refresh", "sitekey", sitekey, common.ErrAttr(ctx.Err()))
 	case <-timer.C:
 		am.Metrics.ObserveEventDropped(common.SitekeyEventType)
+	}
+}
+
+func (am *AuthMiddleware) refreshAPIKeyLastUsed(ctx context.Context, id int32) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case am.APIKeyLastUsedChan <- id:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for API key last used refresh", "id", id, common.ErrAttr(ctx.Err()))
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.APIKeyEventType)
 	}
 }
 
@@ -458,6 +508,8 @@ func (am *AuthMiddleware) APIKey(keyFunc func(r *http.Request) string, scope dbg
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 					return
 				}
+
+				am.refreshAPIKeyLastUsed(ctx, apiKey.ID)
 
 				ctx = context.WithValue(ctx, common.APIKeyContextKey, apiKey)
 			} else {
