@@ -30,16 +30,16 @@ type UserLimiter interface {
 }
 
 type AuthMiddleware struct {
-	Store                       db.Implementor
-	PlanService                 billing.PlanService
-	SitekeyChan                 chan string
-	UsersChan                   chan int32
-	APIKeyLastUsedChan          chan int32
-	BatchSize                   int
-	SitekeyBackfillCancel       context.CancelFunc
-	UsersBackfillCancel         context.CancelFunc
-	APIKeyLastUsedBackfillCancel context.CancelFunc
-	Limiter                     UserLimiter
+	Store                    db.Implementor
+	PlanService              billing.PlanService
+	SitekeyChan              chan string
+	UsersChan                chan int32
+	APIKeyLastUsedChan       chan int32
+	BatchSize                int
+	SitekeyBackfillCancel    context.CancelFunc
+	UsersBackfillCancel      context.CancelFunc
+	APIKeyLastUsedCancel     context.CancelFunc
+	Limiter                  UserLimiter
 	// this is a simple way to control negative cache spam, disabled by default
 	NegativeSitekeyThreshold uint
 }
@@ -138,19 +138,19 @@ func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService) *AuthMiddleware {
 	const batchSize = 10
-	const apiKeyLastUsedChannelSize = 10000
+	const apiKeyLastUsedChannelSize = 250
 
 	am := &AuthMiddleware{
-		Store:                        store,
-		Limiter:                      userLimiter,
-		PlanService:                  planService,
-		SitekeyChan:                  make(chan string, 100*batchSize),
-		UsersChan:                    make(chan int32, 10*batchSize),
-		APIKeyLastUsedChan:           make(chan int32, apiKeyLastUsedChannelSize),
-		BatchSize:                    batchSize,
-		SitekeyBackfillCancel:        func() {},
-		UsersBackfillCancel:          func() {},
-		APIKeyLastUsedBackfillCancel: func() {},
+		Store:                 store,
+		Limiter:               userLimiter,
+		PlanService:           planService,
+		SitekeyChan:           make(chan string, 100*batchSize),
+		UsersChan:             make(chan int32, 10*batchSize),
+		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
+		BatchSize:             batchSize,
+		SitekeyBackfillCancel: func() {},
+		UsersBackfillCancel:   func() {},
+		APIKeyLastUsedCancel:  func() {},
 	}
 
 	return am
@@ -170,23 +170,23 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay time.Duration) {
 	// NOTE: we use the same backfill delay because users processing is slower and sitekey channel will block on it
 	go common.ProcessBatchMap(usersBackfillCtx, am.UsersChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillUsersImpl)
 
-	// API key last used backfill - use generous timeouts and batch sizes since we don't need to update too often
+	// API key last used - use generous timeouts and batch sizes since we don't need to update too often
 	const apiKeyLastUsedBatchSize = 100
 	const apiKeyLastUsedMaxBatchSize = 1000
-	var apiKeyLastUsedBackfillCtx context.Context
-	apiKeyLastUsedBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
-	apiKeyLastUsedBackfillCtx, am.APIKeyLastUsedBackfillCancel = context.WithCancel(
-		context.WithValue(apiKeyLastUsedBackfillBaseCtx, common.TraceIDContextKey, "apikey_lastused_backfill"))
+	var apiKeyLastUsedCtx context.Context
+	apiKeyLastUsedBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
+	apiKeyLastUsedCtx, am.APIKeyLastUsedCancel = context.WithCancel(
+		context.WithValue(apiKeyLastUsedBaseCtx, common.TraceIDContextKey, "apikey_lastused"))
 	// Use a more generous delay (5x the regular backfill delay) since we don't need frequent updates
 	apiKeyLastUsedDelay := backfillDelay * 5
-	go common.ProcessBatchMap(apiKeyLastUsedBackfillCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
+	go common.ProcessBatchMap(apiKeyLastUsedCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
 }
 
 func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	am.SitekeyBackfillCancel()
 	am.UsersBackfillCancel()
-	am.APIKeyLastUsedBackfillCancel()
+	am.APIKeyLastUsedCancel()
 	close(am.SitekeyChan)
 	close(am.UsersChan)
 	close(am.APIKeyLastUsedChan)
