@@ -138,8 +138,8 @@ func NewService() *Service {
 
 	eventDropCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Namespace: MetricsNamespaceAPI,
-			Subsystem: MetricsNamespaceServer,
+			Namespace: MetricsNamespaceServer,
+			Subsystem: platformMetricsSubsystem,
 			Name:      "drop_total",
 			Help:      "Total number of events dropped",
 		},
