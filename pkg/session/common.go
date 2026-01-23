@@ -189,10 +189,10 @@ func (s *Session) Data() *SessionData {
 	return s.data
 }
 
-func (s *Session) Set(key SessionKey, value SessionValue) error {
+func (s *Session) Set(ctx context.Context, key SessionKey, value SessionValue) error {
 	s.data.set(key, value)
 
-	return s.store.Update(s)
+	return s.store.Update(ctx, s)
 }
 
 func (s *Session) ID() string {
@@ -208,16 +208,16 @@ func (s *Session) Get(ctx context.Context, key SessionKey) SessionValue {
 	return v
 }
 
-func (s *Session) Delete(key SessionKey) error {
+func (s *Session) Delete(ctx context.Context, key SessionKey) error {
 	s.data.delete(key)
 
-	return s.store.Update(s)
+	return s.store.Update(ctx, s)
 }
 
 type Store interface {
 	Start(ctx context.Context, interval time.Duration)
 	Init(ctx context.Context, session *Session) error
 	Read(ctx context.Context, sid string, skipCache bool) (*Session, error)
-	Update(session *Session) error
+	Update(ctx context.Context, session *Session) error
 	Destroy(ctx context.Context, sid string) error
 }

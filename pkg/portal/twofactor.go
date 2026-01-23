@@ -50,7 +50,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		if referer := r.Header.Get(common.HeaderReferer); len(referer) > 0 {
 			if inviteID := s.parseOrgInviteIDFromURL(referer); inviteID > 0 {
 				slog.DebugContext(ctx, "Parsed org invite ID from Referer header", "inviteID", inviteID)
-				_ = sess.Set(session.KeyOrgInviteID, inviteID)
+				_ = sess.Set(ctx, session.KeyOrgInviteID, inviteID)
 			}
 		}
 	}
@@ -92,7 +92,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
 		if user, _, err := s.doRegister(ctx, sess); err == nil {
-			_ = sess.Set(session.KeyUserID, user.ID)
+			_ = sess.Set(ctx, session.KeyUserID, user.ID)
 			// NOTE: we can redirect user to create the first property instead of dashboard, but currently it's fine
 			// redirectURL = s.partsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
 		} else {
@@ -105,15 +105,15 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	job := s.Jobs.LoginUser(sess)
 	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
 
-	_ = sess.Set(session.KeyLoginStep, loginStepCompleted)
-	_ = sess.Delete(session.KeyTwoFactorCode)
-	_ = sess.Delete(session.KeyTwoFactorCodeTimestamp)
-	_ = sess.Delete(session.KeyUserEmail)
-	_ = sess.Set(session.KeyPersistent, true)
+	_ = sess.Set(ctx, session.KeyLoginStep, loginStepCompleted)
+	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
+	_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
+	_ = sess.Delete(ctx, session.KeyUserEmail)
+	_ = sess.Set(ctx, session.KeyPersistent, true)
 
 	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)
-		_ = sess.Delete(session.KeyOrgInviteID)
+		_ = sess.Delete(ctx, session.KeyOrgInviteID)
 		// we can only rely on cache because if the user is redirected to portal root, they still can join the org later
 		if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, orgInviteID); err == nil {
 			redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(invite.OrgID)))
@@ -125,7 +125,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
-		_ = sess.Delete(session.KeyReturnURL)
+		_ = sess.Delete(ctx, session.KeyReturnURL)
 		common.Redirect(s.RelURL(returnURL), http.StatusOK, w, r)
 	} else {
 		redirectURL := s.RelURL("/")
@@ -159,8 +159,8 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = sess.Set(session.KeyTwoFactorCode, code)
-	_ = sess.Set(session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
+	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
+	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	s.render(w, r, "login/resend.html", renderContextNothing)
 }
 

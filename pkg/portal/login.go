@@ -151,16 +151,16 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = sess.Set(session.KeyLoginStep, loginStepSignInVerify)
-	_ = sess.Set(session.KeyUserEmail, user.Email)
-	_ = sess.Set(session.KeyUserName, user.Name)
-	_ = sess.Set(session.KeyTwoFactorCode, code)
-	_ = sess.Set(session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
-	_ = sess.Set(session.KeyUserID, user.ID)
+	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify)
+	_ = sess.Set(ctx, session.KeyUserEmail, user.Email)
+	_ = sess.Set(ctx, session.KeyUserName, user.Name)
+	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
+	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
+	_ = sess.Set(ctx, session.KeyUserID, user.ID)
 	// this is needed in case we will be routed to another server that does not have our session in memory
 	// (previously we persisted ONLY logged in sessions, but if we're rerouted during login, it will break)
 	// this should be OK now because we verified that user is a registered user AND they solved captcha
-	_ = sess.Set(session.KeyPersistent, true)
+	_ = sess.Set(ctx, session.KeyPersistent, true)
 
 	data.Token = s.XSRF.Token(email)
 	data.Email = common.MaskEmail(email, '*')

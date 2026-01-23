@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	sessionBatchSize = 20
-	sessionCacheTTL  = 3 * time.Hour
+	sessionBatchSize           = 20
+	sessionCacheTTL            = 3 * time.Hour
+	sessionBackpressureTimeout = 200 * time.Millisecond
 )
 
 type SessionStore struct {
@@ -21,14 +22,16 @@ type SessionStore struct {
 	batchSize     int
 	processCancel context.CancelFunc
 	persistKey    session.SessionKey
+	metrics       common.BaseMetrics
 }
 
-func NewSessionStore(store Implementor, persistKey session.SessionKey) *SessionStore {
+func NewSessionStore(store Implementor, persistKey session.SessionKey, metrics common.BaseMetrics) *SessionStore {
 	return &SessionStore{
 		store:         store,
 		persistChan:   make(chan string, sessionBatchSize),
 		batchSize:     sessionBatchSize,
 		persistKey:    persistKey,
+		metrics:       metrics,
 		processCancel: func() {},
 	}
 }
@@ -65,10 +68,16 @@ func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*
 	return session.NewSession(sd, ss), nil
 }
 
-func (ss *SessionStore) Update(sd *session.Session) error {
-	ss.persistChan <- sd.ID()
-
-	return nil
+func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
+	select {
+	case ss.persistChan <- sd.ID():
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(sessionBackpressureTimeout):
+		ss.metrics.ObserveEventDropped(common.SessionEventType)
+		return nil
+	}
 }
 
 func (ss *SessionStore) TTL() time.Duration {

@@ -451,7 +451,7 @@ func (s *Server) private(next http.Handler) http.Handler {
 
 		// for HTMX requests we don't want to do it (as they are mostly "background")
 		if _, ok := r.Header[common.HeaderHtmxRequest]; !ok {
-			_ = sess.Set(session.KeyReturnURL, r.URL.RequestURI())
+			_ = sess.Set(ctx, session.KeyReturnURL, r.URL.RequestURI())
 		}
 
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)

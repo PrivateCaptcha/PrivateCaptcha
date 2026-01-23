@@ -37,7 +37,7 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 				slog.ErrorContext(ctx, "Mismatch between notification ID in session", "session", notificationID, "param", id)
 			}
 		}
-		if derr := sess.Delete(session.KeyNotificationID); derr != nil {
+		if derr := sess.Delete(ctx, session.KeyNotificationID); derr != nil {
 			slog.ErrorContext(ctx, "Failed to dismiss notification", "id", id, common.ErrAttr(derr))
 		} else {
 			slog.InfoContext(ctx, "Dismissed notification", "id", id)

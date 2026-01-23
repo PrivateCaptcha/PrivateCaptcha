@@ -185,7 +185,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		IDHasher:           idHasher,
 		AsyncTasks:         asyncTasksJob,
 	}
-	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/); err != nil {
+	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
 		return err
 	}
 
@@ -195,7 +195,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
-	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent)
+	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
 	portalServer := &portal.Server{
 		Stage:      stage,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
@@ -23,8 +24,8 @@ func setupSessionSuite(ctx context.Context, manager *session.Manager, t *testing
 	if sess == nil {
 		t.Fatal("session was not started")
 	}
-	sess.Set(session.KeyUserName, t.Name())
-	sess.Set(session.KeyPersistent, true)
+	sess.Set(ctx, session.KeyUserName, t.Name())
+	sess.Set(ctx, session.KeyPersistent, true)
 
 	resp1 := w.Result()
 	idx := slices.IndexFunc(resp1.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
@@ -61,7 +62,7 @@ func TestPersistentSession(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	sessionStore := db.NewSessionStore(store, session.KeyPersistent)
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, monitoring.NewStub())
 
 	manager := &session.Manager{
 		CookieName:  "pcsid",
@@ -100,7 +101,7 @@ func TestDeleteSession(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	sessionStore := db.NewSessionStore(store, session.KeyPersistent)
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, monitoring.NewStub())
 
 	manager := &session.Manager{
 		CookieName:  "pcsid",

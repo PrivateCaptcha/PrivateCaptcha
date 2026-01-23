@@ -87,7 +87,7 @@ func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
 
 		slog.DebugContext(ctx, "Fetching system notification for user", "userID", userID)
 		if n, err := j.Store.Impl().RetrieveSystemUserNotification(ctx, time.Now().UTC(), userID); err == nil {
-			_ = j.Sess.Set(session.KeyNotificationID, n.ID)
+			_ = j.Sess.Set(ctx, session.KeyNotificationID, n.ID)
 		}
 	} else {
 		slog.ErrorContext(ctx, "UserID not found in session")

@@ -33,6 +33,7 @@ const (
 	methodLabel     = "label"
 	handlerIDLabel  = "handler"
 	serviceLabel    = "service"
+	typeLabel       = "type"
 )
 
 type Service struct {
@@ -45,6 +46,7 @@ type Service struct {
 	apiErrorCounter        *prometheus.CounterVec
 	puzzleCounter          *prometheus.CounterVec
 	verifyCounter          *prometheus.CounterVec
+	dropCounter            *prometheus.CounterVec
 	hitRatioGauge          *prometheus.GaugeVec
 	clickhouseHealthGauge  *prometheus.GaugeVec
 	postgresHealthGauge    *prometheus.GaugeVec
@@ -134,6 +136,17 @@ func NewService() *Service {
 	)
 	reg.MustRegister(apiErrorCounter)
 
+	eventDropCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespaceAPI,
+			Subsystem: MetricsNamespaceServer,
+			Name:      "drop_total",
+			Help:      "Total number of events dropped",
+		},
+		[]string{typeLabel},
+	)
+	reg.MustRegister(eventDropCounter)
+
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespacePortal,
@@ -216,6 +229,7 @@ func NewService() *Service {
 		postgresHealthGauge:   postgresHealthGauge,
 		portalErrorCounter:    portalErrorCounter,
 		apiErrorCounter:       apiErrorCounter,
+		dropCounter:           eventDropCounter,
 	}
 }
 
@@ -274,6 +288,12 @@ func (s *Service) ObservePuzzleVerified(userID int32, result string, isStub bool
 		stubLabel:   strconv.FormatBool(isStub),
 		resultLabel: result,
 		userIDLabel: strconv.Itoa(int(userID)),
+	}).Inc()
+}
+
+func (s *Service) ObserveEventDropped(eventType common.MetricEventType) {
+	s.dropCounter.With(prometheus.Labels{
+		typeLabel: string(eventType),
 	}).Inc()
 }
 

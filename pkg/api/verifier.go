@@ -331,7 +331,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 
 	tnow := time.Now()
 	baseDifficulty := v.baseDifficultyOverride(r)
-	puzzleDifficulty, _ := levels.DifficultyEx(fingerprint, property, baseDifficulty, tnow)
+	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, property, baseDifficulty, tnow)
 
 	puzzleID := puzzle.NextPuzzleID()
 	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
@@ -342,5 +342,5 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 	slog.Log(ctx, common.LevelTrace, "Prepared new puzzle", "propID", property.ID, "difficulty", result.Difficulty(),
 		"puzzleID", result.PuzzleID(), "userID", property.OrgOwnerID.Int32)
 
-	return result, property, nil
+	return result, property, err
 }

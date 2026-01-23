@@ -64,7 +64,22 @@ type HTTPMetrics interface {
 	HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
 }
 
+type MetricEventType string
+
+const (
+	PuzzleEventType    MetricEventType = "puzzle"
+	VerifyEventType    MetricEventType = "verify"
+	UserLimitEventType MetricEventType = "user_limit"
+	SessionEventType   MetricEventType = "session"
+	SitekeyEventType   MetricEventType = "sitekey"
+)
+
+type BaseMetrics interface {
+	ObserveEventDropped(eventType MetricEventType)
+}
+
 type APIMetrics interface {
+	BaseMetrics
 	HTTPMetrics
 	ObservePuzzleCreated(userID int32)
 	ObservePuzzleVerified(userID int32, result string, isStub bool)

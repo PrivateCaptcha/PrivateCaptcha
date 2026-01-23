@@ -18,6 +18,7 @@ import (
 )
 
 var (
+	ErrBackpressure            = errors.New("backpressure error")
 	HeaderValueContentTypeJSON = []string{ContentTypeJSON}
 	errEmptyDomain             = errors.New("domain name is empty")
 )
