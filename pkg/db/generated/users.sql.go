@@ -90,61 +90,6 @@ func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUs
 	return items, nil
 }
 
-const getTrialUsers = `-- name: GetTrialUsers :many
-SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
-FROM backend.users u
-JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE
-  s.source = $1 AND
-  s.trial_ends_at IS NOT NULL AND
-  s.trial_ends_at BETWEEN $2 AND $3 AND
-  s.status = $4 AND
-  u.deleted_at IS NULL
-LIMIT $5
-`
-
-type GetTrialUsersParams struct {
-	Source        SubscriptionSource `db:"source" json:"source"`
-	TrialEndsAt   pgtype.Timestamptz `db:"trial_ends_at" json:"trial_ends_at"`
-	TrialEndsAt_2 pgtype.Timestamptz `db:"trial_ends_at_2" json:"trial_ends_at_2"`
-	Status        string             `db:"status" json:"status"`
-	Limit         int32              `db:"limit" json:"limit"`
-}
-
-func (q *Queries) GetTrialUsers(ctx context.Context, arg *GetTrialUsersParams) ([]*User, error) {
-	rows, err := q.db.Query(ctx, getTrialUsers,
-		arg.Source,
-		arg.TrialEndsAt,
-		arg.TrialEndsAt_2,
-		arg.Status,
-		arg.Limit,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*User
-	for rows.Next() {
-		var i User
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Email,
-			&i.SubscriptionID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeletedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE email = $1 AND deleted_at IS NULL
 `

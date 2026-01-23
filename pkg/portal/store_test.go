@@ -495,44 +495,6 @@ func TestRetrieveOrgPropertiesCount(t *testing.T) {
 	}
 }
 
-func TestRetrieveTrialUsers(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	ctx := t.Context()
-
-	// Create a trial user
-	subParams := db_tests.CreateNewSubscriptionParams(testPlan)
-
-	user, _, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), subParams)
-	if err != nil {
-		t.Fatalf("Failed to create trial account: %v", err)
-	}
-
-	from := subParams.TrialEndsAt.Time.Add(-1 * time.Second)
-	to := from.Add(1 * time.Hour)
-	// this test can (silently) fail if we have more than {maxUsers} tests
-	const maxUsers = 10_000
-	trialUsers, err := store.Impl().RetrieveTrialUsers(ctx, from, to, subParams.Status, maxUsers+1, db.IsInternalSubscription(subParams.Source))
-	if err != nil {
-		t.Fatalf("Failed to retrieve trial users: %v", err)
-	}
-
-	// Check that our trial user is in the list
-	found := false
-	for _, tu := range trialUsers {
-		if tu.ID == user.ID {
-			found = true
-			break
-		}
-	}
-
-	if !found && (len(trialUsers) <= maxUsers) {
-		t.Errorf("Expected to find trial user %d in list, but didn't", user.ID)
-	}
-}
-
 func TestWarmupPortalAuthJob(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

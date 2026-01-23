@@ -65,7 +65,6 @@ type Querier interface {
 	GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUsersParams) ([]*GetSoftDeletedUsersRow, error)
 	GetSubscriptionByID(ctx context.Context, id int32) (*Subscription, error)
 	GetSystemNotificationById(ctx context.Context, id int32) (*SystemNotification, error)
-	GetTrialUsers(ctx context.Context, arg *GetTrialUsersParams) ([]*User, error)
 	GetUserAPIKeyByName(ctx context.Context, arg *GetUserAPIKeyByNameParams) (*APIKey, error)
 	GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*APIKey, error)
 	GetUserAuditLogs(ctx context.Context, arg *GetUserAuditLogsParams) ([]*GetUserAuditLogsRow, error)

@@ -2366,44 +2366,6 @@ func (impl *BusinessStoreImpl) DeletePendingUserNotification(ctx context.Context
 	return nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveTrialUsers(ctx context.Context, from, to time.Time, status string, maxUsers int32, internal bool) ([]*dbgen.User, error) {
-	if from.IsZero() || to.IsZero() {
-		return nil, ErrInvalidInput
-	}
-
-	if impl.querier == nil {
-		return nil, ErrMaintenance
-	}
-
-	params := &dbgen.GetTrialUsersParams{
-		TrialEndsAt:   Timestampz(from),
-		TrialEndsAt_2: Timestampz(to),
-		Status:        status,
-		Limit:         maxUsers,
-	}
-
-	if internal {
-		params.Source = dbgen.SubscriptionSourceInternal
-	} else {
-		params.Source = dbgen.SubscriptionSourceExternal
-	}
-
-	users, err := impl.querier.GetTrialUsers(ctx, params)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return []*dbgen.User{}, nil
-		}
-
-		slog.ErrorContext(ctx, "Failed to retrieve trial users", "from", from, "to", to, "status", status, common.ErrAttr(err))
-
-		return nil, err
-	}
-
-	slog.DebugContext(ctx, "Fetched trial users", "count", len(users), "from", from, "to", to, "status", status)
-
-	return users, nil
-}
-
 func (impl *BusinessStoreImpl) ExpireInternalTrials(ctx context.Context, from, to time.Time, activeStatus, expiredStatus string) error {
 	if impl.querier == nil {
 		return ErrMaintenance

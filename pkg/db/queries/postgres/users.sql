@@ -28,15 +28,3 @@ DELETE FROM backend.users WHERE id = ANY($1::INT[]);
 
 -- name: GetUsersWithoutSubscription :many
 SELECT * FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL);
-
--- name: GetTrialUsers :many
-SELECT u.*
-FROM backend.users u
-JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE
-  s.source = $1 AND
-  s.trial_ends_at IS NOT NULL AND
-  s.trial_ends_at BETWEEN $2 AND $3 AND
-  s.status = $4 AND
-  u.deleted_at IS NULL
-LIMIT $5;
