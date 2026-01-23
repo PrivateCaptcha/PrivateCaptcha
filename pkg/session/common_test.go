@@ -13,8 +13,8 @@ func (s *stubStore) Init(ctx context.Context, session *Session) error  { return 
 func (s *stubStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
 	return nil, ErrSessionMissing
 }
-func (s *stubStore) Update(session *Session) error             { return nil }
-func (s *stubStore) Destroy(ctx context.Context, sid string) error { return nil }
+func (s *stubStore) Update(ctx context.Context, session *Session) error { return nil }
+func (s *stubStore) Destroy(ctx context.Context, sid string) error      { return nil }
 
 func TestSessionKeyString(t *testing.T) {
 	sessionKeys := []SessionKey{

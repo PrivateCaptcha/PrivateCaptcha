@@ -583,7 +583,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 
 		// Store invite ID in session so we can link it after registration
 		sess := s.Sessions.SessionStart(w, r)
-		_ = sess.Set(session.KeyOrgInviteID, int32(inviteID))
+		_ = sess.Set(ctx, session.KeyOrgInviteID, int32(inviteID))
 	}
 
 	// Return the register page view (same as regular register)

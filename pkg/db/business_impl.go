@@ -1990,7 +1990,7 @@ func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, 
 	return count, nil
 }
 
-func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string, refreshFunc func(string)) (*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string, refreshFunc func(context.Context, string)) (*dbgen.Property, error) {
 	if sitekey == TestPropertySitekey {
 		return nil, ErrTestProperty
 	}

@@ -316,7 +316,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
 	} else {
-		_ = sess.Set(session.KeyTwoFactorCode, code)
+		_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
 	}
 
 	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
@@ -364,8 +364,8 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		formCode := r.FormValue(common.ParamVerificationCode)
 
 		// we "used" the code now
-		_ = sess.Delete(session.KeyTwoFactorCode)
-		_ = sess.Delete(session.KeyTwoFactorCodeTimestamp)
+		_ = sess.Delete(ctx, session.KeyTwoFactorCode)
+		_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
 
 		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(twoFactorCodeDuration))) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, "timestamp", codeTimestamp, common.ErrAttr(err))
@@ -401,9 +401,9 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if auditEvent, err = s.Store.Impl().UpdateUser(ctx, user, renderCtx.Name, emailToUpdate, user.Email); err == nil {
 			renderCtx.SuccessMessage = "Settings were updated."
 			renderCtx.EditEmail = false
-			_ = sess.Set(session.KeyUserName, renderCtx.Name)
+			_ = sess.Set(ctx, session.KeyUserName, renderCtx.Name)
 			if emailToUpdate != user.Email {
-				_ = sess.Set(session.KeyUserEmail, emailToUpdate)
+				_ = sess.Set(ctx, session.KeyUserEmail, emailToUpdate)
 				renderCtx.Email = emailToUpdate
 			}
 		} else {

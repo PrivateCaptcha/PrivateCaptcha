@@ -406,13 +406,13 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 type cachedPropertyReader struct {
 	sitekey     string
 	cache       common.Cache[CacheKey, any]
-	refreshFunc func(string)
+	refreshFunc func(context.Context, string)
 }
 
 // refreshing means that value is cached, however it has to be reloaded (which is what we are trying to detect)
 func (sf *cachedPropertyReader) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
 	if sf.refreshFunc != nil {
-		sf.refreshFunc(sf.sitekey)
+		sf.refreshFunc(ctx, sf.sitekey)
 	}
 
 	// we keep old value, but (hopefully) trigger a reload using refreshFunc

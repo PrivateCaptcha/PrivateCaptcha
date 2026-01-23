@@ -18,14 +18,19 @@ var (
 	errBackfillPanic = errors.New("panic during backfill")
 )
 
+const (
+	defaultBackpressureTimeout = 10 * time.Millisecond
+)
+
 type Levels struct {
-	timeSeries      common.TimeSeriesStore
-	propertyBuckets *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
-	userBuckets     *leakybucket.Manager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint], *leakybucket.ConstLeakyBucket[common.TFingerprint]]
-	accessChan      chan *common.AccessRecord
-	backfillChan    chan *common.BackfillRequest
-	batchSize       int
-	accessLogCancel context.CancelFunc
+	timeSeries          common.TimeSeriesStore
+	propertyBuckets     *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
+	userBuckets         *leakybucket.Manager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint], *leakybucket.ConstLeakyBucket[common.TFingerprint]]
+	accessChan          chan *common.AccessRecord
+	backfillChan        chan *common.BackfillRequest
+	batchSize           int
+	accessLogCancel     context.CancelFunc
+	backpressureTimeout time.Duration
 }
 
 func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
@@ -44,13 +49,14 @@ func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time
 	)
 
 	levels := &Levels{
-		timeSeries:      timeSeries,
-		propertyBuckets: leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, propertyBucketCap, bucketSize),
-		userBuckets:     leakybucket.NewManager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint]](maxUserBuckets, userBucketCap, userBucketSize),
-		accessChan:      make(chan *common.AccessRecord, 10*batchSize),
-		backfillChan:    make(chan *common.BackfillRequest, batchSize),
-		batchSize:       batchSize,
-		accessLogCancel: func() {},
+		timeSeries:          timeSeries,
+		propertyBuckets:     leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, propertyBucketCap, bucketSize),
+		userBuckets:         leakybucket.NewManager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint]](maxUserBuckets, userBucketCap, userBucketSize),
+		accessChan:          make(chan *common.AccessRecord, 10*batchSize),
+		backfillChan:        make(chan *common.BackfillRequest, batchSize),
+		batchSize:           batchSize,
+		accessLogCancel:     func() {},
+		backpressureTimeout: defaultBackpressureTimeout,
 	}
 
 	return levels
@@ -94,7 +100,13 @@ func requestsToDifficulty(requests float64, minDifficulty float64, level dbgen.D
 	return uint8(difficulty)
 }
 
-func (levels *Levels) Init(accessLogInterval, backfillInterval time.Duration) {
+func (levels *Levels) BackfillTimeout() time.Duration {
+	return levels.backpressureTimeout
+}
+
+func (levels *Levels) Init(accessLogInterval, backfillInterval, backpressureTimeout time.Duration) {
+	levels.backpressureTimeout = max(backpressureTimeout, defaultBackpressureTimeout)
+
 	const (
 		maxPendingBatchSize = 100_000
 		levelsService       = "levels"
@@ -117,14 +129,17 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property, baseDifficulty uint8, tnow time.Time) (uint8, leakybucket.TLevel) {
-	l.recordAccess(fingerprint, p, tnow)
+func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, baseDifficulty uint8, tnow time.Time) (uint8, leakybucket.TLevel, error) {
+	err := l.recordAccess(ctx, fingerprint, p, tnow)
 
 	minDifficulty := float64(max(p.Level.Int16, int16(baseDifficulty)))
 
 	propertyAddResult := l.propertyBuckets.Add(p.ID, 1, tnow)
 	if !propertyAddResult.Found {
-		l.backfillProperty(p)
+		if perr := l.backfillProperty(ctx, p); perr != nil {
+			// yes, we override, because it's not that important
+			err = perr
+		}
 	}
 
 	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
@@ -134,24 +149,32 @@ func (l *Levels) DifficultyEx(fingerprint common.TFingerprint, p *dbgen.Property
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), propertyAddResult.CurrLevel
+	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), propertyAddResult.CurrLevel, err
 }
 
-func (l *Levels) Difficulty(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
-	diff, _ := l.DifficultyEx(fingerprint, p, 0, tnow)
+func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
+	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, 0, tnow)
 	return diff
 }
 
-func (l *Levels) backfillProperty(p *dbgen.Property) {
+func (l *Levels) backfillProperty(ctx context.Context, p *dbgen.Property) error {
 	br := &common.BackfillRequest{
 		OrgID:      p.OrgID.Int32,
 		UserID:     p.OrgOwnerID.Int32,
 		PropertyID: p.ID,
 	}
-	l.backfillChan <- br
+
+	select {
+	case l.backfillChan <- br:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(l.backpressureTimeout):
+		return common.ErrBackpressure
+	}
 }
 
-func (l *Levels) BackfillAccess(result *puzzle.VerifyResult) {
+func (l *Levels) BackfillAccess(ctx context.Context, result *puzzle.VerifyResult) error {
 	ar := &common.AccessRecord{
 		Fingerprint: 0, // we lose information about user but having totals still helps for difficulty calculation
 		UserID:      result.UserID,
@@ -160,12 +183,22 @@ func (l *Levels) BackfillAccess(result *puzzle.VerifyResult) {
 		Timestamp:   result.CreatedAt,
 	}
 
-	l.accessChan <- ar
+	timer := time.NewTimer(l.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case l.accessChan <- ar:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return common.ErrBackpressure
+	}
 }
 
-func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) {
+func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) error {
 	if (p == nil) || !p.ExternalID.Valid {
-		return
+		return nil
 	}
 
 	ar := &common.AccessRecord{
@@ -178,7 +211,17 @@ func (l *Levels) recordAccess(fingerprint common.TFingerprint, p *dbgen.Property
 		Timestamp:  tnow,
 	}
 
-	l.accessChan <- ar
+	timer := time.NewTimer(l.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case l.accessChan <- ar:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return common.ErrBackpressure
+	}
 }
 
 func (l *Levels) Reset() {

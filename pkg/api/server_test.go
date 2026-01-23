@@ -85,7 +85,7 @@ func TestMain(m *testing.M) {
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService),
+		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Verifier:           NewVerifier(cfg, store),
 		Metrics:            metrics,
@@ -96,7 +96,7 @@ func TestMain(m *testing.M) {
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
 	}
-	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay); err != nil {
+	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
 		panic(err)
 	}
 	defer server.Shutdown()

@@ -59,6 +59,7 @@ func TestMain(m *testing.M) {
 		Enterprise: true,
 	}
 	puzzleEngine := &portal_tests.StubPuzzleEngine{Result: &puzzle.VerifyResult{Error: puzzle.VerifyNoError}}
+	stubMetrics := monitoring.NewStub()
 
 	if testing.Short() {
 		store = db.NewBusinessEx(nil, cache)
@@ -68,7 +69,7 @@ func TestMain(m *testing.M) {
 			Prefix: "",
 			XSRF:   &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
 			Sessions: &session.Manager{
-				Store:       db.NewSessionStore(store, session.KeyPersistent),
+				Store:       db.NewSessionStore(store, session.KeyPersistent, stubMetrics),
 				CookieName:  "pcsid",
 				MaxLifetime: 1 * time.Minute,
 			},
@@ -112,12 +113,12 @@ func TestMain(m *testing.M) {
 	}
 
 	levels := difficulty.NewLevels(timeSeries, 100, 5*time.Minute)
-	levels.Init(2*time.Second, 5*time.Minute)
+	levels.Init(2*time.Second, 5*time.Minute, 100*time.Millisecond)
 	defer levels.Shutdown()
 
 	store = db.NewBusinessEx(pool, cache)
 
-	sessionStore := db.NewSessionStore(store, session.KeyPersistent)
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, stubMetrics)
 
 	ctx := context.TODO()
 	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
@@ -138,7 +139,7 @@ func TestMain(m *testing.M) {
 		Mailer:             mailer,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
 		PuzzleEngine:       puzzleEngine,
-		Metrics:            monitoring.NewStub(),
+		Metrics:            stubMetrics,
 		PlanService:        planService,
 		DataCtx:            dataCtx,
 		PlatformCtx:        platformCtx,

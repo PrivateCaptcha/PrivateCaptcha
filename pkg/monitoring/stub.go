@@ -12,9 +12,10 @@ func NewStub() *stubMetrics {
 	return &stubMetrics{}
 }
 
-var _ common.PlatformMetrics = (*Service)(nil)
-var _ common.APIMetrics = (*Service)(nil)
-var _ common.PortalMetrics = (*Service)(nil)
+var _ common.PlatformMetrics = (*stubMetrics)(nil)
+var _ common.APIMetrics = (*stubMetrics)(nil)
+var _ common.PortalMetrics = (*stubMetrics)(nil)
+var _ common.BaseMetrics = (*stubMetrics)(nil)
 
 func (sm *stubMetrics) Handler(h http.Handler) http.Handler {
 	return h
@@ -32,3 +33,5 @@ func (sm *stubMetrics) ObserveCacheHitRatio(ratio float64)      {}
 
 func (sm *stubMetrics) ObserveHttpError(handlerID string, method string, code int) {}
 func (sm *stubMetrics) ObserveApiError(handlerID string, method string, code int)  {}
+
+func (sm *stubMetrics) ObserveEventDropped(eventType common.MetricEventType) {}

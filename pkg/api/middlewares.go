@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	AuthService = "auth"
+	AuthService                = "auth"
+	defaultBackpressureTimeout = 10 * time.Millisecond
 )
 
 type UserLimiter interface {
@@ -38,6 +39,8 @@ type AuthMiddleware struct {
 	SitekeyBackfillCancel context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
 	Limiter               UserLimiter
+	backpressureTimeout   time.Duration
+	Metrics               common.BaseMetrics
 	// this is a simple way to control negative cache spam, disabled by default
 	NegativeSitekeyThreshold uint
 }
@@ -134,7 +137,8 @@ func NewUserLimiter(store db.Implementor) *baseUserLimiter {
 
 func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
-	planService billing.PlanService) *AuthMiddleware {
+	planService billing.PlanService,
+	metrics common.BaseMetrics) *AuthMiddleware {
 	const batchSize = 10
 
 	am := &AuthMiddleware{
@@ -144,14 +148,18 @@ func NewAuthMiddleware(store db.Implementor,
 		SitekeyChan:           make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		BatchSize:             batchSize,
+		Metrics:               metrics,
 		SitekeyBackfillCancel: func() {},
 		UsersBackfillCancel:   func() {},
+		backpressureTimeout:   defaultBackpressureTimeout,
 	}
 
 	return am
 }
 
-func (am *AuthMiddleware) StartBackfill(backfillDelay time.Duration) {
+func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.Duration) {
+	am.backpressureTimeout = max(backpressureTimeout, defaultBackpressureTimeout)
+
 	var sitekeyBackfillCtx context.Context
 	sitekeyBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	sitekeyBackfillCtx, am.SitekeyBackfillCancel = context.WithCancel(
@@ -191,18 +199,39 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 
 	for _, p := range properties {
 		if p.OrgOwnerID.Valid {
-			am.UsersChan <- p.OrgOwnerID.Int32
+			select {
+			case am.UsersChan <- p.OrgOwnerID.Int32:
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "org owner")
+				return ctx.Err()
+			case <-time.After(am.backpressureTimeout):
+				am.Metrics.ObserveEventDropped(common.UserLimitEventType)
+			}
 		}
 
 		if p.CreatorID.Valid && (!p.OrgOwnerID.Valid || (p.CreatorID.Int32 != p.OrgOwnerID.Int32)) {
-			am.UsersChan <- p.CreatorID.Int32
+			select {
+			case am.UsersChan <- p.CreatorID.Int32:
+			case <-ctx.Done():
+				slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "property creator")
+				return ctx.Err()
+			case <-time.After(am.backpressureTimeout):
+				am.Metrics.ObserveEventDropped(common.UserLimitEventType)
+			}
 		}
 
-		// this is an oportunistic process anyways. Other users should be checked via API key mechanism or eventually here
+		// this is an opportunistic process anyways. Other users should be checked via API key mechanism or eventually here
 		if len(orgs) < maxOrgsToPull {
 			if orgMembers, err := am.Store.Impl().RetrieveOrganizationUsers(ctx, p.OrgID.Int32); err == nil {
 				for _, user := range orgMembers {
-					am.UsersChan <- user.User.ID
+					select {
+					case am.UsersChan <- user.User.ID:
+					case <-ctx.Done():
+						slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "org users")
+						return ctx.Err()
+					case <-time.After(am.backpressureTimeout):
+						am.Metrics.ObserveEventDropped(common.UserLimitEventType)
+					}
 				}
 			}
 			orgs[p.OrgID.Int32] = struct{}{}
@@ -268,9 +297,18 @@ func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 	})
 }
 
-func (am *AuthMiddleware) refreshPropertyBySitekey(sitekey string) {
+func (am *AuthMiddleware) refreshPropertyBySitekey(ctx context.Context, sitekey string) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
 	// backfill in the background
-	am.SitekeyChan <- sitekey
+	case am.SitekeyChan <- sitekey:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for property refresh", "sitekey", sitekey, common.ErrAttr(ctx.Err()))
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.SitekeyEventType)
+	}
 }
 
 func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
@@ -284,7 +322,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 			return
 		}
 
-		// we verify sitekey in underlying DB call
+		// we verify sitekey in the underlying DB call
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
 		property, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, am.refreshPropertyBySitekey)
 		if err != nil {
@@ -301,8 +339,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 			case db.ErrTestProperty:
 				// BUMP
 			case db.ErrCacheMiss:
-				// backfill in the background
-				am.SitekeyChan <- sitekey
+				am.refreshPropertyBySitekey(ctx, sitekey)
 			default:
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return

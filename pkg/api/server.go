@@ -162,7 +162,7 @@ type VerifyResponseRecaptchaV3 struct {
 	Action string  `json:"action"`
 }
 
-func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay time.Duration) error {
+func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay, backpressureTimeout time.Duration) error {
 	s.APIHeaders = make(map[string][]string)
 
 	if err := s.Verifier.Update(ctx); err != nil {
@@ -170,8 +170,8 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDela
 		return err
 	}
 
-	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/)
-	s.Auth.StartBackfill(authBackfillDelay)
+	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, backpressureTimeout)
+	s.Auth.StartBackfill(authBackfillDelay, backpressureTimeout)
 	s.RegisterTaskHandlers(ctx)
 
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
@@ -268,24 +268,28 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels)
 	if err != nil {
-		if err == db.ErrTestProperty {
+		switch err {
+		case db.ErrTestProperty:
 			common.WriteHeaders(w, common.CachedHeaders)
 			// we cache test property responses, can as well allow them anywhere
 			common.WriteHeaders(w, headersAnyOrigin)
 			common.WriteHeaders(w, headersContentPlain)
 			_ = s.Verifier.WriteTestPuzzle(w)
 			return
-		}
+		case common.ErrBackpressure:
+			s.Metrics.ObserveEventDropped(common.PuzzleEventType)
+			// NOTE: no return here
+		default:
+			status := http.StatusInternalServerError
+			if err == errInvalidArg {
+				status = http.StatusBadRequest
+			} else {
+				slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
+			}
 
-		status := http.StatusInternalServerError
-		if err == errInvalidArg {
-			status = http.StatusBadRequest
-		} else {
-			slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
+			http.Error(w, "", status)
+			return
 		}
-
-		http.Error(w, "", status)
-		return
 	}
 
 	var extraSalt []byte
@@ -451,13 +455,20 @@ func (s *Server) addVerifyRecord(ctx context.Context, result *puzzle.VerifyResul
 		Status:     int8(result.Error),
 	}
 
-	s.VerifyLogChan <- vr
+	select {
+	case s.VerifyLogChan <- vr:
+		// nothing
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for adding verify record", common.ErrAttr(ctx.Err()))
+	case <-time.After(s.Levels.BackfillTimeout()):
+		s.Metrics.ObserveEventDropped(common.VerifyEventType)
+	}
 
 	s.Metrics.ObservePuzzleVerified(vr.UserID, result.Error.String(), (result.PuzzleID == 0) /*is stub*/)
 
 	// we do not record access for stub puzzles in /puzzle initially, but now they are "verified" so we can backfill
 	if (result.PuzzleID == 0) && !result.CreatedAt.IsZero() {
-		s.Levels.BackfillAccess(result)
+		_ = s.Levels.BackfillAccess(ctx, result)
 	}
 }
 
