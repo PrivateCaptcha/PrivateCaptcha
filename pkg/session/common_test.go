@@ -27,6 +27,7 @@ func TestSessionKeyString(t *testing.T) {
 		KeyNotificationID,
 		KeyReturnURL,
 		KeyTwoFactorCodeTimestamp,
+		KeyOrgInviteID,
 	}
 
 	expectedStrings := []string{
@@ -39,6 +40,7 @@ func TestSessionKeyString(t *testing.T) {
 		"NotificationID",
 		"ReturnURL",
 		"TwoFactorCodeTimestamp",
+		"OrgInviteID",
 	}
 
 	for i, key := range sessionKeys {
