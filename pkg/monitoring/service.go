@@ -30,7 +30,7 @@ const (
 	resultLabel              = "result"
 	// below is copy from go-http-metrics prometheus.go since they are not exposed publicly
 	statusCodeLabel = "code"
-	methodLabel     = "label"
+	methodLabel     = "method"
 	handlerIDLabel  = "handler"
 	serviceLabel    = "service"
 	typeLabel       = "type"
@@ -149,7 +149,7 @@ func NewService() *Service {
 
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Namespace: MetricsNamespacePortal,
+			Namespace: MetricsNamespaceServer,
 			Subsystem: platformMetricsSubsystem,
 			Name:      "health_clickhouse",
 			Help:      "Health status of ClickHouse",
