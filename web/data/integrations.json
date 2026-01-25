@@ -30,7 +30,7 @@
         "ready": true
     },
     {
-        "name": "Javascript",
+        "name": "JavaScript",
         "icon": "img/integrations/javascript.svg",
         "link": "https://docs.privatecaptcha.com/docs/integrations/javascript/",
         "ready": true
@@ -50,7 +50,7 @@
     {
         "name": "Java",
         "icon": "img/integrations/java.svg",
-        "link": "",
-        "ready": false
+        "link": "https://docs.privatecaptcha.com/docs/integrations/java/",
+        "ready": true
     }
 ]
