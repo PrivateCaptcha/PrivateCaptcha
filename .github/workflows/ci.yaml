@@ -107,7 +107,12 @@ jobs:
 
     - name: Init Postgres
       env:
-        PSQL_CMD: psql "postgres://postgres:postgres@localhost:5432/privatecaptcha?options=--search_path%3Dpublic"
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: privatecaptcha
+        PGOPTIONS: "--search_path=public"
       run: pkg/db/migrations/init/postgres.sh
 
     - name: Run ClickHouse
