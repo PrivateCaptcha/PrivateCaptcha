@@ -106,7 +106,9 @@ jobs:
       run: make build-tests-ee
 
     - name: Init Postgres
-      run: psql -f pkg/db/migrations/init/postgres.sql "postgres://postgres:postgres@localhost:5432/privatecaptcha?options=--search_path%3Dpublic"
+      env:
+        PSQL_CMD: psql "postgres://postgres:postgres@localhost:5432/privatecaptcha?options=--search_path%3Dpublic"
+      run: pkg/db/migrations/init/postgres.sh
 
     - name: Run ClickHouse
       run: ./docker/run-clickhouse.sh
