@@ -82,7 +82,7 @@ services:
       - test_postgres_network
     volumes:
       - test_postgres_data_volume:/var/lib/postgresql/18/data
-      - ../pkg/db/migrations/init/postgres.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../pkg/db/migrations/init/postgres.sh:/docker-entrypoint-initdb.d/myinit.sh
 
 networks:
   test_postgres_network:
