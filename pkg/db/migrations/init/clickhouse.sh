@@ -12,10 +12,11 @@ USER_NAME="${2:-${CH_USER_NAME:-captchasrv}}"
 USER_PASSWORD="${3:-${CH_USER_PASSWORD:-uwnhNn4YW01}}"
 ROLE_SUFFIX="${4:-${CH_ROLE_SUFFIX:-}}"
 CH_HOST="${CH_HOST:-localhost}"
+CH_ADMIN_PASSWORD="${CH_ADMIN_PASSWORD:-}"
 
 ROLE_NAME="pc_backend_role${ROLE_SUFFIX}"
 
-clickhouse-client --host "${CH_HOST}" -n <<EOF
+clickhouse-client --host "${CH_HOST}" --password "${CH_ADMIN_PASSWORD}" -n <<EOF
 CREATE DATABASE IF NOT EXISTS ${DB_NAME};
 
 CREATE ROLE IF NOT EXISTS ${ROLE_NAME};
