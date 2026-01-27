@@ -570,3 +570,37 @@ func TestGetMacAddress(t *testing.T) {
 		t.Error("Expected non-empty MAC address")
 	}
 }
+
+func TestNewCheckLicenseJobEmptyURL(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Save and restore LicenseURL
+	originalURL := LicenseURL
+	LicenseURL = ""
+	defer func() { LicenseURL = originalURL }()
+
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cache, err := db.NewMemoryCache[db.CacheKey, any]("test", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	store := db.NewBusinessEx(pool, cache)
+	config := licenseTestConfig("test-license-key")
+
+	quitFunc := func(ctx context.Context) {}
+
+	_, err = NewCheckLicenseJob(store, config, "test-version", quitFunc)
+	// We expect an error since LicenseURL is empty or because activation keys are not available in test
+	if err == nil {
+		t.Error("Expected error from NewCheckLicenseJob with empty URL or missing keys")
+	}
+}

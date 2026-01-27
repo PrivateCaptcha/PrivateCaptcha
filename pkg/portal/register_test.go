@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
 
@@ -298,5 +299,44 @@ func TestPostRegisterMissingCaptcha(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "captcha") {
 		t.Error("Expected error message about captcha")
+	}
+}
+
+func TestPostRegisterExistingEmail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create an existing user first
+	existingUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_existing", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create existing account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Try to register with the same email
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, existingUser.Email)
+	form.Add(common.ParamName, "Another User")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "already registered") && !strings.Contains(body, "already exists") {
+		t.Error("Expected error message about email already being registered")
 	}
 }

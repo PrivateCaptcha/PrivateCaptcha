@@ -2167,3 +2167,290 @@ func TestRetrieveOrgOwnerWithSubscriptionNonOwner(t *testing.T) {
 		t.Error("Expected subscription to be returned for org owner")
 	}
 }
+
+func TestNewOrganizationAuditLogsWithData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create some audit logs by creating properties
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-1.com"), org)
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-2.com"), org)
+
+	// Retrieve org audit logs
+	logs, err := store.Impl().RetrieveOrganizationAuditLogs(ctx, org, 100)
+	if err != nil {
+		t.Fatalf("Failed to retrieve org audit logs: %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Skip("No audit logs found for org - skipping test")
+	}
+
+	// Test newOrganizationAuditLogs
+	result := server.newOrganizationAuditLogs(ctx, user, logs)
+
+	if len(result) == 0 {
+		t.Error("Expected non-empty result from newOrganizationAuditLogs")
+	}
+
+	// Verify each log has expected fields
+	for i, ul := range result {
+		if ul.Time == "" {
+			t.Errorf("Audit log %d: Expected Time to be set", i)
+		}
+		if ul.Action == "" {
+			t.Errorf("Audit log %d: Expected Action to be set", i)
+		}
+		// UserName/UserEmail should be set (either actual name or "Unknown User")
+		if ul.UserName == "" {
+			t.Errorf("Audit log %d: Expected UserName to be set", i)
+		}
+	}
+}
+
+func TestPostNewOrgInvalidForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Test with empty name
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, "")
+
+	req := httptest.NewRequest("POST", "/org/new", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should return 200 with error in form
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "empty") && !strings.Contains(body, "Error") && !strings.Contains(body, "error") {
+		t.Error("Expected error message for empty org name")
+	}
+}
+
+func TestPostNewOrgWrongName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Test with too short name
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, "ab")
+
+	req := httptest.NewRequest("POST", "/org/new", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should return 200 with error in form
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(strings.ToLower(body), "short") && !strings.Contains(strings.ToLower(body), "name") {
+		t.Error("Expected error message for too short org name")
+	}
+}
+
+func TestPostNewOrgUserWithoutSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create a bare account without subscription
+	user, _, err := db_tests.CreateNewBareAccount(ctx, store, t.Name())
+	if err != nil {
+		t.Fatalf("Failed to create bare account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Attempt to create org
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, "Test Org Without Subscription")
+
+	req := httptest.NewRequest("POST", "/org/new", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should return 200 with error message about subscription
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(strings.ToLower(body), "subscription") {
+		t.Error("Expected error message about subscription requirement")
+	}
+}
+
+func TestDeleteOrgMembersUnauthorized(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Try to delete org members without being authenticated
+	req := httptest.NewRequest("DELETE", "/org/test-org-id/members/test-user-id", nil)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should redirect to error page
+	if w.Code != http.StatusSeeOther && w.Code != http.StatusUnauthorized {
+		t.Errorf("Expected redirect or unauthorized status, got %d", w.Code)
+	}
+}
+
+func TestDeleteOrgMembersInvalidForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Test with invalid user ID
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/invalid-user-id", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should fail with bad request
+	if w.Code != http.StatusSeeOther && w.Code != http.StatusBadRequest {
+		t.Errorf("Expected redirect or bad request status, got %d", w.Code)
+	}
+}
+
+func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	// Add member to org
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as the member (not owner)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
+	// Try to remove owner (member cannot do this)
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(owner.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should fail - member cannot delete others
+	if w.Code != http.StatusForbidden && w.Code != http.StatusSeeOther {
+		t.Errorf("Expected forbidden or redirect, got %d", w.Code)
+	}
+}

@@ -2,11 +2,31 @@ package puzzle
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"math/rand"
 	"testing"
 	"time"
 )
+
+// limitedWriter is an io.Writer that returns an error after writing N bytes
+type limitedWriter struct {
+	limit   int
+	written int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if w.written >= w.limit {
+		return 0, errors.New("write limit reached")
+	}
+	remaining := w.limit - w.written
+	if len(p) <= remaining {
+		w.written += len(p)
+		return len(p), nil
+	}
+	w.written += remaining
+	return remaining, errors.New("write limit reached")
+}
 
 func randInit(data []byte) {
 	for i := range data {
@@ -251,4 +271,124 @@ func TestValidityIntervalToIndex(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestComputePuzzleWriteToErrors(t *testing.T) {
+	t.Parallel()
+
+	propertyID := [16]byte{}
+	randInit(propertyID[:])
+
+	puzzle := NewComputePuzzle(NextPuzzleID(), propertyID, 123)
+	_ = puzzle.Init(DefaultValidityPeriod)
+
+	// Test error at version write (byte 0)
+	t.Run("ErrorAtVersion", func(t *testing.T) {
+		w := &limitedWriter{limit: 0}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at version write")
+		}
+	})
+
+	// Test error at propertyID write (after 1 byte)
+	t.Run("ErrorAtPropertyID", func(t *testing.T) {
+		w := &limitedWriter{limit: 1}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at propertyID write")
+		}
+	})
+
+	// Test error at puzzleID write (after 1 + 16 = 17 bytes)
+	t.Run("ErrorAtPuzzleID", func(t *testing.T) {
+		w := &limitedWriter{limit: 17}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at puzzleID write")
+		}
+	})
+
+	// Test error at difficulty write (after 1 + 16 + 8 = 25 bytes)
+	t.Run("ErrorAtDifficulty", func(t *testing.T) {
+		w := &limitedWriter{limit: 25}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at difficulty write")
+		}
+	})
+
+	// Test error at solutionsCount write (after 1 + 16 + 8 + 1 = 26 bytes)
+	t.Run("ErrorAtSolutionsCount", func(t *testing.T) {
+		w := &limitedWriter{limit: 26}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at solutionsCount write")
+		}
+	})
+
+	// Test error at expiration write (after 1 + 16 + 8 + 1 + 1 = 27 bytes)
+	t.Run("ErrorAtExpiration", func(t *testing.T) {
+		w := &limitedWriter{limit: 27}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at expiration write")
+		}
+	})
+
+	// Test error at userData write (after 1 + 16 + 8 + 1 + 1 + 4 = 31 bytes)
+	t.Run("ErrorAtUserData", func(t *testing.T) {
+		w := &limitedWriter{limit: 31}
+		_, err := puzzle.WriteTo(w)
+		if err == nil {
+			t.Error("Expected error at userData write")
+		}
+	})
+}
+
+func TestPuzzlePayloadWriteErrors(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	propertyID := [16]byte{}
+	randInit(propertyID[:])
+	p := NewComputePuzzle(NextPuzzleID(), propertyID, 0 /*difficulty*/)
+	_ = p.Init(DefaultValidityPeriod)
+
+	salt := NewSalt([]byte("salt"))
+	puzzleData, err := p.Serialize(ctx, salt, nil /*property salt*/)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test error at puzzleBase64 write
+	t.Run("ErrorAtPuzzleBase64", func(t *testing.T) {
+		w := &limitedWriter{limit: 0}
+		err := puzzleData.Write(w)
+		if err == nil {
+			t.Error("Expected error at puzzleBase64 write")
+		}
+	})
+
+	// Test error at signatureBase64 write (after puzzleBase64 + dotBytes)
+	t.Run("ErrorAtSignatureBase64", func(t *testing.T) {
+		w := &limitedWriter{limit: len(puzzleData.puzzleBase64) + len(dotBytes)}
+		err := puzzleData.Write(w)
+		if err == nil {
+			t.Error("Expected error at signatureBase64 write")
+		}
+	})
+
+	// Test successful write
+	t.Run("SuccessfulWrite", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := puzzleData.Write(&buf)
+		if err != nil {
+			t.Errorf("Expected no error, got: %v", err)
+		}
+		if buf.Len() != puzzleData.Size() {
+			t.Errorf("Expected size %d, got %d", puzzleData.Size(), buf.Len())
+		}
+	})
 }

@@ -1057,4 +1057,222 @@ func TestExportAuditLogsCSV(t *testing.T) {
 			t.Error("Expected CSV header to contain 'id' and 'action' columns")
 		}
 	}
+
+	// Verify CSV has data rows (not just header)
+	lines := strings.Split(body, "\n")
+	// Should have at least header + some audit log rows + possible empty final line
+	if len(lines) < 2 {
+		t.Error("Expected CSV to have at least header + data rows")
+	}
+}
+
+func TestInitFromSubscriptionPlanWithValidPlan(t *testing.T) {
+	// Use the internal trial plan which we know exists
+	planService := billing.NewPlanService(nil)
+	ul := &UserAuditLog{}
+
+	trialPlan := planService.GetInternalTrialPlan()
+	priceMonthly, priceYearly := trialPlan.PriceIDs()
+
+	// Test with yearly price
+	sub := &db.AuditLogSubscription{
+		Source:            string(dbgen.SubscriptionSourceInternal),
+		ExternalProductID: trialPlan.ProductID(),
+		ExternalPriceID:   priceYearly,
+	}
+
+	ul.initFromSubscriptionPlan(sub, planService, "production")
+
+	if ul.Property != "Product" {
+		t.Errorf("Expected Property to be 'Product', got '%s'", ul.Property)
+	}
+
+	if ul.Value == "" {
+		t.Error("Expected Value to be set with plan name")
+	}
+
+	// Test with monthly price if available
+	if priceMonthly != "" {
+		ul2 := &UserAuditLog{}
+		sub2 := &db.AuditLogSubscription{
+			Source:            string(dbgen.SubscriptionSourceInternal),
+			ExternalProductID: trialPlan.ProductID(),
+			ExternalPriceID:   priceMonthly,
+		}
+
+		ul2.initFromSubscriptionPlan(sub2, planService, "production")
+
+		if ul2.Property != "Product" {
+			t.Errorf("Expected Property to be 'Product', got '%s'", ul2.Property)
+		}
+	}
+}
+
+func TestInitFromOrgUserEmptyEmail(t *testing.T) {
+	ul := &UserAuditLog{}
+
+	orgUser := &db.AuditLogOrgUser{
+		OrgName: "Test Org",
+		UserID:  1,
+		Email:   "", // Empty email
+		Level:   "member",
+	}
+
+	err := ul.initFromOrgUser(nil, orgUser)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// When email is empty, Property should just say "Member"
+	if ul.Property != "Member" {
+		t.Errorf("Expected Property to be 'Member', got '%s'", ul.Property)
+	}
+
+	if ul.Resource != "Organization 'Test Org'" {
+		t.Errorf("Expected Resource to be \"Organization 'Test Org'\", got '%s'", ul.Resource)
+	}
+}
+
+func TestNewUserAuditLogForSubscriptionsTable(t *testing.T) {
+	ctx := context.Background()
+	planService := billing.NewPlanService(nil)
+
+	server := &Server{
+		PlanService: planService,
+		Stage:       "production",
+	}
+
+	log := &dbgen.AuditLog{
+		ID:          1,
+		UserID:      db.Int(1),
+		Action:      dbgen.AuditLogActionCreate,
+		EntityTable: db.TableNameSubscriptions,
+		CreatedAt:   db.Timestampz(time.Now()),
+		Source:      dbgen.AuditLogSourcePortal,
+		NewValue:    mustMarshalJSON(&db.AuditLogSubscription{Source: "internal", Status: "active"}),
+	}
+
+	ul, err := server.newUserAuditLog(ctx, log)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul == nil {
+		t.Fatal("Expected non-nil UserAuditLog")
+	}
+
+	if ul.Resource != "Subscription" {
+		t.Errorf("Expected Resource to be 'Subscription', got '%s'", ul.Resource)
+	}
+}
+
+func TestNewUserAuditLogForOrgUsersTable(t *testing.T) {
+	ctx := context.Background()
+	planService := billing.NewPlanService(nil)
+
+	server := &Server{
+		PlanService: planService,
+		Stage:       "production",
+	}
+
+	log := &dbgen.AuditLog{
+		ID:          1,
+		UserID:      db.Int(1),
+		Action:      dbgen.AuditLogActionCreate,
+		EntityTable: db.TableNameOrgUsers,
+		CreatedAt:   db.Timestampz(time.Now()),
+		Source:      dbgen.AuditLogSourcePortal,
+		NewValue:    mustMarshalJSON(&db.AuditLogOrgUser{OrgName: "Test Org", UserID: 1, Email: "test@example.com", Level: "member"}),
+	}
+
+	ul, err := server.newUserAuditLog(ctx, log)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ul == nil {
+		t.Fatal("Expected non-nil UserAuditLog")
+	}
+
+	if !strings.Contains(ul.Resource, "Organization") {
+		t.Errorf("Expected Resource to contain 'Organization', got '%s'", ul.Resource)
+	}
+}
+
+func TestNewUserAuditLogsArray(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create some audit logs by creating properties
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-log-array-1.com"), org)
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-log-array-2.com"), org)
+
+	// Retrieve audit logs
+	after := time.Now().UTC().AddDate(0, 0, -14)
+	logs, err := store.Impl().RetrieveUserAuditLogs(ctx, user, 100, after)
+	if err != nil {
+		t.Fatalf("Failed to retrieve audit logs: %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Fatal("Expected some audit logs")
+	}
+
+	// Test newUserAuditLogs
+	result := server.newUserAuditLogs(ctx, logs)
+
+	if len(result) == 0 {
+		t.Error("Expected non-empty result from newUserAuditLogs")
+	}
+
+	// Verify each log has expected fields
+	for i, ul := range result {
+		if ul.Time == "" {
+			t.Errorf("Audit log %d: Expected Time to be set", i)
+		}
+		if ul.UserName == "" {
+			t.Errorf("Audit log %d: Expected UserName to be set", i)
+		}
+	}
+}
+
+func TestCreateAuditLogsContextWithAuditLogs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create some audit logs by creating properties
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "ctx-audit-1.com"), org)
+	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "ctx-audit-2.com"), org)
+
+	renderCtx, err := server.CreateAuditLogsContext(ctx, user, 14, 0)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if renderCtx == nil {
+		t.Fatal("Expected render context to be populated, got nil")
+	}
+
+	// Should have some audit logs now
+	if renderCtx.Count == 0 {
+		t.Error("Expected Count to be > 0 after creating properties")
+	}
+
+	if len(renderCtx.AuditLogs) == 0 {
+		t.Error("Expected AuditLogs to have entries")
+	}
 }

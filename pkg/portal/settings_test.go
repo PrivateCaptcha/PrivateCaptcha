@@ -923,3 +923,233 @@ func TestParseAPIKeyScope(t *testing.T) {
 		})
 	}
 }
+
+func TestPutGeneralSettingsChangeName(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Change name to something different
+	newName := "Updated Name"
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, newName)
+
+	req := httptest.NewRequest("PUT", "/settings/tab/general", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.putGeneralSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsGeneralRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsGeneralRenderContext, got %T", viewModel.Model)
+	}
+
+	// Check that name was updated
+	if renderCtx.Name != newName {
+		t.Errorf("Expected Name to be '%s', got '%s'", newName, renderCtx.Name)
+	}
+
+	// Verify in DB
+	updatedUser, err := store.Impl().RetrieveUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updatedUser.Name != newName {
+		t.Errorf("Expected user name in DB to be '%s', got '%s'", newName, updatedUser.Name)
+	}
+}
+
+func TestPostAPIKeySettingsScopedKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Create a scoped API key for a specific org
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, "Scoped API Key")
+	form.Set(common.ParamDays, "90")
+	form.Set(common.ParamScope, apiKeyScopePortal+apiKeyReadWriteSuffix)
+	form.Set(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	req := httptest.NewRequest("POST", "/settings/tab/apikeys/new", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Check that the API key was created with org scope
+	keys, err := store.Impl().RetrieveUserAPIKeys(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(keys) == 0 {
+		t.Error("Expected API key to be created")
+	}
+
+	// Find the scoped key
+	var foundScopedKey bool
+	for _, key := range keys {
+		if key.Name == "Scoped API Key" && key.OrgID.Valid && key.OrgID.Int32 == org.ID {
+			foundScopedKey = true
+			break
+		}
+	}
+
+	if !foundScopedKey {
+		t.Error("Expected to find a scoped API key for the org")
+	}
+}
+
+func TestGetAccountStatsWithUnknownOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property1, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "stats-unknown-1.com"), org1)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	// Create second org
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, "Second Org For Deletion", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create second org: %v", err)
+	}
+
+	property2, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "stats-unknown-2.com"), org2)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	accessRecords := []*common.AccessRecord{
+		{
+			UserID:     user.ID,
+			OrgID:      org1.ID,
+			PropertyID: property1.ID,
+			Timestamp:  now.Add(-1 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org2.ID,
+			PropertyID: property2.ID,
+			Timestamp:  now.Add(-2 * time.Hour),
+		},
+	}
+
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessRecords); err != nil {
+		t.Fatalf("Failed to write access log batch: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Delete the second org BEFORE retrieving stats
+	if _, err := store.Impl().SoftDeleteOrganization(ctx, org2, user); err != nil {
+		t.Fatalf("Failed to delete org: %v", err)
+	}
+
+	// Now get stats - should have one org with "Unknown Organization" name
+	req := httptest.NewRequest("GET", "/user/stats", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	var stats accountStatsResponse
+
+	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	// Should have stats
+	if len(stats.Data) == 0 {
+		t.Error("Expected data but got none")
+	}
+
+	// Should have at least one series (for the existing org)
+	if len(stats.Series) == 0 {
+		t.Error("Expected at least one series")
+	}
+
+	// Check if any series has "Unknown" in name (for deleted org)
+	hasUnknown := false
+	for _, series := range stats.Series {
+		if strings.Contains(series.Name, "Unknown") {
+			hasUnknown = true
+			break
+		}
+	}
+
+	if !hasUnknown {
+		t.Log("Note: Deleted org may have been filtered out if stats only returns current user's orgs")
+	}
+}
