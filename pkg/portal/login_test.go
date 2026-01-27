@@ -12,6 +12,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
@@ -362,5 +363,93 @@ func TestLogout(t *testing.T) {
 	_, err = server.Sessions.Store.Read(ctx, sessionID, true /*skip cache*/)
 	if err != session.ErrSessionMissing {
 		t.Errorf("session should be destroyed after logout: got error %v, want %v", err, session.ErrSessionMissing)
+	}
+}
+
+func TestPortalPropertyOwnerSourceOwnerID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create a property
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "owner-source-test.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Create the owner source
+	ownerSource := &portalPropertyOwnerSource{
+		Store:   store,
+		Sitekey: db.UUIDToSiteKey(property.ExternalID),
+	}
+
+	// Test OwnerID
+	ownerID, orgID, err := ownerSource.OwnerID(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if ownerID != user.ID {
+		t.Errorf("Expected ownerID %d, got %d", user.ID, ownerID)
+	}
+
+	if orgID == nil {
+		t.Fatal("Expected orgID to be non-nil")
+	}
+
+	if *orgID != org.ID {
+		t.Errorf("Expected orgID %d, got %d", org.ID, *orgID)
+	}
+}
+
+func TestPortalPropertyOwnerSourceOwnerIDNotFound(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create the owner source with non-existent sitekey
+	ownerSource := &portalPropertyOwnerSource{
+		Store:   store,
+		Sitekey: "non-existent-sitekey-123456",
+	}
+
+	// Test OwnerID should fail
+	_, _, err := ownerSource.OwnerID(ctx, time.Now().UTC())
+	if err == nil {
+		t.Error("Expected error for non-existent sitekey")
+	}
+
+	if err != errPortalPropertyNotFound {
+		t.Errorf("Expected errPortalPropertyNotFound, got: %v", err)
+	}
+}
+
+func TestPostLoginParseFormFail(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Create a request with invalid URL-encoded form data that will fail ParseForm
+	// Using %ZZ which is an invalid percent-encoding
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, strings.NewReader("email=%ZZ"))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// When ParseForm fails, server redirects to error endpoint
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }

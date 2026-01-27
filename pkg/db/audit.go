@@ -32,7 +32,7 @@ func (al *AuditLog) Start(ctx context.Context, interval time.Duration) {
 	var cancelCtx context.Context
 	cancelCtx, al.persistCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_auditlog"))
-	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.persistAuditLog)
+	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.PersistAuditLog)
 }
 
 func (al *AuditLog) Shutdown() {
@@ -41,7 +41,7 @@ func (al *AuditLog) Shutdown() {
 	close(al.persistChan)
 }
 
-func (al *AuditLog) persistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
+func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
 	dbBatch := make([]*dbgen.CreateAuditLogsParams, 0, len(batch))
 
 	for _, e := range batch {

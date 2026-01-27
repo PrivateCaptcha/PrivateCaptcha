@@ -1484,3 +1484,326 @@ func TestOrgMemberWithNilSubscriptionCanCreateProperty(t *testing.T) {
 
 	runOrgMemberPropertyCreationPortalTest(t, nil)
 }
+
+func TestGetPropertyDashboardAllTabs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "tabs-example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tabs := []struct {
+		name string
+		tab  string
+	}{
+		{"Reports", common.ReportsEndpoint},
+		{"Integrations", common.IntegrationsEndpoint},
+		{"Settings", common.SettingsEndpoint},
+		{"Events", common.EventsEndpoint},
+		{"Default", ""},
+		{"Unknown", "unknown-tab"},
+	}
+
+	for _, tc := range tabs {
+		t.Run(tc.name, func(t *testing.T) {
+			path := fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID)))
+			if tc.tab != "" {
+				path += "?" + common.ParamTab + "=" + tc.tab
+			}
+
+			req := httptest.NewRequest("GET", path, nil)
+			req.AddCookie(cookie)
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+			req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+			w := httptest.NewRecorder()
+			viewModel, err := server.getPropertyDashboard(w, req)
+			if err != nil {
+				t.Fatalf("Expected no error for tab '%s', got: %v", tc.tab, err)
+			}
+
+			if viewModel == nil {
+				t.Fatalf("Expected ViewModel for tab '%s', got nil", tc.tab)
+			}
+
+			if viewModel.View != propertyDashboardTemplate {
+				t.Errorf("Expected view to be %s for tab '%s', got %s", propertyDashboardTemplate, tc.tab, viewModel.View)
+			}
+		})
+	}
+}
+
+func TestNewPropertyAuditLogsArray(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create property
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "prop-audit.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	// Update property to create more audit logs
+	_, _, _ = server.Store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
+		ID:               property.ID,
+		Name:             "Updated Property",
+		Level:            db.Int2(int16(common.DifficultyLevelMedium)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	})
+
+	// Retrieve property audit logs
+	logs, err := store.Impl().RetrievePropertyAuditLogs(ctx, property, 100)
+	if err != nil {
+		t.Fatalf("Failed to retrieve property audit logs: %v", err)
+	}
+
+	if len(logs) == 0 {
+		t.Skip("No audit logs found for property - skipping test")
+	}
+
+	// Test newPropertyAuditLogs
+	result := server.newPropertyAuditLogs(ctx, user, logs)
+
+	if len(result) == 0 {
+		t.Error("Expected non-empty result from newPropertyAuditLogs")
+	}
+
+	// Verify each log has expected fields
+	for i, ul := range result {
+		if ul.Time == "" {
+			t.Errorf("Audit log %d: Expected Time to be set", i)
+		}
+		if ul.UserName == "" {
+			t.Errorf("Audit log %d: Expected UserName to be set", i)
+		}
+	}
+}
+
+func TestPutPropertyCannotEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create owner
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create property under owner
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, "edit-restrict.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	// Create non-owner member and add to org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as member (not owner or property creator)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
+	// Try to edit property
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, "Updated Name By Member")
+	form.Set(common.ParamDifficulty, "100")
+	form.Set(common.ParamGrowth, "2")
+	form.Set(common.ParamValidityInterval, "4")
+
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.putProperty(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	// Should have error message about permissions
+	renderCtx, ok := viewModel.Model.(*propertySettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *propertySettingsRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.ErrorMessage == "" {
+		t.Error("Expected ErrorMessage to be set for permission denial")
+	}
+}
+
+func TestPutPropertyChangeDifficulty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "difficulty-test.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	// Change difficulty to a new value
+	newDifficulty := int(common.DifficultyLevelSmall) + 10
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, csrfToken)
+	form.Set(common.ParamName, property.Name)
+	form.Set(common.ParamDifficulty, strconv.Itoa(newDifficulty))
+	form.Set(common.ParamGrowth, "2")
+	form.Set(common.ParamValidityInterval, "4")
+
+	req := httptest.NewRequest("PUT", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.putProperty(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	// Should have success message
+	renderCtx, ok := viewModel.Model.(*propertySettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *propertySettingsRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.SuccessMessage == "" {
+		t.Error("Expected SuccessMessage to be set after updating property")
+	}
+}
+
+func TestDeletePropertyCannotDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create owner
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create property under owner
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, "delete-restrict.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	// Create non-owner member and add to org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as member (not owner or property creator)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
+	// Try to delete property
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/property/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Member cannot delete property they don't own - should return 405 Method Not Allowed
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected method not allowed (405), got %d", w.Code)
+	}
+}

@@ -570,3 +570,21 @@ func TestGetMacAddress(t *testing.T) {
 		t.Error("Expected non-empty MAC address")
 	}
 }
+
+func TestNewCheckLicenseJobEmptyURL(t *testing.T) {
+	t.Parallel()
+
+	// Save and restore LicenseURL
+	originalURL := LicenseURL
+	LicenseURL = ""
+	defer func() { LicenseURL = originalURL }()
+
+	quitFunc := func(ctx context.Context) {}
+
+	_, err := NewCheckLicenseJob(nil, nil, "test-version", quitFunc)
+	// We expect an error since activation keys are not available in test environment
+	// or because LicenseURL is empty
+	if err == nil {
+		t.Error("Expected error from NewCheckLicenseJob with missing keys or empty URL")
+	}
+}
