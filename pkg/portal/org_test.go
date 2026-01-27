@@ -2293,9 +2293,10 @@ func TestPostNewOrgWrongName(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	// Check for specific error message from common.StatusOrgNameEmptyError
-	if !strings.Contains(body, "Name cannot be empty") {
-		t.Errorf("Expected error message 'Name cannot be empty', got body: %s", body)
+	// Check for specific error message from common.StatusOrgNameEmptyError constant
+	expectedError := common.StatusOrgNameEmptyError.String()
+	if !strings.Contains(body, expectedError) {
+		t.Errorf("Expected error message '%s', got body: %s", expectedError, body)
 	}
 }
 

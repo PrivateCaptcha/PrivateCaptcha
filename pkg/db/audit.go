@@ -42,6 +42,12 @@ func (al *AuditLog) Shutdown() {
 }
 
 func (al *AuditLog) persistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
+	return al.PersistAuditLog(ctx, batch)
+}
+
+// PersistAuditLog directly stores audit log events to the database synchronously.
+// This is primarily intended for testing purposes.
+func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
 	dbBatch := make([]*dbgen.CreateAuditLogsParams, 0, len(batch))
 
 	for _, e := range batch {

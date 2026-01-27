@@ -336,9 +336,9 @@ func TestPostRegisterExistingEmail(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	// Check for specific error message
-	if !strings.Contains(body, "Such email is already registered") {
-		t.Errorf("Expected error message 'Such email is already registered', got body: %s", body)
+	// Check for specific error message constant
+	if !strings.Contains(body, emailAlreadyRegisteredError) {
+		t.Errorf("Expected error message '%s', got body: %s", emailAlreadyRegisteredError, body)
 	}
 }
 

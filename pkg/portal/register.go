@@ -23,8 +23,9 @@ var (
 )
 
 const (
-	registerContentsTemplate = "login/register-contents.html"
-	userNameErrorMessage     = "Name contains invalid characters."
+	registerContentsTemplate     = "login/register-contents.html"
+	userNameErrorMessage         = "Name contains invalid characters."
+	emailAlreadyRegisteredError  = "Such email is already registered. Login instead?"
 )
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -149,7 +150,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if _, err := s.Store.Impl().FindUserByEmail(ctx, email); err == nil {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.Email = ""
-		data.EmailError = "Such email is already registered. Login instead?"
+		data.EmailError = emailAlreadyRegisteredError
 		s.render(w, r, registerContentsTemplate, data)
 		return
 	}

@@ -1205,24 +1205,75 @@ func TestNewUserAuditLogsArray(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	// Retrieve audit logs (may be empty since creation is async)
+	// Create audit log events directly using PersistAuditLog
+	now := time.Now().UTC()
+	auditEvents := []*common.AuditLogEvent{
+		{
+			UserID:    user.ID,
+			Action:    common.AuditLogActionCreate,
+			EntityID:  int64(user.ID),
+			TableName: db.TableNameProperties,
+			Timestamp: now,
+			Source:    common.AuditLogSourcePortal,
+			NewValue: &db.AuditLogProperty{
+				Name:    "test-property-1.com",
+				OrgID:   org.ID,
+				OrgName: org.Name,
+			},
+		},
+		{
+			UserID:    user.ID,
+			Action:    common.AuditLogActionUpdate,
+			EntityID:  int64(user.ID),
+			TableName: db.TableNameProperties,
+			Timestamp: now.Add(-1 * time.Hour),
+			Source:    common.AuditLogSourcePortal,
+			OldValue: &db.AuditLogProperty{
+				Name: "old-name.com",
+			},
+			NewValue: &db.AuditLogProperty{
+				Name: "new-name.com",
+			},
+		},
+	}
+
+	// Cast to *db.AuditLog to access PersistAuditLog
+	auditLog := store.AuditLog().(*db.AuditLog)
+	if err := auditLog.PersistAuditLog(ctx, auditEvents); err != nil {
+		t.Fatalf("Failed to persist audit logs: %v", err)
+	}
+
+	// Retrieve audit logs
 	after := time.Now().UTC().AddDate(0, 0, -14)
 	logs, err := store.Impl().RetrieveUserAuditLogs(ctx, user, 100, after)
 	if err != nil {
 		t.Fatalf("Failed to retrieve audit logs: %v", err)
 	}
 
-	// Test newUserAuditLogs handles empty array gracefully
+	if len(logs) == 0 {
+		t.Fatal("Expected non-empty audit logs array")
+	}
+
+	// Test newUserAuditLogs with NON-EMPTY array
 	result := server.newUserAuditLogs(ctx, logs)
 
-	// Result should be initialized (possibly empty)
-	if result == nil {
-		t.Error("Expected non-nil result from newUserAuditLogs")
+	if len(result) == 0 {
+		t.Error("Expected non-empty result from newUserAuditLogs")
+	}
+
+	// Verify each log has expected fields populated
+	for i, ul := range result {
+		if ul.Time == "" {
+			t.Errorf("Audit log %d: Expected Time to be set", i)
+		}
+		if ul.Action == "" {
+			t.Errorf("Audit log %d: Expected Action to be set", i)
+		}
 	}
 }
 
@@ -1232,9 +1283,33 @@ func TestCreateAuditLogsContextWithAuditLogs(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Create audit log events directly using PersistAuditLog
+	now := time.Now().UTC()
+	auditEvents := []*common.AuditLogEvent{
+		{
+			UserID:    user.ID,
+			Action:    common.AuditLogActionCreate,
+			EntityID:  int64(user.ID),
+			TableName: db.TableNameProperties,
+			Timestamp: now,
+			Source:    common.AuditLogSourcePortal,
+			NewValue: &db.AuditLogProperty{
+				Name:    "ctx-audit-property.com",
+				OrgID:   org.ID,
+				OrgName: org.Name,
+			},
+		},
+	}
+
+	// Cast to *db.AuditLog to access PersistAuditLog
+	auditLog := store.AuditLog().(*db.AuditLog)
+	if err := auditLog.PersistAuditLog(ctx, auditEvents); err != nil {
+		t.Fatalf("Failed to persist audit logs: %v", err)
 	}
 
 	renderCtx, err := server.CreateAuditLogsContext(ctx, user, 14, 0)
@@ -1246,9 +1321,12 @@ func TestCreateAuditLogsContextWithAuditLogs(t *testing.T) {
 		t.Fatal("Expected render context to be populated, got nil")
 	}
 
-	// Account creation itself may or may not create audit logs depending on test setup
-	// The important thing is that the method runs without errors
-	if renderCtx.AuditLogs == nil {
-		t.Error("Expected AuditLogs to be initialized (even if empty)")
+	// Should have non-empty audit logs
+	if renderCtx.Count == 0 {
+		t.Error("Expected Count to be > 0 after persisting audit logs")
+	}
+
+	if len(renderCtx.AuditLogs) == 0 {
+		t.Error("Expected AuditLogs to have entries")
 	}
 }
