@@ -340,3 +340,57 @@ func TestPostRegisterExistingEmail(t *testing.T) {
 		t.Error("Expected error message about email already being registered")
 	}
 }
+
+func TestGetRegisterDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Temporarily disable registration
+	server.canRegister.Store(false)
+	defer server.canRegister.Store(true)
+
+	req := httptest.NewRequest("GET", "/"+common.RegisterEndpoint, nil)
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getRegister(w, req)
+
+	if err == nil {
+		t.Error("Expected error when registration is disabled")
+	}
+
+	if viewModel != nil {
+		t.Error("Expected nil ViewModel when registration is disabled")
+	}
+}
+
+func TestPostRegisterDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Temporarily disable registration
+	server.canRegister.Store(false)
+	defer server.canRegister.Store(true)
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Try to register
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, "disabled-registration@privatecaptcha.com")
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "captchaSolution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	// Should be redirected to an error page when registration is disabled
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect status when registration disabled, got %v", w.Code)
+	}
+}
