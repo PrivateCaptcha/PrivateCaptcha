@@ -32,17 +32,13 @@ func (al *AuditLog) Start(ctx context.Context, interval time.Duration) {
 	var cancelCtx context.Context
 	cancelCtx, al.persistCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_auditlog"))
-	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.persistAuditLog)
+	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.PersistAuditLog)
 }
 
 func (al *AuditLog) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
 	al.persistCancel()
 	close(al.persistChan)
-}
-
-func (al *AuditLog) persistAuditLog(ctx context.Context, batch []*common.AuditLogEvent) error {
-	return al.PersistAuditLog(ctx, batch)
 }
 
 // PersistAuditLog directly stores audit log events to the database synchronously.
