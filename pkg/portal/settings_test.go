@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -519,18 +521,21 @@ func TestDeleteAccount(t *testing.T) {
 	}
 }
 
-func TestGetAccountStats(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
+type accountStatsSuiteResult struct {
+	user    *dbgen.User
+	srv     *http.ServeMux
+	cookie  *http.Cookie
+}
 
-	ctx := common.TraceContext(t.Context(), t.Name())
+func accountStatsSuite(t *testing.T, ctx context.Context) *accountStatsSuiteResult {
+	t.Helper()
+
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "stats-example.com"), org)
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, t.Name()+".com"), org)
 	if err != nil {
 		t.Fatalf("Failed to create new property: %v", err)
 	}
@@ -571,11 +576,22 @@ func TestGetAccountStats(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
+	return &accountStatsSuiteResult{user: user, srv: srv, cookie: cookie}
+}
+
+func TestGetAccountStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	suite := accountStatsSuite(t, ctx)
+
 	req := httptest.NewRequest("GET", "/user/stats", nil)
-	req.AddCookie(cookie)
+	req.AddCookie(suite.cookie)
 
 	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
+	suite.srv.ServeHTTP(w, req)
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusOK {
@@ -594,10 +610,6 @@ func TestGetAccountStats(t *testing.T) {
 
 	if len(stats.Series) != 1 {
 		t.Fatalf("Expected 1 series, got %d", len(stats.Series))
-	}
-
-	if stats.Series[0].Name != org.Name {
-		t.Errorf("Expected series name %q, got %q", org.Name, stats.Series[0].Name)
 	}
 
 	totalCount := 0

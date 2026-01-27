@@ -2180,8 +2180,14 @@ func TestNewOrganizationAuditLogsWithData(t *testing.T) {
 	}
 
 	// Create some audit logs by creating properties
-	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-1.com"), org)
-	_, _, _ = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-2.com"), org)
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-1.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "org-audit-2.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
 
 	// Retrieve org audit logs
 	logs, err := store.Impl().RetrieveOrganizationAuditLogs(ctx, org, 100)
@@ -2234,28 +2240,17 @@ func TestPostNewOrgInvalidForm(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
-
-	// Test with empty name
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, csrfToken)
-	form.Set(common.ParamName, "")
-
-	req := httptest.NewRequest("POST", "/org/new", strings.NewReader(form.Encode()))
+	// Send invalid percent-encoding that will cause ParseForm to fail
+	req := httptest.NewRequest("POST", "/org/new", strings.NewReader("name=%ZZ"))
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Should return 200 with error in form
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d", w.Code)
-	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, "empty") && !strings.Contains(body, "Error") && !strings.Contains(body, "error") {
-		t.Error("Expected error message for empty org name")
+	// When ParseForm fails, server redirects to error endpoint
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }
 
@@ -2280,10 +2275,10 @@ func TestPostNewOrgWrongName(t *testing.T) {
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 
-	// Test with too short name
+	// Test with empty name
 	form := url.Values{}
 	form.Set(common.ParamCSRFToken, csrfToken)
-	form.Set(common.ParamName, "ab")
+	form.Set(common.ParamName, "")
 
 	req := httptest.NewRequest("POST", "/org/new", strings.NewReader(form.Encode()))
 	req.AddCookie(cookie)
@@ -2298,8 +2293,9 @@ func TestPostNewOrgWrongName(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(strings.ToLower(body), "short") && !strings.Contains(strings.ToLower(body), "name") {
-		t.Error("Expected error message for too short org name")
+	// Check for specific error message from common.StatusOrgNameEmptyError
+	if !strings.Contains(body, "Name cannot be empty") {
+		t.Errorf("Expected error message 'Name cannot be empty', got body: %s", body)
 	}
 }
 
@@ -2343,8 +2339,9 @@ func TestPostNewOrgUserWithoutSubscription(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(strings.ToLower(body), "subscription") {
-		t.Error("Expected error message about subscription requirement")
+	// Check for specific error message from activeSubscriptionForOrgError
+	if !strings.Contains(body, "You need an active subscription to create new organizations") {
+		t.Errorf("Expected error message about subscription requirement, got body: %s", body)
 	}
 }
 
@@ -2362,9 +2359,9 @@ func TestDeleteOrgMembersUnauthorized(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Should redirect to error page
-	if w.Code != http.StatusSeeOther && w.Code != http.StatusUnauthorized {
-		t.Errorf("Expected redirect or unauthorized status, got %d", w.Code)
+	// Should redirect to login/error page when unauthenticated
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }
 
@@ -2397,9 +2394,9 @@ func TestDeleteOrgMembersInvalidForm(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Should fail with bad request
-	if w.Code != http.StatusSeeOther && w.Code != http.StatusBadRequest {
-		t.Errorf("Expected redirect or bad request status, got %d", w.Code)
+	// Should redirect to error page when invalid path argument is provided
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }
 
@@ -2449,8 +2446,8 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Should fail - member cannot delete others
-	if w.Code != http.StatusForbidden && w.Code != http.StatusSeeOther {
-		t.Errorf("Expected forbidden or redirect, got %d", w.Code)
+	// Member cannot delete others - should redirect to error
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }

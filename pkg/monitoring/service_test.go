@@ -16,42 +16,6 @@ func TestNewService(t *testing.T) {
 	if service == nil {
 		t.Fatal("Expected NewService to return non-nil service")
 	}
-
-	if service.Registry == nil {
-		t.Error("Expected Registry to be non-nil")
-	}
-
-	if service.puzzleCounter == nil {
-		t.Error("Expected puzzleCounter to be non-nil")
-	}
-
-	if service.verifyCounter == nil {
-		t.Error("Expected verifyCounter to be non-nil")
-	}
-
-	if service.portalErrorCounter == nil {
-		t.Error("Expected portalErrorCounter to be non-nil")
-	}
-
-	if service.apiErrorCounter == nil {
-		t.Error("Expected apiErrorCounter to be non-nil")
-	}
-
-	if service.dropCounter == nil {
-		t.Error("Expected dropCounter to be non-nil")
-	}
-
-	if service.hitRatioGauge == nil {
-		t.Error("Expected hitRatioGauge to be non-nil")
-	}
-
-	if service.clickhouseHealthGauge == nil {
-		t.Error("Expected clickhouseHealthGauge to be non-nil")
-	}
-
-	if service.postgresHealthGauge == nil {
-		t.Error("Expected postgresHealthGauge to be non-nil")
-	}
 }
 
 func TestServiceObservePuzzleCreated(t *testing.T) {

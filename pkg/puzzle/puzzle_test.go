@@ -2,7 +2,6 @@ package puzzle
 
 import (
 	"bytes"
-	"errors"
 	"io"
 	"math/rand"
 	"testing"
@@ -17,7 +16,7 @@ type limitedWriter struct {
 
 func (w *limitedWriter) Write(p []byte) (int, error) {
 	if w.written >= w.limit {
-		return 0, errors.New("write limit reached")
+		return 0, io.ErrShortWrite
 	}
 	remaining := w.limit - w.written
 	if len(p) <= remaining {
@@ -25,7 +24,7 @@ func (w *limitedWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	w.written += remaining
-	return remaining, errors.New("write limit reached")
+	return remaining, io.ErrShortWrite
 }
 
 func randInit(data []byte) {

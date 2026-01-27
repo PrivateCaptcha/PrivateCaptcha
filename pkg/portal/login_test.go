@@ -432,20 +432,24 @@ func TestPortalPropertyOwnerSourceOwnerIDNotFound(t *testing.T) {
 	}
 }
 
-func TestPostLoginInvalidData(t *testing.T) {
+func TestPostLoginParseFormFail(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	// Test with completely malformed form data
-	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, strings.NewReader("this is not valid form data"))
-	req.Header.Set(common.HeaderContentType, "text/plain") // Wrong content type
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Create a request with invalid URL-encoded form data that will fail ParseForm
+	// Using %ZZ which is an invalid percent-encoding
+	req := httptest.NewRequest("POST", "/"+common.LoginEndpoint, strings.NewReader("email=%ZZ"))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 
 	w := httptest.NewRecorder()
-	server.postLogin(w, req)
+	srv.ServeHTTP(w, req)
 
-	// Should handle gracefully
-	if w.Code == http.StatusInternalServerError {
-		t.Error("Should not return 500 for malformed data")
+	// When ParseForm fails, server redirects to error endpoint
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }

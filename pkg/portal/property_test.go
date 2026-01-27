@@ -1632,8 +1632,14 @@ func TestPutPropertyCannotEdit(t *testing.T) {
 		t.Fatalf("Failed to create member account: %v", err)
 	}
 
-	_, _ = store.Impl().InviteUserToOrg(ctx, owner, org, member)
-	_, _ = store.Impl().JoinOrg(ctx, org.ID, member)
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
@@ -1768,8 +1774,14 @@ func TestDeletePropertyCannotDelete(t *testing.T) {
 		t.Fatalf("Failed to create member account: %v", err)
 	}
 
-	_, _ = store.Impl().InviteUserToOrg(ctx, owner, org, member)
-	_, _ = store.Impl().JoinOrg(ctx, org.ID, member)
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
@@ -1790,8 +1802,8 @@ func TestDeletePropertyCannotDelete(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Should fail with unauthorized/forbidden
-	if w.Code != http.StatusUnauthorized && w.Code != http.StatusSeeOther {
-		t.Errorf("Expected unauthorized or redirect, got %d", w.Code)
+	// Member cannot delete property they don't own - should return 405 Method Not Allowed
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected method not allowed (405), got %d", w.Code)
 	}
 }

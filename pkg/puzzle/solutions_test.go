@@ -63,106 +63,56 @@ func TestZeroDifficulty(t *testing.T) {
 	}
 }
 
-func TestMetadataWasmFlag(t *testing.T) {
+func TestMetadataMethods(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		metadata *Metadata
-		expected bool
+		name          string
+		metadata      *Metadata
+		wantWasmFlag  bool
+		wantErrorCode uint8
+		wantElapsed   uint32
 	}{
 		{
-			name:     "NilMetadata",
-			metadata: nil,
-			expected: false,
+			name:          "NilMetadata",
+			metadata:      nil,
+			wantWasmFlag:  false,
+			wantErrorCode: 0,
+			wantElapsed:   0,
 		},
 		{
-			name:     "WasmFlagTrue",
-			metadata: &Metadata{wasmFlag: true},
-			expected: true,
+			name:          "WasmFlagTrue",
+			metadata:      &Metadata{wasmFlag: true, errorCode: 0, elapsedMillis: 0},
+			wantWasmFlag:  true,
+			wantErrorCode: 0,
+			wantElapsed:   0,
 		},
 		{
-			name:     "WasmFlagFalse",
-			metadata: &Metadata{wasmFlag: false},
-			expected: false,
+			name:          "AllFieldsSet",
+			metadata:      &Metadata{wasmFlag: true, errorCode: 42, elapsedMillis: 12345},
+			wantWasmFlag:  true,
+			wantErrorCode: 42,
+			wantElapsed:   12345,
+		},
+		{
+			name:          "WasmFlagFalse",
+			metadata:      &Metadata{wasmFlag: false, errorCode: 0, elapsedMillis: 0},
+			wantWasmFlag:  false,
+			wantErrorCode: 0,
+			wantElapsed:   0,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.metadata.WasmFlag()
-			if result != tt.expected {
-				t.Errorf("WasmFlag() = %v, want %v", result, tt.expected)
+			if got := tt.metadata.WasmFlag(); got != tt.wantWasmFlag {
+				t.Errorf("WasmFlag() = %v, want %v", got, tt.wantWasmFlag)
 			}
-		})
-	}
-}
-
-func TestMetadataErrorCode(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		metadata *Metadata
-		expected uint8
-	}{
-		{
-			name:     "NilMetadata",
-			metadata: nil,
-			expected: 0,
-		},
-		{
-			name:     "ErrorCodeSet",
-			metadata: &Metadata{errorCode: 42},
-			expected: 42,
-		},
-		{
-			name:     "ErrorCodeZero",
-			metadata: &Metadata{errorCode: 0},
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.metadata.ErrorCode()
-			if result != tt.expected {
-				t.Errorf("ErrorCode() = %v, want %v", result, tt.expected)
+			if got := tt.metadata.ErrorCode(); got != tt.wantErrorCode {
+				t.Errorf("ErrorCode() = %v, want %v", got, tt.wantErrorCode)
 			}
-		})
-	}
-}
-
-func TestMetadataElapsedMillis(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name     string
-		metadata *Metadata
-		expected uint32
-	}{
-		{
-			name:     "NilMetadata",
-			metadata: nil,
-			expected: 0,
-		},
-		{
-			name:     "ElapsedMillisSet",
-			metadata: &Metadata{elapsedMillis: 12345},
-			expected: 12345,
-		},
-		{
-			name:     "ElapsedMillisZero",
-			metadata: &Metadata{elapsedMillis: 0},
-			expected: 0,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.metadata.ElapsedMillis()
-			if result != tt.expected {
-				t.Errorf("ElapsedMillis() = %v, want %v", result, tt.expected)
+			if got := tt.metadata.ElapsedMillis(); got != tt.wantElapsed {
+				t.Errorf("ElapsedMillis() = %v, want %v", got, tt.wantElapsed)
 			}
 		})
 	}

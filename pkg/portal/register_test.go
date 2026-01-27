@@ -336,8 +336,9 @@ func TestPostRegisterExistingEmail(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "already registered") && !strings.Contains(body, "already exists") {
-		t.Error("Expected error message about email already being registered")
+	// Check for specific error message
+	if !strings.Contains(body, "Such email is already registered") {
+		t.Errorf("Expected error message 'Such email is already registered', got body: %s", body)
 	}
 }
 
@@ -355,8 +356,8 @@ func TestGetRegisterDisabled(t *testing.T) {
 
 	viewModel, err := server.getRegister(w, req)
 
-	if err == nil {
-		t.Error("Expected error when registration is disabled")
+	if err != errRegistrationDisabled {
+		t.Errorf("Expected errRegistrationDisabled, got: %v", err)
 	}
 
 	if viewModel != nil {
