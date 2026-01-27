@@ -110,16 +110,15 @@ func (v *Verifier) ParseSolutionPayload(ctx context.Context, data []byte) (puzzl
 
 func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.SolutionPayload, tnow time.Time) (puzzle.Puzzle, *dbgen.Property, puzzle.VerifyError) {
 	p := payload.Puzzle()
-	plog := slog.With("puzzleID", p.PuzzleID())
 
 	propertyID := p.PropertyID()
 	if p.IsZero() && bytes.Equal(propertyID[:], db.TestPropertyUUID.Bytes[:]) {
-		plog.Log(ctx, common.LevelTrace, "Verifying test puzzle")
+		slog.Log(ctx, common.LevelTrace, "Verifying test puzzle", common.PuzzleIDAttr(p.PuzzleID()))
 		return p, nil, puzzle.TestPropertyError
 	}
 
 	if expiration := p.Expiration(); !tnow.Before(expiration) {
-		plog.WarnContext(ctx, "Puzzle is expired", "expiration", expiration, "now", tnow)
+		slog.WarnContext(ctx, "Puzzle is expired", "expiration", expiration, "now", tnow, common.PuzzleIDAttr(p.PuzzleID()))
 		return p, nil, puzzle.PuzzleExpiredError
 	}
 
@@ -141,7 +140,7 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 		case db.ErrMaintenance:
 			return p, nil, puzzle.MaintenanceModeError
 		default:
-			plog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.PuzzleIDAttr(p.PuzzleID()), common.ErrAttr(err))
 			return p, nil, puzzle.VerifyErrorOther
 		}
 	}
@@ -152,7 +151,7 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 	}
 
 	if v.Store.CheckVerifiedPuzzle(ctx, p, maxCount) {
-		plog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount)
+		slog.WarnContext(ctx, "Puzzle is already cached", "count", maxCount, common.PuzzleIDAttr(p.PuzzleID()))
 		return p, nil, puzzle.VerifiedBeforeError
 	}
 

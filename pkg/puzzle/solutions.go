@@ -28,6 +28,7 @@ var (
 	errEmptyDecodedSolutions = errors.New("decoded solutions buffer is empty")
 	errInvalidSolutionLength = errors.New("solutions are not SolutionLength multiple")
 	errInvalidVersion        = errors.New("invalid serialization version")
+	errDuplicateSolution     = errors.New("duplicate solution found")
 )
 
 type Metadata struct {
@@ -126,6 +127,39 @@ func emptySolutions(count int) *Solutions {
 	}
 }
 
+func (s *Solutions) UnmarshalBinary(data []byte) error {
+	if len(data) < metadataLength {
+		return errEmptyDecodedSolutions
+	}
+
+	s.Metadata = &Metadata{}
+	if err := s.Metadata.UnmarshalBinary(data[:metadataLength]); err != nil {
+		return err
+	}
+
+	s.Buffer = data[metadataLength:]
+
+	if len(s.Buffer)%SolutionLength != 0 {
+		return errInvalidSolutionLength
+	}
+
+	return nil
+}
+
+func (s *Solutions) MarshalBinary() ([]byte, error) {
+	metadataBytes, err := s.Metadata.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	// Pre-allocate the full slice for better performance
+	raw := make([]byte, len(metadataBytes)+len(s.Buffer))
+	copy(raw, metadataBytes)
+	copy(raw[len(metadataBytes):], s.Buffer)
+
+	return raw, nil
+}
+
 func NewSolutions(data []byte) (*Solutions, error) {
 	if len(data) == 0 {
 		return nil, errEmptyEncodedSolutions
@@ -136,35 +170,21 @@ func NewSolutions(data []byte) (*Solutions, error) {
 	if err != nil {
 		return nil, err
 	}
-	decodedBytes = decodedBytes[:n]
-	if len(decodedBytes) == 0 {
-		return nil, errEmptyDecodedSolutions
-	}
 
-	metadata := &Metadata{}
-	if err := metadata.UnmarshalBinary(decodedBytes[:metadataLength]); err != nil {
+	s := &Solutions{}
+	if err := s.UnmarshalBinary(decodedBytes[:n]); err != nil {
 		return nil, err
 	}
 
-	solutionsBytes := decodedBytes[metadataLength:]
-
-	if len(solutionsBytes)%SolutionLength != 0 {
-		return nil, errInvalidSolutionLength
-	}
-
-	return &Solutions{
-		Buffer:   solutionsBytes,
-		Metadata: metadata,
-	}, nil
+	return s, nil
 }
 
 func (s *Solutions) String() string {
-	var buf bytes.Buffer
-	if metadataBytes, err := s.Metadata.MarshalBinary(); err == nil {
-		_, _ = buf.Write(metadataBytes)
+	raw, err := s.MarshalBinary()
+	if err != nil {
+		return ""
 	}
-	_, _ = buf.Write(s.Buffer)
-	return base64.StdEncoding.EncodeToString(buf.Bytes())
+	return base64.StdEncoding.EncodeToString(raw)
 }
 
 // map difficulty [0, 256) -> threshold [0, 2^32)
@@ -175,20 +195,50 @@ func thresholdFromDifficulty(difficulty uint8) uint32 {
 }
 
 func (s *Solutions) CheckUnique() error {
-	uniqueSolutions := make(map[uint64]bool, solutionsCount)
+	if solutionsCount < 64 {
+		return s.checkUniqueArray()
+	}
+
+	return s.checkUniqueMap()
+}
+
+func (s *Solutions) checkUniqueMap() error {
+	uniqueSolutions := make(map[uint64]struct{}, solutionsCount)
 
 	for start := 0; start < len(s.Buffer); start += SolutionLength {
 		solution := s.Buffer[start:(start + SolutionLength)]
 		uint64Value := binary.LittleEndian.Uint64(solution)
 
-		if _, ok := uniqueSolutions[uint64Value]; ok {
+		if _, exists := uniqueSolutions[uint64Value]; exists {
 			sIndex := solution[0]
 			return fmt.Errorf("duplicated solution found at index %v", sIndex)
 		}
 
-		uniqueSolutions[uint64Value] = true
+		uniqueSolutions[uint64Value] = struct{}{}
 	}
 
+	return nil
+}
+
+func (s *Solutions) checkUniqueArray() error {
+	// NOTE: this is given that solutions count is kind of small
+	var seen [solutionsCount]uint64
+	foundSoFar := 0
+
+	for start := 0; start < len(s.Buffer); start += SolutionLength {
+		val := binary.LittleEndian.Uint64(s.Buffer[start : start+8])
+
+		for i := 0; i < foundSoFar; i++ {
+			if seen[i] == val {
+				return errDuplicateSolution
+			}
+		}
+
+		if foundSoFar < solutionsCount {
+			seen[foundSoFar] = val
+			foundSoFar++
+		}
+	}
 	return nil
 }
 

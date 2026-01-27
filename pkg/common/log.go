@@ -119,6 +119,13 @@ func SessionIDAttr(sid string) slog.Attr {
 	}
 }
 
+func PuzzleIDAttr(pid uint64) slog.Attr {
+	return slog.Attr{
+		Key:   "puzzleID",
+		Value: slog.Uint64Value(pid),
+	}
+}
+
 func ServiceAttr(svc string) slog.Attr {
 	return slog.Attr{
 		Key:   "service",

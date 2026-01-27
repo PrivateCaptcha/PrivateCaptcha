@@ -1,7 +1,9 @@
 package puzzle
 
 import (
+	"encoding/binary"
 	"encoding/base64"
+	randv2 "math/rand/v2"
 	"testing"
 	"time"
 )
@@ -287,5 +289,30 @@ func TestSolutionsVerifyInvalidPuzzleBytes(t *testing.T) {
 	_, err := solutions.Verify(ctx, make([]byte, 10), 100)
 	if err != ErrInvalidPuzzleBytes {
 		t.Errorf("Expected ErrInvalidPuzzleBytes, got: %v", err)
+	}
+}
+
+func setupSolutionsBenchmark() *Solutions {
+	// Create a buffer with 16 unique uint64 values
+	buf := make([]byte, solutionsCount*SolutionLength)
+	for i := 0; i < solutionsCount; i++ {
+		binary.LittleEndian.PutUint64(buf[i*SolutionLength:], randv2.Uint64())
+	}
+	return &Solutions{Buffer: buf}
+}
+
+func BenchmarkCheckUniqueMap(b *testing.B) {
+	s := setupSolutionsBenchmark()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = s.checkUniqueMap()
+	}
+}
+
+func BenchmarkCheckUniqueArray(b *testing.B) {
+	s := setupSolutionsBenchmark()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = s.checkUniqueArray()
 	}
 }
