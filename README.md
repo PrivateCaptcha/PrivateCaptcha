@@ -12,7 +12,7 @@
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=PrivateCaptcha_PrivateCaptcha&metric=sqale_rating)](https://sonarcloud.io/dashboard?id=PrivateCaptcha_PrivateCaptcha)
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=PrivateCaptcha_PrivateCaptcha&metric=reliability_rating)](https://sonarcloud.io/dashboard?id=PrivateCaptcha_PrivateCaptcha)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=PrivateCaptcha_PrivateCaptcha&metric=security_rating)](https://sonarcloud.io/dashboard?id=PrivateCaptcha_PrivateCaptcha)
-[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=PrivateCaptcha_PrivateCaptcha&metric=coverage)](https://sonarcloud.io/summary/new_code?id=PrivateCaptcha_PrivateCaptcha)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=PrivateCaptcha_PrivateCaptcha&metric=coverage)](https://sonarcloud.io/summary/overall?id=PrivateCaptcha_PrivateCaptcha&branch=main)
 
 Private Captcha is an independent, privacy-first, self-hostable Proof-of-Work CAPTCHA service made in EU.
 
