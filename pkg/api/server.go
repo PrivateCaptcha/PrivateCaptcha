@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/justinas/alice"
+	easyjson "github.com/mailru/easyjson"
 	"github.com/rs/cors"
 )
 
@@ -150,26 +151,6 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 	}
 
 	return apiKey.UserID.Int32, orgID, nil
-}
-
-type VerificationResponse struct {
-	Success   bool               `json:"success"`
-	Code      puzzle.VerifyError `json:"code"`
-	Origin    string             `json:"origin,omitempty"`
-	Timestamp common.JSONTime    `json:"timestamp,omitempty"`
-}
-
-type VerifyResponseRecaptchaV2 struct {
-	Success     bool            `json:"success"`
-	ErrorCodes  []string        `json:"error-codes,omitempty"`
-	ChallengeTS common.JSONTime `json:"challenge_ts"`
-	Hostname    string          `json:"hostname"`
-}
-
-type VerifyResponseRecaptchaV3 struct {
-	VerifyResponseRecaptchaV2
-	Score  float64 `json:"score"`
-	Action string  `json:"action"`
 }
 
 func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay, backpressureTimeout time.Duration) error {
@@ -381,7 +362,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		Hostname:    result.Domain,
 	}
 
-	var response interface{} = vr2
+	var response easyjson.Marshaler = vr2
 	if recaptchaCompatVersion := r.Header.Get(common.HeaderCaptchaCompat); recaptchaCompatVersion == recaptchaCompatV3 {
 		response = &VerifyResponseRecaptchaV3{
 			VerifyResponseRecaptchaV2: *vr2,

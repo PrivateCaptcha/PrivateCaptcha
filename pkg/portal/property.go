@@ -118,16 +118,6 @@ type propertyAuditLogsRenderContext struct {
 	CanView bool
 }
 
-type propertyStatsPoint struct {
-	Date  int64 `json:"x"`
-	Value int   `json:"y"`
-}
-
-type propertyStatsResponse struct {
-	Requested []*propertyStatsPoint `json:"requested"`
-	Verified  []*propertyStatsPoint `json:"verified"`
-}
-
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
 		EasyLevel:   int(common.DifficultyLevelSmall),

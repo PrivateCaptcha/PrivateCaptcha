@@ -1,19 +1,48 @@
 package api
 
-import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+import (
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+)
 
+//easyjson:json
+type VerificationResponse struct {
+	Success   bool               `json:"success"`
+	Code      puzzle.VerifyError `json:"code"`
+	Origin    string             `json:"origin,omitempty"`
+	Timestamp common.JSONTime    `json:"timestamp,omitempty"`
+}
+
+//easyjson:json
+type VerifyResponseRecaptchaV2 struct {
+	Success     bool            `json:"success"`
+	ErrorCodes  []string        `json:"error-codes,omitempty"`
+	ChallengeTS common.JSONTime `json:"challenge_ts"`
+	Hostname    string          `json:"hostname"`
+}
+
+//easyjson:json
+type VerifyResponseRecaptchaV3 struct {
+	VerifyResponseRecaptchaV2
+	Score  float64 `json:"score"`
+	Action string  `json:"action"`
+}
+
+//easyjson:json
 type ResponseMetadata struct {
 	Code        common.StatusCode `json:"code"`
 	RequestID   string            `json:"request_id,omitempty"`
 	Description string            `json:"description,omitempty"`
 }
 
+//easyjson:json
 type APIResponse struct {
 	Meta       ResponseMetadata `json:"meta"`
 	Data       interface{}      `json:"data,omitempty"`
 	Pagination *Pagination      `json:"pagination,omitempty"`
 }
 
+//easyjson:json
 type Pagination struct {
 	Page    int  `json:"page"`
 	PerPage int  `json:"per_page"`

@@ -8,6 +8,7 @@ SQLC_MIGRATION_FIX = pkg/db/migrations/postgres/000000_sqlc_fix.sql
 EXTRA_BUILD_FLAGS ?=
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
+GOPATH := $(shell go env GOPATH)
 
 init-widget:
 	cd widget && env STAGE="$(STAGE)" npm install
@@ -93,6 +94,12 @@ build-view-emails:
 
 build-view-widget:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
+
+generate-easyjson:
+	# NOTE: api package has to be first because portal imports it
+	# might require commenting out init() method in pkg/api/server.go
+	GOFLAGS=-mod=mod $(GOPATH)/bin/easyjson pkg/api/response.go
+	GOFLAGS=-mod=mod $(GOPATH)/bin/easyjson pkg/portal/response.go
 
 copy-static-js:
 	cp -v web/js/index.js web/static/js/bundle.js

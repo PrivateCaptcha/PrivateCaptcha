@@ -84,28 +84,6 @@ type settingsUsageRenderContext struct {
 	Limit                   int64
 }
 
-type accountStatsPoint struct {
-	Date   int64 `json:"x"`
-	Value  int   `json:"y"`
-	Series int   `json:"s"`
-}
-
-type accountStatsRawPoint struct {
-	OrgID int32
-	Date  int64
-	Value int
-}
-
-type accountStatsSeries struct {
-	Name  string `json:"name"`
-	Index int    `json:"index"`
-}
-
-type accountStatsResponse struct {
-	Series []*accountStatsSeries `json:"series"`
-	Data   []*accountStatsPoint  `json:"data"`
-}
-
 type settingsGeneralRenderContext struct {
 	SettingsCommonRenderContext
 	Name           string

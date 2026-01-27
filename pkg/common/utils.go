@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"maps"
 
 	"github.com/jpillora/backoff"
+	"github.com/mailru/easyjson"
 )
 
 var (
@@ -87,8 +87,8 @@ func SendReponse(ctx context.Context, w http.ResponseWriter, response []byte, he
 	}
 }
 
-func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data interface{}, headers ...map[string][]string) {
-	response, err := json.Marshal(data)
+func SendJSONResponse(ctx context.Context, w http.ResponseWriter, data easyjson.Marshaler, headers ...map[string][]string) {
+	response, err := easyjson.Marshal(data)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to serialise response", ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
