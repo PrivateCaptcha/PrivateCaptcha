@@ -10,6 +10,9 @@ TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 GOPATH := $(shell go env GOPATH)
 
+lint:
+	$(GOPATH)/bin/golangci-lint run
+
 init-widget:
 	cd widget && env STAGE="$(STAGE)" npm install
 
