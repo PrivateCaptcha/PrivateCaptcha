@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	randv2 "math/rand/v2"
@@ -62,6 +64,8 @@ func loadPropertiesEx(count int, cfg common.ConfigStore) (map[[16]byte]*dbgen.Pr
 		return nil, nil, err
 	}
 
+	slog.Info("Fetched properties", "count", len(properties))
+
 	loginExternalID := db.UUIDFromSiteKey(db.PortalLoginSitekey)
 	registerExternalID := db.UUIDFromSiteKey(db.PortalRegisterSitekey)
 
@@ -91,9 +95,50 @@ func loadPropertiesEx(count int, cfg common.ConfigStore) (map[[16]byte]*dbgen.Pr
 		}
 	}
 
+	return external2propertyMap, user2apiKeyMap, nil
+}
+
+func loadProperty(cfg common.ConfigStore) (*dbgen.Property, *dbgen.APIKey, error) {
+	ctx := context.TODO()
+
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/)
+	if dberr != nil {
+		return nil, nil, dberr
+	}
+
+	defer pool.Close()
+	/*defer*/ clickhouse.Close()
+
+	businessDB := db.NewBusiness(pool)
+
+	properties, err := businessDB.Impl().RetrieveProperties(ctx, 10 /*limit*/)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	slog.Info("Fetched properties", "count", len(properties))
 
-	return external2propertyMap, user2apiKeyMap, nil
+	loginExternalID := db.UUIDFromSiteKey(db.PortalLoginSitekey)
+	registerExternalID := db.UUIDFromSiteKey(db.PortalRegisterSitekey)
+
+	for _, property := range properties {
+		if bytes.Equal(property.ExternalID.Bytes[:], loginExternalID.Bytes[:]) ||
+			bytes.Equal(property.ExternalID.Bytes[:], registerExternalID.Bytes[:]) {
+			continue
+		}
+
+		userID := property.CreatorID.Int32
+
+		if keys, err := businessDB.Impl().RetrieveUserAPIKeys(ctx, userID); err == nil {
+			if len(keys) > 1 {
+				slog.Error("More than 1 API key found", "userID", userID)
+			}
+			// each user HAS to have at least 1 API key per seed()
+			return property, keys[0], nil
+		}
+	}
+
+	return nil, nil, errors.New("valid data was not found")
 }
 
 func randomSiteKey() string {
@@ -262,6 +307,63 @@ func loadVerify(usersCount int, solutionsFile string, cfg common.ConfigStore, fr
 	duration := time.Duration(durationSeconds) * time.Second
 	targeter := verifyTargeter(pairs, propertiesMap, apiKeyMap, cfg)
 	attacker := vegeta.NewAttacker()
+
+	slog.Info("Attacking", "duration", duration.String(), "rate", rate.String())
+
+	var metrics vegeta.Metrics
+	for res := range attacker.Attack(targeter, rate, duration, "Big Bang!") {
+		metrics.Add(res)
+	}
+	metrics.Close()
+
+	reporter := vegeta.NewTextReporter(&metrics)
+	reporter(os.Stdout)
+
+	return nil
+}
+
+func dumbVerifyTargeter(host string, apiKey string, cfg common.ConfigStore) vegeta.Targeter {
+	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
+
+	return func(tgt *vegeta.Target) error {
+		if tgt == nil {
+			return vegeta.ErrNilTarget
+		}
+
+		tgt.Method = http.MethodPost
+
+		apiURLConfig := config.AsURL(context.TODO(), cfg.Get(common.APIBaseURLKey))
+		tgt.URL = fmt.Sprintf("http:%s/%s", apiURLConfig.URL(), common.VerifyEndpoint)
+		tgt.Body = []byte("AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.Aaqqqqq7u8zM3d3u7u7u7u4AAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAA=.AQCiRYnFLBXoqfEYUz7Up+ktTXhxXgw=")
+
+		header := http.Header{}
+		if len(rateLimitHeader) > 0 {
+			header.Add(rateLimitHeader, common_test.GenerateRandomIPv4())
+		}
+		if len(apiKey) > 0 {
+			header.Add(common.HeaderAPIKey, apiKey)
+		}
+		if len(host) > 0 {
+			header.Add("Host", host)
+		}
+		tgt.Header = header
+
+		return nil
+	}
+}
+
+func loadVerifyStub(host, apiKey string, cfg common.ConfigStore, freq int, durationSeconds int, insecure bool) error {
+	rate := vegeta.Rate{Freq: freq, Per: time.Second}
+	duration := time.Duration(durationSeconds) * time.Second
+
+	targeter := dumbVerifyTargeter(host, apiKey, cfg)
+	opts := make([]func(*vegeta.Attacker), 0)
+	if insecure {
+		opts = append(opts, vegeta.TLSConfig(&tls.Config{
+			InsecureSkipVerify: true,
+		}))
+	}
+	attacker := vegeta.NewAttacker(opts...)
 
 	slog.Info("Attacking", "duration", duration.String(), "rate", rate.String())
 
