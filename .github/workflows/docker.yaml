@@ -78,6 +78,7 @@ jobs:
           ACTIVATION_KEYS_BASE64: ${{ secrets.ACTIVATION_KEYS_BASE64 }}
         run: |
           echo "$ACTIVATION_KEYS_BASE64" | go run main.go -base64 -mode read > ../../pkg/license/public.keys
+          sha256sum ../../pkg/license/public.keys
 
       - name: Convert repository name to lowercase
         run: |
