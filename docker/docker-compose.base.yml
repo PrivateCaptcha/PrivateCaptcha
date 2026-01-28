@@ -5,6 +5,7 @@ services:
       dockerfile: ./docker/Dockerfile
       args:
         GIT_COMMIT: '${GIT_COMMIT}'
+    read_only: true
     ports:
       - 8080:8080
     env_file:
@@ -41,6 +42,7 @@ services:
         GIT_COMMIT: '${GIT_COMMIT}'
     command:
       /app/server -mode migrate -migrate-hash $GIT_COMMIT
+    read_only: true
     env_file:
       - pc.env
     environment:
