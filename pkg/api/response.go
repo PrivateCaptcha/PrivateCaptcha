@@ -54,11 +54,13 @@ type apiOrgInput struct {
 	Name string `json:"name,omitempty"`
 }
 
+//easyjson:json
 type apiOrgOutput struct {
 	Name string `json:"name"`
 	ID   string `json:"id"`
 }
 
+//easyjson:json
 type apiOrgPropertyOutput struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -85,20 +87,24 @@ type apiUpdatePropertyInput struct {
 	ID string `json:"id"`
 }
 
+//easyjson:json
 type operationResult struct {
 	Code common.StatusCode `json:"code"`
 }
 
+//easyjson:json
 type apiAsyncTaskOutput struct {
 	ID string `json:"id"`
 }
 
+//easyjson:json
 type apiAsyncTaskResultOutput struct {
 	ID       string      `json:"id"`
 	Finished bool        `json:"finished"`
 	Result   interface{} `json:"result"`
 }
 
+//easyjson:json
 type apiPropertyOutput struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`

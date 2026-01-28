@@ -15,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/justinas/alice"
+	easyjson "github.com/mailru/easyjson"
 )
 
 const (
@@ -151,7 +152,7 @@ func (s *Server) sendHTTPErrorResponse(err error, w http.ResponseWriter) {
 	}
 }
 
-func (s *Server) sendAPISuccessResponse(ctx context.Context, data interface{}, w http.ResponseWriter) {
+func (s *Server) sendAPISuccessResponse(ctx context.Context, data easyjson.Marshaler, w http.ResponseWriter) {
 	s.sendAPISuccessResponseEx(ctx, &APIResponse{Data: data}, w, common.NoCacheHeaders)
 }
 

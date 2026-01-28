@@ -19,7 +19,559 @@ var (
 	_ easyjson.Marshaler
 )
 
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(in *jlexer.Lexer, out *VerifyResponseRecaptchaV3) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(in *jlexer.Lexer, out *operationResult) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "code":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Code = common.StatusCode(in.Int())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(out *jwriter.Writer, in operationResult) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"code\":"
+		out.RawString(prefix[1:])
+		out.Int(int(in.Code))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v operationResult) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v operationResult) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *operationResult) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *operationResult) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlexer.Lexer, out *apiPropertyOutput) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "id":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ID = string(in.String())
+			}
+		case "name":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Name = string(in.String())
+			}
+		case "domain":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Domain = string(in.String())
+			}
+		case "sitekey":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Sitekey = string(in.String())
+			}
+		case "level":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Level = int(in.Int())
+			}
+		case "growth":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Growth = string(in.String())
+			}
+		case "validity_seconds":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ValiditySeconds = int(in.Int())
+			}
+		case "allow_subdomains":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.AllowSubdomains = bool(in.Bool())
+			}
+		case "allow_localhost":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.AllowLocalhost = bool(in.Bool())
+			}
+		case "max_replay_count":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.MaxReplayCount = int(in.Int())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwriter.Writer, in apiPropertyOutput) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"id\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.ID))
+	}
+	{
+		const prefix string = ",\"name\":"
+		out.RawString(prefix)
+		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"domain\":"
+		out.RawString(prefix)
+		out.String(string(in.Domain))
+	}
+	{
+		const prefix string = ",\"sitekey\":"
+		out.RawString(prefix)
+		out.String(string(in.Sitekey))
+	}
+	if in.Level != 0 {
+		const prefix string = ",\"level\":"
+		out.RawString(prefix)
+		out.Int(int(in.Level))
+	}
+	if in.Growth != "" {
+		const prefix string = ",\"growth\":"
+		out.RawString(prefix)
+		out.String(string(in.Growth))
+	}
+	if in.ValiditySeconds != 0 {
+		const prefix string = ",\"validity_seconds\":"
+		out.RawString(prefix)
+		out.Int(int(in.ValiditySeconds))
+	}
+	if in.AllowSubdomains {
+		const prefix string = ",\"allow_subdomains\":"
+		out.RawString(prefix)
+		out.Bool(bool(in.AllowSubdomains))
+	}
+	if in.AllowLocalhost {
+		const prefix string = ",\"allow_localhost\":"
+		out.RawString(prefix)
+		out.Bool(bool(in.AllowLocalhost))
+	}
+	if in.MaxReplayCount != 0 {
+		const prefix string = ",\"max_replay_count\":"
+		out.RawString(prefix)
+		out.Int(int(in.MaxReplayCount))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v apiPropertyOutput) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v apiPropertyOutput) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *apiPropertyOutput) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *apiPropertyOutput) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(in *jlexer.Lexer, out *apiOrgPropertyOutput) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "id":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ID = string(in.String())
+			}
+		case "name":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Name = string(in.String())
+			}
+		case "sitekey":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Sitekey = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(out *jwriter.Writer, in apiOrgPropertyOutput) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"id\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.ID))
+	}
+	{
+		const prefix string = ",\"name\":"
+		out.RawString(prefix)
+		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"sitekey\":"
+		out.RawString(prefix)
+		out.String(string(in.Sitekey))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v apiOrgPropertyOutput) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v apiOrgPropertyOutput) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *apiOrgPropertyOutput) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *apiOrgPropertyOutput) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(in *jlexer.Lexer, out *apiOrgOutput) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "name":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Name = string(in.String())
+			}
+		case "id":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ID = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(out *jwriter.Writer, in apiOrgOutput) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"name\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.Name))
+	}
+	{
+		const prefix string = ",\"id\":"
+		out.RawString(prefix)
+		out.String(string(in.ID))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v apiOrgOutput) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v apiOrgOutput) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *apiOrgOutput) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *apiOrgOutput) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(in *jlexer.Lexer, out *apiAsyncTaskResultOutput) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "id":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ID = string(in.String())
+			}
+		case "finished":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Finished = bool(in.Bool())
+			}
+		case "result":
+			if m, ok := out.Result.(easyjson.Unmarshaler); ok {
+				m.UnmarshalEasyJSON(in)
+			} else if m, ok := out.Result.(json.Unmarshaler); ok {
+				_ = m.UnmarshalJSON(in.Raw())
+			} else {
+				out.Result = in.Interface()
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(out *jwriter.Writer, in apiAsyncTaskResultOutput) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"id\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.ID))
+	}
+	{
+		const prefix string = ",\"finished\":"
+		out.RawString(prefix)
+		out.Bool(bool(in.Finished))
+	}
+	{
+		const prefix string = ",\"result\":"
+		out.RawString(prefix)
+		if m, ok := in.Result.(easyjson.Marshaler); ok {
+			m.MarshalEasyJSON(out)
+		} else if m, ok := in.Result.(json.Marshaler); ok {
+			out.Raw(m.MarshalJSON())
+		} else {
+			out.Raw(json.Marshal(in.Result))
+		}
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v apiAsyncTaskResultOutput) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v apiAsyncTaskResultOutput) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *apiAsyncTaskResultOutput) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *apiAsyncTaskResultOutput) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(in *jlexer.Lexer, out *apiAsyncTaskOutput) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		switch key {
+		case "id":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.ID = string(in.String())
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(out *jwriter.Writer, in apiAsyncTaskOutput) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"id\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.ID))
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v apiAsyncTaskOutput) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v apiAsyncTaskOutput) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *apiAsyncTaskOutput) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *apiAsyncTaskOutput) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(l, v)
+}
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(in *jlexer.Lexer, out *VerifyResponseRecaptchaV3) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -102,7 +654,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(in *jlexe
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(out *jwriter.Writer, in VerifyResponseRecaptchaV3) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(out *jwriter.Writer, in VerifyResponseRecaptchaV3) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -151,27 +703,27 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(out *jwri
 // MarshalJSON supports json.Marshaler interface
 func (v VerifyResponseRecaptchaV3) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v VerifyResponseRecaptchaV3) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *VerifyResponseRecaptchaV3) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *VerifyResponseRecaptchaV3) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi6(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlexer.Lexer, out *VerifyResponseRecaptchaV2) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(in *jlexer.Lexer, out *VerifyResponseRecaptchaV2) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -242,7 +794,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(in *jlex
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwriter.Writer, in VerifyResponseRecaptchaV2) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(out *jwriter.Writer, in VerifyResponseRecaptchaV2) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -281,27 +833,27 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v VerifyResponseRecaptchaV2) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v VerifyResponseRecaptchaV2) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *VerifyResponseRecaptchaV2) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *VerifyResponseRecaptchaV2) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi1(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi7(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(in *jlexer.Lexer, out *VerificationResponse) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(in *jlexer.Lexer, out *VerificationResponse) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -351,7 +903,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(in *jlex
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(out *jwriter.Writer, in VerificationResponse) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(out *jwriter.Writer, in VerificationResponse) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -381,27 +933,27 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v VerificationResponse) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v VerificationResponse) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *VerificationResponse) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *VerificationResponse) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi2(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi8(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(in *jlexer.Lexer, out *ResponseMetadata) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(in *jlexer.Lexer, out *ResponseMetadata) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -443,7 +995,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(in *jlex
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(out *jwriter.Writer, in ResponseMetadata) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(out *jwriter.Writer, in ResponseMetadata) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -468,27 +1020,27 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v ResponseMetadata) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v ResponseMetadata) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *ResponseMetadata) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *ResponseMetadata) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi3(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi9(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(in *jlexer.Lexer, out *Pagination) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(in *jlexer.Lexer, out *Pagination) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -530,7 +1082,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(in *jlex
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(out *jwriter.Writer, in Pagination) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(out *jwriter.Writer, in Pagination) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -555,27 +1107,27 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v Pagination) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v Pagination) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *Pagination) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *Pagination) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi4(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi10(l, v)
 }
-func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(in *jlexer.Lexer, out *APIResponse) {
+func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(in *jlexer.Lexer, out *APIResponse) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -627,7 +1179,7 @@ func easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(in *jlex
 		in.Consumed()
 	}
 }
-func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(out *jwriter.Writer, in APIResponse) {
+func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(out *jwriter.Writer, in APIResponse) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -658,23 +1210,23 @@ func easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(out *jwr
 // MarshalJSON supports json.Marshaler interface
 func (v APIResponse) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(&w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v APIResponse) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(w, v)
+	easyjson6ff3ac1dEncodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *APIResponse) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(&r, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *APIResponse) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi5(l, v)
+	easyjson6ff3ac1dDecodeGithubComPrivateCaptchaPrivateCaptchaPkgApi11(l, v)
 }
