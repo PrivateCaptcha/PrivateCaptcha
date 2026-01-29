@@ -322,7 +322,7 @@ func loadVerify(usersCount int, solutionsFile string, cfg common.ConfigStore, fr
 	return nil
 }
 
-func dumbVerifyTargeter(host string, apiKey string, cfg common.ConfigStore) vegeta.Targeter {
+func stubVerifyTargeter(host string, apiKey string, cfg common.ConfigStore) vegeta.Targeter {
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 
 	return func(tgt *vegeta.Target) error {
@@ -356,7 +356,7 @@ func loadVerifyStub(host, apiKey string, cfg common.ConfigStore, freq int, durat
 	rate := vegeta.Rate{Freq: freq, Per: time.Second}
 	duration := time.Duration(durationSeconds) * time.Second
 
-	targeter := dumbVerifyTargeter(host, apiKey, cfg)
+	targeter := stubVerifyTargeter(host, apiKey, cfg)
 	opts := make([]func(*vegeta.Attacker), 0)
 	if insecure {
 		opts = append(opts, vegeta.TLSConfig(&tls.Config{
