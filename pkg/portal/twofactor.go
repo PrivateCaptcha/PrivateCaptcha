@@ -13,10 +13,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-const (
-	twoFactorCodeDuration = 10 * time.Minute
-)
-
 var (
 	renderContextNothing = struct{}{}
 )
@@ -82,7 +78,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	formCode := strings.TrimSpace(r.FormValue(common.ParamVerificationCode))
-	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(twoFactorCodeDuration))) {
+	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
 		data.CodeError = "Code is not valid."
 		slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, "timestamp", codeTimestamp, common.ErrAttr(err))
 		s.render(w, r, "login/twofactor-form.html", data)

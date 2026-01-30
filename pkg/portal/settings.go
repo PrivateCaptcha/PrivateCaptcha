@@ -352,7 +352,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		_ = sess.Delete(ctx, session.KeyTwoFactorCode)
 		_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
 
-		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(twoFactorCodeDuration))) {
+		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "expected", sentCode, "timestamp", codeTimestamp, common.ErrAttr(err))
 			renderCtx.TwoFactorError = "Code is not valid."
 			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil

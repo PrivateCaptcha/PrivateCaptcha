@@ -221,6 +221,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		UserLimiter:        userLimiter,
 		SubscriptionLimits: subscriptionLimits,
 		EmailVerifier:      &portal.PortalEmailVerifier{},
+		TwoFactorDuration:  10*time.Minute + 5*time.Minute,
 	}
 
 	templatesBuilder := portal.NewTemplatesBuilder()

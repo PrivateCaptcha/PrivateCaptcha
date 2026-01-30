@@ -153,6 +153,7 @@ type Server struct {
 	AuditLogParser     AuditLogParser
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
+	TwoFactorDuration  time.Duration
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -205,6 +206,11 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	}
 
 	s.PlatformCtx = platformCtx
+
+	if s.TwoFactorDuration == 0 {
+		// 10 minutes + grace time (just like usual TOTP)
+		s.TwoFactorDuration = 10*time.Minute + 5*time.Minute
+	}
 
 	return nil
 }
