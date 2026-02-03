@@ -103,6 +103,8 @@ export class CaptchaWidget {
     setOptions(options) {
         const euOnly = this._element.dataset["eu"] || null;
         const defaultEndpoint = euOnly ? PUZZLE_EU_ENDPOINT_URL : PUZZLE_ENDPOINT_URL;
+        const puzzleTimeoutMs = parseInt(this._element.dataset["puzzleTimeoutMs"], 10);
+        const defaultPuzzleTimeoutMs = Number.isFinite(puzzleTimeoutMs) ? puzzleTimeoutMs : 5000;
 
         let defaultField = "private-captcha-solution";
         if (options.hasOwnProperty('compat') && options.compat === RECAPTCHA_COMPAT) {
@@ -119,6 +121,7 @@ export class CaptchaWidget {
             debug: this._element.dataset["debug"],
             fieldName: this._element.dataset["solutionField"] || defaultField,
             puzzleEndpoint: this._element.dataset["puzzleEndpoint"] || defaultEndpoint,
+            puzzleTimeoutMs: defaultPuzzleTimeoutMs,
             sitekey: sitekey || this._element.dataset["sitekey"] || "",
             displayMode: this._element.dataset["displayMode"] || "widget",
             lang: this._element.dataset["lang"] || "auto",
@@ -171,7 +174,7 @@ export class CaptchaWidget {
             this.setState(STATE_LOADING);
             this.setProgressState(STATE_LOADING);
             this.trace(`fetching puzzle. sitekey=${sitekey}`);
-            const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
+            const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey, this._options.puzzleTimeoutMs);
             this._puzzle = new Puzzle(puzzleData);
             if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();

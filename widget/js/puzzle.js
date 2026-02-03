@@ -6,11 +6,12 @@ const PUZZLE_BUFFER_LENGTH = 128;
 // RequestTimeout, Conflict, TooManyRequests
 const ACCEPTABLE_CLIENT_ERRORS = [408, 409, 429];
 
-export async function getPuzzle(endpoint, sitekey) {
+export async function getPuzzle(endpoint, sitekey, timeoutMs = 5000) {
     try {
         const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`,
             { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
-            5 /*max attempts*/
+            5 /*max attempts*/,
+            timeoutMs
         );
 
         if (response.ok) {
@@ -34,7 +35,7 @@ function wait(delay) {
     return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
-async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000) {
+async function fetchWithBackoff(url, options, maxAttempts, timeoutMs, initialDelay = 800, maxDelay = 6000) {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
             const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
@@ -42,7 +43,18 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
         }
 
         try {
-            const response = await fetch(url, options);
+            let response;
+            if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    response = await fetch(url, { ...options, signal: controller.signal });
+                } finally {
+                    clearTimeout(timeout);
+                }
+            } else {
+                response = await fetch(url, options);
+            }
             if (response.ok) {
                 return response;
             } else {
