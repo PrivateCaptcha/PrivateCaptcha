@@ -48,6 +48,8 @@ function wait(delay, signal) {
 }
 
 async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    // Single AbortController is used across all retry attempts - if timeout occurs during any attempt
+    // (including the wait between retries), all subsequent operations will also be aborted
     const controller = new AbortController();
     const { signal } = controller;
     let timeoutId = null;
@@ -65,9 +67,7 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
             }
         }
 
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
+        clearTimeout(timeoutId);
         timeoutId = setTimeout(() => controller.abort(new Error('Fetch timed out')), timeoutMs);
 
         try {

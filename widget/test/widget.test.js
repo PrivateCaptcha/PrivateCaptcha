@@ -502,13 +502,12 @@ test('getPuzzle times out when server responds slowly', async (t) => {
 
     // Save original fetch and use native Node.js fetch to avoid happy-dom's mixed content blocking
     const originalFetch = globalThis.fetch;
-    const nativeFetch = (await import('node:http')).default;
     
     // Use native fetch that doesn't have mixed content restrictions
     globalThis.fetch = async (url, options = {}) => {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
-            const req = nativeFetch.request({
+            const req = http.request({
                 hostname: parsedUrl.hostname,
                 port: parsedUrl.port,
                 path: parsedUrl.pathname + parsedUrl.search,
