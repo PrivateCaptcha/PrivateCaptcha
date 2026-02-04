@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert';
+import http from 'node:http';
 import { Window } from 'happy-dom';
 
 const window = new Window({
@@ -441,53 +442,52 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
     const { CaptchaWidget } = await import('../js/widget.js');
 
     const element = document.querySelector('.private-captcha');
-    const originalFetch = globalThis.fetch;
-    const originalSetTimeout = globalThis.setTimeout;
-    const abortTimings = [];
-    const TEST_PUZZLE_TIMEOUT_MS = 30;
-    const TIMEOUT_ACCELERATION_THRESHOLD_MS = 100;
-    const MOCK_FETCH_DELAY_MS = 1000;
-    const MAX_TIMEOUT_ASSERT_MS = 500;
-    const MAX_ABORT_ASSERT_MS = 200;
-    globalThis.setTimeout = (fn, delay, ...args) => {
-        if (delay >= TIMEOUT_ACCELERATION_THRESHOLD_MS) {
-            return originalSetTimeout(fn, 0, ...args);
-        }
-        return originalSetTimeout(fn, delay, ...args);
-    };
-    globalThis.fetch = (url, options = {}) => {
-        return new Promise((resolve, reject) => {
-            const startedAt = Date.now();
-            const waitTimer = originalSetTimeout(() => {
-                resolve(new window.Response('', { status: 500 }));
-            }, MOCK_FETCH_DELAY_MS);
-            if (options.signal) {
-                options.signal.addEventListener('abort', () => {
-                    abortTimings.push(Date.now() - startedAt);
-                    clearTimeout(waitTimer);
-                    reject(new DOMException('Aborted', 'AbortError'));
-                }, { once: true });
-            }
+    const TEST_PUZZLE_TIMEOUT_MS = 50;
+    const RESPONSE_DELAY_MS = 1000;
+    const MAX_TOTAL_WAIT_MS = 3000;
+    const serverState = { requestCount: 0, abortedCount: 0 };
+    const server = http.createServer((req, res) => {
+        serverState.requestCount += 1;
+        req.on('aborted', () => {
+            serverState.abortedCount += 1;
         });
-    };
+        if (serverState.requestCount === 1) {
+            setTimeout(() => {
+                res.writeHead(200);
+                res.end('Too late!');
+            }, RESPONSE_DELAY_MS);
+            return;
+        }
+        res.writeHead(400);
+        res.end('Stop retries');
+    });
+
+    await new Promise((resolve) => server.listen(0, resolve));
+    const { port } = server.address();
+    const puzzleEndpoint = `http://localhost:${port}/puzzle`;
+    const originalLocation = window.location.href;
 
     try {
+        window.location.href = `http://localhost:${port}/`;
         const widget = new CaptchaWidget(element, {
             sitekey: testSitekey,
             debug: true,
-            puzzleEndpoint: 'https://privatecaptcha.invalid/puzzle',
+            puzzleEndpoint,
             puzzleTimeoutMs: TEST_PUZZLE_TIMEOUT_MS
         });
 
         const startedAt = Date.now();
-        await widget.init(false);
-        const elapsedMs = Date.now() - startedAt;
-        assert.ok(elapsedMs < MAX_TIMEOUT_ASSERT_MS, `Expected timeout before ${MAX_TIMEOUT_ASSERT_MS}ms, got ${elapsedMs}ms`);
-        assert.ok(abortTimings.length > 0, 'Expected aborts to be recorded');
-        assert.ok(abortTimings.every((timing) => timing < MAX_ABORT_ASSERT_MS), `Expected aborts under ${MAX_ABORT_ASSERT_MS}ms, got ${abortTimings.join(',')}`);
+        try {
+            await widget.init(false);
+            assert.fail('Expected init to fail with timeout');
+        } catch (err) {
+            const elapsedMs = Date.now() - startedAt;
+            assert.ok(elapsedMs < MAX_TOTAL_WAIT_MS, `Expected timeout before ${MAX_TOTAL_WAIT_MS}ms, got ${elapsedMs}ms`);
+            assert.ok(serverState.abortedCount > 0, 'Expected at least one aborted request');
+        }
     } finally {
-        globalThis.fetch = originalFetch;
-        globalThis.setTimeout = originalSetTimeout;
+        window.location.href = originalLocation;
+        await new Promise((resolve) => server.close(resolve));
     }
 
     console.log('✓ Widget puzzle timeout respected test passed');

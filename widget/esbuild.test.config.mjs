@@ -19,7 +19,7 @@ build({
     outfile: './test/bundle.test.js',
     format: 'esm',
     loader: { '.css': 'text' },
-    external: ['node:test', 'node:assert', 'happy-dom'],
+    external: ['node:test', 'node:assert', 'happy-dom', 'node:http'],
     plugins: [
         CSSMinifyPlugin,
         inlineWorkerPlugin({
