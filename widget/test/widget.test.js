@@ -597,7 +597,7 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
             }
         );
         const elapsed = Date.now() - startTime;
-        // Should timeout around 200ms (global timeout)
+        // Should timeout around 200ms (global timeout) with some overhead allowance
         assert.ok(elapsed < 500, `Should timeout at global timeout (took ${elapsed}ms)`);
     } finally {
         server.close();
