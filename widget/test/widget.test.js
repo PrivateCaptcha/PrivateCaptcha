@@ -568,52 +568,14 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    // Create a slow server that takes 500ms to respond
+    // Create a server that always returns 500 to trigger retry
     const server = http.createServer((req, res) => {
-        setTimeout(() => {
-            res.writeHead(200, { 'Content-Type': 'text/plain' });
-            res.end('slow response');
-        }, 500);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('{"error": "server error"}');
     });
 
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
-
-    const originalFetch = globalThis.fetch;
-    
-    globalThis.fetch = async (url, options = {}) => {
-        return new Promise((resolve, reject) => {
-            const parsedUrl = new URL(url);
-            const req = http.request({
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port,
-                path: parsedUrl.pathname + parsedUrl.search,
-                method: options.method || 'GET',
-                headers: options.headers ? Object.fromEntries(options.headers) : {}
-            }, (res) => {
-                let data = '';
-                res.on('data', (chunk) => data += chunk);
-                res.on('end', () => {
-                    resolve({
-                        ok: res.statusCode >= 200 && res.statusCode < 300,
-                        status: res.statusCode,
-                        text: async () => data,
-                        json: async () => JSON.parse(data)
-                    });
-                });
-            });
-            
-            if (options.signal) {
-                options.signal.addEventListener('abort', () => {
-                    req.destroy();
-                    reject(new Error('Aborted'));
-                });
-            }
-            
-            req.on('error', reject);
-            req.end();
-        });
-    };
 
     try {
         const startTime = Date.now();
@@ -638,7 +600,6 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
         // Should timeout around 200ms (global timeout)
         assert.ok(elapsed < 500, `Should timeout at global timeout (took ${elapsed}ms)`);
     } finally {
-        globalThis.fetch = originalFetch;
         server.close();
     }
 

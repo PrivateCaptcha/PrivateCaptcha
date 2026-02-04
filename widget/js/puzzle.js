@@ -9,18 +9,15 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 
 export async function getPuzzle(endpoint, sitekey, options = {}) {
-    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
-    const globalTimeoutMs = options.globalTimeout ?? DEFAULT_GLOBAL_TIMEOUT_MS;
-    const maxAttempts = options.attempts ?? 5;
     try {
-        const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`,
-            { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
-            maxAttempts,
-            800 /*initialDelay*/,
-            6000 /*maxDelay*/,
-            timeoutMs,
-            globalTimeoutMs
-        );
+        const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`, {
+            fetchOptions: { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
+            maxAttempts: options.attempts ?? 5,
+            initialDelay: 800,
+            maxDelay: 6000,
+            timeoutMs: options.timeout ?? DEFAULT_TIMEOUT_MS,
+            globalTimeoutMs: options.globalTimeout ?? DEFAULT_GLOBAL_TIMEOUT_MS
+        });
 
         if (response.ok) {
             const data = await response.text();
@@ -51,7 +48,16 @@ function wait(delay, signal) {
     });
 }
 
-async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000, timeoutMs = DEFAULT_TIMEOUT_MS, globalTimeoutMs = DEFAULT_GLOBAL_TIMEOUT_MS) {
+async function fetchWithBackoff(url, options = {}) {
+    const {
+        fetchOptions = {},
+        maxAttempts = 5,
+        initialDelay = 800,
+        maxDelay = 6000,
+        timeoutMs = DEFAULT_TIMEOUT_MS,
+        globalTimeoutMs = DEFAULT_GLOBAL_TIMEOUT_MS
+    } = options;
+
     // Global AbortController is used to abort wait() between retries when global timeout occurs
     const globalController = new AbortController();
     const { signal: globalSignal } = globalController;
@@ -81,7 +87,7 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
         globalSignal.addEventListener('abort', globalAbortHandler, { once: true });
 
         try {
-            const response = await fetch(url, { ...options, signal: fetchSignal });
+            const response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
             clearTimeout(fetchTimeoutId);
             globalSignal.removeEventListener('abort', globalAbortHandler);
             if (response.ok) {
