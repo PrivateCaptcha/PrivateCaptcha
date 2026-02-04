@@ -37,7 +37,7 @@
 
 - All frontend code (HTML, CSS, JavaScript) for Portal is in `web/` directory
 - We use htmx and Alpine.js libraries for frontend. For styles we use Tailwind CSS v3.4 (config is in `web/tailwind.config.js`)
-- Frontend code is formatted using Golang templates (with our additional functions) with entrypoint in `web/portal/templates.go`. Our templates use a similar system to Hugo static site generator where custom pages always get used with "base" templates in `web/layouts/_default` for rendering, so we can reuse functionality.
+- Frontend code is formatted using Golang templates (with our additional functions) with entrypoint in `pkg/portal/templates.go`. Our templates use a similar system to Hugo static site generator where custom pages always get used with "base" templates in `web/layouts/_default` for rendering, so we can reuse functionality.
 
 ## Environment setup
 

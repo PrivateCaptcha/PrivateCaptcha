@@ -268,13 +268,13 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 	return alice.New(svc, common.Recovered, security, s.Metrics.HandlerIDFunc(rg.LastPath), ratelimiter, cop.Handler, monitoring.Logged)
 }
 
-func (s *Server) MiddlewarePrivateRead(public alice.Chain) alice.Chain {
-	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
+func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout time.Duration) alice.Chain {
+	internalTimeout := common.HardTimeoutHandler(timeout)
 	return public.Append(s.maintenance, internalTimeout, s.private)
 }
 
-func (s *Server) MiddlewarePrivateWrite(public alice.Chain) alice.Chain {
-	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
+func (s *Server) MiddlewarePrivateWrite(public alice.Chain, timeout time.Duration) alice.Chain {
+	internalTimeout := common.HardTimeoutHandler(timeout)
 	return public.Append(s.maintenance, defaultMaxBytesHandler, internalTimeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 }
 
@@ -298,8 +298,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
 	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicTimeout)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
-	privateWrite := s.MiddlewarePrivateWrite(public)
-	privateRead := s.MiddlewarePrivateRead(public)
+	privateWrite := s.MiddlewarePrivateWrite(public, 10*time.Second)
+	privateRead := s.MiddlewarePrivateRead(public, 10*time.Second)
 
 	rg.Handle(rg.Post(common.LoginEndpoint), openWrite, http.HandlerFunc(s.postLogin))
 	rg.Handle(rg.Post(common.RegisterEndpoint), openWrite, http.HandlerFunc(s.postRegister))
