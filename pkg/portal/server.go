@@ -342,7 +342,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	s.setupEnterprise(rg, openRead, privateRead, privateWrite)
 
 	// {$} matches the end of the URL
-	rg.Handle(http.MethodGet+" "+rg.Prefix+"{$}", privateRead, http.HandlerFunc(s.getPortal))
+	rg.Handle(&common.Route{Prefix: http.MethodGet + " " + rg.Prefix + "{$}"}, privateRead, http.HandlerFunc(s.getPortal))
 }
 
 func (s *Server) setupCatchAllWithPrefix(router *http.ServeMux, prefix string, chain alice.Chain) {

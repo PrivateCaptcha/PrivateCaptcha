@@ -241,7 +241,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
 	// "root" access
-	rg.Handle(rg.Prefix+"{$}", publicChain.Append(s.Metrics.Handler), common.HttpStatus(http.StatusForbidden))
+	rg.Handle(&common.Route{Prefix: rg.Prefix + "{$}"}, publicChain.Append(s.Metrics.Handler), common.HttpStatus(http.StatusForbidden))
 }
 
 func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {

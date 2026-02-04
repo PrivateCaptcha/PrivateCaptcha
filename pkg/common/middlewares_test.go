@@ -23,17 +23,33 @@ func TestRouteGenerator(t *testing.T) {
 	}
 
 	rg := &RouteGenerator{
-		Prefix: "privatecaptcha.com/",
+		Prefix: "/",
 	}
 
-	for i, tc := range testCases {
-		t.Run(fmt.Sprintf("route_path_%v", i), func(t *testing.T) {
-			rg.Route("any", tc.parts...)
+	handlerIDs := make([]string, 0, len(testCases))
+	handlerFunc := func(handlerIDFunc func() string) func(http.Handler) http.Handler {
+		return func(h http.Handler) http.Handler {
+			handlerIDs = append(handlerIDs, handlerIDFunc())
+			return h
+		}
+	}
 
-			if actual := rg.LastPath(); actual != tc.expected {
-				t.Errorf("Actual path (%v) is different from expected (%v)", actual, tc.expected)
-			}
-		})
+	devNullHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+
+	for _, tc := range testCases {
+		rg.Handle(rg.Route("any", tc.parts...), alice.New(handlerFunc(rg.LastPath)), devNullHandler)
+	}
+
+	rg.Register(&http.ServeMux{})
+
+	if len(handlerIDs) != len(testCases) {
+		t.Fatal("No handler registered")
+	}
+
+	for i, hid := range handlerIDs {
+		if tc := testCases[i]; hid != tc.expected {
+			t.Errorf("Actual path (%v) is different from expected (%v)", hid, tc.expected)
+		}
 	}
 }
 
@@ -344,22 +360,25 @@ func TestRouteGeneratorHandle(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	pattern := "GET /api/test"
 	emptyChain := alice.New()
 
 	// Add a route
-	rg.Handle(pattern, emptyChain, handler)
+	r := rg.Route("any", "api", "test")
+	rg.Handle(r, emptyChain, handler)
 
 	// Verify route was added
-	route, found := rg.Handler(pattern)
+	route, found := rg.Handler(r)
 	if !found {
 		t.Error("Expected route to be found after Handle")
 	}
 	if route == nil {
 		t.Error("Expected route to be non-nil")
 	}
-	if route.pattern != pattern {
-		t.Errorf("Expected pattern %q, got %q", pattern, route.pattern)
+	if route.Prefix != r.Prefix {
+		t.Errorf("Expected prefix %q, got %q", r.Prefix, route.Prefix)
+	}
+	if route.Path != r.Path {
+		t.Errorf("Expected path %q, got %q", r.Path, route.Path)
 	}
 }
 
@@ -376,19 +395,19 @@ func TestRouteGeneratorHandleUpdate(t *testing.T) {
 		w.WriteHeader(http.StatusCreated)
 	})
 
-	pattern := "GET /api/test"
 	emptyChain := alice.New()
+	r := rg.Route("any", "api", "test")
 
 	// Add a route
-	rg.Handle(pattern, emptyChain, handler1)
+	rg.Handle(r, emptyChain, handler1)
 
 	// Update the same route
-	rg.Handle(pattern, emptyChain, handler2)
+	rg.Handle(r, emptyChain, handler2)
 
 	// Verify route was updated (should only have one route, not two)
 	count := 0
 	for _, route := range rg.routes {
-		if route.pattern == pattern {
+		if (route.Prefix == r.Prefix) && (route.Path == r.Path) {
 			count++
 		}
 	}
@@ -403,7 +422,7 @@ func TestRouteGeneratorHandlerNotFound(t *testing.T) {
 	rg := &RouteGenerator{Prefix: "/api/"}
 
 	// Try to find a route that doesn't exist
-	route, found := rg.Handler("GET /api/nonexistent")
+	route, found := rg.Handler(&Route{Prefix: "GET /", Path: "api/nonexistent"})
 	if found {
 		t.Error("Expected route not to be found")
 	}
@@ -423,10 +442,10 @@ func TestRouteGeneratorMultipleRoutes(t *testing.T) {
 
 	emptyChain := alice.New()
 
-	patterns := []string{
-		"GET /api/users",
-		"POST /api/users",
-		"GET /api/orgs",
+	patterns := []*Route{
+		rg.Route("GET", "api", "users"),
+		rg.Route("POST", "api", "users"),
+		rg.Route("GET", "api", "orgs"),
 	}
 
 	for _, p := range patterns {

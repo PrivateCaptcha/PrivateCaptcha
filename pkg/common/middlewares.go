@@ -226,8 +226,13 @@ func GenerateETag(parts ...string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+type Route struct {
+	Path   string
+	Prefix string
+}
+
 type RouteAndHandler struct {
-	pattern string
+	Route
 	chain   alice.Chain
 	handler http.Handler
 }
@@ -241,33 +246,34 @@ type RouteGenerator struct {
 	routes []*RouteAndHandler
 }
 
-func (rg *RouteGenerator) Route(method string, parts ...string) string {
-	rg.Path = strings.Join(parts, "/")
-	result := method + " " + rg.Prefix + rg.Path
-	return result
+func (rg *RouteGenerator) Route(method string, parts ...string) *Route {
+	return &Route{
+		Prefix: method + " " + rg.Prefix,
+		Path:   strings.Join(parts, "/"),
+	}
 }
 
-func (rg *RouteGenerator) Options(parts ...string) string {
+func (rg *RouteGenerator) Options(parts ...string) *Route {
 	return rg.Route(http.MethodOptions, parts...)
 }
 
-func (rg *RouteGenerator) Get(parts ...string) string {
+func (rg *RouteGenerator) Get(parts ...string) *Route {
 	return rg.Route(http.MethodGet, parts...)
 }
 
-func (rg *RouteGenerator) Post(parts ...string) string {
+func (rg *RouteGenerator) Post(parts ...string) *Route {
 	return rg.Route(http.MethodPost, parts...)
 }
 
-func (rg *RouteGenerator) Put(parts ...string) string {
+func (rg *RouteGenerator) Put(parts ...string) *Route {
 	return rg.Route(http.MethodPut, parts...)
 }
 
-func (rg *RouteGenerator) Delete(parts ...string) string {
+func (rg *RouteGenerator) Delete(parts ...string) *Route {
 	return rg.Route(http.MethodDelete, parts...)
 }
 
-func (rg *RouteGenerator) Patch(parts ...string) string {
+func (rg *RouteGenerator) Patch(parts ...string) *Route {
 	return rg.Route(http.MethodPatch, parts...)
 }
 
@@ -278,9 +284,9 @@ func (rg *RouteGenerator) LastPath() string {
 	return result
 }
 
-func (rg *RouteGenerator) Handler(pattern string) (*RouteAndHandler, bool) {
+func (rg *RouteGenerator) Handler(r *Route) (*RouteAndHandler, bool) {
 	for _, route := range rg.routes {
-		if route.pattern == pattern {
+		if (route.Prefix == r.Prefix) && (route.Path == r.Path) {
 			return route, true
 		}
 	}
@@ -288,15 +294,15 @@ func (rg *RouteGenerator) Handler(pattern string) (*RouteAndHandler, bool) {
 	return nil, false
 }
 
-func (rg *RouteGenerator) Handle(pattern string, chain alice.Chain, handler http.Handler) {
-	if route, ok := rg.Handler(pattern); ok {
-		route.chain = chain
-		route.handler = handler
+func (rg *RouteGenerator) Handle(route *Route, chain alice.Chain, handler http.Handler) {
+	if rh, ok := rg.Handler(route); ok {
+		rh.chain = chain
+		rh.handler = handler
 		return
 	}
 
 	rg.routes = append(rg.routes, &RouteAndHandler{
-		pattern: pattern,
+		Route:   *route,
 		chain:   chain,
 		handler: handler,
 	})
@@ -304,6 +310,8 @@ func (rg *RouteGenerator) Handle(pattern string, chain alice.Chain, handler http
 
 func (rg *RouteGenerator) Register(router *http.ServeMux) {
 	for _, route := range rg.routes {
-		router.Handle(route.pattern, route.chain.Then(route.handler))
+		// this horrible side-effect magic is needed for correct passthrough of the http path in prometheus metrics
+		rg.Path = route.Path
+		router.Handle(route.Prefix+route.Path, route.chain.Then(route.handler))
 	}
 }
