@@ -444,8 +444,11 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
     const originalFetch = globalThis.fetch;
     const originalSetTimeout = globalThis.setTimeout;
     const abortTimings = [];
+    const TIMEOUT_ACCELERATION_THRESHOLD_MS = 100;
+    const MAX_TIMEOUT_ASSERT_MS = 500;
+    const MAX_ABORT_ASSERT_MS = 200;
     globalThis.setTimeout = (fn, delay, ...args) => {
-        if (delay >= 100) {
+        if (delay >= TIMEOUT_ACCELERATION_THRESHOLD_MS) {
             return originalSetTimeout(fn, 0, ...args);
         }
         return originalSetTimeout(fn, delay, ...args);
@@ -477,8 +480,8 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
         const startedAt = Date.now();
         await widget.init(false);
         const elapsedMs = Date.now() - startedAt;
-        assert.ok(elapsedMs < 500, `Expected timeout before 500ms, got ${elapsedMs}ms`);
-        assert.ok(abortTimings.every((timing) => timing < 200), `Expected aborts under 200ms, got ${abortTimings.join(',')}`);
+        assert.ok(elapsedMs < MAX_TIMEOUT_ASSERT_MS, `Expected timeout before ${MAX_TIMEOUT_ASSERT_MS}ms, got ${elapsedMs}ms`);
+        assert.ok(abortTimings.every((timing) => timing < MAX_ABORT_ASSERT_MS), `Expected aborts under ${MAX_ABORT_ASSERT_MS}ms, got ${abortTimings.join(',')}`);
     } finally {
         globalThis.fetch = originalFetch;
         globalThis.setTimeout = originalSetTimeout;
