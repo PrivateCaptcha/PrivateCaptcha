@@ -5,12 +5,17 @@ import { decode } from 'base64-arraybuffer';
 const PUZZLE_BUFFER_LENGTH = 128;
 // RequestTimeout, Conflict, TooManyRequests
 const ACCEPTABLE_CLIENT_ERRORS = [408, 409, 429];
+const DEFAULT_TIMEOUT_MS = 5000;
 
-export async function getPuzzle(endpoint, sitekey) {
+export async function getPuzzle(endpoint, sitekey, options = {}) {
+    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
     try {
         const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`,
             { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
-            5 /*max attempts*/
+            5 /*max attempts*/,
+            800 /*initialDelay*/,
+            6000 /*maxDelay*/,
+            timeoutMs
         );
 
         if (response.ok) {
@@ -30,19 +35,44 @@ export async function getPuzzle(endpoint, sitekey) {
     throw Error('Internal error');
 };
 
-function wait(delay) {
-    return new Promise((resolve) => setTimeout(resolve, delay));
+function wait(delay, signal) {
+    return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(resolve, delay);
+        if (signal) {
+            signal.addEventListener('abort', () => {
+                clearTimeout(timeoutId);
+                reject(signal.reason || new Error('Aborted'));
+            }, { once: true });
+        }
+    });
 }
 
-async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000) {
+async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000, timeoutMs = DEFAULT_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const { signal } = controller;
+    let timeoutId = null;
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
             const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
-            await wait(delay);
+            try {
+                await wait(delay, signal);
+            } catch (err) {
+                if (signal.aborted) {
+                    throw new Error('Fetch timed out');
+                }
+                throw err;
+            }
         }
 
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        timeoutId = setTimeout(() => controller.abort(new Error('Fetch timed out')), timeoutMs);
+
         try {
-            const response = await fetch(url, options);
+            const response = await fetch(url, { ...options, signal });
+            clearTimeout(timeoutId);
             if (response.ok) {
                 return response;
             } else {
@@ -57,6 +87,10 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
                 continue;
             }
         } catch (err) {
+            clearTimeout(timeoutId);
+            if (signal.aborted) {
+                throw new Error('Fetch timed out');
+            }
             console.error('[privatecaptcha]', err);
         }
     }

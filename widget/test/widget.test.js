@@ -483,3 +483,81 @@ test('captcha.js getResponse returns widget solution', async (t) => {
 
     console.log('✓ getResponse test passed');
 });
+
+test('getPuzzle times out when server responds slowly', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    // Create a slow server that takes 1 second to respond
+    const server = http.createServer((req, res) => {
+        setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('slow response');
+        }, 1000);
+    });
+
+    // Find a random available port
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+
+    // Save original fetch and use native Node.js fetch to avoid happy-dom's mixed content blocking
+    const originalFetch = globalThis.fetch;
+    const nativeFetch = (await import('node:http')).default;
+    
+    // Use native fetch that doesn't have mixed content restrictions
+    globalThis.fetch = async (url, options = {}) => {
+        return new Promise((resolve, reject) => {
+            const parsedUrl = new URL(url);
+            const req = nativeFetch.request({
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port,
+                path: parsedUrl.pathname + parsedUrl.search,
+                method: options.method || 'GET',
+                headers: options.headers ? Object.fromEntries(options.headers) : {}
+            }, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                    resolve({
+                        ok: res.statusCode >= 200 && res.statusCode < 300,
+                        status: res.statusCode,
+                        text: async () => data,
+                        json: async () => JSON.parse(data)
+                    });
+                });
+            });
+            
+            if (options.signal) {
+                options.signal.addEventListener('abort', () => {
+                    req.destroy();
+                    reject(new Error('Aborted'));
+                });
+            }
+            
+            req.on('error', reject);
+            req.end();
+        });
+    };
+
+    try {
+        const startTime = Date.now();
+        await assert.rejects(
+            async () => {
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { timeout: 200 });
+            },
+            (err) => {
+                assert.ok(err.message.includes('timed out') || err.message.includes('Fetch timed out') || err.message.includes('Aborted'), 
+                    `Error message should indicate timeout, got: ${err.message}`);
+                return true;
+            },
+            'getPuzzle should reject with timeout error'
+        );
+        const elapsed = Date.now() - startTime;
+        assert.ok(elapsed < 800, `Should timeout quickly (took ${elapsed}ms)`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        server.close();
+    }
+
+    console.log('✓ getPuzzle timeout test passed');
+});
