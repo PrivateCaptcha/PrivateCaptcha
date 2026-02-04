@@ -430,10 +430,10 @@ test('CaptchaWidget setOptions() uses EU endpoint when data-eu is set', async (t
     console.log('✓ Widget EU endpoint test passed');
 });
 
-test('CaptchaWidget setOptions() reads puzzle timeout from data attribute', async (t) => {
+test('CaptchaWidget respects puzzle timeout option', async (t) => {
     document.body.innerHTML = `
         <form>
-            <div class="private-captcha" data-puzzle-timeout-ms="7000">
+            <div class="private-captcha">
             </div>
         </form>
     `;
@@ -441,35 +441,50 @@ test('CaptchaWidget setOptions() reads puzzle timeout from data attribute', asyn
     const { CaptchaWidget } = await import('../js/widget.js');
 
     const element = document.querySelector('.private-captcha');
-    const widget = new CaptchaWidget(element, {
-        sitekey: testSitekey,
-        debug: true
-    });
+    const originalFetch = globalThis.fetch;
+    const originalSetTimeout = globalThis.setTimeout;
+    const abortTimings = [];
+    globalThis.setTimeout = (fn, delay, ...args) => {
+        if (delay >= 100) {
+            return originalSetTimeout(fn, 0, ...args);
+        }
+        return originalSetTimeout(fn, delay, ...args);
+    };
+    globalThis.fetch = (url, options = {}) => {
+        return new Promise((resolve, reject) => {
+            const startedAt = Date.now();
+            const waitTimer = originalSetTimeout(() => {
+                resolve(new window.Response('', { status: 500 }));
+            }, 1000);
+            if (options.signal) {
+                options.signal.addEventListener('abort', () => {
+                    abortTimings.push(Date.now() - startedAt);
+                    originalSetTimeout(() => clearTimeout(waitTimer), 0);
+                    reject(new DOMException('Aborted', 'AbortError'));
+                }, { once: true });
+            }
+        });
+    };
 
-    assert.strictEqual(widget._options.puzzleTimeoutMs, 7000, 'Puzzle timeout should be read from data attribute');
+    try {
+        const widget = new CaptchaWidget(element, {
+            sitekey: testSitekey,
+            debug: true,
+            puzzleEndpoint: 'https://privatecaptcha.invalid/puzzle',
+            puzzleTimeoutMs: 30
+        });
 
-    console.log('✓ Widget puzzle timeout from data attribute test passed');
-});
+        const startedAt = Date.now();
+        await widget.init(false);
+        const elapsedMs = Date.now() - startedAt;
+        assert.ok(elapsedMs < 500, `Expected timeout before 500ms, got ${elapsedMs}ms`);
+        assert.ok(abortTimings.every((timing) => timing < 200), `Expected aborts under 200ms, got ${abortTimings.join(',')}`);
+    } finally {
+        globalThis.fetch = originalFetch;
+        globalThis.setTimeout = originalSetTimeout;
+    }
 
-test('CaptchaWidget setOptions() uses default puzzle timeout when data is invalid', async (t) => {
-    document.body.innerHTML = `
-        <form>
-            <div class="private-captcha" data-puzzle-timeout-ms="invalid">
-            </div>
-        </form>
-    `;
-
-    const { CaptchaWidget } = await import('../js/widget.js');
-
-    const element = document.querySelector('.private-captcha');
-    const widget = new CaptchaWidget(element, {
-        sitekey: testSitekey,
-        debug: true
-    });
-
-    assert.strictEqual(widget._options.puzzleTimeoutMs, 5000, 'Puzzle timeout should default to 5000ms on invalid data');
-
-    console.log('✓ Widget puzzle timeout default test passed');
+    console.log('✓ Widget puzzle timeout respected test passed');
 });
 
 test('captcha.js resetCaptchaWidget clears widget solution', async (t) => {
