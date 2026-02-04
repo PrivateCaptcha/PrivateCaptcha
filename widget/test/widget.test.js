@@ -445,16 +445,21 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
     const TEST_PUZZLE_TIMEOUT_MS = 50;
     const RESPONSE_DELAY_MS = 1000;
     const MAX_TOTAL_WAIT_MS = 3000;
-    const serverState = { requestCount: 0, abortedCount: 0 };
+    const serverState = { requestCount: 0, abortedCount: 0, delayTimer: null };
     const server = http.createServer((req, res) => {
         serverState.requestCount += 1;
         req.on('aborted', () => {
             serverState.abortedCount += 1;
+            if (serverState.delayTimer) {
+                clearTimeout(serverState.delayTimer);
+                serverState.delayTimer = null;
+            }
         });
         if (serverState.requestCount === 1) {
-            setTimeout(() => {
+            serverState.delayTimer = setTimeout(() => {
                 res.writeHead(200);
                 res.end('Too late!');
+                serverState.delayTimer = null;
             }, RESPONSE_DELAY_MS);
             return;
         }
@@ -483,10 +488,14 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
         } catch (err) {
             const elapsedMs = Date.now() - startedAt;
             assert.ok(elapsedMs < MAX_TOTAL_WAIT_MS, `Expected timeout before ${MAX_TOTAL_WAIT_MS}ms, got ${elapsedMs}ms`);
+            await new Promise((resolve) => setTimeout(resolve, 0));
             assert.ok(serverState.abortedCount > 0, 'Expected at least one aborted request');
         }
     } finally {
         window.location.href = originalLocation;
+        if (serverState.delayTimer) {
+            clearTimeout(serverState.delayTimer);
+        }
         await new Promise((resolve) => server.close(resolve));
     }
 
