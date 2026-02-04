@@ -484,26 +484,23 @@ test('captcha.js getResponse returns widget solution', async (t) => {
     console.log('✓ getResponse test passed');
 });
 
-test('getPuzzle times out when server responds slowly', async (t) => {
+test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
     const http = await import('node:http');
     const { getPuzzle } = await import('../js/puzzle.js');
 
-    // Create a slow server that takes 1 second to respond
+    // Create a slow server that takes 500ms to respond
     const server = http.createServer((req, res) => {
         setTimeout(() => {
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end('slow response');
-        }, 1000);
+        }, 500);
     });
 
-    // Find a random available port
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
 
-    // Save original fetch and use native Node.js fetch to avoid happy-dom's mixed content blocking
     const originalFetch = globalThis.fetch;
     
-    // Use native fetch that doesn't have mixed content restrictions
     globalThis.fetch = async (url, options = {}) => {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
@@ -542,21 +539,69 @@ test('getPuzzle times out when server responds slowly', async (t) => {
         const startTime = Date.now();
         await assert.rejects(
             async () => {
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { timeout: 200 });
+                // 1 attempt, per-call timeout 100ms, global timeout 5000ms
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { 
+                    attempts: 1, 
+                    timeout: 100, 
+                    globalTimeout: 5000 
+                });
             },
             (err) => {
-                assert.ok(err.message.includes('timed out') || err.message.includes('Fetch timed out') || err.message.includes('Aborted'), 
-                    `Error message should indicate timeout, got: ${err.message}`);
+                // With 1 attempt and per-call timeout, it should fail after max retry attempts
+                assert.ok(err.message.includes('maximum retry attempts') || err.message.includes('timed out'), 
+                    `Error message should indicate retry failure or timeout, got: ${err.message}`);
                 return true;
-            },
-            'getPuzzle should reject with timeout error'
+            }
         );
         const elapsed = Date.now() - startTime;
-        assert.ok(elapsed < 800, `Should timeout quickly (took ${elapsed}ms)`);
+        // Should timeout quickly (per-call timeout of 100ms + small overhead)
+        assert.ok(elapsed < 500, `Should timeout quickly (took ${elapsed}ms)`);
     } finally {
         globalThis.fetch = originalFetch;
         server.close();
     }
 
-    console.log('✓ getPuzzle timeout test passed');
+    console.log('✓ getPuzzle per-call timeout test passed');
+});
+
+test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
+    const http = await import('node:http');
+    const { getPuzzle } = await import('../js/puzzle.js');
+
+    // Create a server that always returns 500 to trigger retry
+    const server = http.createServer((req, res) => {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end('{"error": "server error"}');
+    });
+
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+
+    try {
+        const startTime = Date.now();
+        await assert.rejects(
+            async () => {
+                // 2 attempts, per-call timeout 5000ms, global timeout 200ms
+                // Global timeout should trigger during wait between attempts
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { 
+                    attempts: 2, 
+                    timeout: 5000, 
+                    globalTimeout: 200 
+                });
+            },
+            (err) => {
+                // Global timeout should abort with timeout error
+                assert.ok(err.message.includes('timed out') || err.message.includes('Fetch timed out'), 
+                    `Error message should indicate timeout, got: ${err.message}`);
+                return true;
+            }
+        );
+        const elapsed = Date.now() - startTime;
+        // Should timeout around 200ms (global timeout) with some overhead allowance
+        assert.ok(elapsed < 500, `Should timeout at global timeout (took ${elapsed}ms)`);
+    } finally {
+        server.close();
+    }
+
+    console.log('✓ getPuzzle global timeout test passed');
 });

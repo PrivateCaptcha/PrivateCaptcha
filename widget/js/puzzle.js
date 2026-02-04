@@ -6,17 +6,18 @@ const PUZZLE_BUFFER_LENGTH = 128;
 // RequestTimeout, Conflict, TooManyRequests
 const ACCEPTABLE_CLIENT_ERRORS = [408, 409, 429];
 const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_GLOBAL_TIMEOUT_MS = 30000;
 
 export async function getPuzzle(endpoint, sitekey, options = {}) {
-    const timeoutMs = options.timeout ?? DEFAULT_TIMEOUT_MS;
     try {
-        const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`,
-            { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
-            5 /*max attempts*/,
-            800 /*initialDelay*/,
-            6000 /*maxDelay*/,
-            timeoutMs
-        );
+        const response = await fetchWithBackoff(`${endpoint}?sitekey=${sitekey}`, {
+            fetchOptions: { headers: [["x-pc-captcha-version", "1"]], mode: "cors" },
+            maxAttempts: options.attempts ?? 5,
+            initialDelay: 800,
+            maxDelay: 6000,
+            timeoutMs: options.timeout ?? DEFAULT_TIMEOUT_MS,
+            globalTimeoutMs: options.globalTimeout ?? DEFAULT_GLOBAL_TIMEOUT_MS
+        });
 
         if (response.ok) {
             const data = await response.text();
@@ -47,33 +48,50 @@ function wait(delay, signal) {
     });
 }
 
-async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, maxDelay = 6000, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    // Single AbortController is used across all retry attempts - if timeout occurs during any attempt
-    // (including the wait between retries), all subsequent operations will also be aborted
-    const controller = new AbortController();
-    const { signal } = controller;
-    let timeoutId = null;
+async function fetchWithBackoff(url, options = {}) {
+    const {
+        fetchOptions = {},
+        maxAttempts = 5,
+        initialDelay = 800,
+        maxDelay = 6000,
+        timeoutMs = DEFAULT_TIMEOUT_MS,
+        globalTimeoutMs = DEFAULT_GLOBAL_TIMEOUT_MS
+    } = options;
+
+    // Global AbortController is used to abort wait() between retries when global timeout occurs
+    const globalController = new AbortController();
+    const { signal: globalSignal } = globalController;
+    let globalTimeoutId = setTimeout(() => globalController.abort(new Error('Fetch timed out')), globalTimeoutMs);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
             const delay = Math.min(initialDelay * Math.pow(2, attempt), maxDelay);
             try {
-                await wait(delay, signal);
+                await wait(delay, globalSignal);
             } catch (err) {
-                if (signal.aborted) {
+                clearTimeout(globalTimeoutId);
+                if (globalSignal.aborted) {
                     throw new Error('Fetch timed out');
                 }
                 throw err;
             }
         }
 
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => controller.abort(new Error('Fetch timed out')), timeoutMs);
+        // Per-call AbortController is used for individual fetch timeout
+        const fetchController = new AbortController();
+        const { signal: fetchSignal } = fetchController;
+        const fetchTimeoutId = setTimeout(() => fetchController.abort(new Error('Fetch timed out')), timeoutMs);
+
+        // If global timeout fires, abort the current fetch as well
+        const globalAbortHandler = () => fetchController.abort(new Error('Fetch timed out'));
+        globalSignal.addEventListener('abort', globalAbortHandler, { once: true });
 
         try {
-            const response = await fetch(url, { ...options, signal });
-            clearTimeout(timeoutId);
+            const response = await fetch(url, { ...fetchOptions, signal: fetchSignal });
+            clearTimeout(fetchTimeoutId);
+            globalSignal.removeEventListener('abort', globalAbortHandler);
             if (response.ok) {
+                clearTimeout(globalTimeoutId);
                 return response;
             } else {
                 console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
@@ -87,14 +105,22 @@ async function fetchWithBackoff(url, options, maxAttempts, initialDelay = 800, m
                 continue;
             }
         } catch (err) {
-            clearTimeout(timeoutId);
-            if (signal.aborted) {
+            clearTimeout(fetchTimeoutId);
+            globalSignal.removeEventListener('abort', globalAbortHandler);
+            if (globalSignal.aborted) {
+                clearTimeout(globalTimeoutId);
                 throw new Error('Fetch timed out');
+            }
+            if (fetchSignal.aborted) {
+                // Per-call timeout - continue to next attempt
+                console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
+                continue;
             }
             console.error('[privatecaptcha]', err);
         }
     }
 
+    clearTimeout(globalTimeoutId);
     throw new Error('Captcha puzzle load failed after maximum retry attempts');
 }
 
