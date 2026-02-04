@@ -444,7 +444,7 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
     const originalFetch = globalThis.fetch;
     const originalSetTimeout = globalThis.setTimeout;
     const abortTimings = [];
-    const TEST_PUZZLE_TIMEOUT_SHORT_MS = 30;
+    const TEST_PUZZLE_TIMEOUT_MS = 30;
     const TIMEOUT_ACCELERATION_THRESHOLD_MS = 100;
     const MOCK_FETCH_DELAY_MS = 1000;
     const MAX_TIMEOUT_ASSERT_MS = 500;
@@ -476,13 +476,14 @@ test('CaptchaWidget respects puzzle timeout option', async (t) => {
             sitekey: testSitekey,
             debug: true,
             puzzleEndpoint: 'https://privatecaptcha.invalid/puzzle',
-            puzzleTimeoutMs: TEST_PUZZLE_TIMEOUT_SHORT_MS
+            puzzleTimeoutMs: TEST_PUZZLE_TIMEOUT_MS
         });
 
         const startedAt = Date.now();
         await widget.init(false);
         const elapsedMs = Date.now() - startedAt;
         assert.ok(elapsedMs < MAX_TIMEOUT_ASSERT_MS, `Expected timeout before ${MAX_TIMEOUT_ASSERT_MS}ms, got ${elapsedMs}ms`);
+        assert.ok(abortTimings.length > 0, 'Expected aborts to be recorded');
         assert.ok(abortTimings.every((timing) => timing < MAX_ABORT_ASSERT_MS), `Expected aborts under ${MAX_ABORT_ASSERT_MS}ms, got ${abortTimings.join(',')}`);
     } finally {
         globalThis.fetch = originalFetch;
