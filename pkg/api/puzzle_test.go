@@ -390,8 +390,12 @@ func TestGetPuzzleDisabledProperty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Clear cache so we fetch fresh data
+	// Clear cache and reload the property from DB so it has Enabled: false
 	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+	_, err = store.Impl().RetrievePropertyBySitekey(ctx, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Now the puzzle request should be forbidden
 	resp, err = puzzleSuite(ctx, sitekey, property.Domain)

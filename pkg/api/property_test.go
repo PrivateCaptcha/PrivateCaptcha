@@ -2100,6 +2100,9 @@ func TestApiGetPropertyDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Clear cache so the next request fetches fresh data from DB
+	cache.Delete(ctx, db.PropertyByIDCacheKey(property.ID))
+
 	// Try to get the disabled property
 	_, meta, err = requestResponseAPISuite[*apiPropertyOutput](ctx, nil,
 		http.MethodGet,
