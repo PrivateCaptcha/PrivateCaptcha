@@ -377,7 +377,7 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 				} else {
 					common.Redirect(s.RelURL("/"), http.StatusBadRequest, w, r)
 				}
-			case db.ErrPermissions:
+			case db.ErrPermissions, db.ErrDisabled:
 				s.RedirectError(http.StatusForbidden, w, r)
 			case db.ErrSoftDeleted:
 				s.RedirectError(http.StatusNotAcceptable, w, r)

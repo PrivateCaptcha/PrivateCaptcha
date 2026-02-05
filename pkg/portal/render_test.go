@@ -16,12 +16,13 @@ import (
 
 func stubProperty(name, orgID string) *userProperty {
 	return &userProperty{
-		ID:     "1",
-		OrgID:  orgID,
-		Name:   name,
-		Domain: "example.com",
-		Level:  1,
-		Growth: 2,
+		ID:      "1",
+		OrgID:   orgID,
+		Name:    name,
+		Domain:  "example.com",
+		Level:   1,
+		Growth:  2,
+		Enabled: true,
 	}
 }
 

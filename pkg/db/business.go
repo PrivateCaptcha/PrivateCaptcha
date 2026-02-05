@@ -22,6 +22,7 @@ var (
 	ErrLocked             = errors.New("lock is already acquired")
 	ErrMaintenance        = errors.New("maintenance mode")
 	ErrTestProperty       = errors.New("test property")
+	ErrDisabled           = errors.New("property is disabled")
 	ErrPermissions        = errors.New("insufficient permissions")
 	errInvalidCacheType   = errors.New("cache record type does not match")
 	TestPropertySitekey   = strings.ReplaceAll(TestPropertyID, "-", "")
