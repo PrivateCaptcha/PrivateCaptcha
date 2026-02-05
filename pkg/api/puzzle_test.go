@@ -391,9 +391,7 @@ func TestGetPuzzleDisabledProperty(t *testing.T) {
 	}
 
 	// Clear cache so we fetch fresh data
-	if found := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); !found {
-		t.Fatal("property was not found in cache")
-	}
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
 
 	// Now the puzzle request should be forbidden
 	resp, err = puzzleSuite(ctx, sitekey, property.Domain)

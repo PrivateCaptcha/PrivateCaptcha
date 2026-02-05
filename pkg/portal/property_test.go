@@ -1809,63 +1809,63 @@ func TestDeletePropertyCannotDelete(t *testing.T) {
 }
 
 func TestGetOrgPropertyDisabled(t *testing.T) {
-if testing.Short() {
-t.Skip("skipping integration test")
-}
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
 
-ctx := t.Context()
-user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-if err != nil {
-t.Fatalf("Failed to create account: %v", err)
-}
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
 
-property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
-if err != nil {
-t.Fatalf("Failed to create new property: %v", err)
-}
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
 
-srv := http.NewServeMux()
-server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-if err != nil {
-t.Fatal(err)
-}
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-// First verify the property is accessible
-req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s",
-server.IDHasher.Encrypt(int(org.ID)),
-server.IDHasher.Encrypt(int(property.ID))), nil)
-req.AddCookie(cookie)
+	// First verify the property is accessible
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s",
+		server.IDHasher.Encrypt(int(org.ID)),
+		server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
 
-w := httptest.NewRecorder()
-srv.ServeHTTP(w, req)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
 
-if w.Code != http.StatusOK {
-t.Errorf("Expected status OK before disabling, got %d", w.Code)
-}
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK before disabling, got %d", w.Code)
+	}
 
-// Now disable the property
-if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
-t.Fatal(err)
-}
+	// Now disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
 
-// Try to access the disabled property
-req = httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s",
-server.IDHasher.Encrypt(int(org.ID)),
-server.IDHasher.Encrypt(int(property.ID))), nil)
-req.AddCookie(cookie)
+	// Try to access the disabled property
+	req = httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s",
+		server.IDHasher.Encrypt(int(org.ID)),
+		server.IDHasher.Encrypt(int(property.ID))), nil)
+	req.AddCookie(cookie)
 
-w = httptest.NewRecorder()
-srv.ServeHTTP(w, req)
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
 
-// Should redirect to error page (status 303 See Other for forbidden)
-if w.Code != http.StatusSeeOther {
-t.Errorf("Expected redirect (303) for disabled property, got %d", w.Code)
-}
+	// Should redirect to error page (status 303 See Other for forbidden)
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected redirect (303) for disabled property, got %d", w.Code)
+	}
 
-location, _ := w.Result().Location()
-if location == nil || !strings.Contains(location.String(), common.ErrorEndpoint) {
-t.Errorf("Expected redirect to error endpoint, got %v", location)
-}
+	location, _ := w.Result().Location()
+	if location == nil || !strings.Contains(location.String(), common.ErrorEndpoint) {
+		t.Errorf("Expected redirect to error endpoint, got %v", location)
+	}
 }
