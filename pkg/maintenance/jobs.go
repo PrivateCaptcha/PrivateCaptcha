@@ -7,18 +7,22 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	"golang.org/x/sync/semaphore"
 )
 
-func NewJobs(store db.Implementor) *jobs {
+func NewJobs(store db.Implementor, concurrency int) *jobs {
+	if concurrency < 1 {
+		concurrency = 1
+	}
 	j := &jobs{
 		store:        store,
 		periodicJobs: make([]common.PeriodicJob, 0),
 		oneOffJobs:   make([]common.OneOffJob, 0),
+		sem:          semaphore.NewWeighted(int64(concurrency)),
 	}
 
 	j.maintenanceCtx, j.maintenanceCancel = context.WithCancel(
@@ -34,7 +38,7 @@ type jobs struct {
 	maintenanceCancel context.CancelFunc
 	maintenanceCtx    context.Context
 	apiKey            string
-	mux               sync.Mutex
+	sem               *semaphore.Weighted
 }
 
 // Implicit logic is that lockDuration is the actual job Interval, but it is defined by the SQL lock.
@@ -67,15 +71,15 @@ func (j *jobs) Spawn(job common.PeriodicJob) {
 func (j *jobs) RunAll() {
 	slog.DebugContext(j.maintenanceCtx, "Starting maintenance jobs", "periodic", len(j.periodicJobs), "oneoff", len(j.oneOffJobs))
 
-	// NOTE: we run jobs mutually exclusive to preserve resources for main server (those are _maintenance_ jobs anyways)
+	// NOTE: we limit concurrent jobs with semaphore to preserve resources for main server (those are _maintenance_ jobs anyways)
 	// NOTE 2: this does not apply for on-demand ones below - that's why we wrap them only here, unlike AddLocked()
 
 	for _, job := range j.periodicJobs {
-		go common.RunPeriodicJob(j.maintenanceCtx, &mutexPeriodicJob{job: job, mux: &j.mux})
+		go common.RunPeriodicJob(j.maintenanceCtx, &semaphorePeriodicJob{job: job, sem: j.sem})
 	}
 
 	for _, job := range j.oneOffJobs {
-		go common.RunOneOffJob(j.maintenanceCtx, &mutexOneOffJob{job: job, mux: &j.mux}, job.NewParams())
+		go common.RunOneOffJob(j.maintenanceCtx, &semaphoreOneOffJob{job: job, sem: j.sem}, job.NewParams())
 	}
 }
 

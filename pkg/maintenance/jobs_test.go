@@ -80,7 +80,7 @@ func (j *stubPeriodicJob) wasExecuted() bool {
 }
 
 func TestOneOffJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubOneOffJob{}
@@ -97,7 +97,7 @@ func TestOneOffJobExecution(t *testing.T) {
 }
 
 func TestPeriodicJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{
@@ -116,7 +116,7 @@ func TestPeriodicJobExecution(t *testing.T) {
 }
 
 func TestJobsSetup(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -131,7 +131,7 @@ func TestJobsSetup(t *testing.T) {
 }
 
 func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{
@@ -159,7 +159,7 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -177,7 +177,7 @@ func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -196,7 +196,7 @@ func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -215,7 +215,7 @@ func TestHandlePeriodicJobNotFound(t *testing.T) {
 }
 
 func TestHandleOneOffJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubOneOffJob{}
@@ -241,7 +241,7 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandleOneOffJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -260,7 +260,7 @@ func TestHandleOneOffJobNotFound(t *testing.T) {
 }
 
 func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
@@ -279,7 +279,7 @@ func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 }
 
 func TestJobsUpdateConfig(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	cfg := config.NewBaseConfig(nil)
@@ -293,7 +293,7 @@ func TestJobsUpdateConfig(t *testing.T) {
 }
 
 func TestJobsSpawn(t *testing.T) {
-	jobsManager := NewJobs(nil)
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{
