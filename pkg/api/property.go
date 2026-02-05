@@ -900,7 +900,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) {
 
 	property, err := s.requestProperty(org, r)
 	if err != nil {
-		if (err == db.ErrSoftDeleted) || (err == db.ErrInvalidInput) {
+		if (err == db.ErrSoftDeleted) || (err == db.ErrInvalidInput) || (err == db.ErrDisabled) {
 			s.sendAPIErrorResponse(ctx, common.StatusPropertyIDInvalidError, r, w)
 		} else {
 			s.sendHTTPErrorResponse(err, w)

@@ -82,7 +82,7 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error 
 const getOrgProperties = `-- name: GetOrgProperties :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
 FROM backend.properties
-WHERE org_id = $1 AND deleted_at IS NULL
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 ORDER BY created_at
 OFFSET $2
 LIMIT $3
@@ -478,7 +478,7 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 }
 
 const softDeleteProperties = `-- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL AND enabled = TRUE RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
 `
 
 type SoftDeletePropertiesParams struct {
@@ -574,7 +574,7 @@ func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPro
 const updateProperty = `-- name: UpdateProperty :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled FROM backend.properties p
-    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL)
+    WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE
     FOR UPDATE
 ),
 upd AS (
