@@ -357,6 +357,54 @@ func TestGetPuzzleInvalidSitekeyLength(t *testing.T) {
 	}
 }
 
+func TestGetPuzzleDisabledProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	// First verify the property works
+	resp, err := puzzleSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK before disabling, got %d", resp.StatusCode)
+	}
+
+	// Now disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear cache so we fetch fresh data
+	if found := cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey)); !found {
+		t.Fatal("property was not found in cache")
+	}
+
+	// Now the puzzle request should be forbidden
+	resp, err = puzzleSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("Expected status Forbidden for disabled property, got %d", resp.StatusCode)
+	}
+}
+
 func TestRecaptchaVerifyHandlerInvalidFormData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
