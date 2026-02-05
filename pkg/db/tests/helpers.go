@@ -133,3 +133,8 @@ func DisableProperty(ctx context.Context, store *db.BusinessStore, propertyID in
 	_, err := store.Pool.Exec(ctx, "UPDATE backend.properties SET enabled = FALSE WHERE id = $1", propertyID)
 	return err
 }
+
+func DisableUserForTest(ctx context.Context, store *db.BusinessStore, userID int32) error {
+	_, err := store.Pool.Exec(ctx, "UPDATE backend.users SET enabled = FALSE WHERE id = $1", userID)
+	return err
+}

@@ -436,6 +436,43 @@ func TestUpdateUser(t *testing.T) {
 	}
 }
 
+func TestRetrieveDisabledUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Disable the user
+	if err := db_tests.DisableUserForTest(ctx, store, user.ID); err != nil {
+		t.Fatalf("Failed to disable user: %v", err)
+	}
+
+	// Clear user cache to ensure disabled status is fetched from DB
+	if deleted := cache.Delete(ctx, db.UserCacheKey(user.ID)); !deleted {
+		t.Log("User cache entry not found")
+	}
+
+	// RetrieveUser should return ErrDisabled
+	_, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != db.ErrDisabled {
+		t.Errorf("Expected ErrDisabled, got: %v", err)
+	}
+
+	// FindUserByEmail should also return ErrDisabled
+	// Clear cache again
+	cache.Delete(ctx, db.UserCacheKey(user.ID))
+	_, err = store.Impl().FindUserByEmail(ctx, user.Email)
+	if err != db.ErrDisabled {
+		t.Errorf("Expected ErrDisabled from FindUserByEmail, got: %v", err)
+	}
+}
+
 func TestRetrievePropertiesAll(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

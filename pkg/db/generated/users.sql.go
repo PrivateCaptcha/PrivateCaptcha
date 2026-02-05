@@ -12,7 +12,7 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 type CreateUserParams struct {
@@ -32,6 +32,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }
@@ -46,7 +47,7 @@ func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) error {
 }
 
 const getSoftDeletedUsers = `-- name: GetSoftDeletedUsers :many
-SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at
+SELECT u.id, u.name, u.email, u.subscription_id, u.created_at, u.updated_at, u.deleted_at, u.enabled
 FROM backend.users u
 WHERE u.deleted_at IS NOT NULL
   AND u.deleted_at < $1
@@ -79,6 +80,7 @@ func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUs
 			&i.User.CreatedAt,
 			&i.User.UpdatedAt,
 			&i.User.DeletedAt,
+			&i.User.Enabled,
 		); err != nil {
 			return nil, err
 		}
@@ -91,7 +93,7 @@ func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUs
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users WHERE email = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
@@ -105,12 +107,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, erro
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users WHERE id = $1
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users WHERE id = $1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
@@ -124,12 +127,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int32) (*User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }
 
 const getUsersWithoutSubscription = `-- name: GetUsersWithoutSubscription :many
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL)
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users where id = ANY($1::INT[]) AND (subscription_id IS NULL OR deleted_at IS NOT NULL)
 `
 
 func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error) {
@@ -149,6 +153,7 @@ func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []in
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.Enabled,
 		); err != nil {
 			return nil, err
 		}
@@ -161,7 +166,7 @@ func (q *Queries) GetUsersWithoutSubscription(ctx context.Context, dollar_1 []in
 }
 
 const softDeleteUser = `-- name: SoftDeleteUser :one
-UPDATE backend.users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET deleted_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
@@ -175,12 +180,13 @@ func (q *Queries) SoftDeleteUser(ctx context.Context, id int32) (*User, error) {
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }
 
 const updateUserData = `-- name: UpdateUserData :one
-UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET name = $2, email = $3, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 type UpdateUserDataParams struct {
@@ -200,12 +206,13 @@ func (q *Queries) UpdateUserData(ctx context.Context, arg *UpdateUserDataParams)
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }
 
 const updateUserSubscription = `-- name: UpdateUserSubscription :one
-UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at
+UPDATE backend.users SET subscription_id = $2, updated_at = NOW() WHERE id = $1 RETURNING id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled
 `
 
 type UpdateUserSubscriptionParams struct {
@@ -224,6 +231,7 @@ func (q *Queries) UpdateUserSubscription(ctx context.Context, arg *UpdateUserSub
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
+		&i.Enabled,
 	)
 	return &i, err
 }

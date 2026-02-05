@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -2450,5 +2451,79 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 	// Member cannot delete others - should redirect to error
 	if w.Code != http.StatusSeeOther {
 		t.Errorf("Expected redirect (303), got %d", w.Code)
+	}
+}
+
+func TestInviteDisabledUserToOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user1, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"1", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org1, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-actual-org", user1.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	// Create another user account
+	user2, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"2", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create invitee account: %v", err)
+	}
+
+	// Disable the user
+	if err := db_tests.DisableUserForTest(ctx, store, user2.ID); err != nil {
+		t.Fatalf("failed to disable user: %v", err)
+	}
+
+	// Clear user cache to ensure disabled status is fetched from DB
+	cache.Delete(ctx, db.UserCacheKey(user2.ID))
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user1.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user1.ID))))
+	form.Set(common.ParamEmail, user2.Email)
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/members", server.IDHasher.Encrypt(int(org1.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify the body contains an error about not being able to invite the user
+	body := w.Body.String()
+	if !strings.Contains(body, "Cannot invite") {
+		t.Errorf("Expected error about not being able to invite disabled user, got: %s", body)
+	}
+
+	// Verify that the disabled user was not added to the org (only owner should be present)
+	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the owner should be a member, the disabled user should not have been invited
+	for _, m := range members {
+		if m.User.ID == user2.ID {
+			t.Errorf("Disabled user should not be invited to org")
+		}
 	}
 }

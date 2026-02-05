@@ -647,6 +647,11 @@ func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string
 	if user != nil {
 		cacheKey := UserCacheKey(user.ID)
 		_ = impl.cache.Set(ctx, cacheKey, user)
+
+		if !user.Enabled {
+			slog.WarnContext(ctx, "User is disabled", "userID", user.ID, "email", email)
+			return user, ErrDisabled
+		}
 	}
 
 	return user, nil
@@ -2039,6 +2044,11 @@ func (impl *BusinessStoreImpl) RetrieveUser(ctx context.Context, id int32) (*dbg
 	if user.DeletedAt.Valid {
 		slog.WarnContext(ctx, "User is soft-deleted", "userID", id, "deletedAt", user.DeletedAt.Time)
 		return user, ErrSoftDeleted
+	}
+
+	if !user.Enabled {
+		slog.WarnContext(ctx, "User is disabled", "userID", id)
+		return user, ErrDisabled
 	}
 
 	return user, nil
