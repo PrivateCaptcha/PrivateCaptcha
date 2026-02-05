@@ -2514,13 +2514,16 @@ func TestInviteDisabledUserToOrg(t *testing.T) {
 		t.Errorf("Expected error about not being able to invite disabled user, got: %s", body)
 	}
 
-	// Verify that the disabled user was not added to the org
+	// Verify that the disabled user was not added to the org (only owner should be present)
 	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org1.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(members) != 0 {
-		t.Errorf("Disabled user should not be invited to org, but found %d members", len(members))
+	// Only the owner should be a member, the disabled user should not have been invited
+	for _, m := range members {
+		if m.User.ID == user2.ID {
+			t.Errorf("Disabled user should not be invited to org")
+		}
 	}
 }
