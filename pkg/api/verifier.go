@@ -147,7 +147,7 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 
 	if (property != nil) && !property.Enabled {
 		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, common.PuzzleIDAttr(p.PuzzleID()))
-		return p, property, puzzle.VerifyErrorOther
+		return p, nil, puzzle.VerifyErrorOther
 	}
 
 	var maxCount uint32 = 1
@@ -212,11 +212,6 @@ func (v *Verifier) Verify(ctx context.Context, verifyPayload puzzle.SolutionPayl
 		result.OrgID = property.OrgID.Int32
 		result.PropertyID = property.ID
 		result.Domain = property.Domain
-
-		if !property.Enabled {
-			slog.WarnContext(ctx, "Property is disabled in Verify", "propID", property.ID)
-			return nil, db.ErrDisabled
-		}
 	}
 	if perr != puzzle.VerifyNoError && perr != puzzle.MaintenanceModeError {
 		return result, nil
