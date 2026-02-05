@@ -561,7 +561,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 	}
 
 	if !property.Enabled {
-		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID)
+		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, "domain", property.Domain)
 		return nil, nil, db.ErrDisabled
 	}
 

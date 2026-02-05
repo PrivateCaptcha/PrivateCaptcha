@@ -398,7 +398,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		if property != nil {
 			if !property.Enabled {
-				slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, "sitekey", sitekey)
+				slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, "domain", property.Domain)
 				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
 			}

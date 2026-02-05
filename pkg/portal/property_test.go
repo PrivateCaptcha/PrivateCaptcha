@@ -1568,7 +1568,7 @@ func TestNewPropertyAuditLogsArray(t *testing.T) {
 	}
 
 	// Update property to create more audit logs
-	_, _, _ = server.Store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
+	if updated, _, _ := server.Store.Impl().UpdateProperty(ctx, org, user, &dbgen.UpdatePropertyParams{
 		ID:               property.ID,
 		Name:             "Updated Property",
 		Level:            db.Int2(int16(common.DifficultyLevelMedium)),
@@ -1577,7 +1577,10 @@ func TestNewPropertyAuditLogsArray(t *testing.T) {
 		AllowSubdomains:  false,
 		AllowLocalhost:   false,
 		MaxReplayCount:   1,
-	})
+	}); !updated.Enabled {
+		// it's a bit unrelated to this test, but useful
+		t.Error("Property was disabled by update")
+	}
 
 	// Retrieve property audit logs
 	logs, err := store.Impl().RetrievePropertyAuditLogs(ctx, property, 100)

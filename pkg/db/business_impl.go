@@ -945,6 +945,7 @@ func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
 		AllowSubdomains:  row.AllowSubdomains,
 		AllowLocalhost:   row.AllowLocalhost,
 		MaxReplayCount:   row.MaxReplayCount,
+		Enabled:          row.Enabled,
 	}
 }
 
