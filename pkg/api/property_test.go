@@ -2063,3 +2063,264 @@ func buildManyPropertiesJSON(t *testing.T, count int) []byte {
 	}
 	return data
 }
+
+func TestApiGetPropertyDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// First verify we can get the property
+	propertyID := server.IDHasher.Encrypt(int(property.ID))
+	_, meta, err := requestResponseAPISuite[*apiPropertyOutput](ctx, nil,
+		http.MethodGet,
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)),
+			common.PropertyEndpoint, propertyID),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !meta.Code.Success() {
+		t.Fatalf("Expected success before disabling, got: %v", meta.Description)
+	}
+
+	// Now disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear cache so the next request fetches fresh data from DB
+	cache.Delete(ctx, db.PropertyByIDCacheKey(property.ID))
+
+	// Try to get the disabled property
+	_, meta, err = requestResponseAPISuite[*apiPropertyOutput](ctx, nil,
+		http.MethodGet,
+		fmt.Sprintf("/%s/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)),
+			common.PropertyEndpoint, propertyID),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should return an error code for invalid/disabled property
+	if meta.Code != common.StatusPropertyIDInvalidError {
+		t.Errorf("Expected StatusPropertyIDInvalidError for disabled property, got: %v", meta.Code)
+	}
+}
+
+func TestApiGetPropertiesExcludesDisabled(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 3 properties
+	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example1.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example2.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = server.BusinessDB.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example3.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Disable p1 and p2
+	if err := db_tests.DisableProperty(ctx, store, p1.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db_tests.DisableProperty(ctx, store, p2.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Get properties - should only return 1 (the enabled one)
+	endpoint := fmt.Sprintf("/%s/%v/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint)
+	properties, meta, err := requestResponseAPISuite[[]*apiOrgPropertyOutput](ctx, nil, http.MethodGet, endpoint, apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	if len(properties) != 1 {
+		t.Errorf("Expected 1 enabled property, got %d", len(properties))
+	}
+}
+
+func TestApiUpdateDisabledProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to update the disabled property
+	updates := []*apiUpdatePropertyInput{
+		{
+			ID: server.IDHasher.Encrypt(int(property.ID)),
+			apiPropertySettings: apiPropertySettings{
+				Name:            "Updated Name",
+				Level:           int(common.DifficultyLevelHigh),
+				Growth:          string(dbgen.DifficultyGrowthMedium),
+				ValiditySeconds: int(puzzle.ValidityDurations[3].Seconds()),
+				MaxReplayCount:  100,
+			},
+		},
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, updates,
+		http.MethodPut,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	// Wait for async task
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	// Verify the property was NOT updated (still has original values)
+	var updatedName string
+	err = store.Pool.QueryRow(ctx, "SELECT name FROM backend.properties WHERE id = $1", property.ID).Scan(&updatedName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if updatedName == "Updated Name" {
+		t.Error("Disabled property should not be updated")
+	}
+}
+
+func TestApiDeleteDisabledProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to delete the disabled property
+	idsToDelete := []string{server.IDHasher.Encrypt(int(property.ID))}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
+		http.MethodDelete,
+		"/"+common.PropertiesEndpoint,
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	// Wait for async task
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	// Verify the property was NOT deleted (still exists without soft delete)
+	var deletedAt *time.Time
+	err = store.Pool.QueryRow(ctx, "SELECT deleted_at FROM backend.properties WHERE id = $1", property.ID).Scan(&deletedAt)
+	if err != nil {
+		t.Error("Disabled property should still exist, but got error:", err)
+	}
+	if deletedAt != nil {
+		t.Error("Disabled property should not be soft-deleted")
+	}
+}

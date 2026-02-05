@@ -130,6 +130,11 @@ func (s *Server) requestProperty(org *dbgen.Organization, r *http.Request) (*dbg
 		return nil, err
 	}
 
+	if !property.Enabled {
+		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID)
+		return nil, db.ErrDisabled
+	}
+
 	return property, nil
 }
 

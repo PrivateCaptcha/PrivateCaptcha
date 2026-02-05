@@ -267,6 +267,9 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 			common.WriteHeaders(w, headersContentPlain)
 			_ = s.Verifier.WriteTestPuzzle(w)
 			return
+		case db.ErrDisabled:
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
 		case common.ErrBackpressure:
 			s.Metrics.ObserveEventDropped(common.PuzzleEventType)
 			// NOTE: no return here
@@ -334,7 +337,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
 	if err != nil {
 		switch err {
-		case errPuzzleOwner:
+		case errPuzzleOwner, db.ErrDisabled:
 			// "late" auth check (we postpone API key check in case it's not cached in Auth)
 			// in this case we also automatically set "API key" (or whatever is passed) as missing in cache
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
@@ -405,7 +408,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
 	if err != nil {
 		switch err {
-		case errPuzzleOwner:
+		case errPuzzleOwner, db.ErrDisabled:
 			// "late" auth check (we postpone API key check in case it's not cached in Auth)
 			// in this case we also automatically set "API key" (or whatever is passed) as missing in cache
 			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)

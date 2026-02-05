@@ -338,6 +338,9 @@ func orgPropertiesCacheKey(orgID int32, key string) CacheKey {
 func propertyByIDCacheKey(propID int32) CacheKey {
 	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
 }
+func PropertyByIDCacheKey(propID int32) CacheKey {
+	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
+}
 func PropertyBySitekeyCacheKey(sitekey string) CacheKey {
 	return StringCacheKey(propertyBySitekeyCacheKeyPrefix, sitekey)
 }

@@ -128,3 +128,8 @@ func CreatePropertyForOrg(ctx context.Context, store db.Implementor, org *dbgen.
 	}, org)
 	return property, err
 }
+
+func DisableProperty(ctx context.Context, store *db.BusinessStore, propertyID int32) error {
+	_, err := store.Pool.Exec(ctx, "UPDATE backend.properties SET enabled = FALSE WHERE id = $1", propertyID)
+	return err
+}

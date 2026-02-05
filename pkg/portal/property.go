@@ -67,6 +67,7 @@ type userProperty struct {
 	AllowSubdomains  bool
 	AllowLocalhost   bool
 	AllowReplay      bool
+	Enabled          bool
 }
 
 type orgPropertiesRenderContext struct {
@@ -140,6 +141,7 @@ func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *
 		MaxReplayCount:   max(1, int(p.MaxReplayCount)),
 		AllowSubdomains:  p.AllowSubdomains,
 		AllowLocalhost:   p.AllowLocalhost,
+		Enabled:          p.Enabled,
 	}
 
 	return up
@@ -556,6 +558,11 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 	property, err := s.Property(org, r)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if !property.Enabled {
+		slog.WarnContext(ctx, "Property is disabled", "propID", property.ID)
+		return nil, nil, db.ErrDisabled
 	}
 
 	renderCtx := &propertyDashboardRenderContext{

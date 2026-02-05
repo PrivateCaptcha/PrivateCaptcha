@@ -397,6 +397,12 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 		}
 
 		if property != nil {
+			if !property.Enabled {
+				slog.WarnContext(ctx, "Property is disabled", "propID", property.ID, "sitekey", sitekey)
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+
 			if originHost, err := common.ParseDomainName(origin); err == nil {
 				if !isOriginAllowed(originHost, property) {
 					slog.WarnContext(ctx, "Origin is not allowed", "origin", originHost, "domain", property.Domain, "subdomains", property.AllowSubdomains)

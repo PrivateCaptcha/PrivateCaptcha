@@ -1261,3 +1261,78 @@ func TestAPIKeyLastUsedAtUpdatedOnVerify(t *testing.T) {
 		t.Errorf("last_used_at timestamp is too old: %v", updatedKey.LastUsedAt.Time)
 	}
 }
+
+func TestVerifyDisabledProperty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := fmt.Sprintf("%s.%s", solutionsStr, puzzleStr)
+
+	keyParams := tests.CreateNewPuzzleAPIKeyParams(t.Name()+"-apikey", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	apikey, _, err := store.Impl().CreateAPIKey(ctx, user, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	secret := db.UUIDToSecret(apikey.ExternalID)
+
+	// First verify works
+	resp, err := verifySuite(payload, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK before disabling, got %d", resp.StatusCode)
+	}
+
+	// Now disable the property
+	if err := db_tests.DisableProperty(ctx, store, property.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Clear cache
+	cache.Delete(ctx, db.PropertyBySitekeyCacheKey(sitekey))
+
+	// Generate new puzzle and solution (can't reuse as property is disabled at puzzle endpoint too)
+	// So we test by verifying the same (now stale) payload which will fail due to disabled property
+	resp, err = verifySuite(payload, secret, sitekey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Should get forbidden or an error response
+	body, _ := io.ReadAll(resp.Body)
+	t.Logf("Response body: %s, Status: %d", string(body), resp.StatusCode)
+
+	// Verify returns VerifyErrorOther for disabled properties
+	if resp.StatusCode != http.StatusOK {
+		// Direct HTTP error is also acceptable
+		return
+	}
+
+	var vr VerificationResponse
+	if err := json.Unmarshal(body, &vr); err != nil {
+		t.Fatalf("Failed to parse response: %v", err)
+	}
+	if vr.Success {
+		t.Error("Expected verification to fail for disabled property")
+	}
+}

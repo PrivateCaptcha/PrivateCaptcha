@@ -1,0 +1,1 @@
+ALTER TABLE backend.properties ADD COLUMN enabled BOOL NOT NULL DEFAULT TRUE;
