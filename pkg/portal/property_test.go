@@ -1850,6 +1850,9 @@ func TestGetOrgPropertyDisabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Clear cache so the next request fetches fresh data from DB
+	cache.Delete(ctx, db.PropertyByIDCacheKey(property.ID))
+
 	// Try to access the disabled property
 	req = httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s",
 		server.IDHasher.Encrypt(int(org.ID)),
