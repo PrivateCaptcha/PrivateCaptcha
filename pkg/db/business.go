@@ -18,6 +18,7 @@ var (
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrRecordNotFound     = errors.New("record not found")
 	ErrSoftDeleted        = errors.New("record is marked as deleted")
+	ErrUserDisabled       = errors.New("user account is disabled")
 	ErrDuplicateAccount   = errors.New("this subscrption already has an account")
 	ErrLocked             = errors.New("lock is already acquired")
 	ErrMaintenance        = errors.New("maintenance mode")

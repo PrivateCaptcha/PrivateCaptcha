@@ -423,6 +423,7 @@ type User struct {
 	CreatedAt      pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt      pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	Enabled        bool               `db:"enabled" json:"enabled"`
 }
 
 type UserNotification struct {
