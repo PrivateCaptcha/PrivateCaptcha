@@ -77,6 +77,7 @@ func init() {
 	configKeyToEnvName[common.CountryCodeHeaderKey] = "PC_COUNTRY_CODE_HEADER"
 	configKeyToEnvName[common.EnterpriseAuditLogDaysKey] = "EE_AUDIT_LOGS_DAYS"
 	configKeyToEnvName[common.ClickHouseOptionalKey] = "PC_CLICKHOUSE_OPTIONAL"
+	configKeyToEnvName[common.MaintenanceJobConcurrencyKey] = "PC_MAINTENANCE_JOB_CONCURRENCY"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {

@@ -45,6 +45,7 @@ const (
 	CountryCodeHeaderKey
 	EnterpriseAuditLogDaysKey
 	ClickHouseOptionalKey
+	MaintenanceJobConcurrencyKey
 	// Add new fields _above_
 	COMMON_CONFIG_KEYS_COUNT
 )

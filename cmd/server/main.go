@@ -239,7 +239,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		CheckInterval: cfg.Get(common.HealthCheckIntervalKey),
 		Metrics:       metrics,
 	}
-	jobs := maintenance.NewJobs(businessDB)
+	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
+	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
 
 	updateConfigFunc := func(ctx context.Context) {
 		cfg.Update(ctx)
