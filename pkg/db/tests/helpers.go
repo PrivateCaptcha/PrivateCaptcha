@@ -128,3 +128,9 @@ func CreatePropertyForOrg(ctx context.Context, store db.Implementor, org *dbgen.
 	}, org)
 	return property, err
 }
+
+// DisableUserForTest disables a user for testing purposes
+func DisableUserForTest(ctx context.Context, store *db.BusinessStore, userID int32) error {
+	_, err := store.Pool.Exec(ctx, "UPDATE backend.users SET enabled = FALSE WHERE id = $1", userID)
+	return err
+}

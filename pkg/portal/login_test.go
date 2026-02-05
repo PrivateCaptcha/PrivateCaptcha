@@ -453,3 +453,55 @@ func TestPostLoginParseFormFail(t *testing.T) {
 		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}
 }
+
+func TestPostLoginDisabledUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	// Disable the user
+	if err := db_tests.DisableUserForTest(ctx, store, user.ID); err != nil {
+		t.Fatalf("failed to disable user: %v", err)
+	}
+
+	// Clear user cache to ensure disabled status is fetched from DB
+	cache.Delete(ctx, db.UserCacheKey(user.ID))
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, user.Email)
+	form.Add(common.ParamPortalSolution, "captcha solution")
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	// Disabled user should see error
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "disabled") {
+		t.Errorf("Expected error message about disabled account, got: %s", body)
+	}
+}
