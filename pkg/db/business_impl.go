@@ -132,7 +132,7 @@ func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string
 	}
 
 	data, err := impl.querier.GetCachedByKey(ctx, key)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrCacheMiss
 	} else if err != nil {
 		slog.ErrorContext(ctx, "Failed to read from cache", "key", key, common.ErrAttr(err))
@@ -577,7 +577,7 @@ func (impl *BusinessStoreImpl) FindUserAPIKeyByName(ctx context.Context, user *d
 		Name:   name,
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
 
@@ -635,7 +635,7 @@ func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string
 
 	user, err := impl.querier.GetUserByEmail(ctx, email)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
 
@@ -727,7 +727,7 @@ func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 		UserID: Int(userID),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			_ = impl.cache.SetMissing(ctx, cacheKey)
 			return nil, nullAccessLevelNull, ErrRecordNotFound
 		}
@@ -813,7 +813,7 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 
 	property, err := impl.querier.GetPropertyByID(ctx, propID)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			_ = impl.cache.SetMissing(ctx, cacheKey)
 			return nil, ErrRecordNotFound
 		}
@@ -856,7 +856,7 @@ func (impl *BusinessStoreImpl) FindOrgProperty(ctx context.Context, name string,
 		Name:  name,
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
 
@@ -882,7 +882,7 @@ func (impl *BusinessStoreImpl) FindOrg(ctx context.Context, name string, user *d
 		Name:   name,
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
 
@@ -965,7 +965,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 
 	updatedProperty, err := impl.querier.UpdateProperty(ctx, params)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			plog := slog.With("propID", params.ID, "userID", user.ID)
 			if property, err := FetchCachedOne[dbgen.Property](ctx, impl.cache, propertyByIDCacheKey(params.ID)); err == nil {
 				plog = plog.With("orgOwnerID", property.OrgOwnerID.Int32, "creatorID", property.CreatorID.Int32)
@@ -1036,7 +1036,7 @@ func (impl *BusinessStoreImpl) SoftDeleteProperties(ctx context.Context, ids []i
 
 	properties, err := impl.querier.SoftDeleteProperties(ctx, params)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			slog.WarnContext(ctx, "Failed to mark properties as deleted in DB", "count", len(ids), common.ErrAttr(err))
 			return nil, nil, ErrPermissions
 		}
@@ -1574,7 +1574,7 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 		UserID: Int(user.ID),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			slog.ErrorContext(ctx, "Failed to find API Key", "keyID", keyID, "userID", user.ID)
 			return nil, nil, ErrRecordNotFound
 		}
@@ -1610,7 +1610,7 @@ func (impl *BusinessStoreImpl) DeleteAPIKey(ctx context.Context, user *dbgen.Use
 		UserID: Int(user.ID),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			slog.ErrorContext(ctx, "Failed to find API Key", "keyID", keyID, "userID", user.ID)
 			return nil, ErrRecordNotFound
 		}
@@ -1666,7 +1666,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithoutSubscription(ctx context.Cont
 
 	users, err := impl.querier.GetUsersWithoutSubscription(ctx, userIDs)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.User{}, nil
 		}
 
@@ -1691,7 +1691,7 @@ func (impl *BusinessStoreImpl) RetrieveLock(ctx context.Context, name string) (*
 
 	result, err := impl.querier.GetLock(ctx, name)
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// slog.WarnContext(ctx, "Lock is still taken", "name", name)
 			return nil, ErrRecordNotFound
 		}
@@ -1719,7 +1719,7 @@ func (impl *BusinessStoreImpl) AcquireLock(ctx context.Context, name string, dat
 		ExpiresAt: Timestampz(expiration),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// slog.WarnContext(ctx, "Lock is still taken", "name", name)
 			return nil, ErrLocked
 		}
@@ -1917,7 +1917,7 @@ func (impl *BusinessStoreImpl) RetrieveSystemUserNotification(ctx context.Contex
 	})
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
 		}
 		slog.ErrorContext(ctx, "Failed to retrieve system notification", "userID", userID, common.ErrAttr(err))
@@ -2267,7 +2267,7 @@ func (impl *BusinessStoreImpl) RetrievePendingUserNotifications(ctx context.Cont
 		ProcessingAttempts: int32(maxAttempts),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			slog.DebugContext(ctx, "No pending notifications found", "since", since)
 			return []*dbgen.GetPendingUserNotificationsRow{}, nil
 		}
@@ -2841,7 +2841,7 @@ func (impl *BusinessStoreImpl) RetrievePendingAsyncTasks(ctx context.Context, co
 		Limit:              int32(count),
 	})
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.GetPendingAsyncTasksRow{}, nil
 		}
 
