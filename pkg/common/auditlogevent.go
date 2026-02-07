@@ -77,6 +77,7 @@ type AuditLogEvent struct {
 	EntityID  int64
 	TableName string
 	SessionID string
+	IPAddress string
 	OldValue  interface{}
 	NewValue  interface{}
 	Timestamp time.Time

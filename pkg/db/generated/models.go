@@ -318,6 +318,7 @@ type AuditLog struct {
 	NewValue    []byte             `db:"new_value" json:"new_value"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	Source      AuditLogSource     `db:"source" json:"source"`
+	IpAddress   pgtype.Text        `db:"ip_address" json:"ip_address"`
 }
 
 type Cache struct {

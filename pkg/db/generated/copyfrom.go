@@ -38,6 +38,7 @@ func (r iteratorForCreateAuditLogs) Values() ([]interface{}, error) {
 		r.rows[0].OldValue,
 		r.rows[0].NewValue,
 		r.rows[0].CreatedAt,
+		r.rows[0].IpAddress,
 	}, nil
 }
 
@@ -46,5 +47,5 @@ func (r iteratorForCreateAuditLogs) Err() error {
 }
 
 func (q *Queries) CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error) {
-	return q.db.CopyFrom(ctx, []string{"backend", "audit_logs"}, []string{"user_id", "action", "source", "entity_id", "entity_table", "session_id", "old_value", "new_value", "created_at"}, &iteratorForCreateAuditLogs{rows: arg})
+	return q.db.CopyFrom(ctx, []string{"backend", "audit_logs"}, []string{"user_id", "action", "source", "entity_id", "entity_table", "session_id", "old_value", "new_value", "created_at", "ip_address"}, &iteratorForCreateAuditLogs{rows: arg})
 }
