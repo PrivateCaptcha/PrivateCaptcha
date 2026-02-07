@@ -7,6 +7,7 @@ package generated
 
 import (
 	"context"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -21,7 +22,7 @@ type CreateAuditLogsParams struct {
 	OldValue    []byte             `db:"old_value" json:"old_value"`
 	NewValue    []byte             `db:"new_value" json:"new_value"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
-	IpAddress   pgtype.Text        `db:"ip_address" json:"ip_address"`
+	IpAddress   *netip.Addr        `db:"ip_address" json:"ip_address"`
 }
 
 const deleteOldAuditLogs = `-- name: DeleteOldAuditLogs :exec

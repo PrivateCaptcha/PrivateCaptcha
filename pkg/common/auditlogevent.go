@@ -1,6 +1,7 @@
 package common
 
 import (
+	"net/netip"
 	"strconv"
 	"time"
 )
@@ -77,7 +78,7 @@ type AuditLogEvent struct {
 	EntityID  int64
 	TableName string
 	SessionID string
-	IPAddress string
+	IPAddress netip.Addr
 	OldValue  interface{}
 	NewValue  interface{}
 	Timestamp time.Time

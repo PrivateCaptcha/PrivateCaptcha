@@ -3,14 +3,12 @@ package db
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/netip"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AuditLog struct {
@@ -76,9 +74,9 @@ func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLo
 			source = dbgen.AuditLogSourceApi
 		}
 
-		ipAddress := pgtype.Text{Valid: false}
-		if len(e.IPAddress) > 0 {
-			ipAddress = Text(e.IPAddress)
+		var ipAddress *netip.Addr
+		if e.IPAddress.IsValid() {
+			ipAddress = &e.IPAddress
 		}
 
 		event := &dbgen.CreateAuditLogsParams{
@@ -160,7 +158,7 @@ func (al *AuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent
 	}
 
 	if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
-		event.IPAddress = maskIPAddress(ip)
+		event.IPAddress = common.MaskIPAddress(ip)
 	} else {
 		slog.ErrorContext(ctx, "IP address not found in request context for audit log event", "table", event.TableName, "entityID", event.EntityID, "action", event.Action.String())
 	}
@@ -170,22 +168,6 @@ func (al *AuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent
 
 	slog.DebugContext(ctx, "Queueing audit log event", "action", event.Action.String(), "table", event.TableName, "userID", event.UserID, "source", source.String())
 	al.persistChan <- event
-}
-
-func maskIPAddress(ip netip.Addr) string {
-	if ip.Is4() {
-		raw := ip.As4()
-		return fmt.Sprintf("%d.%d.%d.0", raw[0], raw[1], raw[2])
-	}
-
-	// for IPv6, mask the last 80 bits (last 5 groups of 16 bits)
-	raw := ip.As16()
-	masked := raw
-	for i := 6; i < 16; i++ {
-		masked[i] = 0
-	}
-	maskedIP := netip.AddrFrom16(masked)
-	return maskedIP.String()
 }
 
 type DiscardAuditLog struct{}
