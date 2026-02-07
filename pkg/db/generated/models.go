@@ -7,6 +7,7 @@ package generated
 import (
 	"database/sql/driver"
 	"fmt"
+	"net/netip"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"time"
@@ -318,6 +319,7 @@ type AuditLog struct {
 	NewValue    []byte             `db:"new_value" json:"new_value"`
 	CreatedAt   pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	Source      AuditLogSource     `db:"source" json:"source"`
+	IpAddress   *netip.Addr        `db:"ip_address" json:"ip_address"`
 }
 
 type Cache struct {

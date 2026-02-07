@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/netip"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -73,6 +74,11 @@ func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLo
 			source = dbgen.AuditLogSourceApi
 		}
 
+		var ipAddress *netip.Addr
+		if e.IPAddress.IsValid() {
+			ipAddress = &e.IPAddress
+		}
+
 		event := &dbgen.CreateAuditLogsParams{
 			UserID:      Int(e.UserID),
 			Action:      action,
@@ -83,6 +89,7 @@ func (al *AuditLog) PersistAuditLog(ctx context.Context, batch []*common.AuditLo
 			OldValue:    nil,
 			NewValue:    nil,
 			CreatedAt:   Timestampz(e.Timestamp),
+			IpAddress:   ipAddress,
 		}
 
 		if e.OldValue != nil {
@@ -148,6 +155,12 @@ func (al *AuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent
 
 	if sid, ok := ctx.Value(common.SessionIDContextKey).(string); ok && (len(sid) > 0) {
 		event.SessionID = sid
+	}
+
+	if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
+		event.IPAddress = common.MaskIPAddress(ip)
+	} else {
+		slog.ErrorContext(ctx, "IP address not found in request context for audit log event", "table", event.TableName, "entityID", event.EntityID, "action", event.Action.String())
 	}
 
 	event.Timestamp = time.Now().UTC()
