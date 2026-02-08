@@ -123,6 +123,7 @@ func (p PlatformRenderContext) Registered() bool {
 		return true
 	}
 	if p.LicenseValid == nil {
+		// not initialized means license check is not configured
 		return false
 	}
 	return p.LicenseValid.Load()
