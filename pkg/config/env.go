@@ -113,6 +113,9 @@ func (v *envConfigValue) Key() common.ConfigKey {
 }
 
 func (v *envConfigValue) Value() string {
+	if v == nil {
+		return ""
+	}
 	return v.value
 }
 

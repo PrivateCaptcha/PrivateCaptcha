@@ -68,5 +68,8 @@ func (ci *staticConfigItem) Key() common.ConfigKey {
 }
 
 func (ci *staticConfigItem) Value() string {
+	if ci == nil {
+		return ""
+	}
 	return ci.value
 }
