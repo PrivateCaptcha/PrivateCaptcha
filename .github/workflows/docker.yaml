@@ -25,6 +25,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.5'
+
+      - name: Retrieve the activation keys
+        working-directory: ./cmd/keyspack
+        env:
+          ACTIVATION_KEYS_BASE64: ${{ secrets.ACTIVATION_KEYS_BASE64 }}
+        run: |
+          echo "$ACTIVATION_KEYS_BASE64" | go run main.go -base64 -mode read > ../../pkg/license/public.keys
+          sha256sum ../../pkg/license/public.keys
+
       - name: Convert repository name to lowercase
         run: |
           echo "REPO_LOWER=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV

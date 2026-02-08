@@ -194,6 +194,26 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
+	healthCheck := &maintenance.HealthCheckJob{
+		BusinessDB:      businessDB,
+		TimeSeriesDB:    timeSeriesDB,
+		CheckInterval:   cfg.Get(common.HealthCheckIntervalKey),
+		MaintenanceMode: cfg.Get(common.MaintenanceModeKey),
+		Metrics:         metrics,
+	}
+	quit := make(chan struct{})
+	quitFunc := func(ctx context.Context) {
+		slog.DebugContext(ctx, "Server quit triggered")
+		healthCheck.Shutdown(ctx)
+		// Give time for readiness check to propagate
+		time.Sleep(min(_readinessDrainDelay, healthCheck.Interval()))
+		close(quit)
+	}
+	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
+	if err != nil {
+		return err
+	}
+
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
@@ -222,6 +242,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		SubscriptionLimits: subscriptionLimits,
 		EmailVerifier:      &portal.PortalEmailVerifier{},
 		TwoFactorDuration:  10*time.Minute + 5*time.Minute,
+		LicenseService:     checkLicenseJob,
 	}
 
 	templatesBuilder := portal.NewTemplatesBuilder()
@@ -233,13 +254,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
-	healthCheck := &maintenance.HealthCheckJob{
-		BusinessDB:      businessDB,
-		TimeSeriesDB:    timeSeriesDB,
-		CheckInterval:   cfg.Get(common.HealthCheckIntervalKey),
-		MaintenanceMode: cfg.Get(common.MaintenanceModeKey),
-		Metrics:         metrics,
-	}
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
 	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
 
@@ -256,19 +270,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 	updateConfigFunc(ctx)
 
-	quit := make(chan struct{})
-	quitFunc := func(ctx context.Context) {
-		slog.DebugContext(ctx, "Server quit triggered")
-		healthCheck.Shutdown(ctx)
-		// Give time for readiness check to propagate
-		time.Sleep(min(_readinessDrainDelay, healthCheck.Interval()))
-		close(quit)
-	}
-
-	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
-	if err != nil {
-		return err
-	}
 	// nolint:errcheck
 	go common.RunPeriodicJobOnce(common.TraceContext(context.Background(), "check_license"), checkLicenseJob, checkLicenseJob.NewParams())
 

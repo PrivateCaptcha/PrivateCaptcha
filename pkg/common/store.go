@@ -102,3 +102,7 @@ type AuditLog interface {
 type EmailVerifier interface {
 	VerifyEmail(ctx context.Context, email string) error
 }
+
+type LicenseService interface {
+	IsRegistered() bool
+}

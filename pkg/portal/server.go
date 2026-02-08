@@ -113,8 +113,20 @@ type CaptchaRenderContext struct {
 }
 
 type PlatformRenderContext struct {
-	GitCommit  string
-	Enterprise bool
+	GitCommit      string
+	Enterprise     bool
+	licenseService common.LicenseService
+}
+
+func (p PlatformRenderContext) Registered() bool {
+	if p.Enterprise {
+		return true
+	}
+	if p.licenseService == nil {
+		// not initialized means license check is not configured
+		return false
+	}
+	return p.licenseService.IsRegistered()
 }
 
 func (ac *AlertRenderContext) ClearAlerts() {
@@ -154,6 +166,7 @@ type Server struct {
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
 	TwoFactorDuration  time.Duration
+	LicenseService     common.LicenseService
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -198,8 +211,9 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.AuditLogsFunc = s.CreateAuditLogsContext
 
 	platformCtx := &PlatformRenderContext{
-		GitCommit:  gitCommit,
-		Enterprise: s.isEnterprise(),
+		GitCommit:      gitCommit,
+		Enterprise:     s.isEnterprise(),
+		licenseService: s.LicenseService,
 	}
 	if len(gitCommit) == 0 {
 		platformCtx.GitCommit = xid.New().String()

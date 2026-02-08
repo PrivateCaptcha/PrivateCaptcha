@@ -20,6 +20,7 @@
                     </div>
                     <div class="hidden md:block">
                         <div class="ml-4 flex items-center md:ml-6">
+                            {{if not $.Platform.Registered}}<a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset bg-yellow-400/10 text-yellow-500 ring-yellow-400/20">UNREGISTERED</a>{{end}}
                             <!-- Profile dropdown -->
                             <div class="relative ml-3">
                                 <div>

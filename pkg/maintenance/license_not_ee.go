@@ -4,41 +4,28 @@ package maintenance
 
 import (
 	"context"
-	"time"
+	"log/slog"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
-func NewCheckLicenseJob(db.Implementor, common.ConfigStore, string, func(ctx context.Context)) (common.PeriodicJob, error) {
-	return &checkLicenseNoopJob{}, nil
+func licenseConfigKey() common.ConfigKey {
+	return common.CommunityLicenseKeyKey
 }
 
-type checkLicenseNoopJob struct {
+func requireActivationKeys() bool {
+	return false
 }
 
-func (j *checkLicenseNoopJob) Timeout() time.Duration {
-	return 1 * time.Second
-}
+func (j *CheckLicenseJob) RunOnce(ctx context.Context, params any) error {
+	if err := j.checkLicense(ctx); err != nil {
+		slog.WarnContext(ctx, "License check failed", common.ErrAttr(err))
+		j.licenseValid.Store(false)
+		return nil
+	}
 
-func (j *checkLicenseNoopJob) Trigger() <-chan struct{} { return nil }
+	j.licenseValid.Store(true)
 
-func (j *checkLicenseNoopJob) RunOnce(ctx context.Context, params any) error {
+	slog.DebugContext(ctx, "License check passed")
 	return nil
-}
-
-func (j *checkLicenseNoopJob) NewParams() any {
-	return struct{}{}
-}
-
-func (j *checkLicenseNoopJob) Interval() time.Duration {
-	return 1 * time.Hour
-}
-
-func (j *checkLicenseNoopJob) Jitter() time.Duration {
-	return 1
-}
-
-func (j *checkLicenseNoopJob) Name() string {
-	return "check_license_noop_job"
 }

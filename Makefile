@@ -122,6 +122,9 @@ run:
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
 
+run-docker-ce:
+	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ce.yml up --build
+
 run-docker-ee:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ee.yml up --build
 
