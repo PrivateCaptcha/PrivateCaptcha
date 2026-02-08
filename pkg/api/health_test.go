@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 )
@@ -15,9 +16,10 @@ func TestReadyEndpoint(t *testing.T) {
 	}
 
 	healthCheck := &maintenance.HealthCheckJob{
-		BusinessDB:   store,
-		TimeSeriesDB: timeSeries,
-		Metrics:      monitoring.NewStub(),
+		BusinessDB:      store,
+		TimeSeriesDB:    timeSeries,
+		Metrics:         monitoring.NewStub(),
+		MaintenanceMode: config.NewStaticValue(0, "false"),
 	}
 
 	if err := healthCheck.RunOnce(t.Context(), healthCheck.NewParams()); err != nil {
