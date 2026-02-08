@@ -76,6 +76,7 @@ func init() {
 	configKeyToEnvName[common.IDHasherSaltKey] = "PC_ID_HASH_SALT"
 	configKeyToEnvName[common.CountryCodeHeaderKey] = "PC_COUNTRY_CODE_HEADER"
 	configKeyToEnvName[common.EnterpriseAuditLogDaysKey] = "EE_AUDIT_LOGS_DAYS"
+	configKeyToEnvName[common.CommunityLicenseKeyKey] = "CE_LICENSE_KEY"
 	configKeyToEnvName[common.ClickHouseOptionalKey] = "PC_CLICKHOUSE_OPTIONAL"
 	configKeyToEnvName[common.MaintenanceJobConcurrencyKey] = "PC_MAINTENANCE_JOB_CONCURRENCY"
 

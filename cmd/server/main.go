@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -197,6 +198,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
+	licenseValid := &atomic.Bool{}
 	portalServer := &portal.Server{
 		Stage:      stage,
 		Store:      businessDB,
@@ -233,6 +235,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
+	if pctx, ok := portalServer.PlatformCtx.(*portal.PlatformRenderContext); ok {
+		pctx.LicenseValid = licenseValid
+	}
+
 	healthCheck := &maintenance.HealthCheckJob{
 		BusinessDB:      businessDB,
 		TimeSeriesDB:    timeSeriesDB,
@@ -265,7 +271,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		close(quit)
 	}
 
-	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
+	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc, licenseValid)
 	if err != nil {
 		return err
 	}

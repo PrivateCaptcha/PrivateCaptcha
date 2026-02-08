@@ -113,8 +113,19 @@ type CaptchaRenderContext struct {
 }
 
 type PlatformRenderContext struct {
-	GitCommit  string
-	Enterprise bool
+	GitCommit    string
+	Enterprise   bool
+	LicenseValid *atomic.Bool
+}
+
+func (p PlatformRenderContext) Registered() bool {
+	if p.Enterprise {
+		return true
+	}
+	if p.LicenseValid == nil {
+		return false
+	}
+	return p.LicenseValid.Load()
 }
 
 func (ac *AlertRenderContext) ClearAlerts() {

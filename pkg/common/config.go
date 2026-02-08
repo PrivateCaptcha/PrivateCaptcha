@@ -44,6 +44,7 @@ const (
 	IDHasherSaltKey
 	CountryCodeHeaderKey
 	EnterpriseAuditLogDaysKey
+	CommunityLicenseKeyKey
 	ClickHouseOptionalKey
 	MaintenanceJobConcurrencyKey
 	// Add new fields _above_

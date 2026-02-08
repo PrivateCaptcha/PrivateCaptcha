@@ -139,13 +139,14 @@ func TestCheckLicenseJobValidLicense(t *testing.T) {
 	}
 
 	job := &checkLicenseJob{
-		store:      store,
-		keys:       keys,
-		url:        ts.URL,
-		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
-		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		store:        store,
+		keys:         keys,
+		url:          ts.URL,
+		licenseKey:   config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
+		adminEmail:   config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -176,6 +177,10 @@ func TestCheckLicenseJobValidLicense(t *testing.T) {
 
 	if job.Trigger() != nil {
 		t.Error("Expected nil trigger")
+	}
+
+	if !job.licenseValid.Load() {
+		t.Error("Expected licenseValid to be true after successful license check")
 	}
 }
 
@@ -230,8 +235,9 @@ func TestCheckLicenseJobExpiredLicense(t *testing.T) {
 		url:        ts.URL,
 		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
 		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -304,8 +310,9 @@ func TestCheckLicenseJobInvalidSignature(t *testing.T) {
 		url:        ts.URL,
 		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
 		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -369,8 +376,9 @@ func TestCheckLicenseJobServerError(t *testing.T) {
 		url:        ts.URL,
 		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
 		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -426,8 +434,9 @@ func TestCheckLicenseJobNoLicenseKey(t *testing.T) {
 		url:        ts.URL,
 		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, ""), // Empty license key
 		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -495,8 +504,9 @@ func TestCheckLicenseJobCachedValidLicense(t *testing.T) {
 		url:        ts.URL,
 		licenseKey: config.NewStaticValue(common.EnterpriseLicenseKeyKey, "test-license-key"),
 		adminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
-		quitFunc:   quitFunc,
-		version:    "test-version",
+		quitFunc:     quitFunc,
+		version:      "test-version",
+		licenseValid: &atomic.Bool{},
 	}
 
 	err = job.RunOnce(ctx, job.NewParams())
@@ -581,7 +591,7 @@ func TestNewCheckLicenseJobEmptyURL(t *testing.T) {
 
 	quitFunc := func(ctx context.Context) {}
 
-	_, err := NewCheckLicenseJob(nil, nil, "test-version", quitFunc)
+	_, err := NewCheckLicenseJob(nil, nil, "test-version", quitFunc, &atomic.Bool{})
 	// We expect an error since activation keys are not available in test environment
 	// or because LicenseURL is empty
 	if err == nil {
