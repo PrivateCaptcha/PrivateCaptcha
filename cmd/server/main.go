@@ -234,10 +234,11 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	healthCheck := &maintenance.HealthCheckJob{
-		BusinessDB:    businessDB,
-		TimeSeriesDB:  timeSeriesDB,
-		CheckInterval: cfg.Get(common.HealthCheckIntervalKey),
-		Metrics:       metrics,
+		BusinessDB:      businessDB,
+		TimeSeriesDB:    timeSeriesDB,
+		CheckInterval:   cfg.Get(common.HealthCheckIntervalKey),
+		MaintenanceMode: cfg.Get(common.MaintenanceModeKey),
+		Metrics:         metrics,
 	}
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
 	jobs := maintenance.NewJobs(businessDB, jobConcurrency)

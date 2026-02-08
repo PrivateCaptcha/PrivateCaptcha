@@ -21,6 +21,7 @@ type HealthCheckJob struct {
 	clickhouseFlag   atomic.Int32
 	shuttingDownFlag atomic.Int32
 	CheckInterval    common.ConfigItem
+	MaintenanceMode  common.ConfigItem
 	Metrics          common.PlatformMetrics
 	StrictReadiness  bool
 }
@@ -164,8 +165,9 @@ func (hc *HealthCheckJob) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 
 	shuttingDown := hc.isShuttingDown()
 	healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy()
+	maintenanceMode := config.AsBool(hc.MaintenanceMode)
 
-	if !shuttingDown && (healthy || !hc.StrictReadiness) {
+	if !shuttingDown && (healthy || !hc.StrictReadiness || maintenanceMode) {
 		w.WriteHeader(http.StatusOK)
 		if healthy {
 			fmt.Fprintln(w, greenPage)
