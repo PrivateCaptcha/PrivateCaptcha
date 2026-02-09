@@ -38,6 +38,12 @@ func portalDomain() string {
 	return config.AsURL(context.TODO(), cfg.Get(common.PortalBaseURLKey)).Domain()
 }
 
+type stubLicenseService struct{}
+
+func (s *stubLicenseService) IsRegistered() bool {
+	return false
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -148,6 +154,7 @@ func TestMain(m *testing.M) {
 		UserLimiter:        api.NewUserLimiter(store),
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
+		LicenseService:     &stubLicenseService{},
 	}
 
 	templatesBuilder := NewTemplatesBuilder()
