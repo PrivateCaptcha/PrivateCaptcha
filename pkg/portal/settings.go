@@ -950,12 +950,19 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 		renderCtx.WarningMessage = "You don't have an active subscription."
 	}
 
+	slog.DebugContext(ctx, "Retrieved user limits", "limit", renderCtx.Limit, "properties", renderCtx.IncludedPropertiesCount,
+		"orgs", renderCtx.IncludedOrgsCount)
+
 	if (renderCtx.Limit == 0) ||
 		(renderCtx.IncludedOrgsCount == 0) ||
 		(renderCtx.IncludedPropertiesCount == 0) {
 		if len(renderCtx.WarningMessage) == 0 {
 			renderCtx.WarningMessage = "Could not determine usage limits from your plan."
 		}
+	}
+
+	if !s.LicenseService.IsRegistered() && (len(renderCtx.WarningMessage) == 0) {
+		renderCtx.WarningMessage = "This instance is running without a license."
 	}
 
 	return renderCtx

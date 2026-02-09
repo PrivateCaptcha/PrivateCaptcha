@@ -12,8 +12,13 @@
     {{template "header-signed-in" .}}
 
     <div class="bg-white shadow-sm">
-        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex flex-row gap-4">
             <h1 class="text-lg font-semibold leading-6 text-gray-900">Settings</h1>
+            {{- if not $.Platform.Registered}}
+            <a href="https://privatecaptcha.com/self-hosting/" target="_blank" class="inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">UNLICENSED</a>
+            {{- else }}
+            <span class="inline-flex items-center rounded-md bg-pcslate-50 px-1.5 py-0.5 text-xs font-medium text-pclime-600 ring-1 ring-inset ring-pclime-600/20">Licensed</span>
+            {{- end }}
         </div>
     </div>
 </div>
