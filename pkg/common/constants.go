@@ -42,6 +42,7 @@ const (
 	ParamLicenseKey       = "lid"
 	ParamHardwareID       = "hwid"
 	ParamVersion          = "version"
+	ParamLicenseType      = "ltype"
 	ParamPortalSolution   = "pc_portal_solution"
 	ParamTerms            = "terms"
 	ParamMaxReplayCount   = "max_replay_count"

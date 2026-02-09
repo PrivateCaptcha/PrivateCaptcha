@@ -92,11 +92,12 @@ type CheckLicenseJob struct {
 var _ common.PeriodicJob = (*CheckLicenseJob)(nil)
 var _ common.LicenseService = (*CheckLicenseJob)(nil)
 
-func doFetchActivation(ctx context.Context, licenseURL, licenseKey, hwid, version string) ([]byte, error) {
+func doFetchActivation(ctx context.Context, licenseURL, licenseKey, hwid, version, licenseType string) ([]byte, error) {
 	form := url.Values{}
 	form.Set(common.ParamLicenseKey, licenseKey)
 	form.Set(common.ParamHardwareID, hwid)
 	form.Set(common.ParamVersion, version)
+	form.Set(common.ParamLicenseType, licenseType)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, licenseURL, bytes.NewBufferString(form.Encode()))
 	if err != nil {
@@ -212,7 +213,7 @@ func (j *CheckLicenseJob) fetchActivation(ctx context.Context) ([]byte, error) {
 			}
 		}
 
-		data, err = doFetchActivation(ctx, j.url, licenseKey, hwid, j.version)
+		data, err = doFetchActivation(ctx, j.url, licenseKey, hwid, j.version, licenseType())
 
 		var rerr common.RetriableError
 		if err != nil && errors.As(err, &rerr) {

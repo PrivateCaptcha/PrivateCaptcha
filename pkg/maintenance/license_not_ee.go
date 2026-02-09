@@ -29,3 +29,7 @@ func (j *CheckLicenseJob) RunOnce(ctx context.Context, params any) error {
 	slog.DebugContext(ctx, "License check passed")
 	return nil
 }
+
+func licenseType() string {
+	return "community"
+}
