@@ -209,6 +209,10 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 			level = slog.LevelWarn
 		}
 		slog.Log(ctx, level, "Failed to retrieve properties by sitekey", "count", len(batch), common.ErrAttr(err))
+		if (err == db.ErrInvalidInput) || (err == db.ErrNegativeCacheHit) {
+			// this is to break the reprocessing cycle in batch.go
+			return nil
+		}
 		return err
 	}
 
