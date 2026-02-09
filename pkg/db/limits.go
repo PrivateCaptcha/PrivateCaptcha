@@ -41,7 +41,6 @@ var _ SubscriptionLimits = (*SubscriptionLimitsImpl)(nil)
 
 func (sl *SubscriptionLimitsImpl) CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return false, 0, ErrNoActiveSubscription
 	}
 
@@ -73,7 +72,6 @@ func (sl *SubscriptionLimitsImpl) CheckOrgsLimit(ctx context.Context, userID int
 
 func (sl *SubscriptionLimitsImpl) CheckOrgMembersLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return false, 0, ErrNoActiveSubscription
 	}
 
@@ -97,7 +95,6 @@ func (sl *SubscriptionLimitsImpl) CheckOrgMembersLimit(ctx context.Context, orgI
 
 func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return false, 0, ErrNoActiveSubscription
 	}
 
@@ -121,7 +118,6 @@ func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, user
 
 func (sl *SubscriptionLimitsImpl) RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return 0, ErrNoActiveSubscription
 	}
 
@@ -137,7 +133,6 @@ func (sl *SubscriptionLimitsImpl) RequestsLimit(ctx context.Context, subscr *dbg
 
 func (sl *SubscriptionLimitsImpl) PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return 0, ErrNoActiveSubscription
 	}
 
@@ -153,7 +148,6 @@ func (sl *SubscriptionLimitsImpl) PropertiesLimit(ctx context.Context, subscr *d
 
 func (sl *SubscriptionLimitsImpl) OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
-		slog.WarnContext(ctx, "Subscription is not active", "subscrID", subscr.ID, "status", subscr.Status)
 		return 0, ErrNoActiveSubscription
 	}
 
