@@ -2970,3 +2970,29 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 		_ = impl.cache.Delete(ctx, userAuditLogsCacheKey(userID, key))
 	}
 }
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyID(ctx context.Context, propertyID int32) ([]*dbgen.DifficultyRule, error) {
+	if impl.querier == nil {
+		return nil, nil
+	}
+
+	return impl.querier.GetDifficultyRulesByPropertyID(ctx, pgtype.Int4{Int32: propertyID, Valid: true})
+}
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgID(ctx context.Context, orgID int32) ([]*dbgen.DifficultyRule, error) {
+	if impl.querier == nil {
+		return nil, nil
+	}
+
+	return impl.querier.GetDifficultyRulesByOrgID(ctx, pgtype.Int4{Int32: orgID, Valid: true})
+}
+
+func (impl *BusinessStoreImpl) GetCachedDifficultyRules(ctx context.Context, propertyID int32) (any, error) {
+	cacheKey := DifficultyRulesCacheKey(propertyID)
+	return impl.cache.Get(ctx, cacheKey)
+}
+
+func (impl *BusinessStoreImpl) CacheDifficultyRules(ctx context.Context, propertyID int32, compiled any) {
+	cacheKey := DifficultyRulesCacheKey(propertyID)
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+}

@@ -219,6 +219,7 @@ const (
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
+	difficultyRulesCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -258,6 +259,7 @@ func init() {
 	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
 	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
 	cachePrefixToStrings[orgInviteCacheKeyPrefix] = "orgInvite/"
+	cachePrefixToStrings[difficultyRulesCacheKeyPrefix] = "diffRules/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -378,4 +380,7 @@ func orgPropertiesCountCacheKey(orgID int32) CacheKey {
 }
 func orgInviteCacheKey(inviteID int32) CacheKey {
 	return Int32CacheKey(orgInviteCacheKeyPrefix, inviteID)
+}
+func DifficultyRulesCacheKey(propertyID int32) CacheKey {
+	return Int32CacheKey(difficultyRulesCacheKeyPrefix, propertyID)
 }

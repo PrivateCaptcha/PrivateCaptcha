@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/justinas/alice"
 	easyjson "github.com/mailru/easyjson"
 	"github.com/rs/cors"
@@ -257,7 +258,20 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels)
+
+	var compiledRules *rules.CompiledRules
+	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
+		if cached, err := s.BusinessDB.Impl().GetCachedDifficultyRules(ctx, property.ID); err == nil && cached != nil {
+			compiledRules, _ = cached.(*rules.CompiledRules)
+		}
+	}
+
+	if compiledRules != nil && compiledRules.IsRequestBlocked(ctx, r) {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, compiledRules)
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:
