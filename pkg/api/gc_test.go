@@ -9,6 +9,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
@@ -17,9 +18,10 @@ func gcDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func
 
 	const requests = 1000
 	tnow := time.Now()
+	dp := difficulty.NewDBProperty(property)
 
 	for i := 0; i < requests; i++ {
-		server.Levels.Difficulty(ctx, common.RandomFingerprint(), property, tnow.Add(time.Duration(i)*10*time.Second))
+		server.Levels.Difficulty(ctx, common.RandomFingerprint(), dp, tnow.Add(time.Duration(i)*10*time.Second))
 	}
 
 	// we need to wait for the timeout in the ProcessAccessLog()

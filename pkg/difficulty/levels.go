@@ -129,12 +129,12 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, baseDifficulty uint8, tnow time.Time) (uint8, leakybucket.TLevel, error) {
+func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, baseDifficulty uint8, tnow time.Time) (uint8, leakybucket.TLevel, error) {
 	err := l.recordAccess(ctx, fingerprint, p, tnow)
 
-	minDifficulty := float64(max(p.Level.Int16, int16(baseDifficulty)))
+	minDifficulty := float64(max(p.Level(), int16(baseDifficulty)))
 
-	propertyAddResult := l.propertyBuckets.Add(p.ID, 1, tnow)
+	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
 	if !propertyAddResult.Found {
 		if perr := l.backfillProperty(ctx, p); perr != nil {
 			// yes, we override, because it's not that important
@@ -149,19 +149,19 @@ func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerpri
 
 	// just as bucket's level is the measure of deviation of requests
 	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth), propertyAddResult.CurrLevel, err
+	return requestsToDifficulty(float64(level), minDifficulty, p.Growth()), propertyAddResult.CurrLevel, err
 }
 
-func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) uint8 {
+func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {
 	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, 0, tnow)
 	return diff
 }
 
-func (l *Levels) backfillProperty(ctx context.Context, p *dbgen.Property) error {
+func (l *Levels) backfillProperty(ctx context.Context, p Property) error {
 	br := &common.BackfillRequest{
-		OrgID:      p.OrgID.Int32,
-		UserID:     p.OrgOwnerID.Int32,
-		PropertyID: p.ID,
+		OrgID:      p.OrgID(),
+		UserID:     p.OwnerID(),
+		PropertyID: p.ID(),
 	}
 
 	select {
@@ -196,19 +196,17 @@ func (l *Levels) BackfillAccess(ctx context.Context, result *puzzle.VerifyResult
 	}
 }
 
-func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerprint, p *dbgen.Property, tnow time.Time) error {
-	if (p == nil) || !p.ExternalID.Valid {
+func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) error {
+	if (p == nil) || !p.Valid() {
 		return nil
 	}
 
 	ar := &common.AccessRecord{
 		Fingerprint: fingerprint,
-		// we record events for the user that owns the org where the property belongs
-		// (effectively, who is billed for the org), rather than who created it
-		UserID:     p.OrgOwnerID.Int32,
-		OrgID:      p.OrgID.Int32,
-		PropertyID: p.ID,
-		Timestamp:  tnow,
+		UserID:      p.OwnerID(),
+		OrgID:       p.OrgID(),
+		PropertyID:  p.ID(),
+		Timestamp:   tnow,
 	}
 
 	timer := time.NewTimer(l.backpressureTimeout)

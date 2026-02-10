@@ -31,7 +31,7 @@ func TestBackfillLevels(t *testing.T) {
 	userID := int32(123)
 
 	fingerprints := []common.TFingerprint{common.RandomFingerprint(), common.RandomFingerprint(), common.RandomFingerprint()}
-	prop := &dbgen.Property{
+	prop := difficulty.NewDBProperty(&dbgen.Property{
 		ID:         123,
 		ExternalID: *randomUUID(),
 		OrgOwnerID: db.Int(userID),
@@ -40,7 +40,7 @@ func TestBackfillLevels(t *testing.T) {
 		Growth:     dbgen.DifficultyGrowthFast,
 		CreatedAt:  db.Timestampz(tnow),
 		UpdatedAt:  db.Timestampz(tnow),
-	}
+	})
 
 	ctx := t.Context()
 

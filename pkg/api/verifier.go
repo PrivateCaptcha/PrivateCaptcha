@@ -335,7 +335,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 
 	tnow := time.Now()
 	baseDifficulty := v.baseDifficultyOverride(r)
-	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, property, baseDifficulty, tnow)
+	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficulty.NewDBProperty(property), baseDifficulty, tnow)
 
 	puzzleID := puzzle.NextPuzzleID()
 	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
