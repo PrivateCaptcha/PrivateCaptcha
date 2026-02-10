@@ -331,9 +331,6 @@ func (am *AuthMiddleware) backfillAPIKeyLastUsedImpl(ctx context.Context, batch 
 func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, delay time.Duration) {
 	slog.DebugContext(ctx, "Starting rules backfill", "delay", delay)
 
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-
 	for {
 		select {
 		case req, ok := <-am.RulesChan:

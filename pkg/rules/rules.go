@@ -103,8 +103,8 @@ func ipAddressMatchesMatcher(prefix netip.Prefix) matcherFunc {
 }
 
 func countryCodeEqualsMatcher(value string) matcherFunc {
+	// TODO: implement country_code matching when country code is available in request context
 	return func(_ context.Context, _ *http.Request) bool {
-		// country_code matching is not yet implemented in request context
 		return false
 	}
 }
