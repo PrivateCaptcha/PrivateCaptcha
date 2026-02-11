@@ -728,42 +728,42 @@ func TestRequestInfoIPAddrFallback(t *testing.T) {
 }
 
 func TestMergeNilBoth(t *testing.T) {
-result := Merge(nil, nil)
-if result != nil {
-t.Error("Expected nil when merging two nil CompiledRules")
-}
+	result := Merge(nil, nil)
+	if result != nil {
+		t.Error("Expected nil when merging two nil CompiledRules")
+	}
 }
 
 func TestMergeNilProperty(t *testing.T) {
-orgRules := []*dbgen.DifficultyRule{
-{
-ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-ConditionOperator: dbgen.RuleConditionOperatorContains,
-ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-ActionValue:       100,
-},
-}
-org := Compile(context.Background(), orgRules)
-result := Merge(nil, org)
-if result != org {
-t.Error("Expected org rules returned when property is nil")
-}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       100,
+		},
+	}
+	org := Compile(context.Background(), orgRules)
+	result := Merge(nil, org)
+	if result != org {
+		t.Error("Expected org rules returned when property is nil")
+	}
 }
 
 func TestMergeNilOrg(t *testing.T) {
-propRules := []*dbgen.DifficultyRule{
-{
-ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-ConditionOperator: dbgen.RuleConditionOperatorContains,
-ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-ActionValue:       200,
-},
-}
-prop := Compile(context.Background(), propRules)
-result := Merge(prop, nil)
-if result != prop {
-t.Error("Expected property rules returned when org is nil")
-}
+	propRules := []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       200,
+		},
+	}
+	prop := Compile(context.Background(), propRules)
+	result := Merge(prop, nil)
+	if result != prop {
+		t.Error("Expected property rules returned when org is nil")
+	}
 }
