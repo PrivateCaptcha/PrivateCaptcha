@@ -262,8 +262,8 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 
 	var compiledRules *rules.CompiledRules
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
-		if cached, err := s.BusinessDB.Impl().GetCachedDifficultyRules(ctx, property.ID); err == nil && cached != nil {
-			compiledRules, _ = cached.(*rules.CompiledRules)
+		if cached, err := s.BusinessDB.Impl().GetCachedCompiledDifficultyRules(ctx, property.ID); err == nil && cached != nil {
+			compiledRules = cached
 		}
 	}
 

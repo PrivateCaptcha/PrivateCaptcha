@@ -13,34 +13,40 @@ const getDifficultyRulesForProperties = `-- name: GetDifficultyRulesForPropertie
 WITH property_orgs AS (
     SELECT DISTINCT p.org_id FROM backend.properties p WHERE p.id = ANY($1::INT[]) AND p.org_id IS NOT NULL
 )
-SELECT dr.id, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
+SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
 WHERE dr.property_id = ANY($1::INT[])
    OR (dr.property_id IS NULL AND dr.org_id IN (SELECT org_id FROM property_orgs))
 ORDER BY dr.property_id NULLS LAST, dr.position ASC
 `
 
-func (q *Queries) GetDifficultyRulesForProperties(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error) {
+type GetDifficultyRulesForPropertiesRow struct {
+	DifficultyRule DifficultyRule `db:"difficulty_rule" json:"difficulty_rule"`
+}
+
+func (q *Queries) GetDifficultyRulesForProperties(ctx context.Context, dollar_1 []int32) ([]*GetDifficultyRulesForPropertiesRow, error) {
 	rows, err := q.db.Query(ctx, getDifficultyRulesForProperties, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*DifficultyRule
+	var items []*GetDifficultyRulesForPropertiesRow
 	for rows.Next() {
-		var i DifficultyRule
+		var i GetDifficultyRulesForPropertiesRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.PropertyID,
-			&i.OrgID,
-			&i.ConditionProperty,
-			&i.ConditionOperator,
-			&i.ConditionValueStr,
-			&i.ConditionValueInt,
-			&i.Position,
-			&i.ActionProperty,
-			&i.ActionValue,
-			&i.CreatedAt,
-			&i.UpdatedAt,
+			&i.DifficultyRule.ID,
+			&i.DifficultyRule.Name,
+			&i.DifficultyRule.PropertyID,
+			&i.DifficultyRule.OrgID,
+			&i.DifficultyRule.ConditionProperty,
+			&i.DifficultyRule.ConditionOperator,
+			&i.DifficultyRule.ConditionValueStr,
+			&i.DifficultyRule.ConditionValueInt,
+			&i.DifficultyRule.ConditionValueSeparator,
+			&i.DifficultyRule.Position,
+			&i.DifficultyRule.ActionProperty,
+			&i.DifficultyRule.ActionValue,
+			&i.DifficultyRule.CreatedAt,
+			&i.DifficultyRule.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

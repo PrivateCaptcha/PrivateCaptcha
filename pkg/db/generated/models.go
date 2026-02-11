@@ -283,6 +283,8 @@ const (
 	RuleConditionOperatorEquals   RuleConditionOperator = "equals"
 	RuleConditionOperatorContains RuleConditionOperator = "contains"
 	RuleConditionOperatorMatches  RuleConditionOperator = "matches"
+	RuleConditionOperatorEmpty    RuleConditionOperator = "empty"
+	RuleConditionOperatorIn       RuleConditionOperator = "in"
 )
 
 func (e *RuleConditionOperator) Scan(src interface{}) error {
@@ -467,18 +469,20 @@ type DeletedRecord struct {
 }
 
 type DifficultyRule struct {
-	ID                int32                 `db:"id" json:"id"`
-	PropertyID        pgtype.Int4           `db:"property_id" json:"property_id"`
-	OrgID             pgtype.Int4           `db:"org_id" json:"org_id"`
-	ConditionProperty RuleConditionProperty `db:"condition_property" json:"condition_property"`
-	ConditionOperator RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
-	ConditionValueStr pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
-	ConditionValueInt pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
-	Position          int32                 `db:"position" json:"position"`
-	ActionProperty    RuleActionProperty    `db:"action_property" json:"action_property"`
-	ActionValue       int32                 `db:"action_value" json:"action_value"`
-	CreatedAt         pgtype.Timestamptz    `db:"created_at" json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
+	ID                      int32                 `db:"id" json:"id"`
+	Name                    pgtype.Text           `db:"name" json:"name"`
+	PropertyID              pgtype.Int4           `db:"property_id" json:"property_id"`
+	OrgID                   pgtype.Int4           `db:"org_id" json:"org_id"`
+	ConditionProperty       RuleConditionProperty `db:"condition_property" json:"condition_property"`
+	ConditionOperator       RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
+	ConditionValueStr       pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
+	ConditionValueInt       pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
+	ConditionValueSeparator pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
+	Position                int32                 `db:"position" json:"position"`
+	ActionProperty          RuleActionProperty    `db:"action_property" json:"action_property"`
+	ActionValue             int32                 `db:"action_value" json:"action_value"`
+	CreatedAt               pgtype.Timestamptz    `db:"created_at" json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
 }
 
 type Lock struct {

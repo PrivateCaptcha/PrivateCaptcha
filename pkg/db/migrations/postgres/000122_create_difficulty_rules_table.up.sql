@@ -1,15 +1,17 @@
 CREATE TYPE backend.rule_condition_property AS ENUM ('user_agent', 'ip_address', 'country_code');
-CREATE TYPE backend.rule_condition_operator AS ENUM ('equals', 'contains', 'matches');
+CREATE TYPE backend.rule_condition_operator AS ENUM ('equals', 'contains', 'matches', 'empty', 'in');
 CREATE TYPE backend.rule_action_property AS ENUM ('difficulty_level', 'http_request', 'difficulty_growth');
 
 CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
     property_id INT REFERENCES backend.properties(id) ON DELETE CASCADE,
     org_id INT REFERENCES backend.organizations(id) ON DELETE CASCADE,
     condition_property backend.rule_condition_property NOT NULL,
     condition_operator backend.rule_condition_operator NOT NULL,
     condition_value_str VARCHAR(512),
     condition_value_int INT,
+    condition_value_separator CHAR(1),
     position INT NOT NULL DEFAULT 0,
     action_property backend.rule_action_property NOT NULL,
     action_value INT NOT NULL DEFAULT 0,

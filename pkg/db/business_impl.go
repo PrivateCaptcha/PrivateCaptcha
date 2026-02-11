@@ -14,6 +14,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -2971,20 +2972,20 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesForProperties(ctx context.Context, propertyIDs []int32) ([]*dbgen.DifficultyRule, error) {
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesForProperties(ctx context.Context, propertyIDs []int32) ([]*dbgen.GetDifficultyRulesForPropertiesRow, error) {
 	if impl.querier == nil {
-		return nil, nil
+		return nil, ErrMaintenance
 	}
 
 	return impl.querier.GetDifficultyRulesForProperties(ctx, propertyIDs)
 }
 
-func (impl *BusinessStoreImpl) GetCachedDifficultyRules(ctx context.Context, propertyID int32) (any, error) {
+func (impl *BusinessStoreImpl) GetCachedCompiledDifficultyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
 	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
-	return impl.cache.Get(ctx, cacheKey)
+	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
 }
 
-func (impl *BusinessStoreImpl) CacheDifficultyRules(ctx context.Context, propertyID int32, compiled any) {
+func (impl *BusinessStoreImpl) CacheCompiledDifficultyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
 	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }

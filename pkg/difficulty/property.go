@@ -44,3 +44,20 @@ func (dbp *dbProperty) Level() int16 {
 func (dbp *dbProperty) Growth() dbgen.DifficultyGrowth {
 	return dbp.property.Growth
 }
+
+// StubProperty is a test helper that implements the Property interface
+type StubProperty struct {
+	PropertyID      int32
+	IsValid         bool
+	PropertyOwnerID int32
+	PropertyOrgID   int32
+	PropertyLevel   int16
+	PropertyGrowth  dbgen.DifficultyGrowth
+}
+
+func (p *StubProperty) ID() int32                        { return p.PropertyID }
+func (p *StubProperty) Valid() bool                      { return p.IsValid }
+func (p *StubProperty) OwnerID() int32                   { return p.PropertyOwnerID }
+func (p *StubProperty) OrgID() int32                     { return p.PropertyOrgID }
+func (p *StubProperty) Level() int16                     { return p.PropertyLevel }
+func (p *StubProperty) Growth() dbgen.DifficultyGrowth   { return p.PropertyGrowth }

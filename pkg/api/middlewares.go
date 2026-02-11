@@ -261,6 +261,7 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 			slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "rules")
 			return ctx.Err()
 		case <-time.After(am.backpressureTimeout):
+			am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
 		}
 
 		// this is an opportunistic process anyways. Other users should be checked via API key mechanism or eventually here
@@ -345,7 +346,8 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 
 	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule)
 	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule)
-	for _, r := range allRules {
+	for _, row := range allRules {
+		r := &row.DifficultyRule
 		if r.PropertyID.Valid {
 			propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], r)
 		} else if r.OrgID.Valid {
@@ -373,10 +375,10 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 			oRules = orgRulesMap[orgID]
 		}
 		compiled := rules.Compile(ctx, propRules, oRules)
-		impl.CacheDifficultyRules(ctx, propertyID, compiled)
+		impl.CacheCompiledDifficultyRules(ctx, propertyID, compiled)
 	}
 
-	slog.Log(ctx, common.LevelTrace, "Backfilled difficulty rules",
+	slog.DebugContext(ctx, "Backfilled difficulty rules",
 		"properties", len(propertyIDs), "rules", len(allRules))
 
 	return nil
