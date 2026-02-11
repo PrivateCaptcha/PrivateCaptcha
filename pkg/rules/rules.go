@@ -30,52 +30,80 @@ func NewCompiledRules(rules []Rule) *CompiledRules {
 	return &CompiledRules{rules: rules}
 }
 
-func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
-	if cr == nil || len(cr.rules) == 0 {
-		return p
-	}
-
-	for _, rule := range cr.rules {
+func applyRules(rules []Rule, ri *RequestInfo, p difficulty.Property) difficulty.Property {
+	for _, rule := range rules {
 		if rule.Matches(ri) {
 			return rule.Apply(p)
 		}
 	}
-
 	return p
 }
 
-func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
-	if cr == nil || len(cr.rules) == 0 {
-		return false
-	}
-
-	for _, rule := range cr.rules {
+func isBlockedByRules(rules []Rule, ri *RequestInfo) bool {
+	for _, rule := range rules {
 		if _, ok := rule.(*blockRequestRule); ok {
 			if rule.Matches(ri) {
 				return true
 			}
 		}
 	}
-
 	return false
 }
 
-// Merge combines property-level and org-level compiled rules.
-// Property rules come first (higher priority), then org rules.
-func Merge(propertyRules, orgRules *CompiledRules) *CompiledRules {
-	if propertyRules == nil && orgRules == nil {
-		return nil
+func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
+	if cr == nil || len(cr.rules) == 0 {
+		return p
 	}
-	if propertyRules == nil {
-		return orgRules
+	return applyRules(cr.rules, ri, p)
+}
+
+func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
+	if cr == nil || len(cr.rules) == 0 {
+		return false
 	}
-	if orgRules == nil {
-		return propertyRules
+	return isBlockedByRules(cr.rules, ri)
+}
+
+// RulesPair combines property-level and org-level compiled rules
+// without additional allocations. Property rules have higher priority.
+type RulesPair struct {
+	PropertyRules *CompiledRules
+	OrgRules      *CompiledRules
+}
+
+func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
+	if rp == nil {
+		return p
 	}
-	combined := make([]Rule, 0, len(propertyRules.rules)+len(orgRules.rules))
-	combined = append(combined, propertyRules.rules...)
-	combined = append(combined, orgRules.rules...)
-	return NewCompiledRules(combined)
+
+	if rp.PropertyRules != nil && len(rp.PropertyRules.rules) > 0 {
+		result := applyRules(rp.PropertyRules.rules, ri, p)
+		if result != p {
+			return result
+		}
+	}
+
+	if rp.OrgRules != nil && len(rp.OrgRules.rules) > 0 {
+		return applyRules(rp.OrgRules.rules, ri, p)
+	}
+
+	return p
+}
+
+func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
+	if rp == nil {
+		return false
+	}
+
+	if rp.PropertyRules != nil && isBlockedByRules(rp.PropertyRules.rules, ri) {
+		return true
+	}
+
+	if rp.OrgRules != nil && isBlockedByRules(rp.OrgRules.rules, ri) {
+		return true
+	}
+
+	return false
 }
 
 type overrideProperty struct {
@@ -177,11 +205,7 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
 			if addrErr != nil {
 				return nil, ErrInvalidIPValue
 			}
-			bits := 32
-			if addr.Is6() {
-				bits = 128
-			}
-			prefix = netip.PrefixFrom(addr, bits)
+			prefix = netip.PrefixFrom(addr, addr.BitLen())
 		}
 		return ipAddressMatchesMatcher(prefix), nil
 	case dbgen.RuleConditionPropertyCountryCode:
@@ -218,17 +242,13 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	}
 }
 
-func ruleNameAttr(rule *dbgen.DifficultyRule) slog.Attr {
-	return slog.String("ruleName", rule.Name.String)
-}
-
 func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
 	rules := make([]Rule, 0, len(dbRules))
 
 	for _, r := range dbRules {
 		compiled, err := CompileRule(ctx, r)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, ruleNameAttr(r), common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name.String, common.ErrAttr(err))
 			continue
 		}
 		rules = append(rules, compiled)

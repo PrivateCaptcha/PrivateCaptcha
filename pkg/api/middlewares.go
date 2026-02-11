@@ -255,14 +255,7 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 			}
 		}
 
-		select {
-		case am.RulesChan <- p.ID:
-		case <-ctx.Done():
-			slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "rules")
-			return ctx.Err()
-		case <-time.After(am.backpressureTimeout):
-			am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
-		}
+		am.RefreshPropertyRules(ctx, p.ID)
 
 		// this is an opportunistic process anyways. Other users should be checked via API key mechanism or eventually here
 		if len(orgs) < maxOrgsToPull {
@@ -334,12 +327,14 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	impl := am.Store.Impl()
 
 	// collect property IDs that don't have cached compiled property rules
-	uncachedPropertyIDs := make([]int32, 0, len(batch))
-	for propertyID := range batch {
+	uncachedPropertyIDs := make(map[int32]uint, len(batch))
+	for propertyID, count := range batch {
 		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID); err == db.ErrCacheMiss {
-			uncachedPropertyIDs = append(uncachedPropertyIDs, propertyID)
+			uncachedPropertyIDs[propertyID] = count
 		}
 	}
+
+	slog.DebugContext(ctx, "Uncached property rules", "total", len(batch), "uncached", len(uncachedPropertyIDs))
 
 	if len(uncachedPropertyIDs) == 0 {
 		return nil
@@ -352,62 +347,45 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		return err
 	}
 
-	propertyToOrg := make(map[int32]int32, len(properties))
-	uncachedOrgIDs := make([]int32, 0, len(properties))
+	uncachedOrgIDs := make(map[int32]uint, len(properties)/2)
 	seenOrgs := make(map[int32]struct{})
 	for _, p := range properties {
 		if p.OrgID.Valid {
-			propertyToOrg[p.ID] = p.OrgID.Int32
 			if _, seen := seenOrgs[p.OrgID.Int32]; !seen {
 				seenOrgs[p.OrgID.Int32] = struct{}{}
 				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32); err == db.ErrCacheMiss {
-					uncachedOrgIDs = append(uncachedOrgIDs, p.OrgID.Int32)
+					uncachedOrgIDs[p.OrgID.Int32] = 1
 				}
 			}
 		}
 	}
 
-	// fetch property rules
-	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule)
-	if len(uncachedPropertyIDs) > 0 {
-		propRows, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
-			return err
-		}
-		for _, row := range propRows {
-			r := row.DifficultyRule
-			if r.PropertyID.Valid {
-				propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], &r)
-			}
-		}
+	// fetch and group property rules via StoreBulkReader
+	propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
+		return err
 	}
 
-	// fetch org rules
-	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule)
+	// fetch and group org rules via StoreBulkReader
+	var orgRulesMap map[int32][]*dbgen.DifficultyRule
 	if len(uncachedOrgIDs) > 0 {
-		orgRows, err := impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs)
+		orgRulesMap, err = impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", common.ErrAttr(err))
 			return err
 		}
-		for _, row := range orgRows {
-			r := row.DifficultyRule
-			if r.OrgID.Valid {
-				orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], &r)
-			}
-		}
 	}
 
 	// compile and cache property rules (set missing for no-rules properties)
-	for _, propertyID := range uncachedPropertyIDs {
+	for propertyID := range uncachedPropertyIDs {
 		propRules := propertyRulesMap[propertyID]
 		compiled := rules.Compile(ctx, propRules)
 		impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
 	}
 
 	// compile and cache org rules (set missing for no-rules orgs)
-	for _, orgID := range uncachedOrgIDs {
+	for orgID := range uncachedOrgIDs {
 		oRules := orgRulesMap[orgID]
 		compiled := rules.Compile(ctx, oRules)
 		impl.CacheCompiledOrgRules(ctx, orgID, compiled)
