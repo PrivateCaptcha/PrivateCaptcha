@@ -7,127 +7,19 @@ package generated
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getDifficultyRulesByOrgID = `-- name: GetDifficultyRulesByOrgID :many
-SELECT id, property_id, org_id, condition_property, condition_operator, condition_value_str, condition_value_int, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules WHERE org_id = $1 AND property_id IS NULL ORDER BY position ASC
+const getDifficultyRulesForProperties = `-- name: GetDifficultyRulesForProperties :many
+SELECT dr.id, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
+WHERE dr.property_id = ANY($1::INT[])
+   OR (dr.property_id IS NULL AND dr.org_id IN (
+       SELECT DISTINCT p.org_id FROM backend.properties p WHERE p.id = ANY($1::INT[]) AND p.org_id IS NOT NULL
+   ))
+ORDER BY dr.property_id NULLS LAST, dr.position ASC
 `
 
-func (q *Queries) GetDifficultyRulesByOrgID(ctx context.Context, orgID pgtype.Int4) ([]*DifficultyRule, error) {
-	rows, err := q.db.Query(ctx, getDifficultyRulesByOrgID, orgID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*DifficultyRule
-	for rows.Next() {
-		var i DifficultyRule
-		if err := rows.Scan(
-			&i.ID,
-			&i.PropertyID,
-			&i.OrgID,
-			&i.ConditionProperty,
-			&i.ConditionOperator,
-			&i.ConditionValueStr,
-			&i.ConditionValueInt,
-			&i.Position,
-			&i.ActionProperty,
-			&i.ActionValue,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDifficultyRulesByOrgIDs = `-- name: GetDifficultyRulesByOrgIDs :many
-SELECT id, property_id, org_id, condition_property, condition_operator, condition_value_str, condition_value_int, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules WHERE org_id = ANY($1::INT[]) AND property_id IS NULL ORDER BY org_id, position ASC
-`
-
-func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error) {
-	rows, err := q.db.Query(ctx, getDifficultyRulesByOrgIDs, dollar_1)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*DifficultyRule
-	for rows.Next() {
-		var i DifficultyRule
-		if err := rows.Scan(
-			&i.ID,
-			&i.PropertyID,
-			&i.OrgID,
-			&i.ConditionProperty,
-			&i.ConditionOperator,
-			&i.ConditionValueStr,
-			&i.ConditionValueInt,
-			&i.Position,
-			&i.ActionProperty,
-			&i.ActionValue,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDifficultyRulesByPropertyID = `-- name: GetDifficultyRulesByPropertyID :many
-SELECT id, property_id, org_id, condition_property, condition_operator, condition_value_str, condition_value_int, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules WHERE property_id = $1 ORDER BY position ASC
-`
-
-func (q *Queries) GetDifficultyRulesByPropertyID(ctx context.Context, propertyID pgtype.Int4) ([]*DifficultyRule, error) {
-	rows, err := q.db.Query(ctx, getDifficultyRulesByPropertyID, propertyID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []*DifficultyRule
-	for rows.Next() {
-		var i DifficultyRule
-		if err := rows.Scan(
-			&i.ID,
-			&i.PropertyID,
-			&i.OrgID,
-			&i.ConditionProperty,
-			&i.ConditionOperator,
-			&i.ConditionValueStr,
-			&i.ConditionValueInt,
-			&i.Position,
-			&i.ActionProperty,
-			&i.ActionValue,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, &i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDifficultyRulesByPropertyIDs = `-- name: GetDifficultyRulesByPropertyIDs :many
-SELECT id, property_id, org_id, condition_property, condition_operator, condition_value_str, condition_value_int, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules WHERE property_id = ANY($1::INT[]) ORDER BY property_id, position ASC
-`
-
-func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error) {
-	rows, err := q.db.Query(ctx, getDifficultyRulesByPropertyIDs, dollar_1)
+func (q *Queries) GetDifficultyRulesForProperties(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error) {
+	rows, err := q.db.Query(ctx, getDifficultyRulesForProperties, dollar_1)
 	if err != nil {
 		return nil, err
 	}

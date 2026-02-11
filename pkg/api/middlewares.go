@@ -337,52 +337,32 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		propertyIDs = append(propertyIDs, propertyID)
 	}
 
+	allRules, err := impl.RetrieveDifficultyRulesForProperties(ctx, propertyIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve difficulty rules", common.ErrAttr(err))
+		return err
+	}
+
+	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule)
+	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule)
+	for _, r := range allRules {
+		if r.PropertyID.Valid {
+			propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], r)
+		} else if r.OrgID.Valid {
+			orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], r)
+		}
+	}
+
 	properties, err := impl.RetrievePropertiesByID(ctx, batch)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
 		return err
 	}
 
-	orgIDs := make(map[int32]struct{}, len(properties))
 	propertyToOrg := make(map[int32]int32, len(properties))
 	for _, p := range properties {
 		if p.OrgID.Valid {
-			orgIDs[p.OrgID.Int32] = struct{}{}
 			propertyToOrg[p.ID] = p.OrgID.Int32
-		}
-	}
-
-	allPropertyRules, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, propertyIDs)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve property rules", common.ErrAttr(err))
-		return err
-	}
-
-	uniqueOrgIDs := make([]int32, 0, len(orgIDs))
-	for orgID := range orgIDs {
-		uniqueOrgIDs = append(uniqueOrgIDs, orgID)
-	}
-
-	var allOrgRules []*dbgen.DifficultyRule
-	if len(uniqueOrgIDs) > 0 {
-		allOrgRules, err = impl.RetrieveDifficultyRulesByOrgIDs(ctx, uniqueOrgIDs)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve org rules", common.ErrAttr(err))
-			return err
-		}
-	}
-
-	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule, len(propertyIDs))
-	for _, r := range allPropertyRules {
-		if r.PropertyID.Valid {
-			propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], r)
-		}
-	}
-
-	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule, len(uniqueOrgIDs))
-	for _, r := range allOrgRules {
-		if r.OrgID.Valid {
-			orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], r)
 		}
 	}
 
@@ -397,7 +377,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	}
 
 	slog.Log(ctx, common.LevelTrace, "Backfilled difficulty rules",
-		"properties", len(propertyIDs), "propertyRules", len(allPropertyRules), "orgRules", len(allOrgRules))
+		"properties", len(propertyIDs), "rules", len(allRules))
 
 	return nil
 }

@@ -2971,20 +2971,12 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, propertyIDs []int32) ([]*dbgen.DifficultyRule, error) {
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesForProperties(ctx context.Context, propertyIDs []int32) ([]*dbgen.DifficultyRule, error) {
 	if impl.querier == nil {
 		return nil, nil
 	}
 
-	return impl.querier.GetDifficultyRulesByPropertyIDs(ctx, propertyIDs)
-}
-
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Context, orgIDs []int32) ([]*dbgen.DifficultyRule, error) {
-	if impl.querier == nil {
-		return nil, nil
-	}
-
-	return impl.querier.GetDifficultyRulesByOrgIDs(ctx, orgIDs)
+	return impl.querier.GetDifficultyRulesForProperties(ctx, propertyIDs)
 }
 
 func (impl *BusinessStoreImpl) GetCachedDifficultyRules(ctx context.Context, propertyID int32) (any, error) {

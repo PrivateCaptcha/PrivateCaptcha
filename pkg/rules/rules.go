@@ -19,8 +19,55 @@ var (
 	ErrInvalidIPValue           = errors.New("invalid IP address or prefix value")
 )
 
+// RequestInfo wraps http.Request and lazy-caches request attributes for rule matching
+type RequestInfo struct {
+	r                 *http.Request
+	countryCodeHeader string
+
+	userAgent   *string
+	ipAddr      *netip.Addr
+	countryCode *string
+}
+
+func NewRequestInfo(r *http.Request, countryCodeHeader string) *RequestInfo {
+	return &RequestInfo{
+		r:                 r,
+		countryCodeHeader: countryCodeHeader,
+	}
+}
+
+func (ri *RequestInfo) UserAgent() string {
+	if ri.userAgent == nil {
+		ua := ri.r.UserAgent()
+		ri.userAgent = &ua
+	}
+	return *ri.userAgent
+}
+
+func (ri *RequestInfo) IPAddr() (netip.Addr, bool) {
+	if ri.ipAddr == nil {
+		if ip, ok := ri.r.Context().Value(common.RateLimitKeyContextKey).(netip.Addr); ok {
+			ri.ipAddr = &ip
+		} else {
+			return netip.Addr{}, false
+		}
+	}
+	return *ri.ipAddr, true
+}
+
+func (ri *RequestInfo) CountryCode() string {
+	if ri.countryCode == nil {
+		var cc string
+		if len(ri.countryCodeHeader) > 0 {
+			cc = ri.r.Header.Get(ri.countryCodeHeader)
+		}
+		ri.countryCode = &cc
+	}
+	return *ri.countryCode
+}
+
 type Rule interface {
-	Matches(ctx context.Context, r *http.Request) bool
+	Matches(ri *RequestInfo) bool
 	Apply(p difficulty.Property) difficulty.Property
 }
 
@@ -32,13 +79,13 @@ func NewCompiledRules(rules []Rule) *CompiledRules {
 	return &CompiledRules{rules: rules}
 }
 
-func (cr *CompiledRules) Apply(ctx context.Context, r *http.Request, p difficulty.Property) difficulty.Property {
+func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
 	if cr == nil || len(cr.rules) == 0 {
 		return p
 	}
 
 	for _, rule := range cr.rules {
-		if rule.Matches(ctx, r) {
+		if rule.Matches(ri) {
 			return rule.Apply(p)
 		}
 	}
@@ -46,13 +93,13 @@ func (cr *CompiledRules) Apply(ctx context.Context, r *http.Request, p difficult
 	return p
 }
 
-func (cr *CompiledRules) IsRequestBlocked(ctx context.Context, r *http.Request) bool {
+func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
 	if cr == nil || len(cr.rules) == 0 {
 		return false
 	}
 
 	for _, rule := range cr.rules {
-		if rule.Matches(ctx, r) {
+		if rule.Matches(ri) {
 			if _, ok := rule.(*httpRequestRule); ok {
 				return true
 			}
@@ -86,23 +133,23 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 }
 
 // matcherFunc returns true when the request matches the rule condition
-type matcherFunc func(ctx context.Context, r *http.Request) bool
+type matcherFunc func(ri *RequestInfo) bool
 
 func userAgentEqualsMatcher(value string) matcherFunc {
-	return func(_ context.Context, r *http.Request) bool {
-		return r.UserAgent() == value
+	return func(ri *RequestInfo) bool {
+		return ri.UserAgent() == value
 	}
 }
 
 func userAgentContainsMatcher(value string) matcherFunc {
-	return func(_ context.Context, r *http.Request) bool {
-		return strings.Contains(r.UserAgent(), value)
+	return func(ri *RequestInfo) bool {
+		return strings.Contains(ri.UserAgent(), value)
 	}
 }
 
 func ipAddressMatchesMatcher(prefix netip.Prefix) matcherFunc {
-	return func(ctx context.Context, _ *http.Request) bool {
-		if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok {
+	return func(ri *RequestInfo) bool {
+		if ip, ok := ri.IPAddr(); ok {
 			return prefix.Contains(ip)
 		}
 		return false
@@ -110,12 +157,8 @@ func ipAddressMatchesMatcher(prefix netip.Prefix) matcherFunc {
 }
 
 func countryCodeMatcher(value string, operator dbgen.RuleConditionOperator) matcherFunc {
-	return func(ctx context.Context, r *http.Request) bool {
-		headerName, ok := ctx.Value(common.CountryCodeHeaderContextKey).(string)
-		if !ok || len(headerName) == 0 {
-			return false
-		}
-		cc := r.Header.Get(headerName)
+	return func(ri *RequestInfo) bool {
+		cc := ri.CountryCode()
 		if len(cc) == 0 {
 			return false
 		}
@@ -136,8 +179,8 @@ type difficultyLevelRule struct {
 	level   int16
 }
 
-func (r *difficultyLevelRule) Matches(ctx context.Context, req *http.Request) bool {
-	return r.matcher(ctx, req)
+func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
+	return r.matcher(ri)
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
@@ -151,8 +194,8 @@ type difficultyGrowthRule struct {
 	growth  dbgen.DifficultyGrowth
 }
 
-func (r *difficultyGrowthRule) Matches(ctx context.Context, req *http.Request) bool {
-	return r.matcher(ctx, req)
+func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
+	return r.matcher(ri)
 }
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
@@ -165,8 +208,8 @@ type httpRequestRule struct {
 	matcher matcherFunc
 }
 
-func (r *httpRequestRule) Matches(ctx context.Context, req *http.Request) bool {
-	return r.matcher(ctx, req)
+func (r *httpRequestRule) Matches(ri *RequestInfo) bool {
+	return r.matcher(ri)
 }
 
 func (r *httpRequestRule) Apply(p difficulty.Property) difficulty.Property {

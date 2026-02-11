@@ -278,7 +278,7 @@ func (v *Verifier) baseDifficultyOverride(r *http.Request) uint8 {
 	return 0
 }
 
-func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, compiledRules *rules.CompiledRules) (puzzle.Puzzle, *dbgen.Property, error) {
+func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, compiledRules *rules.CompiledRules, ri *rules.RequestInfo) (puzzle.Puzzle, *dbgen.Property, error) {
 	ctx := r.Context()
 	property, isProperty := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	contextIP := ctx.Value(common.RateLimitKeyContextKey)
@@ -339,7 +339,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	var difficultyProperty difficulty.Property = difficulty.NewDBProperty(property)
 	if compiledRules != nil {
-		difficultyProperty = compiledRules.Apply(ctx, r, difficultyProperty)
+		difficultyProperty = compiledRules.Apply(ri, difficultyProperty)
 	}
 
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, baseDifficulty, tnow)

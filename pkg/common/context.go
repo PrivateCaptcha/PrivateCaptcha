@@ -14,7 +14,6 @@ const (
 	SessionIDContextKey
 	ServiceContextKey
 	TimeContextKey
-	CountryCodeHeaderContextKey
 	// Add new fields _above_
 	CONTEXT_KEYS_COUNT
 )

@@ -260,13 +260,6 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	if s.CountryCodeHeader != nil {
-		if ccHeader := s.CountryCodeHeader.Value(); len(ccHeader) > 0 {
-			ctx = context.WithValue(ctx, common.CountryCodeHeaderContextKey, ccHeader)
-			r = r.WithContext(ctx)
-		}
-	}
-
 	var compiledRules *rules.CompiledRules
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
 		if cached, err := s.BusinessDB.Impl().GetCachedDifficultyRules(ctx, property.ID); err == nil && cached != nil {
@@ -274,12 +267,18 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if compiledRules != nil && compiledRules.IsRequestBlocked(ctx, r) {
+	var countryCodeHeader string
+	if s.CountryCodeHeader != nil {
+		countryCodeHeader = s.CountryCodeHeader.Value()
+	}
+	ri := rules.NewRequestInfo(r, countryCodeHeader)
+
+	if compiledRules != nil && compiledRules.IsRequestBlocked(ri) {
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 
-	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, compiledRules)
+	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, compiledRules, ri)
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:

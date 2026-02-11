@@ -2,7 +2,6 @@ package rules
 
 import (
 	"context"
-	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"testing"
@@ -31,22 +30,21 @@ func (p *testProperty) Growth() dbgen.DifficultyGrowth { return p.growth }
 
 var _ difficulty.Property = (*testProperty)(nil)
 
-func newTestRequest(userAgent string, ip netip.Addr) (*http.Request, context.Context) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+func newTestRequestInfo(userAgent string, ip netip.Addr) *RequestInfo {
+	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("User-Agent", userAgent)
 	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
-	return req.WithContext(ctx), ctx
+	return NewRequestInfo(req.WithContext(ctx), "")
 }
 
-func newTestRequestWithCountryCode(userAgent string, ip netip.Addr, headerName, countryCode string) (*http.Request, context.Context) {
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
+func newTestRequestInfoWithCountryCode(userAgent string, ip netip.Addr, headerName, countryCode string) *RequestInfo {
+	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("User-Agent", userAgent)
 	if len(countryCode) > 0 {
 		req.Header.Set(headerName, countryCode)
 	}
 	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
-	ctx = context.WithValue(ctx, common.CountryCodeHeaderContextKey, headerName)
-	return req.WithContext(ctx), ctx
+	return NewRequestInfo(req.WithContext(ctx), headerName)
 }
 
 func TestUserAgentEqualsMatch(t *testing.T) {
@@ -62,14 +60,14 @@ func TestUserAgentEqualsMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 
-	if !compiled.Matches(ctx, req) {
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match exact user agent")
 	}
 
-	req2, ctx2 := newTestRequest("GoodBot/2.0", netip.MustParseAddr("1.2.3.4"))
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfo("GoodBot/2.0", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match different user agent")
 	}
 }
@@ -87,14 +85,14 @@ func TestUserAgentContainsMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req, ctx := newTestRequest("Mozilla/5.0 BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	ri := newTestRequestInfo("Mozilla/5.0 BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 
-	if !compiled.Matches(ctx, req) {
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match containing user agent")
 	}
 
-	req2, ctx2 := newTestRequest("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match non-containing user agent")
 	}
 }
@@ -113,13 +111,13 @@ func TestIPAddressMatchesPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("10.1.2.3"))
-	if !compiled.Matches(ctx, req) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match IP in prefix 10.0.0.0/8")
 	}
 
-	req2, ctx2 := newTestRequest("test", netip.MustParseAddr("192.168.1.1"))
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.1"))
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match IP outside prefix")
 	}
 }
@@ -138,13 +136,13 @@ func TestIPAddressMatchesExactAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("192.168.1.100"))
-	if !compiled.Matches(ctx, req) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.100"))
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match exact IP address")
 	}
 
-	req2, ctx2 := newTestRequest("test", netip.MustParseAddr("192.168.1.101"))
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.101"))
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match different IP")
 	}
 }
@@ -229,8 +227,8 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
-	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ctx, req, prop)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := compiled.Apply(ri, prop)
 	if result.Level() != 200 {
 		t.Errorf("Expected first matching rule (level 200), got %d", result.Level())
 	}
@@ -266,8 +264,8 @@ func TestCompiledRulesPropertyBeforeOrg(t *testing.T) {
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
-	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ctx, req, prop)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := compiled.Apply(ri, prop)
 	if result.Level() != 180 {
 		t.Errorf("Expected property-level rule (180) to take precedence, got %d", result.Level())
 	}
@@ -290,8 +288,8 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
-	req, ctx := newTestRequest("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ctx, req, prop)
+	ri := newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
+	result := compiled.Apply(ri, prop)
 	if result.Level() != 50 {
 		t.Errorf("Expected original level 50 when no match, got %d", result.Level())
 	}
@@ -303,15 +301,15 @@ func TestNilCompiledRulesApply(t *testing.T) {
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("1.2.3.4"))
+	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
 
 	var cr *CompiledRules
-	result := cr.Apply(ctx, req, prop)
+	result := cr.Apply(ri, prop)
 	if result.Level() != 50 {
 		t.Errorf("Expected original property when compiled rules is nil, got level %d", result.Level())
 	}
 
-	if cr.IsRequestBlocked(ctx, req) {
+	if cr.IsRequestBlocked(ri) {
 		t.Error("Expected nil compiled rules to not block request")
 	}
 }
@@ -336,13 +334,13 @@ func TestIsRequestBlocked(t *testing.T) {
 
 	compiled := Compile(context.Background(), propertyRules, nil)
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("10.1.2.3"))
-	if !compiled.IsRequestBlocked(ctx, req) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if !compiled.IsRequestBlocked(ri) {
 		t.Error("Expected request from 10.1.2.3 to be blocked")
 	}
 
-	req2, ctx2 := newTestRequest("test", netip.MustParseAddr("192.168.1.1"))
-	if compiled.IsRequestBlocked(ctx2, req2) {
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.1"))
+	if compiled.IsRequestBlocked(ri2) {
 		t.Error("Expected request from 192.168.1.1 to not be blocked")
 	}
 }
@@ -381,13 +379,13 @@ func TestIPv6PrefixMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("2001:db8::1"))
-	if !compiled.Matches(ctx, req) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("2001:db8::1"))
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match IPv6 address in prefix")
 	}
 
-	req2, ctx2 := newTestRequest("test", netip.MustParseAddr("2001:db9::1"))
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("2001:db9::1"))
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match IPv6 address outside prefix")
 	}
 }
@@ -461,8 +459,8 @@ func TestCompileSkipsInvalidRules(t *testing.T) {
 	}
 
 	prop := &testProperty{id: 1, valid: true, ownerID: 1, orgID: 1, level: 50, growth: dbgen.DifficultyGrowthMedium}
-	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ctx, req, prop)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := compiled.Apply(ri, prop)
 	if result.Level() != 150 {
 		t.Errorf("Expected level 150 from valid rule, got %d", result.Level())
 	}
@@ -510,13 +508,13 @@ func TestCountryCodeEqualsMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
-	if !compiled.Matches(ctx, req) {
+	ri := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match country code US")
 	}
 
-	req2, ctx2 := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match country code DE")
 	}
 }
@@ -535,8 +533,8 @@ func TestCountryCodeNoHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequest("test", netip.MustParseAddr("1.2.3.4"))
-	if compiled.Matches(ctx, req) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri) {
 		t.Error("Expected rule to not match when no country code header configured")
 	}
 }
@@ -555,13 +553,46 @@ func TestCountryCodeContainsMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, ctx := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
-	if !compiled.Matches(ctx, req) {
+	ri := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
+	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match country code containing 'u' (case-insensitive)")
 	}
 
-	req2, ctx2 := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
-	if compiled.Matches(ctx2, req2) {
+	ri2 := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
+	if compiled.Matches(ri2) {
 		t.Error("Expected rule to not match country code DE for contains 'u'")
+	}
+}
+
+func TestRequestInfoLazyCaching(t *testing.T) {
+	ri := newTestRequestInfoWithCountryCode("TestBot/1.0", netip.MustParseAddr("10.0.0.1"), "X-Country", "US")
+
+	// First access populates cache
+	ua := ri.UserAgent()
+	if ua != "TestBot/1.0" {
+		t.Errorf("Expected UserAgent 'TestBot/1.0', got %q", ua)
+	}
+
+	// Second access returns cached value
+	if ri.UserAgent() != ua {
+		t.Error("Expected same cached user agent")
+	}
+
+	ip, ok := ri.IPAddr()
+	if !ok || ip != netip.MustParseAddr("10.0.0.1") {
+		t.Errorf("Expected IP 10.0.0.1, got %v", ip)
+	}
+
+	cc := ri.CountryCode()
+	if cc != "US" {
+		t.Errorf("Expected country code 'US', got %q", cc)
+	}
+}
+
+func TestRequestInfoNoCountryCodeHeader(t *testing.T) {
+	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
+	cc := ri.CountryCode()
+	if cc != "" {
+		t.Errorf("Expected empty country code, got %q", cc)
 	}
 }

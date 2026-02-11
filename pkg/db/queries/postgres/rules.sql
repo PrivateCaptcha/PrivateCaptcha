@@ -1,11 +1,7 @@
--- name: GetDifficultyRulesByPropertyID :many
-SELECT * FROM backend.difficulty_rules WHERE property_id = $1 ORDER BY position ASC;
-
--- name: GetDifficultyRulesByOrgID :many
-SELECT * FROM backend.difficulty_rules WHERE org_id = $1 AND property_id IS NULL ORDER BY position ASC;
-
--- name: GetDifficultyRulesByPropertyIDs :many
-SELECT * FROM backend.difficulty_rules WHERE property_id = ANY($1::INT[]) ORDER BY property_id, position ASC;
-
--- name: GetDifficultyRulesByOrgIDs :many
-SELECT * FROM backend.difficulty_rules WHERE org_id = ANY($1::INT[]) AND property_id IS NULL ORDER BY org_id, position ASC;
+-- name: GetDifficultyRulesForProperties :many
+SELECT dr.* FROM backend.difficulty_rules dr
+WHERE dr.property_id = ANY($1::INT[])
+   OR (dr.property_id IS NULL AND dr.org_id IN (
+       SELECT DISTINCT p.org_id FROM backend.properties p WHERE p.id = ANY($1::INT[]) AND p.org_id IS NOT NULL
+   ))
+ORDER BY dr.property_id NULLS LAST, dr.position ASC;
