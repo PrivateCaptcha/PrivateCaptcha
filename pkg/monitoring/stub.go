@@ -35,3 +35,4 @@ func (sm *stubMetrics) ObserveHttpError(handlerID string, method string, code in
 func (sm *stubMetrics) ObserveApiError(handlerID string, method string, code int)  {}
 
 func (sm *stubMetrics) ObserveEventDropped(eventType common.MetricEventType) {}
+func (sm *stubMetrics) ObservePanic()                                        {}

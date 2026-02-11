@@ -58,7 +58,7 @@ func TestRecoveredMiddleware(t *testing.T) {
 		panic("test panic")
 	})
 
-	recovered := Recovered(panicHandler)
+	recovered := Recovered(nil)(panicHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestRecoveredMiddlewareNoPanic(t *testing.T) {
 		w.Write([]byte("OK"))
 	})
 
-	recovered := Recovered(okHandler)
+	recovered := Recovered(nil)(okHandler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	w := httptest.NewRecorder()

@@ -77,6 +77,7 @@ const (
 
 type BaseMetrics interface {
 	ObserveEventDropped(eventType MetricEventType)
+	ObservePanic()
 }
 
 type APIMetrics interface {
@@ -88,6 +89,7 @@ type APIMetrics interface {
 }
 
 type PortalMetrics interface {
+	BaseMetrics
 	HTTPMetrics
 	// this method is used for our error page redirects that are not captured by usual monitoring middleware
 	// as we don't actually return an HTTP error out

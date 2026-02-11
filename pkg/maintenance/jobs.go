@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sync/semaphore"
 )
 
-func NewJobs(store db.Implementor, concurrency int) *jobs {
+func NewJobs(store db.Implementor, concurrency int, metrics common.BaseMetrics) *jobs {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -23,6 +23,7 @@ func NewJobs(store db.Implementor, concurrency int) *jobs {
 		periodicJobs: make([]common.PeriodicJob, 0),
 		oneOffJobs:   make([]common.OneOffJob, 0),
 		sem:          semaphore.NewWeighted(int64(concurrency)),
+		metrics:      metrics,
 	}
 
 	j.maintenanceCtx, j.maintenanceCancel = context.WithCancel(
@@ -33,6 +34,7 @@ func NewJobs(store db.Implementor, concurrency int) *jobs {
 
 type jobs struct {
 	store             db.Implementor
+	metrics           common.BaseMetrics
 	periodicJobs      []common.PeriodicJob
 	oneOffJobs        []common.OneOffJob
 	maintenanceCancel context.CancelFunc
@@ -91,10 +93,11 @@ func (j *jobs) Setup(mux *http.ServeMux, cfg common.ConfigStore) {
 	j.apiKey = cfg.Get(common.LocalAPIKeyKey).Value()
 
 	svc := common.ServiceMiddleware("local")
+	recovered := common.Recovered(j.metrics)
 
 	const maxBytes = 256 * 1024
-	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", svc(common.Recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handlePeriodicJob)), maxBytes))))
-	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", svc(common.Recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handleOneoffJob)), maxBytes))))
+	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", svc(recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handlePeriodicJob)), maxBytes))))
+	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", svc(recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handleOneoffJob)), maxBytes))))
 }
 
 func (j *jobs) security(next http.Handler) http.Handler {

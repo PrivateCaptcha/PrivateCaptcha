@@ -214,7 +214,8 @@ func (s *Server) Shutdown() {
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
 	svc := common.ServiceMiddleware(ApiService)
-	publicChain := alice.New(svc, common.Recovered, security)
+	recovered := common.Recovered(s.Metrics)
+	publicChain := alice.New(svc, recovered, security)
 	// NOTE: auth middleware provides rate limiting internally
 	puzzleChain := publicChain.Append(s.Metrics.Handler, s.RateLimiter.RateLimit, monitoring.Traced, common.SoftTimeoutHandler(1*time.Second))
 	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(corsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))

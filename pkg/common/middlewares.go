@@ -60,26 +60,31 @@ func NoopMiddleware(next http.Handler) http.Handler {
 	return next
 }
 
-func Recovered(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		recorder := &statusRecorder{ResponseWriter: w}
+func Recovered(metrics BaseMetrics) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			recorder := &statusRecorder{ResponseWriter: w}
 
-		defer func() {
-			if rvr := recover(); rvr != nil {
-				if rvr == http.ErrAbortHandler {
-					panic(rvr)
+			defer func() {
+				if rvr := recover(); rvr != nil {
+					if rvr == http.ErrAbortHandler {
+						panic(rvr)
+					}
+
+					slog.ErrorContext(r.Context(), "Crash", "panic", rvr, "stack", string(debug.Stack()))
+					if metrics != nil {
+						metrics.ObservePanic()
+					}
+
+					if r.Header.Get("Connection") != "Upgrade" && !recorder.wroteHeader.Load() {
+						w.WriteHeader(http.StatusInternalServerError)
+					}
 				}
+			}()
 
-				slog.ErrorContext(r.Context(), "Crash", "panic", rvr, "stack", string(debug.Stack()))
-
-				if r.Header.Get("Connection") != "Upgrade" && !recorder.wroteHeader.Load() {
-					w.WriteHeader(http.StatusInternalServerError)
-				}
-			}
-		}()
-
-		next.ServeHTTP(recorder, r)
-	})
+			next.ServeHTTP(recorder, r)
+		})
+	}
 }
 
 func ServiceMiddleware(svc string) func(next http.Handler) http.Handler {

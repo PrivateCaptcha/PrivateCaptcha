@@ -278,8 +278,9 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 	ratelimiter := s.RateLimiter.RateLimitExFunc(defaultLeakyBucketCap, defaultLeakInterval)
 	svc := common.ServiceMiddleware(PortalService)
 	cop := http.NewCrossOriginProtection()
+	recovered := common.Recovered(s.Metrics)
 
-	return alice.New(svc, common.Recovered, security, s.Metrics.HandlerIDFunc(rg.LastPath), ratelimiter, cop.Handler, monitoring.Logged)
+	return alice.New(svc, recovered, security, s.Metrics.HandlerIDFunc(rg.LastPath), ratelimiter, cop.Handler, monitoring.Logged)
 }
 
 func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout alice.Constructor) alice.Chain {

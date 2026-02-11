@@ -47,6 +47,7 @@ type Service struct {
 	puzzleCounter          *prometheus.CounterVec
 	verifyCounter          *prometheus.CounterVec
 	dropCounter            *prometheus.CounterVec
+	panicCounter           *prometheus.CounterVec
 	hitRatioGauge          *prometheus.GaugeVec
 	clickhouseHealthGauge  *prometheus.GaugeVec
 	postgresHealthGauge    *prometheus.GaugeVec
@@ -147,6 +148,17 @@ func NewService() *Service {
 	)
 	reg.MustRegister(eventDropCounter)
 
+	panicCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespaceServer,
+			Subsystem: platformMetricsSubsystem,
+			Name:      "panic_total",
+			Help:      "Total number of panics",
+		},
+		[]string{},
+	)
+	reg.MustRegister(panicCounter)
+
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespaceServer,
@@ -230,6 +242,7 @@ func NewService() *Service {
 		portalErrorCounter:    portalErrorCounter,
 		apiErrorCounter:       apiErrorCounter,
 		dropCounter:           eventDropCounter,
+		panicCounter:          panicCounter,
 	}
 }
 
@@ -297,6 +310,10 @@ func (s *Service) ObserveEventDropped(eventType common.MetricEventType) {
 	}).Inc()
 }
 
+func (s *Service) ObservePanic() {
+	s.panicCounter.With(prometheus.Labels{}).Inc()
+}
+
 func (s *Service) ObserveHealth(postgres, clickhouse bool) {
 	var chVal, pgVal float64
 
@@ -317,6 +334,7 @@ func (s *Service) ObserveHealth(postgres, clickhouse bool) {
 }
 
 func (s *Service) Setup(mux *http.ServeMux) {
-	mux.Handle(http.MethodGet+" /metrics", common.Recovered(promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{Registry: s.Registry})))
+	recovered := common.Recovered(s)
+	mux.Handle(http.MethodGet+" /metrics", recovered(promhttp.HandlerFor(s.Registry, promhttp.HandlerOpts{Registry: s.Registry})))
 	s.setupProfiling(context.TODO(), mux)
 }

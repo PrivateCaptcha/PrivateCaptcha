@@ -255,7 +255,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
-	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
+	jobs := maintenance.NewJobs(businessDB, jobConcurrency, metrics)
 
 	updateConfigFunc := func(ctx context.Context) {
 		cfg.Update(ctx)
@@ -279,15 +279,16 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalServer.Setup(portalDomain, common.NoopMiddleware).Register(router)
 	rateLimiter := ipRateLimiter.RateLimitExFunc(publicLeakyBucketCap, publicLeakInterval)
 	cdnDomain := cdnURLConfig.Domain()
-	cdnChain := alice.New(common.Recovered, metrics.CDNHandler, rateLimiter)
+	recovered := common.Recovered(metrics)
+	cdnChain := alice.New(recovered, metrics.CDNHandler, rateLimiter)
 	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static(GitCommit))))
 	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static(GitCommit))))
 	// "protection" (NOTE: different than usual order of monitoring)
-	publicChain := alice.New(common.Recovered, metrics.IgnoredHandler, rateLimiter)
+	publicChain := alice.New(recovered, metrics.IgnoredHandler, rateLimiter)
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)
 	// catch all routes with stricter limit
 	catchAllRateLimiter := ipRateLimiter.RateLimitExFunc(catchAllLeakyBucketCap, catchAllLeakInterval)
-	catchAllChain := alice.New(common.Recovered, metrics.IgnoredHandler, catchAllRateLimiter)
+	catchAllChain := alice.New(recovered, metrics.IgnoredHandler, catchAllRateLimiter)
 	router.Handle("/", catchAllChain.ThenFunc(common.CatchAll))
 
 	ongoingCtx, stopOngoingGracefully := context.WithCancel(context.Background())
@@ -405,8 +406,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		localRouter := http.NewServeMux()
 		metrics.Setup(localRouter)
 		jobs.Setup(localRouter, cfg)
-		localRouter.Handle(http.MethodGet+" /"+common.LiveEndpoint, common.Recovered(http.HandlerFunc(healthCheck.LiveHandler)))
-		localRouter.Handle(http.MethodGet+" /"+common.ReadyEndpoint, common.Recovered(http.HandlerFunc(healthCheck.ReadyHandler)))
+		localRouter.Handle(http.MethodGet+" /"+common.LiveEndpoint, recovered(http.HandlerFunc(healthCheck.LiveHandler)))
+		localRouter.Handle(http.MethodGet+" /"+common.ReadyEndpoint, recovered(http.HandlerFunc(healthCheck.ReadyHandler)))
 		localServer = &http.Server{
 			Addr:              localAddress,
 			Handler:           localRouter,
