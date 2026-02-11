@@ -9,29 +9,70 @@ import (
 	"context"
 )
 
-const getDifficultyRulesForProperties = `-- name: GetDifficultyRulesForProperties :many
-WITH property_orgs AS (
-    SELECT DISTINCT p.org_id FROM backend.properties p WHERE p.id = ANY($1::INT[]) AND p.org_id IS NOT NULL
-)
+const getDifficultyRulesByOrgIDs = `-- name: GetDifficultyRulesByOrgIDs :many
 SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
-WHERE dr.property_id = ANY($1::INT[])
-   OR (dr.property_id IS NULL AND dr.org_id IN (SELECT org_id FROM property_orgs))
-ORDER BY dr.property_id NULLS LAST, dr.position ASC
+WHERE dr.org_id = ANY($1::INT[]) AND dr.property_id IS NULL
+ORDER BY dr.org_id, dr.position ASC
 `
 
-type GetDifficultyRulesForPropertiesRow struct {
+type GetDifficultyRulesByOrgIDsRow struct {
 	DifficultyRule DifficultyRule `db:"difficulty_rule" json:"difficulty_rule"`
 }
 
-func (q *Queries) GetDifficultyRulesForProperties(ctx context.Context, dollar_1 []int32) ([]*GetDifficultyRulesForPropertiesRow, error) {
-	rows, err := q.db.Query(ctx, getDifficultyRulesForProperties, dollar_1)
+func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*GetDifficultyRulesByOrgIDsRow, error) {
+	rows, err := q.db.Query(ctx, getDifficultyRulesByOrgIDs, dollar_1)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []*GetDifficultyRulesForPropertiesRow
+	var items []*GetDifficultyRulesByOrgIDsRow
 	for rows.Next() {
-		var i GetDifficultyRulesForPropertiesRow
+		var i GetDifficultyRulesByOrgIDsRow
+		if err := rows.Scan(
+			&i.DifficultyRule.ID,
+			&i.DifficultyRule.Name,
+			&i.DifficultyRule.PropertyID,
+			&i.DifficultyRule.OrgID,
+			&i.DifficultyRule.ConditionProperty,
+			&i.DifficultyRule.ConditionOperator,
+			&i.DifficultyRule.ConditionValueStr,
+			&i.DifficultyRule.ConditionValueInt,
+			&i.DifficultyRule.ConditionValueSeparator,
+			&i.DifficultyRule.Position,
+			&i.DifficultyRule.ActionProperty,
+			&i.DifficultyRule.ActionValue,
+			&i.DifficultyRule.CreatedAt,
+			&i.DifficultyRule.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDifficultyRulesByPropertyIDs = `-- name: GetDifficultyRulesByPropertyIDs :many
+SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
+WHERE dr.property_id = ANY($1::INT[])
+ORDER BY dr.property_id, dr.position ASC
+`
+
+type GetDifficultyRulesByPropertyIDsRow struct {
+	DifficultyRule DifficultyRule `db:"difficulty_rule" json:"difficulty_rule"`
+}
+
+func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*GetDifficultyRulesByPropertyIDsRow, error) {
+	rows, err := q.db.Query(ctx, getDifficultyRulesByPropertyIDs, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetDifficultyRulesByPropertyIDsRow
+	for rows.Next() {
+		var i GetDifficultyRulesByPropertyIDsRow
 		if err := rows.Scan(
 			&i.DifficultyRule.ID,
 			&i.DifficultyRule.Name,

@@ -333,28 +333,19 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 
 	impl := am.Store.Impl()
 
-	propertyIDs := make([]int32, 0, len(batch))
+	// collect property IDs that don't have cached compiled property rules
+	uncachedPropertyIDs := make([]int32, 0, len(batch))
 	for propertyID := range batch {
-		propertyIDs = append(propertyIDs, propertyID)
-	}
-
-	allRules, err := impl.RetrieveDifficultyRulesForProperties(ctx, propertyIDs)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve difficulty rules", common.ErrAttr(err))
-		return err
-	}
-
-	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule)
-	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule)
-	for _, row := range allRules {
-		r := &row.DifficultyRule
-		if r.PropertyID.Valid {
-			propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], r)
-		} else if r.OrgID.Valid {
-			orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], r)
+		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID); err == db.ErrCacheMiss {
+			uncachedPropertyIDs = append(uncachedPropertyIDs, propertyID)
 		}
 	}
 
+	if len(uncachedPropertyIDs) == 0 {
+		return nil
+	}
+
+	// resolve org IDs from properties
 	properties, err := impl.RetrievePropertiesByID(ctx, batch)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
@@ -362,26 +353,83 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	}
 
 	propertyToOrg := make(map[int32]int32, len(properties))
+	uncachedOrgIDs := make([]int32, 0, len(properties))
+	seenOrgs := make(map[int32]struct{})
 	for _, p := range properties {
 		if p.OrgID.Valid {
 			propertyToOrg[p.ID] = p.OrgID.Int32
+			if _, seen := seenOrgs[p.OrgID.Int32]; !seen {
+				seenOrgs[p.OrgID.Int32] = struct{}{}
+				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32); err == db.ErrCacheMiss {
+					uncachedOrgIDs = append(uncachedOrgIDs, p.OrgID.Int32)
+				}
+			}
 		}
 	}
 
-	for _, propertyID := range propertyIDs {
-		propRules := propertyRulesMap[propertyID]
-		var oRules []*dbgen.DifficultyRule
-		if orgID, ok := propertyToOrg[propertyID]; ok {
-			oRules = orgRulesMap[orgID]
+	// fetch property rules
+	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule)
+	if len(uncachedPropertyIDs) > 0 {
+		propRows, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
+			return err
 		}
-		compiled := rules.Compile(ctx, propRules, oRules)
-		impl.CacheCompiledDifficultyRules(ctx, propertyID, compiled)
+		for _, row := range propRows {
+			r := row.DifficultyRule
+			if r.PropertyID.Valid {
+				propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], &r)
+			}
+		}
+	}
+
+	// fetch org rules
+	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule)
+	if len(uncachedOrgIDs) > 0 {
+		orgRows, err := impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", common.ErrAttr(err))
+			return err
+		}
+		for _, row := range orgRows {
+			r := row.DifficultyRule
+			if r.OrgID.Valid {
+				orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], &r)
+			}
+		}
+	}
+
+	// compile and cache property rules (set missing for no-rules properties)
+	for _, propertyID := range uncachedPropertyIDs {
+		propRules := propertyRulesMap[propertyID]
+		compiled := rules.Compile(ctx, propRules)
+		impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
+	}
+
+	// compile and cache org rules (set missing for no-rules orgs)
+	for _, orgID := range uncachedOrgIDs {
+		oRules := orgRulesMap[orgID]
+		compiled := rules.Compile(ctx, oRules)
+		impl.CacheCompiledOrgRules(ctx, orgID, compiled)
 	}
 
 	slog.DebugContext(ctx, "Backfilled difficulty rules",
-		"properties", len(propertyIDs), "rules", len(allRules))
+		"properties", len(uncachedPropertyIDs), "orgs", len(uncachedOrgIDs))
 
 	return nil
+}
+
+func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case am.RulesChan <- propertyID:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for property rules refresh", "propertyID", propertyID)
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
+	}
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {

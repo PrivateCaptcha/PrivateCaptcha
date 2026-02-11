@@ -47,17 +47,21 @@ func (dbp *dbProperty) Growth() dbgen.DifficultyGrowth {
 
 // StubProperty is a test helper that implements the Property interface
 type StubProperty struct {
-	PropertyID      int32
-	IsValid         bool
-	PropertyOwnerID int32
-	PropertyOrgID   int32
-	PropertyLevel   int16
-	PropertyGrowth  dbgen.DifficultyGrowth
+	id      int32
+	valid   bool
+	ownerID int32
+	orgID   int32
+	level   int16
+	growth  dbgen.DifficultyGrowth
 }
 
-func (p *StubProperty) ID() int32                        { return p.PropertyID }
-func (p *StubProperty) Valid() bool                      { return p.IsValid }
-func (p *StubProperty) OwnerID() int32                   { return p.PropertyOwnerID }
-func (p *StubProperty) OrgID() int32                     { return p.PropertyOrgID }
-func (p *StubProperty) Level() int16                     { return p.PropertyLevel }
-func (p *StubProperty) Growth() dbgen.DifficultyGrowth   { return p.PropertyGrowth }
+func NewStubProperty(id int32, valid bool, ownerID, orgID int32, level int16, growth dbgen.DifficultyGrowth) *StubProperty {
+	return &StubProperty{id: id, valid: valid, ownerID: ownerID, orgID: orgID, level: level, growth: growth}
+}
+
+func (p *StubProperty) ID() int32                      { return p.id }
+func (p *StubProperty) Valid() bool                    { return p.valid }
+func (p *StubProperty) OwnerID() int32                 { return p.ownerID }
+func (p *StubProperty) OrgID() int32                   { return p.orgID }
+func (p *StubProperty) Level() int16                   { return p.level }
+func (p *StubProperty) Growth() dbgen.DifficultyGrowth { return p.growth }

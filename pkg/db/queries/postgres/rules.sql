@@ -1,8 +1,9 @@
--- name: GetDifficultyRulesForProperties :many
-WITH property_orgs AS (
-    SELECT DISTINCT p.org_id FROM backend.properties p WHERE p.id = ANY($1::INT[]) AND p.org_id IS NOT NULL
-)
+-- name: GetDifficultyRulesByPropertyIDs :many
 SELECT sqlc.embed(dr) FROM backend.difficulty_rules dr
 WHERE dr.property_id = ANY($1::INT[])
-   OR (dr.property_id IS NULL AND dr.org_id IN (SELECT org_id FROM property_orgs))
-ORDER BY dr.property_id NULLS LAST, dr.position ASC;
+ORDER BY dr.property_id, dr.position ASC;
+
+-- name: GetDifficultyRulesByOrgIDs :many
+SELECT sqlc.embed(dr) FROM backend.difficulty_rules dr
+WHERE dr.org_id = ANY($1::INT[]) AND dr.property_id IS NULL
+ORDER BY dr.org_id, dr.position ASC;

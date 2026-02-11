@@ -262,9 +262,30 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 
 	var compiledRules *rules.CompiledRules
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
-		if cached, err := s.BusinessDB.Impl().GetCachedCompiledDifficultyRules(ctx, property.ID); err == nil && cached != nil {
-			compiledRules = cached
+		impl := s.BusinessDB.Impl()
+		needsBackfill := false
+
+		var propertyRules *rules.CompiledRules
+		if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
+			propertyRules = cached
+		} else if err == db.ErrCacheMiss {
+			needsBackfill = true
 		}
+
+		var orgRules *rules.CompiledRules
+		if property.OrgID.Valid {
+			if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
+				orgRules = cached
+			} else if err == db.ErrCacheMiss {
+				needsBackfill = true
+			}
+		}
+
+		if needsBackfill {
+			s.Auth.RefreshPropertyRules(ctx, property.ID)
+		}
+
+		compiledRules = rules.Merge(propertyRules, orgRules)
 	}
 
 	var countryCodeHeader string
@@ -274,6 +295,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ri := rules.NewRequestInfo(r, countryCodeHeader)
 
 	if compiledRules != nil && compiledRules.IsRequestBlocked(ri) {
+		slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rule")
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}

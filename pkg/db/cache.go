@@ -219,7 +219,8 @@ const (
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
-	compiledDifficultyRulesCacheKeyPrefix
+	compiledPropertyRulesCacheKeyPrefix
+	compiledOrgRulesCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -259,7 +260,8 @@ func init() {
 	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
 	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
 	cachePrefixToStrings[orgInviteCacheKeyPrefix] = "orgInvite/"
-	cachePrefixToStrings[compiledDifficultyRulesCacheKeyPrefix] = "compiledDiffRules/"
+	cachePrefixToStrings[compiledPropertyRulesCacheKeyPrefix] = "compiledPropRules/"
+	cachePrefixToStrings[compiledOrgRulesCacheKeyPrefix] = "compiledOrgRules/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -381,6 +383,9 @@ func orgPropertiesCountCacheKey(orgID int32) CacheKey {
 func orgInviteCacheKey(inviteID int32) CacheKey {
 	return Int32CacheKey(orgInviteCacheKeyPrefix, inviteID)
 }
-func CompiledDifficultyRulesCacheKey(propertyID int32) CacheKey {
-	return Int32CacheKey(compiledDifficultyRulesCacheKeyPrefix, propertyID)
+func CompiledPropertyRulesCacheKey(propertyID int32) CacheKey {
+	return Int32CacheKey(compiledPropertyRulesCacheKeyPrefix, propertyID)
+}
+func CompiledOrgRulesCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(compiledOrgRulesCacheKeyPrefix, orgID)
 }

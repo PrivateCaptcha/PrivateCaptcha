@@ -2972,20 +2972,46 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesForProperties(ctx context.Context, propertyIDs []int32) ([]*dbgen.GetDifficultyRulesForPropertiesRow, error) {
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, propertyIDs []int32) ([]*dbgen.GetDifficultyRulesByPropertyIDsRow, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	return impl.querier.GetDifficultyRulesForProperties(ctx, propertyIDs)
+	return impl.querier.GetDifficultyRulesByPropertyIDs(ctx, propertyIDs)
 }
 
-func (impl *BusinessStoreImpl) GetCachedCompiledDifficultyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
-	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Context, orgIDs []int32) ([]*dbgen.GetDifficultyRulesByOrgIDsRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetDifficultyRulesByOrgIDs(ctx, orgIDs)
+}
+
+func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
+	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
 	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
 }
 
-func (impl *BusinessStoreImpl) CacheCompiledDifficultyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
-	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
+func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
+	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
+	if compiled == nil {
+		_ = impl.cache.SetMissing(ctx, cacheKey)
+		return
+	}
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+}
+
+func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, error) {
+	cacheKey := CompiledOrgRulesCacheKey(orgID)
+	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
+}
+
+func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID int32, compiled *rules.CompiledRules) {
+	cacheKey := CompiledOrgRulesCacheKey(orgID)
+	if compiled == nil {
+		_ = impl.cache.SetMissing(ctx, cacheKey)
+		return
+	}
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }

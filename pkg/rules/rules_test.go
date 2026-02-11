@@ -37,10 +37,7 @@ func newTestRequestInfoNoIP(userAgent string) *RequestInfo {
 }
 
 func newStubProperty() *difficulty.StubProperty {
-	return &difficulty.StubProperty{
-		PropertyID: 1, IsValid: true, PropertyOwnerID: 1, PropertyOrgID: 1,
-		PropertyLevel: 50, PropertyGrowth: dbgen.DifficultyGrowthMedium,
-	}
+	return difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthMedium)
 }
 
 func TestUserAgentEqualsMatch(t *testing.T) {
@@ -254,10 +251,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prop := &difficulty.StubProperty{
-		PropertyID: 1, IsValid: true, PropertyOwnerID: 1, PropertyOrgID: 1,
-		PropertyLevel: 50, PropertyGrowth: dbgen.DifficultyGrowthSlow,
-	}
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthSlow)
 
 	result := compiled.Apply(prop)
 	if result.Growth() != dbgen.DifficultyGrowthFast {
@@ -288,7 +282,7 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules)
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
@@ -322,7 +316,9 @@ func TestCompiledRulesPropertyBeforeOrg(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, orgRules)
+	compiledProp := Compile(context.Background(), propertyRules)
+	compiledOrg := Compile(context.Background(), orgRules)
+	compiled := Merge(compiledProp, compiledOrg)
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
@@ -343,7 +339,7 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules)
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
@@ -370,7 +366,7 @@ func TestNilCompiledRulesApply(t *testing.T) {
 }
 
 func TestEmptyCompileReturnsNil(t *testing.T) {
-	compiled := Compile(context.Background(), nil, nil)
+	compiled := Compile(context.Background(), nil)
 	if compiled != nil {
 		t.Error("Expected nil CompiledRules from empty rule sets")
 	}
@@ -387,7 +383,7 @@ func TestIsRequestBlocked(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules)
 
 	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ri) {
@@ -420,7 +416,7 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules)
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ri) {
 		t.Error("Expected block rule to still be checked even when non-block rule also matches")
@@ -535,7 +531,7 @@ func TestCompileSkipsInvalidRules(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules)
 	if compiled == nil {
 		t.Fatal("Expected non-nil CompiledRules (one valid rule)")
 	}
@@ -549,10 +545,7 @@ func TestCompileSkipsInvalidRules(t *testing.T) {
 }
 
 func TestOverridePropertyPreservesBase(t *testing.T) {
-	base := &difficulty.StubProperty{
-		PropertyID: 42, IsValid: true, PropertyOwnerID: 10, PropertyOrgID: 5,
-		PropertyLevel: 80, PropertyGrowth: dbgen.DifficultyGrowthSlow,
-	}
+	base := difficulty.NewStubProperty(42, true, 10, 5, 80, dbgen.DifficultyGrowthSlow)
 	level := int16(150)
 	op := &overrideProperty{base: base, level: &level}
 
@@ -732,4 +725,45 @@ func TestRequestInfoIPAddrFallback(t *testing.T) {
 	if ip.IsValid() {
 		t.Error("Expected invalid IP when no context IP and httptest default remote addr")
 	}
+}
+
+func TestMergeNilBoth(t *testing.T) {
+result := Merge(nil, nil)
+if result != nil {
+t.Error("Expected nil when merging two nil CompiledRules")
+}
+}
+
+func TestMergeNilProperty(t *testing.T) {
+orgRules := []*dbgen.DifficultyRule{
+{
+ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+ConditionOperator: dbgen.RuleConditionOperatorContains,
+ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+ActionValue:       100,
+},
+}
+org := Compile(context.Background(), orgRules)
+result := Merge(nil, org)
+if result != org {
+t.Error("Expected org rules returned when property is nil")
+}
+}
+
+func TestMergeNilOrg(t *testing.T) {
+propRules := []*dbgen.DifficultyRule{
+{
+ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+ConditionOperator: dbgen.RuleConditionOperatorContains,
+ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+ActionValue:       200,
+},
+}
+prop := Compile(context.Background(), propRules)
+result := Merge(prop, nil)
+if result != prop {
+t.Error("Expected property rules returned when org is nil")
+}
 }
