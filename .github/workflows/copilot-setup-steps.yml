@@ -29,29 +29,29 @@ jobs:
         env:
           STAGE: prod
         run: make init-web
-  
+
       - name: Install widget NPM dependencies
         env:
           STAGE: prod
         run: make init-widget
-  
+
       - name: Build web
         env:
           STAGE: prod
         run: make build-js
-  
+
       - name: Build widget script
         env:
           STAGE: prod
         run: make build-widget-script
-  
+
       - name: Copy static js
         run: make copy-static-js
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version: '1.25.7'
 
       - name: Set up sqlc
         uses: sqlc-dev/setup-sqlc@v4
