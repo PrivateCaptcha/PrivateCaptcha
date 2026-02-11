@@ -961,7 +961,7 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 		}
 	}
 
-	if !s.LicenseService.IsRegistered() && (len(renderCtx.WarningMessage) == 0) {
+	if (s.LicenseService != nil) && !s.LicenseService.IsRegistered() && (len(renderCtx.WarningMessage) == 0) {
 		renderCtx.WarningMessage = "This instance is running without a license."
 	}
 
