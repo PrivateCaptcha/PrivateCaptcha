@@ -99,7 +99,11 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := s.Jobs.LoginUser(sess)
-	go common.RunOneOffJob(common.CopyTraceID(ctx, context.Background()), job, job.NewParams())
+	jobCtx := common.CopyTraceID(ctx, context.Background())
+	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
+		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
+	}
+	go common.RunOneOffJob(jobCtx, job, job.NewParams())
 
 	_ = sess.Set(ctx, session.KeyLoginStep, loginStepCompleted)
 	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
