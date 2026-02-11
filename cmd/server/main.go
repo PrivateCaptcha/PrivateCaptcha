@@ -184,6 +184,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		SubscriptionLimits: subscriptionLimits,
 		IDHasher:           idHasher,
 		AsyncTasks:         asyncTasksJob,
+		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 	}
 	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
 		return err

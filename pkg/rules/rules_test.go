@@ -38,6 +38,17 @@ func newTestRequest(userAgent string, ip netip.Addr) (*http.Request, context.Con
 	return req.WithContext(ctx), ctx
 }
 
+func newTestRequestWithCountryCode(userAgent string, ip netip.Addr, headerName, countryCode string) (*http.Request, context.Context) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Header.Set("User-Agent", userAgent)
+	if len(countryCode) > 0 {
+		req.Header.Set(headerName, countryCode)
+	}
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
+	ctx = context.WithValue(ctx, common.CountryCodeHeaderContextKey, headerName)
+	return req.WithContext(ctx), ctx
+}
+
 func TestUserAgentEqualsMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -47,7 +58,10 @@ func TestUserAgentEqualsMatch(t *testing.T) {
 		ActionValue:       200,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 
 	if !compiled.Matches(ctx, req) {
@@ -69,7 +83,10 @@ func TestUserAgentContainsMatch(t *testing.T) {
 		ActionValue:       200,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 	req, ctx := newTestRequest("Mozilla/5.0 BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 
 	if !compiled.Matches(ctx, req) {
@@ -91,7 +108,10 @@ func TestIPAddressMatchesPrefix(t *testing.T) {
 		ActionValue:       150,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req, ctx := newTestRequest("test", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.Matches(ctx, req) {
@@ -113,7 +133,10 @@ func TestIPAddressMatchesExactAddr(t *testing.T) {
 		ActionValue:       1,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req, ctx := newTestRequest("test", netip.MustParseAddr("192.168.1.100"))
 	if !compiled.Matches(ctx, req) {
@@ -135,7 +158,10 @@ func TestDifficultyLevelApply(t *testing.T) {
 		ActionValue:       200,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 	prop := &testProperty{
 		id: 1, valid: true, ownerID: 1, orgID: 1,
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
@@ -159,7 +185,10 @@ func TestDifficultyGrowthApply(t *testing.T) {
 		ActionValue:       3, // fast
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 	prop := &testProperty{
 		id: 1, valid: true, ownerID: 1, orgID: 1,
 		level: 50, growth: dbgen.DifficultyGrowthSlow,
@@ -194,14 +223,14 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules, nil)
 	prop := &testProperty{
 		id: 1, valid: true, ownerID: 1, orgID: 1,
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
 	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.ApplyProperty(ctx, req, prop)
+	result := compiled.Apply(ctx, req, prop)
 	if result.Level() != 200 {
 		t.Errorf("Expected first matching rule (level 200), got %d", result.Level())
 	}
@@ -231,14 +260,14 @@ func TestCompiledRulesPropertyBeforeOrg(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(propertyRules, orgRules)
+	compiled := Compile(context.Background(), propertyRules, orgRules)
 	prop := &testProperty{
 		id: 1, valid: true, ownerID: 1, orgID: 1,
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
 	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.ApplyProperty(ctx, req, prop)
+	result := compiled.Apply(ctx, req, prop)
 	if result.Level() != 180 {
 		t.Errorf("Expected property-level rule (180) to take precedence, got %d", result.Level())
 	}
@@ -255,14 +284,14 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules, nil)
 	prop := &testProperty{
 		id: 1, valid: true, ownerID: 1, orgID: 1,
 		level: 50, growth: dbgen.DifficultyGrowthMedium,
 	}
 
 	req, ctx := newTestRequest("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.ApplyProperty(ctx, req, prop)
+	result := compiled.Apply(ctx, req, prop)
 	if result.Level() != 50 {
 		t.Errorf("Expected original level 50 when no match, got %d", result.Level())
 	}
@@ -277,7 +306,7 @@ func TestNilCompiledRulesApply(t *testing.T) {
 	req, ctx := newTestRequest("test", netip.MustParseAddr("1.2.3.4"))
 
 	var cr *CompiledRules
-	result := cr.ApplyProperty(ctx, req, prop)
+	result := cr.Apply(ctx, req, prop)
 	if result.Level() != 50 {
 		t.Errorf("Expected original property when compiled rules is nil, got level %d", result.Level())
 	}
@@ -288,7 +317,7 @@ func TestNilCompiledRulesApply(t *testing.T) {
 }
 
 func TestEmptyCompileReturnsNil(t *testing.T) {
-	compiled := Compile(nil, nil)
+	compiled := Compile(context.Background(), nil, nil)
 	if compiled != nil {
 		t.Error("Expected nil CompiledRules from empty rule sets")
 	}
@@ -305,7 +334,7 @@ func TestIsRequestBlocked(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(propertyRules, nil)
+	compiled := Compile(context.Background(), propertyRules, nil)
 
 	req, ctx := newTestRequest("test", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ctx, req) {
@@ -347,7 +376,10 @@ func TestIPv6PrefixMatch(t *testing.T) {
 		ActionValue:       200,
 	}
 
-	compiled := CompileRule(rule)
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	req, ctx := newTestRequest("test", netip.MustParseAddr("2001:db8::1"))
 	if !compiled.Matches(ctx, req) {
@@ -369,10 +401,70 @@ func TestInvalidIPRuleValue(t *testing.T) {
 		ActionValue:       200,
 	}
 
-	compiled := CompileRule(rule)
-	req, ctx := newTestRequest("test", netip.MustParseAddr("10.0.0.1"))
-	if compiled.Matches(ctx, req) {
-		t.Error("Expected invalid IP rule to never match")
+	_, err := CompileRule(context.Background(), rule)
+	if err != ErrInvalidIPValue {
+		t.Errorf("Expected ErrInvalidIPValue, got %v", err)
+	}
+}
+
+func TestUnknownConditionProperty(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: "unknown_prop",
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "test", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+		ActionValue:       200,
+	}
+
+	_, err := CompileRule(context.Background(), rule)
+	if err != ErrUnknownConditionProperty {
+		t.Errorf("Expected ErrUnknownConditionProperty, got %v", err)
+	}
+}
+
+func TestUnknownActionProperty(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "test", Valid: true},
+		ActionProperty:    "unknown_action",
+		ActionValue:       200,
+	}
+
+	_, err := CompileRule(context.Background(), rule)
+	if err != ErrUnknownActionProperty {
+		t.Errorf("Expected ErrUnknownActionProperty, got %v", err)
+	}
+}
+
+func TestCompileSkipsInvalidRules(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: "unknown_prop",
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ConditionValueStr: pgtype.Text{String: "test", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       200,
+		},
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       150,
+		},
+	}
+
+	compiled := Compile(context.Background(), propertyRules, nil)
+	if compiled == nil {
+		t.Fatal("Expected non-nil CompiledRules (one valid rule)")
+	}
+
+	prop := &testProperty{id: 1, valid: true, ownerID: 1, orgID: 1, level: 50, growth: dbgen.DifficultyGrowthMedium}
+	req, ctx := newTestRequest("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := compiled.Apply(ctx, req, prop)
+	if result.Level() != 150 {
+		t.Errorf("Expected level 150 from valid rule, got %d", result.Level())
 	}
 }
 
@@ -401,5 +493,75 @@ func TestOverridePropertyPreservesBase(t *testing.T) {
 	}
 	if op.Growth() != dbgen.DifficultyGrowthSlow {
 		t.Errorf("Expected Growth slow, got %s", op.Growth())
+	}
+}
+
+func TestCountryCodeEqualsMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "US", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+		ActionValue:       200,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, ctx := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
+	if !compiled.Matches(ctx, req) {
+		t.Error("Expected rule to match country code US")
+	}
+
+	req2, ctx2 := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
+	if compiled.Matches(ctx2, req2) {
+		t.Error("Expected rule to not match country code DE")
+	}
+}
+
+func TestCountryCodeNoHeader(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "US", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+		ActionValue:       200,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, ctx := newTestRequest("test", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ctx, req) {
+		t.Error("Expected rule to not match when no country code header configured")
+	}
+}
+
+func TestCountryCodeContainsMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "u", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+		ActionValue:       200,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req, ctx := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "US")
+	if !compiled.Matches(ctx, req) {
+		t.Error("Expected rule to match country code containing 'u' (case-insensitive)")
+	}
+
+	req2, ctx2 := newTestRequestWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "X-Country-Code", "DE")
+	if compiled.Matches(ctx2, req2) {
+		t.Error("Expected rule to not match country code DE for contains 'u'")
 	}
 }

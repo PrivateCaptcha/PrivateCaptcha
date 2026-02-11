@@ -2,14 +2,21 @@ package rules
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/netip"
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+)
+
+var (
+	ErrUnknownConditionProperty = errors.New("unknown rule condition property")
+	ErrUnknownActionProperty    = errors.New("unknown rule action property")
+	ErrInvalidIPValue           = errors.New("invalid IP address or prefix value")
 )
 
 type Rule interface {
@@ -25,7 +32,7 @@ func NewCompiledRules(rules []Rule) *CompiledRules {
 	return &CompiledRules{rules: rules}
 }
 
-func (cr *CompiledRules) ApplyProperty(ctx context.Context, r *http.Request, p difficulty.Property) difficulty.Property {
+func (cr *CompiledRules) Apply(ctx context.Context, r *http.Request, p difficulty.Property) difficulty.Property {
 	if cr == nil || len(cr.rules) == 0 {
 		return p
 	}
@@ -102,10 +109,24 @@ func ipAddressMatchesMatcher(prefix netip.Prefix) matcherFunc {
 	}
 }
 
-func countryCodeEqualsMatcher(value string) matcherFunc {
-	// TODO: implement country_code matching when country code is available in request context
-	return func(_ context.Context, _ *http.Request) bool {
-		return false
+func countryCodeMatcher(value string, operator dbgen.RuleConditionOperator) matcherFunc {
+	return func(ctx context.Context, r *http.Request) bool {
+		headerName, ok := ctx.Value(common.CountryCodeHeaderContextKey).(string)
+		if !ok || len(headerName) == 0 {
+			return false
+		}
+		cc := r.Header.Get(headerName)
+		if len(cc) == 0 {
+			return false
+		}
+		switch operator {
+		case dbgen.RuleConditionOperatorEquals:
+			return strings.EqualFold(cc, value)
+		case dbgen.RuleConditionOperatorContains:
+			return strings.Contains(strings.ToLower(cc), strings.ToLower(value))
+		default:
+			return strings.EqualFold(cc, value)
+		}
 	}
 }
 
@@ -167,17 +188,17 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) matcherFunc {
+func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
 	switch rule.ConditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent:
 		value := rule.ConditionValueStr.String
 		switch rule.ConditionOperator {
 		case dbgen.RuleConditionOperatorEquals:
-			return userAgentEqualsMatcher(value)
+			return userAgentEqualsMatcher(value), nil
 		case dbgen.RuleConditionOperatorContains:
-			return userAgentContainsMatcher(value)
+			return userAgentContainsMatcher(value), nil
 		default:
-			return userAgentContainsMatcher(value)
+			return userAgentContainsMatcher(value), nil
 		}
 	case dbgen.RuleConditionPropertyIPAddress:
 		value := rule.ConditionValueStr.String
@@ -185,8 +206,7 @@ func buildMatcher(rule *dbgen.DifficultyRule) matcherFunc {
 		if err != nil {
 			addr, addrErr := netip.ParseAddr(value)
 			if addrErr != nil {
-				slog.Warn("Failed to parse IP address rule value", "value", value, common.ErrAttr(err))
-				return func(_ context.Context, _ *http.Request) bool { return false }
+				return nil, ErrInvalidIPValue
 			}
 			bits := 32
 			if addr.Is6() {
@@ -194,50 +214,60 @@ func buildMatcher(rule *dbgen.DifficultyRule) matcherFunc {
 			}
 			prefix = netip.PrefixFrom(addr, bits)
 		}
-		return ipAddressMatchesMatcher(prefix)
+		return ipAddressMatchesMatcher(prefix), nil
 	case dbgen.RuleConditionPropertyCountryCode:
 		value := rule.ConditionValueStr.String
-		return countryCodeEqualsMatcher(value)
+		return countryCodeMatcher(value, rule.ConditionOperator), nil
 	default:
-		return func(_ context.Context, _ *http.Request) bool { return false }
+		return nil, ErrUnknownConditionProperty
 	}
 }
 
-func CompileRule(rule *dbgen.DifficultyRule) Rule {
-	matcher := buildMatcher(rule)
+func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
+	matcher, err := buildMatcher(rule)
+	if err != nil {
+		return nil, err
+	}
 
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevel:
 		return &difficultyLevelRule{
 			matcher: matcher,
 			level:   int16(rule.ActionValue),
-		}
+		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &httpRequestRule{
 			matcher: matcher,
-		}
+		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
 			matcher: matcher,
 			growth:  growthFromInt(rule.ActionValue),
-		}
+		}, nil
 	default:
-		return &difficultyLevelRule{
-			matcher: matcher,
-			level:   int16(rule.ActionValue),
-		}
+		return nil, ErrUnknownActionProperty
 	}
 }
 
-func Compile(propertyRules, orgRules []*dbgen.DifficultyRule) *CompiledRules {
+func Compile(ctx context.Context, propertyRules, orgRules []*dbgen.DifficultyRule) *CompiledRules {
 	rules := make([]Rule, 0, len(propertyRules)+len(orgRules))
 
 	for _, r := range propertyRules {
-		rules = append(rules, CompileRule(r))
+		compiled, err := CompileRule(ctx, r)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to compile property rule", "ruleID", r.ID, common.ErrAttr(err))
+			continue
+		}
+		rules = append(rules, compiled)
 	}
 
 	for _, r := range orgRules {
-		rules = append(rules, CompileRule(r))
+		compiled, err := CompileRule(ctx, r)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to compile org rule", "ruleID", r.ID, common.ErrAttr(err))
+			continue
+		}
+		rules = append(rules, compiled)
 	}
 
 	if len(rules) == 0 {

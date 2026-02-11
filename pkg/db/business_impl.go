@@ -2971,28 +2971,28 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyID(ctx context.Context, propertyID int32) ([]*dbgen.DifficultyRule, error) {
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, propertyIDs []int32) ([]*dbgen.DifficultyRule, error) {
 	if impl.querier == nil {
 		return nil, nil
 	}
 
-	return impl.querier.GetDifficultyRulesByPropertyID(ctx, pgtype.Int4{Int32: propertyID, Valid: true})
+	return impl.querier.GetDifficultyRulesByPropertyIDs(ctx, propertyIDs)
 }
 
-func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgID(ctx context.Context, orgID int32) ([]*dbgen.DifficultyRule, error) {
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Context, orgIDs []int32) ([]*dbgen.DifficultyRule, error) {
 	if impl.querier == nil {
 		return nil, nil
 	}
 
-	return impl.querier.GetDifficultyRulesByOrgID(ctx, pgtype.Int4{Int32: orgID, Valid: true})
+	return impl.querier.GetDifficultyRulesByOrgIDs(ctx, orgIDs)
 }
 
 func (impl *BusinessStoreImpl) GetCachedDifficultyRules(ctx context.Context, propertyID int32) (any, error) {
-	cacheKey := DifficultyRulesCacheKey(propertyID)
+	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
 	return impl.cache.Get(ctx, cacheKey)
 }
 
 func (impl *BusinessStoreImpl) CacheDifficultyRules(ctx context.Context, propertyID int32, compiled any) {
-	cacheKey := DifficultyRulesCacheKey(propertyID)
+	cacheKey := CompiledDifficultyRulesCacheKey(propertyID)
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }

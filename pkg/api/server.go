@@ -89,6 +89,7 @@ type Server struct {
 	SubscriptionLimits db.SubscriptionLimits
 	IDHasher           common.IdentifierHasher
 	AsyncTasks         db.AsyncTasks
+	CountryCodeHeader  common.ConfigItem
 }
 
 type apiKeyOwnerSource struct {
@@ -258,6 +259,13 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	if s.CountryCodeHeader != nil {
+		if ccHeader := s.CountryCodeHeader.Value(); len(ccHeader) > 0 {
+			ctx = context.WithValue(ctx, common.CountryCodeHeaderContextKey, ccHeader)
+			r = r.WithContext(ctx)
+		}
+	}
 
 	var compiledRules *rules.CompiledRules
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {

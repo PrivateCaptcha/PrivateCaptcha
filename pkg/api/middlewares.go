@@ -37,7 +37,7 @@ type AuthMiddleware struct {
 	SitekeyChan           chan string
 	UsersChan             chan int32
 	APIKeyLastUsedChan    chan int32
-	RulesChan             chan *rules.BackfillRequest
+	RulesChan             chan int32
 	BatchSize             int
 	SitekeyBackfillCancel context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
@@ -154,7 +154,7 @@ func NewAuthMiddleware(store db.Implementor,
 		SitekeyChan:           make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
-		RulesChan:             make(chan *rules.BackfillRequest, 10*batchSize),
+		RulesChan:             make(chan int32, 10*batchSize),
 		BatchSize:             batchSize,
 		Metrics:               metrics,
 		SitekeyBackfillCancel: func() {},
@@ -198,7 +198,7 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 	rulesBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
 	rulesBackfillCtx, am.RulesBackfillCancel = context.WithCancel(
 		context.WithValue(rulesBackfillBaseCtx, common.TraceIDContextKey, "rules_backfill"))
-	go am.backfillRulesImpl(rulesBackfillCtx, backfillDelay)
+	go common.ProcessBatchMap(rulesBackfillCtx, am.RulesChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillRulesImpl)
 }
 
 func (am *AuthMiddleware) Shutdown() {
@@ -255,15 +255,12 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 			}
 		}
 
-		if p.OrgID.Valid {
-			req := &rules.BackfillRequest{PropertyID: p.ID, OrgID: p.OrgID.Int32}
-			select {
-			case am.RulesChan <- req:
-			case <-ctx.Done():
-				slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "rules")
-				return ctx.Err()
-			case <-time.After(am.backpressureTimeout):
-			}
+		select {
+		case am.RulesChan <- p.ID:
+		case <-ctx.Done():
+			slog.WarnContext(ctx, "Context cancelled for sitekey backfill implementation", "part", "rules")
+			return ctx.Err()
+		case <-time.After(am.backpressureTimeout):
 		}
 
 		// this is an opportunistic process anyways. Other users should be checked via API key mechanism or eventually here
@@ -328,45 +325,81 @@ func (am *AuthMiddleware) backfillAPIKeyLastUsedImpl(ctx context.Context, batch 
 	return nil
 }
 
-func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, delay time.Duration) {
-	slog.DebugContext(ctx, "Starting rules backfill", "delay", delay)
-
-	for {
-		select {
-		case req, ok := <-am.RulesChan:
-			if !ok {
-				slog.DebugContext(ctx, "Rules backfill channel closed")
-				return
-			}
-			am.compileAndCacheRules(ctx, req)
-		case <-ctx.Done():
-			slog.DebugContext(ctx, "Rules backfill context cancelled")
-			return
-		}
+func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32]uint) error {
+	if len(batch) == 0 {
+		return nil
 	}
-}
 
-func (am *AuthMiddleware) compileAndCacheRules(ctx context.Context, req *rules.BackfillRequest) {
 	impl := am.Store.Impl()
 
-	propertyRules, err := impl.RetrieveDifficultyRulesByPropertyID(ctx, req.PropertyID)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve property rules", "propertyID", req.PropertyID, common.ErrAttr(err))
-		return
+	propertyIDs := make([]int32, 0, len(batch))
+	for propertyID := range batch {
+		propertyIDs = append(propertyIDs, propertyID)
 	}
 
-	orgRules, err := impl.RetrieveDifficultyRulesByOrgID(ctx, req.OrgID)
+	properties, err := impl.RetrievePropertiesByID(ctx, batch)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve org rules", "orgID", req.OrgID, common.ErrAttr(err))
-		return
+		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
+		return err
 	}
 
-	compiled := rules.Compile(propertyRules, orgRules)
-	impl.CacheDifficultyRules(ctx, req.PropertyID, compiled)
+	orgIDs := make(map[int32]struct{}, len(properties))
+	propertyToOrg := make(map[int32]int32, len(properties))
+	for _, p := range properties {
+		if p.OrgID.Valid {
+			orgIDs[p.OrgID.Int32] = struct{}{}
+			propertyToOrg[p.ID] = p.OrgID.Int32
+		}
+	}
 
-	slog.Log(ctx, common.LevelTrace, "Compiled and cached difficulty rules",
-		"propertyID", req.PropertyID, "orgID", req.OrgID,
-		"propertyRules", len(propertyRules), "orgRules", len(orgRules))
+	allPropertyRules, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, propertyIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve property rules", common.ErrAttr(err))
+		return err
+	}
+
+	uniqueOrgIDs := make([]int32, 0, len(orgIDs))
+	for orgID := range orgIDs {
+		uniqueOrgIDs = append(uniqueOrgIDs, orgID)
+	}
+
+	var allOrgRules []*dbgen.DifficultyRule
+	if len(uniqueOrgIDs) > 0 {
+		allOrgRules, err = impl.RetrieveDifficultyRulesByOrgIDs(ctx, uniqueOrgIDs)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org rules", common.ErrAttr(err))
+			return err
+		}
+	}
+
+	propertyRulesMap := make(map[int32][]*dbgen.DifficultyRule, len(propertyIDs))
+	for _, r := range allPropertyRules {
+		if r.PropertyID.Valid {
+			propertyRulesMap[r.PropertyID.Int32] = append(propertyRulesMap[r.PropertyID.Int32], r)
+		}
+	}
+
+	orgRulesMap := make(map[int32][]*dbgen.DifficultyRule, len(uniqueOrgIDs))
+	for _, r := range allOrgRules {
+		if r.OrgID.Valid {
+			orgRulesMap[r.OrgID.Int32] = append(orgRulesMap[r.OrgID.Int32], r)
+		}
+	}
+
+	for _, propertyID := range propertyIDs {
+		propRules := propertyRulesMap[propertyID]
+		var oRules []*dbgen.DifficultyRule
+		if orgID, ok := propertyToOrg[propertyID]; ok {
+			oRules = orgRulesMap[orgID]
+		}
+		compiled := rules.Compile(ctx, propRules, oRules)
+		impl.CacheDifficultyRules(ctx, propertyID, compiled)
+	}
+
+	slog.Log(ctx, common.LevelTrace, "Backfilled difficulty rules",
+		"properties", len(propertyIDs), "propertyRules", len(allPropertyRules), "orgRules", len(allOrgRules))
+
+	return nil
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {

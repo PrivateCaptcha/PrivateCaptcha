@@ -339,7 +339,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 
 	var difficultyProperty difficulty.Property = difficulty.NewDBProperty(property)
 	if compiledRules != nil {
-		difficultyProperty = compiledRules.ApplyProperty(ctx, r, difficultyProperty)
+		difficultyProperty = compiledRules.Apply(ctx, r, difficultyProperty)
 	}
 
 	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, baseDifficulty, tnow)
