@@ -30,15 +30,6 @@ func NewCompiledRules(rules []Rule) *CompiledRules {
 	return &CompiledRules{rules: rules}
 }
 
-func applyRules(rules []Rule, ri *RequestInfo, p difficulty.Property) difficulty.Property {
-	for _, rule := range rules {
-		if rule.Matches(ri) {
-			return rule.Apply(p)
-		}
-	}
-	return p
-}
-
 func isBlockedByRules(rules []Rule, ri *RequestInfo) bool {
 	for _, rule := range rules {
 		if _, ok := rule.(*blockRequestRule); ok {
@@ -47,18 +38,26 @@ func isBlockedByRules(rules []Rule, ri *RequestInfo) bool {
 			}
 		}
 	}
+
 	return false
 }
 
-func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
-	if cr == nil || len(cr.rules) == 0 {
-		return p
+func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficulty.Property, bool) {
+	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) {
+		return p, false
 	}
-	return applyRules(cr.rules, ri, p)
+
+	for _, rule := range cr.rules {
+		if rule.Matches(ri) {
+			return rule.Apply(p), true
+		}
+	}
+
+	return p, false
 }
 
 func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
-	if cr == nil || len(cr.rules) == 0 {
+	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) {
 		return false
 	}
 	return isBlockedByRules(cr.rules, ri)
@@ -72,19 +71,16 @@ type RulesPair struct {
 }
 
 func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Property {
-	if rp == nil {
+	if (rp == nil) || (ri == nil) {
 		return p
 	}
 
-	if rp.PropertyRules != nil && len(rp.PropertyRules.rules) > 0 {
-		result := applyRules(rp.PropertyRules.rules, ri, p)
-		if result != p {
-			return result
-		}
+	if result, found := rp.PropertyRules.Apply(ri, p); found {
+		return result
 	}
 
-	if rp.OrgRules != nil && len(rp.OrgRules.rules) > 0 {
-		return applyRules(rp.OrgRules.rules, ri, p)
+	if result, found := rp.OrgRules.Apply(ri, p); found {
+		return result
 	}
 
 	return p
@@ -113,9 +109,9 @@ type overrideProperty struct {
 }
 
 func (op *overrideProperty) ID() int32      { return op.base.ID() }
-func (op *overrideProperty) Valid() bool     { return op.base.Valid() }
-func (op *overrideProperty) OwnerID() int32  { return op.base.OwnerID() }
-func (op *overrideProperty) OrgID() int32    { return op.base.OrgID() }
+func (op *overrideProperty) Valid() bool    { return op.base.Valid() }
+func (op *overrideProperty) OwnerID() int32 { return op.base.OwnerID() }
+func (op *overrideProperty) OrgID() int32   { return op.base.OrgID() }
 func (op *overrideProperty) Level() int16 {
 	if op.level != nil {
 		return *op.level
