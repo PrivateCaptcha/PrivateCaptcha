@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     name VARCHAR(255),
     property_id INT REFERENCES backend.properties(id) ON DELETE CASCADE,
     org_id INT REFERENCES backend.organizations(id) ON DELETE CASCADE,
+    enabled BOOL NOT NULL DEFAULT TRUE,
     condition_property backend.rule_condition_property NOT NULL,
     condition_operator backend.rule_condition_operator NOT NULL,
     condition_value_str VARCHAR(512),

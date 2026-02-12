@@ -242,11 +242,16 @@ func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRule
 	rules := make([]Rule, 0, len(dbRules))
 
 	for _, r := range dbRules {
+		if !r.Enabled {
+			continue
+		}
+
 		compiled, err := CompileRule(ctx, r)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name.String, common.ErrAttr(err))
 			continue
 		}
+
 		rules = append(rules, compiled)
 	}
 
