@@ -286,8 +286,8 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ri, prop)
-	if result.Level() != 200 {
+	result, found := compiled.Apply(ri, prop)
+	if !found || result.Level() != 200 {
 		t.Errorf("Expected first matching rule (level 200), got %d", result.Level())
 	}
 }
@@ -343,8 +343,8 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ri, prop)
-	if result.Level() != 50 {
+	result, found := compiled.Apply(ri, prop)
+	if found || result.Level() != 50 {
 		t.Errorf("Expected original level 50 when no match, got %d", result.Level())
 	}
 }
@@ -355,8 +355,8 @@ func TestNilCompiledRulesApply(t *testing.T) {
 	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
 
 	var cr *CompiledRules
-	result := cr.Apply(ri, prop)
-	if result.Level() != 50 {
+	result, found := cr.Apply(ri, prop)
+	if found || result.Level() != 50 {
 		t.Errorf("Expected original property when compiled rules is nil, got level %d", result.Level())
 	}
 
@@ -538,8 +538,8 @@ func TestCompileSkipsInvalidRules(t *testing.T) {
 
 	prop := newStubProperty()
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result := compiled.Apply(ri, prop)
-	if result.Level() != 150 {
+	result, found := compiled.Apply(ri, prop)
+	if !found || result.Level() != 150 {
 		t.Errorf("Expected level 150 from valid rule, got %d", result.Level())
 	}
 }

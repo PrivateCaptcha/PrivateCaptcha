@@ -18,15 +18,10 @@ type RequestInfo struct {
 	countryCode *string
 }
 
-func NewRequestInfo(r *http.Request, countryCodeHeader common.ConfigItem) *RequestInfo {
-	var headerValue string
-	if countryCodeHeader != nil {
-		headerValue = countryCodeHeader.Value()
-	}
-
+func NewRequestInfo(r *http.Request, countryCodeHeader string) *RequestInfo {
 	return &RequestInfo{
 		r:                 r,
-		countryCodeHeader: headerValue,
+		countryCodeHeader: countryCodeHeader,
 	}
 }
 

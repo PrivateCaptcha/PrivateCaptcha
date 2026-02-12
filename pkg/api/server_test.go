@@ -95,6 +95,7 @@ func TestMain(m *testing.M) {
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
+		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 	}
 	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
 		panic(err)
