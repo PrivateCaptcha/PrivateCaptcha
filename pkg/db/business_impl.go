@@ -14,6 +14,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -2969,4 +2970,102 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 		key := cachedAfter.Format(time.DateOnly)
 		_ = impl.cache.Delete(ctx, userAuditLogsCacheKey(userID, key))
 	}
+}
+
+func difficultyRulePropertyIDFunc(r *dbgen.DifficultyRule) int32 {
+	return r.PropertyID.Int32
+}
+
+func difficultyRuleOrgIDFunc(r *dbgen.DifficultyRule) int32 {
+	return r.OrgID.Int32
+}
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
+	reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
+		ArgFunc:      difficultyRulePropertyIDFunc,
+		Cache:        impl.cache,
+		CacheKeyFunc: RawPropertyRulesCacheKey,
+		QueryKeyFunc: IdentityKeyFunc[int32],
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetDifficultyRulesByPropertyIDs
+	}
+
+	cached, fetched, err := reader.Read(ctx, batch)
+	if err != nil && err != ErrNegativeCacheHit {
+		return nil, err
+	}
+
+	result := make(map[int32][]*dbgen.DifficultyRule, len(batch)/2)
+	for _, r := range cached {
+		result[r.PropertyID.Int32] = append(result[r.PropertyID.Int32], r)
+	}
+
+	for _, r := range fetched {
+		cacheKey := RawPropertyRulesCacheKey(r.PropertyID.Int32)
+		_ = impl.cache.SetWithTTL(ctx, cacheKey, r, propertyTTL)
+		result[r.PropertyID.Int32] = append(result[r.PropertyID.Int32], r)
+	}
+
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
+	reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
+		ArgFunc:      difficultyRuleOrgIDFunc,
+		Cache:        impl.cache,
+		CacheKeyFunc: RawOrgRulesCacheKey,
+		QueryKeyFunc: IdentityKeyFunc[int32],
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetDifficultyRulesByOrgIDs
+	}
+
+	cached, fetched, err := reader.Read(ctx, batch)
+	if err != nil && err != ErrNegativeCacheHit {
+		return nil, err
+	}
+
+	result := make(map[int32][]*dbgen.DifficultyRule, len(batch)/2)
+	for _, r := range cached {
+		result[r.OrgID.Int32] = append(result[r.OrgID.Int32], r)
+	}
+
+	for _, r := range fetched {
+		cacheKey := RawOrgRulesCacheKey(r.OrgID.Int32)
+		_ = impl.cache.SetWithTTL(ctx, cacheKey, r, propertyTTL)
+		result[r.OrgID.Int32] = append(result[r.OrgID.Int32], r)
+	}
+
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
+	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
+	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
+}
+
+func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
+	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
+	if compiled == nil {
+		_ = impl.cache.SetMissing(ctx, cacheKey)
+		return
+	}
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+}
+
+func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, error) {
+	cacheKey := CompiledOrgRulesCacheKey(orgID)
+	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
+}
+
+func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID int32, compiled *rules.CompiledRules) {
+	cacheKey := CompiledOrgRulesCacheKey(orgID)
+	if compiled == nil {
+		_ = impl.cache.SetMissing(ctx, cacheKey)
+		return
+	}
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }

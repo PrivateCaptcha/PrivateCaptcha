@@ -42,6 +42,8 @@ type Querier interface {
 	GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error)
 	GetAsyncTask(ctx context.Context, id pgtype.UUID) (*AsyncTask, error)
 	GetCachedByKey(ctx context.Context, key string) ([]byte, error)
+	GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
+	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
 	GetLock(ctx context.Context, name string) (*Lock, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)

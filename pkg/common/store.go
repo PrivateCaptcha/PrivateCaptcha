@@ -67,12 +67,13 @@ type HTTPMetrics interface {
 type MetricEventType string
 
 const (
-	PuzzleEventType    MetricEventType = "puzzle"
-	VerifyEventType    MetricEventType = "verify"
-	UserLimitEventType MetricEventType = "user_limit"
-	SessionEventType   MetricEventType = "session"
-	SitekeyEventType   MetricEventType = "sitekey"
-	APIKeyEventType    MetricEventType = "apikey"
+	PuzzleEventType        MetricEventType = "puzzle"
+	VerifyEventType        MetricEventType = "verify"
+	UserLimitEventType     MetricEventType = "user_limit"
+	SessionEventType       MetricEventType = "session"
+	SitekeyEventType       MetricEventType = "sitekey"
+	APIKeyEventType        MetricEventType = "apikey"
+	PropertyRulesEventType MetricEventType = "property_rules"
 )
 
 type BaseMetrics interface {
