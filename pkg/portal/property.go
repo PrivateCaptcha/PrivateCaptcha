@@ -28,11 +28,12 @@ const (
 	propertyDashboardRulesTemplate        = "property/rules.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
-	propertyReportsTabIndex               = 0
-	propertyIntegrationsTabIndex          = 1
-	propertySettingsTabIndex              = 2
-	propertyAuditLogsTabIndex             = 3
-	propertyRulesTabIndex                 = 4
+	// Property tab indices
+	propertyReportsTabIndex       = 0
+	propertyIntegrationsTabIndex  = 1
+	propertySettingsTabIndex      = 2
+	propertyAuditLogsTabIndex     = 3
+	propertyRulesTabIndex         = 4
 	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
 	// Period endpoint constants
 	PeriodEndpointToday = "24h"
@@ -182,6 +183,32 @@ func stubDifficultyRules() []*DifficultyRuleDisplay {
 			ActionProperty:    "difficulty_level",
 			ActionValue:       "2",
 		},
+	}
+}
+
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleDisplay {
+	actionAction := "set"
+	if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
+		actionAction = "block"
+	}
+
+	conditionValue := ""
+	if rule.ConditionValueStr.Valid {
+		conditionValue = rule.ConditionValueStr.String
+	} else if rule.ConditionValueInt.Valid {
+		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+	}
+
+	return &DifficultyRuleDisplay{
+		Position:          int(rule.Position),
+		Name:              rule.Name.String,
+		Enabled:           rule.Enabled,
+		ConditionProperty: string(rule.ConditionProperty),
+		ConditionOperator: string(rule.ConditionOperator),
+		ConditionValue:    conditionValue,
+		ActionAction:      actionAction,
+		ActionProperty:    string(rule.ActionProperty),
+		ActionValue:       fmt.Sprintf("%d", rule.ActionValue),
 	}
 }
 

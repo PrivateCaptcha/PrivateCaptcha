@@ -3,7 +3,6 @@
 package portal
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -163,29 +162,7 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 
 	rules := rulesMap[property.ID]
 	for _, rule := range rules {
-		actionAction := "set"
-		if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
-			actionAction = "block"
-		}
-
-		conditionValue := ""
-		if rule.ConditionValueStr.Valid {
-			conditionValue = rule.ConditionValueStr.String
-		} else if rule.ConditionValueInt.Valid {
-			conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
-		}
-
-		renderCtx.Rules = append(renderCtx.Rules, &DifficultyRuleDisplay{
-			Position:          int(rule.Position),
-			Name:              rule.Name.String,
-			Enabled:           rule.Enabled,
-			ConditionProperty: string(rule.ConditionProperty),
-			ConditionOperator: string(rule.ConditionOperator),
-			ConditionValue:    conditionValue,
-			ActionAction:      actionAction,
-			ActionProperty:    string(rule.ActionProperty),
-			ActionValue:       fmt.Sprintf("%d", rule.ActionValue),
-		})
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule))
 	}
 
 	return renderCtx, nil, nil
