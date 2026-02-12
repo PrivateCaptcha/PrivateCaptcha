@@ -227,7 +227,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       100, // +100% increase
+		ActionValue:       100, // doubles the difficulty (+100%)
 		Enabled:           true,
 	}
 
@@ -238,7 +238,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := compiled.Apply(prop)
-	// Base level is 50, +100% should give 50 * (100 + 100) / 100 = 100
+	// Base level is 50, +100% doubles to 100
 	if result.Level() != 100 {
 		t.Errorf("Expected level 100 (50 + 100%%), got %d", result.Level())
 	}
@@ -253,7 +253,7 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Mobile", Valid: true},
 		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       -20, // -20% decrease
+		ActionValue:       -20, // -20%
 		Enabled:           true,
 	}
 
@@ -264,7 +264,7 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := compiled.Apply(prop)
-	// Base level is 50, -20% should give 50 * (100 - 20) / 100 = 40
+	// Base level is 50, -20% gives 40
 	if result.Level() != 40 {
 		t.Errorf("Expected level 40 (50 - 20%%), got %d", result.Level())
 	}
@@ -287,7 +287,7 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := compiled.Apply(prop)
-	// 50 * 1 / 100 = 0.5 rounds to 0, should be clamped to 1
+	// 50 * 1 / 100 with rounding = 1 (rounded up from 0.5), then clamped to minimum 1
 	if result.Level() != 1 {
 		t.Errorf("Expected level clamped to 1, got %d", result.Level())
 	}
@@ -642,9 +642,9 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 	prop := newStubProperty()
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, found := compiled.Apply(ri, prop)
-	// Base level is 50, valid rule has +25% so result should be 50 * 1.25 = 62
-	if !found || result.Level() != 62 {
-		t.Errorf("Expected level 62 (+25%%) from valid rule, got %d", result.Level())
+	// Base level is 50, valid rule has +25% so result should be 50 * 1.25 = 62.5 rounded to 63
+	if !found || result.Level() != 63 {
+		t.Errorf("Expected level 63 (+25%% with rounding) from valid rule, got %d", result.Level())
 	}
 }
 

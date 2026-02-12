@@ -138,7 +138,8 @@ func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 	baseLevel := p.Level()
 	// Calculate adjusted level: baseLevel * (100 + percentDiff) / 100
-	adjustedLevel := int16((int32(baseLevel) * (100 + int32(r.percentDiff))) / 100)
+	// Add 50 to numerator for rounding to nearest integer
+	adjustedLevel := int16((int32(baseLevel)*(100+int32(r.percentDiff)) + 50) / 100)
 	// Clamp to valid range [1, 255]
 	if adjustedLevel < 1 {
 		adjustedLevel = 1
