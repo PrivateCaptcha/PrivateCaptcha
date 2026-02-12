@@ -136,3 +136,33 @@ func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*
 
 	return renderCtx, auditEvent, nil
 }
+
+func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, property, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx := r.Context()
+
+	renderCtx := &propertyRulesRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		Rules:                          []*DifficultyRuleModel{},
+	}
+
+	renderCtx.Tab = propertyRulesTabIndex
+
+	batch := map[int32]uint{property.ID: 1}
+	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve difficulty rules. Please try again later."
+		return renderCtx, nil, nil
+	}
+
+	rules := rulesMap[property.ID]
+	for _, rule := range rules {
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule))
+	}
+
+	return renderCtx, nil, nil
+}

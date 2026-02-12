@@ -12,9 +12,9 @@
             <option value="{{ $.Const.MembersEndpoint }}">Members</option>
             {{ end }}
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
-            <option value="{{ $.Const.RulesEndpoint }}">Rules</option>
+            <option value="{{ $.Const.RulesEndpoint }}" selected>Rules</option>
             {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
-            <option value="{{ $.Const.EventsEndpoint }}" selected>Audit logs</option>
+            <option value="{{ $.Const.EventsEndpoint }}">Audit logs</option>
             {{ end }}
         </select>
     </div>
@@ -26,22 +26,38 @@
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
+                {{ end }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Rules</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
-                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.RulesEndpoint }}"
-                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Rules</a>
-                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Audit logs</a>
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.EventsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
+                {{ end }}
+                {{ if $.Platform.Enterprise }}
+                <div class="grow flex items-center justify-end gap-x-4">
+                    <a type="button"
+                        href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .Const.NewEndpoint }}"
+                        class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300">
+                        <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add New Rule
+                    </a>
+                </div>
+                {{ end }}
             </nav>
         </div>
     </div>
@@ -55,31 +71,19 @@
 <div class="pt-5">{{template "info-message.html" .Params.InfoMessage}}</div>
 {{else if .Params.WarningMessage}}
 <div class="pt-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
-{{else}}
-{{ if gt .Params.Count 0 }}
-<div class="mt-8 sm:flex sm:items-center">
-    <div class="sm:flex-auto">
-        <p class="mt-2 text-sm text-gray-700">A list of the <strong>last {{.Params.Count}} events</strong> that happened with or related to this organization.</p>
-    </div>
-</div>
-{{end}}
 {{end}}
 
-<div class="mt-8 flow-root{{ if not $.Platform.Enterprise }} relative{{ end }}">
+<div class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
     <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-            {{ template "auditlog-table.html" . }}
+            {{ template "rules-table.html" . }}
         </div>
     </div>
     {{ if not $.Platform.Enterprise }}
-    <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-b-lg" aria-hidden="true"></div>
+    <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-lg" aria-hidden="true"></div>
+
     <div class="absolute inset-0 z-10">
-        {{ template "enterprise.html" "Audit logs are only available in the enterprise edition of Private Captcha." }}
+        {{ template "enterprise.html" "Difficulty rules are only available in the enterprise edition of Private Captcha." }}
     </div>
     {{ end }}
 </div>
-{{ if gt .Params.Count 0 }}
-<div class="mt-8 flex justify-center">
-    <a href="{{ relURL .Const.AuditLogsEndpoint }}" class="pc-internal-form-button pc-internal-form-button-primary">See all Audit Logs</a>
-</div>
-{{end}}

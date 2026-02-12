@@ -147,3 +147,28 @@ func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, d
 		To:   len(logs),
 	}, nil
 }
+
+func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, _, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &propertyRulesRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		Rules:                          stubDifficultyRules(),
+	}
+
+	renderCtx.Tab = propertyRulesTabIndex
+
+	return renderCtx, nil, nil
+}
+
+func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &orgRulesRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
+		Rules:      stubDifficultyRules(),
+	}
+
+	return renderCtx, nil, nil
+}
