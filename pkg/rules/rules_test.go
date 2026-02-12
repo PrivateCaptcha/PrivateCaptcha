@@ -247,6 +247,75 @@ func TestDifficultyLevelApply(t *testing.T) {
 	}
 }
 
+func TestDifficultyLevelNegativePercentApply(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "Mobile", Valid: true},
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       -20, // -20% decrease
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prop := newStubProperty() // has level 50
+
+	result := compiled.Apply(prop)
+	// Base level is 50, -20% should give 50 * (100 - 20) / 100 = 40
+	if result.Level() != 40 {
+		t.Errorf("Expected level 40 (50 - 20%%), got %d", result.Level())
+	}
+}
+
+func TestDifficultyLevelClampingLow(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "Test", Valid: true},
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       -99, // -99% should clamp to minimum
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prop := newStubProperty() // has level 50
+
+	result := compiled.Apply(prop)
+	// 50 * 1 / 100 = 0.5 rounds to 0, should be clamped to 1
+	if result.Level() != 1 {
+		t.Errorf("Expected level clamped to 1, got %d", result.Level())
+	}
+}
+
+func TestDifficultyLevelClampingHigh(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "Test", Valid: true},
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       1000, // +1000% should clamp to maximum
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prop := newStubProperty() // has level 50
+
+	result := compiled.Apply(prop)
+	// 50 * 1100 / 100 = 550, should be clamped to 255
+	if result.Level() != 255 {
+		t.Errorf("Expected level clamped to 255, got %d", result.Level())
+	}
+}
+
 func TestDifficultyGrowthApply(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
