@@ -297,7 +297,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 		rulesPair = s.retrievePropertyRules(ctx, property)
 	}
 
-	ri := rules.NewRequestInfo(r, s.CountryCodeHeader)
+	ri := rules.NewRequestInfo(r, s.CountryCodeHeader.Value())
 
 	if rulesPair != nil && rulesPair.IsRequestBlocked(ri) {
 		slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
