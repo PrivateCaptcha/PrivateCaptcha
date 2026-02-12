@@ -12,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 )
 
 const (
@@ -36,10 +37,12 @@ type AuthMiddleware struct {
 	SitekeyChan           chan string
 	UsersChan             chan int32
 	APIKeyLastUsedChan    chan int32
+	RulesChan             chan int32
 	BatchSize             int
 	SitekeyBackfillCancel context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
 	APIKeyLastUsedCancel  context.CancelFunc
+	RulesBackfillCancel   context.CancelFunc
 	Limiter               UserLimiter
 	backpressureTimeout   time.Duration
 	Metrics               common.BaseMetrics
@@ -151,11 +154,13 @@ func NewAuthMiddleware(store db.Implementor,
 		SitekeyChan:           make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
+		RulesChan:             make(chan int32, 10*batchSize),
 		BatchSize:             batchSize,
 		Metrics:               metrics,
 		SitekeyBackfillCancel: func() {},
 		UsersBackfillCancel:   func() {},
 		APIKeyLastUsedCancel:  func() {},
+		RulesBackfillCancel:   func() {},
 		backpressureTimeout:   defaultBackpressureTimeout,
 	}
 
@@ -188,6 +193,12 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 	// Use a more generous delay (5x the regular backfill delay) since we don't need frequent updates
 	apiKeyLastUsedDelay := backfillDelay * 5
 	go common.ProcessBatchMap(apiKeyLastUsedCtx, am.APIKeyLastUsedChan, apiKeyLastUsedDelay, apiKeyLastUsedBatchSize, apiKeyLastUsedMaxBatchSize, am.backfillAPIKeyLastUsedImpl)
+
+	var rulesBackfillCtx context.Context
+	rulesBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
+	rulesBackfillCtx, am.RulesBackfillCancel = context.WithCancel(
+		context.WithValue(rulesBackfillBaseCtx, common.TraceIDContextKey, "rules_backfill"))
+	go common.ProcessBatchMap(rulesBackfillCtx, am.RulesChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillRulesImpl)
 }
 
 func (am *AuthMiddleware) Shutdown() {
@@ -195,9 +206,11 @@ func (am *AuthMiddleware) Shutdown() {
 	am.SitekeyBackfillCancel()
 	am.UsersBackfillCancel()
 	am.APIKeyLastUsedCancel()
+	am.RulesBackfillCancel()
 	close(am.SitekeyChan)
 	close(am.UsersChan)
 	close(am.APIKeyLastUsedChan)
+	close(am.RulesChan)
 }
 
 // we cache properties and send owners down the background pipeline
@@ -241,6 +254,8 @@ func (am *AuthMiddleware) backfillSitekeyImpl(ctx context.Context, batch map[str
 				am.Metrics.ObserveEventDropped(common.UserLimitEventType)
 			}
 		}
+
+		am.RefreshPropertyRules(ctx, p.ID)
 
 		// this is an opportunistic process anyways. Other users should be checked via API key mechanism or eventually here
 		if len(orgs) < maxOrgsToPull {
@@ -302,6 +317,97 @@ func (am *AuthMiddleware) backfillAPIKeyLastUsedImpl(ctx context.Context, batch 
 	}
 
 	return nil
+}
+
+func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32]uint) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	impl := am.Store.Impl()
+
+	// collect property IDs that don't have cached compiled property rules
+	uncachedPropertyIDs := make(map[int32]uint, len(batch))
+	for propertyID, count := range batch {
+		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID); err == db.ErrCacheMiss {
+			uncachedPropertyIDs[propertyID] = count
+		}
+	}
+
+	slog.DebugContext(ctx, "Uncached property rules", "total", len(batch), "uncached", len(uncachedPropertyIDs))
+
+	if len(uncachedPropertyIDs) == 0 {
+		return nil
+	}
+
+	// resolve org IDs from properties
+	properties, err := impl.RetrievePropertiesByID(ctx, batch)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
+		return err
+	}
+
+	uncachedOrgIDs := make(map[int32]uint, len(properties)/2)
+	seenOrgs := make(map[int32]struct{})
+	for _, p := range properties {
+		if p.OrgID.Valid {
+			if _, seen := seenOrgs[p.OrgID.Int32]; !seen {
+				seenOrgs[p.OrgID.Int32] = struct{}{}
+				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32); err == db.ErrCacheMiss {
+					uncachedOrgIDs[p.OrgID.Int32] = 1
+				}
+			}
+		}
+	}
+
+	// fetch and group property rules via StoreBulkReader
+	propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
+		return err
+	}
+
+	// fetch and group org rules via StoreBulkReader
+	var orgRulesMap map[int32][]*dbgen.DifficultyRule
+	if len(uncachedOrgIDs) > 0 {
+		orgRulesMap, err = impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", common.ErrAttr(err))
+			return err
+		}
+	}
+
+	// compile and cache property rules (set missing for no-rules properties)
+	for propertyID := range uncachedPropertyIDs {
+		propRules := propertyRulesMap[propertyID]
+		compiled := rules.Compile(ctx, propRules)
+		impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
+	}
+
+	// compile and cache org rules (set missing for no-rules orgs)
+	for orgID := range uncachedOrgIDs {
+		oRules := orgRulesMap[orgID]
+		compiled := rules.Compile(ctx, oRules)
+		impl.CacheCompiledOrgRules(ctx, orgID, compiled)
+	}
+
+	slog.DebugContext(ctx, "Backfilled difficulty rules",
+		"properties", len(uncachedPropertyIDs), "orgs", len(uncachedOrgIDs))
+
+	return nil
+}
+
+func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case am.RulesChan <- propertyID:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for property rules refresh", "propertyID", propertyID)
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
+	}
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {

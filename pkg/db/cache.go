@@ -219,6 +219,10 @@ const (
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
+	compiledPropertyRulesCacheKeyPrefix
+	compiledOrgRulesCacheKeyPrefix
+	rawPropertyRulesCacheKeyPrefix
+	rawOrgRulesCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -258,6 +262,10 @@ func init() {
 	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
 	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
 	cachePrefixToStrings[orgInviteCacheKeyPrefix] = "orgInvite/"
+	cachePrefixToStrings[compiledPropertyRulesCacheKeyPrefix] = "compiledPropRules/"
+	cachePrefixToStrings[compiledOrgRulesCacheKeyPrefix] = "compiledOrgRules/"
+	cachePrefixToStrings[rawPropertyRulesCacheKeyPrefix] = "rawPropRules/"
+	cachePrefixToStrings[rawOrgRulesCacheKeyPrefix] = "rawOrgRules/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -378,4 +386,16 @@ func orgPropertiesCountCacheKey(orgID int32) CacheKey {
 }
 func orgInviteCacheKey(inviteID int32) CacheKey {
 	return Int32CacheKey(orgInviteCacheKeyPrefix, inviteID)
+}
+func CompiledPropertyRulesCacheKey(propertyID int32) CacheKey {
+	return Int32CacheKey(compiledPropertyRulesCacheKeyPrefix, propertyID)
+}
+func CompiledOrgRulesCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(compiledOrgRulesCacheKeyPrefix, orgID)
+}
+func RawPropertyRulesCacheKey(propertyID int32) CacheKey {
+	return Int32CacheKey(rawPropertyRulesCacheKeyPrefix, propertyID)
+}
+func RawOrgRulesCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(rawOrgRulesCacheKeyPrefix, orgID)
 }
