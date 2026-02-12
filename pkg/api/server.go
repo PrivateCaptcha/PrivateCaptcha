@@ -258,50 +258,48 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
+	impl := s.BusinessDB.Impl()
+	needsBackfill := false
+
+	var propertyRules *rules.CompiledRules
+	if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
+		propertyRules = cached
+	} else if err == db.ErrCacheMiss {
+		needsBackfill = true
+	}
+
+	var orgRules *rules.CompiledRules
+	if property.OrgID.Valid {
+		if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
+			orgRules = cached
+		} else if err == db.ErrCacheMiss {
+			needsBackfill = true
+		}
+	}
+
+	if needsBackfill {
+		s.Auth.RefreshPropertyRules(ctx, property.ID)
+	}
+
+	return &rules.RulesPair{
+		PropertyRules: propertyRules,
+		OrgRules:      orgRules,
+	}
+}
+
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var rulesPair *rules.RulesPair
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
-		impl := s.BusinessDB.Impl()
-		needsBackfill := false
-
-		var propertyRules *rules.CompiledRules
-		if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
-			propertyRules = cached
-		} else if err == db.ErrCacheMiss {
-			needsBackfill = true
-		}
-
-		var orgRules *rules.CompiledRules
-		if property.OrgID.Valid {
-			if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
-				orgRules = cached
-			} else if err == db.ErrCacheMiss {
-				needsBackfill = true
-			}
-		}
-
-		if needsBackfill {
-			s.Auth.RefreshPropertyRules(ctx, property.ID)
-		}
-
-		if propertyRules != nil || orgRules != nil {
-			rulesPair = &rules.RulesPair{
-				PropertyRules: propertyRules,
-				OrgRules:      orgRules,
-			}
-		}
+		rulesPair = s.retrievePropertyRules(ctx, property)
 	}
 
-	var countryCodeHeader string
-	if s.CountryCodeHeader != nil {
-		countryCodeHeader = s.CountryCodeHeader.Value()
-	}
-	ri := rules.NewRequestInfo(r, countryCodeHeader)
+	ri := rules.NewRequestInfo(r, s.CountryCodeHeader)
 
 	if rulesPair != nil && rulesPair.IsRequestBlocked(ri) {
-		slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rule")
+		slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}

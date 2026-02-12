@@ -2981,6 +2981,10 @@ func difficultyRuleOrgIDFunc(r *dbgen.DifficultyRule) int32 {
 }
 
 func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
+	if len(batch) == 0 {
+		return map[int32][]*dbgen.DifficultyRule{}, nil
+	}
+
 	reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
 		ArgFunc:      difficultyRulePropertyIDFunc,
 		Cache:        impl.cache,
@@ -3008,10 +3012,21 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		result[r.PropertyID.Int32] = append(result[r.PropertyID.Int32], r)
 	}
 
+	for key, value := range result {
+		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+			return int(a.Position - b.Position)
+		})
+		result[key] = value
+	}
+
 	return result, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
+	if len(batch) == 0 {
+		return map[int32][]*dbgen.DifficultyRule{}, nil
+	}
+
 	reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
 		ArgFunc:      difficultyRuleOrgIDFunc,
 		Cache:        impl.cache,
@@ -3037,6 +3052,13 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		cacheKey := RawOrgRulesCacheKey(r.OrgID.Int32)
 		_ = impl.cache.SetWithTTL(ctx, cacheKey, r, propertyTTL)
 		result[r.OrgID.Int32] = append(result[r.OrgID.Int32], r)
+	}
+
+	for key, value := range result {
+		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+			return int(a.Position - b.Position)
+		})
+		result[key] = value
 	}
 
 	return result, nil
