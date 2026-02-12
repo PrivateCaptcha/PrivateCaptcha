@@ -340,7 +340,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		return nil
 	}
 
-	// resolve org IDs from properties
+	// resolve org IDs from properties (they should supposedly be all cached at this time due to other code branches)
 	properties, err := impl.RetrievePropertiesByID(ctx, batch)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
@@ -348,53 +348,52 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	}
 
 	uncachedOrgIDs := make(map[int32]uint, len(properties)/2)
-	seenOrgs := make(map[int32]struct{})
 	for _, p := range properties {
 		if p.OrgID.Valid {
-			if _, seen := seenOrgs[p.OrgID.Int32]; !seen {
-				seenOrgs[p.OrgID.Int32] = struct{}{}
+			if _, seen := uncachedOrgIDs[p.OrgID.Int32]; !seen {
 				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32); err == db.ErrCacheMiss {
 					uncachedOrgIDs[p.OrgID.Int32] = 1
+				} else {
+					// uncached org ids also acts as a temp cache (cleared below)
+					uncachedOrgIDs[p.OrgID.Int32] = 0
 				}
 			}
 		}
 	}
 
-	// fetch and group property rules via StoreBulkReader
-	propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
-		return err
-	}
-
-	// fetch and group org rules via StoreBulkReader
-	var orgRulesMap map[int32][]*dbgen.DifficultyRule
-	if len(uncachedOrgIDs) > 0 {
-		orgRulesMap, err = impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", common.ErrAttr(err))
-			return err
+	for orgID, count := range uncachedOrgIDs {
+		if count == 0 {
+			delete(uncachedOrgIDs, orgID)
 		}
 	}
 
-	// compile and cache property rules (set missing for no-rules properties)
-	for propertyID := range uncachedPropertyIDs {
-		propRules := propertyRulesMap[propertyID]
-		compiled := rules.Compile(ctx, propRules)
-		impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
+	var anyError error
+
+	if propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs); err == nil {
+		for propertyID := range uncachedPropertyIDs {
+			propRules := propertyRulesMap[propertyID]
+			compiled := rules.Compile(ctx, propRules)
+			impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve property difficulty rules", common.ErrAttr(err))
+		anyError = err
 	}
 
-	// compile and cache org rules (set missing for no-rules orgs)
-	for orgID := range uncachedOrgIDs {
-		oRules := orgRulesMap[orgID]
-		compiled := rules.Compile(ctx, oRules)
-		impl.CacheCompiledOrgRules(ctx, orgID, compiled)
+	if orgRulesMap, err := impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs); err == nil {
+		for orgID := range uncachedOrgIDs {
+			oRules := orgRulesMap[orgID]
+			compiled := rules.Compile(ctx, oRules)
+			impl.CacheCompiledOrgRules(ctx, orgID, compiled)
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", common.ErrAttr(err))
+		anyError = err
 	}
 
-	slog.DebugContext(ctx, "Backfilled difficulty rules",
-		"properties", len(uncachedPropertyIDs), "orgs", len(uncachedOrgIDs))
+	slog.DebugContext(ctx, "Finished processing difficulty rules batch", "properties", len(uncachedPropertyIDs), "orgs", len(uncachedOrgIDs))
 
-	return nil
+	return anyError
 }
 
 func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {
