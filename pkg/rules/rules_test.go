@@ -299,8 +299,9 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, found := compiled.Apply(ri, prop)
-	if !found || result.Level() != 200 {
-		t.Errorf("Expected first matching rule (level 200), got %d", result.Level())
+	// Base level is 50, first rule has +50% so result should be 50 * 1.5 = 75
+	if !found || result.Level() != 75 {
+		t.Errorf("Expected first matching rule (+50%% = level 75), got %d", result.Level())
 	}
 }
 
@@ -337,8 +338,9 @@ func TestRulesPairPropertyBeforeOrg(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	if result.Level() != 180 {
-		t.Errorf("Expected property-level rule (180) to take precedence, got %d", result.Level())
+	// Base level is 50, property rule has +30% so result should be 50 * 1.3 = 65
+	if result.Level() != 65 {
+		t.Errorf("Expected property-level rule (+30%% = level 65) to take precedence, got %d", result.Level())
 	}
 }
 
@@ -571,8 +573,9 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 	prop := newStubProperty()
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, found := compiled.Apply(ri, prop)
-	if !found || result.Level() != 150 {
-		t.Errorf("Expected level 150 from valid rule, got %d", result.Level())
+	// Base level is 50, valid rule has +25% so result should be 50 * 1.25 = 62
+	if !found || result.Level() != 62 {
+		t.Errorf("Expected level 62 (+25%%) from valid rule, got %d", result.Level())
 	}
 }
 
@@ -818,7 +821,8 @@ func TestRulesPairPropertyOnly(t *testing.T) {
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	p := newStubProperty()
 	result := rp.Apply(ri, p)
-	if result.Level() != 200 {
-		t.Errorf("Expected property rule (200) when no org rules, got %d", result.Level())
+	// Base level is 50, rule has +50% so result should be 50 * 1.5 = 75
+	if result.Level() != 75 {
+		t.Errorf("Expected property rule (+50%% = level 75) when no org rules, got %d", result.Level())
 	}
 }
