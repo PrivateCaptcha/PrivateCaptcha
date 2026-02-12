@@ -136,3 +136,56 @@ func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*
 
 	return renderCtx, auditEvent, nil
 }
+
+func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, property, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx := r.Context()
+
+	renderCtx := &propertyRulesRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		Rules:                          []*DifficultyRuleDisplay{},
+	}
+
+	renderCtx.Tab = propertyRulesTabIndex
+
+	// Retrieve rules from database
+	batch := map[int32]uint{property.ID: 1}
+	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve difficulty rules. Please try again later."
+		return renderCtx, nil, nil
+	}
+
+	rules := rulesMap[property.ID]
+	for _, rule := range rules {
+		actionAction := "set"
+		if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
+			actionAction = "block"
+		}
+
+		conditionValue := ""
+		if rule.ConditionValueStr.Valid {
+			conditionValue = rule.ConditionValueStr.String
+		} else if rule.ConditionValueInt.Valid {
+			conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+		}
+
+		renderCtx.Rules = append(renderCtx.Rules, &DifficultyRuleDisplay{
+			Position:          int(rule.Position),
+			Name:              rule.Name.String,
+			Enabled:           rule.Enabled,
+			ConditionProperty: string(rule.ConditionProperty),
+			ConditionOperator: string(rule.ConditionOperator),
+			ConditionValue:    conditionValue,
+			ActionAction:      actionAction,
+			ActionProperty:    string(rule.ActionProperty),
+			ActionValue:       fmt.Sprintf("%d", rule.ActionValue),
+		})
+	}
+
+	return renderCtx, nil, nil
+}

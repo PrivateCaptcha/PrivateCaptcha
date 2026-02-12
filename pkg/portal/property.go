@@ -25,11 +25,14 @@ const (
 	propertyDashboardSettingsTemplate     = "property/settings.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
+	propertyDashboardRulesTemplate        = "property/rules.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
-	propertySettingsTabIndex              = 2
+	propertyReportsTabIndex               = 0
 	propertyIntegrationsTabIndex          = 1
+	propertySettingsTabIndex              = 2
 	propertyAuditLogsTabIndex             = 3
+	propertyRulesTabIndex                 = 4
 	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
 	// Period endpoint constants
 	PeriodEndpointToday = "24h"
@@ -117,6 +120,23 @@ type propertyAuditLogsRenderContext struct {
 	AuditLogsRenderContext
 	AlertRenderContext
 	CanView bool
+}
+
+type DifficultyRuleDisplay struct {
+	Position          int
+	Name              string
+	Enabled           bool
+	ConditionProperty string
+	ConditionOperator string
+	ConditionValue    string
+	ActionAction      string
+	ActionProperty    string
+	ActionValue       string
+}
+
+type propertyRulesRenderContext struct {
+	propertyDashboardRenderContext
+	Rules []*DifficultyRuleDisplay
 }
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
@@ -736,6 +756,31 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 	}
 
 	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvent: auditEvent}, nil
+}
+
+func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx, auditEvent, err := s.getPropertyRules(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: ctx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
+}
+
+func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, _, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &propertyRulesRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		Rules:                          stubDifficultyRules(),
+	}
+
+	renderCtx.Tab = propertyRulesTabIndex
+
+	return renderCtx, nil, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

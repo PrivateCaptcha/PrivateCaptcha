@@ -551,6 +551,50 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organ
 	return renderCtx, auditEvent, nil
 }
 
+func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &orgRulesRenderContext{
+		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
+		Rules:      []*DifficultyRuleDisplay{},
+	}
+
+	// Retrieve rules from database
+	batch := map[int32]uint{org.ID: 1}
+	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve difficulty rules. Please try again later."
+		return renderCtx, nil, nil
+	}
+
+	rules := rulesMap[org.ID]
+	for _, rule := range rules {
+		actionAction := "set"
+		if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
+			actionAction = "block"
+		}
+
+		conditionValue := ""
+		if rule.ConditionValueStr.Valid {
+			conditionValue = rule.ConditionValueStr.String
+		} else if rule.ConditionValueInt.Valid {
+			conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+		}
+
+		renderCtx.Rules = append(renderCtx.Rules, &DifficultyRuleDisplay{
+			Position:          int(rule.Position),
+			Name:              rule.Name.String,
+			Enabled:           rule.Enabled,
+			ConditionProperty: string(rule.ConditionProperty),
+			ConditionOperator: string(rule.ConditionOperator),
+			ConditionValue:    conditionValue,
+			ActionAction:      actionAction,
+			ActionProperty:    string(rule.ActionProperty),
+			ActionValue:       fmt.Sprintf("%d", rule.ActionValue),
+		})
+	}
+
+	return renderCtx, nil, nil
+}
+
 // getOrgInviteRegister handles the register-invite URL for users invited by email
 func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
