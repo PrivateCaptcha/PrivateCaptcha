@@ -15,6 +15,8 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"golang.org/x/net/idna"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -25,12 +27,16 @@ const (
 	propertyDashboardSettingsTemplate     = "property/settings.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
+	propertyDashboardRulesTemplate        = "property/rules.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
-	propertySettingsTabIndex              = 2
-	propertyIntegrationsTabIndex          = 1
-	propertyAuditLogsTabIndex             = 3
-	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
+	// Property tab indices
+	propertyReportsTabIndex            = 0
+	propertyIntegrationsTabIndex       = 1
+	propertySettingsTabIndex           = 2
+	propertyAuditLogsTabIndex          = 3
+	propertyRulesTabIndex              = 4
+	activeSubscriptionForPropertyError = "You need an active subscription to create new properties."
 	// Period endpoint constants
 	PeriodEndpointToday = "24h"
 	PeriodEndpointWeek  = "7d"
@@ -224,11 +230,150 @@ func (c *propertyAuditLogsRenderContext) Params() interface{} { return c }
 
 var _ RenderContext = (*propertyAuditLogsRenderContext)(nil)
 
+
+type DifficultyRuleModel struct {
+	Position          int
+	Name              string
+	Enabled           bool
+	ConditionProperty string
+	ConditionOperator string
+	ConditionValue    string
+	ActionAction      string
+	ActionProperty    string
+	ActionValue       string
+}
+
+type propertyRulesRenderContext struct {
+	propertyDashboardRenderContext
+	Rules []*DifficultyRuleModel
+}
+
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
 		EasyLevel:   int(common.DifficultyLevelSmall),
 		NormalLevel: int(common.DifficultyLevelMedium),
 		HardLevel:   int(common.DifficultyLevelHigh),
+	}
+}
+
+func stubDifficultyRules() []*DifficultyRuleModel {
+	return []*DifficultyRuleModel{
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+			Name:                    db.Text("Block suspicious countries"),
+			Enabled:                 true,
+			ConditionProperty:       dbgen.RuleConditionPropertyCountryCode,
+			ConditionOperator:       dbgen.RuleConditionOperatorIn,
+			ConditionValueStr:       db.Text("CN, RU, KP"),
+			ConditionValueSeparator: db.Text(","),
+			Position:                0,
+			ActionProperty:          dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:             0,
+			CreatedAt:               db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:               db.Timestampz(time.Now().Add(-2 * time.Hour)),
+		}),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+			Name:              db.Text("Block empty User-Agents"),
+			Enabled:           false,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorEmpty,
+			Position:          1,
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       0,
+			CreatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+		}),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+			Name:              db.Text("Lower difficulty for mobile"),
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: db.Text("Mobile"),
+			Position:          2,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       120,
+			CreatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+		}),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+			Name:              db.Text("Raise difficulty for crawlers"),
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: db.Text("curl"),
+			Position:          3,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       180,
+			CreatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+		}),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+			Name:              db.Text("Lower difficulty for trusted IPs"),
+			Enabled:           true,
+			ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+			ConditionOperator: dbgen.RuleConditionOperatorMatches,
+			ConditionValueStr: db.Text("192.168.0.0/16"),
+			Position:          4,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionValue:       120,
+			CreatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+		}),
+	}
+}
+
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
+	actionAction := "set"
+	if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
+		actionAction = "block"
+	}
+
+	conditionValue := ""
+	if rule.ConditionValueStr.Valid {
+		conditionValue = rule.ConditionValueStr.String
+	} else if rule.ConditionValueInt.Valid {
+		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+	}
+
+	titleCase := cases.Title(language.Und)
+
+	var actionProperty string
+	var actionValue string
+	switch rule.ActionProperty {
+	case dbgen.RuleActionPropertyHTTPRequest:
+		actionProperty = "HTTP request"
+	default:
+		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
+		actionValue = fmt.Sprintf("%d", rule.ActionValue)
+	}
+
+	var conditionOperator string
+	switch rule.ConditionOperator {
+	case dbgen.RuleConditionOperatorEmpty:
+		conditionOperator = "is empty"
+	case dbgen.RuleConditionOperatorIn:
+		conditionOperator = "is one of"
+	default:
+		conditionOperator = strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
+	}
+
+	var conditionProperty string
+	switch rule.ConditionProperty {
+	case dbgen.RuleConditionPropertyIPAddress:
+		conditionProperty = "IP address"
+	default:
+		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
+	}
+
+	return &DifficultyRuleModel{
+		Position:          int(rule.Position) + 1,
+		Name:              rule.Name.String,
+		Enabled:           rule.Enabled,
+		ConditionProperty: conditionProperty,
+		ConditionOperator: conditionOperator,
+		ConditionValue:    conditionValue,
+		ActionAction:      actionAction,
+		ActionProperty:    actionProperty,
+		ActionValue:       actionValue,
 	}
 }
 
@@ -752,6 +897,13 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (*
 		} else {
 			derr = err
 		}
+	case common.RulesEndpoint:
+		if rulesCtx, ae, err := s.getPropertyRules(w, r); err == nil {
+			model = rulesCtx
+			event = ae
+		} else {
+			derr = err
+		}
 	default:
 		if (tabParam != common.ReportsEndpoint) && (tabParam != "") {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
@@ -841,6 +993,15 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 	}
 
 	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvent: auditEvent}, nil
+}
+
+func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx, auditEvent, err := s.getPropertyRules(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: ctx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

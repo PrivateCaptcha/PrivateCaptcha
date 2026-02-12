@@ -323,6 +323,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead, s.Handler(s.getOrgMembers))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getOrgSettings))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getOrgAuditLogs))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getOrgRules))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
@@ -334,6 +335,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getPropertySettingsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getPropertyIntegrationsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getPropertyAuditLogsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getPropertyRulesTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyStats))
 
 	rg.Handle(rg.Get(common.SettingsEndpoint), privateRead, s.Handler(s.getSettings))
@@ -341,7 +343,6 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite, s.Handler(s.editEmail))
 	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite, s.Handler(s.putGeneralSettings))
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postAPIKeySettings))
-
 	rg.Handle(rg.Get(common.AuditLogsEndpoint), privateRead, s.Handler(s.getAuditLogs))
 
 	rg.Handle(rg.Get(common.UserEndpoint, common.StatsEndpoint), privateRead, http.HandlerFunc(s.getAccountStats))

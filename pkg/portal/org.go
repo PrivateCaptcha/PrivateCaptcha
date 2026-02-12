@@ -51,40 +51,13 @@ var (
 	}
 )
 
-type PortalRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint        string
-	DashboardEndpoint  string
-	OrgLevelOwner      string
-	OrgLevelInvited    string
-	OrgLevelMember     string
-	MembersEndpoint    string
-	EventsEndpoint     string
-	PropertyEndpoint   string
-	NewEndpoint        string
-	PropertiesEndpoint string
-	Page               string
-	Email              string
-	Name               string
-	TransferEndpoint   string
-	DeleteEndpoint     string
-	EditEndpoint       string
-	User               string
-}
-
-type OrgWizardRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint string
-	NewEndpoint string
-	Name        string
-}
-
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
 	orgPropertiesTemplate         = "portal/properties.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
 	orgAuditLogsTemplate          = "portal/org-auditlogs.html"
+	orgRulesTemplate              = "portal/org-rules.html"
 	orgWizardTemplate             = "org-wizard/wizard.html"
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
@@ -118,6 +91,12 @@ var _ RenderContext = (*orgAuditLogsRenderContext)(nil)
 
 func (c *orgAuditLogsRenderContext) Params() interface{} { return c }
 func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
+
+type orgRulesRenderContext struct {
+	AlertRenderContext
+	CurrentOrg *userOrg
+	Rules      []*DifficultyRuleModel
+}
 
 type orgUser struct {
 	Name      string
@@ -587,6 +566,30 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 	return &ViewModel{
 		Model:      renderCtx,
 		View:       orgAuditLogsTemplate,
+		AuditEvent: auditEvent,
+	}, nil
+}
+
+func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx, auditEvent, err := s.createOrgRulesContext(ctx, org, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgRulesTemplate,
 		AuditEvent: auditEvent,
 	}, nil
 }
