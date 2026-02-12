@@ -109,44 +109,6 @@ func stubAuditLogs() []*UserAuditLog {
 	return result
 }
 
-func stubDifficultyRules() []*DifficultyRuleDisplay {
-	return []*DifficultyRuleDisplay{
-		{
-			Position:          1,
-			Name:              "Block suspicious countries",
-			Enabled:           true,
-			ConditionProperty: "country_code",
-			ConditionOperator: "in",
-			ConditionValue:    "CN,RU,KP",
-			ActionAction:      "block",
-			ActionProperty:    "http_request",
-			ActionValue:       "403",
-		},
-		{
-			Position:          2,
-			Name:              "Increase difficulty for mobile",
-			Enabled:           true,
-			ConditionProperty: "user_agent",
-			ConditionOperator: "contains",
-			ConditionValue:    "Mobile",
-			ActionAction:      "set",
-			ActionProperty:    "difficulty_level",
-			ActionValue:       "8",
-		},
-		{
-			Position:          3,
-			Name:              "Lower difficulty for trusted IPs",
-			Enabled:           false,
-			ConditionProperty: "ip_address",
-			ConditionOperator: "matches",
-			ConditionValue:    "192.168.*.*",
-			ActionAction:      "set",
-			ActionProperty:    "difficulty_level",
-			ActionValue:       "2",
-		},
-	}
-}
-
 func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string

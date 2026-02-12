@@ -541,15 +541,6 @@ func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}, nil
 }
 
-func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
-	renderCtx := &orgRulesRenderContext{
-		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
-		Rules:      stubDifficultyRules(),
-	}
-
-	return renderCtx, nil, nil
-}
-
 func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))

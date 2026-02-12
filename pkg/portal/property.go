@@ -147,6 +147,44 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	}
 }
 
+func stubDifficultyRules() []*DifficultyRuleDisplay {
+	return []*DifficultyRuleDisplay{
+		{
+			Position:          1,
+			Name:              "Block suspicious countries",
+			Enabled:           true,
+			ConditionProperty: "country_code",
+			ConditionOperator: "in",
+			ConditionValue:    "CN,RU,KP",
+			ActionAction:      "block",
+			ActionProperty:    "http_request",
+			ActionValue:       "403",
+		},
+		{
+			Position:          2,
+			Name:              "Increase difficulty for mobile",
+			Enabled:           true,
+			ConditionProperty: "user_agent",
+			ConditionOperator: "contains",
+			ConditionValue:    "Mobile",
+			ActionAction:      "set",
+			ActionProperty:    "difficulty_level",
+			ActionValue:       "8",
+		},
+		{
+			Position:          3,
+			Name:              "Lower difficulty for trusted IPs",
+			Enabled:           false,
+			ConditionProperty: "ip_address",
+			ConditionOperator: "matches",
+			ConditionValue:    "192.168.*.*",
+			ActionAction:      "set",
+			ActionProperty:    "difficulty_level",
+			ActionValue:       "2",
+		},
+	}
+}
+
 func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *userProperty {
 	up := &userProperty{
 		ID:               hasher.Encrypt(int(p.ID)),
@@ -765,22 +803,6 @@ func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*V
 	}
 
 	return &ViewModel{Model: ctx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
-}
-
-func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
-	dashboardCtx, _, err := s.getOrgProperty(w, r)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	renderCtx := &propertyRulesRenderContext{
-		propertyDashboardRenderContext: *dashboardCtx,
-		Rules:                          stubDifficultyRules(),
-	}
-
-	renderCtx.Tab = propertyRulesTabIndex
-
-	return renderCtx, nil, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

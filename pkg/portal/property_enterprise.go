@@ -3,6 +3,7 @@
 package portal
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"

@@ -4,6 +4,7 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
