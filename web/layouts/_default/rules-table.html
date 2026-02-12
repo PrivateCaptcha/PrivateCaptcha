@@ -1,0 +1,26 @@
+{{ if .Params.Rules }}
+<ul role="list" class="divide-y divide-gray-100">
+    {{ range .Params.Rules }}
+    <li class="flex items-center justify-between gap-x-6 py-5">
+        <div class="min-w-0">
+            <div class="flex items-start gap-x-3">
+                <p class="text-sm/6 font-semibold text-gray-900">{{.Position}}. {{ .Name }}</p>
+                {{- if .Enabled }}
+                <p class="mt-0.5 rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Enabled</p>
+                {{- else }}
+                <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
+                {{- end }}
+            </div>
+            <div class="mt-1 flex items-center gap-x-2 text-xs/5 text-gray-500">
+                <p class="whitespace-nowrap">When <span class="inline-flex items-center rounded-md bg-pink-100 px-1.5 py-0.5 text-xs font-medium text-pink-700">{{.ConditionProperty}}</span> <strong>{{.ConditionOperator}}</strong> <span class="inline-flex items-center rounded-md bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600">{{.ConditionValue}}</span>, {{.ActionAction}} <span class="inline-flex items-center rounded-md bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-700">{{.ActionProperty}}</span> to <span class="inline-flex items-center rounded-md bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-700">{{.ActionValue}}</span></p>
+            </div>
+        </div>
+        <div class="flex flex-none items-center gap-x-4">
+            <a href="#"
+                hx-disabled-elt="this"
+                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
+        </div>
+    </li>
+    {{ end }}
+</ul>
+{{ end }}
