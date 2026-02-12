@@ -10,7 +10,7 @@ import (
 )
 
 const getDifficultyRulesByOrgIDs = `-- name: GetDifficultyRulesByOrgIDs :many
-SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
+SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.enabled, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
 WHERE dr.org_id = ANY($1::INT[]) AND dr.property_id IS NULL
 ORDER BY dr.org_id, dr.position ASC
 `
@@ -29,6 +29,7 @@ func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int
 			&i.Name,
 			&i.PropertyID,
 			&i.OrgID,
+			&i.Enabled,
 			&i.ConditionProperty,
 			&i.ConditionOperator,
 			&i.ConditionValueStr,
@@ -51,7 +52,7 @@ func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int
 }
 
 const getDifficultyRulesByPropertyIDs = `-- name: GetDifficultyRulesByPropertyIDs :many
-SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
+SELECT dr.id, dr.name, dr.property_id, dr.org_id, dr.enabled, dr.condition_property, dr.condition_operator, dr.condition_value_str, dr.condition_value_int, dr.condition_value_separator, dr.position, dr.action_property, dr.action_value, dr.created_at, dr.updated_at FROM backend.difficulty_rules dr
 WHERE dr.property_id = ANY($1::INT[]) AND dr.org_id IS NULL
 ORDER BY dr.property_id, dr.position ASC
 `
@@ -70,6 +71,7 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 			&i.Name,
 			&i.PropertyID,
 			&i.OrgID,
+			&i.Enabled,
 			&i.ConditionProperty,
 			&i.ConditionOperator,
 			&i.ConditionValueStr,
