@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/justinas/alice"
 	easyjson "github.com/mailru/easyjson"
 	"github.com/rs/cors"
@@ -88,6 +89,7 @@ type Server struct {
 	SubscriptionLimits db.SubscriptionLimits
 	IDHasher           common.IdentifierHasher
 	AsyncTasks         db.AsyncTasks
+	CountryCodeHeader  common.ConfigItem
 }
 
 type apiKeyOwnerSource struct {
@@ -258,7 +260,53 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels)
+
+	var rulesPair *rules.RulesPair
+	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
+		impl := s.BusinessDB.Impl()
+		needsBackfill := false
+
+		var propertyRules *rules.CompiledRules
+		if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
+			propertyRules = cached
+		} else if err == db.ErrCacheMiss {
+			needsBackfill = true
+		}
+
+		var orgRules *rules.CompiledRules
+		if property.OrgID.Valid {
+			if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
+				orgRules = cached
+			} else if err == db.ErrCacheMiss {
+				needsBackfill = true
+			}
+		}
+
+		if needsBackfill {
+			s.Auth.RefreshPropertyRules(ctx, property.ID)
+		}
+
+		if propertyRules != nil || orgRules != nil {
+			rulesPair = &rules.RulesPair{
+				PropertyRules: propertyRules,
+				OrgRules:      orgRules,
+			}
+		}
+	}
+
+	var countryCodeHeader string
+	if s.CountryCodeHeader != nil {
+		countryCodeHeader = s.CountryCodeHeader.Value()
+	}
+	ri := rules.NewRequestInfo(r, countryCodeHeader)
+
+	if rulesPair != nil && rulesPair.IsRequestBlocked(ri) {
+		slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rule")
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+		return
+	}
+
+	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, rulesPair, ri)
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:
