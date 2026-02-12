@@ -45,8 +45,8 @@ func TestUserAgentEqualsMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 		ConditionOperator: dbgen.RuleConditionOperatorEquals,
 		ConditionValueStr: pgtype.Text{String: "BadBot/1.0", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -71,8 +71,8 @@ func TestUserAgentContainsMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "BadBot", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -96,8 +96,8 @@ func TestUserAgentEmptyMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 		ConditionOperator: dbgen.RuleConditionOperatorEmpty,
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -123,8 +123,8 @@ func TestUserAgentInMatch(t *testing.T) {
 		ConditionOperator:       dbgen.RuleConditionOperatorIn,
 		ConditionValueStr:       pgtype.Text{String: "BadBot/1.0|GoodBot/2.0", Valid: true},
 		ConditionValueSeparator: pgtype.Text{String: "|", Valid: true},
-		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:             200,
+		ActionProperty:          dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
 		Enabled:                 true,
 	}
 
@@ -149,8 +149,8 @@ func TestIPAddressMatchesPrefix(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
 		ConditionOperator: dbgen.RuleConditionOperatorMatches,
 		ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       150,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       25,
 		Enabled:           true,
 	}
 
@@ -200,8 +200,8 @@ func TestIPAddressEmptyMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
 		ConditionOperator: dbgen.RuleConditionOperatorEmpty,
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -226,8 +226,8 @@ func TestDifficultyLevelApply(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       100, // +100% increase
 		Enabled:           true,
 	}
 
@@ -235,11 +235,12 @@ func TestDifficultyLevelApply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prop := newStubProperty()
+	prop := newStubProperty() // has level 50
 
 	result := compiled.Apply(prop)
-	if result.Level() != 200 {
-		t.Errorf("Expected level 200, got %d", result.Level())
+	// Base level is 50, +100% should give 50 * (100 + 100) / 100 = 100
+	if result.Level() != 100 {
+		t.Errorf("Expected level 100 (50 + 100%%), got %d", result.Level())
 	}
 	if result.Growth() != dbgen.DifficultyGrowthMedium {
 		t.Errorf("Expected growth to remain medium, got %s", result.Growth())
@@ -277,8 +278,8 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       200,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
 			Position:          1,
 			Enabled:           true,
 		},
@@ -286,7 +287,7 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       100,
 			Position:          2,
 			Enabled:           true,
@@ -310,8 +311,8 @@ func TestRulesPairPropertyBeforeOrg(t *testing.T) {
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       180,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       30,
 			Position:          1,
 			Enabled:           true,
 		},
@@ -322,7 +323,7 @@ func TestRulesPairPropertyBeforeOrg(t *testing.T) {
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       100,
 			Position:          1,
 			Enabled:           true,
@@ -347,8 +348,8 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorEquals,
 			ConditionValueStr: pgtype.Text{String: "SpecificBot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       200,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
 			Enabled:           true,
 		},
 	}
@@ -417,8 +418,8 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       200,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
 			Position:          1,
 			Enabled:           true,
 		},
@@ -465,8 +466,8 @@ func TestIPv6PrefixMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
 		ConditionOperator: dbgen.RuleConditionOperatorMatches,
 		ConditionValueStr: pgtype.Text{String: "2001:db8::/32", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -491,8 +492,8 @@ func TestInvalidIPRuleValue(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
 		ConditionOperator: dbgen.RuleConditionOperatorMatches,
 		ConditionValueStr: pgtype.Text{String: "not-an-ip", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -507,8 +508,8 @@ func TestUnknownConditionProperty(t *testing.T) {
 		ConditionProperty: "unknown_prop",
 		ConditionOperator: dbgen.RuleConditionOperatorEquals,
 		ConditionValueStr: pgtype.Text{String: "test", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -524,7 +525,7 @@ func TestUnknownActionProperty(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorEquals,
 		ConditionValueStr: pgtype.Text{String: "test", Valid: true},
 		ActionProperty:    "unknown_action",
-		ActionValue:       200,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -540,15 +541,15 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 			ConditionProperty: "unknown_prop",
 			ConditionOperator: dbgen.RuleConditionOperatorEquals,
 			ConditionValueStr: pgtype.Text{String: "test", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       200,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
 			Enabled:           true,
 		},
 		{
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       199,
 			Enabled:           false,
 		},
@@ -556,8 +557,8 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       150,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       25,
 			Enabled:           true,
 		},
 	}
@@ -605,8 +606,8 @@ func TestCountryCodeEqualsMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
 		ConditionOperator: dbgen.RuleConditionOperatorEquals,
 		ConditionValueStr: pgtype.Text{String: "US", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -631,8 +632,8 @@ func TestCountryCodeNoHeader(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
 		ConditionOperator: dbgen.RuleConditionOperatorEquals,
 		ConditionValueStr: pgtype.Text{String: "US", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -652,8 +653,8 @@ func TestCountryCodeContainsMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "u", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -678,8 +679,8 @@ func TestCountryCodeInMatch(t *testing.T) {
 		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
 		ConditionOperator: dbgen.RuleConditionOperatorIn,
 		ConditionValueStr: pgtype.Text{String: "US,GB,CA", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -703,8 +704,8 @@ func TestCountryCodeEmptyMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
 		ConditionOperator: dbgen.RuleConditionOperatorEmpty,
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-		ActionValue:       200,
+		ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
 		Enabled:           true,
 	}
 
@@ -784,7 +785,7 @@ func TestRulesPairOrgFallback(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       100,
 			Enabled:           true,
 		},
@@ -806,8 +807,8 @@ func TestRulesPairPropertyOnly(t *testing.T) {
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevel,
-			ActionValue:       200,
+			ActionProperty:    dbgen.BackendRuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
 			Enabled:           true,
 		},
 	}

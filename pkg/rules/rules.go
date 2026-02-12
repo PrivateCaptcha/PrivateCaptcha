@@ -125,10 +125,10 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 	return op.base.Growth()
 }
 
-// difficultyLevelRule overrides the difficulty level for a property
+// difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
-	matcher matcherFunc
-	level   int16
+	matcher     matcherFunc
+	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
@@ -136,8 +136,16 @@ func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
-	level := r.level
-	return &overrideProperty{base: p, level: &level}
+	baseLevel := p.Level()
+	// Calculate adjusted level: baseLevel * (100 + percentDiff) / 100
+	adjustedLevel := int16((int32(baseLevel) * (100 + int32(r.percentDiff))) / 100)
+	// Clamp to valid range [1, 255]
+	if adjustedLevel < 1 {
+		adjustedLevel = 1
+	} else if adjustedLevel > 255 {
+		adjustedLevel = 255
+	}
+	return &overrideProperty{base: p, level: &adjustedLevel}
 }
 
 // difficultyGrowthRule overrides the difficulty growth for a property
@@ -219,10 +227,10 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	}
 
 	switch rule.ActionProperty {
-	case dbgen.RuleActionPropertyDifficultyLevel:
+	case dbgen.BackendRuleActionPropertyDifficultyLevelPercent:
 		return &difficultyLevelRule{
-			matcher: matcher,
-			level:   int16(rule.ActionValue),
+			matcher:     matcher,
+			percentDiff: int16(rule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{

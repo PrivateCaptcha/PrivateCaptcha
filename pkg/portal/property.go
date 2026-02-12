@@ -170,6 +170,15 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyHTTPRequest:
 		actionProperty = "HTTP request"
+	case dbgen.BackendRuleActionPropertyDifficultyLevelPercent:
+		actionProperty = "Difficulty level percent"
+		// Format percentage with +/- sign
+		percent := rule.ActionValue
+		if percent >= 0 {
+			actionValue = fmt.Sprintf("+%d%%", percent)
+		} else {
+			actionValue = fmt.Sprintf("%d%%", percent)
+		}
 	default:
 		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
 		actionValue = fmt.Sprintf("%d", rule.ActionValue)
