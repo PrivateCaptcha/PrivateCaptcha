@@ -11,19 +11,21 @@ import (
 type matcherFunc func(ri *RequestInfo) bool
 
 // stringMatcher creates a matcherFunc for a string value using a string extractor
-func stringMatcher(extract func(ri *RequestInfo) string, value string, operator dbgen.RuleConditionOperator, separator string) matcherFunc {
+func stringMatcher(extract func(ri *RequestInfo) string, value string, operator dbgen.RuleConditionOperator, separator string, negated bool) matcherFunc {
+	var baseMatcher matcherFunc
+	
 	switch operator {
 	case dbgen.RuleConditionOperatorEquals:
-		return func(ri *RequestInfo) bool {
+		baseMatcher = func(ri *RequestInfo) bool {
 			return strings.EqualFold(extract(ri), value)
 		}
 	case dbgen.RuleConditionOperatorContains:
 		lowerValue := strings.ToLower(value)
-		return func(ri *RequestInfo) bool {
+		baseMatcher = func(ri *RequestInfo) bool {
 			return strings.Contains(strings.ToLower(extract(ri)), lowerValue)
 		}
 	case dbgen.RuleConditionOperatorEmpty:
-		return func(ri *RequestInfo) bool {
+		baseMatcher = func(ri *RequestInfo) bool {
 			return len(extract(ri)) == 0
 		}
 	case dbgen.RuleConditionOperatorIn:
@@ -35,7 +37,7 @@ func stringMatcher(extract func(ri *RequestInfo) string, value string, operator 
 		for i, item := range items {
 			items[i] = strings.ToLower(strings.TrimSpace(item))
 		}
-		return func(ri *RequestInfo) bool {
+		baseMatcher = func(ri *RequestInfo) bool {
 			v := strings.ToLower(extract(ri))
 			for _, item := range items {
 				if item == v {
@@ -45,22 +47,48 @@ func stringMatcher(extract func(ri *RequestInfo) string, value string, operator 
 			return false
 		}
 	default:
-		return func(ri *RequestInfo) bool {
+		baseMatcher = func(ri *RequestInfo) bool {
 			return strings.EqualFold(extract(ri), value)
 		}
 	}
+	
+	if negated {
+		return func(ri *RequestInfo) bool {
+			return !baseMatcher(ri)
+		}
+	}
+	
+	return baseMatcher
 }
 
-func ipAddressMatchesMatcher(prefix netip.Prefix) matcherFunc {
-	return func(ri *RequestInfo) bool {
+func ipAddressMatchesMatcher(prefix netip.Prefix, negated bool) matcherFunc {
+	baseMatcher := func(ri *RequestInfo) bool {
 		ip := ri.IPAddr()
 		if !ip.IsValid() {
 			return false
 		}
 		return prefix.Contains(ip)
 	}
+	
+	if negated {
+		return func(ri *RequestInfo) bool {
+			return !baseMatcher(ri)
+		}
+	}
+	
+	return baseMatcher
 }
 
-var ipAddressEmptyMatcher matcherFunc = func(ri *RequestInfo) bool {
-	return !ri.IPAddr().IsValid()
+func ipAddressEmptyMatcher(negated bool) matcherFunc {
+	baseMatcher := func(ri *RequestInfo) bool {
+		return !ri.IPAddr().IsValid()
+	}
+	
+	if negated {
+		return func(ri *RequestInfo) bool {
+			return !baseMatcher(ri)
+		}
+	}
+	
+	return baseMatcher
 }

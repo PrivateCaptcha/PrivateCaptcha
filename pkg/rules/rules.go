@@ -194,14 +194,15 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 
 func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
 	separator := rule.ConditionValueSeparator.String
+	negated := rule.ConditionOperatorNegated
 
 	switch rule.ConditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent:
 		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).UserAgent, value, rule.ConditionOperator, separator), nil
+		return stringMatcher((*RequestInfo).UserAgent, value, rule.ConditionOperator, separator, negated), nil
 	case dbgen.RuleConditionPropertyIPAddress:
 		if rule.ConditionOperator == dbgen.RuleConditionOperatorEmpty {
-			return ipAddressEmptyMatcher, nil
+			return ipAddressEmptyMatcher(negated), nil
 		}
 		value := rule.ConditionValueStr.String
 		prefix, err := netip.ParsePrefix(value)
@@ -212,10 +213,10 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
 			}
 			prefix = netip.PrefixFrom(addr, addr.BitLen())
 		}
-		return ipAddressMatchesMatcher(prefix), nil
+		return ipAddressMatchesMatcher(prefix, negated), nil
 	case dbgen.RuleConditionPropertyCountryCode:
 		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).CountryCode, value, rule.ConditionOperator, separator), nil
+		return stringMatcher((*RequestInfo).CountryCode, value, rule.ConditionOperator, separator, negated), nil
 	default:
 		return nil, ErrUnknownConditionProperty
 	}
