@@ -16,6 +16,7 @@ type Querier interface {
 	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
 	CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
+	CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error)
 	CreateNotificationTemplate(ctx context.Context, arg *CreateNotificationTemplateParams) (*NotificationTemplate, error)
 	CreateOrganization(ctx context.Context, arg *CreateOrganizationParams) (*Organization, error)
 	CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error)

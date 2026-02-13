@@ -37,6 +37,19 @@ func TestStatusCodeString(t *testing.T) {
 		StatusPropertyIDDuplicateError,
 		StatusPropertyPermissionsError,
 		StatusSubscriptionPropertyLimitError,
+		StatusRuleNameEmptyError,
+		StatusRuleConditionPropertyRequired,
+		StatusRuleConditionOperatorInvalid,
+		StatusRuleConditionValueRequired,
+		StatusRuleConditionPropertyInvalid,
+		StatusRuleActionPropertyRequired,
+		StatusRuleActionValueRequired,
+		StatusRuleActionValueInvalid,
+		StatusRuleActionPropertyInvalid,
+		StatusRuleIPAddressRequired,
+		StatusRuleCountryRequired,
+		StatusRuleDifficultyValueInvalid,
+		StatusRuleDifficultyGrowthInvalid,
 	}
 
 	for _, sc := range statusCodes {

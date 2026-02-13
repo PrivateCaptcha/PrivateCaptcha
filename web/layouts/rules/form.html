@@ -1,0 +1,280 @@
+<div class="space-y-4">
+    {{- if .Params.ErrorMessage -}}
+    {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- else if .Params.WarningMessage -}}
+    {{template "warning-message.html" .Params.WarningMessage}}
+    {{- end -}}
+
+    <div>
+        <label for="{{ .Const.RuleName }}" class="pc-internal-form-label">Rule Name</label>
+        <div class="mt-2">
+            <input 
+            type="text" 
+            name="{{ .Const.RuleName }}" 
+            id="{{ .Const.RuleName }}"
+            placeholder="Block requests from specific countries" 
+            maxlength="255" 
+            value="{{ .Params.FormData.RuleName }}" 
+            class="w-full pc-internal-form-input-base pc-form-input-normal" 
+            required 
+            />
+        </div>
+    </div>
+
+    <div>
+        <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ConditionProperty }}" 
+                id="{{ .Const.ConditionProperty }}"
+                x-model="conditionProperty"
+                class="w-full pc-internal-form-select"
+                >
+                {{ range .Params.ConditionProperties }}
+                <option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>
+                {{ if eq . $.Params.ConditionUserAgent }}User Agent
+                {{ else if eq . $.Params.ConditionIPAddress }}IP Address
+                {{ else if eq . $.Params.ConditionCountryCode }}Country Code
+                {{ end }}
+                </option>
+                {{ end }}
+            </select>
+        </div>
+    </div>
+
+    <!-- Condition Operator -->
+    <div x-show="!isListCondition">
+        <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ConditionOperator }}" 
+                id="{{ .Const.ConditionOperator }}"
+                x-model="conditionOperator"
+                :disabled="isListCondition"
+                class="w-full pc-internal-form-select"
+                >
+                <!-- String operators (user_agent) -->
+                <template x-if="isStringCondition">
+                    <optgroup label="String Operations">
+                        {{ range .Params.StringOperators }}
+                        <option value="{{ . }}">
+                        {{ if eq . $.Params.OperatorEquals }}Equals
+                        {{ else if eq . $.Params.OperatorContains }}Contains
+                        {{ else if eq . $.Params.OperatorEmpty }}Is Empty
+                        {{ end }}
+                        </option>
+                        <option value="{{ . }}_negated">
+                        {{ if eq . $.Params.OperatorEquals }}Not Equals
+                        {{ else if eq . $.Params.OperatorContains }}Not Contains
+                        {{ else if eq . $.Params.OperatorEmpty }}Is Not Empty
+                        {{ end }}
+                        </option>
+                        {{ end }}
+                    </optgroup>
+                </template>
+
+                <!-- IP operators -->
+                <template x-if="isIPCondition">
+                    <optgroup label="IP Operations">
+                        {{ range .Params.IPOperators }}
+                        <option value="{{ . }}">
+                        {{ if eq . $.Params.OperatorMatches }}Matches
+                        {{ else if eq . $.Params.OperatorEmpty }}Is Empty
+                        {{ end }}
+                        </option>
+                        <option value="{{ . }}_negated">
+                        {{ if eq . $.Params.OperatorMatches }}Not Matches
+                        {{ else if eq . $.Params.OperatorEmpty }}Is Not Empty
+                        {{ end }}
+                        </option>
+                        {{ end }}
+                    </optgroup>
+                </template>
+            </select>
+        </div>
+    </div>
+
+    <!-- Condition Value for String/IP -->
+    <div x-show="!isListCondition && showConditionValue">
+        <label class="pc-internal-form-label">
+            <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
+        </label>
+        <div class="mt-2">
+            <input 
+            type="text" 
+            name="{{ .Const.ConditionValue }}" 
+            id="{{ .Const.ConditionValue }}"
+            placeholder="Enter value..."
+            value="{{ .Params.FormData.ConditionValue }}" 
+            class="w-full pc-internal-form-input-base pc-form-input-normal"
+            />
+        </div>
+    </div>
+
+    <!-- Country Selection -->
+    <div x-show="isListCondition">
+        <label class="pc-internal-form-label">Countries</label>
+        <div class="mt-2">
+            <div class="border border-gray-300 rounded-md max-h-48 overflow-y-auto p-2 space-y-1">
+                {{ range .Params.Countries }}
+                <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                    <input 
+                    type="checkbox" 
+                    @click="toggleCountry('{{ .Code }}')"
+                    :checked="isCountrySelected('{{ .Code }}')"
+                    class="pc-internal-form-checkbox"
+                    />
+                    <span class="text-sm">{{ .Name }}</span>
+                </label>
+                {{ end }}
+            </div>
+
+            <!-- Hidden input for comma-separated values -->
+            <input 
+            type="hidden" 
+            name="{{ .Const.ConditionValue }}" 
+            :value="selectedCountries.join(',')"
+            />
+
+            <!-- Hidden input for negation -->
+            <input 
+            type="hidden" 
+            name="{{ .Const.ConditionOperator }}" 
+            :value="conditionNegated ? '{{ .Params.OperatorIn }}_negated' : '{{ .Params.OperatorIn }}'"
+            />
+        </div>
+    </div>
+
+    <div class="border-t border-gray-200 pt-6">
+        <h3 class="text-base font-semibold text-gray-900 mb-4">Action</h3>
+    </div>
+
+    <div>
+        <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ActionProperty }}" 
+                id="{{ .Const.ActionProperty }}"
+                x-model="actionProperty"
+                class="w-full pc-internal-form-select"
+                >
+                {{ range .Params.ActionProperties }}
+                <option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>
+                {{ if eq . "difficulty_level_percent" }}Adjust Difficulty Level
+                {{ else if eq . "http_request" }}Block HTTP Request
+                {{ else if eq . "difficulty_growth" }}Change Difficulty Growth
+                {{ end }}
+                </option>
+                {{ end }}
+            </select>
+        </div>
+    </div>
+
+    <!-- Difficulty Adjustment -->
+    <div x-show="actionProperty === 'difficulty_level_percent'">
+        <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Adjustment (%)</label>
+        <div class="mt-2">
+            <input 
+            type="number" 
+            name="{{ .Const.ActionValue }}" 
+            id="{{ .Const.ActionValue }}"
+            placeholder="0" 
+            min="-100"
+            max="1000"
+            value="{{ .Params.FormData.ActionValue }}" 
+            class="w-full pc-internal-form-input-base pc-form-input-normal"
+            />
+            <p class="mt-1 text-sm text-gray-500">Range: -100 to +1000</p>
+        </div>
+    </div>
+
+    <!-- HTTP Request Block -->
+    <div x-show="actionProperty === 'http_request'">
+        <div class="flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input 
+                    id="http_request_checkbox" 
+                    name="{{ .Const.ActionValue }}" 
+                    type="checkbox" 
+                    value="1"
+                    {{ if or (not .Params.FormData.ActionValue) (eq .Params.FormData.ActionValue "1") }}checked{{ end }}
+                    class="col-start-1 row-start-1 pc-internal-form-checkbox"
+                    />
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="http_request_checkbox" class="font-medium text-gray-900">Block HTTP request</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Difficulty Growth -->
+    <div x-show="actionProperty === 'difficulty_growth'">
+        <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ActionValue }}" 
+                id="growth_select"
+                class="w-full pc-internal-form-select"
+                >
+                {{ range $index, $growth := .Params.GrowthTypes }}
+                <option value="{{ $index }}" {{ if eq $.Params.FormData.ActionValue (printf "%d" $index) }}selected{{ end }}>
+                {{ if eq $growth "constant" }}Constant (no growth)
+                {{ else if eq $growth "slow" }}Slow
+                {{ else if eq $growth "medium" }}Normal
+                {{ else if eq $growth "fast" }}Fast
+                {{ end }}
+                </option>
+                {{ end }}
+            </select>
+        </div>
+    </div>
+
+    <div class="flex items-center justify-between mt-6">
+        <div class="flex gap-3">
+            <div class="flex h-6 shrink-0 items-center">
+                <div class="group grid size-4 grid-cols-1">
+                    <input 
+                    id="{{ .Const.RuleEnabled }}" 
+                    name="{{ .Const.RuleEnabled }}" 
+                    type="checkbox" 
+                    {{ if .Params.FormData.RuleEnabled }}checked{{ end }}
+                    class="col-start-1 row-start-1 pc-internal-form-checkbox"
+                    />
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                        <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                </div>
+            </div>
+            <div class="text-sm/6">
+                <label for="{{ .Const.RuleEnabled }}" class="font-medium text-gray-900">Enable this rule</label>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-6">
+            <button
+                type="button"
+                onclick="window.history.go(-1); return false;"
+                class="pc-internal-form-button pc-internal-form-button-secondary"
+                >
+                Cancel
+            </button>
+
+                <button
+                    type="submit"
+                    class="pc-internal-form-button pc-internal-form-button-primary"
+                    hx-indicator="#spinner"
+                    >
+                    <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Create Rule
+                </button>
+        </div>
+    </div>
+</div>
