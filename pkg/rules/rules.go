@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -15,6 +16,10 @@ var (
 	ErrUnknownConditionProperty = errors.New("unknown rule condition property")
 	ErrUnknownActionProperty    = errors.New("unknown rule action property")
 	ErrInvalidIPValue           = errors.New("invalid IP address or prefix value")
+)
+
+const (
+	defaultSeparator = ","
 )
 
 type Rule interface {
@@ -127,12 +132,12 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
-	matcher     matcherFunc
+	matcher     matcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
@@ -151,12 +156,12 @@ func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
-	matcher matcherFunc
+	matcher matcher
 	growth  dbgen.DifficultyGrowth
 }
 
 func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
@@ -166,11 +171,11 @@ func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property 
 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
-	matcher matcherFunc
+	matcher matcher
 }
 
 func (r *blockRequestRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
@@ -192,31 +197,53 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
-	separator := rule.ConditionValueSeparator.String
-	negated := rule.ConditionOperatorNegated
-
+func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent:
+	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
 		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).UserAgent, value, rule.ConditionOperator, separator, negated), nil
-	case dbgen.RuleConditionPropertyIPAddress:
-		if rule.ConditionOperator == dbgen.RuleConditionOperatorEmpty {
-			return ipAddressEmptyMatcher(negated), nil
+		sm := &stringMatcher{
+			conditionProperty:        rule.ConditionProperty,
+			conditionOperator:        rule.ConditionOperator,
+			conditionValueStr:        value,
+			conditionOperatorNegated: rule.ConditionOperatorNegated,
 		}
-		value := rule.ConditionValueStr.String
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			addr, addrErr := netip.ParseAddr(value)
-			if addrErr != nil {
-				return nil, ErrInvalidIPValue
+		
+		// Pre-process values for optimized matching
+		if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
+			sep := defaultSeparator
+			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+				sep = rule.ConditionValueSeparator.String
 			}
-			prefix = netip.PrefixFrom(addr, addr.BitLen())
+			items := strings.Split(value, sep)
+			for i, item := range items {
+				items[i] = strings.TrimSpace(item)
+			}
+			sm.conditionValueItems = items
 		}
-		return ipAddressMatchesMatcher(prefix, negated), nil
-	case dbgen.RuleConditionPropertyCountryCode:
-		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).CountryCode, value, rule.ConditionOperator, separator, negated), nil
+		
+		return sm, nil
+		
+	case dbgen.RuleConditionPropertyIPAddress:
+		im := &ipMatcher{
+			conditionOperator:        rule.ConditionOperator,
+			conditionOperatorNegated: rule.ConditionOperatorNegated,
+		}
+		
+		if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
+			value := rule.ConditionValueStr.String
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				addr, addrErr := netip.ParseAddr(value)
+				if addrErr != nil {
+					return nil, ErrInvalidIPValue
+				}
+				prefix = netip.PrefixFrom(addr, addr.BitLen())
+			}
+			im.conditionValueIPPrefix = prefix
+		}
+		
+		return im, nil
+		
 	default:
 		return nil, ErrUnknownConditionProperty
 	}
