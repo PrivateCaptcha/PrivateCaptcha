@@ -257,7 +257,7 @@ func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRule
 
 		compiled, err := CompileRule(ctx, r)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name.String, common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name, common.ErrAttr(err))
 			continue
 		}
 

@@ -470,7 +470,7 @@ type DeletedRecord struct {
 
 type DifficultyRule struct {
 	ID                      int32                 `db:"id" json:"id"`
-	Name                    pgtype.Text           `db:"name" json:"name"`
+	Name                    string                `db:"name" json:"name"`
 	PropertyID              pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                   pgtype.Int4           `db:"org_id" json:"org_id"`
 	Enabled                 bool                  `db:"enabled" json:"enabled"`
