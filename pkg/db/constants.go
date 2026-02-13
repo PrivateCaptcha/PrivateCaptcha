@@ -8,4 +8,5 @@ const (
 	TableNameSubscriptions = "subscriptions"
 	TableNameAPIKeys       = "apikeys"
 	TableNameAuditLogs     = "audit_logs"
+	TableNameDifficultyRules = "difficulty_rules"
 )

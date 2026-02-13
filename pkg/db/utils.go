@@ -518,3 +518,29 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 
 	return cached, items, nil
 }
+
+// NullText is a wrapper around pgtype.Text that provides a ToDBType method
+type NullText struct {
+	String string
+	Valid  bool
+}
+
+func (nt NullText) ToDBType() pgtype.Text {
+	return pgtype.Text{
+		String: nt.String,
+		Valid:  nt.Valid,
+	}
+}
+
+// NullInt4 is a wrapper around pgtype.Int4 that provides a ToDBType method
+type NullInt4 struct {
+	Int32 int32
+	Valid bool
+}
+
+func (ni NullInt4) ToDBType() pgtype.Int4 {
+	return pgtype.Int4{
+		Int32: ni.Int32,
+		Valid:  ni.Valid,
+	}
+}

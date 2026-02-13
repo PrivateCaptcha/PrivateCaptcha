@@ -40,6 +40,20 @@ const (
 	StatusPropertyPermissionsError        StatusCode = 1214
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
+	// rules errors
+	StatusRuleNameEmptyError              StatusCode = 1400
+	StatusRuleConditionPropertyRequired   StatusCode = 1401
+	StatusRuleConditionOperatorInvalid    StatusCode = 1402
+	StatusRuleConditionValueRequired      StatusCode = 1403
+	StatusRuleConditionPropertyInvalid    StatusCode = 1404
+	StatusRuleActionPropertyRequired      StatusCode = 1405
+	StatusRuleActionValueRequired         StatusCode = 1406
+	StatusRuleActionValueInvalid          StatusCode = 1407
+	StatusRuleActionPropertyInvalid       StatusCode = 1408
+	StatusRuleIPAddressRequired           StatusCode = 1409
+	StatusRuleCountryRequired             StatusCode = 1410
+	StatusRuleDifficultyValueInvalid      StatusCode = 1411
+	StatusRuleDifficultyGrowthInvalid     StatusCode = 1412
 )
 
 func (sc StatusCode) Success() bool {
@@ -110,6 +124,32 @@ func (sc StatusCode) String() string {
 		return "Property limit reached for current subscription plan."
 	case StatusPropertyPermissionsError:
 		return "Insufficient permissions to update settings."
+	case StatusRuleNameEmptyError:
+		return "Rule name is required."
+	case StatusRuleConditionPropertyRequired:
+		return "Condition property is required."
+	case StatusRuleConditionOperatorInvalid:
+		return "Invalid operator for this condition property."
+	case StatusRuleConditionValueRequired:
+		return "Condition value is required for this operator."
+	case StatusRuleConditionPropertyInvalid:
+		return "Invalid condition property."
+	case StatusRuleActionPropertyRequired:
+		return "Action property is required."
+	case StatusRuleActionValueRequired:
+		return "Action value is required."
+	case StatusRuleActionValueInvalid:
+		return "Invalid action value."
+	case StatusRuleActionPropertyInvalid:
+		return "Invalid action property."
+	case StatusRuleIPAddressRequired:
+		return "IP address prefix is required."
+	case StatusRuleCountryRequired:
+		return "At least one country must be selected."
+	case StatusRuleDifficultyValueInvalid:
+		return "Difficulty adjustment must be between -100 and 1000."
+	case StatusRuleDifficultyGrowthInvalid:
+		return "Difficulty growth must be between 0 and 3."
 	default:
 		return strconv.Itoa(int(sc))
 	}
