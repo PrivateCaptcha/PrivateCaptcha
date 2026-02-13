@@ -1,0 +1,288 @@
+<form method="POST" x-data="ruleFormData()" class="space-y-6">
+    {{- if .Params.ErrorMessage -}}
+    <div class="rounded-md bg-red-50 p-4">
+        <div class="flex">
+            <div class="shrink-0">
+                <svg class="size-5 text-red-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94 8.28 7.22z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-red-800">{{ .Params.ErrorMessage }}</p>
+            </div>
+        </div>
+    </div>
+    {{- else if .Params.WarningMessage -}}
+    <div class="rounded-md bg-yellow-50 p-4">
+        <div class="flex">
+            <div class="shrink-0">
+                <svg class="size-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm font-medium text-yellow-800">{{ .Params.WarningMessage }}</p>
+            </div>
+        </div>
+    </div>
+    {{- end -}}
+
+    <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.CSRFToken }}" />
+
+    <div>
+        <label for="{{ .Const.RuleName }}" class="pc-internal-form-label">Rule Name</label>
+        <div class="mt-2">
+            <input 
+                type="text" 
+                name="{{ .Const.RuleName }}" 
+                id="{{ .Const.RuleName }}"
+                placeholder="Block requests from specific countries" 
+                maxlength="255" 
+                value="{{ .Params.FormData.RuleName }}" 
+                class="w-full pc-internal-form-input-base pc-form-input-normal" 
+                required 
+            />
+        </div>
+    </div>
+
+    <div class="flex gap-3">
+        <div class="flex h-6 shrink-0 items-center">
+            <div class="group grid size-4 grid-cols-1">
+                <input 
+                    id="{{ .Const.RuleEnabled }}" 
+                    name="{{ .Const.RuleEnabled }}" 
+                    type="checkbox" 
+                    {{ if .Params.FormData.RuleEnabled }}checked{{ end }}
+                    class="col-start-1 row-start-1 pc-internal-form-checkbox"
+                />
+                <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                    <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </div>
+        </div>
+        <div class="text-sm/6">
+            <label for="{{ .Const.RuleEnabled }}" class="font-medium text-gray-900">Enable this rule</label>
+        </div>
+    </div>
+
+    <div>
+        <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ConditionProperty }}" 
+                id="{{ .Const.ConditionProperty }}"
+                x-model="conditionProperty"
+                class="w-full pc-internal-form-select"
+            >
+                <option value="user_agent" {{ if eq .Params.FormData.ConditionProperty "user_agent" }}selected{{ end }}>User Agent</option>
+                <option value="ip_address" {{ if eq .Params.FormData.ConditionProperty "ip_address" }}selected{{ end }}>IP Address</option>
+                <option value="country_code" {{ if eq .Params.FormData.ConditionProperty "country_code" }}selected{{ end }}>Country Code</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Condition Operator -->
+    <div x-show="!isListCondition">
+        <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
+        <div class="mt-2">
+            <select 
+                name="{{ .Const.ConditionOperator }}" 
+                id="{{ .Const.ConditionOperator }}"
+                x-model="conditionOperator"
+                class="w-full pc-internal-form-select"
+            >
+                <!-- String operators (user_agent) -->
+                <template x-if="isStringCondition">
+                    <optgroup label="String Operations">
+                        <option value="equals">Equals</option>
+                        <option value="equals_negated">Not Equals</option>
+                        <option value="contains">Contains</option>
+                        <option value="contains_negated">Not Contains</option>
+                        <option value="empty">Is Empty</option>
+                        <option value="empty_negated">Is Not Empty</option>
+                    </optgroup>
+                </template>
+                
+                <!-- IP operators -->
+                <template x-if="isIPCondition">
+                    <optgroup label="IP Operations">
+                        <option value="matches">Matches</option>
+                        <option value="matches_negated">Not Matches</option>
+                    </optgroup>
+                </template>
+            </select>
+        </div>
+    </div>
+
+    <!-- Condition Value for String/IP -->
+    <div x-show="!isListCondition && showConditionValue">
+        <label class="pc-internal-form-label">
+            <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
+        </label>
+        <div class="mt-2">
+            <input 
+                type="text" 
+                name="{{ .Const.ConditionValue }}" 
+                :placeholder="isIPCondition ? '192.168.1.0/24' : 'Mozilla/5.0'"
+                value="{{ .Params.FormData.ConditionValue }}"
+                class="w-full pc-internal-form-input-base pc-form-input-normal"
+            />
+        </div>
+    </div>
+
+    <!-- List Condition (Country Code) -->
+    <div x-show="isListCondition">
+        <label class="pc-internal-form-label">Country Selection</label>
+        <div class="mt-2">
+            <div class="flex gap-2 mb-2">
+                <button 
+                    type="button"
+                    @click="conditionNegated = false; conditionOperator = 'in'"
+                    :class="!conditionNegated ? 'bg-pclime-100 text-pclime-800 ring-pclime-600/20' : 'bg-gray-50 text-gray-600 ring-gray-500/10'"
+                    class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset"
+                >
+                    Include selected countries
+                </button>
+                <button 
+                    type="button"
+                    @click="conditionNegated = true; conditionOperator = 'in'"
+                    :class="conditionNegated ? 'bg-pclime-100 text-pclime-800 ring-pclime-600/20' : 'bg-gray-50 text-gray-600 ring-gray-500/10'"
+                    class="rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset"
+                >
+                    Exclude selected countries
+                </button>
+            </div>
+            
+            <div class="border border-gray-300 rounded-md p-3 max-h-64 overflow-y-auto">
+                {{ range .Params.Countries }}
+                <div class="flex items-center gap-2 py-1">
+                    <input 
+                        type="checkbox"
+                        :checked="isCountrySelected('{{ .Code }}')"
+                        @change="toggleCountry('{{ .Code }}')"
+                        class="pc-internal-form-checkbox"
+                        id="country-{{ .Code }}"
+                    />
+                    <label for="country-{{ .Code }}" class="text-sm text-gray-700 cursor-pointer flex-1">
+                        {{ .Name }}
+                    </label>
+                </div>
+                {{ end }}
+            </div>
+            
+            <!-- Hidden input to submit selected countries -->
+            <input 
+                type="hidden" 
+                name="{{ .Const.ConditionValue }}" 
+                :value="selectedCountries.join(',')"
+            />
+            
+            <!-- Hidden input for negation -->
+            <input 
+                type="hidden" 
+                name="{{ .Const.ConditionOperator }}" 
+                :value="conditionNegated ? 'in_negated' : 'in'"
+            />
+        </div>
+    </div>
+
+    <div class="border-t border-gray-200 pt-6">
+        <h3 class="text-base font-semibold text-gray-900 mb-4">Action</h3>
+        
+        <div>
+            <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action Type</label>
+            <div class="mt-2">
+                <select 
+                    name="{{ .Const.ActionProperty }}" 
+                    id="{{ .Const.ActionProperty }}"
+                    x-model="actionProperty"
+                    class="w-full pc-internal-form-select"
+                >
+                    <option value="difficulty_level_percent" {{ if eq .Params.FormData.ActionProperty "difficulty_level_percent" }}selected{{ end }}>Change Difficulty Level</option>
+                    <option value="http_request" {{ if eq .Params.FormData.ActionProperty "http_request" }}selected{{ end }}>Block HTTP Request</option>
+                    <option value="difficulty_growth" {{ if eq .Params.FormData.ActionProperty "difficulty_growth" }}selected{{ end }}>Change Difficulty Growth</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Action Value for Difficulty Percent -->
+        <div x-show="actionProperty === 'difficulty_level_percent'" class="mt-4">
+            <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Adjustment (%)</label>
+            <div class="mt-2">
+                <input 
+                    type="number" 
+                    name="{{ .Const.ActionValue }}" 
+                    id="{{ .Const.ActionValue }}"
+                    placeholder="0"
+                    min="-100"
+                    max="1000"
+                    value="{{ .Params.FormData.ActionValue }}"
+                    class="w-full pc-internal-form-input-base pc-form-input-normal"
+                />
+                <p class="mt-1 text-sm text-gray-500">Use positive values to increase difficulty (e.g., 50 for +50%) or negative values to decrease (e.g., -25 for -25%)</p>
+            </div>
+        </div>
+
+        <!-- Action Value for Block (checkbox) -->
+        <div x-show="actionProperty === 'http_request'" class="mt-4">
+            <div class="flex gap-3">
+                <div class="flex h-6 shrink-0 items-center">
+                    <div class="group grid size-4 grid-cols-1">
+                        <input 
+                            type="checkbox" 
+                            name="{{ .Const.ActionValue }}" 
+                            value="1"
+                            checked
+                            class="col-start-1 row-start-1 pc-internal-form-checkbox"
+                        />
+                        <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                            <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="text-sm/6">
+                    <label class="font-medium text-gray-900">Block HTTP request</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Value for Difficulty Growth -->
+        <div x-show="actionProperty === 'difficulty_growth'" class="mt-4">
+            <label for="{{ .Const.ActionValue }}-growth" class="pc-internal-form-label">Difficulty Growth</label>
+            <div class="mt-2">
+                <select 
+                    name="{{ .Const.ActionValue }}" 
+                    id="{{ .Const.ActionValue }}-growth"
+                    class="w-full pc-internal-form-select"
+                >
+                    <option value="0" {{ if eq .Params.FormData.ActionValue "0" }}selected{{ end }}>Constant (no growth)</option>
+                    <option value="1" {{ if eq .Params.FormData.ActionValue "1" }}selected{{ end }}>Slow</option>
+                    <option value="2" {{ if eq .Params.FormData.ActionValue "2" }}selected{{ end }}>Normal</option>
+                    <option value="3" {{ if eq .Params.FormData.ActionValue "3" }}selected{{ end }}>Fast</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex items-center justify-end mt-6 space-x-6">
+        <button
+            type="button"
+            onclick="window.history.go(-1); return false;"
+            class="pc-internal-form-button pc-internal-form-button-secondary"
+        >
+            Cancel
+        </button>
+
+        <button
+            type="submit"
+            class="pc-internal-form-button pc-internal-form-button-primary"
+            hx-indicator="#spinner"
+        >
+            <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Create Rule
+        </button>
+    </div>
+</form>

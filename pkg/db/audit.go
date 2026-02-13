@@ -614,3 +614,51 @@ type AuditLogAccess struct {
 	View       string `json:"view,omitempty"`
 	EntityName string `json:"name,omitempty"`
 }
+
+type AuditLogDifficultyRule struct {
+	Name                     string `json:"name,omitempty"`
+	PropertyID               int32  `json:"property_id,omitempty"`
+	OrgID                    int32  `json:"org_id,omitempty"`
+	Enabled                  bool   `json:"enabled"`
+	ConditionProperty        string `json:"condition_property,omitempty"`
+	ConditionOperator        string `json:"condition_operator,omitempty"`
+	ConditionOperatorNegated bool   `json:"condition_operator_negated"`
+	ConditionValueStr        string `json:"condition_value_str,omitempty"`
+	ConditionValueInt        int32  `json:"condition_value_int,omitempty"`
+	Position                 int32  `json:"position"`
+	ActionProperty           string `json:"action_property,omitempty"`
+	ActionValue              int32  `json:"action_value"`
+}
+
+func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRule {
+	if rule == nil {
+		return nil
+	}
+
+	event := &AuditLogDifficultyRule{
+		Name:                     rule.Name,
+		Enabled:                  rule.Enabled,
+		ConditionProperty:        string(rule.ConditionProperty),
+		ConditionOperator:        string(rule.ConditionOperator),
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+		Position:                 rule.Position,
+		ActionProperty:           string(rule.ActionProperty),
+		ActionValue:              rule.ActionValue,
+	}
+
+	if rule.PropertyID.Valid {
+		event.PropertyID = rule.PropertyID.Int32
+	}
+	if rule.OrgID.Valid {
+		event.OrgID = rule.OrgID.Int32
+	}
+	if rule.ConditionValueStr.Valid {
+		event.ConditionValueStr = rule.ConditionValueStr.String
+	}
+	if rule.ConditionValueInt.Valid {
+		event.ConditionValueInt = rule.ConditionValueInt.Int32
+	}
+
+	return event
+}
+

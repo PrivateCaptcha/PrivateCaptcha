@@ -54,5 +54,11 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
+	// Rules routes
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.getPropertyNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postPropertyNewRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.getOrgNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postOrgNewRule))
+
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
 }

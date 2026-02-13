@@ -46,10 +46,17 @@ const (
 	ParamPortalSolution   = "pc_portal_solution"
 	ParamTerms            = "terms"
 	ParamMaxReplayCount   = "max_replay_count"
-	ParamPage             = "page"
-	ParamPerPage          = "per_page"
-	ParamScope            = "scope"
-	All                   = "all"
+	ParamPage               = "page"
+	ParamPerPage            = "per_page"
+	ParamScope              = "scope"
+	ParamRuleName           = "rule_name"
+	ParamRuleEnabled        = "rule_enabled"
+	ParamConditionProperty  = "condition_property"
+	ParamConditionOperator  = "condition_operator"
+	ParamConditionValue     = "condition_value"
+	ParamActionProperty     = "action_property"
+	ParamActionValue        = "action_value"
+	All                     = "all"
 )
 
 var (

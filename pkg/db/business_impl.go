@@ -3064,6 +3064,27 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 	return result, nil
 }
 
+func (impl *BusinessStoreImpl) InsertDifficultyRule(ctx context.Context, params *dbgen.InsertDifficultyRuleParams) (*dbgen.DifficultyRule, error) {
+	rule, err := impl.querier.InsertDifficultyRule(ctx, *params)
+	if err != nil {
+		return nil, err
+	}
+
+	// Invalidate cache for the property or org
+	if rule.PropertyID.Valid {
+		propertyID := rule.PropertyID.Int32
+		_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+		_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+	}
+	if rule.OrgID.Valid {
+		orgID := rule.OrgID.Int32
+		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+	}
+
+	return &rule, nil
+}
+
 func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
 	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
 	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)

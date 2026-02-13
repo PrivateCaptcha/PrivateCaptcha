@@ -7,6 +7,8 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getDifficultyRulesByOrgIDs = `-- name: GetDifficultyRulesByOrgIDs :many
@@ -93,4 +95,79 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertDifficultyRule = `-- name: InsertDifficultyRule :one
+INSERT INTO backend.difficulty_rules (
+    name,
+    property_id,
+    org_id,
+    enabled,
+    condition_property,
+    condition_operator,
+    condition_operator_negated,
+    condition_value_str,
+    condition_value_int,
+    condition_value_separator,
+    position,
+    action_property,
+    action_value
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+)
+RETURNING id, name, property_id, org_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at
+`
+
+type InsertDifficultyRuleParams struct {
+	Name                     string                `db:"name" json:"name"`
+	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
+	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
+	Enabled                  bool                  `db:"enabled" json:"enabled"`
+	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
+	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
+	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
+	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
+	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
+	Position                 int32                 `db:"position" json:"position"`
+	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
+	ActionValue              int32                 `db:"action_value" json:"action_value"`
+}
+
+func (q *Queries) InsertDifficultyRule(ctx context.Context, arg *InsertDifficultyRuleParams) (*DifficultyRule, error) {
+	row := q.db.QueryRow(ctx, insertDifficultyRule,
+		arg.Name,
+		arg.PropertyID,
+		arg.OrgID,
+		arg.Enabled,
+		arg.ConditionProperty,
+		arg.ConditionOperator,
+		arg.ConditionOperatorNegated,
+		arg.ConditionValueStr,
+		arg.ConditionValueInt,
+		arg.ConditionValueSeparator,
+		arg.Position,
+		arg.ActionProperty,
+		arg.ActionValue,
+	)
+	var i DifficultyRule
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PropertyID,
+		&i.OrgID,
+		&i.Enabled,
+		&i.ConditionProperty,
+		&i.ConditionOperator,
+		&i.ConditionOperatorNegated,
+		&i.ConditionValueStr,
+		&i.ConditionValueInt,
+		&i.ConditionValueSeparator,
+		&i.Position,
+		&i.ActionProperty,
+		&i.ActionValue,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
 }

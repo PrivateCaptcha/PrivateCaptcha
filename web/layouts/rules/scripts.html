@@ -1,0 +1,61 @@
+<script>
+function ruleFormData() {
+    return {
+        conditionProperty: '{{ if .Params.FormData.ConditionProperty }}{{ .Params.FormData.ConditionProperty }}{{ else }}user_agent{{ end }}',
+        conditionOperator: '{{ if .Params.FormData.ConditionOperator }}{{ .Params.FormData.ConditionOperator }}{{ else }}equals{{ end }}',
+        conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else }}false{{ end }},
+        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}difficulty_level_percent{{ end }}',
+        selectedCountries: {{ if .Params.FormData.SelectedCountries }}{{ .Params.FormData.SelectedCountries }}{{ else }}[]{{ end }},
+        
+        get showConditionValue() {
+            return this.conditionOperator !== 'empty';
+        },
+        
+        get isStringCondition() {
+            return this.conditionProperty === 'user_agent';
+        },
+        
+        get isListCondition() {
+            return this.conditionProperty === 'country_code';
+        },
+        
+        get isIPCondition() {
+            return this.conditionProperty === 'ip_address';
+        },
+        
+        get availableOperators() {
+            if (this.isListCondition) {
+                return ['in'];
+            } else if (this.isIPCondition) {
+                return ['matches'];
+            } else {
+                return ['equals', 'contains', 'empty'];
+            }
+        },
+        
+        init() {
+            // Update operator when property changes
+            this.$watch('conditionProperty', (value) => {
+                const operators = this.availableOperators;
+                if (!operators.includes(this.conditionOperator)) {
+                    this.conditionOperator = operators[0];
+                    this.conditionNegated = false;
+                }
+            });
+        },
+        
+        toggleCountry(code) {
+            const index = this.selectedCountries.indexOf(code);
+            if (index > -1) {
+                this.selectedCountries.splice(index, 1);
+            } else {
+                this.selectedCountries.push(code);
+            }
+        },
+        
+        isCountrySelected(code) {
+            return this.selectedCountries.includes(code);
+        }
+    };
+}
+</script>

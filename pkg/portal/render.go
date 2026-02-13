@@ -72,6 +72,13 @@ type RenderConstants struct {
 	PropertiesEndpoint         string
 	All                        string
 	RulesEndpoint              string
+	RuleName                   string
+	RuleEnabled                string
+	ConditionProperty          string
+	ConditionOperator          string
+	ConditionValue             string
+	ActionProperty             string
+	ActionValue                string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -135,6 +142,13 @@ func NewRenderConstants() *RenderConstants {
 		PropertiesEndpoint:         common.PropertiesEndpoint,
 		All:                        common.All,
 		RulesEndpoint:              common.RulesEndpoint,
+		RuleName:                   common.ParamRuleName,
+		RuleEnabled:                common.ParamRuleEnabled,
+		ConditionProperty:          common.ParamConditionProperty,
+		ConditionOperator:          common.ParamConditionOperator,
+		ConditionValue:             common.ParamConditionValue,
+		ActionProperty:             common.ParamActionProperty,
+		ActionValue:                common.ParamActionValue,
 	}
 }
 
