@@ -142,8 +142,6 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 
 	if property != nil {
 		renderCtx.Property = propertyToUserProperty(property, s.IDHasher)
-	} else {
-		renderCtx.Property = &userProperty{}
 	}
 
 	if org != nil {
@@ -152,8 +150,6 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 			ID:    s.IDHasher.Encrypt(int(org.ID)),
 			Level: "",
 		}
-	} else {
-		renderCtx.CurrentOrg = &userOrg{}
 	}
 
 	renderCtx.populateRuleConstants()
