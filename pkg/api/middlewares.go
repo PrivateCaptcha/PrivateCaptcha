@@ -396,19 +396,6 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	return anyError
 }
 
-func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {
-	timer := time.NewTimer(am.backpressureTimeout)
-	defer timer.Stop()
-
-	select {
-	case am.RulesChan <- propertyID:
-	case <-ctx.Done():
-		slog.WarnContext(ctx, "Context cancelled for property rules refresh", "propertyID", propertyID)
-	case <-timer.C:
-		am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
-	}
-}
-
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
 	return len(origin) > 0, nil
 }
