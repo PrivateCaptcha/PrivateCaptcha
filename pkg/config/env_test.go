@@ -17,11 +17,11 @@ func TestEnvConfigValueUpdate(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name           string
-		key            common.ConfigKey
-		envValue       string
-		expectedValue  string
-		expectedError  bool
+		name          string
+		key           common.ConfigKey
+		envValue      string
+		expectedValue string
+		expectedError bool
 	}{
 		{"valid_key_with_value", common.StageKey, "production", "production", false},
 		{"valid_key_empty_value", common.StageKey, "", "", true},

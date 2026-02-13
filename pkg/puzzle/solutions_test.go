@@ -1,8 +1,8 @@
 package puzzle
 
 import (
-	"encoding/binary"
 	"encoding/base64"
+	"encoding/binary"
 	randv2 "math/rand/v2"
 	"testing"
 	"time"

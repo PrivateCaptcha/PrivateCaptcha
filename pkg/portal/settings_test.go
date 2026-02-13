@@ -522,9 +522,9 @@ func TestDeleteAccount(t *testing.T) {
 }
 
 type accountStatsSuiteResult struct {
-	user    *dbgen.User
-	srv     *http.ServeMux
-	cookie  *http.Cookie
+	user   *dbgen.User
+	srv    *http.ServeMux
+	cookie *http.Cookie
 }
 
 func accountStatsSuite(t *testing.T, ctx context.Context) *accountStatsSuiteResult {

@@ -259,9 +259,9 @@ func TestMemoryTimeSeriesRetrievePropertyStatsByPeriodAllPeriods(t *testing.T) {
 
 	// Add records at various times to test different period aggregations
 	accessRecords := []*common.AccessRecord{
-		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-30 * time.Minute)},  // Today
-		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-2 * time.Hour)},     // Today
-		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-3 * 24 * time.Hour)}, // This week
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-30 * time.Minute)},    // Today
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-2 * time.Hour)},       // Today
+		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-3 * 24 * time.Hour)},  // This week
 		{OrgID: 1, PropertyID: 1, Timestamp: now.Add(-15 * 24 * time.Hour)}, // This month
 	}
 	ts.WriteAccessLogBatch(ctx, accessRecords)

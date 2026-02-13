@@ -23,9 +23,9 @@ var (
 )
 
 const (
-	registerContentsTemplate     = "login/register-contents.html"
-	userNameErrorMessage         = "Name contains invalid characters."
-	emailAlreadyRegisteredError  = "Such email is already registered. Login instead?"
+	registerContentsTemplate    = "login/register-contents.html"
+	userNameErrorMessage        = "Name contains invalid characters."
+	emailAlreadyRegisteredError = "Such email is already registered. Login instead?"
 )
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
