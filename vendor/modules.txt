@@ -1,9 +1,9 @@
-# github.com/ClickHouse/ch-go v0.69.0
-## explicit; go 1.24.0
+# github.com/ClickHouse/ch-go v0.71.0
+## explicit; go 1.24.1
 github.com/ClickHouse/ch-go/compress
 github.com/ClickHouse/ch-go/proto
-# github.com/ClickHouse/clickhouse-go/v2 v2.42.0
-## explicit; go 1.24.0
+# github.com/ClickHouse/clickhouse-go/v2 v2.43.0
+## explicit; go 1.24.1
 github.com/ClickHouse/clickhouse-go/v2
 github.com/ClickHouse/clickhouse-go/v2/contributors
 github.com/ClickHouse/clickhouse-go/v2/ext
@@ -107,8 +107,8 @@ github.com/jpillora/backoff
 # github.com/justinas/alice v1.2.0
 ## explicit; go 1.12
 github.com/justinas/alice
-# github.com/klauspost/compress v1.18.0
-## explicit; go 1.22
+# github.com/klauspost/compress v1.18.3
+## explicit; go 1.23
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
@@ -148,8 +148,8 @@ github.com/munnerz/goautoneg
 # github.com/paulmach/orb v0.12.0
 ## explicit; go 1.15
 github.com/paulmach/orb
-# github.com/pierrec/lz4/v4 v4.1.22
-## explicit; go 1.14
+# github.com/pierrec/lz4/v4 v4.1.25
+## explicit; go 1.17
 github.com/pierrec/lz4/v4
 github.com/pierrec/lz4/v4/internal/lz4block
 github.com/pierrec/lz4/v4/internal/lz4errors
