@@ -21,7 +21,12 @@ if [ -n "$UNFORMATTED" ]; then
     exit 1
 fi
 
-PACKAGES=($(printf "%s\n" "${STAGED_GO_FILES[@]}" | xargs -n1 dirname | sort -u))
+mapfile -t PACKAGES < <(
+  printf "%s\n" "${STAGED_GO_FILES[@]}" \
+    | xargs -n1 dirname \
+    | sort -u \
+    | sed 's|^|./|'
+)
 if ! go vet -tags 'enterprise' $PACKAGES; then
     echo "'go vet' failed"
     exit 1
