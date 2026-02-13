@@ -62,33 +62,33 @@ func stringMatcher(extract func(ri *RequestInfo) string, value string, operator 
 }
 
 func ipAddressMatchesMatcher(prefix netip.Prefix, negated bool) matcherFunc {
-	baseMatcher := func(ri *RequestInfo) bool {
+	if negated {
+		return func(ri *RequestInfo) bool {
+			ip := ri.IPAddr()
+			if !ip.IsValid() {
+				return false
+			}
+			return !prefix.Contains(ip)
+		}
+	}
+	
+	return func(ri *RequestInfo) bool {
 		ip := ri.IPAddr()
 		if !ip.IsValid() {
 			return false
 		}
 		return prefix.Contains(ip)
 	}
-	
-	if negated {
-		return func(ri *RequestInfo) bool {
-			return !baseMatcher(ri)
-		}
-	}
-	
-	return baseMatcher
 }
 
 func ipAddressEmptyMatcher(negated bool) matcherFunc {
-	baseMatcher := func(ri *RequestInfo) bool {
-		return !ri.IPAddr().IsValid()
-	}
-	
 	if negated {
 		return func(ri *RequestInfo) bool {
-			return !baseMatcher(ri)
+			return ri.IPAddr().IsValid()
 		}
 	}
 	
-	return baseMatcher
+	return func(ri *RequestInfo) bool {
+		return !ri.IPAddr().IsValid()
+	}
 }
