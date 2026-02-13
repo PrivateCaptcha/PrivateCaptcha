@@ -10,6 +10,10 @@ TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 GOPATH := $(shell go env GOPATH)
 
+setup-git:
+	git config core.hooksPath scripts/hooks
+	git config commit.cleanup whitespace
+
 lint:
 	$(GOPATH)/bin/golangci-lint run
 
