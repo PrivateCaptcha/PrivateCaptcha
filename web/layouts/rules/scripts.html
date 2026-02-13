@@ -1,11 +1,11 @@
 <script>
 function ruleFormData() {
     return {
-        conditionProperty: '{{ if .Params.FormData.ConditionProperty }}{{ .Params.FormData.ConditionProperty }}{{ else }}user_agent{{ end }}',
-        conditionOperator: '{{ if .Params.FormData.ConditionOperator }}{{ .Params.FormData.ConditionOperator }}{{ else }}equals{{ end }}',
-        conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else }}false{{ end }},
-        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}difficulty_level_percent{{ end }}',
-        selectedCountries: {{ if .Params.FormData.SelectedCountries }}{{ .Params.FormData.SelectedCountries }}{{ else }}[]{{ end }},
+        conditionProperty: 'user_agent',
+        conditionOperator: 'equals',
+        conditionNegated: false,
+        actionProperty: 'difficulty_level_percent',
+        selectedCountries: [],
         
         get showConditionValue() {
             return this.conditionOperator !== 'empty';

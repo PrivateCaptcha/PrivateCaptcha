@@ -89,6 +89,7 @@
                 name="{{ .Const.ConditionOperator }}" 
                 id="{{ .Const.ConditionOperator }}"
                 x-model="conditionOperator"
+                :disabled="isListCondition"
                 class="w-full pc-internal-form-select"
             >
                 <!-- String operators (user_agent) -->
