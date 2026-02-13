@@ -4,7 +4,7 @@ CREATE TYPE backend.rule_action_property AS ENUM ('difficulty_level_percent', 'h
 
 CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255),
+    name VARCHAR(255) NOT NULL,
     property_id INT REFERENCES backend.properties(id) ON DELETE CASCADE,
     org_id INT REFERENCES backend.organizations(id) ON DELETE CASCADE,
     enabled BOOL NOT NULL DEFAULT TRUE,

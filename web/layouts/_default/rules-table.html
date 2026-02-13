@@ -5,17 +5,18 @@
         <div class="min-w-0">
             <div class="flex items-start gap-x-3">
                 <p class="text-sm/6 text-gray-900 {{if .Enabled }} font-semibold{{ end }}">{{.Position}}. {{ .Name }}</p>
-                {{- if .Enabled }}
-                <p class="mt-0.5 rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Enabled</p>
-                {{- else }}
-                <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
-                {{- end }}
             </div>
             <div class="mt-2.5 ml-4 flex items-center gap-x-2 text-xs/5 {{if .Enabled }}text-gray-500{{else}}text-gray-400{{end}}">
                 <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ConditionProperty}}</span> <strong>{{.ConditionOperator}}</strong>{{ if .ConditionValue}} <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ConditionValue}}</span>{{end}}, then <strong>{{.ActionAction}}</strong> <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ActionProperty}}</span>{{ if .ActionValue }} to <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ActionValue}}</span>{{ end }}</p>
             </div>
         </div>
-        <div class="flex flex-none items-center gap-x-4">
+        <div class="flex flex-none items-center gap-x-10">
+            {{- if .Enabled }}
+            <p class="mt-0.5 rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Enabled</p>
+            {{- else }}
+            <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
+            {{- end }}
+
             <a href="#"
                 hx-disabled-elt="this"
                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
