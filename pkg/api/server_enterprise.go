@@ -13,6 +13,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/justinas/alice"
 	easyjson "github.com/mailru/easyjson"
@@ -191,4 +192,47 @@ func (s *Server) sendAPIErrorResponse(ctx context.Context, code common.StatusCod
 	slog.WarnContext(ctx, "Returned API error response", "code", int(code))
 
 	s.Metrics.ObserveApiError(r.URL.Path, r.Method, int(code))
+}
+
+func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Property) *rules.RulesPair {
+	impl := s.BusinessDB.Impl()
+	needsBackfill := false
+
+	var propertyRules *rules.CompiledRules
+	if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
+		propertyRules = cached
+	} else if err == db.ErrCacheMiss {
+		needsBackfill = true
+	}
+
+	var orgRules *rules.CompiledRules
+	if property.OrgID.Valid {
+		if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
+			orgRules = cached
+		} else if err == db.ErrCacheMiss {
+			needsBackfill = true
+		}
+	}
+
+	if needsBackfill {
+		s.Auth.RefreshPropertyRules(ctx, property.ID)
+	}
+
+	return &rules.RulesPair{
+		PropertyRules: propertyRules,
+		OrgRules:      orgRules,
+	}
+}
+
+func (am *AuthMiddleware) RefreshPropertyRules(ctx context.Context, propertyID int32) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case am.RulesChan <- propertyID:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for property rules refresh", "propertyID", propertyID)
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.PropertyRulesEventType)
+	}
 }

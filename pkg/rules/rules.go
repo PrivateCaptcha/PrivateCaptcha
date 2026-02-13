@@ -87,7 +87,7 @@ func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Pr
 }
 
 func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
-	if rp == nil {
+	if (rp == nil) || (ri == nil) {
 		return false
 	}
 
