@@ -18,6 +18,10 @@ var (
 	ErrInvalidIPValue           = errors.New("invalid IP address or prefix value")
 )
 
+const (
+	defaultSeparator = ","
+)
+
 type Rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(p difficulty.Property) difficulty.Property
@@ -210,7 +214,7 @@ func buildMatcher(rule *dbgen.DifficultyRule) (baseMatcher, error) {
 		case dbgen.RuleConditionOperatorContains:
 			bm.conditionValueLower = strings.ToLower(value)
 		case dbgen.RuleConditionOperatorIn:
-			sep := ","
+			sep := defaultSeparator
 			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
 				sep = rule.ConditionValueSeparator.String
 			}

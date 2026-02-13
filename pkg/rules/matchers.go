@@ -7,9 +7,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-// extractFunc extracts a string value from RequestInfo for matching
-type extractFunc func(ri *RequestInfo) string
-
 // baseMatcher contains the core matching logic without allocations
 type baseMatcher struct {
 	conditionProperty         dbgen.RuleConditionProperty
