@@ -7,20 +7,23 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-// baseMatcher contains the core matching logic without allocations
-type baseMatcher struct {
-	conditionProperty         dbgen.RuleConditionProperty
-	conditionOperator         dbgen.RuleConditionOperator
-	conditionOperatorNegated  bool
-	conditionValueStr         string
-	conditionValueLower       string  // Pre-lowercased for Contains/In operators
-	conditionValueItems       []string // Pre-split items for In operator
-	conditionValueIPPrefix    netip.Prefix
+// matcher is the interface that all specialized matchers implement
+type matcher interface {
+	matches(ri *RequestInfo) bool
+}
+
+// stringMatcher handles string-based matching (UserAgent, CountryCode)
+type stringMatcher struct {
+	conditionProperty    dbgen.RuleConditionProperty
+	conditionOperator    dbgen.RuleConditionOperator
+	conditionValueStr    string
+	conditionValueItems  []string // Pre-split items for In operator
+	conditionOperatorNegated bool
 }
 
 // extract returns the string value from RequestInfo based on the condition property
-func (bm *baseMatcher) extract(ri *RequestInfo) string {
-	switch bm.conditionProperty {
+func (sm *stringMatcher) extract(ri *RequestInfo) string {
+	switch sm.conditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent:
 		return ri.UserAgent()
 	case dbgen.RuleConditionPropertyCountryCode:
@@ -31,57 +34,81 @@ func (bm *baseMatcher) extract(ri *RequestInfo) string {
 }
 
 // matches performs the actual matching logic
-func (bm *baseMatcher) matches(ri *RequestInfo) bool {
+func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 	var result bool
 	
-	switch bm.conditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
-		result = bm.matchString(ri)
-	case dbgen.RuleConditionPropertyIPAddress:
-		result = bm.matchIPAddress(ri)
+	switch sm.conditionOperator {
+	case dbgen.RuleConditionOperatorEquals:
+		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
+	case dbgen.RuleConditionOperatorContains:
+		result = containsCaseInsensitive(sm.extract(ri), sm.conditionValueStr)
+	case dbgen.RuleConditionOperatorEmpty:
+		result = len(sm.extract(ri)) == 0
+	case dbgen.RuleConditionOperatorIn:
+		extractedValue := sm.extract(ri)
+		for _, item := range sm.conditionValueItems {
+			if strings.EqualFold(item, extractedValue) {
+				result = true
+				break
+			}
+		}
 	default:
-		result = false
+		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
 	}
 	
-	if bm.conditionOperatorNegated {
+	if sm.conditionOperatorNegated {
 		return !result
 	}
 	return result
 }
 
-// matchString handles string-based matching
-func (bm *baseMatcher) matchString(ri *RequestInfo) bool {
-	switch bm.conditionOperator {
-	case dbgen.RuleConditionOperatorEquals:
-		return strings.EqualFold(bm.extract(ri), bm.conditionValueStr)
-	case dbgen.RuleConditionOperatorContains:
-		return strings.Contains(strings.ToLower(bm.extract(ri)), bm.conditionValueLower)
-	case dbgen.RuleConditionOperatorEmpty:
-		return len(bm.extract(ri)) == 0
-	case dbgen.RuleConditionOperatorIn:
-		v := strings.ToLower(bm.extract(ri))
-		for _, item := range bm.conditionValueItems {
-			if item == v {
-				return true
-			}
-		}
-		return false
-	default:
-		return strings.EqualFold(bm.extract(ri), bm.conditionValueStr)
+// containsCaseInsensitive checks if s contains substr in a case-insensitive manner
+func containsCaseInsensitive(s, substr string) bool {
+	// For contains, we need to check if substr appears anywhere in s
+	// We'll iterate through s and check each position
+	sLen := len(s)
+	substrLen := len(substr)
+	
+	if substrLen == 0 {
+		return true
 	}
+	if substrLen > sLen {
+		return false
+	}
+	
+	for i := 0; i <= sLen-substrLen; i++ {
+		if strings.EqualFold(s[i:i+substrLen], substr) {
+			return true
+		}
+	}
+	return false
 }
 
-// matchIPAddress handles IP address matching
-func (bm *baseMatcher) matchIPAddress(ri *RequestInfo) bool {
+// ipMatcher handles IP address matching
+type ipMatcher struct {
+	conditionOperator        dbgen.RuleConditionOperator
+	conditionValueIPPrefix   netip.Prefix
+	conditionOperatorNegated bool
+}
+
+// matches performs IP address matching
+func (im *ipMatcher) matches(ri *RequestInfo) bool {
 	ip := ri.IPAddr()
+	var result bool
 	
-	switch bm.conditionOperator {
+	switch im.conditionOperator {
 	case dbgen.RuleConditionOperatorEmpty:
-		return !ip.IsValid()
+		result = !ip.IsValid()
 	default:
 		if !ip.IsValid() {
-			return false
+			result = false
+		} else {
+			result = im.conditionValueIPPrefix.Contains(ip)
 		}
-		return bm.conditionValueIPPrefix.Contains(ip)
 	}
+	
+	if im.conditionOperatorNegated {
+		return !result
+	}
+	return result
 }

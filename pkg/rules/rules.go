@@ -132,12 +132,12 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
-	baseMatcher
+	matcher     matcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
-	return r.baseMatcher.matches(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
@@ -156,12 +156,12 @@ func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
-	baseMatcher
-	growth dbgen.DifficultyGrowth
+	matcher matcher
+	growth  dbgen.DifficultyGrowth
 }
 
 func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
-	return r.baseMatcher.matches(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
@@ -171,11 +171,11 @@ func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property 
 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
-	baseMatcher
+	matcher matcher
 }
 
 func (r *blockRequestRule) Matches(ri *RequestInfo) bool {
-	return r.baseMatcher.matches(ri)
+	return r.matcher.matches(ri)
 }
 
 func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
@@ -197,55 +197,55 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) (baseMatcher, error) {
-	bm := baseMatcher{
-		conditionProperty:        rule.ConditionProperty,
-		conditionOperator:        rule.ConditionOperator,
-		conditionOperatorNegated: rule.ConditionOperatorNegated,
-	}
-
+func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	switch rule.ConditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
 		value := rule.ConditionValueStr.String
-		bm.conditionValueStr = value
+		sm := &stringMatcher{
+			conditionProperty:        rule.ConditionProperty,
+			conditionOperator:        rule.ConditionOperator,
+			conditionValueStr:        value,
+			conditionOperatorNegated: rule.ConditionOperatorNegated,
+		}
 		
 		// Pre-process values for optimized matching
-		switch rule.ConditionOperator {
-		case dbgen.RuleConditionOperatorContains:
-			bm.conditionValueLower = strings.ToLower(value)
-		case dbgen.RuleConditionOperatorIn:
+		if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
 			sep := defaultSeparator
 			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
 				sep = rule.ConditionValueSeparator.String
 			}
 			items := strings.Split(value, sep)
 			for i, item := range items {
-				items[i] = strings.ToLower(strings.TrimSpace(item))
+				items[i] = strings.TrimSpace(item)
 			}
-			bm.conditionValueItems = items
+			sm.conditionValueItems = items
 		}
 		
-		return bm, nil
+		return sm, nil
 		
 	case dbgen.RuleConditionPropertyIPAddress:
-		if rule.ConditionOperator == dbgen.RuleConditionOperatorEmpty {
-			return bm, nil
+		im := &ipMatcher{
+			conditionOperator:        rule.ConditionOperator,
+			conditionOperatorNegated: rule.ConditionOperatorNegated,
 		}
 		
-		value := rule.ConditionValueStr.String
-		prefix, err := netip.ParsePrefix(value)
-		if err != nil {
-			addr, addrErr := netip.ParseAddr(value)
-			if addrErr != nil {
-				return bm, ErrInvalidIPValue
+		if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
+			value := rule.ConditionValueStr.String
+			prefix, err := netip.ParsePrefix(value)
+			if err != nil {
+				addr, addrErr := netip.ParseAddr(value)
+				if addrErr != nil {
+					return nil, ErrInvalidIPValue
+				}
+				prefix = netip.PrefixFrom(addr, addr.BitLen())
 			}
-			prefix = netip.PrefixFrom(addr, addr.BitLen())
+			im.conditionValueIPPrefix = prefix
 		}
-		bm.conditionValueIPPrefix = prefix
-		return bm, nil
+		
+		return im, nil
 		
 	default:
-		return bm, ErrUnknownConditionProperty
+		return nil, ErrUnknownConditionProperty
 	}
 }
 
@@ -258,17 +258,17 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
 		return &difficultyLevelRule{
-			baseMatcher: matcher,
+			matcher:     matcher,
 			percentDiff: int16(rule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
-			baseMatcher: matcher,
+			matcher: matcher,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
-			baseMatcher: matcher,
-			growth:      growthFromInt(rule.ActionValue),
+			matcher: matcher,
+			growth:  growthFromInt(rule.ActionValue),
 		}, nil
 	default:
 		return nil, ErrUnknownActionProperty
