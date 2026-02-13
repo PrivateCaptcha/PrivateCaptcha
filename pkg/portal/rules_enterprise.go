@@ -64,20 +64,25 @@ func getAllCountries() []CountryOption {
 	return options
 }
 
-func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.RedirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, err
 	}
 
-	property := ctx.Value(propertyContextKey).(*dbgen.Property)
-	org := ctx.Value(orgContextKey).(*dbgen.Organization)
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		return nil, err
+	}
 
 	if !s.checkUserOrgAccess(user, org) {
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := &newRuleRenderContext{
@@ -92,22 +97,23 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 		PropertyID: property.ID,
 	}
 
-	s.render(w, r, propertyNewRuleTemplate, renderCtx)
+	return &ViewModel{Model: renderCtx, View: propertyNewRuleTemplate}, nil
 }
 
-func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.RedirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, err
 	}
 
-	org := ctx.Value(orgContextKey).(*dbgen.Organization)
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
 
 	if !s.checkUserOrgAccess(user, org) {
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := &newRuleRenderContext{
@@ -122,7 +128,7 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) {
 		OrgID:     org.ID,
 	}
 
-	s.render(w, r, orgNewRuleTemplate, renderCtx)
+	return &ViewModel{Model: renderCtx, View: orgNewRuleTemplate}, nil
 }
 
 func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
@@ -133,8 +139,17 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	property := ctx.Value(propertyContextKey).(*dbgen.Property)
-	org := ctx.Value(orgContextKey).(*dbgen.Organization)
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
 
 	if !s.checkUserOrgAccess(user, org) {
 		s.RedirectError(http.StatusForbidden, w, r)
@@ -176,7 +191,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record audit log
-	s.RecordAuditLog(ctx, &common.AuditLogEvent{
+	s.Store.AuditLog().RecordEvent(ctx, &common.AuditLogEvent{
 		UserID:    user.ID,
 		Action:    common.AuditLogActionCreate,
 		EntityID:  int64(insertedRule.ID),
@@ -196,7 +211,11 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org := ctx.Value(orgContextKey).(*dbgen.Organization)
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
 
 	if !s.checkUserOrgAccess(user, org) {
 		s.RedirectError(http.StatusForbidden, w, r)
@@ -238,7 +257,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record audit log
-	s.RecordAuditLog(ctx, &common.AuditLogEvent{
+	s.Store.AuditLog().RecordEvent(ctx, &common.AuditLogEvent{
 		UserID:    user.ID,
 		Action:    common.AuditLogActionCreate,
 		EntityID:  int64(insertedRule.ID),

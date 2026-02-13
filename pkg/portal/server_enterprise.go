@@ -56,9 +56,9 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 
 	// Rules routes
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.getPropertyNewRule))
-	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postPropertyNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postPropertyNewRule))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.getOrgNewRule))
-	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postOrgNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postOrgNewRule))
 
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
 }
