@@ -1,0 +1,60 @@
+<script>
+function ruleFormData() {
+    return {
+        conditionProperty: '{{ index .Params.ConditionProperties 0 }}',
+        conditionOperator: '{{ index .Params.StringOperators 0 }}',
+        conditionNegated: false,
+        actionProperty: '{{ index .Params.ActionProperties 0 }}',
+        selectedCountries: [],
+        
+        get showConditionValue() {
+            return this.conditionOperator !== '{{ .Params.OperatorEmpty }}';
+        },
+        
+        get isStringCondition() {
+            return this.conditionProperty === '{{ .Params.ConditionUserAgent }}';
+        },
+        
+        get isListCondition() {
+            return this.conditionProperty === '{{ .Params.ConditionCountryCode }}';
+        },
+        
+        get isIPCondition() {
+            return this.conditionProperty === '{{ .Params.ConditionIPAddress }}';
+        },
+        
+        get availableOperators() {
+            if (this.isListCondition) {
+                return ['{{ .Params.OperatorIn }}'];
+            } else if (this.isIPCondition) {
+                return ['{{ .Params.OperatorMatches }}'];
+            } else {
+                return ['{{ .Params.OperatorEquals }}', '{{ .Params.OperatorContains }}', '{{ .Params.OperatorEmpty }}'];
+            }
+        },
+        
+        init() {
+            this.$watch('conditionProperty', (value) => {
+                const operators = this.availableOperators;
+                if (!operators.includes(this.conditionOperator)) {
+                    this.conditionOperator = operators[0];
+                    this.conditionNegated = false;
+                }
+            });
+        },
+        
+        toggleCountry(code) {
+            const index = this.selectedCountries.indexOf(code);
+            if (index > -1) {
+                this.selectedCountries.splice(index, 1);
+            } else {
+                this.selectedCountries.push(code);
+            }
+        },
+        
+        isCountrySelected(code) {
+            return this.selectedCountries.includes(code);
+        }
+    };
+}
+</script>

@@ -619,15 +619,15 @@ type AuditLogDifficultyRule struct {
 	Name                     string `json:"name,omitempty"`
 	PropertyID               int32  `json:"property_id,omitempty"`
 	OrgID                    int32  `json:"org_id,omitempty"`
-	Enabled                  bool   `json:"enabled"`
 	ConditionProperty        string `json:"condition_property,omitempty"`
 	ConditionOperator        string `json:"condition_operator,omitempty"`
-	ConditionOperatorNegated bool   `json:"condition_operator_negated"`
 	ConditionValueStr        string `json:"condition_value_str,omitempty"`
 	ConditionValueInt        int32  `json:"condition_value_int,omitempty"`
-	Position                 int32  `json:"position"`
+	Position                 int32  `json:"position,omitempty"`
 	ActionProperty           string `json:"action_property,omitempty"`
-	ActionValue              int32  `json:"action_value"`
+	ActionValue              int32  `json:"action_value,omitempty"`
+	Enabled                  bool   `json:"enabled,omitempty"`
+	ConditionOperatorNegated bool   `json:"condition_operator_negated,omitempty"`
 }
 
 func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRule {

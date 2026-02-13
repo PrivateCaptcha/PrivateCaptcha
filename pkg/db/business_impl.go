@@ -3064,7 +3064,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 	return result, nil
 }
 
-func (impl *BusinessStoreImpl) InsertDifficultyRule(ctx context.Context, params *dbgen.InsertDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if params == nil {
 		return nil, nil, ErrInvalidInput
 	}
@@ -3073,13 +3073,13 @@ func (impl *BusinessStoreImpl) InsertDifficultyRule(ctx context.Context, params 
 		return nil, nil, ErrMaintenance
 	}
 
-	rule, err := impl.querier.InsertDifficultyRule(ctx, params)
+	rule, err := impl.querier.CreateDifficultyRule(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to create difficulty rule", common.ErrAttr(err))
 		return nil, nil, err
 	}
 
-	slog.InfoContext(ctx, "Inserted difficulty rule", "ruleID", rule.ID, "name", rule.Name)
+	slog.InfoContext(ctx, "Created difficulty rule", "ruleID", rule.ID, "name", rule.Name)
 
 	// Invalidate cache for the property or org
 	if rule.PropertyID.Valid {
@@ -3094,6 +3094,8 @@ func (impl *BusinessStoreImpl) InsertDifficultyRule(ctx context.Context, params 
 	}
 
 	auditEvent := &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionCreate,
 		EntityID:  int64(rule.ID),
 		TableName: TableNameDifficultyRules,
 		NewValue:  NewAuditLogDifficultyRule(rule),

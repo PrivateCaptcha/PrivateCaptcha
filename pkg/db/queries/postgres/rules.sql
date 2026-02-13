@@ -8,7 +8,7 @@ SELECT dr.* FROM backend.difficulty_rules dr
 WHERE dr.org_id = ANY($1::INT[]) AND dr.property_id IS NULL
 ORDER BY dr.org_id, dr.position ASC;
 
--- name: InsertDifficultyRule :one
+-- name: CreateDifficultyRule :one
 INSERT INTO backend.difficulty_rules (
     name,
     property_id,

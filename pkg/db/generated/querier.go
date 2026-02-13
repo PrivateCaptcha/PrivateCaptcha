@@ -16,6 +16,7 @@ type Querier interface {
 	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
 	CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
+	CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error)
 	CreateNotificationTemplate(ctx context.Context, arg *CreateNotificationTemplateParams) (*NotificationTemplate, error)
 	CreateOrganization(ctx context.Context, arg *CreateOrganizationParams) (*Organization, error)
 	CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error)
@@ -75,7 +76,6 @@ type Querier interface {
 	GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error)
 	GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error)
 	GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error)
-	InsertDifficultyRule(ctx context.Context, arg *InsertDifficultyRuleParams) (*DifficultyRule, error)
 	InsertLock(ctx context.Context, arg *InsertLockParams) (*Lock, error)
 	InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error)
 	InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error)
