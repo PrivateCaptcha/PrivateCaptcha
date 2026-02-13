@@ -51,7 +51,7 @@
                     <a type="button"
                         href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .Const.NewEndpoint }}"
                         hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .Const.NewEndpoint }}"
-                        hx-target="#org-tabs"
+                        hx-target="#rules-host"
                         hx-swap="innerHTML"
                         class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300">
                         <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -76,7 +76,7 @@
 <div class="pt-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
 {{end}}
 
-<div class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
+<div id="rules-host" class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
     <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             {{ template "rules-table.html" . }}

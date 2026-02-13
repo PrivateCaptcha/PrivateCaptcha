@@ -5,8 +5,6 @@
     {{template "warning-message.html" .Params.WarningMessage}}
     {{- end -}}
 
-    <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.CSRFToken }}" />
-
     <div>
         <label for="{{ .Const.RuleName }}" class="pc-internal-form-label">Rule Name</label>
         <div class="mt-2">
@@ -265,3 +263,64 @@
         </button>
     </div>
 </form>
+
+<script>
+function ruleFormData() {
+    return {
+        conditionProperty: 'user_agent',
+        conditionOperator: 'equals',
+        conditionNegated: false,
+        actionProperty: 'difficulty_level_percent',
+        selectedCountries: [],
+        
+        get showConditionValue() {
+            return this.conditionOperator !== 'empty';
+        },
+        
+        get isStringCondition() {
+            return this.conditionProperty === 'user_agent';
+        },
+        
+        get isListCondition() {
+            return this.conditionProperty === 'country_code';
+        },
+        
+        get isIPCondition() {
+            return this.conditionProperty === 'ip_address';
+        },
+        
+        get availableOperators() {
+            if (this.isListCondition) {
+                return ['in'];
+            } else if (this.isIPCondition) {
+                return ['matches'];
+            } else {
+                return ['equals', 'contains', 'empty'];
+            }
+        },
+        
+        init() {
+            this.$watch('conditionProperty', (value) => {
+                const operators = this.availableOperators;
+                if (!operators.includes(this.conditionOperator)) {
+                    this.conditionOperator = operators[0];
+                    this.conditionNegated = false;
+                }
+            });
+        },
+        
+        toggleCountry(code) {
+            const index = this.selectedCountries.indexOf(code);
+            if (index > -1) {
+                this.selectedCountries.splice(index, 1);
+            } else {
+                this.selectedCountries.push(code);
+            }
+        },
+        
+        isCountrySelected(code) {
+            return this.selectedCountries.includes(code);
+        }
+    };
+}
+</script>
