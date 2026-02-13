@@ -895,3 +895,348 @@ func TestRulesPairPropertyOnly(t *testing.T) {
 		t.Errorf("Expected property rule (+50%% = level 75) when no org rules, got %d", result.Level())
 	}
 }
+
+// Tests for condition negation
+
+func TestUserAgentNegation(t *testing.T) {
+	tests := []struct {
+		name      string
+		operator  dbgen.RuleConditionOperator
+		value     string
+		separator string
+		userAgent string
+		negated   bool
+		wantMatch bool
+	}{
+		{
+			name:      "equals negated matches different",
+			operator:  dbgen.RuleConditionOperatorEquals,
+			value:     "BadBot/1.0",
+			userAgent: "GoodBot/2.0",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "equals negated not matches same",
+			operator:  dbgen.RuleConditionOperatorEquals,
+			value:     "BadBot/1.0",
+			userAgent: "BadBot/1.0",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "contains negated matches non-containing",
+			operator:  dbgen.RuleConditionOperatorContains,
+			value:     "BadBot",
+			userAgent: "Mozilla/5.0",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "contains negated not matches containing",
+			operator:  dbgen.RuleConditionOperatorContains,
+			value:     "BadBot",
+			userAgent: "Mozilla/5.0 BadBot/1.0",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "empty negated matches non-empty",
+			operator:  dbgen.RuleConditionOperatorEmpty,
+			userAgent: "Mozilla/5.0",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "empty negated not matches empty",
+			operator:  dbgen.RuleConditionOperatorEmpty,
+			userAgent: "",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "in negated matches not in list",
+			operator:  dbgen.RuleConditionOperatorIn,
+			value:     "BadBot/1.0|EvilBot/2.0",
+			separator: "|",
+			userAgent: "GoodBot/3.0",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "in negated not matches in list",
+			operator:  dbgen.RuleConditionOperatorIn,
+			value:     "BadBot/1.0|EvilBot/2.0",
+			separator: "|",
+			userAgent: "BadBot/1.0",
+			negated:   true,
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator:        tt.operator,
+				ConditionOperatorNegated: tt.negated,
+				ConditionValueStr:        pgtype.Text{String: tt.value, Valid: true},
+				ConditionValueSeparator:  pgtype.Text{String: tt.separator, Valid: len(tt.separator) > 0},
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              50,
+				Enabled:                  true,
+			}
+
+			compiled, err := CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ri := newTestRequestInfo(tt.userAgent, netip.MustParseAddr("1.2.3.4"))
+			gotMatch := compiled.Matches(ri)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
+			}
+		})
+	}
+}
+
+func TestIPAddressNegation(t *testing.T) {
+	tests := []struct {
+		name      string
+		operator  dbgen.RuleConditionOperator
+		value     string
+		ip        string
+		negated   bool
+		wantMatch bool
+	}{
+		{
+			name:      "matches negated matches outside prefix",
+			operator:  dbgen.RuleConditionOperatorMatches,
+			value:     "10.0.0.0/8",
+			ip:        "192.168.1.1",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "matches negated not matches inside prefix",
+			operator:  dbgen.RuleConditionOperatorMatches,
+			value:     "10.0.0.0/8",
+			ip:        "10.1.2.3",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "matches exact IP negated matches different IP",
+			operator:  dbgen.RuleConditionOperatorMatches,
+			value:     "192.168.1.100",
+			ip:        "192.168.1.101",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "matches exact IP negated not matches same IP",
+			operator:  dbgen.RuleConditionOperatorMatches,
+			value:     "192.168.1.100",
+			ip:        "192.168.1.100",
+			negated:   true,
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty:        dbgen.RuleConditionPropertyIPAddress,
+				ConditionOperator:        tt.operator,
+				ConditionOperatorNegated: tt.negated,
+				ConditionValueStr:        pgtype.Text{String: tt.value, Valid: true},
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              50,
+				Enabled:                  true,
+			}
+
+			compiled, err := CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ri := newTestRequestInfo("test", netip.MustParseAddr(tt.ip))
+			gotMatch := compiled.Matches(ri)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
+			}
+		})
+	}
+}
+
+func TestIPAddressEmptyNegation(t *testing.T) {
+	tests := []struct {
+		name      string
+		hasIP     bool
+		negated   bool
+		wantMatch bool
+	}{
+		{
+			name:      "empty negated matches valid IP",
+			hasIP:     true,
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "empty negated not matches invalid IP",
+			hasIP:     false,
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "empty not negated matches invalid IP",
+			hasIP:     false,
+			negated:   false,
+			wantMatch: true,
+		},
+		{
+			name:      "empty not negated not matches valid IP",
+			hasIP:     true,
+			negated:   false,
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty:        dbgen.RuleConditionPropertyIPAddress,
+				ConditionOperator:        dbgen.RuleConditionOperatorEmpty,
+				ConditionOperatorNegated: tt.negated,
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              50,
+				Enabled:                  true,
+			}
+
+			compiled, err := CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var ri *RequestInfo
+			if tt.hasIP {
+				ri = newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
+			} else {
+				ri = newTestRequestInfoNoIP("test")
+			}
+
+			gotMatch := compiled.Matches(ri)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
+			}
+		})
+	}
+}
+
+func TestCountryCodeNegation(t *testing.T) {
+	tests := []struct {
+		name        string
+		operator    dbgen.RuleConditionOperator
+		value       string
+		separator   string
+		countryCode string
+		negated     bool
+		wantMatch   bool
+	}{
+		{
+			name:        "equals negated matches different",
+			operator:    dbgen.RuleConditionOperatorEquals,
+			value:       "US",
+			countryCode: "CA",
+			negated:     true,
+			wantMatch:   true,
+		},
+		{
+			name:        "equals negated not matches same",
+			operator:    dbgen.RuleConditionOperatorEquals,
+			value:       "US",
+			countryCode: "US",
+			negated:     true,
+			wantMatch:   false,
+		},
+		{
+			name:        "contains negated matches non-containing",
+			operator:    dbgen.RuleConditionOperatorContains,
+			value:       "US",
+			countryCode: "CA",
+			negated:     true,
+			wantMatch:   true,
+		},
+		{
+			name:        "contains negated not matches containing",
+			operator:    dbgen.RuleConditionOperatorContains,
+			value:       "US",
+			countryCode: "US",
+			negated:     true,
+			wantMatch:   false,
+		},
+		{
+			name:        "empty negated matches non-empty",
+			operator:    dbgen.RuleConditionOperatorEmpty,
+			countryCode: "US",
+			negated:     true,
+			wantMatch:   true,
+		},
+		{
+			name:        "empty negated not matches empty",
+			operator:    dbgen.RuleConditionOperatorEmpty,
+			countryCode: "",
+			negated:     true,
+			wantMatch:   false,
+		},
+		{
+			name:        "in negated matches not in list",
+			operator:    dbgen.RuleConditionOperatorIn,
+			value:       "US,CA,MX",
+			separator:   ",",
+			countryCode: "UK",
+			negated:     true,
+			wantMatch:   true,
+		},
+		{
+			name:        "in negated not matches in list",
+			operator:    dbgen.RuleConditionOperatorIn,
+			value:       "US,CA,MX",
+			separator:   ",",
+			countryCode: "CA",
+			negated:     true,
+			wantMatch:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty:        dbgen.RuleConditionPropertyCountryCode,
+				ConditionOperator:        tt.operator,
+				ConditionOperatorNegated: tt.negated,
+				ConditionValueStr:        pgtype.Text{String: tt.value, Valid: true},
+				ConditionValueSeparator:  pgtype.Text{String: tt.separator, Valid: len(tt.separator) > 0},
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              50,
+				Enabled:                  true,
+			}
+
+			compiled, err := CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			ri := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "CF-IPCountry", tt.countryCode)
+			gotMatch := compiled.Matches(ri)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
+			}
+		})
+	}
+}
