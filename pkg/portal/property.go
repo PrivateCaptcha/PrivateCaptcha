@@ -186,11 +186,24 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
 	var conditionOperator string
 	switch rule.ConditionOperator {
 	case dbgen.RuleConditionOperatorEmpty:
-		conditionOperator = "is empty"
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "is not empty"
+		} else {
+			conditionOperator = "is empty"
+		}
 	case dbgen.RuleConditionOperatorIn:
-		conditionOperator = "is one of"
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "is not one of"
+		} else {
+			conditionOperator = "is one of"
+		}
 	default:
-		conditionOperator = strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
+		baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "not " + baseOperator
+		} else {
+			conditionOperator = baseOperator
+		}
 	}
 
 	var conditionProperty string
