@@ -63,9 +63,8 @@ func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 }
 
 // containsCaseInsensitive checks if s contains substr in a case-insensitive manner
+// This is more efficient than converting strings and avoids allocations
 func containsCaseInsensitive(s, substr string) bool {
-	// For contains, we need to check if substr appears anywhere in s
-	// We'll iterate through s and check each position
 	sLen := len(s)
 	substrLen := len(substr)
 	
@@ -76,12 +75,8 @@ func containsCaseInsensitive(s, substr string) bool {
 		return false
 	}
 	
-	for i := 0; i <= sLen-substrLen; i++ {
-		if strings.EqualFold(s[i:i+substrLen], substr) {
-			return true
-		}
-	}
-	return false
+	// Convert to lowercase once and use standard Contains
+	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
 // ipMatcher handles IP address matching
