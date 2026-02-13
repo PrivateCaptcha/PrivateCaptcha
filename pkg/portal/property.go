@@ -151,11 +151,6 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 }
 
 func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
-	actionAction := "set"
-	if rule.ActionProperty == dbgen.RuleActionPropertyHTTPRequest {
-		actionAction = "block"
-	}
-
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String
@@ -167,12 +162,25 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
 
 	var actionProperty string
 	var actionValue string
+	var actionAction string
+
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyHTTPRequest:
+		actionAction = "block"
 		actionProperty = "HTTP request"
+	case dbgen.RuleActionPropertyDifficultyLevelPercent:
+		actionAction = "change"
+		actionProperty = "Difficulty level"
+		// Format percentage with +/- sign
+		if percent := rule.ActionValue; percent >= 0 {
+			actionValue = fmt.Sprintf("+%d%%", percent)
+		} else {
+			actionValue = fmt.Sprintf("%d%%", percent)
+		}
 	default:
 		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
 		actionValue = fmt.Sprintf("%d", rule.ActionValue)
+		actionAction = "set"
 	}
 
 	var conditionOperator string

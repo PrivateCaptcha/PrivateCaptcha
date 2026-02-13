@@ -237,9 +237,9 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 type RuleActionProperty string
 
 const (
-	RuleActionPropertyDifficultyLevel  RuleActionProperty = "difficulty_level"
-	RuleActionPropertyHTTPRequest      RuleActionProperty = "http_request"
-	RuleActionPropertyDifficultyGrowth RuleActionProperty = "difficulty_growth"
+	RuleActionPropertyDifficultyLevelPercent RuleActionProperty = "difficulty_level_percent"
+	RuleActionPropertyHTTPRequest            RuleActionProperty = "http_request"
+	RuleActionPropertyDifficultyGrowth       RuleActionProperty = "difficulty_growth"
 )
 
 func (e *RuleActionProperty) Scan(src interface{}) error {

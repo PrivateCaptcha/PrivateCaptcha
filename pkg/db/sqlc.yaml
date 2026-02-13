@@ -77,7 +77,7 @@ sql:
           backend_rule_condition_operator_empty: RuleConditionOperatorEmpty
           backend_rule_condition_operator_in: RuleConditionOperatorIn
           backend_rule_action_property: RuleActionProperty
-          backend_rule_action_property_difficulty_level: RuleActionPropertyDifficultyLevel
+          backend_rule_action_property_difficulty_level_percent: RuleActionPropertyDifficultyLevelPercent
           backend_rule_action_property_http_request: RuleActionPropertyHTTPRequest
           backend_rule_action_property_difficulty_growth: RuleActionPropertyDifficultyGrowth
         overrides:
