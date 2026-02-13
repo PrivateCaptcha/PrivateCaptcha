@@ -14,10 +14,10 @@ type matcher interface {
 
 // stringMatcher handles string-based matching (UserAgent, CountryCode)
 type stringMatcher struct {
-	conditionProperty    dbgen.RuleConditionProperty
-	conditionOperator    dbgen.RuleConditionOperator
-	conditionValueStr    string
-	conditionValueItems  []string // Pre-split items for In operator
+	conditionProperty        dbgen.RuleConditionProperty
+	conditionOperator        dbgen.RuleConditionOperator
+	conditionValueStr        string
+	conditionValueItems      []string // Pre-split items for In operator
 	conditionOperatorNegated bool
 }
 
@@ -36,7 +36,7 @@ func (sm *stringMatcher) extract(ri *RequestInfo) string {
 // matches performs the actual matching logic
 func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 	var result bool
-	
+
 	switch sm.conditionOperator {
 	case dbgen.RuleConditionOperatorEquals:
 		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
@@ -55,7 +55,7 @@ func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 	default:
 		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
 	}
-	
+
 	if sm.conditionOperatorNegated {
 		return !result
 	}
@@ -67,14 +67,14 @@ func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 func containsCaseInsensitive(s, substr string) bool {
 	sLen := len(s)
 	substrLen := len(substr)
-	
+
 	if substrLen == 0 {
 		return true
 	}
 	if substrLen > sLen {
 		return false
 	}
-	
+
 	// Convert to lowercase once and use standard Contains
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
@@ -90,7 +90,7 @@ type ipMatcher struct {
 func (im *ipMatcher) matches(ri *RequestInfo) bool {
 	ip := ri.IPAddr()
 	var result bool
-	
+
 	switch im.conditionOperator {
 	case dbgen.RuleConditionOperatorEmpty:
 		result = !ip.IsValid()
@@ -101,7 +101,7 @@ func (im *ipMatcher) matches(ri *RequestInfo) bool {
 			result = im.conditionValueIPPrefix.Contains(ip)
 		}
 	}
-	
+
 	if im.conditionOperatorNegated {
 		return !result
 	}

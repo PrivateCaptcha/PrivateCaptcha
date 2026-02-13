@@ -541,6 +541,6 @@ type NullInt4 struct {
 func (ni NullInt4) ToDBType() pgtype.Int4 {
 	return pgtype.Int4{
 		Int32: ni.Int32,
-		Valid:  ni.Valid,
+		Valid: ni.Valid,
 	}
 }

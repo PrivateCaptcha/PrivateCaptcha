@@ -41,19 +41,19 @@ const (
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 	// rules errors
-	StatusRuleNameEmptyError              StatusCode = 1400
-	StatusRuleConditionPropertyRequired   StatusCode = 1401
-	StatusRuleConditionOperatorInvalid    StatusCode = 1402
-	StatusRuleConditionValueRequired      StatusCode = 1403
-	StatusRuleConditionPropertyInvalid    StatusCode = 1404
-	StatusRuleActionPropertyRequired      StatusCode = 1405
-	StatusRuleActionValueRequired         StatusCode = 1406
-	StatusRuleActionValueInvalid          StatusCode = 1407
-	StatusRuleActionPropertyInvalid       StatusCode = 1408
-	StatusRuleIPAddressRequired           StatusCode = 1409
-	StatusRuleCountryRequired             StatusCode = 1410
-	StatusRuleDifficultyValueInvalid      StatusCode = 1411
-	StatusRuleDifficultyGrowthInvalid     StatusCode = 1412
+	StatusRuleNameEmptyError            StatusCode = 1400
+	StatusRuleConditionPropertyRequired StatusCode = 1401
+	StatusRuleConditionOperatorInvalid  StatusCode = 1402
+	StatusRuleConditionValueRequired    StatusCode = 1403
+	StatusRuleConditionPropertyInvalid  StatusCode = 1404
+	StatusRuleActionPropertyRequired    StatusCode = 1405
+	StatusRuleActionValueRequired       StatusCode = 1406
+	StatusRuleActionValueInvalid        StatusCode = 1407
+	StatusRuleActionPropertyInvalid     StatusCode = 1408
+	StatusRuleIPAddressRequired         StatusCode = 1409
+	StatusRuleCountryRequired           StatusCode = 1410
+	StatusRuleDifficultyValueInvalid    StatusCode = 1411
+	StatusRuleDifficultyGrowthInvalid   StatusCode = 1412
 )
 
 func (sc StatusCode) Success() bool {

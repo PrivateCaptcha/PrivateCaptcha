@@ -661,4 +661,3 @@ func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRu
 
 	return event
 }
-

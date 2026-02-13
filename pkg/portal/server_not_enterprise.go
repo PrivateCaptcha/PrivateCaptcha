@@ -78,9 +78,9 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ConditionValueStr:        db.Text("192.168.0.0/16"),
 			Position:                 4,
 			ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:       -30,
-			CreatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
-			UpdatedAt:         db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			ActionValue:              -30,
+			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
+			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}),
 	}
 }
