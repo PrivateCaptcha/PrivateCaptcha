@@ -22,7 +22,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			Enabled:                 true,
 			ConditionProperty:       dbgen.RuleConditionPropertyCountryCode,
 			ConditionOperator:       dbgen.RuleConditionOperatorIn,
-			ConditionValueStr:       db.Text("CN, RU, KP"),
+			ConditionValueStr:       db.Text("AB, CD, EF"),
 			ConditionValueSeparator: db.Text(","),
 			Position:                0,
 			ActionProperty:          dbgen.RuleActionPropertyHTTPRequest,

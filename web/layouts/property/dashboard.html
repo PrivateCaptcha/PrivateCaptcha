@@ -90,6 +90,8 @@
                     {{- else if eq .Params.Tab 2 -}}
                     {{template "settings.html" .}}
                     {{- else if eq .Params.Tab 3 -}}
+                    {{template "rules.html" .}}
+                    {{- else if eq .Params.Tab 4 -}}
                     {{template "auditlogs.html" .}}
                     {{- else -}}
                     {{template "reports.html" .}}

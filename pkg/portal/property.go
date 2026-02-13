@@ -34,8 +34,8 @@ const (
 	propertyReportsTabIndex            = 0
 	propertyIntegrationsTabIndex       = 1
 	propertySettingsTabIndex           = 2
-	propertyAuditLogsTabIndex          = 3
-	propertyRulesTabIndex              = 4
+	propertyRulesTabIndex              = 3
+	propertyAuditLogsTabIndex          = 4
 	activeSubscriptionForPropertyError = "You need an active subscription to create new properties."
 	// Period endpoint constants
 	PeriodEndpointToday = "24h"
@@ -309,7 +309,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
 
 	return &DifficultyRuleModel{
 		Position:          int(rule.Position) + 1,
-		Name:              rule.Name.String,
+		Name:              rule.Name,
 		Enabled:           rule.Enabled,
 		ConditionProperty: conditionProperty,
 		ConditionOperator: conditionOperator,
