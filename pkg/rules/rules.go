@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/netip"
+	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -127,12 +128,12 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
-	matcher     matcherFunc
+	baseMatcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.baseMatcher.matches(ri)
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
@@ -151,12 +152,12 @@ func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
-	matcher matcherFunc
-	growth  dbgen.DifficultyGrowth
+	baseMatcher
+	growth dbgen.DifficultyGrowth
 }
 
 func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.baseMatcher.matches(ri)
 }
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
@@ -166,11 +167,11 @@ func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property 
 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
-	matcher matcherFunc
+	baseMatcher
 }
 
 func (r *blockRequestRule) Matches(ri *RequestInfo) bool {
-	return r.matcher(ri)
+	return r.baseMatcher.matches(ri)
 }
 
 func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
@@ -192,33 +193,55 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) (matcherFunc, error) {
-	separator := rule.ConditionValueSeparator.String
-	negated := rule.ConditionOperatorNegated
+func buildMatcher(rule *dbgen.DifficultyRule) (baseMatcher, error) {
+	bm := baseMatcher{
+		conditionProperty:        rule.ConditionProperty,
+		conditionOperator:        rule.ConditionOperator,
+		conditionOperatorNegated: rule.ConditionOperatorNegated,
+	}
 
 	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent:
+	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
 		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).UserAgent, value, rule.ConditionOperator, separator, negated), nil
+		bm.conditionValueStr = value
+		
+		// Pre-process values for optimized matching
+		switch rule.ConditionOperator {
+		case dbgen.RuleConditionOperatorContains:
+			bm.conditionValueLower = strings.ToLower(value)
+		case dbgen.RuleConditionOperatorIn:
+			sep := ","
+			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+				sep = rule.ConditionValueSeparator.String
+			}
+			items := strings.Split(value, sep)
+			for i, item := range items {
+				items[i] = strings.ToLower(strings.TrimSpace(item))
+			}
+			bm.conditionValueItems = items
+		}
+		
+		return bm, nil
+		
 	case dbgen.RuleConditionPropertyIPAddress:
 		if rule.ConditionOperator == dbgen.RuleConditionOperatorEmpty {
-			return ipAddressEmptyMatcher(negated), nil
+			return bm, nil
 		}
+		
 		value := rule.ConditionValueStr.String
 		prefix, err := netip.ParsePrefix(value)
 		if err != nil {
 			addr, addrErr := netip.ParseAddr(value)
 			if addrErr != nil {
-				return nil, ErrInvalidIPValue
+				return bm, ErrInvalidIPValue
 			}
 			prefix = netip.PrefixFrom(addr, addr.BitLen())
 		}
-		return ipAddressMatchesMatcher(prefix, negated), nil
-	case dbgen.RuleConditionPropertyCountryCode:
-		value := rule.ConditionValueStr.String
-		return stringMatcher((*RequestInfo).CountryCode, value, rule.ConditionOperator, separator, negated), nil
+		bm.conditionValueIPPrefix = prefix
+		return bm, nil
+		
 	default:
-		return nil, ErrUnknownConditionProperty
+		return bm, ErrUnknownConditionProperty
 	}
 }
 
@@ -231,17 +254,17 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
 		return &difficultyLevelRule{
-			matcher:     matcher,
+			baseMatcher: matcher,
 			percentDiff: int16(rule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
-			matcher: matcher,
+			baseMatcher: matcher,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
-			matcher: matcher,
-			growth:  growthFromInt(rule.ActionValue),
+			baseMatcher: matcher,
+			growth:      growthFromInt(rule.ActionValue),
 		}, nil
 	default:
 		return nil, ErrUnknownActionProperty

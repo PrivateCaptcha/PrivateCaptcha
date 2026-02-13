@@ -7,88 +7,84 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-// matcherFunc returns true when the request matches the rule condition
-type matcherFunc func(ri *RequestInfo) bool
+// extractFunc extracts a string value from RequestInfo for matching
+type extractFunc func(ri *RequestInfo) string
 
-// stringMatcher creates a matcherFunc for a string value using a string extractor
-func stringMatcher(extract func(ri *RequestInfo) string, value string, operator dbgen.RuleConditionOperator, separator string, negated bool) matcherFunc {
-	var baseMatcher matcherFunc
-	
-	switch operator {
-	case dbgen.RuleConditionOperatorEquals:
-		baseMatcher = func(ri *RequestInfo) bool {
-			return strings.EqualFold(extract(ri), value)
-		}
-	case dbgen.RuleConditionOperatorContains:
-		lowerValue := strings.ToLower(value)
-		baseMatcher = func(ri *RequestInfo) bool {
-			return strings.Contains(strings.ToLower(extract(ri)), lowerValue)
-		}
-	case dbgen.RuleConditionOperatorEmpty:
-		baseMatcher = func(ri *RequestInfo) bool {
-			return len(extract(ri)) == 0
-		}
-	case dbgen.RuleConditionOperatorIn:
-		sep := ","
-		if len(separator) > 0 {
-			sep = separator
-		}
-		items := strings.Split(value, sep)
-		for i, item := range items {
-			items[i] = strings.ToLower(strings.TrimSpace(item))
-		}
-		baseMatcher = func(ri *RequestInfo) bool {
-			v := strings.ToLower(extract(ri))
-			for _, item := range items {
-				if item == v {
-					return true
-				}
-			}
-			return false
-		}
-	default:
-		baseMatcher = func(ri *RequestInfo) bool {
-			return strings.EqualFold(extract(ri), value)
-		}
-	}
-	
-	if negated {
-		return func(ri *RequestInfo) bool {
-			return !baseMatcher(ri)
-		}
-	}
-	
-	return baseMatcher
+// baseMatcher contains the core matching logic without allocations
+type baseMatcher struct {
+	conditionProperty         dbgen.RuleConditionProperty
+	conditionOperator         dbgen.RuleConditionOperator
+	conditionOperatorNegated  bool
+	conditionValueStr         string
+	conditionValueLower       string  // Pre-lowercased for Contains/In operators
+	conditionValueItems       []string // Pre-split items for In operator
+	conditionValueIPPrefix    netip.Prefix
 }
 
-func ipAddressMatchesMatcher(prefix netip.Prefix, negated bool) matcherFunc {
-	if negated {
-		return func(ri *RequestInfo) bool {
-			ip := ri.IPAddr()
-			if !ip.IsValid() {
-				return false
-			}
-			return !prefix.Contains(ip)
-		}
+// extract returns the string value from RequestInfo based on the condition property
+func (bm *baseMatcher) extract(ri *RequestInfo) string {
+	switch bm.conditionProperty {
+	case dbgen.RuleConditionPropertyUserAgent:
+		return ri.UserAgent()
+	case dbgen.RuleConditionPropertyCountryCode:
+		return ri.CountryCode()
+	default:
+		return ""
+	}
+}
+
+// matches performs the actual matching logic
+func (bm *baseMatcher) matches(ri *RequestInfo) bool {
+	var result bool
+	
+	switch bm.conditionProperty {
+	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
+		result = bm.matchString(ri)
+	case dbgen.RuleConditionPropertyIPAddress:
+		result = bm.matchIPAddress(ri)
+	default:
+		result = false
 	}
 	
-	return func(ri *RequestInfo) bool {
-		ip := ri.IPAddr()
+	if bm.conditionOperatorNegated {
+		return !result
+	}
+	return result
+}
+
+// matchString handles string-based matching
+func (bm *baseMatcher) matchString(ri *RequestInfo) bool {
+	switch bm.conditionOperator {
+	case dbgen.RuleConditionOperatorEquals:
+		return strings.EqualFold(bm.extract(ri), bm.conditionValueStr)
+	case dbgen.RuleConditionOperatorContains:
+		return strings.Contains(strings.ToLower(bm.extract(ri)), bm.conditionValueLower)
+	case dbgen.RuleConditionOperatorEmpty:
+		return len(bm.extract(ri)) == 0
+	case dbgen.RuleConditionOperatorIn:
+		v := strings.ToLower(bm.extract(ri))
+		for _, item := range bm.conditionValueItems {
+			if item == v {
+				return true
+			}
+		}
+		return false
+	default:
+		return strings.EqualFold(bm.extract(ri), bm.conditionValueStr)
+	}
+}
+
+// matchIPAddress handles IP address matching
+func (bm *baseMatcher) matchIPAddress(ri *RequestInfo) bool {
+	ip := ri.IPAddr()
+	
+	switch bm.conditionOperator {
+	case dbgen.RuleConditionOperatorEmpty:
+		return !ip.IsValid()
+	default:
 		if !ip.IsValid() {
 			return false
 		}
-		return prefix.Contains(ip)
-	}
-}
-
-func ipAddressEmptyMatcher(negated bool) matcherFunc {
-	if negated {
-		return func(ri *RequestInfo) bool {
-			return ri.IPAddr().IsValid()
-		}
-	}
-	
-	return func(ri *RequestInfo) bool {
-		return !ri.IPAddr().IsValid()
+		return bm.conditionValueIPPrefix.Contains(ip)
 	}
 }
