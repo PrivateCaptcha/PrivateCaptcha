@@ -9,4 +9,5 @@ const (
 	DifficultyLevelMedium DifficultyLevel = DifficultyLevelSmall + DifficultyDelta
 	DifficultyLevelHigh   DifficultyLevel = DifficultyLevelMedium + DifficultyDelta
 	MaxDifficultyLevel    DifficultyLevel = 255
+	MinDifficultyLevel    DifficultyLevel = 1
 )
