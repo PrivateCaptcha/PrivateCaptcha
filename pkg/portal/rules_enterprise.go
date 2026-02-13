@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -77,6 +78,10 @@ func getAllCountries() []CountryOption {
 				})
 			}
 		}
+
+		sort.Slice(cachedCountries, func(i, j int) bool {
+			return strings.Compare(cachedCountries[i].Name, cachedCountries[j].Name) < 0
+		})
 	})
 
 	return cachedCountries

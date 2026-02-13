@@ -72,8 +72,8 @@
 {{define "main"}}
 <main class='-mt-32 flex flex-1'>
     <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
-        <div class="rounded-lg bg-white px-6 py-8 shadow sm:px-6 flex flex-1 items-center justify-center">
-            <div class="max-w-md flex-1">
+        <div class="rounded-lg bg-white px-6 py-8 shadow sm:px-6 flex flex-1 xl:items-center justify-center">
+            <div class="max-w-md flex-1 max-lg:mt-12">
                 <form
                     {{ if .Params.Property }}
                     hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID .Const.RulesEndpoint .Const.NewEndpoint }}'
