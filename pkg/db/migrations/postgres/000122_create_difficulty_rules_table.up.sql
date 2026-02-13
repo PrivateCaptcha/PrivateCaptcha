@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     enabled BOOL NOT NULL DEFAULT TRUE,
     condition_property backend.rule_condition_property NOT NULL,
     condition_operator backend.rule_condition_operator NOT NULL,
+    condition_operator_negated BOOL NOT NULL DEFAULT FALSE,
     condition_value_str VARCHAR(512),
     condition_value_int INT,
     condition_value_separator CHAR(1),
