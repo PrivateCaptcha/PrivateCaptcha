@@ -3064,6 +3064,46 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 	return result, nil
 }
 
+func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if params == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	rule, err := impl.querier.CreateDifficultyRule(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create difficulty rule", common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Created difficulty rule", "ruleID", rule.ID, "name", rule.Name)
+
+	// Invalidate cache for the property or org
+	if rule.PropertyID.Valid {
+		propertyID := rule.PropertyID.Int32
+		_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+		_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+	}
+	if rule.OrgID.Valid {
+		orgID := rule.OrgID.Int32
+		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+	}
+
+	auditEvent := &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionCreate,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		NewValue:  NewAuditLogDifficultyRule(rule),
+	}
+
+	return rule, auditEvent, nil
+}
+
 func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
 	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
 	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)

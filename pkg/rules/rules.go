@@ -207,7 +207,7 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 			conditionValueStr:        value,
 			conditionOperatorNegated: rule.ConditionOperatorNegated,
 		}
-		
+
 		// Pre-process values for optimized matching
 		if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
 			sep := defaultSeparator
@@ -220,15 +220,15 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 			}
 			sm.conditionValueItems = items
 		}
-		
+
 		return sm, nil
-		
+
 	case dbgen.RuleConditionPropertyIPAddress:
 		im := &ipMatcher{
 			conditionOperator:        rule.ConditionOperator,
 			conditionOperatorNegated: rule.ConditionOperatorNegated,
 		}
-		
+
 		if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
 			value := rule.ConditionValueStr.String
 			prefix, err := netip.ParsePrefix(value)
@@ -241,9 +241,9 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 			}
 			im.conditionValueIPPrefix = prefix
 		}
-		
+
 		return im, nil
-		
+
 	default:
 		return nil, ErrUnknownConditionProperty
 	}

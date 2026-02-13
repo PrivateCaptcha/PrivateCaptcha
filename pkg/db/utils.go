@@ -518,3 +518,8 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 
 	return cached, items, nil
 }
+
+// NullInt returns an invalid pgtype.Int4
+func NullInt() pgtype.Int4 {
+	return pgtype.Int4{Valid: false}
+}

@@ -383,6 +383,53 @@ func TestRenderHTML(t *testing.T) {
 			selector: "",
 			matches:  []string{},
 		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, common.NewEndpoint},
+			template: newRuleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext:  stubToken(),
+				AlertRenderContext: AlertRenderContext{},
+				CurrentOrg:         stubOrg("123"),
+				Property:           stubProperty("my property", "123"),
+				FormData:           &RuleFormData{},
+				Countries:          []CountryOption{},
+				ConditionProperties: []string{
+					string(dbgen.RuleConditionPropertyUserAgent),
+					string(dbgen.RuleConditionPropertyIPAddress),
+					string(dbgen.RuleConditionPropertyCountryCode),
+				},
+				StringOperators: []string{
+					string(dbgen.RuleConditionOperatorEquals),
+					string(dbgen.RuleConditionOperatorContains),
+					string(dbgen.RuleConditionOperatorEmpty),
+				},
+				IPOperators: []string{
+					string(dbgen.RuleConditionOperatorMatches),
+					string(dbgen.RuleConditionOperatorEmpty),
+				},
+				ActionProperties: []string{
+					string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					string(dbgen.RuleActionPropertyHTTPRequest),
+					string(dbgen.RuleActionPropertyDifficultyGrowth),
+				},
+				GrowthTypes: []dbgen.DifficultyGrowth{
+					dbgen.DifficultyGrowthConstant,
+					dbgen.DifficultyGrowthSlow,
+					dbgen.DifficultyGrowthMedium,
+					dbgen.DifficultyGrowthFast,
+				},
+				ConditionUserAgent:   string(dbgen.RuleConditionPropertyUserAgent),
+				ConditionIPAddress:   string(dbgen.RuleConditionPropertyIPAddress),
+				ConditionCountryCode: string(dbgen.RuleConditionPropertyCountryCode),
+				OperatorEquals:       string(dbgen.RuleConditionOperatorEquals),
+				OperatorContains:     string(dbgen.RuleConditionOperatorContains),
+				OperatorEmpty:        string(dbgen.RuleConditionOperatorEmpty),
+				OperatorMatches:      string(dbgen.RuleConditionOperatorMatches),
+				OperatorIn:           string(dbgen.RuleConditionOperatorIn),
+			},
+			selector: "",
+			matches:  []string{},
+		},
 	}
 
 	for _, tc := range testCases {
