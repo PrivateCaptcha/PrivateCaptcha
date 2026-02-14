@@ -9,6 +9,7 @@ EXTRA_BUILD_FLAGS ?=
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 GOPATH := $(shell go env GOPATH)
+OPEN ?= open
 
 setup-git:
 	git config core.hooksPath scripts/hooks
@@ -125,12 +126,15 @@ run:
 
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
+	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ce:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ce.yml up --build
+	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ee:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ee.yml up --build
+	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 profile-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.monitoring.yml up --build
