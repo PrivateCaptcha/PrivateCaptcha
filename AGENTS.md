@@ -63,3 +63,4 @@
 - Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
 - For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
 - Always make sure all unit and integration tests pass before sending a PR
+- To login to the Portal for testing (when run with `make run-docker`) use email `admin@privatecaptcha.local`, wait for captcha to solve and on the next page to find two-factor code, run command `make find-docker-2fa`
