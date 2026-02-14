@@ -527,7 +527,7 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 
 	if !actionStatus.Success() {
 		slog.WarnContext(ctx, "Failed to parse rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue,
-			actionStatus.String())
+			"status", actionStatus.String())
 		return nil, actionStatus
 	}
 

@@ -7,6 +7,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
+// nolint:unused
 func stubDifficultyRules() []*DifficultyRuleModel {
 	return []*DifficultyRuleModel{
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
