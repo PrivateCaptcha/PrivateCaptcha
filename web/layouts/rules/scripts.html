@@ -16,7 +16,7 @@ function ruleFormData() {
         conditionProperty: formDataConditionProperty || '{{ index .Params.ConditionProperties 0 }}',
         conditionOperator: initialOperator,
         conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else }}false{{ end }},
-        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}{{ index .Params.ActionProperties 0 }}{{ end }}',
+        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}{{ .Params.ActionPropertyDifficultyLevel }}{{ end }}',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         get showConditionValue() {

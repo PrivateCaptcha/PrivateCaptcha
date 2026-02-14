@@ -19,7 +19,30 @@ import (
 )
 
 const (
-	newRuleTemplate = "rules/new-rule.html"
+	ruleTemplate = "rules/rule.html"
+)
+
+var (
+	ruleConstants = RuleConstants{
+		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
+		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
+		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
+		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
+		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
+		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
+		OperatorMatches:                string(dbgen.RuleConditionOperatorMatches),
+		OperatorIn:                     string(dbgen.RuleConditionOperatorIn),
+		ConditionProperties:            []string{string(dbgen.RuleConditionPropertyUserAgent), string(dbgen.RuleConditionPropertyIPAddress), string(dbgen.RuleConditionPropertyCountryCode)},
+		StringOperators:                []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
+		IPOperators:                    []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
+		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
+		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
+		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),
+		GrowthTypeFast:                 string(dbgen.DifficultyGrowthFast),
+		ActionPropertyDifficultyLevel:  string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		ActionPropertyDifficultyGrowth: string(dbgen.RuleActionPropertyDifficultyGrowth),
+		ActionPropertyHTTPRequest:      string(dbgen.RuleActionPropertyHTTPRequest),
+	}
 )
 
 type CountryOption struct {
@@ -28,36 +51,46 @@ type CountryOption struct {
 }
 
 type RuleFormData struct {
-	RuleName          string
-	RuleEnabled       bool
+	Name              string
+	NameError         string
 	ConditionProperty string
 	ConditionOperator string
-	ConditionNegated  bool
 	ConditionValue    string
 	ActionProperty    string
 	ActionValue       string
+	Enabled           bool
+	ConditionNegated  bool
+}
+
+type RuleConstants struct {
+	ConditionUserAgent             string
+	ConditionIPAddress             string
+	ConditionCountryCode           string
+	OperatorEquals                 string
+	OperatorContains               string
+	OperatorEmpty                  string
+	OperatorMatches                string
+	OperatorIn                     string
+	ConditionProperties            []string
+	StringOperators                []string
+	IPOperators                    []string
+	GrowthTypeConstant             string
+	GrowthTypeSlow                 string
+	GrowthTypeMedium               string
+	GrowthTypeFast                 string
+	ActionPropertyDifficultyLevel  string
+	ActionPropertyDifficultyGrowth string
+	ActionPropertyHTTPRequest      string
 }
 
 type RuleWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
-	CurrentOrg           *userOrg
-	Property             *userProperty
-	FormData             *RuleFormData
-	Countries            []CountryOption
-	ConditionProperties  []string
-	StringOperators      []string
-	IPOperators          []string
-	ActionProperties     []string
-	GrowthTypes          []dbgen.DifficultyGrowth
-	ConditionUserAgent   string
-	ConditionIPAddress   string
-	ConditionCountryCode string
-	OperatorEquals       string
-	OperatorContains     string
-	OperatorEmpty        string
-	OperatorMatches      string
-	OperatorIn           string
+	RuleConstants
+	Countries  []CountryOption
+	CurrentOrg *userOrg
+	Property   *userProperty
+	FormData   *RuleFormData
 }
 
 var (
@@ -87,57 +120,17 @@ func getAllCountries() []CountryOption {
 	return cachedCountries
 }
 
-func (renderCtx *RuleWizardRenderContext) populateRuleConstants() {
-	renderCtx.ConditionProperties = []string{
-		string(dbgen.RuleConditionPropertyUserAgent),
-		string(dbgen.RuleConditionPropertyIPAddress),
-		string(dbgen.RuleConditionPropertyCountryCode),
-	}
-
-	renderCtx.StringOperators = []string{
-		string(dbgen.RuleConditionOperatorEquals),
-		string(dbgen.RuleConditionOperatorContains),
-		string(dbgen.RuleConditionOperatorEmpty),
-	}
-
-	renderCtx.IPOperators = []string{
-		string(dbgen.RuleConditionOperatorMatches),
-		string(dbgen.RuleConditionOperatorEmpty),
-	}
-
-	renderCtx.ActionProperties = []string{
-		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
-		string(dbgen.RuleActionPropertyHTTPRequest),
-		string(dbgen.RuleActionPropertyDifficultyGrowth),
-	}
-
-	renderCtx.GrowthTypes = []dbgen.DifficultyGrowth{
-		dbgen.DifficultyGrowthConstant,
-		dbgen.DifficultyGrowthSlow,
-		dbgen.DifficultyGrowthMedium,
-		dbgen.DifficultyGrowthFast,
-	}
-
-	renderCtx.ConditionUserAgent = string(dbgen.RuleConditionPropertyUserAgent)
-	renderCtx.ConditionIPAddress = string(dbgen.RuleConditionPropertyIPAddress)
-	renderCtx.ConditionCountryCode = string(dbgen.RuleConditionPropertyCountryCode)
-	renderCtx.OperatorEquals = string(dbgen.RuleConditionOperatorEquals)
-	renderCtx.OperatorContains = string(dbgen.RuleConditionOperatorContains)
-	renderCtx.OperatorEmpty = string(dbgen.RuleConditionOperatorEmpty)
-	renderCtx.OperatorMatches = string(dbgen.RuleConditionOperatorMatches)
-	renderCtx.OperatorIn = string(dbgen.RuleConditionOperatorIn)
-}
-
 func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organization, property *dbgen.Property) *RuleWizardRenderContext {
 	renderCtx := &RuleWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
 		FormData: &RuleFormData{
-			RuleEnabled:       true,
+			Enabled:           true,
 			ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
 			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
 			ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		},
-		Countries: getAllCountries(),
+		RuleConstants: ruleConstants,
+		Countries:     getAllCountries(),
 	}
 
 	if property != nil {
@@ -151,8 +144,6 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 			Level: "",
 		}
 	}
-
-	renderCtx.populateRuleConstants()
 
 	return renderCtx
 }
@@ -180,7 +171,7 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
 
-	return &ViewModel{Model: renderCtx, View: newRuleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
 }
 
 func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -201,7 +192,7 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
 
-	return &ViewModel{Model: renderCtx, View: newRuleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
 }
 
 func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
@@ -243,7 +234,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 
 	if !statusCode.Success() {
 		renderCtx.ErrorMessage = statusCode.String()
-		s.render(w, r, newRuleTemplate, renderCtx)
+		s.render(w, r, ruleTemplate, renderCtx)
 		return
 	}
 
@@ -251,7 +242,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, newRuleTemplate, renderCtx)
+		s.render(w, r, ruleTemplate, renderCtx)
 		return
 	}
 
@@ -296,7 +287,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 
 	if !statusCode.Success() {
 		renderCtx.ErrorMessage = statusCode.String()
-		s.render(w, r, newRuleTemplate, renderCtx)
+		s.render(w, r, ruleTemplate, renderCtx)
 		return
 	}
 
@@ -304,7 +295,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, newRuleTemplate, renderCtx)
+		s.render(w, r, ruleTemplate, renderCtx)
 		return
 	}
 
@@ -315,12 +306,12 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, propertyID int32, orgID int32) (*dbgen.CreateDifficultyRuleParams, *RuleFormData, common.StatusCode) {
-	name := strings.TrimSpace(r.FormValue(common.ParamRuleName))
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if name == "" {
 		return nil, nil, common.StatusRuleNameEmptyError
 	}
 
-	enabled := r.FormValue(common.ParamRuleEnabled) == "on"
+	_, enabled := r.Form[common.ParamEnabled]
 
 	conditionProperty := r.FormValue(common.ParamConditionProperty)
 	if conditionProperty == "" {
@@ -338,8 +329,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, propertyID 
 	}
 
 	formData := &RuleFormData{
-		RuleName:          name,
-		RuleEnabled:       enabled,
+		Name:              name,
+		Enabled:           enabled,
 		ConditionProperty: conditionProperty,
 		ConditionOperator: conditionOperator,
 		ConditionNegated:  conditionNegated,

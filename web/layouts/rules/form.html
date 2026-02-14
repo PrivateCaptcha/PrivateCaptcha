@@ -6,9 +6,31 @@
     {{- end -}}
 
     <div>
-        <label for="{{ .Const.RuleName }}" class="pc-internal-form-label">Rule Name</label>
-        <div class="mt-2">
-            <input type="text" name="{{ .Const.RuleName }}" id="{{ .Const.RuleName }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.FormData.RuleName }}" class="w-full pc-internal-form-input-base pc-form-input-normal"  required />
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label">Rule Name</label>
+        <div class="mt-2 relative">
+            {{- if .Params.FormData.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.FormData.Name }}" class="w-full pc-internal-form-input-base {{ if .Params.FormData.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.FormData.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.FormData.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div class="flex gap-3">
+        <div class="flex h-6 shrink-0 items-center">
+            <div class="group grid size-4 grid-cols-1">
+                <input id="{{ .Const.Enabled }}" name="{{ .Const.Enabled }}" type="checkbox" {{ if .Params.FormData.Enabled }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                    <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                    <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </div>
+        </div>
+        <div class="text-sm/6">
+            <label for="{{ .Const.Enabled }}" class="font-medium text-gray-900">Enable</label>
+            <span id="{{ .Const.Enabled }}-description" class="text-gray-500"><span class="sr-only">Enable </span>this rule</span>
         </div>
     </div>
 
@@ -110,83 +132,34 @@
             <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
             <div class="mt-2">
                 <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select">
-                    {{ range .Params.ActionProperties }}
-                    <option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>
-                    {{ if eq . "difficulty_level_percent" }}Adjust Difficulty Level
-                    {{ else if eq . "difficulty_growth" }}Change Difficulty Growth
-                    {{ else if eq . "http_request" }}Block HTTP Request
-                    {{ end }}
-                    </option>
-                    {{ end }}
+                    {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
+                    {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
+                    {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
                 </select>
             </div>
         </div>
 
         <!-- Difficulty Adjustment -->
-        <div x-show="actionProperty === 'difficulty_level_percent'">
+        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
             <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Level (%)</label>
             <div class="mt-2">
                 <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.FormData.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
-                <p class="mt-1 text-xs text-gray-500">Range: <code>-100%</code> to <code>+100%</code></p>
+                <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-100%</code> to <code class="px-1 py-0.5 bg-gray-100">+100%</code></p>
             </div>
         </div>
 
         <!-- Difficulty Growth -->
-        <div x-show="actionProperty === 'difficulty_growth'">
+        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
             <div class="mt-2">
                 <select name="{{ .Const.ActionValue }}" id="growth_select" class="w-full pc-internal-form-select">
-                    {{ range $index, $growth := .Params.GrowthTypes }}
-                    <option value="{{ $index }}" {{ if eq $.Params.FormData.ActionValue (printf "%d" $index) }}selected{{ end }}>
-                    {{ if eq $growth "constant" }}Constant (no growth)
-                    {{ else if eq $growth "slow" }}Slow
-                    {{ else if eq $growth "medium" }}Normal
-                    {{ else if eq $growth "fast" }}Fast
-                    {{ end }}
+                    {{ with .Const.GrowthTypeConstant }}<option value="0" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Constant (no growth)</option>{{end}}
+                    {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
+                    {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
+                    {{ with .Const.GrowthTypeFast }}<option value="3" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Fast</option>{{end}}
                     </option>
-                    {{ end }}
                 </select>
             </div>
         </div>
-    </div>
-</div>
-
-<div class="flex items-center justify-between mt-6">
-    <div class="flex gap-3">
-        <div class="flex h-6 shrink-0 items-center">
-            <div class="group grid size-4 grid-cols-1">
-                <input id="{{ .Const.RuleEnabled }}" name="{{ .Const.RuleEnabled }}" type="checkbox" {{ if .Params.FormData.RuleEnabled }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox" />
-                <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
-                    <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                    <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-            </div>
-        </div>
-        <div class="text-sm/6">
-            <label for="{{ .Const.RuleEnabled }}" class="font-medium text-gray-900">Enable</label>
-            <span id="{{ .Const.RuleEnabled }}-description" class="text-gray-500"><span class="sr-only">Enable </span>this rule</span>
-        </div>
-    </div>
-
-    <div class="flex items-center space-x-6">
-        <button
-            type="reset"
-            action="action"
-            onclick="window.history.go(-1); return false;"
-            class="pc-internal-form-button pc-internal-form-button-secondary"
-            >
-            Cancel
-        </button>
-
-        <button
-            type="submit"
-            class="pc-internal-form-button pc-internal-form-button-primary"
-            >
-            <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Create
-        </button>
     </div>
 </div>
