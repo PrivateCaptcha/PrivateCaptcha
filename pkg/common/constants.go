@@ -31,6 +31,7 @@ const (
 	ParamUser              = "user"
 	ParamPeriod            = "period"
 	ParamProperty          = "property"
+	ParamRule              = "rule"
 	ParamKey               = "key"
 	ParamCode              = "code"
 	ParamID                = "id"

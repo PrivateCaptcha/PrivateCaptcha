@@ -43,6 +43,8 @@ type Querier interface {
 	GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error)
 	GetAsyncTask(ctx context.Context, id pgtype.UUID) (*AsyncTask, error)
 	GetCachedByKey(ctx context.Context, key string) ([]byte, error)
+	GetDifficultyRuleByIDAndOrg(ctx context.Context, arg *GetDifficultyRuleByIDAndOrgParams) (*DifficultyRule, error)
+	GetDifficultyRuleByIDAndProperty(ctx context.Context, arg *GetDifficultyRuleByIDAndPropertyParams) (*DifficultyRule, error)
 	GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
@@ -98,6 +100,8 @@ type Querier interface {
 	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error
 	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) error
+	UpdateDifficultyRuleByOrg(ctx context.Context, arg *UpdateDifficultyRuleByOrgParams) (*DifficultyRule, error)
+	UpdateDifficultyRuleByProperty(ctx context.Context, arg *UpdateDifficultyRuleByPropertyParams) (*DifficultyRule, error)
 	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) error
 	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) error
 	UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error)

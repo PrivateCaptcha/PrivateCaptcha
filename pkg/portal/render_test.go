@@ -408,6 +408,31 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "789", common.EditEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext:  stubToken(),
+				AlertRenderContext: AlertRenderContext{},
+				RuleFormData: RuleFormData{
+					Name:              "Existing Rule",
+					ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+					ConditionOperator: string(dbgen.RuleConditionOperatorContains),
+					ConditionValue:    "curl",
+					ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					ActionValue:       "50",
+					Enabled:           true,
+					ConditionNegated:  false,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property:   stubProperty("my property", "123"),
+				Countries:  []CountryOption{},
+				RuleID:     "789",
+				IsEdit:     true,
+			},
+			selector: "",
+			matches:  []string{},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
 			template: orgRulesTemplate,
 			model: &orgRulesRenderContext{

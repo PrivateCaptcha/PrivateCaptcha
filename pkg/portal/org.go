@@ -126,6 +126,7 @@ func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
 type orgRulesRenderContext struct {
 	AlertRenderContext
 	CurrentOrg *userOrg
+	Property   *userProperty
 	Rules      []*DifficultyRuleModel
 }
 

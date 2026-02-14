@@ -233,6 +233,7 @@ func (c *propertyAuditLogsRenderContext) Params() interface{} { return c }
 var _ RenderContext = (*propertyAuditLogsRenderContext)(nil)
 
 type DifficultyRuleModel struct {
+	ID                string
 	Position          int
 	Name              string
 	Enabled           bool
@@ -260,7 +261,7 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	}
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, hasher common.IdentifierHasher) *DifficultyRuleModel {
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String
@@ -325,6 +326,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule) *DifficultyRuleModel {
 	}
 
 	return &DifficultyRuleModel{
+		ID:                hasher.Encrypt(int(rule.ID)),
 		Position:          int(rule.Position) + 1,
 		Name:              rule.Name,
 		Enabled:           rule.Enabled,

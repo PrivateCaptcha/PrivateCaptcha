@@ -3131,3 +3131,89 @@ func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID 
 	}
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRuleByProperty(ctx context.Context, ruleID int32, propertyID int32) (*dbgen.DifficultyRule, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetDifficultyRuleByIDAndProperty(ctx, &dbgen.GetDifficultyRuleByIDAndPropertyParams{
+		ID:         ruleID,
+		PropertyID: Int(propertyID),
+	})
+}
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRuleByOrg(ctx context.Context, ruleID int32, orgID int32) (*dbgen.DifficultyRule, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetDifficultyRuleByIDAndOrg(ctx, &dbgen.GetDifficultyRuleByIDAndOrgParams{
+		ID:    ruleID,
+		OrgID: Int(orgID),
+	})
+}
+
+func (impl *BusinessStoreImpl) UpdateDifficultyRuleByProperty(ctx context.Context, user *dbgen.User, params *dbgen.UpdateDifficultyRuleByPropertyParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if params == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	rule, err := impl.querier.UpdateDifficultyRuleByProperty(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update difficulty rule by property", common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Updated difficulty rule", "ruleID", rule.ID, "name", rule.Name)
+
+	propertyID := rule.PropertyID.Int32
+	_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+	_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+
+	auditEvent := &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		NewValue:  NewAuditLogDifficultyRule(rule),
+	}
+
+	return rule, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) UpdateDifficultyRuleByOrg(ctx context.Context, user *dbgen.User, params *dbgen.UpdateDifficultyRuleByOrgParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if params == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	rule, err := impl.querier.UpdateDifficultyRuleByOrg(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update difficulty rule by org", common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Updated difficulty rule", "ruleID", rule.ID, "name", rule.Name)
+
+	orgID := rule.OrgID.Int32
+	_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+	_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+
+	auditEvent := &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		NewValue:  NewAuditLogDifficultyRule(rule),
+	}
+
+	return rule, auditEvent, nil
+}
