@@ -55,7 +55,7 @@ func funcMap(prefix string) template.FuncMap {
 
 type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
 
-type Model = any
+type Model = RenderContext
 type ViewModel struct {
 	Model      Model
 	View       string
@@ -155,7 +155,6 @@ type Server struct {
 	canRegister        atomic.Bool
 	SettingsTabs       []*SettingsTab
 	RateLimiter        ratelimit.HTTPRateLimiter
-	RenderConstants    interface{}
 	Jobs               Jobs
 	PlatformCtx        interface{}
 	DataCtx            interface{}
@@ -207,7 +206,6 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 
 	s.Jobs = s
 	s.SettingsTabs = s.createSettingsTabs()
-	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
 
 	platformCtx := &PlatformRenderContext{

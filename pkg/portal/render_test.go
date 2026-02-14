@@ -113,7 +113,7 @@ func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string
 		template string
-		model    any
+		model    RenderContext
 		selector string
 		matches  []string
 	}{
@@ -121,11 +121,24 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.ErrorEndpoint, "404"},
 			template: errorTemplate,
 			model:    &errorRenderContext{ErrorCode: 404, ErrorMessage: http.StatusText(404)},
+			selector: "",
+			matches:  []string{},
 		},
 		{
 			path:     []string{common.LoginEndpoint},
 			template: loginTemplate,
-			model:    &loginRenderContext{CsrfRenderContext: stubToken()},
+			model: &loginRenderContext{
+				CsrfRenderContext:    stubToken(),
+				CaptchaRenderContext: CaptchaRenderContext{},
+				Email:                "foo@bar.com",
+				EmailError:           "Something is wrong",
+				CodeError:            "Code is not OK",
+				NameError:            "Name is no good",
+				CanRegister:          true,
+				IsRegister:           false,
+			},
+			selector: "",
+			matches:  []string{},
 		},
 		{
 			path:     []string{common.LoginEndpoint},
@@ -135,7 +148,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.RegisterEndpoint},
 			template: loginTemplate,
-			model:    &loginRenderContext{CsrfRenderContext: stubToken(), IsRegister: true},
+			model:    &loginRenderContext{CsrfRenderContext: stubToken(), Email: "foo@bar.com", IsRegister: true},
 		},
 		// technically this is not needed (copy of the above), but it's an insurance against typos in case IsRegister will change
 		{
@@ -146,7 +159,9 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, common.NewEndpoint},
 			template: orgWizardTemplate,
-			model:    &orgWizardRenderContext{CsrfRenderContext: stubToken()},
+			model:    &orgWizardRenderContext{CsrfRenderContext: stubToken(), NameError: "Name is no good"},
+			selector: "",
+			matches:  []string{},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123"},
@@ -199,6 +214,7 @@ func TestRenderHTML(t *testing.T) {
 			model: &orgSettingsRenderContext{
 				CurrentOrg:        stubOrg("123"),
 				CsrfRenderContext: stubToken(),
+				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
 				CanEdit:           true,
 			},
 		},
@@ -219,7 +235,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, common.NewEndpoint},
 			template: propertyWizardTemplate,
-			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken()},
+			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken(), NameError: "Name error"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
@@ -259,7 +275,11 @@ func TestRenderHTML(t *testing.T) {
 					Property:          stubProperty("Foo", "123"),
 					Org:               stubOrg("123"),
 					CanEdit:           true,
+					NameError:         common.StatusPropertyNameEmptyError.String(),
 				},
+				Orgs:     []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+				MinLevel: 1,
+				MaxLevel: int(common.MaxDifficultyLevel),
 			},
 		},
 		// same as above, but property audit logs _template_
@@ -297,7 +317,9 @@ func TestRenderHTML(t *testing.T) {
 					ActiveTabID:       common.GeneralEndpoint,
 					Tabs:              CreateTabViewModels(common.GeneralEndpoint, server.SettingsTabs),
 				},
-				Name: "User",
+				Name:       "User",
+				EmailError: "Email error",
+				NameError:  "Name error",
 			},
 		},
 		{
@@ -314,6 +336,7 @@ func TestRenderHTML(t *testing.T) {
 					Tabs:        CreateTabViewModels(common.APIKeysEndpoint, server.SettingsTabs),
 				},
 				Keys:       []*userAPIKey{stubAPIKey("foo"), stubAPIKey("bar")},
+				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 				CreateOpen: false,
 			},
 			selector: "p.apikey-name",
@@ -363,28 +386,41 @@ func TestRenderHTML(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(fmt.Sprintf("render_%s", strings.Join(tc.path, "_")), func(t *testing.T) {
-			path := server.RelURL(strings.Join(tc.path, "/"))
-			buf, err := server.RenderResponse(t.Context(), tc.template, tc.model, &RequestContext{Path: server.RelURL(path)})
-			if err != nil {
-				t.Fatal(err)
+		for _, enterprise := range []bool{false, true} {
+			version := "community"
+			if enterprise {
+				version = "enterprise"
 			}
 
-			if len(tc.selector) > 0 {
-				document := portal_tests.ParseHTML(t, buf)
-				selection := document.Find(tc.selector)
-				if len(tc.matches) != len(selection.Nodes) {
-					t.Fatalf("Expected %v matches, but got %v", len(tc.matches), len(selection.Nodes))
+			t.Run(fmt.Sprintf("render_%s_%s", version, strings.Join(tc.path, "_")), func(t *testing.T) {
+				platformCtx := &PlatformRenderContext{
+					GitCommit:      "qwerty123",
+					Enterprise:     enterprise,
+					licenseService: server.LicenseService,
 				}
-				for i, node := range selection.Nodes {
-					nodeText := portal_tests.Text(node)
-					if tc.matches[i] != nodeText {
-						t.Errorf("Expected match %v at %v, but got %v", tc.matches[i], i, nodeText)
+
+				path := server.RelURL(strings.Join(tc.path, "/"))
+				buf, err := server.RenderResponse(t.Context(), tc.template, tc.model, &RequestContext{Path: server.RelURL(path)}, platformCtx)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if len(tc.selector) > 0 {
+					document := portal_tests.ParseHTML(t, buf)
+					selection := document.Find(tc.selector)
+					if len(tc.matches) != len(selection.Nodes) {
+						t.Fatalf("Expected %v matches, but got %v", len(tc.matches), len(selection.Nodes))
 					}
+					for i, node := range selection.Nodes {
+						nodeText := portal_tests.Text(node)
+						if tc.matches[i] != nodeText {
+							t.Errorf("Expected match %v at %v, but got %v", tc.matches[i], i, nodeText)
+						}
+					}
+				} else {
+					portal_tests.AssertWellFormedHTML(t, buf)
 				}
-			} else {
-				portal_tests.AssertWellFormedHTML(t, buf)
-			}
-		})
+			})
+		}
 	}
 }
