@@ -15,6 +15,7 @@ linters:
       - cmd/playground/
       - cmd/viewemails/
       - cmd/viewwidget/
+      - cmd/formatlogs/
       - pkg/db/generated/
 
 run:
