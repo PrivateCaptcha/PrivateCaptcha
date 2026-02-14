@@ -9,11 +9,16 @@ EXTRA_BUILD_FLAGS ?=
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 GOPATH := $(shell go env GOPATH)
-OPEN ?= open
+OPEN ?= printf "file://%s\n"
 
 setup-git:
 	git config core.hooksPath scripts/hooks
 	git config commit.cleanup whitespace
+
+docker/pc.env: docker/pc.env.example
+	cp -v docker/pc.env.example docker/pc.env
+
+setup-docker: docker/pc.env
 
 lint:
 	$(GOPATH)/bin/golangci-lint run

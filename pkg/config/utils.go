@@ -71,6 +71,7 @@ func splitHostPort(s string) (domain string, port string, err error) {
 type urlConfig struct {
 	baseURL string
 	domain  string
+	path    string
 }
 
 func (uc *urlConfig) Domain() string {
@@ -81,12 +82,26 @@ func (uc *urlConfig) URL() string {
 	return fmt.Sprintf("//%s", uc.baseURL)
 }
 
+func (uc *urlConfig) Path() string {
+	return uc.path
+}
+
 func AsURL(ctx context.Context, item common.ConfigItem) *urlConfig {
 	baseURL := strings.TrimRight(item.Value(), "/")
-	domain, _, err := splitHostPort(baseURL)
+
+	// Split host:port from path
+	// e.g. "localhost:8080/portal" → hostPort="localhost:8080", path="/portal"
+	hostPort := baseURL
+	path := ""
+	if idx := strings.Index(baseURL, "/"); idx >= 0 {
+		hostPort = baseURL[:idx]
+		path = strings.TrimRight(baseURL[idx:], "/") // e.g. "/portal"
+	}
+
+	domain, _, err := splitHostPort(hostPort)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse domain from baseURL", common.ErrAttr(err))
 	}
 
-	return &urlConfig{baseURL: baseURL, domain: domain}
+	return &urlConfig{baseURL: baseURL, domain: domain, path: path}
 }

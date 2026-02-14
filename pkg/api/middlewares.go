@@ -309,6 +309,10 @@ func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, [
 }
 
 func isOriginAllowed(origin string, property *dbgen.Property) bool {
+	if origin == property.Domain {
+		return true
+	}
+
 	if common.IsLocalhost(origin) || common.IsSubDomainOrDomain(origin, "localhost") {
 		return property.AllowLocalhost
 	}
@@ -317,7 +321,7 @@ func isOriginAllowed(origin string, property *dbgen.Property) bool {
 		return common.IsSubDomainOrDomain(origin, property.Domain)
 	}
 
-	return origin == property.Domain
+	return false
 }
 
 func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
@@ -372,8 +376,14 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if len(origin) == 0 {
 			slog.Log(ctx, common.LevelTrace, "Origin header is missing from the request")
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
+
+			if referer := r.Header.Get(common.HeaderReferer); len(referer) > 0 {
+				origin = referer
+			} else {
+				slog.Log(ctx, common.LevelTrace, "Origin and Referer headers are both missing from the request")
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			}
 		}
 
 		// we verify sitekey in the underlying DB call

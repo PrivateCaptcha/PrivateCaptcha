@@ -20,7 +20,9 @@ func requireActivationKeys() bool {
 func (j *CheckLicenseJob) RunOnce(ctx context.Context, params any) error {
 	if err := j.checkLicense(ctx); err != nil {
 		j.licenseValid.Store(false)
-		go j.quitFunc(common.CopyTraceID(ctx, context.Background()))
+		if j.quitFunc != nil {
+			go j.quitFunc(common.CopyTraceID(ctx, context.Background()))
+		}
 		return err
 	}
 

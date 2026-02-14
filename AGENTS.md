@@ -49,6 +49,14 @@
 - To build portal/web JS code, run `make build-js` followed by `make copy-static-js`
 - To build main server executable, run `make build-server` (or `make build-server-ee` if Enterprise Edition changes were made)
 
+## Running instructions
+
+- running locally requires `docker/pc.env` file to exist
+- to launch usual version, run `make run-docker` in the repo root
+- to launch enterprise version, first patch `cmd/server/main.go` file to pass `nil` instead of `quitFunc` into `maintenance.NewCheckLicenseJob` and then run `make run-docker-ee` in the repo root (don't commit this patch)
+- open http://localhost:8080/portal/ URL in browser
+- for login to the Portal use email `admin@privatecaptcha.local` (`PC_ADMIN_EMAIL` from `docker/pc.env`), wait for captcha to solve and on the next page enter two-factor code, which you can find by running `make find-docker-2fa` in the repo root (in parallel bash session)
+
 ## Testing instructions
 
 - To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
@@ -63,4 +71,3 @@
 - Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
 - For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
 - Always make sure all unit and integration tests pass before sending a PR
-- To login to the Portal for testing (when run with `make run-docker`) use email `admin@privatecaptcha.local`, wait for captcha to solve and on the next page to find two-factor code, run command `make find-docker-2fa`

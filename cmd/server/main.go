@@ -169,8 +169,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	// special case for async jobs (register handlers before adding)
 	asyncTasksJob := maintenance.NewAsyncTasksJob(businessDB)
 
+	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiServer := &api.Server{
 		Stage:              stage,
+		Prefix:             apiURLConfig.Path(),
 		BusinessDB:         businessDB,
 		TimeSeries:         timeSeriesDB,
 		RateLimiter:        ipRateLimiter,
@@ -214,11 +216,11 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
-	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
 	portalServer := &portal.Server{
 		Stage:      stage,
+		Prefix:     portalURLConfig.Path(),
 		Store:      businessDB,
 		TimeSeries: timeSeriesDB,
 		XSRF:       &common.XSRFMiddleware{Key: xsrfKey.Value(), Timeout: 1 * time.Hour},
@@ -278,11 +280,15 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalDomain := portalURLConfig.Domain()
 	portalServer.Setup(portalDomain, common.NoopMiddleware).Register(router)
 	rateLimiter := ipRateLimiter.RateLimitExFunc(publicLeakyBucketCap, publicLeakInterval)
-	cdnDomain := cdnURLConfig.Domain()
+	cdnPrefix := cdnURLConfig.Domain()
+	cdnPath := cdnURLConfig.Path()
+	if len(cdnPath) > 0 {
+		cdnPrefix = cdnURLConfig.Domain() + cdnPath
+	}
 	recovered := common.Recovered(metrics)
 	cdnChain := alice.New(recovered, metrics.CDNHandler, rateLimiter)
-	router.Handle("GET "+cdnDomain+"/portal/", http.StripPrefix("/portal/", cdnChain.Then(web.Static(GitCommit))))
-	router.Handle("GET "+cdnDomain+"/widget/", http.StripPrefix("/widget/", cdnChain.Then(widget.Static(GitCommit))))
+	router.Handle("GET "+cdnPrefix+"/portal/", http.StripPrefix(cdnPath+"/portal/", cdnChain.Then(web.Static(GitCommit))))
+	router.Handle("GET "+cdnPrefix+"/widget/", http.StripPrefix(cdnPath+"/widget/", cdnChain.Then(widget.Static(GitCommit))))
 	// "protection" (NOTE: different than usual order of monitoring)
 	publicChain := alice.New(recovered, metrics.IgnoredHandler, rateLimiter)
 	portalServer.SetupCatchAll(router, portalDomain, publicChain)

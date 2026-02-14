@@ -74,6 +74,7 @@ func init() {
 type Server struct {
 	APIHeaders         map[string][]string
 	Stage              string
+	Prefix             string
 	BusinessDB         db.Implementor
 	TimeSeries         common.TimeSeriesStore
 	Levels             *difficulty.Levels
@@ -195,7 +196,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 
 	s.Cors = cors.New(corsOpts)
 
-	prefix := domain + "/"
+	prefix := domain + common.RelURL(s.Prefix, "/")
 	slog.Debug("Setting up the API routes", "prefix", prefix)
 	rg := &common.RouteGenerator{Prefix: prefix}
 	s.setupWithPrefix(rg, s.Cors.Handler, security)
