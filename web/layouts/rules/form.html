@@ -8,20 +8,20 @@
     <div>
         <label for="{{ .Const.Name }}" class="pc-internal-form-label">Rule Name</label>
         <div class="mt-2 relative">
-            {{- if .Params.FormData.NameError -}}
+            {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.FormData.Name }}" class="w-full pc-internal-form-input-base {{ if .Params.FormData.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.Name }}" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
-        {{- if .Params.FormData.NameError -}}
-        <p class="pc-form-error-text">{{ .Params.FormData.NameError }}</p>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
         {{- end -}}
     </div>
 
     <div class="flex gap-3">
         <div class="flex h-6 shrink-0 items-center">
             <div class="group grid size-4 grid-cols-1">
-                <input id="{{ .Const.Enabled }}" name="{{ .Const.Enabled }}" type="checkbox" {{ if .Params.FormData.Enabled }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                <input id="{{ .Const.Enabled }}" name="{{ .Const.Enabled }}" type="checkbox" {{ if .Params.Enabled }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox" />
                 <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
                     <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -39,9 +39,9 @@
             <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
             <div class="mt-2">
                 <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
-                    {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
-                    {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
-                    {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
+                    {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
+                    {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
+                    {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                 </select>
             </div>
         </div>
@@ -64,7 +64,7 @@
                 <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
             </label>
             <div class="mt-2">
-                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" placeholder="Enter value..." value="{{ .Params.FormData.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
@@ -77,7 +77,7 @@
                 <div class="flex gap-3">
                     <div class="flex h-6 shrink-0 items-center">
                         <div class="group grid size-4 grid-cols-1">
-                            <input id="condition_negated" type="checkbox" x-model="conditionNegated" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                            <input id="{{ .Const.ConditionNegated }}" type="checkbox" x-model="conditionNegated" class="col-start-1 row-start-1 pc-internal-form-checkbox" />
                             <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
                                 <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -85,8 +85,8 @@
                         </div>
                     </div>
                     <div class="text-sm/6">
-                        <label for="condition_negated" class="font-medium text-gray-900">Invert condition</label>
-                        <span id="condition_negated-description" class="text-gray-500"><span class="sr-only">Inverted condition </span>(<strong>not</strong> in selected countries)</span>
+                        <label for="{{.Const.ConditionNegated}}" class="font-medium text-gray-900">Invert condition</label>
+                        <span id="{{.Const.ConditionNegated}}-description" class="text-gray-500"><span class="sr-only">Inverted condition </span>(<strong>not</strong> in selected countries)</span>
                     </div>
                 </div>
             </div>
@@ -127,9 +127,9 @@
             <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
             <div class="mt-2">
                 <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select">
-                    {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
-                    {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
-                    {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.FormData.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
+                    {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
+                    {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
+                    {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
                 </select>
             </div>
         </div>
@@ -138,7 +138,7 @@
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
             <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Level (%)</label>
             <div class="mt-2">
-                <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.FormData.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+                <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
                 <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-100%</code> to <code class="px-1 py-0.5 bg-gray-100">+100%</code></p>
             </div>
         </div>
@@ -148,12 +148,34 @@
             <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
             <div class="mt-2">
                 <select name="{{ .Const.ActionValue }}" id="growth_select" class="w-full pc-internal-form-select">
-                    {{ with .Const.GrowthTypeConstant }}<option value="0" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Constant (no growth)</option>{{end}}
-                    {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
-                    {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
-                    {{ with .Const.GrowthTypeFast }}<option value="3" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Fast</option>{{end}}
+                    {{ with .Const.GrowthTypeConstant }}<option value="0" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Constant (no growth)</option>{{end}}
+                    {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
+                    {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
+                    {{ with .Const.GrowthTypeFast }}<option value="3" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Fast</option>{{end}}
                 </select>
             </div>
         </div>
     </div>
+</div>
+
+<div class="flex items-center justify-end mt-6 space-x-6">
+    <button
+        type="reset"
+        action="action"
+        onclick="window.history.go(-1); return false;"
+        class="pc-internal-form-button pc-internal-form-button-secondary"
+        >
+        Cancel
+    </button>
+
+    <button
+        type="submit"
+        class="pc-internal-form-button pc-internal-form-button-primary"
+        >
+        <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Create
+    </button>
 </div>

@@ -2,22 +2,22 @@
 {{template "default-scripts.html" .}}
 <script>
 function ruleFormData() {
-    const formDataConditionValue = '{{ .Params.FormData.ConditionValue }}';
-    const formDataConditionProperty = '{{ .Params.FormData.ConditionProperty }}';
+    const formDataConditionValue = '{{ .Params.ConditionValue }}';
+    const formDataConditionProperty = '{{ .Params.ConditionProperty }}';
     const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
 
     // Initialize operator with negation suffix if needed
-    let initialOperator = '{{ if .Params.FormData.ConditionOperator }}{{ .Params.FormData.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
-    {{ if .Params.FormData.ConditionNegated }}
+    let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
+    {{ if .Params.ConditionNegated }}
     initialOperator = initialOperator + '_negated';
     {{ end }}
 
     return {
         conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
         conditionOperator: initialOperator,
-        conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else
+        conditionNegated: {{ if .Params.ConditionNegated }}true{{ else
         }}false{{ end }},
-        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}',
+        actionProperty: '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         get showConditionValue() {
@@ -44,6 +44,11 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
                     { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
                     { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                ];
+            } else if (this.isListCondition) {
+                return [
+                    { value: '{{ .Const.OperatorIn }}', label: 'In' },
+                    { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' },
                 ];
             } else {
                 // String operators for user_agent

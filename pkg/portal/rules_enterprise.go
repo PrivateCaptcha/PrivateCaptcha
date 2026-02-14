@@ -19,12 +19,14 @@ import (
 )
 
 const (
-	ruleTemplate = "rules/rule.html"
+	ruleTemplate     = "rules/rule.html"
+	ruleFormTemplate = "rules/form.html"
 )
 
 var (
 	ruleConstants = RuleConstants{
 		BaseRenderConstants:            baseConst,
+		DashboardEndpoint:              common.DashboardEndpoint,
 		OrgEndpoint:                    common.OrgEndpoint,
 		PropertyEndpoint:               common.PropertyEndpoint,
 		RulesEndpoint:                  common.RulesEndpoint,
@@ -56,6 +58,14 @@ var (
 		ActionValue:                    common.ParamActionValue,
 		Name:                           common.ParamName,
 		Enabled:                        common.ParamEnabled,
+		OrgLevelOwner:                  string(dbgen.AccessLevelOwner),
+		OrgLevelInvited:                string(dbgen.AccessLevelInvited),
+		OrgLevelMember:                 string(dbgen.AccessLevelMember),
+		MembersEndpoint:                common.MembersEndpoint,
+		ReportsEndpoint:                common.ReportsEndpoint,
+		IntegrationsEndpoint:           common.IntegrationsEndpoint,
+		EventsEndpoint:                 common.EventsEndpoint,
+		Tab:                            common.ParamTab,
 	}
 )
 
@@ -79,6 +89,7 @@ type RuleFormData struct {
 type RuleConstants struct {
 	BaseRenderConstants
 
+	DashboardEndpoint              string
 	OrgEndpoint                    string
 	PropertyEndpoint               string
 	RulesEndpoint                  string
@@ -110,21 +121,122 @@ type RuleConstants struct {
 	ActionPropertyHTTPRequest      string
 	Name                           string
 	Enabled                        string
+	OrgLevelOwner                  string
+	OrgLevelInvited                string
+	OrgLevelMember                 string
+	MembersEndpoint                string
+	ReportsEndpoint                string
+	IntegrationsEndpoint           string
+	EventsEndpoint                 string
+	Tab                            string
 }
 
 type RuleWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
+	RuleFormData
 	Countries  []CountryOption
 	CurrentOrg *userOrg
 	Property   *userProperty
-	FormData   *RuleFormData
 }
 
 var _ RenderContext = (*RuleWizardRenderContext)(nil)
 
 func (c *RuleWizardRenderContext) Params() interface{} { return c }
 func (c *RuleWizardRenderContext) Const() interface{}  { return ruleConstants }
+
+func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
+	// Validate operator
+	switch c.ConditionOperator {
+	case string(dbgen.RuleConditionOperatorEquals),
+		string(dbgen.RuleConditionOperatorContains),
+		string(dbgen.RuleConditionOperatorEmpty):
+	// Valid operators
+	default:
+		return common.StatusRuleConditionOperatorInvalid
+	}
+
+	// Validate value
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) && c.ConditionValue == "" {
+		return common.StatusRuleConditionValueRequired
+	}
+
+	return common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseIPAddressCondition() common.StatusCode {
+	// Validate operator - IP address can use matches or empty
+	switch c.ConditionOperator {
+	case string(dbgen.RuleConditionOperatorMatches),
+		string(dbgen.RuleConditionOperatorEmpty):
+	// Valid operators
+	default:
+		return common.StatusRuleConditionOperatorInvalid
+	}
+
+	// Validate value
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) && c.ConditionValue == "" {
+		return common.StatusRuleIPAddressRequired
+	}
+
+	return common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseCountryCodeCondition() common.StatusCode {
+	// Validate operator
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorIn) {
+		return common.StatusRuleConditionOperatorInvalid
+	}
+
+	// Validate value
+	if c.ConditionValue == "" {
+		return common.StatusRuleCountryRequired
+	}
+
+	// Country codes are comma-separated
+	return common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseDifficultyAction() (int32, common.StatusCode) {
+	if c.ActionValue == "" {
+		return 0, common.StatusRuleActionValueRequired
+	}
+
+	val, err := strconv.ParseInt(c.ActionValue, 10, 32)
+	if err != nil {
+		return 0, common.StatusRuleActionValueInvalid
+	}
+
+	if val < -100 || val > 100 {
+		return 0, common.StatusRuleDifficultyValueInvalid
+	}
+
+	return int32(val), common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseHTTPRequestAction() (int32, common.StatusCode) {
+	if len(c.ActionValue) > 0 {
+		return 1, common.StatusOK
+	}
+	return 0, common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseDifficultyGrowthAction() (int32, common.StatusCode) {
+	if len(c.ActionValue) == 0 {
+		return 0, common.StatusRuleActionValueRequired
+	}
+
+	val, err := strconv.ParseInt(c.ActionValue, 10, 32)
+	if err != nil {
+		return 0, common.StatusRuleActionValueInvalid
+	}
+
+	if val < 0 || val > 3 {
+		return 0, common.StatusRuleDifficultyGrowthInvalid
+	}
+
+	return int32(val), common.StatusOK
+}
 
 var (
 	cachedCountries []CountryOption
@@ -156,7 +268,7 @@ func getAllCountries() []CountryOption {
 func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organization, property *dbgen.Property) *RuleWizardRenderContext {
 	renderCtx := &RuleWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
-		FormData: &RuleFormData{
+		RuleFormData: RuleFormData{
 			Enabled:           true,
 			ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
 			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
@@ -261,20 +373,23 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
-	rule, formData, statusCode := s.parseRuleForm(ctx, r, property.ID, 0)
-	renderCtx.FormData = formData
+	params, statusCode := s.parseRuleForm(ctx, r, renderCtx)
 
 	if !statusCode.Success() {
-		renderCtx.ErrorMessage = statusCode.String()
-		s.render(w, r, ruleTemplate, renderCtx)
+		if len(renderCtx.ErrorMessage) == 0 {
+			renderCtx.ErrorMessage = statusCode.String()
+		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
 
-	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, rule)
+	params.PropertyID = db.Int(property.ID)
+
+	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
 
@@ -314,20 +429,23 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
 
-	rule, formData, statusCode := s.parseRuleForm(ctx, r, 0, org.ID)
-	renderCtx.FormData = formData
+	params, statusCode := s.parseRuleForm(ctx, r, renderCtx)
 
 	if !statusCode.Success() {
-		renderCtx.ErrorMessage = statusCode.String()
-		s.render(w, r, ruleTemplate, renderCtx)
+		if len(renderCtx.ErrorMessage) == 0 {
+			renderCtx.ErrorMessage = statusCode.String()
+		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
 
-	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, rule)
+	params.OrgID = db.Int(org.ID)
+
+	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
 
@@ -337,213 +455,93 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
 
-func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, propertyID int32, orgID int32) (*dbgen.CreateDifficultyRuleParams, *RuleFormData, common.StatusCode) {
-	name := strings.TrimSpace(r.FormValue(common.ParamName))
-	if name == "" {
-		return nil, nil, common.StatusRuleNameEmptyError
+func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *RuleWizardRenderContext) (*dbgen.CreateDifficultyRuleParams, common.StatusCode) {
+	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
+	if len(renderCtx.Name) == 0 {
+		renderCtx.NameError = common.StatusRuleNameEmptyError.String()
+		return nil, common.StatusRuleNameEmptyError
 	}
 
-	_, enabled := r.Form[common.ParamEnabled]
+	_, renderCtx.Enabled = r.Form[common.ParamEnabled]
 
-	conditionProperty := r.FormValue(common.ParamConditionProperty)
-	if conditionProperty == "" {
-		return nil, nil, common.StatusRuleConditionPropertyRequired
+	renderCtx.ConditionProperty = r.FormValue(common.ParamConditionProperty)
+	if len(renderCtx.ConditionProperty) == 0 {
+		return nil, common.StatusRuleConditionPropertyRequired
 	}
 
-	conditionOperator := r.FormValue(common.ParamConditionOperator)
-	conditionValue := strings.TrimSpace(r.FormValue(common.ParamConditionValue))
+	renderCtx.ConditionOperator = r.FormValue(common.ParamConditionOperator)
+	renderCtx.ConditionValue = strings.TrimSpace(r.FormValue(common.ParamConditionValue))
 
 	// Parse operator for negation
 	conditionNegated := false
-	if strings.HasSuffix(conditionOperator, "_negated") {
-		conditionNegated = true
-		conditionOperator = strings.TrimSuffix(conditionOperator, "_negated")
-	}
-
-	formData := &RuleFormData{
-		Name:              name,
-		Enabled:           enabled,
-		ConditionProperty: conditionProperty,
-		ConditionOperator: conditionOperator,
-		ConditionNegated:  conditionNegated,
-		ConditionValue:    conditionValue,
+	if strings.HasSuffix(renderCtx.ConditionOperator, "_negated") {
+		renderCtx.ConditionNegated = true
+		renderCtx.ConditionOperator = strings.TrimSuffix(renderCtx.ConditionOperator, "_negated")
 	}
 
 	// Validate and parse based on condition property type
-	var conditionValueStr pgtype.Text
-	var conditionValueInt pgtype.Int4
 	var conditionValueSeparator pgtype.Text
 	var parseStatus common.StatusCode
 
-	switch conditionProperty {
+	switch renderCtx.ConditionProperty {
 	case string(dbgen.RuleConditionPropertyUserAgent):
-		conditionValueStr, parseStatus = s.parseUserAgentCondition(conditionOperator, conditionValue)
+		parseStatus = renderCtx.parseUserAgentCondition()
 	case string(dbgen.RuleConditionPropertyIPAddress):
-		conditionValueStr, parseStatus = s.parseIPAddressCondition(conditionOperator, conditionValue)
+		parseStatus = renderCtx.parseIPAddressCondition()
 	case string(dbgen.RuleConditionPropertyCountryCode):
-		conditionValueStr, conditionValueSeparator, parseStatus = s.parseCountryCodeCondition(conditionOperator, conditionValue)
+		parseStatus = renderCtx.parseCountryCodeCondition()
+		conditionValueSeparator = db.Text(",")
 	default:
-		return nil, formData, common.StatusRuleConditionPropertyInvalid
+		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
+		return nil, common.StatusRuleConditionPropertyInvalid
 	}
 
 	if !parseStatus.Success() {
-		return nil, formData, parseStatus
+		slog.WarnContext(ctx, "Failed to parse rule condition", "condition", renderCtx.ConditionProperty, "operator", renderCtx.ConditionOperator,
+			"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated, "status", parseStatus.String())
+		return nil, parseStatus
 	}
 
-	actionProperty := r.FormValue(common.ParamActionProperty)
-	if actionProperty == "" {
-		return nil, formData, common.StatusRuleActionPropertyRequired
+	renderCtx.ActionProperty = r.FormValue(common.ParamActionProperty)
+	if len(renderCtx.ActionProperty) == 0 {
+		slog.WarnContext(ctx, "Empty action property")
+		return nil, common.StatusRuleActionPropertyRequired
 	}
 
-	actionValueStr := r.FormValue(common.ParamActionValue)
-	formData.ActionProperty = actionProperty
-	formData.ActionValue = actionValueStr
+	renderCtx.ActionValue = strings.TrimSpace(r.FormValue(common.ParamActionValue))
 
 	var actionValue int32
 	var actionStatus common.StatusCode
 
-	switch actionProperty {
+	switch renderCtx.ActionProperty {
 	case string(dbgen.RuleActionPropertyDifficultyLevelPercent):
-		actionValue, actionStatus = s.parseDifficultyAction(actionValueStr)
+		actionValue, actionStatus = renderCtx.parseDifficultyAction()
 	case string(dbgen.RuleActionPropertyHTTPRequest):
-		actionValue, actionStatus = s.parseHTTPRequestAction(actionValueStr)
+		actionValue, actionStatus = renderCtx.parseHTTPRequestAction()
 	case string(dbgen.RuleActionPropertyDifficultyGrowth):
-		actionValue, actionStatus = s.parseDifficultyGrowthAction(actionValueStr)
+		actionValue, actionStatus = renderCtx.parseDifficultyGrowthAction()
 	default:
-		return nil, formData, common.StatusRuleActionPropertyInvalid
+		slog.WarnContext(ctx, "Invalid action property", "action", renderCtx.ActionProperty)
+		return nil, common.StatusRuleActionPropertyInvalid
 	}
 
 	if !actionStatus.Success() {
-		return nil, formData, actionStatus
+		slog.WarnContext(ctx, "Failed to parse rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue,
+			actionStatus.String())
+		return nil, actionStatus
 	}
 
-	// Get the current position (last position + 1)
-	// For simplicity, we'll use 0 for now and let DB handle it
-	position := int32(0)
-
 	params := &dbgen.CreateDifficultyRuleParams{
-		Name:                     name,
-		Enabled:                  enabled,
-		ConditionProperty:        dbgen.RuleConditionProperty(conditionProperty),
-		ConditionOperator:        dbgen.RuleConditionOperator(conditionOperator),
+		Name:                     renderCtx.Name,
+		Enabled:                  renderCtx.Enabled,
+		ConditionProperty:        dbgen.RuleConditionProperty(renderCtx.ConditionProperty),
+		ConditionOperator:        dbgen.RuleConditionOperator(renderCtx.ConditionOperator),
 		ConditionOperatorNegated: conditionNegated,
-		ConditionValueStr:        conditionValueStr,
-		ConditionValueInt:        conditionValueInt,
+		ConditionValueStr:        db.Text(renderCtx.ConditionValue),
 		ConditionValueSeparator:  conditionValueSeparator,
-		Position:                 position,
-		ActionProperty:           dbgen.RuleActionProperty(actionProperty),
+		ActionProperty:           dbgen.RuleActionProperty(renderCtx.ActionProperty),
 		ActionValue:              actionValue,
 	}
 
-	if propertyID > 0 {
-		params.PropertyID = db.Int(propertyID)
-		params.OrgID = db.NullInt()
-	} else {
-		params.OrgID = db.Int(orgID)
-		params.PropertyID = db.NullInt()
-	}
-
-	return params, formData, common.StatusOK
-}
-
-func (s *Server) parseUserAgentCondition(operator string, value string) (pgtype.Text, common.StatusCode) {
-	// Validate operator
-	switch operator {
-	case string(dbgen.RuleConditionOperatorEquals),
-		string(dbgen.RuleConditionOperatorContains),
-		string(dbgen.RuleConditionOperatorEmpty):
-	// Valid operators
-	default:
-		return pgtype.Text{Valid: false}, common.StatusRuleConditionOperatorInvalid
-	}
-
-	// Validate value
-	if operator != string(dbgen.RuleConditionOperatorEmpty) && value == "" {
-		return pgtype.Text{Valid: false}, common.StatusRuleConditionValueRequired
-	}
-
-	if value != "" {
-		return pgtype.Text{String: value, Valid: true}, common.StatusOK
-	}
-
-	return pgtype.Text{Valid: false}, common.StatusOK
-}
-
-func (s *Server) parseIPAddressCondition(operator string, value string) (pgtype.Text, common.StatusCode) {
-	// Validate operator - IP address can use matches or empty
-	switch operator {
-	case string(dbgen.RuleConditionOperatorMatches),
-		string(dbgen.RuleConditionOperatorEmpty):
-	// Valid operators
-	default:
-		return pgtype.Text{Valid: false}, common.StatusRuleConditionOperatorInvalid
-	}
-
-	// Validate value
-	if operator != string(dbgen.RuleConditionOperatorEmpty) && value == "" {
-		return pgtype.Text{Valid: false}, common.StatusRuleIPAddressRequired
-	}
-
-	if value != "" {
-		return pgtype.Text{String: value, Valid: true}, common.StatusOK
-	}
-
-	return pgtype.Text{Valid: false}, common.StatusOK
-}
-
-func (s *Server) parseCountryCodeCondition(operator string, value string) (pgtype.Text, pgtype.Text, common.StatusCode) {
-	// Validate operator
-	if operator != string(dbgen.RuleConditionOperatorIn) {
-		return pgtype.Text{Valid: false}, pgtype.Text{}, common.StatusRuleConditionOperatorInvalid
-	}
-
-	// Validate value
-	if value == "" {
-		return pgtype.Text{Valid: false}, pgtype.Text{}, common.StatusRuleCountryRequired
-	}
-
-	// Country codes are comma-separated
-	return pgtype.Text{String: value, Valid: true}, pgtype.Text{String: ",", Valid: true}, common.StatusOK
-}
-
-func (s *Server) parseDifficultyAction(valueStr string) (int32, common.StatusCode) {
-	if valueStr == "" {
-		return 0, common.StatusRuleActionValueRequired
-	}
-
-	val, err := strconv.ParseInt(valueStr, 10, 32)
-	if err != nil {
-		return 0, common.StatusRuleActionValueInvalid
-	}
-
-	if val < -100 || val > 1000 {
-		return 0, common.StatusRuleDifficultyValueInvalid
-	}
-
-	return int32(val), common.StatusOK
-}
-
-func (s *Server) parseHTTPRequestAction(valueStr string) (int32, common.StatusCode) {
-	// Checkbox - if checked, value is "1", otherwise empty
-	if valueStr == "1" {
-		return 1, common.StatusOK
-	}
-	return 0, common.StatusOK
-}
-
-func (s *Server) parseDifficultyGrowthAction(valueStr string) (int32, common.StatusCode) {
-	if valueStr == "" {
-		return 0, common.StatusRuleActionValueRequired
-	}
-
-	val, err := strconv.ParseInt(valueStr, 10, 32)
-	if err != nil {
-		return 0, common.StatusRuleActionValueInvalid
-	}
-
-	if val < 0 || val > 3 {
-		return 0, common.StatusRuleDifficultyGrowthInvalid
-	}
-
-	return int32(val), common.StatusOK
+	return params, common.StatusOK
 }

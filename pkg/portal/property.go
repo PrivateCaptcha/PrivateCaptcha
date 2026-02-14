@@ -249,6 +249,9 @@ type propertyRulesRenderContext struct {
 	Rules []*DifficultyRuleModel
 }
 
+func (c *propertyRulesRenderContext) Params() interface{} { return c }
+func (c *propertyRulesRenderContext) Const() interface{}  { return ruleConstants }
+
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
 		EasyLevel:   int(common.DifficultyLevelSmall),
@@ -664,7 +667,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))
-	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
+	dashboardURL += fmt.Sprintf("?%s=%s", common.ParamTab, common.IntegrationsEndpoint)
 	common.Redirect(dashboardURL, http.StatusOK, w, r)
 
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
