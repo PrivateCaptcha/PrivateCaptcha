@@ -39,31 +39,8 @@ const (
 )
 
 var (
-	propertyConst = struct {
-		defaultConstants
-		OrgEndpoint          string
-		PropertyEndpoint     string
-		ReportsEndpoint      string
-		IntegrationsEndpoint string
-		EventsEndpoint       string
-		Tab                  string
-		APIKeysEndpoint      string
-		Stats                string
-		Name                 string
-		Domain               string
-		AllowSubdomains      string
-		AllowLocalhost       string
-		ValidityInterval     string
-		AllowReplay          string
-		MaxReplayCount       string
-		Growth               string
-		Difficulty           string
-		DeleteEndpoint       string
-		MoveEndpoint         string
-		EditEndpoint         string
-		Org                  string
-	}{
-		defaultConstants:     defaultConst,
+	propertyConst = PropertyRenderConstants{
+		BaseRenderConstants:  baseConst,
 		OrgEndpoint:          common.OrgEndpoint,
 		PropertyEndpoint:     common.PropertyEndpoint,
 		ReportsEndpoint:      common.ReportsEndpoint,
@@ -87,24 +64,51 @@ var (
 		Org:                  common.ParamOrg,
 	}
 
-	propertyWizardConst = struct {
-		defaultConstants
-		OrgEndpoint      string
-		PropertyEndpoint string
-		NewEndpoint      string
-		Name             string
-		Domain           string
-		IgnoreError      string
-	}{
-		defaultConstants: defaultConst,
-		OrgEndpoint:      common.OrgEndpoint,
-		PropertyEndpoint: common.PropertyEndpoint,
-		NewEndpoint:      common.NewEndpoint,
-		Name:             common.ParamName,
-		Domain:           common.ParamDomain,
-		IgnoreError:      common.ParamIgnoreError,
+	propertyWizardConst = PropertyWizardRenderConstants{
+		BaseRenderConstants: baseConst,
+		OrgEndpoint:         common.OrgEndpoint,
+		PropertyEndpoint:    common.PropertyEndpoint,
+		NewEndpoint:         common.NewEndpoint,
+		Name:                common.ParamName,
+		Domain:              common.ParamDomain,
+		IgnoreError:         common.ParamIgnoreError,
 	}
 )
+
+type PropertyRenderConstants struct {
+	BaseRenderConstants
+	OrgEndpoint          string
+	PropertyEndpoint     string
+	ReportsEndpoint      string
+	IntegrationsEndpoint string
+	EventsEndpoint       string
+	Tab                  string
+	APIKeysEndpoint      string
+	Stats                string
+	Name                 string
+	Domain               string
+	AllowSubdomains      string
+	AllowLocalhost       string
+	ValidityInterval     string
+	AllowReplay          string
+	MaxReplayCount       string
+	Growth               string
+	Difficulty           string
+	DeleteEndpoint       string
+	MoveEndpoint         string
+	EditEndpoint         string
+	Org                  string
+}
+
+type PropertyWizardRenderConstants struct {
+	BaseRenderConstants
+	OrgEndpoint      string
+	PropertyEndpoint string
+	NewEndpoint      string
+	Name             string
+	Domain           string
+	IgnoreError      string
+}
 
 type difficultyLevelsRenderContext struct {
 	EasyLevel   int
@@ -124,6 +128,8 @@ type propertyWizardRenderContext struct {
 
 func (c *propertyWizardRenderContext) Params() interface{} { return c }
 func (c *propertyWizardRenderContext) Const() interface{}  { return propertyWizardConst }
+
+var _ RenderContext = (*propertyWizardRenderContext)(nil)
 
 type userProperty struct {
 	ID               string
@@ -151,6 +157,8 @@ type orgPropertiesRenderContext struct {
 func (c *orgPropertiesRenderContext) Params() interface{} { return c }
 func (c *orgPropertiesRenderContext) Const() interface{}  { return portalConst }
 
+var _ RenderContext = (*orgPropertiesRenderContext)(nil)
+
 type propertyDashboardRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
@@ -166,6 +174,8 @@ type propertyDashboardRenderContext struct {
 func (c *propertyDashboardRenderContext) Params() interface{} { return c }
 func (c *propertyDashboardRenderContext) Const() interface{}  { return propertyConst }
 
+var _ RenderContext = (*propertyDashboardRenderContext)(nil)
+
 type propertySettingsRenderContext struct {
 	propertyDashboardRenderContext
 	difficultyLevelsRenderContext
@@ -176,6 +186,8 @@ type propertySettingsRenderContext struct {
 }
 
 func (c *propertySettingsRenderContext) Params() interface{} { return c }
+
+var _ RenderContext = (*propertySettingsRenderContext)(nil)
 
 func (pc *propertySettingsRenderContext) UpdateLevels() {
 	const epsilon = common.DifficultyDelta
@@ -193,6 +205,8 @@ type propertyIntegrationsRenderContext struct {
 
 func (c *propertyIntegrationsRenderContext) Params() interface{} { return c }
 
+var _ RenderContext = (*propertyIntegrationsRenderContext)(nil)
+
 type propertyAuditLogsRenderContext struct {
 	propertyDashboardRenderContext
 	AuditLogsRenderContext
@@ -201,6 +215,8 @@ type propertyAuditLogsRenderContext struct {
 }
 
 func (c *propertyAuditLogsRenderContext) Params() interface{} { return c }
+
+var _ RenderContext = (*propertyAuditLogsRenderContext)(nil)
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{

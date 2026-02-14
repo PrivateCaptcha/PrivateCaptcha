@@ -48,41 +48,19 @@ var (
 	errNoTabs             = errors.New("no settings tabs configured")
 	errInvalidAPIKeyScope = errors.New("invalid API key scope")
 
-	settingsGeneralConst = struct {
-		defaultConstants
-		UserEndpoint     string
-		GeneralEndpoint  string
-		Name             string
-		VerificationCode string
-		Email            string
-		EmailEndpoint    string
-		Tab              string
-	}{
-		defaultConstants: defaultConst,
-		UserEndpoint:     common.UserEndpoint,
-		GeneralEndpoint:  common.GeneralEndpoint,
-		Name:             common.ParamName,
-		VerificationCode: common.ParamVerificationCode,
-		Email:            common.ParamEmail,
-		EmailEndpoint:    common.EmailEndpoint,
-		Tab:              common.ParamTab,
+	settingsGeneralConst = SettingsGeneralRenderConstants{
+		BaseRenderConstants: baseConst,
+		UserEndpoint:        common.UserEndpoint,
+		GeneralEndpoint:     common.GeneralEndpoint,
+		Name:                common.ParamName,
+		VerificationCode:    common.ParamVerificationCode,
+		Email:               common.ParamEmail,
+		EmailEndpoint:       common.EmailEndpoint,
+		Tab:                 common.ParamTab,
 	}
 
-	settingsAPIKeysConst = struct {
-		defaultConstants
-		APIKeysEndpoint            string
-		NewEndpoint                string
-		APIKeyScopePuzzle          string
-		APIKeyScopePortalReadWrite string
-		APIKeyScopePortalReadOnly  string
-		Name                       string
-		Scope                      string
-		Days                       string
-		Org                        string
-		All                        string
-		Tab                        string
-	}{
-		defaultConstants:           defaultConst,
+	settingsAPIKeysConst = SettingsAPIKeysRenderConstants{
+		BaseRenderConstants:        baseConst,
 		APIKeysEndpoint:            common.APIKeysEndpoint,
 		NewEndpoint:                common.NewEndpoint,
 		APIKeyScopePuzzle:          apiKeyScopePuzzle,
@@ -96,18 +74,46 @@ var (
 		Tab:                        common.ParamTab,
 	}
 
-	settingsUsageConst = struct {
-		defaultConstants
-		UserEndpoint string
-		Stats        string
-		Tab          string
-	}{
-		defaultConstants: defaultConst,
-		UserEndpoint:     common.UserEndpoint,
-		Stats:            common.StatsEndpoint,
-		Tab:              common.ParamTab,
+	settingsUsageConst = SettingsUsageRenderConstants{
+		BaseRenderConstants: baseConst,
+		UserEndpoint:        common.UserEndpoint,
+		Stats:               common.StatsEndpoint,
+		Tab:                 common.ParamTab,
 	}
 )
+
+type SettingsGeneralRenderConstants struct {
+	BaseRenderConstants
+	UserEndpoint     string
+	GeneralEndpoint  string
+	Name             string
+	VerificationCode string
+	Email            string
+	EmailEndpoint    string
+	Tab              string
+}
+
+type SettingsAPIKeysRenderConstants struct {
+	BaseRenderConstants
+	APIKeysEndpoint            string
+	NewEndpoint                string
+	APIKeyScopePuzzle          string
+	APIKeyScopePortalReadWrite string
+	APIKeyScopePortalReadOnly  string
+	Name                       string
+	Scope                      string
+	Days                       string
+	Org                        string
+	All                        string
+	Tab                        string
+}
+
+type SettingsUsageRenderConstants struct {
+	BaseRenderConstants
+	UserEndpoint string
+	Stats        string
+	Tab          string
+}
 
 type SettingsTab struct {
 	ID             string
@@ -147,6 +153,8 @@ type settingsUsageRenderContext struct {
 func (c *settingsUsageRenderContext) Params() interface{} { return c }
 func (c *settingsUsageRenderContext) Const() interface{}  { return settingsUsageConst }
 
+var _ RenderContext = (*settingsUsageRenderContext)(nil)
+
 type settingsGeneralRenderContext struct {
 	SettingsCommonRenderContext
 	Name           string
@@ -159,6 +167,8 @@ type settingsGeneralRenderContext struct {
 
 func (c *settingsGeneralRenderContext) Params() interface{} { return c }
 func (c *settingsGeneralRenderContext) Const() interface{}  { return settingsGeneralConst }
+
+var _ RenderContext = (*settingsGeneralRenderContext)(nil)
 
 type userAPIKey struct {
 	ID                string
@@ -176,6 +186,8 @@ type userAPIKey struct {
 func (c *userAPIKey) Params() interface{} { return c }
 func (c *userAPIKey) Const() interface{}  { return settingsAPIKeysConst }
 
+var _ RenderContext = (*userAPIKey)(nil)
+
 type settingsAPIKeysRenderContext struct {
 	SettingsCommonRenderContext
 	Name       string
@@ -188,6 +200,8 @@ type settingsAPIKeysRenderContext struct {
 
 func (c *settingsAPIKeysRenderContext) Params() interface{} { return c }
 func (c *settingsAPIKeysRenderContext) Const() interface{}  { return settingsAPIKeysConst }
+
+var _ RenderContext = (*settingsAPIKeysRenderContext)(nil)
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
 	// in terms of "leaky bucket" logic

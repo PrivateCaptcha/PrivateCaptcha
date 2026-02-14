@@ -28,30 +28,32 @@ const (
 var (
 	errPortalPropertyNotFound = errors.New("portal property not found")
 
-	loginConst = struct {
-		defaultConstants
-		VerificationCode  string
-		ResendEndpoint    string
-		Email             string
-		Token             string
-		LoginEndpoint     string
-		RegisterEndpoint  string
-		TwoFactorEndpoint string
-		Name              string
-		Terms             string
-	}{
-		defaultConstants:  defaultConst,
-		VerificationCode:  common.ParamVerificationCode,
-		ResendEndpoint:    common.ResendEndpoint,
-		Email:             common.ParamEmail,
-		Token:             common.ParamCSRFToken,
-		LoginEndpoint:     common.LoginEndpoint,
-		RegisterEndpoint:  common.RegisterEndpoint,
-		TwoFactorEndpoint: common.TwoFactorEndpoint,
-		Name:              common.ParamName,
-		Terms:             common.ParamTerms,
+	loginConst = LoginRenderConstants{
+		BaseRenderConstants: baseConst,
+		VerificationCode:    common.ParamVerificationCode,
+		ResendEndpoint:      common.ResendEndpoint,
+		Email:               common.ParamEmail,
+		Token:               common.ParamCSRFToken,
+		LoginEndpoint:       common.LoginEndpoint,
+		RegisterEndpoint:    common.RegisterEndpoint,
+		TwoFactorEndpoint:   common.TwoFactorEndpoint,
+		Name:                common.ParamName,
+		Terms:               common.ParamTerms,
 	}
 )
+
+type LoginRenderConstants struct {
+	BaseRenderConstants
+	VerificationCode  string
+	ResendEndpoint    string
+	Email             string
+	Token             string
+	LoginEndpoint     string
+	RegisterEndpoint  string
+	TwoFactorEndpoint string
+	Name              string
+	Terms             string
+}
 
 type loginRenderContext struct {
 	CsrfRenderContext
@@ -63,6 +65,8 @@ type loginRenderContext struct {
 	CanRegister bool
 	IsRegister  bool
 }
+
+var _ RenderContext = (*loginRenderContext)(nil)
 
 func (c *loginRenderContext) Params() interface{} { return c }
 func (c *loginRenderContext) Const() interface{}  { return loginConst }

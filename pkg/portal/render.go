@@ -18,7 +18,7 @@ type RenderContext interface {
 	Const() interface{}
 }
 
-type defaultConstants struct {
+type BaseRenderConstants struct {
 	HeaderCSRFToken      string
 	SettingsEndpoint     string
 	TabEndpoint          string
@@ -28,7 +28,7 @@ type defaultConstants struct {
 	NotificationEndpoint string
 }
 
-var defaultConst = defaultConstants{
+var baseConst = BaseRenderConstants{
 	HeaderCSRFToken:      common.HeaderCSRFToken,
 	SettingsEndpoint:     common.SettingsEndpoint,
 	TabEndpoint:          common.TabEndpoint,

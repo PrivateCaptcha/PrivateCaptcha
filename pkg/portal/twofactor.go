@@ -15,6 +15,8 @@ import (
 
 type emptyRenderContext struct{}
 
+var _ RenderContext = (*emptyRenderContext)(nil)
+
 func (c emptyRenderContext) Params() interface{} { return c }
 func (c emptyRenderContext) Const() interface{}  { return nil }
 
