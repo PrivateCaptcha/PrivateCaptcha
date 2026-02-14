@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -11,219 +12,24 @@ import (
 	"time"
 )
 
-// HTMLTemplate is the constant defining the page structure
-const HTMLTemplate = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Error Log Viewer</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f4f4f9; margin: 0; }
-        h1 { color: #333; margin: 0 0 12px 0; }
-
-        .page-header {
-            position: sticky;
-            top: 0;
-            z-index: 3;
-            background: #f4f4f9;
-            padding: 20px 20px 12px 20px;
-            border-bottom: 1px solid #ccc;
-        }
-
-        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
-        thead th { position: sticky; top: 110px; z-index: 2; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: middle; }
-        td.details { max-width: 400px; }
-        thead { background-color: #f8f9fa; }
-        th { background-color: #f8f9fa; font-weight: 600; color: #555; }
-        tr:hover { background-color: #f1f1f1; }
-
-        /* Highlighting Errors */
-        .error-row { box-shadow: inset 5px 0 0 #dc3545; border-left: none; }
-        .warn-row  { box-shadow: inset 5px 0 0 #ffc107; border-left: none; }
-
-        /* Badges */
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; color: white; background: #6c757d; }
-        .badge.error, .badge.critical, .badge.fatal { background: #dc3545; }
-        .badge.warning, .badge.warn { background: #ffc107; color: #333; }
-        .badge.info { background: #17a2b8; }
-
-        pre { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 0.75rem; margin-top: 5px; }
-        .message { font-weight: 500; font-size: 1rem; max-width: 600px; }
-        .error-detail { border: 2px solid #dc3545; font-size: 1rem; display: inline-block; padding: 6px 10px; border-radius: 0.5rem; }
-
-        .filter-row { display: flex; align-items: center; justify-content: flex-start; gap: 3rem; flex-wrap: wrap; }
-        .filter { display: flex; align-items: center; gap: 8px; }
-        .filter label { font-weight: 600; margin-right: 8px; }
-        .total { font-weight: 600; color: #333; }
-        .page-body { padding: 20px; }
-
-        .trace-cell {
-            border-radius: 0.375rem;
-            padding: 0.25rem 0.5rem;
-        }
-    </style>
-</head>
-<body>
-    <div class="page-header">
-        <h1>Log Analysis Report</h1>
-        <div class="filter-row">
-            <div class="filter">
-                <label for="levelFilter">Minimum Level:</label>
-                <select id="levelFilter">
-                    <option value="ERROR">ERROR</option>
-                    <option value="WARN">WARN</option>
-                    <option value="INFO">INFO</option>
-                    <option value="DEBUG">DEBUG</option>
-                    <option value="DEBUG-4">DEBUG-4 (Trace)</option>
-                </select>
-            </div>
-            <div class="filter">
-                <label for="traceFilter">Trace ID:</label>
-                <select id="traceFilter">
-                    <option value="">All</option>
-                </select>
-            </div>
-            <div class="total">Total Entries: {{len .}}</div>
-        </div>
-    </div>
-
-    <div class="page-body">
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 150px;">Timestamp</th>
-                    <th style="width: 80px;">Level</th>
-                    <th style="width: 100px;">Trace ID</th>
-                    <th style="width: 100px;">Session ID</th>
-                    <th style="width: 80px;">Service</th>
-                    <th>Message</th>
-                    <th>Error</th>
-                    <th style="width: 120px;">Details</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .}}
-                <tr class="{{if .IsError}}error-row{{else if .IsWarn}}warn-row{{end}}" data-level="{{.Level}}" data-trace-id="{{.TraceID}}">
-                    <td>{{.Timestamp}}</td>
-                    <td><span class="badge {{.LevelClass}}">{{.Level}}</span></td>
-                    <td>
-                        {{if .TraceID}}
-                        <span class="trace-cell" data-trace-color="{{.TraceColor}}" style="background-color: {{.TraceBackground}};">
-                            {{.TraceID}}
-                        </span>
-                        {{else}}
-                            <span class="trace-cell" style="opacity: 0.3">(empty)</span>
-                        {{end}}
-                    </td>
-                    <td>{{.SessID}}</td>
-                    <td>{{.Service}}</td>
-                    <td>
-                        <div class="message">{{.Message}}</div>
-                    </td>
-                    <td>
-                        {{if .ErrorDetails}}
-                        <p class="error-detail">{{.ErrorDetails}}</p>
-                        {{end}}
-                    </td>
-                    <td class="details">
-                        {{if .Extras}}
-                        <pre>{{.Extras}}</pre>
-                        {{end}}
-                        {{if .Details}}
-                        <pre>{{.Details}}</pre>
-                        {{end}}
-                    </td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-    </div>
-
-    <script>
-        const levelOrder = {
-            "DEBUG-4": 1,
-            "TRACE": 1,
-            "DEBUG": 2,
-            "INFO": 3,
-            "WARN": 4,
-            "WARNING": 4,
-            "ERROR": 5,
-            "CRITICAL": 6,
-            "FATAL": 7
-        };
-
-        const filterSelect = document.getElementById("levelFilter");
-        const traceFilter = document.getElementById("traceFilter");
-        filterSelect.value = "ERROR";
-
-        function applyFilter() {
-            const minLevel = filterSelect.value;
-            const minRank = levelOrder[minLevel] || 0;
-            const selectedTrace = traceFilter.value;
-            const emptyToken = "__EMPTY__";
-
-            document.querySelectorAll("tbody tr").forEach(row => {
-                const rowLevel = (row.dataset.level || "").toUpperCase();
-                const rowRank = levelOrder[rowLevel] || 0;
-                const rowTrace = row.dataset.traceId || "";
-                const levelMatch = rowRank >= minRank;
-                const traceMatch =
-                    selectedTrace === "" ||
-                    (selectedTrace === emptyToken && rowTrace === "") ||
-                    rowTrace === selectedTrace;
-                row.style.display = levelMatch && traceMatch ? "" : "none";
-            });
-        }
-
-        function buildTraceFilter() {
-            const traces = new Set();
-            document.querySelectorAll("tbody tr").forEach(row => {
-                const trace = row.dataset.traceId || "";
-                traces.add(trace);
-            });
-
-            const ordered = Array.from(traces).sort((a, b) => {
-                if (a === "") return -1;
-                if (b === "") return 1;
-                return a.localeCompare(b);
-            });
-
-            const emptyToken = "__EMPTY__";
-            ordered.forEach(trace => {
-                const option = document.createElement("option");
-                option.value = trace === "" ? emptyToken : trace;
-                option.textContent = trace === "" ? "(empty)" : trace;
-                traceFilter.appendChild(option);
-            });
-        }
-
-        filterSelect.addEventListener("change", applyFilter);
-        traceFilter.addEventListener("change", applyFilter);
-        buildTraceFilter();
-        applyFilter();
-    </script>
-</body>
-</html>
-`
+//go:embed report.html
+var htmlTemplate string
 
 // LogEntry represents the normalized data structure for the template
 type LogEntry struct {
-	Timestamp       string
-	Level           string
-	LevelClass      string
-	Message         string
-	Details         string
-	ErrorDetails    string
-	Extras          string
-	TraceID         string
-	SessID          string
-	Service         string
-	IsError         bool
-	IsWarn          bool
-	TraceColor      string
-	TraceBackground template.CSS
+	Timestamp            string
+	Level                string
+	LevelClass           string
+	Message              string
+	Details              string
+	ErrorDetails         string
+	Extras               string
+	TraceID              string
+	SessID               string
+	Service              string
+	TraceColor           string
+	TraceBackground      template.CSS
+	TraceHoverBackground template.CSS
 }
 
 func main() {
@@ -268,7 +74,7 @@ func main() {
 	defer tmpFile.Close()
 
 	// 3. Render Template
-	t := template.Must(template.New("report").Parse(HTMLTemplate))
+	t := template.Must(template.New("report").Parse(htmlTemplate))
 	err = t.Execute(tmpFile, logs)
 	if err != nil {
 		panic(err)
@@ -307,6 +113,7 @@ func applyTraceColors(entries []LogEntry) {
 		}
 		entries[i].TraceColor = color
 		entries[i].TraceBackground = withAlpha(color, 0.12)
+		entries[i].TraceHoverBackground = withAlpha(color, 0.35)
 	}
 }
 
@@ -354,15 +161,7 @@ func normalizeLog(raw map[string]interface{}) LogEntry {
 	}
 
 	// Determine styling logic
-	lvl := strings.ToUpper(entry.Level)
 	entry.LevelClass = strings.ToLower(entry.Level)
-
-	if lvl == "ERROR" || lvl == "CRITICAL" || lvl == "FATAL" {
-		entry.IsError = true
-	}
-	if lvl == "WARN" || lvl == "WARNING" {
-		entry.IsWarn = true
-	}
 
 	// Collect extra fields not mapped to columns/message/details
 	entry.Extras = formatExtras(raw)
