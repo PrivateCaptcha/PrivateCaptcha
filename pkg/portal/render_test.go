@@ -113,7 +113,7 @@ func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string
 		template string
-		model    any
+		model    RenderContext
 		selector string
 		matches  []string
 	}{

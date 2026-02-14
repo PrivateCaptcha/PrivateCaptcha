@@ -24,6 +24,9 @@ type errorRenderContext struct {
 	Detail       string
 }
 
+func (c *errorRenderContext) Params() interface{} { return c }
+func (c *errorRenderContext) Const() interface{}  { return defaultConst }
+
 func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code int) {
 	slog.DebugContext(ctx, "Rendering error page", "code", code)
 
@@ -47,7 +50,7 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		Platform interface{}
 	}{
 		Params:   data,
-		Const:    s.RenderConstants,
+		Const:    data.Const(),
 		Ctx:      reqCtx,
 		Platform: s.PlatformCtx,
 	}

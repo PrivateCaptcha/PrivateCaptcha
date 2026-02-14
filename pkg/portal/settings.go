@@ -47,6 +47,66 @@ const (
 var (
 	errNoTabs             = errors.New("no settings tabs configured")
 	errInvalidAPIKeyScope = errors.New("invalid API key scope")
+
+	settingsGeneralConst = struct {
+		defaultConstants
+		UserEndpoint     string
+		GeneralEndpoint  string
+		Name             string
+		VerificationCode string
+		Email            string
+		EmailEndpoint    string
+		Tab              string
+	}{
+		defaultConstants: defaultConst,
+		UserEndpoint:     common.UserEndpoint,
+		GeneralEndpoint:  common.GeneralEndpoint,
+		Name:             common.ParamName,
+		VerificationCode: common.ParamVerificationCode,
+		Email:            common.ParamEmail,
+		EmailEndpoint:    common.EmailEndpoint,
+		Tab:              common.ParamTab,
+	}
+
+	settingsAPIKeysConst = struct {
+		defaultConstants
+		APIKeysEndpoint            string
+		NewEndpoint                string
+		APIKeyScopePuzzle          string
+		APIKeyScopePortalReadWrite string
+		APIKeyScopePortalReadOnly  string
+		Name                       string
+		Scope                      string
+		Days                       string
+		Org                        string
+		All                        string
+		Tab                        string
+	}{
+		defaultConstants:           defaultConst,
+		APIKeysEndpoint:            common.APIKeysEndpoint,
+		NewEndpoint:                common.NewEndpoint,
+		APIKeyScopePuzzle:          apiKeyScopePuzzle,
+		APIKeyScopePortalReadWrite: apiKeyScopePortal + apiKeyReadWriteSuffix,
+		APIKeyScopePortalReadOnly:  apiKeyScopePortal + apiKeyReadOnlySuffix,
+		Name:                       common.ParamName,
+		Scope:                      common.ParamScope,
+		Days:                       common.ParamDays,
+		Org:                        common.ParamOrg,
+		All:                        common.All,
+		Tab:                        common.ParamTab,
+	}
+
+	settingsUsageConst = struct {
+		defaultConstants
+		UserEndpoint string
+		Stats        string
+		Tab          string
+	}{
+		defaultConstants: defaultConst,
+		UserEndpoint:     common.UserEndpoint,
+		Stats:            common.StatsEndpoint,
+		Tab:              common.ParamTab,
+	}
 )
 
 type SettingsTab struct {
@@ -84,6 +144,9 @@ type settingsUsageRenderContext struct {
 	Limit                   int64
 }
 
+func (c *settingsUsageRenderContext) Params() interface{} { return c }
+func (c *settingsUsageRenderContext) Const() interface{}  { return settingsUsageConst }
+
 type settingsGeneralRenderContext struct {
 	SettingsCommonRenderContext
 	Name           string
@@ -93,6 +156,9 @@ type settingsGeneralRenderContext struct {
 	TwoFactorEmail string
 	EditEmail      bool
 }
+
+func (c *settingsGeneralRenderContext) Params() interface{} { return c }
+func (c *settingsGeneralRenderContext) Const() interface{}  { return settingsGeneralConst }
 
 type userAPIKey struct {
 	ID                string
@@ -107,6 +173,9 @@ type userAPIKey struct {
 	LastUsedAt        string
 }
 
+func (c *userAPIKey) Params() interface{} { return c }
+func (c *userAPIKey) Const() interface{}  { return settingsAPIKeysConst }
+
 type settingsAPIKeysRenderContext struct {
 	SettingsCommonRenderContext
 	Name       string
@@ -116,6 +185,9 @@ type settingsAPIKeysRenderContext struct {
 	Orgs       []*userOrg
 	CreateOpen bool
 }
+
+func (c *settingsAPIKeysRenderContext) Params() interface{} { return c }
+func (c *settingsAPIKeysRenderContext) Const() interface{}  { return settingsAPIKeysConst }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
 	// in terms of "leaky bucket" logic

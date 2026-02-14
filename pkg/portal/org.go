@@ -21,6 +21,58 @@ var (
 	errNoOrgs         = errors.New("user has no organizations")
 	stubUserOrg       = &userOrg{ID: "-1"}
 	propertiesPerPage = 30
+
+	portalConst = struct {
+		defaultConstants
+		OrgEndpoint        string
+		DashboardEndpoint  string
+		OrgLevelOwner      string
+		OrgLevelInvited    string
+		OrgLevelMember     string
+		MembersEndpoint    string
+		EventsEndpoint     string
+		PropertyEndpoint   string
+		NewEndpoint        string
+		PropertiesEndpoint string
+		Page               string
+		Email              string
+		Name               string
+		TransferEndpoint   string
+		DeleteEndpoint     string
+		EditEndpoint       string
+		User               string
+	}{
+		defaultConstants:   defaultConst,
+		OrgEndpoint:        common.OrgEndpoint,
+		DashboardEndpoint:  common.DashboardEndpoint,
+		OrgLevelOwner:      string(dbgen.AccessLevelOwner),
+		OrgLevelInvited:    string(dbgen.AccessLevelInvited),
+		OrgLevelMember:     string(dbgen.AccessLevelMember),
+		MembersEndpoint:    common.MembersEndpoint,
+		EventsEndpoint:     common.EventsEndpoint,
+		PropertyEndpoint:   common.PropertyEndpoint,
+		NewEndpoint:        common.NewEndpoint,
+		PropertiesEndpoint: common.PropertiesEndpoint,
+		Page:               common.ParamPage,
+		Email:              common.ParamEmail,
+		Name:               common.ParamName,
+		TransferEndpoint:   common.TransferEndpoint,
+		DeleteEndpoint:     common.DeleteEndpoint,
+		EditEndpoint:       common.EditEndpoint,
+		User:               common.ParamUser,
+	}
+
+	orgWizardConst = struct {
+		defaultConstants
+		OrgEndpoint string
+		NewEndpoint string
+		Name        string
+	}{
+		defaultConstants: defaultConst,
+		OrgEndpoint:      common.OrgEndpoint,
+		NewEndpoint:      common.NewEndpoint,
+		Name:             common.ParamName,
+	}
 )
 
 const (
@@ -46,12 +98,18 @@ type orgSettingsRenderContext struct {
 	CanTransfer bool
 }
 
+func (c *orgSettingsRenderContext) Params() interface{} { return c }
+func (c *orgSettingsRenderContext) Const() interface{}  { return portalConst }
+
 type orgAuditLogsRenderContext struct {
 	AlertRenderContext
 	AuditLogsRenderContext
 	CurrentOrg *userOrg
 	CanView    bool
 }
+
+func (c *orgAuditLogsRenderContext) Params() interface{} { return c }
+func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
 
 type orgUser struct {
 	Name      string
@@ -69,6 +127,9 @@ type orgMemberRenderContext struct {
 	CanEdit    bool
 }
 
+func (c *orgMemberRenderContext) Params() interface{} { return c }
+func (c *orgMemberRenderContext) Const() interface{}  { return portalConst }
+
 type userOrg struct {
 	Name  string
 	ID    string
@@ -85,11 +146,17 @@ type orgDashboardRenderContext struct {
 	Properties []*userProperty
 }
 
+func (c *orgDashboardRenderContext) Params() interface{} { return c }
+func (c *orgDashboardRenderContext) Const() interface{}  { return portalConst }
+
 type orgWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	NameError string
 }
+
+func (c *orgWizardRenderContext) Params() interface{} { return c }
+func (c *orgWizardRenderContext) Const() interface{}  { return orgWizardConst }
 
 func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHasher) *orgUser {
 	return &orgUser{

@@ -48,6 +48,20 @@ type UserAuditLog struct {
 
 var (
 	errUnexpectedAuditLogPayload = errors.New("unexpected audit log payload")
+
+	auditConst = struct {
+		defaultConstants
+		Days           string
+		EventsEndpoint string
+		ExportEndpoint string
+		Page           string
+	}{
+		defaultConstants: defaultConst,
+		Days:             common.ParamDays,
+		EventsEndpoint:   common.EventsEndpoint,
+		ExportEndpoint:   common.ExportEndpoint,
+		Page:             common.ParamPage,
+	}
 )
 
 func (ul *UserAuditLog) initFromUser(oldValue, newValue *db.AuditLogUser) error {
@@ -256,6 +270,9 @@ type MainAuditLogsRenderContext struct {
 	To   int
 	Days int
 }
+
+func (c *MainAuditLogsRenderContext) Params() interface{} { return c }
+func (c *MainAuditLogsRenderContext) Const() interface{}  { return auditConst }
 
 func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
