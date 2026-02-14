@@ -4,55 +4,56 @@
 function ruleFormData() {
     const formDataConditionValue = '{{ .Params.FormData.ConditionValue }}';
     const formDataConditionProperty = '{{ .Params.FormData.ConditionProperty }}';
-    const isCountryCondition = formDataConditionProperty === '{{ .Params.ConditionCountryCode }}';
-    
+    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
+
     // Initialize operator with negation suffix if needed
-    let initialOperator = '{{ if .Params.FormData.ConditionOperator }}{{ .Params.FormData.ConditionOperator }}{{ else }}{{ index .Params.StringOperators 0 }}{{ end }}';
+    let initialOperator = '{{ if .Params.FormData.ConditionOperator }}{{ .Params.FormData.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
     {{ if .Params.FormData.ConditionNegated }}
     initialOperator = initialOperator + '_negated';
     {{ end }}
-    
+
     return {
-        conditionProperty: formDataConditionProperty || '{{ index .Params.ConditionProperties 0 }}',
+        conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
         conditionOperator: initialOperator,
-        conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else }}false{{ end }},
-        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}{{ .Params.ActionPropertyDifficultyLevel }}{{ end }}',
+        conditionNegated: {{ if .Params.FormData.ConditionNegated }}true{{ else
+        }}false{{ end }},
+        actionProperty: '{{ if .Params.FormData.ActionProperty }}{{ .Params.FormData.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         get showConditionValue() {
             const baseOperator = this.conditionOperator.replace('_negated', '');
-            return baseOperator !== '{{ .Params.OperatorEmpty }}';
+            return baseOperator !== '{{ .Const.OperatorEmpty }}';
         },
 
         get isStringCondition() {
-            return this.conditionProperty === '{{ .Params.ConditionUserAgent }}';
+            return this.conditionProperty === '{{ .Const.ConditionUserAgent }}';
         },
 
         get isListCondition() {
-            return this.conditionProperty === '{{ .Params.ConditionCountryCode }}';
+            return this.conditionProperty === '{{ .Const.ConditionCountryCode }}';
         },
 
         get isIPCondition() {
-            return this.conditionProperty === '{{ .Params.ConditionIPAddress }}';
+            return this.conditionProperty === '{{ .Const.ConditionIPAddress }}';
         },
 
         get availableOperators() {
             if (this.isIPCondition) {
                 return [
-                    { value: '{{ .Params.OperatorMatches }}', label: 'Matches' },
-                    { value: '{{ .Params.OperatorMatches }}_negated', label: 'Not Matches' },
-                    { value: '{{ .Params.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Params.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                    { value: '{{ .Const.OperatorMatches }}', label: 'Matches' },
+                    { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
+                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
                 ];
             } else {
                 // String operators for user_agent
                 return [
-                    { value: '{{ .Params.OperatorEquals }}', label: 'Equals' },
-                    { value: '{{ .Params.OperatorEquals }}_negated', label: 'Not Equals' },
-                    { value: '{{ .Params.OperatorContains }}', label: 'Contains' },
-                    { value: '{{ .Params.OperatorContains }}_negated', label: 'Not Contains' },
-                    { value: '{{ .Params.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Params.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                    { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
+                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
+                    { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
+                    { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
+                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
                 ];
             }
         },

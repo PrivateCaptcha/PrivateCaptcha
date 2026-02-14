@@ -393,7 +393,6 @@ func TestRenderHTML(t *testing.T) {
 				Property:           stubProperty("my property", "123"),
 				FormData:           &RuleFormData{},
 				Countries:          []CountryOption{},
-				RuleConstants:      ruleConstants,
 			},
 			selector: "",
 			matches:  []string{},

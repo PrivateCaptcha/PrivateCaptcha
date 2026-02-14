@@ -24,6 +24,11 @@ const (
 
 var (
 	ruleConstants = RuleConstants{
+		BaseRenderConstants:            baseConst,
+		OrgEndpoint:                    common.OrgEndpoint,
+		PropertyEndpoint:               common.PropertyEndpoint,
+		RulesEndpoint:                  common.RulesEndpoint,
+		NewEndpoint:                    common.NewEndpoint,
 		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
@@ -32,9 +37,12 @@ var (
 		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
 		OperatorMatches:                string(dbgen.RuleConditionOperatorMatches),
 		OperatorIn:                     string(dbgen.RuleConditionOperatorIn),
-		ConditionProperties:            []string{string(dbgen.RuleConditionPropertyUserAgent), string(dbgen.RuleConditionPropertyIPAddress), string(dbgen.RuleConditionPropertyCountryCode)},
 		StringOperators:                []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
 		IPOperators:                    []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
+		ConditionProperty:              common.ParamConditionProperty,
+		ConditionPropertyUserAgent:     string(dbgen.RuleConditionPropertyUserAgent),
+		ConditionPropertyIPAddress:     string(dbgen.RuleConditionPropertyIPAddress),
+		ConditionPropertyCountryCode:   string(dbgen.RuleConditionPropertyCountryCode),
 		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
 		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
 		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),
@@ -42,6 +50,12 @@ var (
 		ActionPropertyDifficultyLevel:  string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		ActionPropertyDifficultyGrowth: string(dbgen.RuleActionPropertyDifficultyGrowth),
 		ActionPropertyHTTPRequest:      string(dbgen.RuleActionPropertyHTTPRequest),
+		ActionProperty:                 common.ParamActionProperty,
+		ConditionOperator:              common.ParamConditionOperator,
+		ConditionValue:                 common.ParamConditionValue,
+		ActionValue:                    common.ParamActionValue,
+		Name:                           common.ParamName,
+		Enabled:                        common.ParamEnabled,
 	}
 )
 
@@ -63,15 +77,28 @@ type RuleFormData struct {
 }
 
 type RuleConstants struct {
+	BaseRenderConstants
+
+	OrgEndpoint                    string
+	PropertyEndpoint               string
+	RulesEndpoint                  string
+	NewEndpoint                    string
 	ConditionUserAgent             string
 	ConditionIPAddress             string
 	ConditionCountryCode           string
+	ConditionProperty              string
+	ConditionOperator              string
+	ConditionValue                 string
+	ActionProperty                 string
+	ActionValue                    string
+	ConditionPropertyUserAgent     string
+	ConditionPropertyIPAddress     string
+	ConditionPropertyCountryCode   string
 	OperatorEquals                 string
 	OperatorContains               string
 	OperatorEmpty                  string
 	OperatorMatches                string
 	OperatorIn                     string
-	ConditionProperties            []string
 	StringOperators                []string
 	IPOperators                    []string
 	GrowthTypeConstant             string
@@ -81,17 +108,23 @@ type RuleConstants struct {
 	ActionPropertyDifficultyLevel  string
 	ActionPropertyDifficultyGrowth string
 	ActionPropertyHTTPRequest      string
+	Name                           string
+	Enabled                        string
 }
 
 type RuleWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
-	RuleConstants
 	Countries  []CountryOption
 	CurrentOrg *userOrg
 	Property   *userProperty
 	FormData   *RuleFormData
 }
+
+var _ RenderContext = (*RuleWizardRenderContext)(nil)
+
+func (c *RuleWizardRenderContext) Params() interface{} { return c }
+func (c *RuleWizardRenderContext) Const() interface{}  { return ruleConstants }
 
 var (
 	cachedCountries []CountryOption
@@ -129,8 +162,7 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
 			ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		},
-		RuleConstants: ruleConstants,
-		Countries:     getAllCountries(),
+		Countries: getAllCountries(),
 	}
 
 	if property != nil {

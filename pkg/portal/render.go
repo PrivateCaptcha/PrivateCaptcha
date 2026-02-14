@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 

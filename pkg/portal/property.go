@@ -71,6 +71,7 @@ var (
 		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
 		OrgLevelInvited:      string(dbgen.AccessLevelInvited),
 		OrgLevelMember:       string(dbgen.AccessLevelMember),
+		RulesEndpoint:        common.RulesEndpoint,
 	}
 
 	propertyWizardConst = PropertyWizardRenderConstants{
@@ -110,6 +111,7 @@ type PropertyRenderConstants struct {
 	OrgLevelOwner        string
 	OrgLevelInvited      string
 	OrgLevelMember       string
+	RulesEndpoint        string
 }
 
 type PropertyWizardRenderConstants struct {
@@ -229,7 +231,6 @@ type propertyAuditLogsRenderContext struct {
 func (c *propertyAuditLogsRenderContext) Params() interface{} { return c }
 
 var _ RenderContext = (*propertyAuditLogsRenderContext)(nil)
-
 
 type DifficultyRuleModel struct {
 	Position          int

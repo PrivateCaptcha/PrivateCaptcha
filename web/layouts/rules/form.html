@@ -39,14 +39,9 @@
             <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
             <div class="mt-2">
                 <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
-                    {{ range .Params.ConditionProperties }}
-                    <option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>
-                    {{ if eq . $.Params.ConditionUserAgent }}User Agent
-                    {{ else if eq . $.Params.ConditionIPAddress }}IP Address
-                    {{ else if eq . $.Params.ConditionCountryCode }}Country
-                    {{ end }}
-                    </option>
-                    {{ end }}
+                    {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
+                    {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
+                    {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.FormData.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                 </select>
             </div>
         </div>
@@ -122,7 +117,7 @@
                 <input type="hidden" name="{{ .Const.ConditionValue }}" :value="selectedCountries.join(',')" />
 
                 <!-- Hidden input for operator with negation -->
-                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Params.OperatorIn }}_negated' : '{{ .Params.OperatorIn }}'" />
+                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" />
             </div>
         </div>
     </div>
@@ -157,7 +152,6 @@
                     {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
                     {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
                     {{ with .Const.GrowthTypeFast }}<option value="3" {{ if eq $.Params.FormData.ActionValue . }}selected{{ end }}>Fast</option>{{end}}
-                    </option>
                 </select>
             </div>
         </div>

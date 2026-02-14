@@ -41,6 +41,7 @@ var (
 		DeleteEndpoint:      common.DeleteEndpoint,
 		EditEndpoint:        common.EditEndpoint,
 		User:                common.ParamUser,
+		RulesEndpoint:       common.RulesEndpoint,
 	}
 
 	orgWizardConst = OrgWizardRenderConstants{
@@ -50,6 +51,36 @@ var (
 		Name:                common.ParamName,
 	}
 )
+
+type PortalRenderConstants struct {
+	BaseRenderConstants
+
+	OrgEndpoint        string
+	DashboardEndpoint  string
+	OrgLevelOwner      string
+	OrgLevelInvited    string
+	OrgLevelMember     string
+	MembersEndpoint    string
+	EventsEndpoint     string
+	PropertyEndpoint   string
+	NewEndpoint        string
+	PropertiesEndpoint string
+	Page               string
+	Email              string
+	Name               string
+	TransferEndpoint   string
+	DeleteEndpoint     string
+	EditEndpoint       string
+	User               string
+	RulesEndpoint      string
+}
+
+type OrgWizardRenderConstants struct {
+	BaseRenderConstants
+	OrgEndpoint string
+	NewEndpoint string
+	Name        string
+}
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
@@ -97,6 +128,11 @@ type orgRulesRenderContext struct {
 	CurrentOrg *userOrg
 	Rules      []*DifficultyRuleModel
 }
+
+var _ RenderContext = (*orgRulesRenderContext)(nil)
+
+func (c *orgRulesRenderContext) Params() interface{} { return c }
+func (c *orgRulesRenderContext) Const() interface{}  { return ruleConstants }
 
 type orgUser struct {
 	Name      string
