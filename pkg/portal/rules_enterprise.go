@@ -23,54 +23,6 @@ const (
 	ruleFormTemplate = "rules/form.html"
 )
 
-var (
-	ruleConstants = RuleConstants{
-		BaseRenderConstants:            baseConst,
-		DashboardEndpoint:              common.DashboardEndpoint,
-		OrgEndpoint:                    common.OrgEndpoint,
-		PropertyEndpoint:               common.PropertyEndpoint,
-		RulesEndpoint:                  common.RulesEndpoint,
-		NewEndpoint:                    common.NewEndpoint,
-		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
-		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
-		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
-		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
-		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
-		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
-		OperatorMatches:                string(dbgen.RuleConditionOperatorMatches),
-		OperatorIn:                     string(dbgen.RuleConditionOperatorIn),
-		StringOperators:                []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
-		IPOperators:                    []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
-		ConditionProperty:              common.ParamConditionProperty,
-		ConditionPropertyUserAgent:     string(dbgen.RuleConditionPropertyUserAgent),
-		ConditionPropertyIPAddress:     string(dbgen.RuleConditionPropertyIPAddress),
-		ConditionPropertyCountryCode:   string(dbgen.RuleConditionPropertyCountryCode),
-		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
-		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
-		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),
-		GrowthTypeFast:                 string(dbgen.DifficultyGrowthFast),
-		ActionPropertyDifficultyLevel:  string(dbgen.RuleActionPropertyDifficultyLevelPercent),
-		ActionPropertyDifficultyGrowth: string(dbgen.RuleActionPropertyDifficultyGrowth),
-		ActionPropertyHTTPRequest:      string(dbgen.RuleActionPropertyHTTPRequest),
-		ActionProperty:                 common.ParamActionProperty,
-		ConditionOperator:              common.ParamConditionOperator,
-		ConditionValue:                 common.ParamConditionValue,
-		ActionValue:                    common.ParamActionValue,
-		Name:                           common.ParamName,
-		Enabled:                        common.ParamEnabled,
-		OrgLevelOwner:                  string(dbgen.AccessLevelOwner),
-		OrgLevelInvited:                string(dbgen.AccessLevelInvited),
-		OrgLevelMember:                 string(dbgen.AccessLevelMember),
-		MembersEndpoint:                common.MembersEndpoint,
-		ReportsEndpoint:                common.ReportsEndpoint,
-		IntegrationsEndpoint:           common.IntegrationsEndpoint,
-		EventsEndpoint:                 common.EventsEndpoint,
-		Tab:                            common.ParamTab,
-		EditEndpoint:                   common.EditEndpoint,
-		ConditionNegated:               common.ParamConditionNegated,
-	}
-)
-
 type CountryOption struct {
 	Code string
 	Name string
@@ -86,53 +38,6 @@ type RuleFormData struct {
 	ActionValue       string
 	Enabled           bool
 	ConditionNegated  bool
-}
-
-type RuleConstants struct {
-	BaseRenderConstants
-
-	DashboardEndpoint              string
-	OrgEndpoint                    string
-	PropertyEndpoint               string
-	RulesEndpoint                  string
-	NewEndpoint                    string
-	ConditionUserAgent             string
-	ConditionIPAddress             string
-	ConditionCountryCode           string
-	ConditionProperty              string
-	ConditionOperator              string
-	ConditionValue                 string
-	ActionProperty                 string
-	ActionValue                    string
-	ConditionPropertyUserAgent     string
-	ConditionPropertyIPAddress     string
-	ConditionPropertyCountryCode   string
-	OperatorEquals                 string
-	OperatorContains               string
-	OperatorEmpty                  string
-	OperatorMatches                string
-	OperatorIn                     string
-	StringOperators                []string
-	IPOperators                    []string
-	GrowthTypeConstant             string
-	GrowthTypeSlow                 string
-	GrowthTypeMedium               string
-	GrowthTypeFast                 string
-	ActionPropertyDifficultyLevel  string
-	ActionPropertyDifficultyGrowth string
-	ActionPropertyHTTPRequest      string
-	Name                           string
-	Enabled                        string
-	OrgLevelOwner                  string
-	OrgLevelInvited                string
-	OrgLevelMember                 string
-	MembersEndpoint                string
-	ReportsEndpoint                string
-	IntegrationsEndpoint           string
-	EventsEndpoint                 string
-	Tab                            string
-	EditEndpoint                   string
-	ConditionNegated               string
 }
 
 type RuleWizardRenderContext struct {

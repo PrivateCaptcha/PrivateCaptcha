@@ -9,12 +9,106 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
+type RuleConstants struct {
+	BaseRenderConstants
+
+	DashboardEndpoint              string
+	OrgEndpoint                    string
+	PropertyEndpoint               string
+	RulesEndpoint                  string
+	NewEndpoint                    string
+	EditEndpoint                   string
+	ConditionUserAgent             string
+	ConditionIPAddress             string
+	ConditionCountryCode           string
+	ConditionProperty              string
+	ConditionOperator              string
+	ConditionValue                 string
+	ActionProperty                 string
+	ActionValue                    string
+	ConditionPropertyUserAgent     string
+	ConditionPropertyIPAddress     string
+	ConditionPropertyCountryCode   string
+	OperatorEquals                 string
+	OperatorContains               string
+	OperatorEmpty                  string
+	OperatorMatches                string
+	OperatorIn                     string
+	StringOperators                []string
+	IPOperators                    []string
+	GrowthTypeConstant             string
+	GrowthTypeSlow                 string
+	GrowthTypeMedium               string
+	GrowthTypeFast                 string
+	ActionPropertyDifficultyLevel  string
+	ActionPropertyDifficultyGrowth string
+	ActionPropertyHTTPRequest      string
+	Name                           string
+	Enabled                        string
+	OrgLevelOwner                  string
+	OrgLevelInvited                string
+	OrgLevelMember                 string
+	MembersEndpoint                string
+	ReportsEndpoint                string
+	IntegrationsEndpoint           string
+	EventsEndpoint                 string
+	Tab                            string
+	ConditionNegated               string
+}
+
+var (
+	ruleConstants = RuleConstants{
+		BaseRenderConstants:            baseConst,
+		DashboardEndpoint:              common.DashboardEndpoint,
+		OrgEndpoint:                    common.OrgEndpoint,
+		PropertyEndpoint:               common.PropertyEndpoint,
+		RulesEndpoint:                  common.RulesEndpoint,
+		NewEndpoint:                    common.NewEndpoint,
+		EditEndpoint:                   common.EditEndpoint,
+		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
+		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
+		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
+		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
+		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
+		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
+		OperatorMatches:                string(dbgen.RuleConditionOperatorMatches),
+		OperatorIn:                     string(dbgen.RuleConditionOperatorIn),
+		StringOperators:                []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
+		IPOperators:                    []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
+		ConditionProperty:              common.ParamConditionProperty,
+		ConditionPropertyUserAgent:     string(dbgen.RuleConditionPropertyUserAgent),
+		ConditionPropertyIPAddress:     string(dbgen.RuleConditionPropertyIPAddress),
+		ConditionPropertyCountryCode:   string(dbgen.RuleConditionPropertyCountryCode),
+		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
+		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
+		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),
+		GrowthTypeFast:                 string(dbgen.DifficultyGrowthFast),
+		ActionPropertyDifficultyLevel:  string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		ActionPropertyDifficultyGrowth: string(dbgen.RuleActionPropertyDifficultyGrowth),
+		ActionPropertyHTTPRequest:      string(dbgen.RuleActionPropertyHTTPRequest),
+		ActionProperty:                 common.ParamActionProperty,
+		ConditionOperator:              common.ParamConditionOperator,
+		ConditionValue:                 common.ParamConditionValue,
+		ActionValue:                    common.ParamActionValue,
+		Name:                           common.ParamName,
+		Enabled:                        common.ParamEnabled,
+		OrgLevelOwner:                  string(dbgen.AccessLevelOwner),
+		OrgLevelInvited:                string(dbgen.AccessLevelInvited),
+		OrgLevelMember:                 string(dbgen.AccessLevelMember),
+		MembersEndpoint:                common.MembersEndpoint,
+		ReportsEndpoint:                common.ReportsEndpoint,
+		IntegrationsEndpoint:           common.IntegrationsEndpoint,
+		EventsEndpoint:                 common.EventsEndpoint,
+		Tab:                            common.ParamTab,
+		ConditionNegated:               common.ParamConditionNegated,
+	}
+)
+
 // nolint:unused
 func stubDifficultyRules() []*DifficultyRuleModel {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
-	stubRules := []*dbgen.DifficultyRule{
-		{
-			ID:                       1,
+	return []*DifficultyRuleModel{
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block suspicious countries",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyCountryCode,
@@ -27,9 +121,8 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		},
-		{
-			ID:                       2,
+		}, hasher),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block empty User-Agents",
 			Enabled:                  false,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -40,9 +133,8 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		},
-		{
-			ID:                       3,
+		}, hasher),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -54,9 +146,8 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -20,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		},
-		{
-			ID:                       4,
+		}, hasher),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -68,9 +159,8 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              50,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		},
-		{
-			ID:                       5,
+		}, hasher),
+		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyIPAddress,
@@ -82,13 +172,6 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -30,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		},
+		}, hasher),
 	}
-
-	models := make([]*DifficultyRuleModel, 0, len(stubRules))
-	for _, rule := range stubRules {
-		model := difficultyRuleToDisplay(rule, hasher)
-		models = append(models, model)
-	}
-	return models
 }
