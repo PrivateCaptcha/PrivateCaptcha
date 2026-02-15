@@ -486,6 +486,7 @@ type DifficultyRule struct {
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
 	CreatedAt                pgtype.Timestamptz    `db:"created_at" json:"created_at"`
 	UpdatedAt                pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
+	DeletedAt                pgtype.Timestamptz    `db:"deleted_at" json:"deleted_at"`
 }
 
 type Lock struct {
