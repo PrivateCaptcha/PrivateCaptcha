@@ -3169,8 +3169,8 @@ func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.D
 	}
 }
 
-func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.UpdateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
-	if params == nil {
+func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, user *dbgen.User, params *dbgen.UpdateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if (params == nil) || (user == nil) || (org == nil) {
 		return nil, nil, ErrInvalidInput
 	}
 
@@ -3178,9 +3178,29 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, user *d
 		return nil, nil, ErrMaintenance
 	}
 
+	// Set permission check parameters
+	params.CreatorID = Int(user.ID)
+	params.Column13 = org.UserID.Int32
+	if property != nil {
+		params.PropertyID = Int(property.ID)
+	}
+	params.OrgID = Int(org.ID)
+
 	result, err := impl.querier.UpdateDifficultyRule(ctx, params)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", params.ID, common.ErrAttr(err))
+		if errors.Is(err, pgx.ErrNoRows) {
+			rlog := slog.With("ruleID", params.ID, "userID", user.ID, "orgOwnerID", org.UserID.Int32)
+			if rule, err := FetchCachedOne[dbgen.DifficultyRule](ctx, impl.cache, DifficultyRuleCacheKey(params.ID)); err == nil {
+				if rule.CreatorID.Valid {
+					rlog = rlog.With("creatorID", rule.CreatorID.Int32)
+				}
+			}
+			rlog.WarnContext(ctx, "Cannot update difficulty rule in DB")
+
+			return nil, nil, ErrPermissions
+		}
+
+		slog.ErrorContext(ctx, "Failed to update difficulty rule in DB", "ruleID", params.ID, "userID", user.ID, common.ErrAttr(err))
 		return nil, nil, err
 	}
 

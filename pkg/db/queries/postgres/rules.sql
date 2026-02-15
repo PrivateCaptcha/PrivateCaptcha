@@ -22,9 +22,10 @@ INSERT INTO backend.difficulty_rules (
     condition_value_separator,
     position,
     action_property,
-    action_value
+    action_value,
+    creator_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
 )
 RETURNING *;
 
@@ -36,6 +37,8 @@ WHERE id = $1;
 WITH old AS (
     SELECT * FROM backend.difficulty_rules dr
     WHERE dr.id = $1
+    AND (dr.creator_id = $12 OR $13 = $12)
+    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $14 OR $14 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $15 OR $15 IS NULL)))
     FOR UPDATE
 ),
 upd AS (

@@ -295,6 +295,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params.PropertyID = db.Int(property.ID)
+	params.CreatorID = db.Int(user.ID)
 
 	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
@@ -351,6 +352,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params.OrgID = db.Int(org.ID)
+	params.CreatorID = db.Int(user.ID)
 
 	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
@@ -641,7 +643,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, property, user, updateParams)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "propertyID", property.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
@@ -715,7 +717,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, nil, user, updateParams)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "orgID", org.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
