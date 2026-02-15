@@ -126,7 +126,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
 		_ = sess.Delete(ctx, session.KeyReturnURL)
-		common.Redirect(s.RelURL(returnURL), http.StatusOK, w, r)
+		common.Redirect(returnURL, http.StatusOK, w, r)
 	} else {
 		redirectURL := s.RelURL("/")
 		common.Redirect(redirectURL, http.StatusOK, w, r)
