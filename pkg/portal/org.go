@@ -100,7 +100,10 @@ const (
 type orgSettingsRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
+	systemNotificationContext
+	Orgs        []*userOrg
 	CurrentOrg  *userOrg
+	Tab         int
 	NameError   string
 	Members     []*orgUser
 	CanEdit     bool
@@ -114,8 +117,12 @@ func (c *orgSettingsRenderContext) Const() interface{}  { return portalConst }
 
 type orgAuditLogsRenderContext struct {
 	AlertRenderContext
+	CsrfRenderContext
 	AuditLogsRenderContext
+	systemNotificationContext
+	Orgs       []*userOrg
 	CurrentOrg *userOrg
+	Tab        int
 	CanView    bool
 }
 
@@ -135,7 +142,10 @@ type orgUser struct {
 type orgMemberRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
+	systemNotificationContext
+	Orgs       []*userOrg
 	CurrentOrg *userOrg
+	Tab        int
 	Members    []*orgUser
 	CanEdit    bool
 }
@@ -155,19 +165,11 @@ type orgDashboardRenderContext struct {
 	CsrfRenderContext
 	systemNotificationContext
 	PaginationRenderContext
-	AlertRenderContext
-	Tab        int
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
+	Tab        int
 	// shortened from CurrentOrgProperties for simplicity
-	Properties  []*userProperty
-	Members     []*orgUser
-	CanEdit     bool
-	CanTransfer bool
-	NameError   string
-	AuditLogs   []*UserAuditLog
-	SeeMore     bool
-	CanView     bool
+	Properties []*userProperty
 }
 
 func (c *orgDashboardRenderContext) Params() interface{} { return c }
@@ -397,14 +399,37 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 
 	tabParam := r.URL.Query().Get(common.ParamTab)
 	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
+	var model Model = renderCtx
 	if renderCtx.CurrentOrg.Level != string(dbgen.AccessLevelInvited) {
 		switch tabParam {
 		case common.MembersEndpoint:
-			s.populatePortalMembersTab(ctx, renderCtx, sess, r)
+			if vm, err := s.getOrgMembers(w, r); err == nil {
+				if mc, ok := vm.Model.(*orgMemberRenderContext); ok {
+					mc.Orgs = renderCtx.Orgs
+					mc.Tab = portalMembersTabIndex
+					mc.systemNotificationContext = renderCtx.systemNotificationContext
+				}
+				model = vm.Model
+			}
 		case common.SettingsEndpoint:
-			s.populatePortalSettingsTab(ctx, renderCtx, sess, r)
+			if vm, err := s.getOrgSettings(w, r); err == nil {
+				if sc, ok := vm.Model.(*orgSettingsRenderContext); ok {
+					sc.Orgs = renderCtx.Orgs
+					sc.Tab = portalSettingsTabIndex
+					sc.systemNotificationContext = renderCtx.systemNotificationContext
+				}
+				model = vm.Model
+			}
 		case common.EventsEndpoint:
-			s.populatePortalEventsTab(ctx, renderCtx, sess, r)
+			if vm, err := s.getOrgAuditLogs(w, r); err == nil {
+				if ac, ok := vm.Model.(*orgAuditLogsRenderContext); ok {
+					ac.Orgs = renderCtx.Orgs
+					ac.Tab = portalEventsTabIndex
+					ac.CsrfRenderContext = renderCtx.CsrfRenderContext
+					ac.systemNotificationContext = renderCtx.systemNotificationContext
+				}
+				model = vm.Model
+			}
 		default:
 			if tabParam != common.DashboardEndpoint && tabParam != "" {
 				slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
@@ -412,87 +437,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	s.render(w, r, portalTemplate, renderCtx)
-}
-
-func (s *Server) populatePortalMembersTab(ctx context.Context, renderCtx *orgDashboardRenderContext, sess *session.Session, r *http.Request) {
-	user, err := s.SessionUser(ctx, sess)
-	if err != nil {
-		return
-	}
-
-	org, _, err := s.Org(user, r)
-	if err != nil {
-		return
-	}
-
-	renderCtx.Tab = portalMembersTabIndex
-	renderCtx.CanEdit = org.UserID.Int32 == user.ID
-
-	if user.ID != org.UserID.Int32 {
-		return
-	}
-
-	members, err := s.Store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve org users for portal members tab", common.ErrAttr(err))
-		return
-	}
-
-	renderCtx.Members = usersWithEmailInvitesToOrgUsers(members, s.IDHasher)
-}
-
-func (s *Server) populatePortalSettingsTab(ctx context.Context, renderCtx *orgDashboardRenderContext, sess *session.Session, r *http.Request) {
-	user, err := s.SessionUser(ctx, sess)
-	if err != nil {
-		return
-	}
-
-	org, _, err := s.Org(user, r)
-	if err != nil {
-		return
-	}
-
-	renderCtx.Tab = portalSettingsTabIndex
-	renderCtx.CanEdit = org.UserID.Int32 == user.ID
-
-	if renderCtx.CanEdit && s.isEnterprise() {
-		if members, err := s.Store.Impl().RetrieveOrganizationUsers(ctx, org.ID); err == nil {
-			acceptedMembers := make([]*orgUser, 0, len(members))
-			for _, m := range members {
-				if m.Level == dbgen.AccessLevelMember {
-					acceptedMembers = append(acceptedMembers, userToOrgUser(&m.User, string(m.Level), s.IDHasher))
-				}
-			}
-			renderCtx.Members = acceptedMembers
-			renderCtx.CanTransfer = len(acceptedMembers) > 0
-		}
-	}
-}
-
-func (s *Server) populatePortalEventsTab(ctx context.Context, renderCtx *orgDashboardRenderContext, sess *session.Session, r *http.Request) {
-	user, err := s.SessionUser(ctx, sess)
-	if err != nil {
-		return
-	}
-
-	org, _, err := s.Org(user, r)
-	if err != nil {
-		return
-	}
-
-	renderCtx.Tab = portalEventsTabIndex
-	renderCtx.CanView = org.UserID.Int32 == user.ID
-
-	auditLogsCtx, _, err := s.createOrgAuditLogsContext(ctx, org, user)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create org audit logs context for portal events tab", common.ErrAttr(err))
-		return
-	}
-
-	renderCtx.AuditLogs = auditLogsCtx.AuditLogs
-	renderCtx.Count = auditLogsCtx.Count
-	renderCtx.SeeMore = auditLogsCtx.SeeMore
+	s.render(w, r, portalTemplate, model)
 }
 
 func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
