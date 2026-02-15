@@ -3178,13 +3178,15 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 		return nil, nil, ErrMaintenance
 	}
 
-	// Set permission check parameters
-	params.CreatorID = Int(user.ID)
-	params.Column13 = org.UserID.Int32
+	// Set permission check parameters (used in SQL WHERE clause)
+	// Note: Column13 is org owner ID - sqlc generates this name because the parameter
+	// is used in a comparison ($12 = $13) rather than a column reference
+	params.CreatorID = Int(user.ID)    // $12: user ID for permission check
+	params.Column13 = org.UserID.Int32 // $13: org owner ID for permission check
 	if property != nil {
-		params.PropertyID = Int(property.ID)
+		params.PropertyID = Int(property.ID) // $14: property ID for scope validation
 	}
-	params.OrgID = Int(org.ID)
+	params.OrgID = Int(org.ID) // $15: org ID for scope validation
 
 	result, err := impl.querier.UpdateDifficultyRule(ctx, params)
 	if err != nil {

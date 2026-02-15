@@ -212,7 +212,7 @@ const updateDifficultyRule = `-- name: UpdateDifficultyRule :one
 WITH old AS (
     SELECT id, name, property_id, org_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, creator_id FROM backend.difficulty_rules dr
     WHERE dr.id = $1
-    AND (dr.creator_id = $12 OR $13 = $12)
+    AND (dr.creator_id = $12 OR $12 = $13)
     AND ((dr.property_id IS NOT NULL AND (dr.property_id = $14 OR $14 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $15 OR $15 IS NULL)))
     FOR UPDATE
 ),
