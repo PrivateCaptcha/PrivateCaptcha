@@ -3093,7 +3093,7 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 	}
 
-	impl.cache.Set(ctx, DifficultyRuleCacheKey(rule.ID), rule)
+	_ = impl.cache.Set(ctx, DifficultyRuleCacheKey(rule.ID), rule)
 
 	auditEvent := &common.AuditLogEvent{
 		UserID:    user.ID,
@@ -3198,7 +3198,7 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, user *d
 	}
 
 	updatedRule := newDifficultyRuleFromUpdate(result)
-	impl.cache.Set(ctx, DifficultyRuleCacheKey(updatedRule.ID), updatedRule)
+	_ = impl.cache.Set(ctx, DifficultyRuleCacheKey(updatedRule.ID), updatedRule)
 
 	auditEvent := newUpdateRuleAuditLogEvent(updatedRule, result, user)
 
