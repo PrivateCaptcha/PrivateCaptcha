@@ -67,7 +67,7 @@ var (
 		EventsEndpoint:                 common.EventsEndpoint,
 		Tab:                            common.ParamTab,
 		EditEndpoint:                   common.EditEndpoint,
-		ConditionNegated:               "condition_negated",
+		ConditionNegated:               common.ParamConditionNegated,
 	}
 )
 
@@ -552,6 +552,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	return params, common.StatusOK
 }
 
+const errUpdateRuleMessage = "Failed to update the difficulty rule. Please try again later."
+
 func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
@@ -570,8 +572,22 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	}
 }
 
-func (s *Server) ruleID(r *http.Request) (int32, string, error) {
-	return common.IntPathArg(r, common.ParamRule, s.IDHasher)
+func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, string, error) {
+	ctx := r.Context()
+
+	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
+		return nil, "", errInvalidPathArg
+	}
+
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
+		return nil, "", err
+	}
+
+	return rule, value, nil
 }
 
 func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -595,12 +611,7 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, db.ErrPermissions
 	}
 
-	ruleID, ruleIDStr, err := s.ruleID(r)
-	if err != nil {
-		return nil, err
-	}
-
-	rule, err := s.Store.Impl().RetrieveDifficultyRuleByProperty(ctx, ruleID, property.ID)
+	rule, ruleIDStr, err := s.Rule(r)
 	if err != nil {
 		return nil, err
 	}
@@ -629,12 +640,7 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, db.ErrPermissions
 	}
 
-	ruleID, ruleIDStr, err := s.ruleID(r)
-	if err != nil {
-		return nil, err
-	}
-
-	rule, err := s.Store.Impl().RetrieveDifficultyRuleByOrg(ctx, ruleID, org.ID)
+	rule, ruleIDStr, err := s.Rule(r)
 	if err != nil {
 		return nil, err
 	}
@@ -673,7 +679,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, ruleIDStr, err := s.ruleID(r)
+	rule, ruleIDStr, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -700,9 +706,8 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updateParams := &dbgen.UpdateDifficultyRuleByPropertyParams{
-		ID:                       ruleID,
-		PropertyID:               db.Int(property.ID),
+	updateParams := &dbgen.UpdateDifficultyRuleParams{
+		ID:                       rule.ID,
 		Name:                     createParams.Name,
 		Enabled:                  createParams.Enabled,
 		ConditionProperty:        createParams.ConditionProperty,
@@ -715,10 +720,10 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRuleByProperty(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update difficulty rule", common.ErrAttr(err))
-		renderCtx.ErrorMessage = common.StatusFailure.String()
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
+		renderCtx.ErrorMessage = errUpdateRuleMessage
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
@@ -748,7 +753,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, ruleIDStr, err := s.ruleID(r)
+	rule, ruleIDStr, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -775,9 +780,8 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updateParams := &dbgen.UpdateDifficultyRuleByOrgParams{
-		ID:                       ruleID,
-		OrgID:                    db.Int(org.ID),
+	updateParams := &dbgen.UpdateDifficultyRuleParams{
+		ID:                       rule.ID,
 		Name:                     createParams.Name,
 		Enabled:                  createParams.Enabled,
 		ConditionProperty:        createParams.ConditionProperty,
@@ -790,10 +794,10 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRuleByOrg(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update difficulty rule", common.ErrAttr(err))
-		renderCtx.ErrorMessage = common.StatusFailure.String()
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
+		renderCtx.ErrorMessage = errUpdateRuleMessage
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}

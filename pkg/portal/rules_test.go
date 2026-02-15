@@ -585,7 +585,7 @@ func TestEditPropertyRule(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	updatedRule, err := store.Impl().RetrieveDifficultyRuleByProperty(ctx, rule.ID, prop.ID)
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve rule: %v", err)
 	}
@@ -667,7 +667,7 @@ func TestEditOrgRule(t *testing.T) {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	updatedRule, err := store.Impl().RetrieveDifficultyRuleByOrg(ctx, rule.ID, org.ID)
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve rule: %v", err)
 	}

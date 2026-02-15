@@ -126,8 +126,9 @@ func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
 type orgRulesRenderContext struct {
 	AlertRenderContext
 	CurrentOrg *userOrg
-	Property   *userProperty
-	Rules      []*DifficultyRuleModel
+	// Property is a stub to distinguish org rules from property rules in shared templates
+	Property interface{}
+	Rules    []*DifficultyRuleModel
 }
 
 var _ RenderContext = (*orgRulesRenderContext)(nil)

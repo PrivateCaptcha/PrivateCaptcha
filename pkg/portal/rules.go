@@ -1,15 +1,17 @@
 package portal
 
 import (
-	"strconv"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 // nolint:unused
 func stubDifficultyRules() []*DifficultyRuleModel {
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	stubRules := []*dbgen.DifficultyRule{
 		{
 			ID:                       1,
@@ -85,23 +87,8 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 
 	models := make([]*DifficultyRuleModel, 0, len(stubRules))
 	for _, rule := range stubRules {
-		model := difficultyRuleToDisplay(rule, stubHasher{})
+		model := difficultyRuleToDisplay(rule, hasher)
 		models = append(models, model)
 	}
 	return models
 }
-
-// nolint:unused
-type stubHasher struct{}
-
-// nolint:unused
-func (s stubHasher) Encrypt(id int) string { return strconv.Itoa(id) }
-
-// nolint:unused
-func (s stubHasher) Encrypt64(id int64) string { return strconv.FormatInt(id, 10) }
-
-// nolint:unused
-func (s stubHasher) Decrypt(id string) (int, error) { return strconv.Atoi(id) }
-
-// nolint:unused
-func (s stubHasher) Decrypt64(id string) (int64, error) { return strconv.ParseInt(id, 10, 64) }
