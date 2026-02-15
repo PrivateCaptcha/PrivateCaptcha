@@ -34,7 +34,7 @@ services:
     command:
       /app/bin/server -mode migrate -migrate-hash $GIT_COMMIT
     environment:
-      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?search_path=public
       PC_VERBOSE: true
       PC_CLICKHOUSE_OPTIONAL: "true"
     depends_on:
@@ -49,7 +49,7 @@ services:
     command:
       vet
     environment:
-      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=require&search_path=public
+      PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?search_path=public
       SQLCDEBUG: dumpvetenv=1
     working_dir: /src
     volumes:
@@ -64,9 +64,6 @@ services:
     image: postgres:18
     pull_policy: if_not_present
     command: >
-        -c ssl=on 
-        -c ssl_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
-        -c ssl_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
         -c log_statement=all
         -c log_destination=stderr
     environment:
