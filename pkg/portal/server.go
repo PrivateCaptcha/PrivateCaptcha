@@ -300,8 +300,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 
 	// separately configured "public" ones
 	public := s.MiddlewarePublicChain(rg, security)
-	publicTimeout := common.SoftTimeoutHandler(2 * time.Second)
-	openRead := public.Append(s.maintenance, publicTimeout)
+	publicReadTimeout := common.SoftTimeoutHandler(2 * time.Second)
+	openRead := public.Append(s.maintenance, publicReadTimeout)
 	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
 	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
 	rg.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public, http.HandlerFunc(s.error))
@@ -309,7 +309,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.LogoutEndpoint), public, http.HandlerFunc(s.logout))
 
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
-	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicTimeout)
+	// larger write timeout is mostly due to emails / external APIs
+	publicWriteTimeout := common.SoftTimeoutHandler(5 * time.Second)
+	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicWriteTimeout)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
