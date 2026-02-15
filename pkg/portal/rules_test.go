@@ -1151,3 +1151,279 @@ func TestMemberCannotUpdateOrgRuleCreatedByOwner(t *testing.T) {
 		t.Errorf("Rule was incorrectly updated to: %s", updatedRule.Name)
 	}
 }
+
+func TestDeletePropertyRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Rule",
+		PropertyID:        db.Int(prop.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("curl"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	req := httptest.NewRequest("DELETE",
+		fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify rule is soft deleted
+	if _, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID); err == nil {
+		t.Fatal("Rule was not deleted")
+	}
+}
+
+func TestDeleteOrgRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("curl"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	req := httptest.NewRequest("DELETE",
+		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	// Verify rule is soft deleted
+	if _, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID); err == nil {
+		t.Fatal("Rule was not deleted")
+	}
+}
+
+func TestMemberCannotDeletePropertyRuleCreatedByOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and property
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Owner creates a rule
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Owner Rule",
+		PropertyID:        db.Int(prop.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and join org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
+	// Try to delete rule - should fail
+	req := httptest.NewRequest("DELETE",
+		fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with forbidden
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+
+	// Verify rule was not deleted
+	if _, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID); err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+}
+
+func TestMemberCannotDeleteOrgRuleCreatedByOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and org
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Owner creates a rule
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Owner Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and join org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
+	// Try to delete rule - should fail
+	req := httptest.NewRequest("DELETE",
+		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with forbidden
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+
+	// Verify rule was not deleted
+	if _, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID); err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+}

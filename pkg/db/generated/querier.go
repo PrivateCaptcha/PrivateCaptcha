@@ -27,6 +27,7 @@ type Querier interface {
 	DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*APIKey, error)
 	DeleteCachedByKey(ctx context.Context, key string) error
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
+	DeleteDifficultyRule(ctx context.Context, id int32) error
 	DeleteExpiredCache(ctx context.Context) error
 	DeleteLock(ctx context.Context, name string) error
 	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error

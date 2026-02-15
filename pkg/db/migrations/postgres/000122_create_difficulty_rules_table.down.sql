@@ -1,3 +1,4 @@
+DROP TRIGGER IF EXISTS deleted_record_insert ON backend.difficulty_rules CASCADE;
 DROP INDEX IF EXISTS backend.index_difficulty_rules_property_id;
 DROP INDEX IF EXISTS backend.index_difficulty_rules_org_id;
 DROP TABLE IF EXISTS backend.difficulty_rules;

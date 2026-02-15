@@ -3226,3 +3226,33 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 
 	return updatedRule, auditEvent, nil
 }
+
+func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	if err := impl.querier.DeleteDifficultyRule(ctx, rule.ID); err != nil {
+		slog.ErrorContext(ctx, "Failed to soft delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Deleted difficulty rule", "ruleID", rule.ID)
+
+	// Clear caches
+	if rule.PropertyID.Valid {
+		propertyID := rule.PropertyID.Int32
+		_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+		_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+	}
+	if rule.OrgID.Valid {
+		orgID := rule.OrgID.Int32
+		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+	}
+	_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
+
+	auditEvent := newDeleteRuleAuditLogEvent(rule, user)
+
+	return auditEvent, nil
+}

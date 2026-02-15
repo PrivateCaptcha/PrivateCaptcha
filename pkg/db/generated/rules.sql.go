@@ -90,6 +90,15 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 	return &i, err
 }
 
+const deleteDifficultyRule = `-- name: DeleteDifficultyRule :exec
+DELETE FROM backend.difficulty_rules WHERE id = $1
+`
+
+func (q *Queries) DeleteDifficultyRule(ctx context.Context, id int32) error {
+	_, err := q.db.Exec(ctx, deleteDifficultyRule, id)
+	return err
+}
+
 const getDifficultyRuleByID = `-- name: GetDifficultyRuleByID :one
 SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules
 WHERE id = $1

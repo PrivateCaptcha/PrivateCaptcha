@@ -70,3 +70,6 @@ SELECT
     old.action_value AS old_action_value
 FROM upd
 CROSS JOIN old;
+
+-- name: DeleteDifficultyRule :exec
+DELETE FROM backend.difficulty_rules WHERE id = $1;
