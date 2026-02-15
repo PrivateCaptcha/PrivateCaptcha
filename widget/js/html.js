@@ -79,10 +79,18 @@ function progressLabel(text) {
     return el;
 }
 
-function debugSpan(text, isError) {
+function debugSpan(text, isError, internalError) {
     const el = document.createElement('span');
     el.id = DEBUG_ID;
     if (isError) { el.className = DEBUG_ERROR_CLASS; }
+    
+    if (internalError) {
+        el.style.textDecoration = 'underline';
+        el.style.textDecorationStyle = 'dashed';
+        el.style.cursor = 'help';
+        el.title = internalError;
+    }
+    
     el.textContent = text;
     return el;
 }
@@ -130,6 +138,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         this._debug = false;
         this._error = null;
+        this._internalError = null;
         this._displayMode = DISPLAY_HIDDEN;
         this._lang = 'en';
 
@@ -143,6 +152,7 @@ export class CaptchaElement extends SafeHTMLElement {
     update() {
         this._debug = this.getAttribute('debug');
         this._error = null;
+        this._internalError = null;
         this._displayMode = this.getAttribute('display-mode');
         this._lang = this.getAttribute('lang');
         if (!(this._lang in i18n.STRINGS)) {
@@ -241,7 +251,8 @@ export class CaptchaElement extends SafeHTMLElement {
 
         if (this._debug || this._error) {
             const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            activeArea.appendChild(debugSpan(text, this._error));
+            const internalError = (this._debug && this._error && this._internalError) ? this._internalError : null;
+            activeArea.appendChild(debugSpan(text, this._error, internalError));
         }
 
         this._syncHostClass(showPopupIfNeeded);
@@ -323,9 +334,11 @@ export class CaptchaElement extends SafeHTMLElement {
 
     /**
      * @param {number} value
+     * @param {string} internalError
      */
-    setError(value) {
+    setError(value, internalError) {
         this._error = value;
+        this._internalError = internalError;
     }
 
     /**

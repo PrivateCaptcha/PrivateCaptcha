@@ -62,6 +62,7 @@ async function fetchWithBackoff(url, options = {}) {
     const globalController = new AbortController();
     const { signal: globalSignal } = globalController;
     let globalTimeoutId = setTimeout(() => globalController.abort(new Error('Fetch timed out')), globalTimeoutMs);
+    let lastError = null;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         if (attempt > 0) {
@@ -71,7 +72,10 @@ async function fetchWithBackoff(url, options = {}) {
             } catch (err) {
                 clearTimeout(globalTimeoutId);
                 if (globalSignal.aborted) {
-                    throw new Error('Fetch timed out');
+                    lastError = 'Fetch timed out';
+                    const error = new Error('Fetch timed out');
+                    error.internalError = lastError;
+                    throw error;
                 }
                 throw err;
             }
@@ -94,6 +98,7 @@ async function fetchWithBackoff(url, options = {}) {
                 clearTimeout(globalTimeoutId);
                 return response;
             } else {
+                lastError = `HTTP ${response.status}`;
                 console.warn('[privatecaptcha]', `HTTP request failed. url=${url} status=${response.status}`);
             }
 
@@ -109,19 +114,26 @@ async function fetchWithBackoff(url, options = {}) {
             globalSignal.removeEventListener('abort', globalAbortHandler);
             if (globalSignal.aborted) {
                 clearTimeout(globalTimeoutId);
-                throw new Error('Fetch timed out');
+                lastError = 'Fetch timed out';
+                const error = new Error('Fetch timed out');
+                error.internalError = lastError;
+                throw error;
             }
             if (fetchSignal.aborted) {
                 // Per-call timeout - continue to next attempt
+                lastError = 'Fetch timed out';
                 console.warn('[privatecaptcha]', `Fetch attempt ${attempt + 1} timed out`);
                 continue;
             }
+            lastError = err.message || String(err);
             console.error('[privatecaptcha]', err);
         }
     }
 
     clearTimeout(globalTimeoutId);
-    throw new Error('Captcha puzzle load failed after maximum retry attempts');
+    const error = new Error('Captcha puzzle load failed after maximum retry attempts');
+    error.internalError = lastError;
+    throw error;
 }
 
 function readUInt32LE(binaryData, offset) {
