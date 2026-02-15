@@ -406,7 +406,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		case common.EventsEndpoint:
 			s.populatePortalEventsTab(ctx, renderCtx, sess, r)
 		default:
-			if (tabParam != common.DashboardEndpoint) && (tabParam != "") {
+			if tabParam != common.DashboardEndpoint && tabParam != "" {
 				slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 			}
 		}
