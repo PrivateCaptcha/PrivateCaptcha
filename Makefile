@@ -168,6 +168,10 @@ vet-sqlc:
 vet-docker:
 	@$(DOCKER) compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm vetsqlc
 
+view-docker-logs: OPEN = open
+view-docker-logs:
+	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
+
 view-emails: build-view-emails
 	bin/viewemails
 
