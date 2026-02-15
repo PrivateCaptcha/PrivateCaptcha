@@ -13,15 +13,8 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-type emptyRenderContext struct{}
-
-var _ RenderContext = (*emptyRenderContext)(nil)
-
-func (c emptyRenderContext) Params() interface{} { return c }
-func (c emptyRenderContext) Const() interface{}  { return nil }
-
 var (
-	renderContextNothing = emptyRenderContext{}
+	renderContextNothing = struct{}{}
 )
 
 func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {

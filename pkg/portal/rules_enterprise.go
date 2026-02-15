@@ -51,11 +51,6 @@ type RuleWizardRenderContext struct {
 	IsEdit     bool
 }
 
-var _ RenderContext = (*RuleWizardRenderContext)(nil)
-
-func (c *RuleWizardRenderContext) Params() interface{} { return c }
-func (c *RuleWizardRenderContext) Const() interface{}  { return ruleConstants }
-
 func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
 	// Validate operator
 	switch c.ConditionOperator {

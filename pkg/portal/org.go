@@ -21,66 +21,7 @@ var (
 	errNoOrgs         = errors.New("user has no organizations")
 	stubUserOrg       = &userOrg{ID: "-1"}
 	propertiesPerPage = 30
-
-	portalConst = PortalRenderConstants{
-		BaseRenderConstants: baseConst,
-		OrgEndpoint:         common.OrgEndpoint,
-		DashboardEndpoint:   common.DashboardEndpoint,
-		OrgLevelOwner:       string(dbgen.AccessLevelOwner),
-		OrgLevelInvited:     string(dbgen.AccessLevelInvited),
-		OrgLevelMember:      string(dbgen.AccessLevelMember),
-		MembersEndpoint:     common.MembersEndpoint,
-		EventsEndpoint:      common.EventsEndpoint,
-		PropertyEndpoint:    common.PropertyEndpoint,
-		NewEndpoint:         common.NewEndpoint,
-		PropertiesEndpoint:  common.PropertiesEndpoint,
-		Page:                common.ParamPage,
-		Email:               common.ParamEmail,
-		Name:                common.ParamName,
-		TransferEndpoint:    common.TransferEndpoint,
-		DeleteEndpoint:      common.DeleteEndpoint,
-		EditEndpoint:        common.EditEndpoint,
-		User:                common.ParamUser,
-		RulesEndpoint:       common.RulesEndpoint,
-	}
-
-	orgWizardConst = OrgWizardRenderConstants{
-		BaseRenderConstants: baseConst,
-		OrgEndpoint:         common.OrgEndpoint,
-		NewEndpoint:         common.NewEndpoint,
-		Name:                common.ParamName,
-	}
 )
-
-type PortalRenderConstants struct {
-	BaseRenderConstants
-
-	OrgEndpoint        string
-	DashboardEndpoint  string
-	OrgLevelOwner      string
-	OrgLevelInvited    string
-	OrgLevelMember     string
-	MembersEndpoint    string
-	EventsEndpoint     string
-	PropertyEndpoint   string
-	NewEndpoint        string
-	PropertiesEndpoint string
-	Page               string
-	Email              string
-	Name               string
-	TransferEndpoint   string
-	DeleteEndpoint     string
-	EditEndpoint       string
-	User               string
-	RulesEndpoint      string
-}
-
-type OrgWizardRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint string
-	NewEndpoint string
-	Name        string
-}
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
@@ -106,22 +47,12 @@ type orgSettingsRenderContext struct {
 	CanTransfer bool
 }
 
-var _ RenderContext = (*orgSettingsRenderContext)(nil)
-
-func (c *orgSettingsRenderContext) Params() interface{} { return c }
-func (c *orgSettingsRenderContext) Const() interface{}  { return portalConst }
-
 type orgAuditLogsRenderContext struct {
 	AlertRenderContext
 	AuditLogsRenderContext
 	CurrentOrg *userOrg
 	CanView    bool
 }
-
-var _ RenderContext = (*orgAuditLogsRenderContext)(nil)
-
-func (c *orgAuditLogsRenderContext) Params() interface{} { return c }
-func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
 
 type orgRulesRenderContext struct {
 	AlertRenderContext
@@ -131,11 +62,6 @@ type orgRulesRenderContext struct {
 	Rules    []*DifficultyRuleModel
 	CanEdit  bool
 }
-
-var _ RenderContext = (*orgRulesRenderContext)(nil)
-
-func (c *orgRulesRenderContext) Params() interface{} { return c }
-func (c *orgRulesRenderContext) Const() interface{}  { return ruleConstants }
 
 type orgUser struct {
 	Name      string
@@ -153,11 +79,6 @@ type orgMemberRenderContext struct {
 	CanEdit    bool
 }
 
-var _ RenderContext = (*orgMemberRenderContext)(nil)
-
-func (c *orgMemberRenderContext) Params() interface{} { return c }
-func (c *orgMemberRenderContext) Const() interface{}  { return portalConst }
-
 type userOrg struct {
 	Name  string
 	ID    string
@@ -174,21 +95,11 @@ type orgDashboardRenderContext struct {
 	Properties []*userProperty
 }
 
-func (c *orgDashboardRenderContext) Params() interface{} { return c }
-func (c *orgDashboardRenderContext) Const() interface{}  { return portalConst }
-
-var _ RenderContext = (*orgDashboardRenderContext)(nil)
-
 type orgWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	NameError string
 }
-
-func (c *orgWizardRenderContext) Params() interface{} { return c }
-func (c *orgWizardRenderContext) Const() interface{}  { return orgWizardConst }
-
-var _ RenderContext = (*orgWizardRenderContext)(nil)
 
 func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHasher) *orgUser {
 	return &orgUser{

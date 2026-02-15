@@ -118,12 +118,16 @@ func numberedRuleNames(rules []*DifficultyRuleModel) []string {
 }
 
 func TestRenderHTML(t *testing.T) {
+	enterpriseOnly := new(bool)
+	*enterpriseOnly = true
+
 	testCases := []struct {
-		path     []string
-		template string
-		model    RenderContext
-		selector string
-		matches  []string
+		path       []string
+		template   string
+		model      interface{}
+		selector   string
+		enterprise *bool
+		matches    []string
 	}{
 		{
 			path:     []string{common.ErrorEndpoint, "404"},
@@ -388,6 +392,7 @@ func TestRenderHTML(t *testing.T) {
 				To:   10,
 				Days: 365,
 			},
+			// TODO: Add selector tests for audit logs
 			selector: "",
 			matches:  []string{},
 		},
@@ -449,12 +454,13 @@ func TestRenderHTML(t *testing.T) {
 				Rules:              stubDifficultyRules(),
 				CanEdit:            true,
 			},
-			selector: "p.rule-name",
-			matches:  numberedRuleNames(stubDifficultyRules()),
+			selector:   "p.rule-name",
+			matches:    numberedRuleNames(stubDifficultyRules()),
+			enterprise: enterpriseOnly,
 		},
-		// same as above but empty rules to check for placeholder
+		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
 		{
-			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
+			path:     []string{common.OrgEndpoint, "000", common.RulesEndpoint},
 			template: orgRulesTemplate,
 			model: &orgRulesRenderContext{
 				AlertRenderContext: AlertRenderContext{},
@@ -462,7 +468,7 @@ func TestRenderHTML(t *testing.T) {
 				Rules:              []*DifficultyRuleModel{},
 				CanEdit:            true,
 			},
-			selector: "",
+			selector: "p.rule-name",
 			matches:  []string{},
 		},
 		{
@@ -477,12 +483,13 @@ func TestRenderHTML(t *testing.T) {
 				},
 				Rules: stubDifficultyRules(),
 			},
-			selector: "p.rule-name",
-			matches:  numberedRuleNames(stubDifficultyRules()),
+			selector:   "p.rule-name",
+			matches:    numberedRuleNames(stubDifficultyRules()),
+			enterprise: enterpriseOnly,
 		},
-		// same as above but empty rules to check for placeholder
+		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
 		{
-			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint, "123", common.RulesEndpoint},
+			path:     []string{common.OrgEndpoint, "000", common.PropertiesEndpoint, "000", common.RulesEndpoint},
 			template: propertyDashboardRulesTemplate,
 			model: &propertyRulesRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
@@ -493,13 +500,21 @@ func TestRenderHTML(t *testing.T) {
 				},
 				Rules: []*DifficultyRuleModel{},
 			},
-			selector: "",
+			selector: "p.rule-name",
 			matches:  []string{},
 		},
 	}
 
 	for _, tc := range testCases {
-		for _, enterprise := range []bool{false, true} {
+		enterpriseArray := make([]bool, 0, 2)
+		if tc.enterprise != nil {
+			enterpriseArray = append(enterpriseArray, *tc.enterprise)
+		} else {
+			enterpriseArray = append(enterpriseArray, false)
+			enterpriseArray = append(enterpriseArray, true)
+		}
+
+		for _, enterprise := range enterpriseArray {
 			version := "community"
 			if enterprise {
 				version = "enterprise"
