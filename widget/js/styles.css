@@ -269,6 +269,12 @@ svg.verified circle {
     cursor: default;
 }
 
+#pc-debug.tooltip {
+    text-decoration: underline;
+    text-decoration-style: dashed;
+    cursor: help;
+}
+
 #pc-debug.warn {
     color: var(--warn-color);
 }

@@ -41,6 +41,7 @@ export class CaptchaWidget {
         this._apiTriggered = false; // aka execute() for programmatic triggering
         this._options = {};
         this._errorCode = errors.ERROR_NO_ERROR;
+        this._internalError = null;
 
         this.setOptions(options);
 
@@ -151,6 +152,7 @@ export class CaptchaWidget {
         this._puzzle = null;
         this._solution = null;
         this._errorCode = errors.ERROR_NO_ERROR;
+        this._internalError = null;
 
         const sitekey = this.checkConfigured();
         if (!sitekey) { return; }
@@ -184,6 +186,7 @@ export class CaptchaWidget {
             console.error('[privatecaptcha]', e);
             if (this._expiryTimeout) { clearTimeout(this._expiryTimeout); }
             this._errorCode = errors.ERROR_FETCH_PUZZLE;
+            this._internalError = e.internalError || e.message;
             this.setState(STATE_ERROR);
             this.setProgressState((this._userStarted || this._apiTriggered) ? STATE_VERIFIED : STATE_EMPTY);
             if (this._userStarted || this._apiTriggered) {
@@ -313,6 +316,7 @@ export class CaptchaWidget {
         this._puzzle = null;
         this._solution = null;
         this._errorCode = errors.ERROR_NO_ERROR;
+        this._internalError = null;
         this.setOptions(options);
         this.setState(STATE_EMPTY);
         const pcElement = this._element.querySelector('private-captcha');
@@ -538,7 +542,7 @@ export class CaptchaWidget {
             (this._apiTriggered && (DISPLAY_POPUP === this._options.displayMode));
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
-            pcElement.setError(this._errorCode);
+            pcElement.setError(this._errorCode, this._internalError);
             const changed = pcElement.setState(state, canShow);
             if (!changed && forceRefresh) {
                 pcElement.render(state, canShow);

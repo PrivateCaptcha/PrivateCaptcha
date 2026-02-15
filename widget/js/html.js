@@ -26,6 +26,7 @@ const CHECKBOX_ID = 'pc-checkbox';
 const PROGRESS_ID = 'pc-progress';
 const DEBUG_ID = 'pc-debug';
 const DEBUG_ERROR_CLASS = 'warn';
+const DEBUG_TOOLTIP_CLASS = 'tooltip';
 
 const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" class="pc-logo" preserveAspectRatio="xMidYMid meet">
 <path d="M0 0v30.62l4.29 2.48V4.85h30.83v23.29l-15.41 8.9-6.83-3.94v-4.95l6.83 3.94 11.12-6.42V9.91H8.58v25.66l11.12 6.42 19.7-11.37V0Zm12.87 14.86h13.66v8.32l-6.83 3.94-6.83-3.94z" fill="currentColor"/>
@@ -79,10 +80,22 @@ function progressLabel(text) {
     return el;
 }
 
-function debugSpan(text, isError) {
+/**
+ * @param {string} text - The debug text to display
+ * @param {boolean} isError - Whether this is an error state
+ * @param {string|null} internalError - Optional internal error message for tooltip
+ * @returns {HTMLElement} The debug span element
+ */
+function debugSpan(text, isError, internalError) {
     const el = document.createElement('span');
     el.id = DEBUG_ID;
-    if (isError) { el.className = DEBUG_ERROR_CLASS; }
+    if (isError) { el.classList.add(DEBUG_ERROR_CLASS); }
+
+    if (internalError) {
+        el.classList.add(DEBUG_TOOLTIP_CLASS);
+        el.title = internalError;
+    }
+
     el.textContent = text;
     return el;
 }
@@ -130,6 +143,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         this._debug = false;
         this._error = null;
+        this._internalError = null;
         this._displayMode = DISPLAY_HIDDEN;
         this._lang = 'en';
 
@@ -143,6 +157,7 @@ export class CaptchaElement extends SafeHTMLElement {
     update() {
         this._debug = this.getAttribute('debug');
         this._error = null;
+        this._internalError = null;
         this._displayMode = this.getAttribute('display-mode');
         this._lang = this.getAttribute('lang');
         if (!(this._lang in i18n.STRINGS)) {
@@ -241,7 +256,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         if (this._debug || this._error) {
             const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            activeArea.appendChild(debugSpan(text, this._error));
+            activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
         }
 
         this._syncHostClass(showPopupIfNeeded);
@@ -323,9 +338,11 @@ export class CaptchaElement extends SafeHTMLElement {
 
     /**
      * @param {number} value
+     * @param {string} internalError
      */
-    setError(value) {
+    setError(value, internalError) {
         this._error = value;
+        this._internalError = internalError;
     }
 
     /**
