@@ -54,6 +54,7 @@ const (
 	ParamConditionOperator = "condition_operator"
 	ParamConditionValue    = "condition_value"
 	ParamActionProperty    = "action_property"
+	ParamConditionNegated  = "condition_negated"
 	ParamActionValue       = "action_value"
 	All                    = "all"
 )

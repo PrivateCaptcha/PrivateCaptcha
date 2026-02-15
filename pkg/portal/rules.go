@@ -51,6 +51,7 @@ type RuleConstants struct {
 	IntegrationsEndpoint           string
 	EventsEndpoint                 string
 	Tab                            string
+	ConditionNegated               string
 }
 
 var (
@@ -96,6 +97,7 @@ var (
 		IntegrationsEndpoint:           common.IntegrationsEndpoint,
 		EventsEndpoint:                 common.EventsEndpoint,
 		Tab:                            common.ParamTab,
+		ConditionNegated:               common.ParamConditionNegated,
 	}
 )
 
