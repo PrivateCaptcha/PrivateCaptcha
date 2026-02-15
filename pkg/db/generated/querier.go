@@ -86,6 +86,7 @@ type Querier interface {
 	RemoveOrgInviteByID(ctx context.Context, id int32) error
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
+	SoftDeleteDifficultyRule(ctx context.Context, id int32) (*DifficultyRule, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)
 	SoftDeleteProperty(ctx context.Context, id int32) (*Property, error)
 	SoftDeleteUser(ctx context.Context, id int32) (*User, error)

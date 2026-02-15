@@ -691,3 +691,14 @@ func newUpdateRuleAuditLogEvent(updatedRule *dbgen.DifficultyRule, result *dbgen
 		NewValue:  NewAuditLogDifficultyRule(updatedRule),
 	}
 }
+
+func newDeleteRuleAuditLogEvent(rule *dbgen.DifficultyRule, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionSoftDelete,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(rule),
+		NewValue:  nil,
+	}
+}

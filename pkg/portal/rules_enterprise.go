@@ -744,3 +744,89 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
+
+func (s *Server) deletePropertyRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can delete this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot delete property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	auditEvent, err := s.Store.Impl().SoftDeleteDifficultyRule(ctx, rule, user)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}
+
+func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can delete this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot delete org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	auditEvent, err := s.Store.Impl().SoftDeleteDifficultyRule(ctx, rule, user)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}

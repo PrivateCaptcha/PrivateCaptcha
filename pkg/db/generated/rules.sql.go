@@ -208,6 +208,35 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 	return items, nil
 }
 
+const softDeleteDifficultyRule = `-- name: SoftDeleteDifficultyRule :one
+UPDATE backend.difficulty_rules SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at
+`
+
+func (q *Queries) SoftDeleteDifficultyRule(ctx context.Context, id int32) (*DifficultyRule, error) {
+	row := q.db.QueryRow(ctx, softDeleteDifficultyRule, id)
+	var i DifficultyRule
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PropertyID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.Enabled,
+		&i.ConditionProperty,
+		&i.ConditionOperator,
+		&i.ConditionOperatorNegated,
+		&i.ConditionValueStr,
+		&i.ConditionValueInt,
+		&i.ConditionValueSeparator,
+		&i.Position,
+		&i.ActionProperty,
+		&i.ActionValue,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
 const updateDifficultyRule = `-- name: UpdateDifficultyRule :one
 WITH old AS (
     SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules dr

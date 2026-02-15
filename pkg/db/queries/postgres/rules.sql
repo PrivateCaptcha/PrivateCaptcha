@@ -70,3 +70,6 @@ SELECT
     old.action_value AS old_action_value
 FROM upd
 CROSS JOIN old;
+
+-- name: SoftDeleteDifficultyRule :one
+UPDATE backend.difficulty_rules SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1 RETURNING *;
