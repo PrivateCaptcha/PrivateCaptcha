@@ -196,8 +196,9 @@ func (s *BusinessStore) CacheVerifiedPuzzle(ctx context.Context, p puzzle.Puzzle
 		return
 	}
 
-	value := s.puzzleCache.Inc(ctx, p.HashKey(), expiration.Sub(tnow))
-	slog.Log(ctx, common.LevelTrace, "Cached verified puzzle", "times", value)
+	key := p.HashKey()
+	value := s.puzzleCache.Inc(ctx, key, expiration.Sub(tnow))
+	slog.Log(ctx, common.LevelTrace, "Cached verified puzzle", "times", value, "key", key)
 }
 
 func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *dbgen.Property, userID int32) bool {

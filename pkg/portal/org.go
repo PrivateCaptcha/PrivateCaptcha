@@ -21,65 +21,7 @@ var (
 	errNoOrgs         = errors.New("user has no organizations")
 	stubUserOrg       = &userOrg{ID: "-1"}
 	propertiesPerPage = 30
-
-	portalConst = PortalRenderConstants{
-		BaseRenderConstants: baseConst,
-		OrgEndpoint:         common.OrgEndpoint,
-		DashboardEndpoint:   common.DashboardEndpoint,
-		OrgLevelOwner:       string(dbgen.AccessLevelOwner),
-		OrgLevelInvited:     string(dbgen.AccessLevelInvited),
-		OrgLevelMember:      string(dbgen.AccessLevelMember),
-		MembersEndpoint:     common.MembersEndpoint,
-		EventsEndpoint:      common.EventsEndpoint,
-		PropertyEndpoint:    common.PropertyEndpoint,
-		NewEndpoint:         common.NewEndpoint,
-		PropertiesEndpoint:  common.PropertiesEndpoint,
-		Page:                common.ParamPage,
-		Email:               common.ParamEmail,
-		Name:                common.ParamName,
-		TransferEndpoint:    common.TransferEndpoint,
-		DeleteEndpoint:      common.DeleteEndpoint,
-		EditEndpoint:        common.EditEndpoint,
-		User:                common.ParamUser,
-		Tab:                 common.ParamTab,
-	}
-
-	orgWizardConst = OrgWizardRenderConstants{
-		BaseRenderConstants: baseConst,
-		OrgEndpoint:         common.OrgEndpoint,
-		NewEndpoint:         common.NewEndpoint,
-		Name:                common.ParamName,
-	}
 )
-
-type PortalRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint        string
-	DashboardEndpoint  string
-	OrgLevelOwner      string
-	OrgLevelInvited    string
-	OrgLevelMember     string
-	MembersEndpoint    string
-	EventsEndpoint     string
-	PropertyEndpoint   string
-	NewEndpoint        string
-	PropertiesEndpoint string
-	Page               string
-	Email              string
-	Name               string
-	TransferEndpoint   string
-	DeleteEndpoint     string
-	EditEndpoint       string
-	User               string
-	Tab                string
-}
-
-type OrgWizardRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint string
-	NewEndpoint string
-	Name        string
-}
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
@@ -92,44 +34,24 @@ const (
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
 	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
 	orgUserCreatedAtFormat        = "02 Jan 2006"
-	portalMembersTabIndex         = 1
-	portalSettingsTabIndex        = 2
-	portalEventsTabIndex          = 3
 )
 
 type orgSettingsRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
-	systemNotificationContext
-	Orgs        []*userOrg
 	CurrentOrg  *userOrg
-	Tab         int
 	NameError   string
 	Members     []*orgUser
 	CanEdit     bool
 	CanTransfer bool
 }
 
-var _ RenderContext = (*orgSettingsRenderContext)(nil)
-
-func (c *orgSettingsRenderContext) Params() interface{} { return c }
-func (c *orgSettingsRenderContext) Const() interface{}  { return portalConst }
-
 type orgAuditLogsRenderContext struct {
 	AlertRenderContext
-	CsrfRenderContext
 	AuditLogsRenderContext
-	systemNotificationContext
-	Orgs       []*userOrg
 	CurrentOrg *userOrg
-	Tab        int
 	CanView    bool
 }
-
-var _ RenderContext = (*orgAuditLogsRenderContext)(nil)
-
-func (c *orgAuditLogsRenderContext) Params() interface{} { return c }
-func (c *orgAuditLogsRenderContext) Const() interface{}  { return portalConst }
 
 type orgUser struct {
 	Name      string
@@ -142,18 +64,10 @@ type orgUser struct {
 type orgMemberRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
-	systemNotificationContext
-	Orgs       []*userOrg
 	CurrentOrg *userOrg
-	Tab        int
 	Members    []*orgUser
 	CanEdit    bool
 }
-
-var _ RenderContext = (*orgMemberRenderContext)(nil)
-
-func (c *orgMemberRenderContext) Params() interface{} { return c }
-func (c *orgMemberRenderContext) Const() interface{}  { return portalConst }
 
 type userOrg struct {
 	Name  string
@@ -167,26 +81,15 @@ type orgDashboardRenderContext struct {
 	PaginationRenderContext
 	Orgs       []*userOrg
 	CurrentOrg *userOrg
-	Tab        int
 	// shortened from CurrentOrgProperties for simplicity
 	Properties []*userProperty
 }
-
-func (c *orgDashboardRenderContext) Params() interface{} { return c }
-func (c *orgDashboardRenderContext) Const() interface{}  { return portalConst }
-
-var _ RenderContext = (*orgDashboardRenderContext)(nil)
 
 type orgWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	NameError string
 }
-
-func (c *orgWizardRenderContext) Params() interface{} { return c }
-func (c *orgWizardRenderContext) Const() interface{}  { return orgWizardConst }
-
-var _ RenderContext = (*orgWizardRenderContext)(nil)
 
 func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHasher) *orgUser {
 	return &orgUser{
@@ -397,47 +300,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tabParam := r.URL.Query().Get(common.ParamTab)
-	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
-	var model Model = renderCtx
-	if renderCtx.CurrentOrg.Level != string(dbgen.AccessLevelInvited) {
-		switch tabParam {
-		case common.MembersEndpoint:
-			if vm, err := s.getOrgMembers(w, r); err == nil {
-				if mc, ok := vm.Model.(*orgMemberRenderContext); ok {
-					mc.Orgs = renderCtx.Orgs
-					mc.Tab = portalMembersTabIndex
-					mc.systemNotificationContext = renderCtx.systemNotificationContext
-				}
-				model = vm.Model
-			}
-		case common.SettingsEndpoint:
-			if vm, err := s.getOrgSettings(w, r); err == nil {
-				if sc, ok := vm.Model.(*orgSettingsRenderContext); ok {
-					sc.Orgs = renderCtx.Orgs
-					sc.Tab = portalSettingsTabIndex
-					sc.systemNotificationContext = renderCtx.systemNotificationContext
-				}
-				model = vm.Model
-			}
-		case common.EventsEndpoint:
-			if vm, err := s.getOrgAuditLogs(w, r); err == nil {
-				if ac, ok := vm.Model.(*orgAuditLogsRenderContext); ok {
-					ac.Orgs = renderCtx.Orgs
-					ac.Tab = portalEventsTabIndex
-					ac.CsrfRenderContext = renderCtx.CsrfRenderContext
-					ac.systemNotificationContext = renderCtx.systemNotificationContext
-				}
-				model = vm.Model
-			}
-		default:
-			if tabParam != common.DashboardEndpoint && tabParam != "" {
-				slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
-			}
-		}
-	}
-
-	s.render(w, r, portalTemplate, model)
+	s.render(w, r, portalTemplate, renderCtx)
 }
 
 func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {

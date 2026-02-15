@@ -113,7 +113,7 @@ func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string
 		template string
-		model    RenderContext
+		model    interface{}
 		selector string
 		matches  []string
 	}{
@@ -193,56 +193,8 @@ func TestRenderHTML(t *testing.T) {
 			selector: "p.property-name",
 			matches:  []string{},
 		},
-		// portal template with members tab
 		{
-			path:     []string{common.OrgEndpoint, "123"},
-			template: portalTemplate,
-			model: &orgMemberRenderContext{
-				AlertRenderContext: AlertRenderContext{
-					SuccessMessage: "Test",
-				},
-				Orgs:              []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				CurrentOrg:        stubOrg("123"),
-				Tab:               portalMembersTabIndex,
-				CsrfRenderContext: stubToken(),
-				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
-				CanEdit:           true,
-			},
-			selector: "p.member-name",
-			matches:  []string{"foo", "bar"},
-		},
-		// portal template with settings tab
-		{
-			path:     []string{common.OrgEndpoint, "123"},
-			template: portalTemplate,
-			model: &orgSettingsRenderContext{
-				Orgs:              []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				CurrentOrg:        stubOrg("123"),
-				Tab:               portalSettingsTabIndex,
-				CsrfRenderContext: stubToken(),
-				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember)},
-				CanEdit:           true,
-			},
-		},
-		// portal template with audit logs tab
-		{
-			path:     []string{common.OrgEndpoint, "123"},
-			template: portalTemplate,
-			model: &orgAuditLogsRenderContext{
-				CsrfRenderContext: stubToken(),
-				AuditLogsRenderContext: AuditLogsRenderContext{
-					AuditLogs: stubAuditLogs(),
-					Count:     12345,
-					Page:      10,
-					PerPage:   25,
-				},
-				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				CurrentOrg: stubOrg("123"),
-				Tab:        portalEventsTabIndex,
-				CanView:    true,
-			},
-		},
-		{
+			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.MembersEndpoint},
 			template: orgMembersTemplate,
 			model: &orgMemberRenderContext{
 				AlertRenderContext: AlertRenderContext{

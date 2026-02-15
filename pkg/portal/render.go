@@ -8,37 +8,135 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-// RenderContext is the interface that all portal view models must implement.
-// Params returns the view-specific data and Const returns the view-specific constants.
-type RenderContext interface {
-	Params() interface{}
-	Const() interface{}
+type RenderConstants struct {
+	LoginEndpoint              string
+	TwoFactorEndpoint          string
+	ResendEndpoint             string
+	RegisterEndpoint           string
+	SettingsEndpoint           string
+	LogoutEndpoint             string
+	NewEndpoint                string
+	OrgEndpoint                string
+	PropertyEndpoint           string
+	DashboardEndpoint          string
+	TabEndpoint                string
+	ReportsEndpoint            string
+	IntegrationsEndpoint       string
+	EditEndpoint               string
+	Token                      string
+	Email                      string
+	Name                       string
+	Tab                        string
+	VerificationCode           string
+	Domain                     string
+	Difficulty                 string
+	Growth                     string
+	Stats                      string
+	DeleteEndpoint             string
+	MembersEndpoint            string
+	OrgLevelInvited            string
+	OrgLevelMember             string
+	OrgLevelOwner              string
+	GeneralEndpoint            string
+	EmailEndpoint              string
+	UserEndpoint               string
+	APIKeysEndpoint            string
+	Days                       string
+	HeaderCSRFToken            string
+	UsageEndpoint              string
+	NotificationEndpoint       string
+	ErrorEndpoint              string
+	ValidityInterval           string
+	AllowSubdomains            string
+	AllowLocalhost             string
+	AllowReplay                string
+	IgnoreError                string
+	Terms                      string
+	MaxReplayCount             string
+	MoveEndpoint               string
+	TransferEndpoint           string
+	Org                        string
+	User                       string
+	AuditLogsEndpoint          string
+	EventsEndpoint             string
+	Page                       string
+	ExportEndpoint             string
+	Scope                      string
+	APIKeyScopePuzzle          string
+	APIKeyScopePortalReadWrite string
+	APIKeyScopePortalReadOnly  string
+	PropertiesEndpoint         string
+	All                        string
 }
 
-type BaseRenderConstants struct {
-	HeaderCSRFToken      string
-	SettingsEndpoint     string
-	TabEndpoint          string
-	AuditLogsEndpoint    string
-	LogoutEndpoint       string
-	ErrorEndpoint        string
-	NotificationEndpoint string
+func NewRenderConstants() *RenderConstants {
+	return &RenderConstants{
+		LoginEndpoint:              common.LoginEndpoint,
+		TwoFactorEndpoint:          common.TwoFactorEndpoint,
+		ResendEndpoint:             common.ResendEndpoint,
+		RegisterEndpoint:           common.RegisterEndpoint,
+		SettingsEndpoint:           common.SettingsEndpoint,
+		LogoutEndpoint:             common.LogoutEndpoint,
+		OrgEndpoint:                common.OrgEndpoint,
+		PropertyEndpoint:           common.PropertyEndpoint,
+		DashboardEndpoint:          common.DashboardEndpoint,
+		NewEndpoint:                common.NewEndpoint,
+		Token:                      common.ParamCSRFToken,
+		Email:                      common.ParamEmail,
+		Name:                       common.ParamName,
+		Tab:                        common.ParamTab,
+		VerificationCode:           common.ParamVerificationCode,
+		Domain:                     common.ParamDomain,
+		Difficulty:                 common.ParamDifficulty,
+		Growth:                     common.ParamGrowth,
+		Stats:                      common.StatsEndpoint,
+		TabEndpoint:                common.TabEndpoint,
+		ReportsEndpoint:            common.ReportsEndpoint,
+		IntegrationsEndpoint:       common.IntegrationsEndpoint,
+		EditEndpoint:               common.EditEndpoint,
+		DeleteEndpoint:             common.DeleteEndpoint,
+		MembersEndpoint:            common.MembersEndpoint,
+		OrgLevelInvited:            string(dbgen.AccessLevelInvited),
+		OrgLevelMember:             string(dbgen.AccessLevelMember),
+		OrgLevelOwner:              string(dbgen.AccessLevelOwner),
+		GeneralEndpoint:            common.GeneralEndpoint,
+		EmailEndpoint:              common.EmailEndpoint,
+		UserEndpoint:               common.UserEndpoint,
+		APIKeysEndpoint:            common.APIKeysEndpoint,
+		Days:                       common.ParamDays,
+		HeaderCSRFToken:            common.HeaderCSRFToken,
+		UsageEndpoint:              common.UsageEndpoint,
+		NotificationEndpoint:       common.NotificationEndpoint,
+		ErrorEndpoint:              common.ErrorEndpoint,
+		ValidityInterval:           common.ParamValidityInterval,
+		AllowSubdomains:            common.ParamAllowSubdomains,
+		AllowLocalhost:             common.ParamAllowLocalhost,
+		AllowReplay:                common.ParamAllowReplay,
+		IgnoreError:                common.ParamIgnoreError,
+		Terms:                      common.ParamTerms,
+		MaxReplayCount:             common.ParamMaxReplayCount,
+		MoveEndpoint:               common.MoveEndpoint,
+		TransferEndpoint:           common.TransferEndpoint,
+		Org:                        common.ParamOrg,
+		User:                       common.ParamUser,
+		AuditLogsEndpoint:          common.AuditLogsEndpoint,
+		EventsEndpoint:             common.EventsEndpoint,
+		Page:                       common.ParamPage,
+		ExportEndpoint:             common.ExportEndpoint,
+		Scope:                      common.ParamScope,
+		APIKeyScopePuzzle:          apiKeyScopePuzzle,
+		APIKeyScopePortalReadWrite: apiKeyScopePortal + apiKeyReadWriteSuffix,
+		APIKeyScopePortalReadOnly:  apiKeyScopePortal + apiKeyReadOnlySuffix,
+		PropertiesEndpoint:         common.PropertiesEndpoint,
+		All:                        common.All,
+	}
 }
 
-var baseConst = BaseRenderConstants{
-	HeaderCSRFToken:      common.HeaderCSRFToken,
-	SettingsEndpoint:     common.SettingsEndpoint,
-	TabEndpoint:          common.TabEndpoint,
-	AuditLogsEndpoint:    common.AuditLogsEndpoint,
-	LogoutEndpoint:       common.LogoutEndpoint,
-	ErrorEndpoint:        common.ErrorEndpoint,
-	NotificationEndpoint: common.NotificationEndpoint,
-}
-
-func (s *Server) RenderResponse(ctx context.Context, name string, data RenderContext, reqCtx *RequestContext, platformCtx interface{}) (bytes.Buffer, error) {
+func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext, platformCtx interface{}) (bytes.Buffer, error) {
 	actualData := struct {
 		Params   interface{}
 		Const    interface{}
@@ -46,8 +144,8 @@ func (s *Server) RenderResponse(ctx context.Context, name string, data RenderCon
 		Platform interface{}
 		Data     interface{}
 	}{
-		Params:   data.Params(),
-		Const:    data.Const(),
+		Params:   data,
+		Const:    s.RenderConstants,
 		Ctx:      reqCtx,
 		Platform: platformCtx,
 		Data:     s.DataCtx,
@@ -67,7 +165,7 @@ func (s *Server) RenderResponse(ctx context.Context, name string, data RenderCon
 	return out, err
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data RenderContext) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
 	ctx := r.Context()
 
 	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
