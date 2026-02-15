@@ -3250,7 +3250,7 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, rule *d
 		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
 		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 	}
-	_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
+	_ = impl.cache.SetMissing(ctx, DifficultyRuleCacheKey(rule.ID))
 
 	auditEvent := newDeleteRuleAuditLogEvent(rule, user)
 
