@@ -1,6 +1,6 @@
 {{template "base.html" .}}
 
-{{define "title"}}Create new property rule{{end}}
+{{define "title"}}{{ if .Params.IsEdit }}Edit rule{{ else }}Create new property rule{{ end }}{{end}}
 
 {{define "html_class"}}h-full bg-gray-100{{end}}
 {{define "body_class"}}h-full min-h-full flex flex-col{{end}}
@@ -62,7 +62,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">Create New Rule</h2>
+                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">{{ if .Params.IsEdit }}Edit Rule{{ else }}Create New Rule{{ end }}</h2>
             </div>
         </div>
     </div>
@@ -75,10 +75,18 @@
         <div class="rounded-lg bg-white px-6 py-8 shadow sm:px-6 flex flex-1 xl:items-center justify-center">
             <div class="max-w-md flex-1 max-lg:mt-12">
                 <form
-                    {{ if .Params.Property }}
-                    hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID .Const.RulesEndpoint .Const.NewEndpoint }}'
+                    {{ if .Params.IsEdit }}
+                        {{ if .Params.Property }}
+                    hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID .Const.RulesEndpoint .Params.RuleID .Const.EditEndpoint }}'
+                        {{ else }}
+                    hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.RulesEndpoint .Params.RuleID .Const.EditEndpoint }}'
+                        {{ end }}
                     {{ else }}
+                        {{ if .Params.Property }}
+                    hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID .Const.RulesEndpoint .Const.NewEndpoint }}'
+                        {{ else }}
                     hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.RulesEndpoint .Const.NewEndpoint }}'
+                        {{ end }}
                     {{ end }}
                     hx-target="this"
                     hx-swap="innerHTML"

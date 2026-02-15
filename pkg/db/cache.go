@@ -223,6 +223,7 @@ const (
 	compiledOrgRulesCacheKeyPrefix
 	rawPropertyRulesCacheKeyPrefix
 	rawOrgRulesCacheKeyPrefix
+	difficultyRuleCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -266,6 +267,7 @@ func init() {
 	cachePrefixToStrings[compiledOrgRulesCacheKeyPrefix] = "compiledOrgRules/"
 	cachePrefixToStrings[rawPropertyRulesCacheKeyPrefix] = "rawPropRules/"
 	cachePrefixToStrings[rawOrgRulesCacheKeyPrefix] = "rawOrgRules/"
+	cachePrefixToStrings[difficultyRuleCacheKeyPrefix] = "diffRule/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -398,4 +400,7 @@ func RawPropertyRulesCacheKey(propertyID int32) CacheKey {
 }
 func RawOrgRulesCacheKey(orgID int32) CacheKey {
 	return Int32CacheKey(rawOrgRulesCacheKeyPrefix, orgID)
+}
+func DifficultyRuleCacheKey(ruleID int32) CacheKey {
+	return Int32CacheKey(difficultyRuleCacheKeyPrefix, ruleID)
 }

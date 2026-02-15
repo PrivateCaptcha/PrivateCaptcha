@@ -3093,6 +3093,8 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 	}
 
+	impl.cache.Set(ctx, DifficultyRuleCacheKey(rule.ID), rule)
+
 	auditEvent := &common.AuditLogEvent{
 		UserID:    user.ID,
 		Action:    common.AuditLogActionCreate,
@@ -3130,4 +3132,75 @@ func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID 
 		return
 	}
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+}
+
+func (impl *BusinessStoreImpl) RetrieveDifficultyRule(ctx context.Context, ruleID int32) (*dbgen.DifficultyRule, error) {
+	reader := &StoreOneReader[int32, dbgen.DifficultyRule]{
+		CacheKey: DifficultyRuleCacheKey(ruleID),
+		Cache:    impl.cache,
+	}
+
+	if impl.querier != nil {
+		reader.QueryKeyFunc = QueryKeyInt
+		reader.QueryFunc = impl.querier.GetDifficultyRuleByID
+	}
+
+	return reader.Read(ctx)
+}
+
+func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	return &dbgen.DifficultyRule{
+		ID:                       result.ID,
+		Name:                     result.Name,
+		PropertyID:               result.PropertyID,
+		OrgID:                    result.OrgID,
+		Enabled:                  result.Enabled,
+		ConditionProperty:        result.ConditionProperty,
+		ConditionOperator:        result.ConditionOperator,
+		ConditionOperatorNegated: result.ConditionOperatorNegated,
+		ConditionValueStr:        result.ConditionValueStr,
+		ConditionValueInt:        result.ConditionValueInt,
+		ConditionValueSeparator:  result.ConditionValueSeparator,
+		Position:                 result.Position,
+		ActionProperty:           result.ActionProperty,
+		ActionValue:              result.ActionValue,
+		CreatedAt:                result.CreatedAt,
+		UpdatedAt:                result.UpdatedAt,
+	}
+}
+
+func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.UpdateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if params == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	result, err := impl.querier.UpdateDifficultyRule(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", params.ID, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Updated difficulty rule", "ruleID", result.ID, "name", result.Name)
+
+	if result.PropertyID.Valid {
+		propertyID := result.PropertyID.Int32
+		_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+		_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+	}
+	if result.OrgID.Valid {
+		orgID := result.OrgID.Int32
+		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+	}
+
+	updatedRule := newDifficultyRuleFromUpdate(result)
+	impl.cache.Set(ctx, DifficultyRuleCacheKey(updatedRule.ID), updatedRule)
+
+	auditEvent := newUpdateRuleAuditLogEvent(updatedRule, result, user)
+
+	return updatedRule, auditEvent, nil
 }

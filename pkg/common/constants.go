@@ -31,6 +31,7 @@ const (
 	ParamUser              = "user"
 	ParamPeriod            = "period"
 	ParamProperty          = "property"
+	ParamRule              = "rule"
 	ParamKey               = "key"
 	ParamCode              = "code"
 	ParamID                = "id"
@@ -53,8 +54,8 @@ const (
 	ParamConditionProperty = "condition_property"
 	ParamConditionOperator = "condition_operator"
 	ParamConditionValue    = "condition_value"
-	ParamActionProperty    = "action_property"
 	ParamConditionNegated  = "condition_negated"
+	ParamActionProperty    = "action_property"
 	ParamActionValue       = "action_value"
 	All                    = "all"
 )

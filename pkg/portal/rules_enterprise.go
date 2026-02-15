@@ -47,6 +47,8 @@ type RuleWizardRenderContext struct {
 	Countries  []CountryOption
 	CurrentOrg *userOrg
 	Property   *userProperty
+	RuleID     string
+	IsEdit     bool
 }
 
 var _ RenderContext = (*RuleWizardRenderContext)(nil)
@@ -382,7 +384,6 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	renderCtx.ConditionValue = strings.TrimSpace(r.FormValue(common.ParamConditionValue))
 
 	// Parse operator for negation
-	conditionNegated := false
 	if strings.HasSuffix(renderCtx.ConditionOperator, "_negated") {
 		renderCtx.ConditionNegated = true
 		renderCtx.ConditionOperator = strings.TrimSuffix(renderCtx.ConditionOperator, "_negated")
@@ -410,6 +411,9 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 			"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated, "status", parseStatus.String())
 		return nil, parseStatus
 	}
+
+	slog.DebugContext(ctx, "Parsed rule condition", "condition", renderCtx.ConditionProperty, "operator", renderCtx.ConditionOperator,
+		"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated)
 
 	renderCtx.ActionProperty = r.FormValue(common.ParamActionProperty)
 	if len(renderCtx.ActionProperty) == 0 {
@@ -440,12 +444,14 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		return nil, actionStatus
 	}
 
+	slog.DebugContext(ctx, "Parsed rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue)
+
 	params := &dbgen.CreateDifficultyRuleParams{
 		Name:                     renderCtx.Name,
 		Enabled:                  renderCtx.Enabled,
 		ConditionProperty:        dbgen.RuleConditionProperty(renderCtx.ConditionProperty),
 		ConditionOperator:        dbgen.RuleConditionOperator(renderCtx.ConditionOperator),
-		ConditionOperatorNegated: conditionNegated,
+		ConditionOperatorNegated: renderCtx.ConditionNegated,
 		ConditionValueStr:        db.Text(renderCtx.ConditionValue),
 		ConditionValueSeparator:  conditionValueSeparator,
 		ActionProperty:           dbgen.RuleActionProperty(renderCtx.ActionProperty),
@@ -453,4 +459,271 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	}
 
 	return params, common.StatusOK
+}
+
+const errUpdateRuleMessage = "Failed to update the difficulty rule. Please try again later."
+
+func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
+	conditionValue := ""
+	if rule.ConditionValueStr.Valid {
+		conditionValue = rule.ConditionValueStr.String
+	}
+
+	return RuleFormData{
+		Name:              rule.Name,
+		Enabled:           rule.Enabled,
+		ConditionProperty: string(rule.ConditionProperty),
+		ConditionOperator: string(rule.ConditionOperator),
+		ConditionValue:    conditionValue,
+		ActionProperty:    string(rule.ActionProperty),
+		ActionValue:       strconv.Itoa(int(rule.ActionValue)),
+		ConditionNegated:  rule.ConditionOperatorNegated,
+	}
+}
+
+func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
+	ctx := r.Context()
+
+	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	return rule, nil
+}
+
+func (s *Server) RuleID(r *http.Request) (int32, string, error) {
+	ctx := r.Context()
+
+	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
+		return -1, "", errInvalidPathArg
+	}
+
+	return ruleID, value, err
+}
+
+func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.checkUserOrgAccess(user, org) {
+		return nil, db.ErrPermissions
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
+	renderCtx.RuleFormData = ruleToFormData(rule)
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
+	renderCtx.IsEdit = true
+
+	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+}
+
+func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !s.checkUserOrgAccess(user, org) {
+		return nil, db.ErrPermissions
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
+	renderCtx.RuleFormData = ruleToFormData(rule)
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
+	renderCtx.IsEdit = true
+
+	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+}
+
+func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	ruleID, ruleIDStr, err := s.RuleID(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
+	renderCtx.RuleID = ruleIDStr
+	renderCtx.IsEdit = true
+
+	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+
+	if !statusCode.Success() {
+		if len(renderCtx.ErrorMessage) == 0 {
+			renderCtx.ErrorMessage = statusCode.String()
+		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	updateParams := &dbgen.UpdateDifficultyRuleParams{
+		ID:                       ruleID,
+		Name:                     createParams.Name,
+		Enabled:                  createParams.Enabled,
+		ConditionProperty:        createParams.ConditionProperty,
+		ConditionOperator:        createParams.ConditionOperator,
+		ConditionOperatorNegated: createParams.ConditionOperatorNegated,
+		ConditionValueStr:        createParams.ConditionValueStr,
+		ConditionValueInt:        createParams.ConditionValueInt,
+		ConditionValueSeparator:  createParams.ConditionValueSeparator,
+		ActionProperty:           createParams.ActionProperty,
+		ActionValue:              createParams.ActionValue,
+	}
+
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "propertyID", property.ID, common.ErrAttr(err))
+		renderCtx.ErrorMessage = errUpdateRuleMessage
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}
+
+func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	if !level.Valid || level.AccessLevel != dbgen.AccessLevelOwner {
+		slog.WarnContext(ctx, "User is not org owner, cannot edit org rules", "orgID", org.ID, "userID", user.ID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	ruleID, ruleIDStr, err := s.RuleID(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
+	renderCtx.RuleID = ruleIDStr
+	renderCtx.IsEdit = true
+
+	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+
+	if !statusCode.Success() {
+		if len(renderCtx.ErrorMessage) == 0 {
+			renderCtx.ErrorMessage = statusCode.String()
+		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	updateParams := &dbgen.UpdateDifficultyRuleParams{
+		ID:                       ruleID,
+		Name:                     createParams.Name,
+		Enabled:                  createParams.Enabled,
+		ConditionProperty:        createParams.ConditionProperty,
+		ConditionOperator:        createParams.ConditionOperator,
+		ConditionOperatorNegated: createParams.ConditionOperatorNegated,
+		ConditionValueStr:        createParams.ConditionValueStr,
+		ConditionValueInt:        createParams.ConditionValueInt,
+		ConditionValueSeparator:  createParams.ConditionValueSeparator,
+		ActionProperty:           createParams.ActionProperty,
+		ActionValue:              createParams.ActionValue,
+	}
+
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "orgID", org.ID, common.ErrAttr(err))
+		renderCtx.ErrorMessage = errUpdateRuleMessage
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }

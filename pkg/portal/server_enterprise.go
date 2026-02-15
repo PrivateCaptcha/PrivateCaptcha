@@ -60,5 +60,10 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getPropertyNewRule))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postPropertyNewRule))
 
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateRead, s.Handler(s.getOrgEditRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postOrgEditRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateRead, s.Handler(s.getPropertyEditRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postPropertyEditRule))
+
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
 }

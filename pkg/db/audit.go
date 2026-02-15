@@ -661,3 +661,33 @@ func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRu
 
 	return event
 }
+
+func newOldDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	return &dbgen.DifficultyRule{
+		ID:                       result.ID,
+		Name:                     result.OldName,
+		PropertyID:               result.PropertyID,
+		OrgID:                    result.OrgID,
+		Enabled:                  result.OldEnabled,
+		ConditionProperty:        result.OldConditionProperty,
+		ConditionOperator:        result.OldConditionOperator,
+		ConditionOperatorNegated: result.OldConditionOperatorNegated,
+		ConditionValueStr:        result.OldConditionValueStr,
+		ConditionValueInt:        result.OldConditionValueInt,
+		ActionProperty:           result.OldActionProperty,
+		ActionValue:              result.OldActionValue,
+	}
+}
+
+func newUpdateRuleAuditLogEvent(updatedRule *dbgen.DifficultyRule, result *dbgen.UpdateDifficultyRuleRow, user *dbgen.User) *common.AuditLogEvent {
+	oldRule := newOldDifficultyRuleFromUpdate(result)
+
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(updatedRule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(oldRule),
+		NewValue:  NewAuditLogDifficultyRule(updatedRule),
+	}
+}

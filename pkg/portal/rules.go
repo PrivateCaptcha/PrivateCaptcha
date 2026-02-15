@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
@@ -16,6 +17,7 @@ type RuleConstants struct {
 	PropertyEndpoint               string
 	RulesEndpoint                  string
 	NewEndpoint                    string
+	EditEndpoint                   string
 	ConditionUserAgent             string
 	ConditionIPAddress             string
 	ConditionCountryCode           string
@@ -62,6 +64,7 @@ var (
 		PropertyEndpoint:               common.PropertyEndpoint,
 		RulesEndpoint:                  common.RulesEndpoint,
 		NewEndpoint:                    common.NewEndpoint,
+		EditEndpoint:                   common.EditEndpoint,
 		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
@@ -103,6 +106,7 @@ var (
 
 // nolint:unused
 func stubDifficultyRules() []*DifficultyRuleModel {
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	return []*DifficultyRuleModel{
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block suspicious countries",
@@ -117,7 +121,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}),
+		}, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block empty User-Agents",
 			Enabled:                  false,
@@ -129,7 +133,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}),
+		}, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
@@ -142,7 +146,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -20,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}),
+		}, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
@@ -155,7 +159,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              50,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}),
+		}, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
@@ -168,6 +172,6 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -30,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}),
+		}, hasher),
 	}
 }

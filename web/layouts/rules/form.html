@@ -50,7 +50,7 @@
         <div x-show="!isListCondition">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" class="w-full pc-internal-form-select">
+                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select">
                     <template x-for="op in availableOperators" :key="op.value">
                         <option :value="op.value" x-text="op.label"></option>
                     </template>
@@ -64,7 +64,7 @@
                 <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
             </label>
             <div class="mt-2">
-                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" :disabled="isListCondition" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
@@ -176,6 +176,6 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        Create
+        {{ if .Params.IsEdit }}Save{{ else }}Create{{ end }}
     </button>
 </div>
