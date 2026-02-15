@@ -211,10 +211,13 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	renderCtx := &orgMemberRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		Members:           usersToOrgUsers(members, s.IDHasher),
-		CanEdit:           org.UserID.Int32 == user.ID,
+		portalBaseRenderContext: portalBaseRenderContext{
+			CsrfRenderContext: s.CreateCsrfContext(user),
+			CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
+			Tab:               portalMembersTabIndex,
+		},
+		Members: usersToOrgUsers(members, s.IDHasher),
+		CanEdit: org.UserID.Int32 == user.ID,
 	}
 
 	if !renderCtx.CanEdit {
@@ -521,12 +524,15 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgAuditLogsRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
+			Tab:        portalEventsTabIndex,
+		},
 		AuditLogsRenderContext: AuditLogsRenderContext{
 			AuditLogs: []*UserAuditLog{},
 			SeeMore:   true,
 		},
-		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
-		CanView:    org.UserID.Int32 == user.ID,
+		CanView: org.UserID.Int32 == user.ID,
 	}
 
 	const maxOrgAuditLogs = 10

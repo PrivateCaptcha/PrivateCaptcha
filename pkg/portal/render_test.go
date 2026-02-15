@@ -167,8 +167,10 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123"},
 			template: portalTemplate,
 			model: &orgDashboardRenderContext{
-				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				},
 				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
 				PaginationRenderContext: PaginationRenderContext{
 					From:    1,
@@ -186,8 +188,10 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123"},
 			template: portalTemplate,
 			model: &orgDashboardRenderContext{
-				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelInvited)},
-				CurrentOrg: stubOrgEx("123", dbgen.AccessLevelInvited),
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelInvited)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelInvited),
+				},
 				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
 			},
 			selector: "p.property-name",
@@ -200,10 +204,12 @@ func TestRenderHTML(t *testing.T) {
 				AlertRenderContext: AlertRenderContext{
 					SuccessMessage: "Test",
 				},
-				CurrentOrg:        stubOrg("123"),
-				CsrfRenderContext: stubToken(),
-				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
-				CanEdit:           true,
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg:        stubOrg("123"),
+					CsrfRenderContext: stubToken(),
+				},
+				Members: []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
+				CanEdit: true,
 			},
 			selector: "p.member-name",
 			matches:  []string{"foo", "bar"},
@@ -212,24 +218,80 @@ func TestRenderHTML(t *testing.T) {
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{
-				CurrentOrg:        stubOrg("123"),
-				CsrfRenderContext: stubToken(),
-				Members:           []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
-				CanEdit:           true,
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg:        stubOrg("123"),
+					CsrfRenderContext: stubToken(),
+				},
+				Members: []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
+				CanEdit: true,
 			},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.EventsEndpoint},
 			template: orgAuditLogsTemplate,
 			model: &orgAuditLogsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrg("123"),
+				},
 				AuditLogsRenderContext: AuditLogsRenderContext{
 					AuditLogs: stubAuditLogs(),
 					Count:     12345,
 					Page:      10,
 					PerPage:   25,
 				},
-				CurrentOrg: stubOrg("123"),
-				CanView:    true,
+				CanView: true,
+			},
+		},
+		// portal template with members tab
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgMemberRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:              []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg:        stubOrg("123"),
+					CsrfRenderContext: stubToken(),
+					Tab:               portalMembersTabIndex,
+				},
+				Members: []*orgUser{stubUser("foo", dbgen.AccessLevelMember), stubUser("bar", dbgen.AccessLevelInvited)},
+				CanEdit: true,
+			},
+			selector: "p.member-name",
+			matches:  []string{"foo", "bar"},
+		},
+		// portal template with settings tab
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgSettingsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:              []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg:        stubOrg("123"),
+					CsrfRenderContext: stubToken(),
+					Tab:               portalSettingsTabIndex,
+				},
+				Members: []*orgUser{stubUser("foo", dbgen.AccessLevelMember)},
+				CanEdit: true,
+			},
+		},
+		// portal template with audit logs tab
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgAuditLogsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:              []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg:        stubOrg("123"),
+					CsrfRenderContext: stubToken(),
+					Tab:               portalEventsTabIndex,
+				},
+				AuditLogsRenderContext: AuditLogsRenderContext{
+					AuditLogs: stubAuditLogs(),
+					Count:     12345,
+					Page:      10,
+					PerPage:   25,
+				},
+				CanView: true,
 			},
 		},
 		{

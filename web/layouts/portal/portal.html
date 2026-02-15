@@ -156,7 +156,15 @@
                         </div>
                     </div>
                     {{ else }}
+                    {{- if eq .Params.Tab 1 -}}
+                    {{template "org-members.html" .}}
+                    {{- else if eq .Params.Tab 2 -}}
+                    {{template "org-settings.html" .}}
+                    {{- else if eq .Params.Tab 3 -}}
+                    {{template "org-auditlogs.html" .}}
+                    {{- else -}}
                     {{template "org-dashboard.html" .}}
+                    {{- end -}}
                     {{ end }}
                 </div>
             </div>

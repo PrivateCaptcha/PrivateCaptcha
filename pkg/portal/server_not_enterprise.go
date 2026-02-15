@@ -80,8 +80,11 @@ func newStubAuditLog() *UserAuditLog {
 
 func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgAuditLogsRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{
+			CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
+			Tab:        portalEventsTabIndex,
+		},
 		AuditLogsRenderContext: AuditLogsRenderContext{},
-		CurrentOrg:             orgToUserOrg(org, user.ID, s.IDHasher),
 		CanView:                org.UserID.Int32 == user.ID,
 	}
 
