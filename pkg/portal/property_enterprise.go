@@ -144,6 +144,15 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	}
 
 	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	renderCtx := &propertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
@@ -161,7 +170,7 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 
 	rules := rulesMap[property.ID]
 	for _, rule := range rules {
-		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, s.IDHasher))
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, user, org, s.IDHasher))
 	}
 
 	return renderCtx, nil, nil

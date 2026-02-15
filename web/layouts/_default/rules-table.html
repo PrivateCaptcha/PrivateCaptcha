@@ -17,12 +17,14 @@
             <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
             {{- end }}
 
+            {{ if .CanEdit }}
             {{ if $.Params.Property }}
             <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint .ID $.Const.EditEndpoint }}"
             {{ else }}
             <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .ID $.Const.EditEndpoint }}"
             {{ end }}
                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
+            {{ end }}
         </div>
     </li>
     {{ end }}

@@ -243,6 +243,7 @@ type DifficultyRuleModel struct {
 	ActionAction      string
 	ActionProperty    string
 	ActionValue       string
+	CanEdit           bool
 }
 
 type propertyRulesRenderContext struct {
@@ -261,7 +262,7 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	}
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, hasher common.IdentifierHasher) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, user *dbgen.User, org *dbgen.Organization, hasher common.IdentifierHasher) *DifficultyRuleModel {
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String
@@ -336,6 +337,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, hasher common.Identifie
 		ActionAction:      actionAction,
 		ActionProperty:    actionProperty,
 		ActionValue:       actionValue,
+		CanEdit:           canEditRule(user, org, rule),
 	}
 }
 
