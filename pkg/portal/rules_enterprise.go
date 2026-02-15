@@ -483,6 +483,19 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	}
 }
 
+// canEditRule checks if a user can edit a rule (org owner OR rule creator)
+func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule) bool {
+	// Org owner can always edit
+	if user.ID == org.UserID.Int32 {
+		return true
+	}
+	// Rule creator can edit
+	if rule.CreatorID.Valid && user.ID == rule.CreatorID.Int32 {
+		return true
+	}
+	return false
+}
+
 func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
 	ctx := r.Context()
 
@@ -539,6 +552,12 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, err
 	}
 
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		return nil, db.ErrPermissions
+	}
+
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
 	renderCtx.RuleFormData = ruleToFormData(rule)
 	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
@@ -566,6 +585,12 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 	rule, err := s.Rule(r)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
@@ -605,6 +630,21 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	ruleID, ruleIDStr, err := s.RuleID(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Retrieve the rule to check permissions
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, ruleID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve rule for permission check", "ruleID", ruleID, common.ErrAttr(err))
+		s.RedirectError(http.StatusNotFound, w, r)
+		return
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
@@ -670,8 +710,9 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !level.Valid || level.AccessLevel != dbgen.AccessLevelOwner {
-		slog.WarnContext(ctx, "User is not org owner, cannot edit org rules", "orgID", org.ID, "userID", user.ID)
+	// Check org membership
+	if !level.Valid || level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is not org member", "orgID", org.ID, "userID", user.ID)
 		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
@@ -679,6 +720,21 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	ruleID, ruleIDStr, err := s.RuleID(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Retrieve the rule to check permissions
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, ruleID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve rule for permission check", "ruleID", ruleID, common.ErrAttr(err))
+		s.RedirectError(http.StatusNotFound, w, r)
+		return
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
