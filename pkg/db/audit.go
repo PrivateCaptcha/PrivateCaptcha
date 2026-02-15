@@ -661,3 +661,55 @@ func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRu
 
 	return event
 }
+
+func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	return &dbgen.DifficultyRule{
+		ID:                       result.ID,
+		Name:                     result.Name,
+		PropertyID:               result.PropertyID,
+		OrgID:                    result.OrgID,
+		Enabled:                  result.Enabled,
+		ConditionProperty:        result.ConditionProperty,
+		ConditionOperator:        result.ConditionOperator,
+		ConditionOperatorNegated: result.ConditionOperatorNegated,
+		ConditionValueStr:        result.ConditionValueStr,
+		ConditionValueInt:        result.ConditionValueInt,
+		ConditionValueSeparator:  result.ConditionValueSeparator,
+		Position:                 result.Position,
+		ActionProperty:           result.ActionProperty,
+		ActionValue:              result.ActionValue,
+		CreatedAt:                result.CreatedAt,
+		UpdatedAt:                result.UpdatedAt,
+	}
+}
+
+func newOldDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	return &dbgen.DifficultyRule{
+		ID:                       result.ID,
+		Name:                     result.OldName,
+		PropertyID:               result.PropertyID,
+		OrgID:                    result.OrgID,
+		Enabled:                  result.OldEnabled,
+		ConditionProperty:        result.OldConditionProperty,
+		ConditionOperator:        result.OldConditionOperator,
+		ConditionOperatorNegated: result.OldConditionOperatorNegated,
+		ConditionValueStr:        result.OldConditionValueStr,
+		ConditionValueInt:        result.OldConditionValueInt,
+		ActionProperty:           result.OldActionProperty,
+		ActionValue:              result.OldActionValue,
+	}
+}
+
+func newUpdateRuleAuditLogEvent(result *dbgen.UpdateDifficultyRuleRow, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent) {
+	rule := newDifficultyRuleFromUpdate(result)
+	oldRule := newOldDifficultyRuleFromUpdate(result)
+
+	return rule, &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(oldRule),
+		NewValue:  NewAuditLogDifficultyRule(rule),
+	}
+}

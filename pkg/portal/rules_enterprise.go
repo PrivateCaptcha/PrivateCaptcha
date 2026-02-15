@@ -477,22 +477,22 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	}
 }
 
-func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, string, error) {
+func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
 	ctx := r.Context()
 
 	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
-		return nil, "", errInvalidPathArg
+		return nil, errInvalidPathArg
 	}
 
 	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
-		return nil, "", err
+		return nil, err
 	}
 
-	return rule, value, nil
+	return rule, nil
 }
 
 func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -516,14 +516,14 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, db.ErrPermissions
 	}
 
-	rule, ruleIDStr, err := s.Rule(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		return nil, err
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
 	renderCtx.RuleFormData = ruleToFormData(rule)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
@@ -545,14 +545,14 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, db.ErrPermissions
 	}
 
-	rule, ruleIDStr, err := s.Rule(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		return nil, err
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
 	renderCtx.RuleFormData = ruleToFormData(rule)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
@@ -584,7 +584,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, ruleIDStr, err := s.Rule(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -598,7 +598,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
@@ -658,7 +658,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, ruleIDStr, err := s.Rule(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -672,7 +672,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
