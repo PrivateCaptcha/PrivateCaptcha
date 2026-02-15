@@ -168,6 +168,7 @@ func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organizat
 	renderCtx := &orgRulesRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
 		Rules:      stubDifficultyRules(),
+		CanEdit:    false,
 	}
 
 	return renderCtx, nil, nil

@@ -555,6 +555,7 @@ func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organizat
 	renderCtx := &orgRulesRenderContext{
 		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
 		Rules:      []*DifficultyRuleModel{},
+		CanEdit:    org.UserID.Int32 == user.ID,
 	}
 
 	batch := map[int32]uint{org.ID: 1}

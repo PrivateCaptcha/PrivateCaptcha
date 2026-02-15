@@ -109,6 +109,14 @@ func stubAuditLogs() []*UserAuditLog {
 	return result
 }
 
+func numberedRuleNames(rules []*DifficultyRuleModel) []string {
+	result := make([]string, 0, len(rules))
+	for i, r := range rules {
+		result = append(result, fmt.Sprintf("%d. %s", i+1, r.Name))
+	}
+	return result
+}
+
 func TestRenderHTML(t *testing.T) {
 	testCases := []struct {
 		path     []string
@@ -439,6 +447,20 @@ func TestRenderHTML(t *testing.T) {
 				AlertRenderContext: AlertRenderContext{},
 				CurrentOrg:         stubOrg("123"),
 				Rules:              stubDifficultyRules(),
+				CanEdit:            true,
+			},
+			selector: "p.rule-name",
+			matches:  numberedRuleNames(stubDifficultyRules()),
+		},
+		// same as above but empty rules to check for placeholder
+		{
+			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
+			template: orgRulesTemplate,
+			model: &orgRulesRenderContext{
+				AlertRenderContext: AlertRenderContext{},
+				CurrentOrg:         stubOrg("123"),
+				Rules:              []*DifficultyRuleModel{},
+				CanEdit:            true,
 			},
 			selector: "",
 			matches:  []string{},
@@ -454,6 +476,22 @@ func TestRenderHTML(t *testing.T) {
 					CanEdit:           true,
 				},
 				Rules: stubDifficultyRules(),
+			},
+			selector: "p.rule-name",
+			matches:  numberedRuleNames(stubDifficultyRules()),
+		},
+		// same as above but empty rules to check for placeholder
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint, "123", common.RulesEndpoint},
+			template: propertyDashboardRulesTemplate,
+			model: &propertyRulesRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				Rules: []*DifficultyRuleModel{},
 			},
 			selector: "",
 			matches:  []string{},

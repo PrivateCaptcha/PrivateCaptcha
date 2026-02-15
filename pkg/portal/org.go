@@ -129,6 +129,7 @@ type orgRulesRenderContext struct {
 	// Property is a stub to distinguish org rules from property rules in shared templates
 	Property interface{}
 	Rules    []*DifficultyRuleModel
+	CanEdit  bool
 }
 
 var _ RenderContext = (*orgRulesRenderContext)(nil)
