@@ -1190,10 +1190,13 @@ func TestDeletePropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
 	req := httptest.NewRequest("DELETE",
 		fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
 		nil)
 	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -1247,10 +1250,13 @@ func TestDeleteOrgRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
 	req := httptest.NewRequest("DELETE",
 		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
 		nil)
 	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -1326,11 +1332,14 @@ func TestMemberCannotDeletePropertyRuleCreatedByOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
 	// Try to delete rule - should fail
 	req := httptest.NewRequest("DELETE",
 		fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
 		nil)
 	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
@@ -1405,11 +1414,14 @@ func TestMemberCannotDeleteOrgRuleCreatedByOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
+
 	// Try to delete rule - should fail
 	req := httptest.NewRequest("DELETE",
 		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
 		nil)
 	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)

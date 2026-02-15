@@ -18,6 +18,7 @@ type RuleConstants struct {
 	RulesEndpoint                  string
 	NewEndpoint                    string
 	EditEndpoint                   string
+	DeleteEndpoint                 string
 	ConditionUserAgent             string
 	ConditionIPAddress             string
 	ConditionCountryCode           string
@@ -65,6 +66,7 @@ var (
 		RulesEndpoint:                  common.RulesEndpoint,
 		NewEndpoint:                    common.NewEndpoint,
 		EditEndpoint:                   common.EditEndpoint,
+		DeleteEndpoint:                 common.DeleteEndpoint,
 		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
