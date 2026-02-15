@@ -1,5 +1,5 @@
 {{ if .Params.Rules }}
-<div class="mt-4 flow-root">
+<div class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
     <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <ul role="list" class="divide-y divide-gray-100">
@@ -34,6 +34,13 @@
             </ul>
         </div>
     </div>
+    {{ if not $.Platform.Enterprise }}
+    <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-lg" aria-hidden="true"></div>
+
+    <div class="absolute inset-0 z-10">
+        {{ template "enterprise.html" "Difficulty rules are only available in the enterprise edition of Private Captcha." }}
+    </div>
+    {{ end }}
 </div>
 {{ else }}
 <div class="flex-1 flex items-center">
