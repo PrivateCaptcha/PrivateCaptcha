@@ -38,84 +38,6 @@ const (
 	PeriodEndpointYear  = "1y"
 )
 
-var (
-	propertyConst = PropertyRenderConstants{
-		BaseRenderConstants:  baseConst,
-		OrgEndpoint:          common.OrgEndpoint,
-		PropertyEndpoint:     common.PropertyEndpoint,
-		ReportsEndpoint:      common.ReportsEndpoint,
-		IntegrationsEndpoint: common.IntegrationsEndpoint,
-		EventsEndpoint:       common.EventsEndpoint,
-		Tab:                  common.ParamTab,
-		APIKeysEndpoint:      common.APIKeysEndpoint,
-		Stats:                common.StatsEndpoint,
-		Name:                 common.ParamName,
-		Domain:               common.ParamDomain,
-		AllowSubdomains:      common.ParamAllowSubdomains,
-		AllowLocalhost:       common.ParamAllowLocalhost,
-		ValidityInterval:     common.ParamValidityInterval,
-		AllowReplay:          common.ParamAllowReplay,
-		MaxReplayCount:       common.ParamMaxReplayCount,
-		Growth:               common.ParamGrowth,
-		Difficulty:           common.ParamDifficulty,
-		DeleteEndpoint:       common.DeleteEndpoint,
-		MoveEndpoint:         common.MoveEndpoint,
-		EditEndpoint:         common.EditEndpoint,
-		Org:                  common.ParamOrg,
-		OrgLevelOwner:        string(dbgen.AccessLevelOwner),
-		OrgLevelInvited:      string(dbgen.AccessLevelInvited),
-		OrgLevelMember:       string(dbgen.AccessLevelMember),
-	}
-
-	propertyWizardConst = PropertyWizardRenderConstants{
-		BaseRenderConstants: baseConst,
-		OrgEndpoint:         common.OrgEndpoint,
-		PropertyEndpoint:    common.PropertyEndpoint,
-		NewEndpoint:         common.NewEndpoint,
-		Name:                common.ParamName,
-		Domain:              common.ParamDomain,
-		IgnoreError:         common.ParamIgnoreError,
-	}
-)
-
-type PropertyRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint          string
-	PropertyEndpoint     string
-	ReportsEndpoint      string
-	IntegrationsEndpoint string
-	EventsEndpoint       string
-	Tab                  string
-	APIKeysEndpoint      string
-	Stats                string
-	Name                 string
-	Domain               string
-	AllowSubdomains      string
-	AllowLocalhost       string
-	ValidityInterval     string
-	AllowReplay          string
-	MaxReplayCount       string
-	Growth               string
-	Difficulty           string
-	DeleteEndpoint       string
-	MoveEndpoint         string
-	EditEndpoint         string
-	Org                  string
-	OrgLevelOwner        string
-	OrgLevelInvited      string
-	OrgLevelMember       string
-}
-
-type PropertyWizardRenderConstants struct {
-	BaseRenderConstants
-	OrgEndpoint      string
-	PropertyEndpoint string
-	NewEndpoint      string
-	Name             string
-	Domain           string
-	IgnoreError      string
-}
-
 type difficultyLevelsRenderContext struct {
 	EasyLevel   int
 	NormalLevel int
@@ -131,11 +53,6 @@ type propertyWizardRenderContext struct {
 	DomainError string
 	CurrentOrg  *userOrg
 }
-
-func (c *propertyWizardRenderContext) Params() interface{} { return c }
-func (c *propertyWizardRenderContext) Const() interface{}  { return propertyWizardConst }
-
-var _ RenderContext = (*propertyWizardRenderContext)(nil)
 
 type userProperty struct {
 	ID               string
@@ -160,11 +77,6 @@ type orgPropertiesRenderContext struct {
 	CurrentOrg *userOrg
 }
 
-func (c *orgPropertiesRenderContext) Params() interface{} { return c }
-func (c *orgPropertiesRenderContext) Const() interface{}  { return portalConst }
-
-var _ RenderContext = (*orgPropertiesRenderContext)(nil)
-
 type propertyDashboardRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
@@ -177,11 +89,6 @@ type propertyDashboardRenderContext struct {
 	CanEdit   bool
 }
 
-func (c *propertyDashboardRenderContext) Params() interface{} { return c }
-func (c *propertyDashboardRenderContext) Const() interface{}  { return propertyConst }
-
-var _ RenderContext = (*propertyDashboardRenderContext)(nil)
-
 type propertySettingsRenderContext struct {
 	propertyDashboardRenderContext
 	difficultyLevelsRenderContext
@@ -190,10 +97,6 @@ type propertySettingsRenderContext struct {
 	MaxLevel int
 	CanMove  bool
 }
-
-func (c *propertySettingsRenderContext) Params() interface{} { return c }
-
-var _ RenderContext = (*propertySettingsRenderContext)(nil)
 
 func (pc *propertySettingsRenderContext) UpdateLevels() {
 	const epsilon = common.DifficultyDelta
@@ -209,20 +112,12 @@ type propertyIntegrationsRenderContext struct {
 	Sitekey string
 }
 
-func (c *propertyIntegrationsRenderContext) Params() interface{} { return c }
-
-var _ RenderContext = (*propertyIntegrationsRenderContext)(nil)
-
 type propertyAuditLogsRenderContext struct {
 	propertyDashboardRenderContext
 	AuditLogsRenderContext
 	AlertRenderContext
 	CanView bool
 }
-
-func (c *propertyAuditLogsRenderContext) Params() interface{} { return c }
-
-var _ RenderContext = (*propertyAuditLogsRenderContext)(nil)
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
