@@ -79,6 +79,12 @@ function progressLabel(text) {
     return el;
 }
 
+/**
+ * @param {string} text - The debug text to display
+ * @param {boolean} isError - Whether this is an error state
+ * @param {string|null} internalError - Optional internal error message for tooltip
+ * @returns {HTMLElement} The debug span element
+ */
 function debugSpan(text, isError, internalError) {
     const el = document.createElement('span');
     el.id = DEBUG_ID;
