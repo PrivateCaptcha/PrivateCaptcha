@@ -685,3 +685,469 @@ func TestEditOrgRule(t *testing.T) {
 		t.Error("Expected condition to be negated")
 	}
 }
+
+func TestNonMemberCannotReadPropertyRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and property
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Create a rule
+	_, _, err = store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Rule",
+		PropertyID:        db.Int(prop.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create non-member user
+	nonMember, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonmember", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, nonMember.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access property rules - should fail
+	req := httptest.NewRequest("GET",
+		fmt.Sprintf("/org/%s/property/%s/tab/rules", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
+		nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect to error page
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for non-member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+}
+
+func TestInvitedMemberCannotReadPropertyRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and property
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Create a rule
+	_, _, err = store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Rule",
+		PropertyID:        db.Int(prop.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and invite (but not join)
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access property rules - should fail (invited but not joined)
+	req := httptest.NewRequest("GET",
+		fmt.Sprintf("/org/%s/property/%s?tab=rules", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
+		nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect to error page
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for invited member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+}
+
+func TestNonMemberCannotReadOrgRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and org
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	// Create a rule
+	_, _, err = store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create non-member user
+	nonMember, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_nonmember", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create non-member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, nonMember.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access org rules - should fail
+	req := httptest.NewRequest("GET",
+		fmt.Sprintf("/org/%s?tab=rules", server.IDHasher.Encrypt(int(org.ID))),
+		nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect to error page
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for non-member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+}
+
+func TestInvitedMemberCannotReadOrgRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and org
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	// Create a rule
+	_, _, err = store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Test Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and invite (but not join)
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to access org rules - should fail (invited but not joined)
+	req := httptest.NewRequest("GET",
+		fmt.Sprintf("/org/%s/tab/rules", server.IDHasher.Encrypt(int(org.ID))),
+		nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should redirect to error page
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for invited member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+}
+
+func TestMemberCannotUpdatePropertyRuleCreatedByOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and property
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	// Owner creates a rule
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Owner Rule",
+		PropertyID:        db.Int(prop.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and join org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to edit rule - should fail
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+	form.Set(common.ParamName, "Updated Rule")
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
+	form.Set(common.ParamConditionValue, "bot")
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, "-30")
+
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with forbidden
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+
+	// Verify rule was not updated
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+	if updatedRule.Name != "Owner Rule" {
+		t.Errorf("Rule was incorrectly updated to: %s", updatedRule.Name)
+	}
+}
+
+func TestMemberCannotUpdateOrgRuleCreatedByOwner(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create owner and org
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	// Owner creates a rule
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Owner Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(owner.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	// Create member and join org
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to edit rule - should fail
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+	form.Set(common.ParamName, "Updated Org Rule")
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
+	form.Set(common.ParamConditionValue, "bot")
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, "-30")
+
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	// Should fail with forbidden
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location != nil && !strings.Contains(location.String(), "error") {
+		t.Errorf("Expected redirect to error page, got: %s", location.String())
+	}
+
+	// Verify rule was not updated
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, rule.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+	if updatedRule.Name != "Owner Org Rule" {
+		t.Errorf("Rule was incorrectly updated to: %s", updatedRule.Name)
+	}
+}

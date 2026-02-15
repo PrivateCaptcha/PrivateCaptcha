@@ -54,6 +54,7 @@ const (
 	StatusRuleCountryRequired           StatusCode = 1410
 	StatusRuleDifficultyValueInvalid    StatusCode = 1411
 	StatusRuleDifficultyGrowthInvalid   StatusCode = 1412
+	StatusRulePermissionsError          StatusCode = 1413
 )
 
 func (sc StatusCode) Success() bool {
@@ -150,6 +151,8 @@ func (sc StatusCode) String() string {
 		return "Difficulty adjustment must be between -100 and 1000."
 	case StatusRuleDifficultyGrowthInvalid:
 		return "Difficulty growth must be between 0 and 3."
+	case StatusRulePermissionsError:
+		return "You don't have permission to access this rule."
 	default:
 		return strconv.Itoa(int(sc))
 	}

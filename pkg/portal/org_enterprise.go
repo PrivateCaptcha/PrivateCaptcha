@@ -566,7 +566,8 @@ func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organizat
 
 	rules := rulesMap[org.ID]
 	for _, rule := range rules {
-		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, s.IDHasher))
+		canEdit := canEditRule(user, org, rule)
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher))
 	}
 
 	return renderCtx, nil, nil

@@ -144,6 +144,20 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	}
 
 	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, nil, db.ErrPermissions
+	}
 
 	renderCtx := &propertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
@@ -161,7 +175,8 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 
 	rules := rulesMap[property.ID]
 	for _, rule := range rules {
-		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, s.IDHasher))
+		canEdit := canEditRule(user, org, rule)
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher))
 	}
 
 	return renderCtx, nil, nil

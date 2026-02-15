@@ -104,9 +104,27 @@ var (
 	}
 )
 
+// canEditRule checks if a user can edit a rule (org owner OR rule creator)
+func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule) bool {
+	// Handle nil cases (e.g., from stub data)
+	if user == nil || org == nil || rule == nil {
+		return false
+	}
+	// Org owner can always edit
+	if user.ID == org.UserID.Int32 {
+		return true
+	}
+	// Rule creator can edit
+	if rule.CreatorID.Valid && user.ID == rule.CreatorID.Int32 {
+		return true
+	}
+	return false
+}
+
 // nolint:unused
 func stubDifficultyRules() []*DifficultyRuleModel {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+	// For stub data, pass nil for user and org (CanEdit will be false)
 	return []*DifficultyRuleModel{
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block suspicious countries",
@@ -121,7 +139,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block empty User-Agents",
 			Enabled:                  false,
@@ -133,7 +151,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
@@ -146,7 +164,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -20,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
@@ -159,7 +177,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              50,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
@@ -172,6 +190,6 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -30,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, hasher),
+		}, false, hasher),
 	}
 }

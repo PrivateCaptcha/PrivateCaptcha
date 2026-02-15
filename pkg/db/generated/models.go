@@ -473,6 +473,7 @@ type DifficultyRule struct {
 	Name                     string                `db:"name" json:"name"`
 	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
+	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
 	Enabled                  bool                  `db:"enabled" json:"enabled"`
 	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
 	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`

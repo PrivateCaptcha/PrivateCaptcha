@@ -615,9 +615,14 @@ func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx, auditEvent, err := s.createOrgRulesContext(ctx, org, user)

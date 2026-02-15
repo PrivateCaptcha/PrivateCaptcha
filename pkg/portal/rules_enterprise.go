@@ -295,6 +295,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params.PropertyID = db.Int(property.ID)
+	params.CreatorID = db.Int(user.ID)
 
 	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
@@ -351,6 +352,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params.OrgID = db.Int(org.ID)
+	params.CreatorID = db.Int(user.ID)
 
 	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	if err != nil {
@@ -499,18 +501,6 @@ func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
 	return rule, nil
 }
 
-func (s *Server) RuleID(r *http.Request) (int32, string, error) {
-	ctx := r.Context()
-
-	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
-		return -1, "", errInvalidPathArg
-	}
-
-	return ruleID, value, err
-}
-
 func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -535,6 +525,12 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 	rule, err := s.Rule(r)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
@@ -564,6 +560,12 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 	rule, err := s.Rule(r)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
@@ -600,9 +602,16 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ruleID, ruleIDStr, err := s.RuleID(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
@@ -614,7 +623,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
@@ -628,7 +637,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updateParams := &dbgen.UpdateDifficultyRuleParams{
-		ID:                       ruleID,
+		ID:                       rule.ID,
 		Name:                     createParams.Name,
 		Enabled:                  createParams.Enabled,
 		ConditionProperty:        createParams.ConditionProperty,
@@ -641,9 +650,9 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, property, user, updateParams)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "propertyID", property.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
@@ -668,15 +677,23 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !level.Valid || level.AccessLevel != dbgen.AccessLevelOwner {
-		slog.WarnContext(ctx, "User is not org owner, cannot edit org rules", "orgID", org.ID, "userID", user.ID)
+	// Check org membership
+	if !level.Valid || level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is not org member", "orgID", org.ID, "userID", user.ID)
 		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
-	ruleID, ruleIDStr, err := s.RuleID(r)
+	rule, err := s.Rule(r)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can edit this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot edit org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}
 
@@ -688,7 +705,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
-	renderCtx.RuleID = ruleIDStr
+	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
 	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
@@ -702,7 +719,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updateParams := &dbgen.UpdateDifficultyRuleParams{
-		ID:                       ruleID,
+		ID:                       rule.ID,
 		Name:                     createParams.Name,
 		Enabled:                  createParams.Enabled,
 		ConditionProperty:        createParams.ConditionProperty,
@@ -715,9 +732,9 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		ActionValue:              createParams.ActionValue,
 	}
 
-	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, user, updateParams)
+	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, nil, user, updateParams)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", ruleID, "orgID", org.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
