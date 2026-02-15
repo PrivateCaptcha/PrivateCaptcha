@@ -251,8 +251,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         if (this._debug || this._error) {
             const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            const internalError = (this._debug && this._error && this._internalError) ? this._internalError : null;
-            activeArea.appendChild(debugSpan(text, this._error, internalError));
+            activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
         }
 
         this._syncHostClass(showPopupIfNeeded);
