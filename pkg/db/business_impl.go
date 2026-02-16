@@ -3332,27 +3332,47 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		return nil, nil, err
 	}
 
+	// Convert interface{} to float64, using -1 as sentinel for NULL
+	prevPos := -1.0
+	nextPos := -1.0
+	if neighbors.PrevPosition != nil {
+		if f, ok := neighbors.PrevPosition.(float64); ok {
+			prevPos = f
+		}
+	}
+	if neighbors.NextPosition != nil {
+		if f, ok := neighbors.NextPosition.(float64); ok {
+			nextPos = f
+		}
+	}
+
 	// Calculate new position using fractional indexing
 	var newPosition float64
 	if newIndex == 0 {
 		// Moving to first position
-		if neighbors.NextPosition == 0 {
+		if nextPos < 0 {
+			// No rules exist, start at 0
 			newPosition = 0
 		} else {
-			newPosition = neighbors.NextPosition - positionStep
+			newPosition = nextPos - positionStep
 		}
-	} else if neighbors.NextPosition == 0 {
-		// Moving to last position
-		newPosition = neighbors.PrevPosition + positionStep
+	} else if nextPos < 0 {
+		// Moving to last position (no next neighbor)
+		if prevPos < 0 {
+			// Should not happen - moving to position > 0 but no prev neighbor
+			newPosition = 0
+		} else {
+			newPosition = prevPos + positionStep
+		}
 	} else {
 		// Moving between two positions
-		newPosition = (neighbors.PrevPosition + neighbors.NextPosition) / 2.0
+		newPosition = (prevPos + nextPos) / 2.0
 
 		// Check if we have enough precision
-		if delta := neighbors.NextPosition - neighbors.PrevPosition; delta < minPositionDelta {
+		if delta := nextPos - prevPos; delta < minPositionDelta {
 			// Need rebalancing - return specific error
 			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
-				"prevPos", neighbors.PrevPosition, "nextPos", neighbors.NextPosition, "delta", delta)
+				"prevPos", prevPos, "nextPos", nextPos, "delta", delta)
 			return nil, nil, common.ErrRulesNeedRebalancing
 		}
 	}

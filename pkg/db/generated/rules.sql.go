@@ -150,8 +150,8 @@ rules_list AS (
       AND (dr.org_id = target.org_id OR (dr.org_id IS NULL AND target.org_id IS NULL))
 )
 SELECT
-    (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
-    (SELECT position FROM rules_list WHERE idx = $2) AS next_position
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2 - 1), -1.0::float8) AS prev_position,
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2), -1.0::float8) AS next_position
 `
 
 type GetDifficultyRulePositionNeighborsParams struct {
@@ -160,8 +160,8 @@ type GetDifficultyRulePositionNeighborsParams struct {
 }
 
 type GetDifficultyRulePositionNeighborsRow struct {
-	PrevPosition float64 `db:"prev_position" json:"prev_position"`
-	NextPosition float64 `db:"next_position" json:"next_position"`
+	PrevPosition interface{} `db:"prev_position" json:"prev_position"`
+	NextPosition interface{} `db:"next_position" json:"next_position"`
 }
 
 func (q *Queries) GetDifficultyRulePositionNeighbors(ctx context.Context, arg *GetDifficultyRulePositionNeighborsParams) (*GetDifficultyRulePositionNeighborsRow, error) {

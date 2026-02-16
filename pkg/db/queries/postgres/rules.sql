@@ -101,8 +101,8 @@ rules_list AS (
       AND (dr.org_id = target.org_id OR (dr.org_id IS NULL AND target.org_id IS NULL))
 )
 SELECT
-    (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
-    (SELECT position FROM rules_list WHERE idx = $2) AS next_position;
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2 - 1), -1.0::float8) AS prev_position,
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2), -1.0::float8) AS next_position;
 
 -- name: RebalanceDifficultyRules :exec
 WITH rules_list AS (

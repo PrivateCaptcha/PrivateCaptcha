@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -136,5 +137,29 @@ func DisableProperty(ctx context.Context, store *db.BusinessStore, propertyID in
 
 func DisableUserForTest(ctx context.Context, store *db.BusinessStore, userID int32) error {
 	_, err := store.Pool.Exec(ctx, "UPDATE backend.users SET enabled = FALSE WHERE id = $1", userID)
+	return err
+}
+
+// CorruptDifficultyRulePositionsForTest sets all rules to have very close positions
+// to force rebalancing when moving. This is used to test the rebalancing logic.
+func CorruptDifficultyRulePositionsForTest(ctx context.Context, store *db.BusinessStore, propertyID *int32, orgID *int32) error {
+	var query string
+	var args []interface{}
+
+	if propertyID != nil {
+		query = `UPDATE backend.difficulty_rules 
+		         SET position = (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 
+		         WHERE property_id = $1 AND org_id IS NULL`
+		args = []interface{}{*propertyID}
+	} else if orgID != nil {
+		query = `UPDATE backend.difficulty_rules 
+		         SET position = (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 
+		         WHERE org_id = $1 AND property_id IS NULL`
+		args = []interface{}{*orgID}
+	} else {
+		return errors.New("either propertyID or orgID must be provided")
+	}
+
+	_, err := store.Pool.Exec(ctx, query, args...)
 	return err
 }
