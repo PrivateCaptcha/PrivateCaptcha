@@ -99,6 +99,7 @@ rules_list AS (
     CROSS JOIN target
     WHERE (dr.property_id = target.property_id OR (dr.property_id IS NULL AND target.property_id IS NULL))
       AND (dr.org_id = target.org_id OR (dr.org_id IS NULL AND target.org_id IS NULL))
+      AND dr.id != $1
 )
 SELECT
     COALESCE((SELECT position FROM rules_list WHERE idx = $2 - 1), -1.0::float8) AS prev_position,

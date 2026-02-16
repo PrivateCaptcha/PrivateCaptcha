@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -62,6 +63,7 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 
 	// Try to move the single rule (should succeed even though it's the only rule)
 	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "0")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
@@ -77,8 +79,8 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
 	}
 }
 
@@ -131,6 +133,7 @@ func TestMovePropertyRuleToFirstPosition(t *testing.T) {
 
 	// Move last rule to first position
 	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "0")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
@@ -146,8 +149,8 @@ func TestMovePropertyRuleToFirstPosition(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rule is now first
@@ -213,6 +216,7 @@ func TestMovePropertyRuleToLastPosition(t *testing.T) {
 
 	// Move first rule to last position (index 2)
 	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "2")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
@@ -228,8 +232,8 @@ func TestMovePropertyRuleToLastPosition(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rule is now last
@@ -289,6 +293,7 @@ func TestMoveOrgRuleMultipleRules(t *testing.T) {
 
 	// Move middle rule to first position
 	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "0")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/rules/%s/move",
@@ -302,8 +307,8 @@ func TestMoveOrgRuleMultipleRules(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rule is now first
@@ -374,6 +379,7 @@ func TestRebalancingPropertyRules(t *testing.T) {
 
 	// Try to move a rule - this should trigger rebalancing
 	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "1")
 
 	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
@@ -389,8 +395,8 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status OK, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rules are now properly spaced

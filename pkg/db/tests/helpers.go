@@ -147,14 +147,26 @@ func CorruptDifficultyRulePositionsForTest(ctx context.Context, store *db.Busine
 	var args []interface{}
 
 	if propertyID != nil {
-		query = `UPDATE backend.difficulty_rules 
-		         SET position = (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 
-		         WHERE property_id = $1 AND org_id IS NULL`
+		query = `WITH numbered AS (
+		           SELECT id, (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 AS new_pos
+		           FROM backend.difficulty_rules
+		           WHERE property_id = $1 AND org_id IS NULL
+		         )
+		         UPDATE backend.difficulty_rules dr
+		         SET position = numbered.new_pos
+		         FROM numbered
+		         WHERE dr.id = numbered.id`
 		args = []interface{}{*propertyID}
 	} else if orgID != nil {
-		query = `UPDATE backend.difficulty_rules 
-		         SET position = (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 
-		         WHERE org_id = $1 AND property_id IS NULL`
+		query = `WITH numbered AS (
+		           SELECT id, (ROW_NUMBER() OVER (ORDER BY position ASC) - 1) * 0.0000001 AS new_pos
+		           FROM backend.difficulty_rules
+		           WHERE org_id = $1 AND property_id IS NULL
+		         )
+		         UPDATE backend.difficulty_rules dr
+		         SET position = numbered.new_pos
+		         FROM numbered
+		         WHERE dr.id = numbered.id`
 		args = []interface{}{*orgID}
 	} else {
 		return errors.New("either propertyID or orgID must be provided")
