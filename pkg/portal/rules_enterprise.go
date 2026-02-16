@@ -4,6 +4,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -819,6 +820,160 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 		slog.ErrorContext(ctx, "Failed to delete difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}
+
+func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can move this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot move property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Parse new position index
+	positionStr := r.FormValue(common.ParamPosition)
+	newIndex, err := strconv.Atoi(positionStr)
+	if err != nil {
+		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Move the rule
+	_, auditEvent, err := s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
+	if err != nil {
+		// Check if we need rebalancing
+		if errors.Is(err, common.ErrRulesNeedRebalancing) {
+			slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "propertyID", property.ID)
+			if rebalanceErr := s.Store.Impl().RebalanceDifficultyRulesForProperty(ctx, property.ID); rebalanceErr != nil {
+				slog.ErrorContext(ctx, "Failed to rebalance rules", "propertyID", property.ID, common.ErrAttr(rebalanceErr))
+				s.RedirectError(http.StatusInternalServerError, w, r)
+				return
+			}
+			// Try moving again after rebalancing
+			_, auditEvent, err = s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to move rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
+				s.RedirectError(http.StatusInternalServerError, w, r)
+				return
+			}
+		} else {
+			slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}
+
+func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can move this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot move org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Parse new position index
+	positionStr := r.FormValue(common.ParamPosition)
+	newIndex, err := strconv.Atoi(positionStr)
+	if err != nil {
+		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Move the rule
+	_, auditEvent, err := s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
+	if err != nil {
+		// Check if we need rebalancing
+		if errors.Is(err, common.ErrRulesNeedRebalancing) {
+			slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "orgID", org.ID)
+			if rebalanceErr := s.Store.Impl().RebalanceDifficultyRulesForOrg(ctx, org.ID); rebalanceErr != nil {
+				slog.ErrorContext(ctx, "Failed to rebalance rules", "orgID", org.ID, common.ErrAttr(rebalanceErr))
+				s.RedirectError(http.StatusInternalServerError, w, r)
+				return
+			}
+			// Try moving again after rebalancing
+			_, auditEvent, err = s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to move rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
+				s.RedirectError(http.StatusInternalServerError, w, r)
+				return
+			}
+		} else {
+			slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
+			s.RedirectError(http.StatusInternalServerError, w, r)
+			return
+		}
 	}
 
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
