@@ -449,7 +449,10 @@ type StoreBulkReader[TArg comparable, TKey any, T any] struct {
 	MinMissingCount uint
 }
 
-// returns cached and fetched items separately
+// We convert []TArg -> []TKey so that QueryFunc for DB query can return []*T
+// (before doing so we filter out cached entries using TArg -> CacheKey (CacheKeyFunc)).
+// We mark missing items with reverse operation T -> TArg -> CacheKey (ArgFunc into CacheKeyFunc).
+// Returns cached and fetched items separately
 func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TArg]uint) ([]*T, []*T, error) {
 	if len(args) == 0 {
 		return []*T{}, []*T{}, nil

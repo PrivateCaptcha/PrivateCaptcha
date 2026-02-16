@@ -1427,3 +1427,273 @@ func TestMemberCannotDeleteOrgRuleCreatedByOwner(t *testing.T) {
 		t.Fatalf("Failed to retrieve rule: %v", err)
 	}
 }
+
+// Test suite for property rules with cache testing
+func TestRetrievePropertyRulesWithCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tests := []struct {
+		name       string
+		clearCache bool
+	}{
+		{
+			name:       "with cache",
+			clearCache: false,
+		},
+		{
+			name:       "without cache",
+			clearCache: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+			if err != nil {
+				t.Fatalf("Failed to create property: %v", err)
+			}
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create multiple rules via POST routes
+			rules := []struct {
+				name     string
+				operator string
+				value    string
+			}{
+				{"Block crawlers", string(dbgen.RuleConditionOperatorContains), "curl"},
+				{"Block bots", string(dbgen.RuleConditionOperatorContains), "bot"},
+				{"Check Firefox", string(dbgen.RuleConditionOperatorContains), "Firefox"},
+			}
+
+			for _, rule := range rules {
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+				form.Set(common.ParamName, rule.name)
+				form.Set(common.ParamEnabled, "on")
+				form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+				form.Set(common.ParamConditionOperator, rule.operator)
+				form.Set(common.ParamConditionValue, rule.value)
+				form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+				form.Set(common.ParamActionValue, "50")
+
+				req := httptest.NewRequest("POST",
+					fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
+					strings.NewReader(form.Encode()))
+				req.AddCookie(cookie)
+				req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+				w := httptest.NewRecorder()
+				srv.ServeHTTP(w, req)
+
+				resp := w.Result()
+				if resp.StatusCode != http.StatusSeeOther {
+					t.Fatalf("Failed to create rule %s: status code %v", rule.name, resp.StatusCode)
+				}
+			}
+
+			// Clear cache if requested
+			if tt.clearCache {
+				_ = cache.Delete(ctx, db.RawPropertyRulesCacheKey(prop.ID))
+			}
+
+			// Read rules via server's getPropertyRules method
+			req := httptest.NewRequest("GET",
+				fmt.Sprintf("/org/%s/property/%s/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), common.TabEndpoint, common.RulesEndpoint),
+				nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			resp := w.Result()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Failed to get property rules: status code %v", resp.StatusCode)
+			}
+
+			// Verify rules via direct retrieval
+			batch := map[int32]uint{prop.ID: 1}
+			rulesMap, err := store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch)
+			if err != nil {
+				t.Fatalf("Failed to retrieve rules: %v", err)
+			}
+
+			retrievedRules := rulesMap[prop.ID]
+			if len(retrievedRules) != len(rules) {
+				t.Fatalf("Expected %d rules, got %d", len(rules), len(retrievedRules))
+			}
+
+			// Verify all rules are present using a map-based comparison
+			expectedNames := make(map[string]bool)
+			for _, rule := range rules {
+				expectedNames[rule.name] = true
+			}
+
+			for _, retrievedRule := range retrievedRules {
+				if !expectedNames[retrievedRule.Name] {
+					t.Errorf("Unexpected rule name: %s", retrievedRule.Name)
+				}
+				if !retrievedRule.Enabled {
+					t.Errorf("Rule %s should be enabled", retrievedRule.Name)
+				}
+				if retrievedRule.ConditionProperty != dbgen.RuleConditionPropertyUserAgent {
+					t.Errorf("Rule %s: unexpected condition property: %s", retrievedRule.Name, retrievedRule.ConditionProperty)
+				}
+				delete(expectedNames, retrievedRule.Name)
+			}
+
+			if len(expectedNames) > 0 {
+				t.Errorf("Missing rules: %v", expectedNames)
+			}
+		})
+	}
+}
+
+// Test suite for org rules with cache testing
+func TestRetrieveOrgRulesWithCache(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	tests := []struct {
+		name       string
+		clearCache bool
+	}{
+		{
+			name:       "with cache",
+			clearCache: false,
+		},
+		{
+			name:       "without cache",
+			clearCache: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := t.Context()
+			user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", user.ID)
+			if err != nil {
+				t.Fatalf("Failed to create org: %v", err)
+			}
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create multiple rules via POST routes
+			rules := []struct {
+				name     string
+				operator string
+				value    string
+			}{
+				{"Block US", string(dbgen.RuleConditionOperatorIn), "US"},
+				{"Block GB", string(dbgen.RuleConditionOperatorIn), "GB"},
+				{"Block CA", string(dbgen.RuleConditionOperatorIn), "CA"},
+			}
+
+			for _, rule := range rules {
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+				form.Set(common.ParamName, rule.name)
+				form.Set(common.ParamEnabled, "on")
+				form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
+				form.Set(common.ParamConditionOperator, rule.operator)
+				form.Set(common.ParamConditionValue, rule.value)
+				form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
+				form.Set(common.ParamActionValue, "block")
+
+				req := httptest.NewRequest("POST",
+					fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
+					strings.NewReader(form.Encode()))
+				req.AddCookie(cookie)
+				req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+				w := httptest.NewRecorder()
+				srv.ServeHTTP(w, req)
+
+				resp := w.Result()
+				if resp.StatusCode != http.StatusSeeOther {
+					t.Fatalf("Failed to create rule %s: status code %v", rule.name, resp.StatusCode)
+				}
+			}
+
+			// Clear cache if requested
+			if tt.clearCache {
+				_ = cache.Delete(ctx, db.RawOrgRulesCacheKey(org.ID))
+			}
+
+			// Read rules via server's createOrgRulesContext method
+			req := httptest.NewRequest("GET",
+				fmt.Sprintf("/org/%s?tab=rules", server.IDHasher.Encrypt(int(org.ID))),
+				nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			resp := w.Result()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Failed to get org rules: status code %v", resp.StatusCode)
+			}
+
+			// Verify rules via direct retrieval
+			batch := map[int32]uint{org.ID: 1}
+			rulesMap, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)
+			if err != nil {
+				t.Fatalf("Failed to retrieve rules: %v", err)
+			}
+
+			retrievedRules := rulesMap[org.ID]
+			if len(retrievedRules) != len(rules) {
+				t.Fatalf("Expected %d rules, got %d", len(rules), len(retrievedRules))
+			}
+
+			// Verify all rules are present using a map-based comparison
+			expectedNames := make(map[string]bool)
+			for _, rule := range rules {
+				expectedNames[rule.name] = true
+			}
+
+			for _, retrievedRule := range retrievedRules {
+				if !expectedNames[retrievedRule.Name] {
+					t.Errorf("Unexpected rule name: %s", retrievedRule.Name)
+				}
+				if !retrievedRule.Enabled {
+					t.Errorf("Rule %s should be enabled", retrievedRule.Name)
+				}
+				if retrievedRule.ConditionProperty != dbgen.RuleConditionPropertyCountryCode {
+					t.Errorf("Rule %s: unexpected condition property: %s", retrievedRule.Name, retrievedRule.ConditionProperty)
+				}
+				delete(expectedNames, retrievedRule.Name)
+			}
+
+			if len(expectedNames) > 0 {
+				t.Errorf("Missing rules: %v", expectedNames)
+			}
+		})
+	}
+}
