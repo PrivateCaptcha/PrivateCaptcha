@@ -3025,19 +3025,19 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		for _, r := range fetched {
 			result[r.PropertyID.Int32] = append(result[r.PropertyID.Int32], r)
 		}
-	}
 
-	// Sort and cache arrays
-	for key, value := range result {
-		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-			return int(a.Position - b.Position)
-		})
-		result[key] = value
-
-		// Cache the sorted array if it was fetched (not from cache)
-		if slices.Contains(uncachedIDs, key) {
-			cacheKey := RawPropertyRulesCacheKey(key)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, value, propertyTTL)
+		// Sort and cache arrays for uncached IDs
+		for _, propertyID := range uncachedIDs {
+			rules := result[propertyID]
+			if len(rules) > 0 {
+				slices.SortFunc(rules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+					return int(a.Position - b.Position)
+				})
+				result[propertyID] = rules
+			}
+			// Cache the array (even if empty) to avoid repeated queries
+			cacheKey := RawPropertyRulesCacheKey(propertyID)
+			_ = impl.cache.SetWithTTL(ctx, cacheKey, rules, propertyTTL)
 		}
 	}
 
@@ -3089,19 +3089,19 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		for _, r := range fetched {
 			result[r.OrgID.Int32] = append(result[r.OrgID.Int32], r)
 		}
-	}
 
-	// Sort and cache arrays
-	for key, value := range result {
-		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-			return int(a.Position - b.Position)
-		})
-		result[key] = value
-
-		// Cache the sorted array if it was fetched (not from cache)
-		if slices.Contains(uncachedIDs, key) {
-			cacheKey := RawOrgRulesCacheKey(key)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, value, propertyTTL)
+		// Sort and cache arrays for uncached IDs
+		for _, orgID := range uncachedIDs {
+			rules := result[orgID]
+			if len(rules) > 0 {
+				slices.SortFunc(rules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+					return int(a.Position - b.Position)
+				})
+				result[orgID] = rules
+			}
+			// Cache the array (even if empty) to avoid repeated queries
+			cacheKey := RawOrgRulesCacheKey(orgID)
+			_ = impl.cache.SetWithTTL(ctx, cacheKey, rules, propertyTTL)
 		}
 	}
 
