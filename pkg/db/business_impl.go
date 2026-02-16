@@ -3033,7 +3033,6 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 				slices.SortFunc(rules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
 					return int(a.Position - b.Position)
 				})
-				result[propertyID] = rules
 			}
 			// Cache the array (even if empty) to avoid repeated queries
 			cacheKey := RawPropertyRulesCacheKey(propertyID)
@@ -3097,7 +3096,6 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 				slices.SortFunc(rules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
 					return int(a.Position - b.Position)
 				})
-				result[orgID] = rules
 			}
 			// Cache the array (even if empty) to avoid repeated queries
 			cacheKey := RawOrgRulesCacheKey(orgID)
