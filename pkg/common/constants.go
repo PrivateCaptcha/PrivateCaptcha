@@ -1,6 +1,9 @@
 package common
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+)
 
 const (
 	DefaultOrgName         = "My Organization"
@@ -77,4 +80,9 @@ var (
 	HeaderSitekey             = http.CanonicalHeaderKey("X-PC-Sitekey")
 	HeaderCacheControl        = http.CanonicalHeaderKey("Cache-Control")
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
+)
+
+var (
+	// ErrRulesNeedRebalancing is returned when rule positions need to be rebalanced
+	ErrRulesNeedRebalancing = errors.New("rules need rebalancing")
 )

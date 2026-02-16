@@ -3297,3 +3297,130 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, rule *d
 
 	return auditEvent, nil
 }
+
+const (
+	// minPositionDelta is the minimum distance between positions before we need rebalancing
+	minPositionDelta = 0.000001
+)
+
+func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	if rule == nil || user == nil {
+		return nil, nil, ErrInvalidInput
+	}
+
+	// Get neighboring positions
+	neighbors, err := impl.querier.GetDifficultyRulePositionNeighbors(ctx, &dbgen.GetDifficultyRulePositionNeighborsParams{
+		ID:      rule.ID,
+		Column2: int32(newIndex),
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get position neighbors", "ruleID", rule.ID, "newIndex", newIndex, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	// Calculate new position using fractional indexing
+	var newPosition float64
+	if newIndex == 0 {
+		// Moving to first position
+		if neighbors.NextPosition == 0 {
+			newPosition = 0
+		} else {
+			newPosition = neighbors.NextPosition - 1000.0
+		}
+	} else if neighbors.NextPosition == 0 {
+		// Moving to last position
+		newPosition = neighbors.PrevPosition + 1000.0
+	} else {
+		// Moving between two positions
+		newPosition = (neighbors.PrevPosition + neighbors.NextPosition) / 2.0
+
+		// Check if we have enough precision
+		if neighbors.NextPosition-neighbors.PrevPosition < minPositionDelta {
+			// Need rebalancing - return specific error
+			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
+				"prevPos", neighbors.PrevPosition, "nextPos", neighbors.NextPosition)
+			return nil, nil, common.ErrRulesNeedRebalancing
+		}
+	}
+
+	// Update the rule position
+	updatedRule, err := impl.querier.MoveDifficultyRule(ctx, &dbgen.MoveDifficultyRuleParams{
+		ID:       rule.ID,
+		Position: newPosition,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "newPosition", newPosition, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Moved difficulty rule", "ruleID", rule.ID, "oldPosition", rule.Position, "newPosition", newPosition, "newIndex", newIndex)
+
+	// Clear caches
+	if updatedRule.PropertyID.Valid {
+		propertyID := updatedRule.PropertyID.Int32
+		_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+		_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+	}
+	if updatedRule.OrgID.Valid {
+		orgID := updatedRule.OrgID.Int32
+		_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+		_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+	}
+	_ = impl.cache.Set(ctx, DifficultyRuleCacheKey(updatedRule.ID), updatedRule)
+
+	// Create audit event
+	auditEvent := &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(updatedRule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(rule),
+		NewValue:  NewAuditLogDifficultyRule(updatedRule),
+	}
+
+	return updatedRule, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.Context, propertyID int32) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	err := impl.querier.RebalanceDifficultyRulesForProperty(ctx, Int(propertyID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for property", "propertyID", propertyID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Rebalanced difficulty rules for property", "propertyID", propertyID)
+
+	// Clear caches
+	_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
+	_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
+
+	return nil
+}
+
+func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Context, orgID int32) error {
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	err := impl.querier.RebalanceDifficultyRulesForOrg(ctx, Int(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Rebalanced difficulty rules for org", "orgID", orgID)
+
+	// Clear caches
+	_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
+	_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
+
+	return nil
+}
