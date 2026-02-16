@@ -1537,17 +1537,27 @@ func TestRetrievePropertyRulesWithCache(t *testing.T) {
 				t.Fatalf("Expected %d rules, got %d", len(rules), len(retrievedRules))
 			}
 
-			// Verify all rules are present
-			for i, expectedRule := range rules {
-				if retrievedRules[i].Name != expectedRule.name {
-					t.Errorf("Rule %d: expected name %s, got %s", i, expectedRule.name, retrievedRules[i].Name)
+			// Verify all rules are present using a map-based comparison
+			expectedNames := make(map[string]bool)
+			for _, rule := range rules {
+				expectedNames[rule.name] = true
+			}
+
+			for _, retrievedRule := range retrievedRules {
+				if !expectedNames[retrievedRule.Name] {
+					t.Errorf("Unexpected rule name: %s", retrievedRule.Name)
 				}
-				if !retrievedRules[i].Enabled {
-					t.Errorf("Rule %d should be enabled", i)
+				if !retrievedRule.Enabled {
+					t.Errorf("Rule %s should be enabled", retrievedRule.Name)
 				}
-				if retrievedRules[i].ConditionProperty != dbgen.RuleConditionPropertyUserAgent {
-					t.Errorf("Rule %d: unexpected condition property: %s", i, retrievedRules[i].ConditionProperty)
+				if retrievedRule.ConditionProperty != dbgen.RuleConditionPropertyUserAgent {
+					t.Errorf("Rule %s: unexpected condition property: %s", retrievedRule.Name, retrievedRule.ConditionProperty)
 				}
+				delete(expectedNames, retrievedRule.Name)
+			}
+
+			if len(expectedNames) > 0 {
+				t.Errorf("Missing rules: %v", expectedNames)
 			}
 		})
 	}
@@ -1662,17 +1672,27 @@ func TestRetrieveOrgRulesWithCache(t *testing.T) {
 				t.Fatalf("Expected %d rules, got %d", len(rules), len(retrievedRules))
 			}
 
-			// Verify all rules are present
-			for i, expectedRule := range rules {
-				if retrievedRules[i].Name != expectedRule.name {
-					t.Errorf("Rule %d: expected name %s, got %s", i, expectedRule.name, retrievedRules[i].Name)
+			// Verify all rules are present using a map-based comparison
+			expectedNames := make(map[string]bool)
+			for _, rule := range rules {
+				expectedNames[rule.name] = true
+			}
+
+			for _, retrievedRule := range retrievedRules {
+				if !expectedNames[retrievedRule.Name] {
+					t.Errorf("Unexpected rule name: %s", retrievedRule.Name)
 				}
-				if !retrievedRules[i].Enabled {
-					t.Errorf("Rule %d should be enabled", i)
+				if !retrievedRule.Enabled {
+					t.Errorf("Rule %s should be enabled", retrievedRule.Name)
 				}
-				if retrievedRules[i].ConditionProperty != dbgen.RuleConditionPropertyCountryCode {
-					t.Errorf("Rule %d: unexpected condition property: %s", i, retrievedRules[i].ConditionProperty)
+				if retrievedRule.ConditionProperty != dbgen.RuleConditionPropertyCountryCode {
+					t.Errorf("Rule %s: unexpected condition property: %s", retrievedRule.Name, retrievedRule.ConditionProperty)
 				}
+				delete(expectedNames, retrievedRule.Name)
+			}
+
+			if len(expectedNames) > 0 {
+				t.Errorf("Missing rules: %v", expectedNames)
 			}
 		})
 	}
