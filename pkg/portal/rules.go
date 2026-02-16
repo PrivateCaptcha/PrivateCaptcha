@@ -44,7 +44,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, 0, false, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block empty User-Agents",
 			Enabled:                  false,
@@ -56,7 +56,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, 1, false, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
@@ -69,7 +69,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -20,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, 2, false, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
@@ -82,7 +82,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              50,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, 3, false, hasher),
+		}, false, hasher),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
@@ -95,6 +95,6 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -30,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, 4, false, hasher),
+		}, false, hasher),
 	}
 }

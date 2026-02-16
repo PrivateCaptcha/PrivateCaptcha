@@ -152,7 +152,7 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	}
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, index int, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String
@@ -218,7 +218,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, index int, canEdit bool
 
 	return &DifficultyRuleModel{
 		ID:                hasher.Encrypt(int(rule.ID)),
-		Position:          index + 1,
+		Position:          int(rule.Position) + 1,
 		Name:              rule.Name,
 		Enabled:           rule.Enabled,
 		ConditionProperty: conditionProperty,

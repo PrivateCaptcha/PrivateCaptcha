@@ -10,7 +10,7 @@ ORDER BY org_id, position ASC;
 
 -- name: CreateDifficultyRule :one
 WITH max_pos AS (
-    SELECT COALESCE(MAX(position), -1000.0) + 1000.0 AS new_position
+    SELECT COALESCE(MAX(position), -$14::float8) + $14::float8 AS new_position
     FROM backend.difficulty_rules
     WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
       AND (org_id = $3 OR (org_id IS NULL AND $3 IS NULL))
@@ -104,24 +104,14 @@ SELECT
     (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
     (SELECT position FROM rules_list WHERE idx = $2) AS next_position;
 
--- name: RebalanceDifficultyRulesForProperty :exec
+-- name: RebalanceDifficultyRules :exec
 WITH rules_list AS (
     SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
     FROM backend.difficulty_rules dr
-    WHERE dr.property_id = $1 AND dr.org_id IS NULL
+    WHERE (dr.property_id = $1 OR (dr.property_id IS NULL AND $1 IS NULL))
+      AND (dr.org_id = $2 OR (dr.org_id IS NULL AND $2 IS NULL))
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
-FROM rules_list rl
-WHERE dr.id = rl.id;
-
--- name: RebalanceDifficultyRulesForOrg :exec
-WITH rules_list AS (
-    SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
-    FROM backend.difficulty_rules dr
-    WHERE dr.org_id = $1 AND dr.property_id IS NULL
-)
-UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
+SET position = (rl.row_num - 1) * $3::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id;

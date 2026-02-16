@@ -13,7 +13,7 @@ import (
 
 const createDifficultyRule = `-- name: CreateDifficultyRule :one
 WITH max_pos AS (
-    SELECT COALESCE(MAX(position), -1000.0) + 1000.0 AS new_position
+    SELECT COALESCE(MAX(position), -$14::float8) + $14::float8 AS new_position
     FROM backend.difficulty_rules
     WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
       AND (org_id = $3 OR (org_id IS NULL AND $3 IS NULL))
@@ -53,6 +53,7 @@ type CreateDifficultyRuleParams struct {
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
 	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
+	Column14                 float64               `db:"column_14" json:"column_14"`
 }
 
 func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error) {
@@ -70,6 +71,7 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 		arg.ActionProperty,
 		arg.ActionValue,
 		arg.CreatorID,
+		arg.Column14,
 	)
 	var i DifficultyRule
 	err := row.Scan(
@@ -294,47 +296,27 @@ func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRul
 	return &i, err
 }
 
-const rebalanceDifficultyRulesForOrg = `-- name: RebalanceDifficultyRulesForOrg :exec
+const rebalanceDifficultyRules = `-- name: RebalanceDifficultyRules :exec
 WITH rules_list AS (
     SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
     FROM backend.difficulty_rules dr
-    WHERE dr.org_id = $1 AND dr.property_id IS NULL
+    WHERE (dr.property_id = $1 OR (dr.property_id IS NULL AND $1 IS NULL))
+      AND (dr.org_id = $2 OR (dr.org_id IS NULL AND $2 IS NULL))
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
+SET position = (rl.row_num - 1) * $3::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id
 `
 
-type RebalanceDifficultyRulesForOrgParams struct {
-	OrgID   pgtype.Int4 `db:"org_id" json:"org_id"`
-	Column2 float64     `db:"column_2" json:"column_2"`
-}
-
-func (q *Queries) RebalanceDifficultyRulesForOrg(ctx context.Context, arg *RebalanceDifficultyRulesForOrgParams) error {
-	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForOrg, arg.OrgID, arg.Column2)
-	return err
-}
-
-const rebalanceDifficultyRulesForProperty = `-- name: RebalanceDifficultyRulesForProperty :exec
-WITH rules_list AS (
-    SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
-    FROM backend.difficulty_rules dr
-    WHERE dr.property_id = $1 AND dr.org_id IS NULL
-)
-UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
-FROM rules_list rl
-WHERE dr.id = rl.id
-`
-
-type RebalanceDifficultyRulesForPropertyParams struct {
+type RebalanceDifficultyRulesParams struct {
 	PropertyID pgtype.Int4 `db:"property_id" json:"property_id"`
-	Column2    float64     `db:"column_2" json:"column_2"`
+	OrgID      pgtype.Int4 `db:"org_id" json:"org_id"`
+	Column3    float64     `db:"column_3" json:"column_3"`
 }
 
-func (q *Queries) RebalanceDifficultyRulesForProperty(ctx context.Context, arg *RebalanceDifficultyRulesForPropertyParams) error {
-	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForProperty, arg.PropertyID, arg.Column2)
+func (q *Queries) RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) error {
+	_, err := q.db.Exec(ctx, rebalanceDifficultyRules, arg.PropertyID, arg.OrgID, arg.Column3)
 	return err
 }
 

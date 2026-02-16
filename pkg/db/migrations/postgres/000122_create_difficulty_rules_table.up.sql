@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
 
 CREATE INDEX IF NOT EXISTS index_difficulty_rules_property_id ON backend.difficulty_rules(property_id) WHERE property_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS index_difficulty_rules_org_id ON backend.difficulty_rules(org_id) WHERE org_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS index_difficulty_rules_property_position ON backend.difficulty_rules(property_id, position) WHERE property_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS index_difficulty_rules_org_position ON backend.difficulty_rules(org_id, position) WHERE org_id IS NOT NULL;
 
 CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON backend.difficulty_rules
     FOR EACH ROW EXECUTE FUNCTION backend.deleted_record_insert();

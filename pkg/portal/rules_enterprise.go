@@ -4,7 +4,6 @@ package portal
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"net/http"
 	"sort"
@@ -827,49 +826,6 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
 
-func (s *Server) moveDifficultyRuleWithRebalancing(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User, propertyID *int32, orgID int32) (*common.AuditLogEvent, error) {
-	// Move the rule
-	_, auditEvent, err := s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
-	if err != nil {
-		// Check if we need rebalancing
-		if errors.Is(err, common.ErrRulesNeedRebalancing) {
-			var rebalanceErr error
-			if propertyID != nil {
-				slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "propertyID", *propertyID)
-				rebalanceErr = s.Store.Impl().RebalanceDifficultyRulesForProperty(ctx, *propertyID)
-			} else {
-				slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "orgID", orgID)
-				rebalanceErr = s.Store.Impl().RebalanceDifficultyRulesForOrg(ctx, orgID)
-			}
-
-			if rebalanceErr != nil {
-				if propertyID != nil {
-					slog.ErrorContext(ctx, "Failed to rebalance rules", "propertyID", *propertyID, common.ErrAttr(rebalanceErr))
-				} else {
-					slog.ErrorContext(ctx, "Failed to rebalance rules", "orgID", orgID, common.ErrAttr(rebalanceErr))
-				}
-				return nil, rebalanceErr
-			}
-
-			// Try moving again after rebalancing
-			_, auditEvent, err = s.Store.Impl().MoveDifficultyRule(ctx, rule, newIndex, user)
-			if err != nil {
-				slog.ErrorContext(ctx, "Failed to move rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
-				return nil, err
-			}
-		} else {
-			if propertyID != nil {
-				slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "propertyID", *propertyID, common.ErrAttr(err))
-			} else {
-				slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "orgID", orgID, common.ErrAttr(err))
-			}
-			return nil, err
-		}
-	}
-
-	return auditEvent, nil
-}
-
 func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -920,13 +876,20 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEvent, err := s.moveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user, &property.ID, org.ID)
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if err != nil {
+			return nil, err
+		}
+		return []*common.AuditLogEvent{auditEvent}, nil
+	})
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
@@ -975,13 +938,20 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEvent, err := s.moveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user, nil, org.ID)
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if err != nil {
+			return nil, err
+		}
+		return []*common.AuditLogEvent{auditEvent}, nil
+	})
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
 		return
 	}
 
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }

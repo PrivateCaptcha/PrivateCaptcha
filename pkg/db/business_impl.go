@@ -3114,6 +3114,7 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		return nil, nil, ErrMaintenance
 	}
 
+	params.Column14 = positionStep
 	rule, err := impl.querier.CreateDifficultyRule(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create difficulty rule", common.ErrAttr(err))
@@ -3307,9 +3308,9 @@ const (
 	minPositionDelta = 0.000001
 
 	// positionStep is the spacing between positions when rebalancing or creating new rules.
-	// Using 1000.0 provides ample room for fractional indexing between positions while
+	// Using 100.0 provides ample room for fractional indexing between positions while
 	// keeping position values human-readable in logs and debugging.
-	positionStep = 1000.0
+	positionStep = 100.0
 )
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
@@ -3348,8 +3349,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		newPosition = (neighbors.PrevPosition + neighbors.NextPosition) / 2.0
 
 		// Check if we have enough precision
-		delta := neighbors.NextPosition - neighbors.PrevPosition
-		if delta < minPositionDelta {
+		if delta := neighbors.NextPosition - neighbors.PrevPosition; delta < minPositionDelta {
 			// Need rebalancing - return specific error
 			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
 				"prevPos", neighbors.PrevPosition, "nextPos", neighbors.NextPosition, "delta", delta)
@@ -3400,9 +3400,10 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRulesForProperty(ctx, &dbgen.RebalanceDifficultyRulesForPropertyParams{
+	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: Int(propertyID),
-		Column2:    positionStep,
+		OrgID:      pgtype.Int4{Valid: false},
+		Column3:    positionStep,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for property", "propertyID", propertyID, common.ErrAttr(err))
@@ -3423,9 +3424,10 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRulesForOrg(ctx, &dbgen.RebalanceDifficultyRulesForOrgParams{
-		OrgID:   Int(orgID),
-		Column2: positionStep,
+	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
+		PropertyID: pgtype.Int4{Valid: false},
+		OrgID:      Int(orgID),
+		Column3:    positionStep,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))
@@ -3439,4 +3441,42 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 	_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 
 	return nil
+}
+
+func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+	// Move the rule
+	updatedRule, auditEvent, err := impl.MoveDifficultyRule(ctx, rule, newIndex, user)
+	if err != nil {
+		// Check if we need rebalancing
+		if errors.Is(err, common.ErrRulesNeedRebalancing) {
+			var rebalanceErr error
+			if rule.PropertyID.Valid {
+				propertyID := rule.PropertyID.Int32
+				slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "propertyID", propertyID)
+				rebalanceErr = impl.RebalanceDifficultyRulesForProperty(ctx, propertyID)
+			} else if rule.OrgID.Valid {
+				orgID := rule.OrgID.Int32
+				slog.InfoContext(ctx, "Rules need rebalancing, performing rebalance", "orgID", orgID)
+				rebalanceErr = impl.RebalanceDifficultyRulesForOrg(ctx, orgID)
+			} else {
+				return nil, nil, errors.New("rule has neither property_id nor org_id")
+			}
+
+			if rebalanceErr != nil {
+				slog.ErrorContext(ctx, "Failed to rebalance rules", "ruleID", rule.ID, common.ErrAttr(rebalanceErr))
+				return nil, nil, rebalanceErr
+			}
+
+			// Try moving again after rebalancing
+			updatedRule, auditEvent, err = impl.MoveDifficultyRule(ctx, rule, newIndex, user)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to move rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
+				return nil, nil, err
+			}
+		} else {
+			return nil, nil, err
+		}
+	}
+
+	return updatedRule, auditEvent, nil
 }
