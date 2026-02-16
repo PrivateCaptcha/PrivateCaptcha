@@ -2972,6 +2972,14 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
+func difficultyRulePropertyIDFunc(r *dbgen.DifficultyRule) int32 {
+	return r.PropertyID.Int32
+}
+
+func difficultyRuleOrgIDFunc(r *dbgen.DifficultyRule) int32 {
+	return r.OrgID.Int32
+}
+
 func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
 	if len(batch) == 0 {
 		return map[int32][]*dbgen.DifficultyRule{}, nil
@@ -2980,7 +2988,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 	result := make(map[int32][]*dbgen.DifficultyRule, len(batch))
 	uncachedIDs := make([]int32, 0, len(batch))
 
-	// Check cache for each property ID
+	// Check cache for arrays of rules
 	for propertyID := range batch {
 		cacheKey := RawPropertyRulesCacheKey(propertyID)
 		if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey); err == nil {
@@ -2990,43 +2998,46 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		}
 	}
 
-	// Fetch uncached rules from database
+	// Fetch uncached rules using bulk reader (without caching in the reader)
 	if len(uncachedIDs) > 0 {
-		if impl.querier == nil {
-			return result, ErrMaintenance
+		uncachedBatch := make(map[int32]uint, len(uncachedIDs))
+		for _, id := range uncachedIDs {
+			uncachedBatch[id] = batch[id]
 		}
 
-		rules, err := impl.querier.GetDifficultyRulesByPropertyIDs(ctx, uncachedIDs)
-		if err != nil && err != pgx.ErrNoRows {
-			slog.ErrorContext(ctx, "Failed to query property rules", "propertyIDs", uncachedIDs, common.ErrAttr(err))
+		reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
+			ArgFunc:      difficultyRulePropertyIDFunc,
+			Cache:        nil, // No caching in the reader
+			CacheKeyFunc: RawPropertyRulesCacheKey,
+			QueryKeyFunc: IdentityKeyFunc[int32],
+		}
+
+		if impl.querier != nil {
+			reader.QueryFunc = impl.querier.GetDifficultyRulesByPropertyIDs
+		}
+
+		_, fetched, err := reader.Read(ctx, uncachedBatch)
+		if err != nil && err != ErrNegativeCacheHit {
 			return result, err
 		}
 
-		// Group rules by property ID
-		rulesByProperty := make(map[int32][]*dbgen.DifficultyRule)
-		for _, rule := range rules {
-			propertyID := rule.PropertyID.Int32
-			rulesByProperty[propertyID] = append(rulesByProperty[propertyID], rule)
+		// Group fetched rules by property ID
+		for _, r := range fetched {
+			result[r.PropertyID.Int32] = append(result[r.PropertyID.Int32], r)
 		}
+	}
 
-		// Cache and add to result
-		for propertyID, propertyRules := range rulesByProperty {
-			// Sort by position
-			slices.SortFunc(propertyRules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-				return int(a.Position - b.Position)
-			})
-			cacheKey := RawPropertyRulesCacheKey(propertyID)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, propertyRules, propertyTTL)
-			result[propertyID] = propertyRules
-		}
+	// Sort and cache arrays
+	for key, value := range result {
+		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+			return int(a.Position - b.Position)
+		})
+		result[key] = value
 
-		// Cache empty arrays for properties with no rules
-		for _, propertyID := range uncachedIDs {
-			if _, found := rulesByProperty[propertyID]; !found {
-				cacheKey := RawPropertyRulesCacheKey(propertyID)
-				_ = impl.cache.SetWithTTL(ctx, cacheKey, []*dbgen.DifficultyRule{}, propertyTTL)
-				result[propertyID] = []*dbgen.DifficultyRule{}
-			}
+		// Cache the sorted array if it was fetched (not from cache)
+		if slices.Contains(uncachedIDs, key) {
+			cacheKey := RawPropertyRulesCacheKey(key)
+			_ = impl.cache.SetWithTTL(ctx, cacheKey, value, propertyTTL)
 		}
 	}
 
@@ -3041,7 +3052,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 	result := make(map[int32][]*dbgen.DifficultyRule, len(batch))
 	uncachedIDs := make([]int32, 0, len(batch))
 
-	// Check cache for each org ID
+	// Check cache for arrays of rules
 	for orgID := range batch {
 		cacheKey := RawOrgRulesCacheKey(orgID)
 		if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey); err == nil {
@@ -3051,43 +3062,46 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		}
 	}
 
-	// Fetch uncached rules from database
+	// Fetch uncached rules using bulk reader (without caching in the reader)
 	if len(uncachedIDs) > 0 {
-		if impl.querier == nil {
-			return result, ErrMaintenance
+		uncachedBatch := make(map[int32]uint, len(uncachedIDs))
+		for _, id := range uncachedIDs {
+			uncachedBatch[id] = batch[id]
 		}
 
-		rules, err := impl.querier.GetDifficultyRulesByOrgIDs(ctx, uncachedIDs)
-		if err != nil && err != pgx.ErrNoRows {
-			slog.ErrorContext(ctx, "Failed to query org rules", "orgIDs", uncachedIDs, common.ErrAttr(err))
+		reader := &StoreBulkReader[int32, int32, dbgen.DifficultyRule]{
+			ArgFunc:      difficultyRuleOrgIDFunc,
+			Cache:        nil, // No caching in the reader
+			CacheKeyFunc: RawOrgRulesCacheKey,
+			QueryKeyFunc: IdentityKeyFunc[int32],
+		}
+
+		if impl.querier != nil {
+			reader.QueryFunc = impl.querier.GetDifficultyRulesByOrgIDs
+		}
+
+		_, fetched, err := reader.Read(ctx, uncachedBatch)
+		if err != nil && err != ErrNegativeCacheHit {
 			return result, err
 		}
 
-		// Group rules by org ID
-		rulesByOrg := make(map[int32][]*dbgen.DifficultyRule)
-		for _, rule := range rules {
-			orgID := rule.OrgID.Int32
-			rulesByOrg[orgID] = append(rulesByOrg[orgID], rule)
+		// Group fetched rules by org ID
+		for _, r := range fetched {
+			result[r.OrgID.Int32] = append(result[r.OrgID.Int32], r)
 		}
+	}
 
-		// Cache and add to result
-		for orgID, orgRules := range rulesByOrg {
-			// Sort by position
-			slices.SortFunc(orgRules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-				return int(a.Position - b.Position)
-			})
-			cacheKey := RawOrgRulesCacheKey(orgID)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, orgRules, propertyTTL)
-			result[orgID] = orgRules
-		}
+	// Sort and cache arrays
+	for key, value := range result {
+		slices.SortFunc(value, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+			return int(a.Position - b.Position)
+		})
+		result[key] = value
 
-		// Cache empty arrays for orgs with no rules
-		for _, orgID := range uncachedIDs {
-			if _, found := rulesByOrg[orgID]; !found {
-				cacheKey := RawOrgRulesCacheKey(orgID)
-				_ = impl.cache.SetWithTTL(ctx, cacheKey, []*dbgen.DifficultyRule{}, propertyTTL)
-				result[orgID] = []*dbgen.DifficultyRule{}
-			}
+		// Cache the sorted array if it was fetched (not from cache)
+		if slices.Contains(uncachedIDs, key) {
+			cacheKey := RawOrgRulesCacheKey(key)
+			_ = impl.cache.SetWithTTL(ctx, cacheKey, value, propertyTTL)
 		}
 	}
 
