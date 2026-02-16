@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     condition_value_str VARCHAR(512),
     condition_value_int INT,
     condition_value_separator CHAR(1),
-    position INT NOT NULL DEFAULT 0,
+    position DOUBLE PRECISION NOT NULL DEFAULT 0,
     action_property backend.rule_action_property NOT NULL,
     action_value INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,

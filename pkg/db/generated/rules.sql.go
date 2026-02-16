@@ -12,6 +12,12 @@ import (
 )
 
 const createDifficultyRule = `-- name: CreateDifficultyRule :one
+WITH max_pos AS (
+    SELECT COALESCE(MAX(position), -1000.0) + 1000.0 AS new_position
+    FROM backend.difficulty_rules
+    WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
+      AND (org_id = $3 OR (org_id IS NULL AND $3 IS NULL))
+)
 INSERT INTO backend.difficulty_rules (
     name,
     property_id,
@@ -28,7 +34,7 @@ INSERT INTO backend.difficulty_rules (
     action_value,
     creator_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT new_position FROM max_pos), $11, $12, $13
 )
 RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at
 `
@@ -44,7 +50,6 @@ type CreateDifficultyRuleParams struct {
 	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
-	Position                 int32                 `db:"position" json:"position"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
 	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
@@ -62,7 +67,6 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 		arg.ConditionValueStr,
 		arg.ConditionValueInt,
 		arg.ConditionValueSeparator,
-		arg.Position,
 		arg.ActionProperty,
 		arg.ActionValue,
 		arg.CreatorID,
@@ -126,6 +130,42 @@ func (q *Queries) GetDifficultyRuleByID(ctx context.Context, id int32) (*Difficu
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return &i, err
+}
+
+const getDifficultyRulePositionNeighbors = `-- name: GetDifficultyRulePositionNeighbors :one
+WITH target AS (
+    SELECT t.position, t.property_id, t.org_id
+    FROM backend.difficulty_rules t
+    WHERE t.id = $1
+),
+rules_list AS (
+    SELECT dr.id AS id, dr.position AS position,
+           ROW_NUMBER() OVER (ORDER BY dr.position ASC) - 1 AS idx
+    FROM backend.difficulty_rules dr
+    CROSS JOIN target
+    WHERE (dr.property_id = target.property_id OR (dr.property_id IS NULL AND target.property_id IS NULL))
+      AND (dr.org_id = target.org_id OR (dr.org_id IS NULL AND target.org_id IS NULL))
+)
+SELECT
+    (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
+    (SELECT position FROM rules_list WHERE idx = $2) AS next_position
+`
+
+type GetDifficultyRulePositionNeighborsParams struct {
+	ID      int32       `db:"id" json:"id"`
+	Column2 interface{} `db:"column_2" json:"column_2"`
+}
+
+type GetDifficultyRulePositionNeighborsRow struct {
+	PrevPosition float64 `db:"prev_position" json:"prev_position"`
+	NextPosition float64 `db:"next_position" json:"next_position"`
+}
+
+func (q *Queries) GetDifficultyRulePositionNeighbors(ctx context.Context, arg *GetDifficultyRulePositionNeighborsParams) (*GetDifficultyRulePositionNeighborsRow, error) {
+	row := q.db.QueryRow(ctx, getDifficultyRulePositionNeighbors, arg.ID, arg.Column2)
+	var i GetDifficultyRulePositionNeighborsRow
+	err := row.Scan(&i.PrevPosition, &i.NextPosition)
 	return &i, err
 }
 
@@ -217,6 +257,77 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 	return items, nil
 }
 
+const moveDifficultyRule = `-- name: MoveDifficultyRule :one
+UPDATE backend.difficulty_rules
+SET position = $2, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at
+`
+
+type MoveDifficultyRuleParams struct {
+	ID       int32   `db:"id" json:"id"`
+	Position float64 `db:"position" json:"position"`
+}
+
+func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRuleParams) (*DifficultyRule, error) {
+	row := q.db.QueryRow(ctx, moveDifficultyRule, arg.ID, arg.Position)
+	var i DifficultyRule
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.PropertyID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.Enabled,
+		&i.ConditionProperty,
+		&i.ConditionOperator,
+		&i.ConditionOperatorNegated,
+		&i.ConditionValueStr,
+		&i.ConditionValueInt,
+		&i.ConditionValueSeparator,
+		&i.Position,
+		&i.ActionProperty,
+		&i.ActionValue,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return &i, err
+}
+
+const rebalanceDifficultyRulesForOrg = `-- name: RebalanceDifficultyRulesForOrg :exec
+WITH rules_list AS (
+    SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
+    FROM backend.difficulty_rules dr
+    WHERE dr.org_id = $1 AND dr.property_id IS NULL
+)
+UPDATE backend.difficulty_rules dr
+SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+FROM rules_list rl
+WHERE dr.id = rl.id
+`
+
+func (q *Queries) RebalanceDifficultyRulesForOrg(ctx context.Context, orgID pgtype.Int4) error {
+	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForOrg, orgID)
+	return err
+}
+
+const rebalanceDifficultyRulesForProperty = `-- name: RebalanceDifficultyRulesForProperty :exec
+WITH rules_list AS (
+    SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
+    FROM backend.difficulty_rules dr
+    WHERE dr.property_id = $1 AND dr.org_id IS NULL
+)
+UPDATE backend.difficulty_rules dr
+SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+FROM rules_list rl
+WHERE dr.id = rl.id
+`
+
+func (q *Queries) RebalanceDifficultyRulesForProperty(ctx context.Context, propertyID pgtype.Int4) error {
+	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForProperty, propertyID)
+	return err
+}
+
 const updateDifficultyRule = `-- name: UpdateDifficultyRule :one
 WITH old AS (
     SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at FROM backend.difficulty_rules dr
@@ -287,7 +398,7 @@ type UpdateDifficultyRuleRow struct {
 	ConditionValueStr           pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt           pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator     pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
-	Position                    int32                 `db:"position" json:"position"`
+	Position                    float64               `db:"position" json:"position"`
 	ActionProperty              RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue                 int32                 `db:"action_value" json:"action_value"`
 	CreatedAt                   pgtype.Timestamptz    `db:"created_at" json:"created_at"`
