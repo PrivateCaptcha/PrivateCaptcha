@@ -1,30 +1,36 @@
 {{ if .Params.Rules }}
+<div x-data="{ moveOpen: false, moveRuleIndex: 0, moveRuleID: '', newPosition: 0, rulesCount: {{ len .Params.Rules }} }">
 <div class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
     <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
         <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
             <ul role="list" class="divide-y divide-gray-100">
-                {{ range .Params.Rules }}
+                {{ range $index, $rule := .Params.Rules }}
                 <li class="flex items-center justify-between gap-x-6 py-5">
                     <div class="min-w-0">
                         <div class="flex items-start gap-x-3">
-                            <p class="rule-name text-sm/6 text-gray-900 {{if .Enabled }} font-semibold{{ end }}">{{.Position}}. {{ .Name }}</p>
+                            <p class="rule-name text-sm/6 text-gray-900 {{if $rule.Enabled }} font-semibold{{ end }}">{{$rule.Position}}. {{ $rule.Name }}</p>
                         </div>
-                        <div class="mt-2.5 ml-4 flex items-center gap-x-2 text-xs/5 {{if .Enabled }}text-gray-500{{else}}text-gray-400{{end}}">
-                            <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ConditionProperty}}</span> <strong>{{.ConditionOperator}}</strong>{{ if .ConditionValue}} <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ConditionValue}}</span>{{end}}, then <strong>{{.ActionAction}}</strong> <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ActionProperty}}</span>{{ if .ActionValue }} to <span class="inline-flex items-center rounded-md {{if .Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{.ActionValue}}</span>{{ end }}</p>
+                        <div class="mt-2.5 ml-4 flex items-center gap-x-2 text-xs/5 {{if $rule.Enabled }}text-gray-500{{else}}text-gray-400{{end}}">
+                            <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ConditionProperty}}</span> <strong>{{$rule.ConditionOperator}}</strong>{{ if $rule.ConditionValue}} <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pink-100 text-pink-700{{else}}bg-pink-50 text-pink-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ConditionValue}}</span>{{end}}, then <strong>{{$rule.ActionAction}}</strong> <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionProperty}}</span>{{ if $rule.ActionValue }} to <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-indigo-100 text-indigo-700{{else}}bg-indigo-50 text-indigo-400{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionValue}}</span>{{ end }}</p>
                         </div>
                     </div>
-                    <div class="flex flex-none items-center gap-x-10">
-                        {{- if .Enabled }}
+                    <div class="flex flex-none items-center gap-x-4">
+                        {{- if $rule.Enabled }}
                         <p class="mt-0.5 rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Enabled</p>
                         {{- else }}
                         <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
                         {{- end }}
 
-                        {{ if .CanEdit }}
+                        {{ if $rule.CanEdit }}
+                        <button type="button" 
+                                @click="moveRuleIndex = {{ $index }}; moveRuleID = '{{ $rule.ID }}'; moveOpen = true"
+                                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
+                            Move<span class="sr-only">, difficulty rule</span>
+                        </button>
                         {{ if $.Params.Property }}
-                        <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint .ID $.Const.EditEndpoint }}"
+                        <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint $rule.ID $.Const.EditEndpoint }}"
                             {{ else }}
-                            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .ID $.Const.EditEndpoint }}"
+                            <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $rule.ID $.Const.EditEndpoint }}"
                                 {{ end }}
                                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
                             {{ end }}
@@ -65,6 +71,46 @@
             </a>
         </div>
         {{ end }}
+    </div>
+</div>
+{{ end }}
+
+<!-- Move rule dialog -->
+{{ if .Params.Rules }}
+<div class="relative z-10" x-show="moveOpen" x-cloak aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+    <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg" @click.away="moveOpen = false">
+                <form method="POST" 
+                      x-bind:action="'{{ if $.Params.Property }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint }}{{ end }}/' + moveRuleID + '/{{ $.Const.MoveEndpoint }}'"
+                      x-on:submit="moveOpen = false">
+                    <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6">
+                        <div class="sm:flex sm:items-start">
+                            <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                                <h3 class="text-base font-semibold leading-6 text-gray-900" id="modal-title">Move rule</h3>
+                                <div class="mt-4">
+                                    <label for="position" class="pc-internal-form-label">New Position</label>
+                                    <div class="mt-2">
+                                        <select name="position" x-model="newPosition" class="w-full pc-internal-form-select">
+                                            <template x-for="(n, index) in rulesCount" :key="index">
+                                                <option :value="index" x-text="'Position ' + (index + 1)"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                        <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
+                            Move
+                        </button>
+                        <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary sm:w-auto" @click="moveOpen = false">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {{ end }}
