@@ -3299,8 +3299,17 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, rule *d
 }
 
 const (
-	// minPositionDelta is the minimum distance between positions before we need rebalancing
+	// minPositionDelta is the minimum distance between positions before we need rebalancing.
+	// This value is set at 1e-6 to ensure that we can perform millions of fractional moves
+	// before exhausting floating-point precision. With float64's ~15 decimal digits of precision,
+	// this threshold allows for approximately 1 million sequential moves between two positions
+	// before requiring rebalancing.
 	minPositionDelta = 0.000001
+
+	// positionStep is the spacing between positions when rebalancing or creating new rules.
+	// Using 1000.0 provides ample room for fractional indexing between positions while
+	// keeping position values human-readable in logs and debugging.
+	positionStep = 1000.0
 )
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
@@ -3329,20 +3338,21 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		if neighbors.NextPosition == 0 {
 			newPosition = 0
 		} else {
-			newPosition = neighbors.NextPosition - 1000.0
+			newPosition = neighbors.NextPosition - positionStep
 		}
 	} else if neighbors.NextPosition == 0 {
 		// Moving to last position
-		newPosition = neighbors.PrevPosition + 1000.0
+		newPosition = neighbors.PrevPosition + positionStep
 	} else {
 		// Moving between two positions
 		newPosition = (neighbors.PrevPosition + neighbors.NextPosition) / 2.0
 
 		// Check if we have enough precision
-		if neighbors.NextPosition-neighbors.PrevPosition < minPositionDelta {
+		delta := neighbors.NextPosition - neighbors.PrevPosition
+		if delta < minPositionDelta {
 			// Need rebalancing - return specific error
 			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
-				"prevPos", neighbors.PrevPosition, "nextPos", neighbors.NextPosition)
+				"prevPos", neighbors.PrevPosition, "nextPos", neighbors.NextPosition, "delta", delta)
 			return nil, nil, common.ErrRulesNeedRebalancing
 		}
 	}
@@ -3390,7 +3400,10 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRulesForProperty(ctx, Int(propertyID))
+	err := impl.querier.RebalanceDifficultyRulesForProperty(ctx, &dbgen.RebalanceDifficultyRulesForPropertyParams{
+		PropertyID: Int(propertyID),
+		Column2:    positionStep,
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for property", "propertyID", propertyID, common.ErrAttr(err))
 		return err
@@ -3410,7 +3423,10 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRulesForOrg(ctx, Int(orgID))
+	err := impl.querier.RebalanceDifficultyRulesForOrg(ctx, &dbgen.RebalanceDifficultyRulesForOrgParams{
+		OrgID:   Int(orgID),
+		Column2: positionStep,
+	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))
 		return err

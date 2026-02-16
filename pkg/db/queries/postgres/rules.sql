@@ -111,7 +111,7 @@ WITH rules_list AS (
     WHERE dr.property_id = $1 AND dr.org_id IS NULL
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id;
 
@@ -122,6 +122,6 @@ WITH rules_list AS (
     WHERE dr.org_id = $1 AND dr.property_id IS NULL
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id;

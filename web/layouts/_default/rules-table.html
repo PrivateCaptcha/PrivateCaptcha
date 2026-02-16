@@ -82,9 +82,9 @@
     <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
         <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
             <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg" @click.away="moveOpen = false">
-                <form method="POST" 
-                      x-bind:action="'{{ if $.Params.Property }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint }}{{ end }}/' + moveRuleID + '/{{ $.Const.MoveEndpoint }}'"
-                      x-on:submit="moveOpen = false">
+                <form x-bind:hx-post="'{{ if $.Params.Property }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint }}{{ end }}/' + moveRuleID + '/{{ $.Const.MoveEndpoint }}'"
+                      hx-disabled-elt="input, button"
+                      @htmx:after-request="moveOpen = false">
                     <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6">
                         <div class="sm:flex sm:items-start">
                             <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">

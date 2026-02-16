@@ -301,13 +301,18 @@ WITH rules_list AS (
     WHERE dr.org_id = $1 AND dr.property_id IS NULL
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id
 `
 
-func (q *Queries) RebalanceDifficultyRulesForOrg(ctx context.Context, orgID pgtype.Int4) error {
-	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForOrg, orgID)
+type RebalanceDifficultyRulesForOrgParams struct {
+	OrgID   pgtype.Int4 `db:"org_id" json:"org_id"`
+	Column2 float64     `db:"column_2" json:"column_2"`
+}
+
+func (q *Queries) RebalanceDifficultyRulesForOrg(ctx context.Context, arg *RebalanceDifficultyRulesForOrgParams) error {
+	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForOrg, arg.OrgID, arg.Column2)
 	return err
 }
 
@@ -318,13 +323,18 @@ WITH rules_list AS (
     WHERE dr.property_id = $1 AND dr.org_id IS NULL
 )
 UPDATE backend.difficulty_rules dr
-SET position = (rl.row_num - 1) * 1000.0, updated_at = NOW()
+SET position = (rl.row_num - 1) * $2::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id
 `
 
-func (q *Queries) RebalanceDifficultyRulesForProperty(ctx context.Context, propertyID pgtype.Int4) error {
-	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForProperty, propertyID)
+type RebalanceDifficultyRulesForPropertyParams struct {
+	PropertyID pgtype.Int4 `db:"property_id" json:"property_id"`
+	Column2    float64     `db:"column_2" json:"column_2"`
+}
+
+func (q *Queries) RebalanceDifficultyRulesForProperty(ctx context.Context, arg *RebalanceDifficultyRulesForPropertyParams) error {
+	_, err := q.db.Exec(ctx, rebalanceDifficultyRulesForProperty, arg.PropertyID, arg.Column2)
 	return err
 }
 
