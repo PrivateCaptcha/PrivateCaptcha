@@ -34,23 +34,34 @@ const (
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
 	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
 	orgUserCreatedAtFormat        = "02 Jan 2006"
+	portalPropertiesTabIndex      = 0
+	portalMembersTabIndex         = 1
+	portalSettingsTabIndex        = 2
+	portalEventsTabIndex          = 3
 )
 
-type orgSettingsRenderContext struct {
-	AlertRenderContext
+type portalBaseRenderContext struct {
 	CsrfRenderContext
-	CurrentOrg  *userOrg
+	systemNotificationContext
+	Orgs       []*userOrg
+	CurrentOrg *userOrg
+	Tab        int
+	CanEdit    bool
+}
+
+type orgSettingsRenderContext struct {
+	portalBaseRenderContext
+	AlertRenderContext
 	NameError   string
 	Members     []*orgUser
-	CanEdit     bool
 	CanTransfer bool
 }
 
 type orgAuditLogsRenderContext struct {
+	portalBaseRenderContext
 	AlertRenderContext
 	AuditLogsRenderContext
-	CurrentOrg *userOrg
-	CanView    bool
+	CanView bool
 }
 
 type orgUser struct {
@@ -62,11 +73,9 @@ type orgUser struct {
 }
 
 type orgMemberRenderContext struct {
+	portalBaseRenderContext
 	AlertRenderContext
-	CsrfRenderContext
-	CurrentOrg *userOrg
-	Members    []*orgUser
-	CanEdit    bool
+	Members []*orgUser
 }
 
 type userOrg struct {
@@ -76,11 +85,8 @@ type userOrg struct {
 }
 
 type orgDashboardRenderContext struct {
-	CsrfRenderContext
-	systemNotificationContext
+	portalBaseRenderContext
 	PaginationRenderContext
-	Orgs       []*userOrg
-	CurrentOrg *userOrg
 	// shortened from CurrentOrgProperties for simplicity
 	Properties []*userProperty
 }
@@ -186,27 +192,37 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 	return &ViewModel{Model: renderCtx, View: orgWizardTemplate}, nil
 }
 
-func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, sess *session.Session) (*orgDashboardRenderContext, error) {
-	slog.DebugContext(ctx, "Creating org dashboard context", "orgID", orgID)
+func (s *Server) createPortalTabBaseContext(org *dbgen.Organization, user *dbgen.User, tab int) *portalBaseRenderContext {
+	return &portalBaseRenderContext{
+		CsrfRenderContext:         s.CreateCsrfContext(user),
+		systemNotificationContext: systemNotificationContext{},
+		CurrentOrg:                orgToUserOrg(org, user.ID, s.IDHasher),
+		Tab:                       tab,
+		CanEdit:                   org.UserID.Int32 == user.ID,
+	}
+}
+
+func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess *session.Session, tab int) (*portalBaseRenderContext, *dbgen.Organization, error) {
+	slog.DebugContext(ctx, "Creating portal base context", "orgID", orgID, "tab", tab)
 
 	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(orgs) == 0 {
 		slog.WarnContext(ctx, "User has no organizations")
-		return nil, errNoOrgs
+		return nil, nil, errNoOrgs
 	}
 
 	if !s.checkUserOrgsLimit(ctx, user, len(orgs)) {
 		slog.WarnContext(ctx, "Organizations limit reached", "count", len(orgs))
-		return nil, errLimitedFeature
+		return nil, nil, errLimitedFeature
 	}
 
 	idx := -1
@@ -214,16 +230,16 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 		idx = slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
 		if idx == -1 {
 			slog.WarnContext(ctx, "Org is not found in user orgs", "orgID", orgID, "userID", user.ID)
-			return nil, errInvalidPathArg
+			return nil, nil, errInvalidPathArg
 		}
 	}
 
-	renderCtx := &orgDashboardRenderContext{
+	renderCtx := &portalBaseRenderContext{
 		CsrfRenderContext:         s.CreateCsrfContext(user),
 		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs, s.IDHasher),
-		Properties:                []*userProperty{},
 		CurrentOrg:                stubUserOrg,
+		Tab:                       tab,
 	}
 
 	if idx >= 0 {
@@ -242,32 +258,62 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, orgID int32, ses
 
 		idx = earliestIdx
 		renderCtx.CurrentOrg = renderCtx.Orgs[earliestIdx]
-		slog.DebugContext(ctx, "Selected current org as earliest owned", "index", idx)
+		slog.DebugContext(ctx, "Selected current org as earliest owned", "index", earliestIdx)
 	}
 
-	if (0 <= idx) && (idx < len(orgs)) {
-		if orgs[idx].Level != dbgen.AccessLevelInvited {
-			if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, &orgs[idx].Organization, 0 /*offset*/, propertiesPerPage); err == nil {
-				renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
+	org := &orgs[idx].Organization
+	renderCtx.CanEdit = (org.UserID.Int32 == user.ID)
 
-				renderCtx.PaginationRenderContext = PaginationRenderContext{
-					From:    1,
-					To:      len(properties),
-					Count:   len(properties),
-					Page:    0,
-					PerPage: propertiesPerPage,
-				}
+	return renderCtx, org, nil
+}
 
-				if hasMore {
-					if count, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, orgs[idx].Organization.ID); err == nil {
-						renderCtx.Count = int(count)
-					}
-				}
+func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization) (*orgDashboardRenderContext, error) {
+	baseCtx.Tab = portalPropertiesTabIndex
+
+	renderCtx := &orgDashboardRenderContext{
+		portalBaseRenderContext: *baseCtx,
+		Properties:              []*userProperty{},
+	}
+
+	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+		return renderCtx, nil
+	}
+
+	if properties, hasMore, err := s.Store.Impl().RetrieveOrgProperties(ctx, org, 0 /*offset*/, propertiesPerPage); err == nil {
+		renderCtx.Properties = propertiesToUserProperties(ctx, properties, s.IDHasher)
+
+		renderCtx.PaginationRenderContext = PaginationRenderContext{
+			From:    1,
+			To:      len(properties),
+			Count:   len(properties),
+			Page:    0,
+			PerPage: propertiesPerPage,
+		}
+
+		if hasMore {
+			if count, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, org.ID); err == nil {
+				renderCtx.Count = int(count)
 			}
 		}
 	}
 
 	return renderCtx, nil
+}
+
+func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter, r *http.Request) {
+	if (orgID == -1) && (err == errNoOrgs) {
+		common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
+	} else if err == errInvalidSession {
+		slog.WarnContext(r.Context(), "Inconsistent user session found")
+		s.Sessions.SessionDestroy(w, r)
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+	} else if err == errInvalidPathArg {
+		s.RedirectError(http.StatusBadRequest, w, r)
+	} else if err == errLimitedFeature {
+		s.RedirectError(http.StatusPaymentRequired, w, r)
+	} else {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+	}
 }
 
 // This cannot be "MVC" function since we're redirecting user to create new org if needed
@@ -282,25 +328,75 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		orgID = -1
 	}
 
-	renderCtx, err := s.createOrgDashboardContext(ctx, orgID, sess)
+	baseCtx, org, err := s.createPortalBaseContext(ctx, orgID, sess, portalPropertiesTabIndex)
 	if err != nil {
-		if (orgID == -1) && (err == errNoOrgs) {
-			common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
-		} else if err == errInvalidSession {
-			slog.WarnContext(ctx, "Inconsistent user session found")
-			s.Sessions.SessionDestroy(w, r)
-			common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-		} else if err == errInvalidPathArg {
-			s.RedirectError(http.StatusBadRequest, w, r)
-		} else if err == errLimitedFeature {
-			s.RedirectError(http.StatusPaymentRequired, w, r)
-		} else {
-			s.RedirectError(http.StatusInternalServerError, w, r)
-		}
+		s.handlePortalError(orgID, err, w, r)
 		return
 	}
 
-	s.render(w, r, portalTemplate, renderCtx)
+	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+		s.render(w, r, portalTemplate, &orgDashboardRenderContext{
+			portalBaseRenderContext: *baseCtx,
+			Properties:              []*userProperty{},
+		})
+		return
+	}
+
+	tabParam := r.URL.Query().Get(common.ParamTab)
+	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
+
+	user, err := s.SessionUser(ctx, sess)
+	if err != nil {
+		s.handlePortalError(orgID, err, w, r)
+		return
+	}
+
+	var model Model
+	var derr error
+	var event *common.AuditLogEvent
+	switch tabParam {
+	case common.MembersEndpoint:
+		if vm, ae, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user); err == nil {
+			model = vm
+			event = ae
+		} else {
+			derr = err
+		}
+	case common.SettingsEndpoint:
+		if vm, ae, err := s.createOrgSettingsRenderContext(ctx, baseCtx, org, user); err == nil {
+			model = vm
+			event = ae
+		} else {
+			derr = err
+		}
+	case common.EventsEndpoint:
+		if vm, ae, err := s.createOrgAuditLogsContext(ctx, baseCtx, org, user); err == nil {
+			model = vm
+			event = ae
+		} else {
+			derr = err
+		}
+	default:
+		if (tabParam != "") && (tabParam != common.DashboardEndpoint) {
+			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
+		}
+		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org); err == nil {
+			model = vm
+		} else {
+			derr = err
+		}
+	}
+
+	if derr != nil {
+		s.handlePortalError(orgID, derr, w, r)
+		return
+	}
+
+	if event != nil {
+		s.Store.AuditLog().RecordEvent(ctx, event, common.AuditLogSourcePortal)
+	}
+
+	s.render(w, r, portalTemplate, model)
 }
 
 func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
@@ -316,7 +412,6 @@ func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Orga
 	from := 1 + page*propertiesPerPage
 
 	renderCtx := &orgPropertiesRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
 		PaginationRenderContext: PaginationRenderContext{
 			From:    from,
 			To:      from + len(properties) - 1,
@@ -386,46 +481,34 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate}, nil
 }
 
-func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	ctx := r.Context()
-	user, err := s.SessionUser(ctx, s.Session(w, r))
-	if err != nil {
-		return nil, err
-	}
-
-	org, _, err := s.Org(user, r)
-	if err != nil {
-		return nil, err
-	}
+func (s *Server) createOrgMembersRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgMemberRenderContext, *common.AuditLogEvent, error) {
+	baseCtx.Tab = portalMembersTabIndex
 
 	renderCtx := &orgMemberRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		CanEdit:           org.UserID.Int32 == user.ID,
+		portalBaseRenderContext: *baseCtx,
 	}
 
-	if user.ID != org.UserID.Int32 {
-		slog.WarnContext(ctx, "Fetching org members as not an owner", "userID", user.ID)
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+	event := newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.MembersEndpoint)
+
+	if !baseCtx.CanEdit {
+		slog.WarnContext(ctx, "Fetching org members as not an owner")
+		return renderCtx, event, nil
 	}
 
 	members, err := s.Store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
-		return nil, err
+		return nil, event, err
 	}
 
 	renderCtx.Members = usersWithEmailInvitesToOrgUsers(members, s.IDHasher)
 
-	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgMembersTemplate,
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.MembersEndpoint),
-	}, nil
+	return renderCtx, event, nil
 }
 
-func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
+
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, err
@@ -436,12 +519,26 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
+	baseCtx := s.createPortalTabBaseContext(org, user, portalMembersTabIndex)
+	renderCtx, event, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgMembersTemplate,
+		AuditEvent: event,
+	}, nil
+}
+
+func (s *Server) createOrgSettingsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgSettingsRenderContext, *common.AuditLogEvent, error) {
+	baseCtx.Tab = portalSettingsTabIndex
+
 	renderCtx := &orgSettingsRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		CanEdit:           org.UserID.Int32 == user.ID,
-		CanTransfer:       false,
-		Members:           []*orgUser{},
+		portalBaseRenderContext: *baseCtx,
+		CanTransfer:             false,
+		Members:                 []*orgUser{},
 	}
 
 	// Fetch org members for transfer dropdown (only for owners and enterprise)
@@ -459,10 +556,34 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		}
 	}
 
+	event := newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.SettingsEndpoint)
+
+	return renderCtx, event, nil
+}
+
+func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	baseCtx := s.createPortalTabBaseContext(org, user, portalSettingsTabIndex)
+	renderCtx, event, err := s.createOrgSettingsRenderContext(ctx, baseCtx, org, user)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ViewModel{
 		Model:      renderCtx,
 		View:       orgSettingsTemplate,
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameOrgs, int64(org.ID), org.Name, common.SettingsEndpoint),
+		AuditEvent: event,
 	}, nil
 }
 
@@ -488,6 +609,7 @@ func (s *Server) newOrganizationAuditLogs(ctx context.Context, user *dbgen.User,
 
 func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
+
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, err
@@ -498,7 +620,8 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	renderCtx, auditEvent, err := s.createOrgAuditLogsContext(ctx, org, user)
+	baseCtx := s.createPortalTabBaseContext(org, user, portalEventsTabIndex)
+	renderCtx, auditEvent, err := s.createOrgAuditLogsContext(ctx, baseCtx, org, user)
 	if err != nil {
 		return nil, err
 	}
@@ -522,15 +645,16 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
 		return nil, ErrInvalidRequestArg
 	}
+
 	org, _, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
 	}
 
-	renderCtx := &orgSettingsRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		CanEdit:           org.UserID.Int32 == user.ID,
+	baseCtx := s.createPortalTabBaseContext(org, user, portalSettingsTabIndex)
+	renderCtx, _, err := s.createOrgSettingsRenderContext(ctx, baseCtx, org, user)
+	if err != nil {
+		return nil, err
 	}
 
 	if !renderCtx.CanEdit {

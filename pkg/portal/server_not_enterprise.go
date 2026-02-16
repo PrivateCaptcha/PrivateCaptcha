@@ -78,11 +78,13 @@ func newStubAuditLog() *UserAuditLog {
 	}
 }
 
-func (s *Server) createOrgAuditLogsContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgAuditLogsRenderContext, *common.AuditLogEvent, error) {
+	baseCtx.Tab = portalEventsTabIndex
+
 	renderCtx := &orgAuditLogsRenderContext{
-		AuditLogsRenderContext: AuditLogsRenderContext{},
-		CurrentOrg:             orgToUserOrg(org, user.ID, s.IDHasher),
-		CanView:                org.UserID.Int32 == user.ID,
+		portalBaseRenderContext: *baseCtx,
+		AuditLogsRenderContext:  AuditLogsRenderContext{},
+		CanView:                 baseCtx.CanEdit,
 	}
 
 	const maxOrgAuditLogs = 5

@@ -578,10 +578,6 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 
 func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) (*propertySettingsRenderContext, *common.AuditLogEvent, error) {
 	ctx := r.Context()
-	user, err := s.SessionUser(ctx, s.Session(w, r))
-	if err != nil {
-		return nil, nil, err
-	}
 
 	propertyRenderCtx, property, err := s.getOrgProperty(w, r)
 	if err != nil {
@@ -593,6 +589,11 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 		difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 		Orgs:                           []*userOrg{},
 		CanMove:                        false,
+	}
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// only property owner can move it around
