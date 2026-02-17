@@ -38,7 +38,7 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 		owner, err = s.Store.Impl().RetrieveUser(ctx, org.UserID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve org owner", "orgID", org.ID, common.ErrAttr(err))
-			return common.StatusOK
+			return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
 		}
 	}
 
@@ -46,16 +46,18 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, owner.SubscriptionID.Int32)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve owner subscription", "userID", owner.ID, common.ErrAttr(err))
-			return common.StatusOK
+			return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
 		}
 	}
 
 	ok, extra, err := s.SubscriptionLimits.CheckOrgRulesLimit(ctx, org.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
-			return common.StatusOK
+			slog.InfoContext(ctx, "No active subscription for org rules", "orgID", org.ID, "ownerID", owner.ID)
+			return common.StatusOK // Allow rule creation without active subscription
 		}
-		return common.StatusOK
+		slog.ErrorContext(ctx, "Failed to check org rules limit", "orgID", org.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
 	}
 
 	if !ok {
@@ -72,15 +74,18 @@ func (s *Server) validatePropertyRulesLimit(ctx context.Context, org *dbgen.Orga
 	// For properties, check limits of org owner (like validatePropertiesLimit)
 	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user)
 	if err != nil {
-		return common.StatusOK
+		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
 	}
 
 	ok, extra, err := s.SubscriptionLimits.CheckPropertyRulesLimit(ctx, property.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
-			return common.StatusOK
+			slog.InfoContext(ctx, "No active subscription for property rules", "propertyID", property.ID, "ownerID", owner.ID)
+			return common.StatusOK // Allow rule creation without active subscription
 		}
-		return common.StatusOK
+		slog.ErrorContext(ctx, "Failed to check property rules limit", "propertyID", property.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
 	}
 
 	if !ok {

@@ -175,7 +175,7 @@ func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID 
 		return false, 0, err
 	}
 
-	// NOTE: this should be freshly cached as we should have just rendered the dashboard
+	// Retrieve rules via cached method
 	rules, err := sl.store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{orgID: 0})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org rules", "orgID", orgID, common.ErrAttr(err))
@@ -204,7 +204,7 @@ func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, p
 		return false, 0, err
 	}
 
-	// NOTE: this should be freshly cached as we should have just rendered the dashboard
+	// Retrieve rules via cached method
 	rules, err := sl.store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{propertyID: 0})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve property rules", "propertyID", propertyID, common.ErrAttr(err))
