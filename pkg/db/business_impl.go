@@ -2016,6 +2016,26 @@ func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, 
 	return count, nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveOrgRulesCount(ctx context.Context, orgID int32) (int64, error) {
+	if impl.querier == nil {
+		return 0, ErrMaintenance
+	}
+
+	// TODO: Implement actual rules counting once rules table is created
+	// For now, return 0 to allow unlimited rules
+	return 0, nil
+}
+
+func (impl *BusinessStoreImpl) RetrievePropertyRulesCount(ctx context.Context, propertyID int32) (int64, error) {
+	if impl.querier == nil {
+		return 0, ErrMaintenance
+	}
+
+	// TODO: Implement actual rules counting once rules table is created
+	// For now, return 0 to allow unlimited rules
+	return 0, nil
+}
+
 func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string, refreshFunc func(context.Context, string)) (*dbgen.Property, error) {
 	if sitekey == TestPropertySitekey {
 		return nil, ErrTestProperty
