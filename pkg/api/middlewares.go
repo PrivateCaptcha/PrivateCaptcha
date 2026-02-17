@@ -328,8 +328,13 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 
 	// collect property IDs that don't have cached compiled property rules
 	uncachedPropertyIDs := make(map[int32]uint, len(batch))
+
 	for propertyID, count := range batch {
-		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID); err == db.ErrCacheMiss {
+		// because we have 2-layered cache (raw rules -> compiled rules) so when we detect that we would have wanted to
+		// reread our compiled rules ("refresh" in otter's terminology), we _actually_ want to recompile originals
+		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID, func(ctx context.Context, pID int32) {
+			uncachedPropertyIDs[pID] = count
+		}); err == db.ErrCacheMiss {
 			uncachedPropertyIDs[propertyID] = count
 		}
 	}
@@ -351,7 +356,10 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	for _, p := range properties {
 		if p.OrgID.Valid {
 			if _, seen := uncachedOrgIDs[p.OrgID.Int32]; !seen {
-				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32); err == db.ErrCacheMiss {
+				// see comment for reading compiled property rules above
+				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32, func(ctx context.Context, oID int32) {
+					uncachedOrgIDs[oID] = 1
+				}); err == db.ErrCacheMiss {
 					uncachedOrgIDs[p.OrgID.Int32] = 1
 				} else {
 					// uncached org ids also acts as a temp cache (cleared below)

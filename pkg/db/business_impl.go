@@ -2028,10 +2028,11 @@ func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, s
 		return nil, ErrInvalidInput
 	}
 
-	reader := &cachedPropertyReader{
-		sitekey:     sitekey,
-		cache:       impl.cache,
-		refreshFunc: refreshFunc,
+	reader := &cachedRefreshReader[string, dbgen.Property]{
+		key:          sitekey,
+		cache:        impl.cache,
+		refreshFunc:  refreshFunc,
+		cacheKeyFunc: PropertyBySitekeyCacheKey,
 	}
 
 	// we should NOT check for soft-deleted state because soft-deleted properties are deleted from cache in the first place
@@ -3141,9 +3142,15 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 	return rule, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, error) {
-	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
-	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
+func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
+	reader := &cachedRefreshReader[int32, rules.CompiledRules]{
+		key:          propertyID,
+		cache:        impl.cache,
+		refreshFunc:  refreshFunc,
+		cacheKeyFunc: CompiledPropertyRulesCacheKey,
+	}
+
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
@@ -3155,9 +3162,15 @@ func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, p
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }
 
-func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, error) {
-	cacheKey := CompiledOrgRulesCacheKey(orgID)
-	return FetchCachedOne[rules.CompiledRules](ctx, impl.cache, cacheKey)
+func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
+	reader := &cachedRefreshReader[int32, rules.CompiledRules]{
+		key:          orgID,
+		cache:        impl.cache,
+		refreshFunc:  refreshFunc,
+		cacheKeyFunc: CompiledOrgRulesCacheKey,
+	}
+
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID int32, compiled *rules.CompiledRules) {
