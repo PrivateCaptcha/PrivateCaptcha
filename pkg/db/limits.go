@@ -175,21 +175,16 @@ func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID 
 		return false, 0, err
 	}
 
+	// NOTE: this should be freshly cached as we should have just rendered the dashboard
+	rules, err := sl.store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{orgID: 0})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org rules", "orgID", orgID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
 	count := 0
-	// Check cache first
-	cacheKey := RawOrgRulesCacheKey(orgID)
-	if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, sl.store.Cache(), cacheKey); err == nil {
-		count = len(cachedRules)
-	} else if err != ErrNegativeCacheHit {
-		// Cache miss, query from DB
-		rules, err := sl.store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{orgID: 0})
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve org rules", "orgID", orgID, common.ErrAttr(err))
-			return false, 0, err
-		}
-		if orgRules, ok := rules[orgID]; ok {
-			count = len(orgRules)
-		}
+	if orgRules, ok := rules[orgID]; ok {
+		count = len(orgRules)
 	}
 
 	ok := (plan.OrgRulesLimit() == 0) || (count < plan.OrgRulesLimit())
@@ -209,21 +204,16 @@ func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, p
 		return false, 0, err
 	}
 
+	// NOTE: this should be freshly cached as we should have just rendered the dashboard
+	rules, err := sl.store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{propertyID: 0})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve property rules", "propertyID", propertyID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
 	count := 0
-	// Check cache first
-	cacheKey := RawPropertyRulesCacheKey(propertyID)
-	if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, sl.store.Cache(), cacheKey); err == nil {
-		count = len(cachedRules)
-	} else if err != ErrNegativeCacheHit {
-		// Cache miss, query from DB
-		rules, err := sl.store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{propertyID: 0})
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve property rules", "propertyID", propertyID, common.ErrAttr(err))
-			return false, 0, err
-		}
-		if propRules, ok := rules[propertyID]; ok {
-			count = len(propRules)
-		}
+	if propRules, ok := rules[propertyID]; ok {
+		count = len(propRules)
 	}
 
 	ok := (plan.PropertyRulesLimit() == 0) || (count < plan.PropertyRulesLimit())
