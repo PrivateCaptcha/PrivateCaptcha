@@ -93,94 +93,80 @@ func createOrgRuleForMove(ctx context.Context, user *dbgen.User, orgID int32, na
 	return rule, err
 }
 
-func postCreatePropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, name, conditionValue, actionValue string) *http.Response {
+func postRuleRequest(srv *http.ServeMux, cookie *http.Cookie, method, endpoint, token string, params map[string]string) *http.Response {
 	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, name)
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, conditionValue)
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, actionValue)
+	form.Set(common.ParamCSRFToken, token)
+	for key, value := range params {
+		form.Set(key, value)
+	}
 
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
-		strings.NewReader(form.Encode()))
+	req := httptest.NewRequest(method, endpoint, strings.NewReader(form.Encode()))
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
+}
+
+func postCreatePropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, name, conditionValue, actionValue string) *http.Response {
+	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorContains),
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
 func postCreateOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, name)
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, conditionProp)
-	form.Set(common.ParamConditionOperator, conditionOp)
-	form.Set(common.ParamConditionValue, conditionValue)
-	form.Set(common.ParamActionProperty, actionProp)
-	form.Set(common.ParamActionValue, actionValue)
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	return w.Result()
+	endpoint := fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: conditionProp,
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    actionProp,
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
 func postEditPropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, name, conditionOp, conditionValue, actionValue string) *http.Response {
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, name)
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, conditionOp)
-	form.Set(common.ParamConditionValue, conditionValue)
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, actionValue)
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	return w.Result()
+	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
 func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, name)
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, conditionProp)
-	form.Set(common.ParamConditionOperator, conditionOp)
-	form.Set(common.ParamConditionValue, conditionValue)
-	form.Set(common.ParamActionProperty, actionProp)
-	form.Set(common.ParamActionValue, actionValue)
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-	return w.Result()
+	endpoint := fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: conditionProp,
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    actionProp,
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
 }
 
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
