@@ -56,6 +56,8 @@ const (
 	StatusRuleDifficultyGrowthInvalid   StatusCode = 1412
 	StatusRulePermissionsError          StatusCode = 1413
 	StatusRulePositionPrecisionError    StatusCode = 1414
+	StatusOrgRulesLimitError            StatusCode = 1415
+	StatusPropertyRulesLimitError       StatusCode = 1416
 )
 
 func (sc StatusCode) Success() bool {
@@ -156,6 +158,10 @@ func (sc StatusCode) String() string {
 		return "You don't have permission to access this rule."
 	case StatusRulePositionPrecisionError:
 		return "Rules need rebalancing. Please try again in a moment."
+	case StatusOrgRulesLimitError:
+		return "Organization rules limit reached on your current plan, please upgrade to create more."
+	case StatusPropertyRulesLimitError:
+		return "Property rules limit reached on your current plan, please upgrade to create more."
 	default:
 		return strconv.Itoa(int(sc))
 	}
