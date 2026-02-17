@@ -481,7 +481,7 @@ type DifficultyRule struct {
 	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
-	Position                 int32                 `db:"position" json:"position"`
+	Position                 float64               `db:"position" json:"position"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
 	CreatedAt                pgtype.Timestamptz    `db:"created_at" json:"created_at"`

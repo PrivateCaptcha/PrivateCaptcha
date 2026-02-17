@@ -825,3 +825,133 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
+
+func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can move this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot move property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Parse new position index
+	positionStr := r.FormValue(common.ParamPosition)
+	newIndex, err := strconv.Atoi(positionStr)
+	if err != nil {
+		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if err != nil {
+			return nil, err
+		}
+		return []*common.AuditLogEvent{auditEvent}, nil
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}
+
+func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	rule, err := s.Rule(r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Check if user can move this rule (org owner OR rule creator)
+	if !canEditRule(user, org, rule) {
+		slog.WarnContext(ctx, "User cannot move org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	err = r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	// Parse new position index
+	positionStr := r.FormValue(common.ParamPosition)
+	newIndex, err := strconv.Atoi(positionStr)
+	if err != nil {
+		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if err != nil {
+			return nil, err
+		}
+		return []*common.AuditLogEvent{auditEvent}, nil
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+}

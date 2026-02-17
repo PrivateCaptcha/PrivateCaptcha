@@ -1,6 +1,8 @@
 package common
 
-import "net/http"
+import (
+	"net/http"
+)
 
 const (
 	DefaultOrgName         = "My Organization"
@@ -57,6 +59,7 @@ const (
 	ParamConditionNegated  = "condition_negated"
 	ParamActionProperty    = "action_property"
 	ParamActionValue       = "action_value"
+	ParamPosition          = "position"
 	All                    = "all"
 )
 

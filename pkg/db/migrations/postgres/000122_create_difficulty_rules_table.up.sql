@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     condition_value_str VARCHAR(512),
     condition_value_int INT,
     condition_value_separator CHAR(1),
-    position INT NOT NULL DEFAULT 0,
+    position DOUBLE PRECISION NOT NULL DEFAULT 0,
     action_property backend.rule_action_property NOT NULL,
     action_value INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     CONSTRAINT difficulty_rules_scope CHECK (property_id IS NOT NULL OR org_id IS NOT NULL)
 );
 
-CREATE INDEX IF NOT EXISTS index_difficulty_rules_property_id ON backend.difficulty_rules(property_id) WHERE property_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS index_difficulty_rules_org_id ON backend.difficulty_rules(org_id) WHERE org_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS index_difficulty_rules_property_position ON backend.difficulty_rules(property_id, position) WHERE property_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS index_difficulty_rules_org_position ON backend.difficulty_rules(org_id, position) WHERE org_id IS NOT NULL;
 
 CREATE OR REPLACE TRIGGER deleted_record_insert AFTER DELETE ON backend.difficulty_rules
     FOR EACH ROW EXECUTE FUNCTION backend.deleted_record_insert();

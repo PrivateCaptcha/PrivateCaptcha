@@ -55,6 +55,7 @@ const (
 	StatusRuleDifficultyValueInvalid    StatusCode = 1411
 	StatusRuleDifficultyGrowthInvalid   StatusCode = 1412
 	StatusRulePermissionsError          StatusCode = 1413
+	StatusRulePositionPrecisionError    StatusCode = 1414
 )
 
 func (sc StatusCode) Success() bool {
@@ -153,6 +154,8 @@ func (sc StatusCode) String() string {
 		return "Difficulty growth must be between 0 and 3."
 	case StatusRulePermissionsError:
 		return "You don't have permission to access this rule."
+	case StatusRulePositionPrecisionError:
+		return "Rules need rebalancing. Please try again in a moment."
 	default:
 		return strconv.Itoa(int(sc))
 	}
