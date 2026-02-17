@@ -93,6 +93,96 @@ func createOrgRuleForMove(ctx context.Context, user *dbgen.User, orgID int32, na
 	return rule, err
 }
 
+func postCreatePropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, name, conditionValue, actionValue string) *http.Response {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, name)
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
+	form.Set(common.ParamConditionValue, conditionValue)
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, actionValue)
+
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func postCreateOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, name)
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, conditionProp)
+	form.Set(common.ParamConditionOperator, conditionOp)
+	form.Set(common.ParamConditionValue, conditionValue)
+	form.Set(common.ParamActionProperty, actionProp)
+	form.Set(common.ParamActionValue, actionValue)
+
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func postEditPropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, name, conditionOp, conditionValue, actionValue string) *http.Response {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, name)
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, conditionOp)
+	form.Set(common.ParamConditionValue, conditionValue)
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, actionValue)
+
+	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, name)
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, conditionProp)
+	form.Set(common.ParamConditionOperator, conditionOp)
+	form.Set(common.ParamConditionValue, conditionValue)
+	form.Set(common.ParamActionProperty, actionProp)
+	form.Set(common.ParamActionValue, actionValue)
+
+	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -480,26 +570,7 @@ func TestCreatePropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block crawlers")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, "curl")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "50")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postCreatePropertyRule(srv, cookie, user, org, prop, "Block crawlers", "curl", "50")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -553,26 +624,12 @@ func TestCreateOrgRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block countries")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn))
-	form.Set(common.ParamConditionValue, "US,GB")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postCreateOrgRule(srv, cookie, user, org, "Block countries",
+		string(dbgen.RuleConditionPropertyCountryCode),
+		string(dbgen.RuleConditionOperatorIn),
+		"US,GB",
+		string(dbgen.RuleActionPropertyHTTPRequest),
+		"block")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -628,27 +685,8 @@ func TestEditPropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals)+"_negated")
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditPropertyRule(srv, cookie, user, org, prop, rule, "Updated Rule",
+		string(dbgen.RuleConditionOperatorEquals)+"_negated", "bot", "-30")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -701,27 +739,12 @@ func TestEditOrgRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Org Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn)+"_negated")
-	form.Set(common.ParamConditionValue, "DE,FR")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditOrgRule(srv, cookie, user, org, rule, "Updated Org Rule",
+		string(dbgen.RuleConditionPropertyCountryCode),
+		string(dbgen.RuleConditionOperatorIn)+"_negated",
+		"DE,FR",
+		string(dbgen.RuleActionPropertyHTTPRequest),
+		"block")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -1077,26 +1100,8 @@ func TestMemberCannotUpdatePropertyRuleCreatedByOwner(t *testing.T) {
 	}
 
 	// Try to edit rule - should fail
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
-	form.Set(common.ParamName, "Updated Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditPropertyRule(srv, cookie, member, org, prop, rule, "Updated Rule",
+		string(dbgen.RuleConditionOperatorEquals), "bot", "-30")
 	// Should fail with forbidden
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
@@ -1172,26 +1177,12 @@ func TestMemberCannotUpdateOrgRuleCreatedByOwner(t *testing.T) {
 	}
 
 	// Try to edit rule - should fail
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
-	form.Set(common.ParamName, "Updated Org Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditOrgRule(srv, cookie, member, org, rule, "Updated Org Rule",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorEquals),
+		"bot",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"-30")
 	// Should fail with forbidden
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
