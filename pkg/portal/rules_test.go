@@ -2102,3 +2102,164 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Errorf("Expected rule at index 1 to be rule 2, got rule %d", propertyRules[1].ID)
 	}
 }
+
+func TestTrialPlanRulesLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 10 org rules (should succeed since limit is 10 for trial plan)
+	for i := 0; i < 10; i++ {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+		form.Set(common.ParamName, fmt.Sprintf("Org Rule %d", i))
+		form.Set(common.ParamEnabled, "on")
+		form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+		form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
+		form.Set(common.ParamConditionValue, fmt.Sprintf("test-%d", i))
+		form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+		form.Set(common.ParamActionValue, "10")
+
+		req := httptest.NewRequest("POST",
+			fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
+			strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("Failed to create org rule %d: status code %v, body: %s", i, resp.StatusCode, w.Body.String())
+		}
+	}
+
+	// Verify 10 org rules were created
+	orgRules, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+	if err != nil {
+		t.Fatalf("Failed to retrieve org rules: %v", err)
+	}
+	if len(orgRules[org.ID]) != 10 {
+		t.Fatalf("Expected 10 org rules, got %d", len(orgRules[org.ID]))
+	}
+
+	// Try to create 11th org rule (should fail)
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, "Org Rule 11")
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
+	form.Set(common.ParamConditionValue, "test-11")
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, "10")
+
+	req := httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected org rule creation to fail due to limit, but it succeeded")
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, common.StatusOrgRulesLimitError.String()) {
+		t.Errorf("Expected error message about org rules limit, got: %s", body)
+	}
+
+	// Create 10 property rules (should succeed)
+	for i := 0; i < 10; i++ {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+		form.Set(common.ParamName, fmt.Sprintf("Property Rule %d", i))
+		form.Set(common.ParamEnabled, "on")
+		form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+		form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
+		form.Set(common.ParamConditionValue, fmt.Sprintf("test-%d", i))
+		form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+		form.Set(common.ParamActionValue, "10")
+
+		req := httptest.NewRequest("POST",
+			fmt.Sprintf("/org/%s/property/%s/rules/new",
+				server.IDHasher.Encrypt(int(org.ID)),
+				server.IDHasher.Encrypt(int(property.ID))),
+			strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("Failed to create property rule %d: status code %v, body: %s", i, resp.StatusCode, w.Body.String())
+		}
+	}
+
+	// Verify 10 property rules were created
+	propRules, err := store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
+	if err != nil {
+		t.Fatalf("Failed to retrieve property rules: %v", err)
+	}
+	if len(propRules[property.ID]) != 10 {
+		t.Fatalf("Expected 10 property rules, got %d", len(propRules[property.ID]))
+	}
+
+	// Try to create 11th property rule (should fail)
+	form = url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamName, "Property Rule 11")
+	form.Set(common.ParamEnabled, "on")
+	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
+	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
+	form.Set(common.ParamConditionValue, "test-11")
+	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
+	form.Set(common.ParamActionValue, "10")
+
+	req = httptest.NewRequest("POST",
+		fmt.Sprintf("/org/%s/property/%s/rules/new",
+			server.IDHasher.Encrypt(int(org.ID)),
+			server.IDHasher.Encrypt(int(property.ID))),
+		strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w = httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp = w.Result()
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected property rule creation to fail due to limit, but it succeeded")
+	}
+
+	body = w.Body.String()
+	if !strings.Contains(body, common.StatusPropertyRulesLimitError.String()) {
+		t.Errorf("Expected error message about property rules limit, got: %s", body)
+	}
+}
