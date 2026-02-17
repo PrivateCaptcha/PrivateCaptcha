@@ -41,23 +41,25 @@ const (
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 	// rules errors
-	StatusRuleNameEmptyError            StatusCode = 1400
-	StatusRuleConditionPropertyRequired StatusCode = 1401
-	StatusRuleConditionOperatorInvalid  StatusCode = 1402
-	StatusRuleConditionValueRequired    StatusCode = 1403
-	StatusRuleConditionPropertyInvalid  StatusCode = 1404
-	StatusRuleActionPropertyRequired    StatusCode = 1405
-	StatusRuleActionValueRequired       StatusCode = 1406
-	StatusRuleActionValueInvalid        StatusCode = 1407
-	StatusRuleActionPropertyInvalid     StatusCode = 1408
-	StatusRuleIPAddressRequired         StatusCode = 1409
-	StatusRuleCountryRequired           StatusCode = 1410
-	StatusRuleDifficultyValueInvalid    StatusCode = 1411
-	StatusRuleDifficultyGrowthInvalid   StatusCode = 1412
-	StatusRulePermissionsError          StatusCode = 1413
-	StatusRulePositionPrecisionError    StatusCode = 1414
-	StatusOrgRulesLimitError            StatusCode = 1415
-	StatusPropertyRulesLimitError       StatusCode = 1416
+	StatusRuleNameEmptyError                StatusCode = 1400
+	StatusRuleConditionPropertyRequired     StatusCode = 1401
+	StatusRuleConditionOperatorInvalid      StatusCode = 1402
+	StatusRuleConditionValueRequired        StatusCode = 1403
+	StatusRuleConditionPropertyInvalid      StatusCode = 1404
+	StatusRuleActionPropertyRequired        StatusCode = 1405
+	StatusRuleActionValueRequired           StatusCode = 1406
+	StatusRuleActionValueInvalid            StatusCode = 1407
+	StatusRuleActionPropertyInvalid         StatusCode = 1408
+	StatusRuleIPAddressRequired             StatusCode = 1409
+	StatusRuleCountryRequired               StatusCode = 1410
+	StatusRuleDifficultyValueInvalid        StatusCode = 1411
+	StatusRuleDifficultyGrowthInvalid       StatusCode = 1412
+	StatusRulePermissionsError              StatusCode = 1413
+	StatusRulePositionPrecisionError        StatusCode = 1414
+	StatusOrgRulesLimitError                StatusCode = 1415
+	StatusPropertyRulesLimitError           StatusCode = 1416
+	StatusOrgRulesSubscriptionRequiredError StatusCode = 1417
+	StatusPropertyRulesSubscriptionRequired StatusCode = 1418
 )
 
 func (sc StatusCode) Success() bool {
@@ -162,6 +164,10 @@ func (sc StatusCode) String() string {
 		return "Organization rules limit reached on your current plan, please upgrade to create more."
 	case StatusPropertyRulesLimitError:
 		return "Property rules limit reached on your current plan, please upgrade to create more."
+	case StatusOrgRulesSubscriptionRequiredError:
+		return "You need an active subscription to create organization rules."
+	case StatusPropertyRulesSubscriptionRequired:
+		return "You need an active subscription to create property rules."
 	default:
 		return strconv.Itoa(int(sc))
 	}

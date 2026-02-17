@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -2061,7 +2062,70 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	}
 }
 
-func TestTrialPlanRulesLimit(t *testing.T) {
+func TestTrialPlanOrgRulesLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 10 org rules (should succeed since limit is 10 for trial plan)
+	for i := 0; i < 10; i++ {
+		resp := postCreateOrgRule(srv, cookie, user, org,
+			fmt.Sprintf("Org Rule %d", i),
+			string(dbgen.RuleConditionPropertyUserAgent),
+			string(dbgen.RuleConditionOperatorContains),
+			fmt.Sprintf("test-%d", i),
+			string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+			"10")
+
+		if resp.StatusCode != http.StatusSeeOther {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Failed to create org rule %d: status code %v, body: %s", i, resp.StatusCode, string(body))
+		}
+	}
+
+	// Verify 10 org rules were created
+	orgRules, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+	if err != nil {
+		t.Fatalf("Failed to retrieve org rules: %v", err)
+	}
+	if len(orgRules[org.ID]) != 10 {
+		t.Fatalf("Expected 10 org rules, got %d", len(orgRules[org.ID]))
+	}
+
+	// Try to create 11th org rule (should fail)
+	resp := postCreateOrgRule(srv, cookie, user, org,
+		"Org Rule 11",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"test-11",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"10")
+
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected org rule creation to fail due to limit, but it succeeded")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusOrgRulesLimitError.String()) {
+		t.Errorf("Expected error message about org rules limit, got: %s", string(body))
+	}
+}
+
+func TestTrialPlanPropertyRulesLimit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -2085,98 +2149,16 @@ func TestTrialPlanRulesLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create 10 org rules (should succeed since limit is 10 for trial plan)
+	// Create 10 property rules (should succeed since limit is 10 for trial plan)
 	for i := 0; i < 10; i++ {
-		form := url.Values{}
-		form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-		form.Set(common.ParamName, fmt.Sprintf("Org Rule %d", i))
-		form.Set(common.ParamEnabled, "on")
-		form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-		form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-		form.Set(common.ParamConditionValue, fmt.Sprintf("test-%d", i))
-		form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-		form.Set(common.ParamActionValue, "10")
+		resp := postCreatePropertyRule(srv, cookie, user, org, property,
+			fmt.Sprintf("Property Rule %d", i),
+			fmt.Sprintf("test-%d", i),
+			"10")
 
-		req := httptest.NewRequest("POST",
-			fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-			strings.NewReader(form.Encode()))
-		req.AddCookie(cookie)
-		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-
-		resp := w.Result()
 		if resp.StatusCode != http.StatusSeeOther {
-			t.Fatalf("Failed to create org rule %d: status code %v, body: %s", i, resp.StatusCode, w.Body.String())
-		}
-	}
-
-	// Verify 10 org rules were created
-	orgRules, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
-	if err != nil {
-		t.Fatalf("Failed to retrieve org rules: %v", err)
-	}
-	if len(orgRules[org.ID]) != 10 {
-		t.Fatalf("Expected 10 org rules, got %d", len(orgRules[org.ID]))
-	}
-
-	// Try to create 11th org rule (should fail)
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Org Rule 11")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, "test-11")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "10")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode == http.StatusSeeOther {
-		t.Fatal("Expected org rule creation to fail due to limit, but it succeeded")
-	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, common.StatusOrgRulesLimitError.String()) {
-		t.Errorf("Expected error message about org rules limit, got: %s", body)
-	}
-
-	// Create 10 property rules (should succeed)
-	for i := 0; i < 10; i++ {
-		form := url.Values{}
-		form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-		form.Set(common.ParamName, fmt.Sprintf("Property Rule %d", i))
-		form.Set(common.ParamEnabled, "on")
-		form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-		form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-		form.Set(common.ParamConditionValue, fmt.Sprintf("test-%d", i))
-		form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-		form.Set(common.ParamActionValue, "10")
-
-		req := httptest.NewRequest("POST",
-			fmt.Sprintf("/org/%s/property/%s/rules/new",
-				server.IDHasher.Encrypt(int(org.ID)),
-				server.IDHasher.Encrypt(int(property.ID))),
-			strings.NewReader(form.Encode()))
-		req.AddCookie(cookie)
-		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-		w := httptest.NewRecorder()
-		srv.ServeHTTP(w, req)
-
-		resp := w.Result()
-		if resp.StatusCode != http.StatusSeeOther {
-			t.Fatalf("Failed to create property rule %d: status code %v, body: %s", i, resp.StatusCode, w.Body.String())
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Failed to create property rule %d: status code %v, body: %s", i, resp.StatusCode, string(body))
 		}
 	}
 
@@ -2190,34 +2172,97 @@ func TestTrialPlanRulesLimit(t *testing.T) {
 	}
 
 	// Try to create 11th property rule (should fail)
-	form = url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Property Rule 11")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, "test-11")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "10")
+	resp := postCreatePropertyRule(srv, cookie, user, org, property,
+		"Property Rule 11",
+		"test-11",
+		"10")
 
-	req = httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/new",
-			server.IDHasher.Encrypt(int(org.ID)),
-			server.IDHasher.Encrypt(int(property.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w = httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp = w.Result()
 	if resp.StatusCode == http.StatusSeeOther {
 		t.Fatal("Expected property rule creation to fail due to limit, but it succeeded")
 	}
 
-	body = w.Body.String()
-	if !strings.Contains(body, common.StatusPropertyRulesLimitError.String()) {
-		t.Errorf("Expected error message about property rules limit, got: %s", body)
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusPropertyRulesLimitError.String()) {
+		t.Errorf("Expected error message about property rules limit, got: %s", string(body))
+	}
+}
+
+func TestOrgRuleCreationWithoutSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create account without subscription
+	user, org, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to create org rule without subscription (should fail)
+	resp := postCreateOrgRule(srv, cookie, user, org,
+		"Test Rule",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"test",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"10")
+
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected org rule creation to fail without subscription, but it succeeded")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusOrgRulesSubscriptionRequiredError.String()) {
+		t.Errorf("Expected error message about subscription required, got: %s", string(body))
+	}
+}
+
+func TestPropertyRuleCreationWithoutSubscription(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	// Create account without subscription
+	user, org, err := db_tests.CreateNewAccountForTestEx(ctx, store, t.Name(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to create property rule without subscription (should fail)
+	resp := postCreatePropertyRule(srv, cookie, user, org, property,
+		"Test Rule",
+		"test",
+		"10")
+
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected property rule creation to fail without subscription, but it succeeded")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusPropertyRulesSubscriptionRequired.String()) {
+		t.Errorf("Expected error message about subscription required, got: %s", string(body))
 	}
 }

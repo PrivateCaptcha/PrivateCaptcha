@@ -23,11 +23,6 @@ const (
 	ruleFormTemplate = "rules/form.html"
 )
 
-const (
-	activeSubscriptionForOrgRulesError      = "You need an active subscription to create organization rules."
-	activeSubscriptionForPropertyRulesError = "You need an active subscription to create property rules."
-)
-
 func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode {
 	var subscr *dbgen.Subscription
 	var err error
@@ -53,8 +48,7 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 	ok, extra, err := s.SubscriptionLimits.CheckOrgRulesLimit(ctx, org.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
-			slog.InfoContext(ctx, "No active subscription for org rules", "orgID", org.ID, "ownerID", owner.ID)
-			return common.StatusOK // Allow rule creation without active subscription
+			return common.StatusOrgRulesSubscriptionRequiredError
 		}
 		slog.ErrorContext(ctx, "Failed to check org rules limit", "orgID", org.ID, common.ErrAttr(err))
 		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
@@ -81,8 +75,7 @@ func (s *Server) validatePropertyRulesLimit(ctx context.Context, org *dbgen.Orga
 	ok, extra, err := s.SubscriptionLimits.CheckPropertyRulesLimit(ctx, property.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
-			slog.InfoContext(ctx, "No active subscription for property rules", "propertyID", property.ID, "ownerID", owner.ID)
-			return common.StatusOK // Allow rule creation without active subscription
+			return common.StatusPropertyRulesSubscriptionRequired
 		}
 		slog.ErrorContext(ctx, "Failed to check property rules limit", "propertyID", property.ID, common.ErrAttr(err))
 		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
