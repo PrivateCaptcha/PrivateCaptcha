@@ -338,7 +338,7 @@ func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organiz
 			"orgOwner", isOrgOwner, "internal", db.IsInternalSubscription(subscr.Source))
 
 		if isOrgOwner {
-			return "Properties limit reached on your current plan, please upgrade to create more."
+			return common.StatusSubscriptionPropertyLimitError.String()
 		}
 
 		return "Properties limit reached for this organization's owner, contact them to upgrade."
