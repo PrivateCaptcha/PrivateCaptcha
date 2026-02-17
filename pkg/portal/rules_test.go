@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,158 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
+
+func createPropertyRuleUserAgent(ctx context.Context, user *dbgen.User, propertyID int32, name string) (*dbgen.DifficultyRule, error) {
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              name,
+		PropertyID:        db.Int(propertyID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("curl"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+	})
+	return rule, err
+}
+
+func createOrgRuleUserAgent(ctx context.Context, user *dbgen.User, orgID int32, name string) (*dbgen.DifficultyRule, error) {
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              name,
+		OrgID:             db.Int(orgID),
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("curl"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+	})
+	return rule, err
+}
+
+func createOrgRuleIPAddress(ctx context.Context, user *dbgen.User, orgID int32, name string, enabled bool) (*dbgen.DifficultyRule, error) {
+	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              name,
+		OrgID:             db.Int(orgID),
+		Enabled:           enabled,
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr: db.Text("10.0.0.0/8"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       20,
+	})
+	return rule, err
+}
+
+func createPropertyRuleForMove(ctx context.Context, user *dbgen.User, propertyID int32, name string, actionValue int32) (*dbgen.DifficultyRule, error) {
+	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:                     name,
+		PropertyID:               db.Int(propertyID),
+		Enabled:                  true,
+		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator:        dbgen.RuleConditionOperatorContains,
+		ConditionOperatorNegated: false,
+		ConditionValueStr:        db.Text("test"),
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              actionValue,
+		CreatorID:                db.Int(user.ID),
+		Column14:                 100.0,
+	})
+	return rule, err
+}
+
+func createOrgRuleForMove(ctx context.Context, user *dbgen.User, orgID int32, name string, actionValue int32) (*dbgen.DifficultyRule, error) {
+	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:                     name,
+		OrgID:                    db.Int(orgID),
+		Enabled:                  true,
+		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator:        dbgen.RuleConditionOperatorContains,
+		ConditionOperatorNegated: false,
+		ConditionValueStr:        db.Text("test"),
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              actionValue,
+		CreatorID:                db.Int(user.ID),
+		Column14:                 100.0,
+	})
+	return rule, err
+}
+
+func postRuleRequest(srv *http.ServeMux, cookie *http.Cookie, method, endpoint, token string, params map[string]string) *http.Response {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, token)
+	for key, value := range params {
+		form.Set(key, value)
+	}
+
+	req := httptest.NewRequest(method, endpoint, strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func postCreatePropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, name, conditionValue, actionValue string) *http.Response {
+	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorContains),
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
+}
+
+func postCreateOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+	endpoint := fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: conditionProp,
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    actionProp,
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
+}
+
+func postEditPropertyRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, name, conditionOp, conditionValue, actionValue string) *http.Response {
+	endpoint := fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
+}
+
+func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule, name, conditionProp, conditionOp, conditionValue, actionProp, actionValue string) *http.Response {
+	endpoint := fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	token := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params := map[string]string{
+		common.ParamName:              name,
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: conditionProp,
+		common.ParamConditionOperator: conditionOp,
+		common.ParamConditionValue:    conditionValue,
+		common.ParamActionProperty:    actionProp,
+		common.ParamActionValue:       actionValue,
+	}
+	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
+}
 
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
 	tests := []struct {
@@ -403,26 +556,7 @@ func TestCreatePropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block crawlers")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, "curl")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "50")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postCreatePropertyRule(srv, cookie, user, org, prop, "Block crawlers", "curl", "50")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -476,26 +610,12 @@ func TestCreateOrgRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block countries")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn))
-	form.Set(common.ParamConditionValue, "US,GB")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postCreateOrgRule(srv, cookie, user, org, "Block countries",
+		string(dbgen.RuleConditionPropertyCountryCode),
+		string(dbgen.RuleConditionOperatorIn),
+		"US,GB",
+		string(dbgen.RuleActionPropertyHTTPRequest),
+		"block")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -538,16 +658,7 @@ func TestEditPropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:              "Original Rule",
-		PropertyID:        db.Int(prop.ID),
-		Enabled:           true,
-		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-		ConditionOperator: dbgen.RuleConditionOperatorContains,
-		ConditionValueStr: db.Text("curl"),
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-	})
+	rule, err := createPropertyRuleUserAgent(ctx, user, prop.ID, "Original Rule")
 	if err != nil {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
@@ -560,27 +671,8 @@ func TestEditPropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals)+"_negated")
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditPropertyRule(srv, cookie, user, org, prop, rule, "Updated Rule",
+		string(dbgen.RuleConditionOperatorEquals)+"_negated", "bot", "-30")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -620,16 +712,7 @@ func TestEditOrgRule(t *testing.T) {
 		t.Fatalf("Failed to create org: %v", err)
 	}
 
-	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:              "Original Org Rule",
-		OrgID:             db.Int(org.ID),
-		Enabled:           false,
-		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
-		ConditionOperator: dbgen.RuleConditionOperatorMatches,
-		ConditionValueStr: db.Text("10.0.0.0/8"),
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       20,
-	})
+	rule, err := createOrgRuleIPAddress(ctx, user, org.ID, "Original Org Rule", false)
 	if err != nil {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
@@ -642,27 +725,12 @@ func TestEditOrgRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Org Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn)+"_negated")
-	form.Set(common.ParamConditionValue, "DE,FR")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
-
-	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditOrgRule(srv, cookie, user, org, rule, "Updated Org Rule",
+		string(dbgen.RuleConditionPropertyCountryCode),
+		string(dbgen.RuleConditionOperatorIn)+"_negated",
+		"DE,FR",
+		string(dbgen.RuleActionPropertyHTTPRequest),
+		"block")
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -1018,26 +1086,8 @@ func TestMemberCannotUpdatePropertyRuleCreatedByOwner(t *testing.T) {
 	}
 
 	// Try to edit rule - should fail
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
-	form.Set(common.ParamName, "Updated Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditPropertyRule(srv, cookie, member, org, prop, rule, "Updated Rule",
+		string(dbgen.RuleConditionOperatorEquals), "bot", "-30")
 	// Should fail with forbidden
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
@@ -1113,26 +1163,12 @@ func TestMemberCannotUpdateOrgRuleCreatedByOwner(t *testing.T) {
 	}
 
 	// Try to edit rule - should fail
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
-	form.Set(common.ParamName, "Updated Org Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals))
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
-
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	resp := postEditOrgRule(srv, cookie, member, org, rule, "Updated Org Rule",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorEquals),
+		"bot",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"-30")
 	// Should fail with forbidden
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Expected redirect status for unauthorized member, got %v", resp.StatusCode)
@@ -1168,16 +1204,7 @@ func TestDeletePropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:              "Test Rule",
-		PropertyID:        db.Int(prop.ID),
-		Enabled:           true,
-		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-		ConditionOperator: dbgen.RuleConditionOperatorContains,
-		ConditionValueStr: db.Text("curl"),
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-	})
+	rule, err := createPropertyRuleUserAgent(ctx, user, prop.ID, "Test Rule")
 	if err != nil {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
@@ -1223,16 +1250,7 @@ func TestDeleteOrgRule(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	rule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:              "Test Org Rule",
-		OrgID:             db.Int(org.ID),
-		Enabled:           true,
-		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-		ConditionOperator: dbgen.RuleConditionOperatorContains,
-		ConditionValueStr: db.Text("curl"),
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-	})
+	rule, err := createOrgRuleUserAgent(ctx, user, org.ID, "Test Org Rule")
 	if err != nil {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
@@ -1716,19 +1734,7 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 	}
 
 	// Create single rule
-	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:                     "Test Rule",
-		PropertyID:               db.Int(property.ID),
-		Enabled:                  true,
-		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-		ConditionOperator:        dbgen.RuleConditionOperatorContains,
-		ConditionOperatorNegated: false,
-		ConditionValueStr:        db.Text("test"),
-		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:              10,
-		CreatorID:                db.Int(user.ID),
-		Column14:                 100.0,
-	})
+	rule, err := createPropertyRuleForMove(ctx, user, property.ID, "Test Rule", 10)
 	if err != nil {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
@@ -1784,19 +1790,7 @@ func TestMovePropertyRuleToFirstPosition(t *testing.T) {
 	// Create multiple rules
 	rules := make([]*dbgen.DifficultyRule, 3)
 	for i := 0; i < 3; i++ {
-		rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-			Name:                     fmt.Sprintf("Test Rule %d", i),
-			PropertyID:               db.Int(property.ID),
-			Enabled:                  true,
-			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator:        dbgen.RuleConditionOperatorContains,
-			ConditionOperatorNegated: false,
-			ConditionValueStr:        db.Text("test"),
-			ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:              int32(10 + i),
-			CreatorID:                db.Int(user.ID),
-			Column14:                 100.0,
-		})
+		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
 		if err != nil {
 			t.Fatalf("Failed to create rule %d: %v", i, err)
 		}
@@ -1867,19 +1861,7 @@ func TestMovePropertyRuleToLastPosition(t *testing.T) {
 	// Create multiple rules
 	rules := make([]*dbgen.DifficultyRule, 3)
 	for i := 0; i < 3; i++ {
-		rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-			Name:                     fmt.Sprintf("Test Rule %d", i),
-			PropertyID:               db.Int(property.ID),
-			Enabled:                  true,
-			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator:        dbgen.RuleConditionOperatorContains,
-			ConditionOperatorNegated: false,
-			ConditionValueStr:        db.Text("test"),
-			ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:              int32(10 + i),
-			CreatorID:                db.Int(user.ID),
-			Column14:                 100.0,
-		})
+		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
 		if err != nil {
 			t.Fatalf("Failed to create rule %d: %v", i, err)
 		}
@@ -1944,19 +1926,7 @@ func TestMoveOrgRuleMultipleRules(t *testing.T) {
 	// Create multiple org-level rules
 	rules := make([]*dbgen.DifficultyRule, 3)
 	for i := 0; i < 3; i++ {
-		rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-			Name:                     fmt.Sprintf("Test Org Rule %d", i),
-			OrgID:                    db.Int(org.ID),
-			Enabled:                  true,
-			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator:        dbgen.RuleConditionOperatorContains,
-			ConditionOperatorNegated: false,
-			ConditionValueStr:        db.Text("test"),
-			ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:              int32(10 + i),
-			CreatorID:                db.Int(user.ID),
-			Column14:                 100.0,
-		})
+		rule, err := createOrgRuleForMove(ctx, user, org.ID, fmt.Sprintf("Test Org Rule %d", i), int32(10+i))
 		if err != nil {
 			t.Fatalf("Failed to create rule %d: %v", i, err)
 		}
@@ -2025,19 +1995,7 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	// Create multiple rules
 	rules := make([]*dbgen.DifficultyRule, 5)
 	for i := 0; i < 5; i++ {
-		rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-			Name:                     fmt.Sprintf("Test Rule %d", i),
-			PropertyID:               db.Int(property.ID),
-			Enabled:                  true,
-			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator:        dbgen.RuleConditionOperatorContains,
-			ConditionOperatorNegated: false,
-			ConditionValueStr:        db.Text("test"),
-			ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:              int32(10 + i),
-			CreatorID:                db.Int(user.ID),
-			Column14:                 100.0,
-		})
+		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
 		if err != nil {
 			t.Fatalf("Failed to create rule %d: %v", i, err)
 		}
