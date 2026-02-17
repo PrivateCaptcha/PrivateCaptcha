@@ -23,6 +23,74 @@ const (
 	ruleFormTemplate = "rules/form.html"
 )
 
+func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode {
+	var subscr *dbgen.Subscription
+	var err error
+
+	// Get org owner
+	owner := user
+	if org.UserID.Valid && org.UserID.Int32 != user.ID {
+		owner, err = s.Store.Impl().RetrieveUser(ctx, org.UserID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve org owner", "orgID", org.ID, common.ErrAttr(err))
+			return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
+		}
+	}
+
+	if owner.SubscriptionID.Valid {
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, owner.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve owner subscription", "userID", owner.ID, common.ErrAttr(err))
+			return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
+		}
+	}
+
+	ok, extra, err := s.SubscriptionLimits.CheckOrgRulesLimit(ctx, org.ID, subscr)
+	if err != nil {
+		if err == db.ErrNoActiveSubscription {
+			return common.StatusOrgRulesSubscriptionRequiredError
+		}
+		slog.ErrorContext(ctx, "Failed to check org rules limit", "orgID", org.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
+	}
+
+	if !ok {
+		slog.WarnContext(ctx, "Org rules limit check failed", "extra", extra, "orgID", org.ID, "ownerID", owner.ID, "subscriptionID", subscr.ID,
+			"internal", db.IsInternalSubscription(subscr.Source))
+
+		return common.StatusOrgRulesLimitError
+	}
+
+	return common.StatusOK
+}
+
+func (s *Server) validatePropertyRulesLimit(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, user *dbgen.User) common.StatusCode {
+	// For properties, check limits of org owner (like validatePropertiesLimit)
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
+	}
+
+	ok, extra, err := s.SubscriptionLimits.CheckPropertyRulesLimit(ctx, property.ID, subscr)
+	if err != nil {
+		if err == db.ErrNoActiveSubscription {
+			return common.StatusPropertyRulesSubscriptionRequired
+		}
+		slog.ErrorContext(ctx, "Failed to check property rules limit", "propertyID", property.ID, common.ErrAttr(err))
+		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
+	}
+
+	if !ok {
+		slog.WarnContext(ctx, "Property rules limit check failed", "extra", extra, "propertyID", property.ID, "ownerID", owner.ID, "subscriptionID", subscr.ID,
+			"internal", db.IsInternalSubscription(subscr.Source))
+
+		return common.StatusPropertyRulesLimitError
+	}
+
+	return common.StatusOK
+}
+
 type CountryOption struct {
 	Code string
 	Name string
@@ -289,6 +357,12 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if limitStatus := s.validatePropertyRulesLimit(ctx, org, property, user); !limitStatus.Success() {
+		renderCtx.ErrorMessage = limitStatus.String()
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
 	params.PropertyID = db.Int(property.ID)
 	params.CreatorID = db.Int(user.ID)
 
@@ -342,6 +416,12 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 		if len(renderCtx.ErrorMessage) == 0 {
 			renderCtx.ErrorMessage = statusCode.String()
 		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	if limitStatus := s.validateOrgRulesLimit(ctx, org, user); !limitStatus.Success() {
+		renderCtx.ErrorMessage = limitStatus.String()
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
 	}
