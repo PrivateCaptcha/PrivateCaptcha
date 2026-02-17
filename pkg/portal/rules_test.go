@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,54 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
+
+func setupRulesSuite(ctx context.Context, user *dbgen.User) (*http.ServeMux, *http.Cookie, error) {
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return srv, cookie, nil
+}
+
+func buildRuleForm(userID int32, params map[string]string) url.Values {
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(userID))))
+	for key, value := range params {
+		form.Set(key, value)
+	}
+	return form
+}
+
+func rulesSuite(srv *http.ServeMux, cookie *http.Cookie, method, path string, form url.Values) (*http.Response, error) {
+	var body *strings.Reader
+	if form != nil {
+		body = strings.NewReader(form.Encode())
+	} else {
+		body = strings.NewReader("")
+	}
+
+	req := httptest.NewRequest(method, path, body)
+	req.AddCookie(cookie)
+
+	if method == "POST" && form != nil {
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	}
+	if method == "DELETE" && form != nil {
+		csrfToken := form.Get(common.ParamCSRFToken)
+		if csrfToken != "" {
+			req.Header.Set(common.HeaderCSRFToken, csrfToken)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	return w.Result(), nil
+}
 
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
 	tests := []struct {
@@ -395,34 +444,26 @@ func TestCreatePropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block crawlers")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorContains))
-	form.Set(common.ParamConditionValue, "curl")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "50")
+	form := buildRuleForm(user.ID, map[string]string{
+		common.ParamName:              "Block crawlers",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorContains),
+		common.ParamConditionValue:    "curl",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       "50",
+	})
 
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	path := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	resp, err := rulesSuite(srv, cookie, "POST", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -468,34 +509,26 @@ func TestCreateOrgRule(t *testing.T) {
 		t.Fatalf("Failed to create org: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Block countries")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn))
-	form.Set(common.ParamConditionValue, "US,GB")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
+	form := buildRuleForm(user.ID, map[string]string{
+		common.ParamName:              "Block countries",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorIn),
+		common.ParamConditionValue:    "US,GB",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
+		common.ParamActionValue:       "block",
+	})
 
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	path := fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)))
+	resp, err := rulesSuite(srv, cookie, "POST", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -552,35 +585,27 @@ func TestEditPropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyUserAgent))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorEquals)+"_negated")
-	form.Set(common.ParamConditionValue, "bot")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyDifficultyLevelPercent))
-	form.Set(common.ParamActionValue, "-30")
+	form := buildRuleForm(user.ID, map[string]string{
+		common.ParamName:              "Updated Rule",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorEquals) + "_negated",
+		common.ParamConditionValue:    "bot",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       "-30",
+	})
 
 	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	path := fmt.Sprintf("/org/%s/property/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), ruleIDStr)
+	resp, err := rulesSuite(srv, cookie, "POST", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -634,35 +659,27 @@ func TestEditOrgRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Set(common.ParamName, "Updated Org Rule")
-	form.Set(common.ParamEnabled, "on")
-	form.Set(common.ParamConditionProperty, string(dbgen.RuleConditionPropertyCountryCode))
-	form.Set(common.ParamConditionOperator, string(dbgen.RuleConditionOperatorIn)+"_negated")
-	form.Set(common.ParamConditionValue, "DE,FR")
-	form.Set(common.ParamActionProperty, string(dbgen.RuleActionPropertyHTTPRequest))
-	form.Set(common.ParamActionValue, "block")
+	form := buildRuleForm(user.ID, map[string]string{
+		common.ParamName:              "Updated Org Rule",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorIn) + "_negated",
+		common.ParamConditionValue:    "DE,FR",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
+		common.ParamActionValue:       "block",
+	})
 
 	ruleIDStr := server.IDHasher.Encrypt(int(rule.ID))
-	req := httptest.NewRequest("POST",
-		fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr),
-		strings.NewReader(form.Encode()))
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	path := fmt.Sprintf("/org/%s/rules/%s/edit", server.IDHasher.Encrypt(int(org.ID)), ruleIDStr)
+	resp, err := rulesSuite(srv, cookie, "POST", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -1182,26 +1199,17 @@ func TestDeletePropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
-
-	req := httptest.NewRequest("DELETE",
-		fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		nil)
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderCSRFToken, csrfToken)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	form := buildRuleForm(user.ID, map[string]string{})
+	path := fmt.Sprintf("/org/%s/property/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	resp, err := rulesSuite(srv, cookie, "DELETE", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -1237,26 +1245,17 @@ func TestDeleteOrgRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
-
-	req := httptest.NewRequest("DELETE",
-		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))),
-		nil)
-	req.AddCookie(cookie)
-	req.Header.Set(common.HeaderCSRFToken, csrfToken)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
+	form := buildRuleForm(user.ID, map[string]string{})
+	path := fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID)))
+	resp, err := rulesSuite(srv, cookie, "DELETE", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -1733,34 +1732,26 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	srv, cookie, err := setupRulesSuite(ctx, user)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Try to move the single rule (should succeed even though it's the only rule)
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "0")
+	form := buildRuleForm(user.ID, map[string]string{
+		common.ParamPosition: "0",
+	})
 
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
+	path := fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
 		server.IDHasher.Encrypt(int(org.ID)),
 		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rule.ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+		server.IDHasher.Encrypt(int(rule.ID)))
+	resp, err := rulesSuite(srv, cookie, "POST", path, form)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected status 303 See Other, got %d", resp.StatusCode)
 	}
 }
 
