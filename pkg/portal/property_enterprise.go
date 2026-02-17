@@ -3,6 +3,7 @@
 package portal
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -165,6 +166,15 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	}
 
 	renderCtx.Tab = propertyRulesTabIndex
+
+	// Check for cached org rules and show info message if they exist
+	if orgRules, err := s.Store.Impl().GetCachedOrgRules(ctx, org.ID); err == nil && len(orgRules) > 0 {
+		if len(orgRules) == 1 {
+			renderCtx.InfoMessage = "1 org rule is also applied to this property."
+		} else {
+			renderCtx.InfoMessage = fmt.Sprintf("%d org rules are also applied to this property.", len(orgRules))
+		}
+	}
 
 	batch := map[int32]uint{property.ID: 1}
 	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch)
