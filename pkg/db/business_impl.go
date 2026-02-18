@@ -3361,6 +3361,41 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		}
 	}
 
+	// Check if position is already correctly ordered (no-op optimization)
+	// The rule is correctly positioned if:
+	// - For first position: rule.Position < nextPos (or no next)
+	// - For last position: prevPos < rule.Position (or no prev)
+	// - For middle position: prevPos < rule.Position < nextPos
+	currentPos := rule.Position
+	isCorrectlyOrdered := false
+
+	if newIndex == 0 {
+		// First position: should be less than next (if exists)
+		if nextPos < 0 {
+			// Only rule, already in correct position
+			isCorrectlyOrdered = true
+		} else {
+			isCorrectlyOrdered = currentPos < nextPos
+		}
+	} else if nextPos < 0 {
+		// Last position: should be greater than prev (if exists)
+		if prevPos < 0 {
+			// Only rule (shouldn't happen for index > 0)
+			isCorrectlyOrdered = false
+		} else {
+			isCorrectlyOrdered = prevPos < currentPos
+		}
+	} else {
+		// Middle position: should be between prev and next
+		isCorrectlyOrdered = prevPos < currentPos && currentPos < nextPos
+	}
+
+	// If already correctly ordered, skip the update
+	if isCorrectlyOrdered {
+		slog.InfoContext(ctx, "Rule already in correct position, skipping update", "ruleID", rule.ID, "position", currentPos, "newIndex", newIndex)
+		return rule, nil, nil
+	}
+
 	// Calculate new position using fractional indexing
 	var newPosition float64
 	if newIndex == 0 {
