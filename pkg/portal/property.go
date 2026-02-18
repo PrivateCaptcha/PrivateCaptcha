@@ -850,12 +850,12 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	ctx, auditEvent, err := s.getPropertyRules(w, r)
+	renderCtx, auditEvent, err := s.getPropertyRules(w, r)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ViewModel{Model: ctx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

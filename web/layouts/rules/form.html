@@ -34,11 +34,11 @@
         </div>
     </div>
 
-    <div class="space-y-4 bg-pink-50 p-4 rounded-md">
+    <div class="space-y-4 bg-pcteal-50 p-4 rounded-md">
         <div>
             <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
+                <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
                     {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
                     {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
@@ -50,7 +50,7 @@
         <div x-show="!isListCondition">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select">
+                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
                     <template x-for="op in availableOperators" :key="op.value">
                         <option :value="op.value" x-text="op.label"></option>
                     </template>
@@ -64,7 +64,7 @@
                 <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
             </label>
             <div class="mt-2">
-                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" :disabled="isListCondition" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" :disabled="isListCondition" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
 
@@ -122,11 +122,11 @@
         </div>
     </div>
 
-    <div class="space-y-4 bg-indigo-50 p-4 rounded-md">
+    <div class="space-y-4 bg-pcred-50 p-4 rounded-md">
         <div>
             <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
             <div class="mt-2">
-                <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select">
+                <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
                     {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
                     {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
                     {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
@@ -138,7 +138,7 @@
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
             <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Level (%)</label>
             <div class="mt-2">
-                <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal" />
+                <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
                 <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-100%</code> to <code class="px-1 py-0.5 bg-gray-100">+100%</code></p>
             </div>
         </div>
@@ -147,7 +147,7 @@
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
             <div class="mt-2">
-                <select name="{{ .Const.ActionValue }}" id="growth_select" class="w-full pc-internal-form-select">
+                <select name="{{ .Const.ActionValue }}" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
                     {{ with .Const.GrowthTypeConstant }}<option value="0" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Constant (no growth)</option>{{end}}
                     {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
                     {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
@@ -171,7 +171,7 @@
     {{ else }}
     <div></div>
     {{ end }}
-    
+
     <div class="flex items-center space-x-6">
         <button
             type="reset"

@@ -906,45 +906,39 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
 
-func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
+func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.RedirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, err
 	}
 
 	org, _, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, err
 	}
 
 	property, err := s.Property(org, r)
 	if err != nil {
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, err
 	}
 
 	rule, err := s.Rule(r)
 	if err != nil {
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, err
 	}
 
 	// Check if user can move this rule (org owner OR rule creator)
 	if !canEditRule(user, org, rule) {
 		slog.WarnContext(ctx, "User cannot move property rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, db.ErrPermissions
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, ErrInvalidRequestArg
 	}
 
 	// Parse new position index
@@ -952,61 +946,58 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) {
 	newIndex, err := strconv.Atoi(positionStr)
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, ErrInvalidRequestArg
 	}
 
-	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
-		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
-		if err != nil {
-			return nil, err
+	var auditEvent *common.AuditLogEvent
+	if _, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		var moveErr error
+		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if moveErr != nil {
+			return nil, moveErr
 		}
 		return []*common.AuditLogEvent{auditEvent}, nil
-	})
-	if err != nil {
+	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, err
 	}
 
-	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+	renderCtx, _, err := s.getPropertyRules(w, r)
+	if err != nil {
+		return nil, err
+	}
 
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
 }
 
-func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) {
+func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.RedirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, err
 	}
 
 	org, _, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, err
 	}
 
 	rule, err := s.Rule(r)
 	if err != nil {
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, err
 	}
 
 	// Check if user can move this rule (org owner OR rule creator)
 	if !canEditRule(user, org, rule) {
 		slog.WarnContext(ctx, "User cannot move org rule", "userID", user.ID, "ruleID", rule.ID, "orgOwnerID", org.UserID.Int32, "ruleCreatorID", rule.CreatorID)
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, db.ErrPermissions
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, ErrInvalidRequestArg
 	}
 
 	// Parse new position index
@@ -1014,24 +1005,30 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) {
 	newIndex, err := strconv.Atoi(positionStr)
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, ErrInvalidRequestArg
 	}
 
-	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
-		_, auditEvent, err := impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
-		if err != nil {
-			return nil, err
+	var auditEvent *common.AuditLogEvent
+	if _, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		var moveErr error
+		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		if moveErr != nil {
+			return nil, moveErr
 		}
 		return []*common.AuditLogEvent{auditEvent}, nil
-	})
-	if err != nil {
+	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, err
 	}
 
-	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+	renderCtx, _, err := s.createOrgRulesContext(ctx, org, user)
+	if err != nil {
+		return nil, err
+	}
 
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgRulesTemplate,
+		AuditEvent: auditEvent,
+	}, nil
 }
