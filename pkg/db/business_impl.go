@@ -3117,7 +3117,7 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		return nil, nil, ErrMaintenance
 	}
 
-	params.Column14 = positionStep
+	params.Column14 = RulePositionStep
 	rule, err := impl.querier.CreateDifficultyRule(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create difficulty rule", common.ErrAttr(err))
@@ -3322,10 +3322,10 @@ const (
 	// before requiring rebalancing.
 	minPositionDelta = 0.000001
 
-	// positionStep is the spacing between positions when rebalancing or creating new rules.
+	// RulePositionStep is the spacing between positions when rebalancing or creating new rules.
 	// Using 100.0 provides ample room for fractional indexing between positions while
 	// keeping position values human-readable in logs and debugging.
-	positionStep = 100.0
+	RulePositionStep = 100.0
 )
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
@@ -3361,6 +3361,41 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		}
 	}
 
+	// Check if position is already correctly ordered (no-op optimization)
+	// The rule is correctly positioned if:
+	// - For first position: rule.Position < nextPos (or no next)
+	// - For last position: prevPos < rule.Position (or no prev)
+	// - For middle position: prevPos < rule.Position < nextPos
+	currentPos := rule.Position
+	isCorrectlyOrdered := false
+
+	if newIndex == 0 {
+		// First position: should be less than next (if exists)
+		if nextPos < 0 {
+			// Only rule, already in correct position
+			isCorrectlyOrdered = true
+		} else {
+			isCorrectlyOrdered = currentPos < nextPos
+		}
+	} else if nextPos < 0 {
+		// Last position: should be greater than prev (if exists)
+		if prevPos < 0 {
+			// Only rule (shouldn't happen for index > 0)
+			isCorrectlyOrdered = false
+		} else {
+			isCorrectlyOrdered = prevPos < currentPos
+		}
+	} else {
+		// Middle position: should be between prev and next
+		isCorrectlyOrdered = prevPos < currentPos && currentPos < nextPos
+	}
+
+	// If already correctly ordered, skip the update
+	if isCorrectlyOrdered {
+		slog.InfoContext(ctx, "Rule already in correct position, skipping update", "ruleID", rule.ID, "position", currentPos, "newIndex", newIndex)
+		return rule, nil, nil
+	}
+
 	// Calculate new position using fractional indexing
 	var newPosition float64
 	if newIndex == 0 {
@@ -3369,7 +3404,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 			// No rules exist, start at 0
 			newPosition = 0
 		} else {
-			newPosition = nextPos - positionStep
+			newPosition = nextPos - RulePositionStep
 		}
 	} else if nextPos < 0 {
 		// Moving to last position (no next neighbor)
@@ -3377,7 +3412,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 			// Should not happen - moving to position > 0 but no prev neighbor
 			newPosition = 0
 		} else {
-			newPosition = prevPos + positionStep
+			newPosition = prevPos + RulePositionStep
 		}
 	} else {
 		// Moving between two positions
@@ -3438,7 +3473,7 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: Int(propertyID),
 		OrgID:      pgtype.Int4{Valid: false},
-		Column3:    positionStep,
+		Column3:    RulePositionStep,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for property", "propertyID", propertyID, common.ErrAttr(err))
@@ -3462,7 +3497,7 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: pgtype.Int4{Valid: false},
 		OrgID:      Int(orgID),
-		Column3:    positionStep,
+		Column3:    RulePositionStep,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))

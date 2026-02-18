@@ -60,10 +60,9 @@ func createOrgRuleIPAddress(ctx context.Context, user *dbgen.User, orgID int32, 
 	return rule, err
 }
 
-func createPropertyRuleForMove(ctx context.Context, user *dbgen.User, propertyID int32, name string, actionValue int32) (*dbgen.DifficultyRule, error) {
-	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+func createRuleForMove(ctx context.Context, user *dbgen.User, orgID *int32, propertyID *int32, name string, actionValue int32) (*dbgen.DifficultyRule, error) {
+	params := &dbgen.CreateDifficultyRuleParams{
 		Name:                     name,
-		PropertyID:               db.Int(propertyID),
 		Enabled:                  true,
 		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
 		ConditionOperator:        dbgen.RuleConditionOperatorContains,
@@ -73,24 +72,13 @@ func createPropertyRuleForMove(ctx context.Context, user *dbgen.User, propertyID
 		ActionValue:              actionValue,
 		CreatorID:                db.Int(user.ID),
 		Column14:                 100.0,
-	})
-	return rule, err
-}
-
-func createOrgRuleForMove(ctx context.Context, user *dbgen.User, orgID int32, name string, actionValue int32) (*dbgen.DifficultyRule, error) {
-	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
-		Name:                     name,
-		OrgID:                    db.Int(orgID),
-		Enabled:                  true,
-		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-		ConditionOperator:        dbgen.RuleConditionOperatorContains,
-		ConditionOperatorNegated: false,
-		ConditionValueStr:        db.Text("test"),
-		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:              actionValue,
-		CreatorID:                db.Int(user.ID),
-		Column14:                 100.0,
-	})
+	}
+	if orgID != nil {
+		params.OrgID = db.Int(*orgID)
+	} else {
+		params.PropertyID = db.Int(*propertyID)
+	}
+	rule, _, err := server.Store.Impl().CreateDifficultyRule(ctx, user, params)
 	return rule, err
 }
 
@@ -1717,263 +1705,161 @@ func TestRetrieveOrgRulesWithCache(t *testing.T) {
 	}
 }
 
-func TestMovePropertyRuleSingleRule(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
+type moveRulesTestSuite struct {
+	createRules   func(ctx context.Context, user *dbgen.User, org *dbgen.Organization, numRules int) ([]*dbgen.DifficultyRule, *dbgen.Property, error)
+	retrieveRules func(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) ([]*dbgen.DifficultyRule, error)
+	moveHandler   func(w http.ResponseWriter, r *http.Request) (*ViewModel, error)
+}
+
+func moveElement[T any](slice []T, i, j int) []T {
+	element := slice[i]
+
+	// If moving to the right
+	if i < j {
+		copy(slice[i:j], slice[i+1:j+1])
+	} else {
+		// If moving to the left
+		copy(slice[j+1:i+1], slice[j:i])
 	}
 
-	ctx := t.Context()
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create account: %v", err)
-	}
+	slice[j] = element
 
-	// Create property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
-	if err != nil {
-		t.Fatalf("Failed to create property: %v", err)
-	}
+	return slice
+}
 
-	// Create single rule
-	rule, err := createPropertyRuleForMove(ctx, user, property.ID, "Test Rule", 10)
-	if err != nil {
-		t.Fatalf("Failed to create rule: %v", err)
-	}
+func testMoveRulesSuite(t *testing.T, suite moveRulesTestSuite) {
+	for _, numRules := range []int{1, 2, 3} {
+		numRules := numRules
+		t.Run(fmt.Sprintf("%dRules", numRules), func(t *testing.T) {
+			// Test moving each rule to each position
+			for fromIndex := 0; fromIndex < numRules; fromIndex++ {
+				fromIndex := fromIndex
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+				for toIndex := 0; toIndex < numRules; toIndex++ {
+					toIndex := toIndex
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
+					t.Run(fmt.Sprintf("From%dTo%d", fromIndex, toIndex), func(t *testing.T) {
+						ctx := t.Context()
+						user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+						if err != nil {
+							t.Fatalf("Failed to create account: %v", err)
+						}
 
-	// Try to move the single rule (should succeed even though it's the only rule)
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "0")
+						// Create rules using suite-specific function
+						rules, property, err := suite.createRules(ctx, user, org, numRules)
+						if err != nil {
+							t.Fatal(err)
+						}
 
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rule.ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+						srv := http.NewServeMux()
+						server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+						cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+						if err != nil {
+							t.Fatal(err)
+						}
 
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
+						form := url.Values{}
+						form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+						form.Add(common.ParamPosition, strconv.Itoa(toIndex))
 
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
+						req := httptest.NewRequest("POST", "/endpoint", strings.NewReader(form.Encode()))
+						req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						req.AddCookie(cookie)
+						req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+						if property != nil {
+							req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+						}
+						req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[fromIndex].ID)))
+
+						w := httptest.NewRecorder()
+						if _, err := suite.moveHandler(w, req); err != nil {
+							t.Fatal(err)
+						}
+
+						// Verify rule moved to correct position
+						movedRules, err := suite.retrieveRules(ctx, org, property)
+						if err != nil {
+							t.Fatal(err)
+						}
+						if len(movedRules) != numRules {
+							t.Fatalf("Expected %d rules, got %d", numRules, len(movedRules))
+						}
+						moveElement(rules, fromIndex, toIndex)
+						for i := 0; i < numRules; i++ {
+							if rules[i].ID != movedRules[i].ID {
+								t.Errorf("Expected rule at index %d to be rule %d, got rule %d", i, rules[i].ID, movedRules[i].ID)
+							}
+						}
+					})
+				}
+			}
+		})
 	}
 }
 
-func TestMovePropertyRuleToFirstPosition(t *testing.T) {
+func TestMovePropertyRules(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := t.Context()
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create account: %v", err)
+	suite := moveRulesTestSuite{
+		createRules: func(ctx context.Context, user *dbgen.User, org *dbgen.Organization, numRules int) ([]*dbgen.DifficultyRule, *dbgen.Property, error) {
+			property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			rules := make([]*dbgen.DifficultyRule, numRules)
+			for i := 0; i < numRules; i++ {
+				rule, err := createRuleForMove(ctx, user, nil, &property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
+				if err != nil {
+					return nil, nil, err
+				}
+				rules[i] = rule
+			}
+			return rules, property, nil
+		},
+		retrieveRules: func(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) ([]*dbgen.DifficultyRule, error) {
+			allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
+			if err != nil {
+				return nil, err
+			}
+			return allRules[property.ID], nil
+		},
+		moveHandler: server.postMovePropertyRule,
 	}
 
-	// Create property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
-	if err != nil {
-		t.Fatalf("Failed to create property: %v", err)
-	}
-
-	// Create multiple rules
-	rules := make([]*dbgen.DifficultyRule, 3)
-	for i := 0; i < 3; i++ {
-		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
-		if err != nil {
-			t.Fatalf("Failed to create rule %d: %v", i, err)
-		}
-		rules[i] = rule
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Move last rule to first position
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "0")
-
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rules[2].ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[2].ID)))
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
-	}
-
-	// Verify rule is now first
-	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
-	if err != nil {
-		t.Fatalf("Failed to retrieve rules: %v", err)
-	}
-	propertyRules := allRules[property.ID]
-	if len(propertyRules) != 3 {
-		t.Fatalf("Expected 3 rules, got %d", len(propertyRules))
-	}
-	if propertyRules[0].ID != rules[2].ID {
-		t.Errorf("Expected first rule to be rule 2, got rule %d", propertyRules[0].ID)
-	}
+	testMoveRulesSuite(t, suite)
 }
 
-func TestMovePropertyRuleToLastPosition(t *testing.T) {
+func TestMoveOrgRules(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := t.Context()
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create account: %v", err)
+	suite := moveRulesTestSuite{
+		createRules: func(ctx context.Context, user *dbgen.User, org *dbgen.Organization, numRules int) ([]*dbgen.DifficultyRule, *dbgen.Property, error) {
+			rules := make([]*dbgen.DifficultyRule, numRules)
+			for i := 0; i < numRules; i++ {
+				rule, err := createRuleForMove(ctx, user, &org.ID, nil, fmt.Sprintf("Test Org Rule %d", i), int32(10+i))
+				if err != nil {
+					return nil, nil, err
+				}
+				rules[i] = rule
+			}
+			return rules, nil, nil
+		},
+		retrieveRules: func(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) ([]*dbgen.DifficultyRule, error) {
+			allRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+			if err != nil {
+				return nil, err
+			}
+			return allRules[org.ID], nil
+		},
+		moveHandler: server.postMoveOrgRule,
 	}
 
-	// Create property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
-	if err != nil {
-		t.Fatalf("Failed to create property: %v", err)
-	}
-
-	// Create multiple rules
-	rules := make([]*dbgen.DifficultyRule, 3)
-	for i := 0; i < 3; i++ {
-		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
-		if err != nil {
-			t.Fatalf("Failed to create rule %d: %v", i, err)
-		}
-		rules[i] = rule
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Move first rule to last position (index 2)
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "2")
-
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rules[0].ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[0].ID)))
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
-	}
-
-	// Verify rule is now last
-	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
-	if err != nil {
-		t.Fatalf("Failed to retrieve rules: %v", err)
-	}
-	propertyRules := allRules[property.ID]
-	if len(propertyRules) != 3 {
-		t.Fatalf("Expected 3 rules, got %d", len(propertyRules))
-	}
-	if propertyRules[2].ID != rules[0].ID {
-		t.Errorf("Expected last rule to be rule 0, got rule %d", propertyRules[2].ID)
-	}
-}
-
-func TestMoveOrgRuleMultipleRules(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	ctx := t.Context()
-	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create account: %v", err)
-	}
-
-	// Create multiple org-level rules
-	rules := make([]*dbgen.DifficultyRule, 3)
-	for i := 0; i < 3; i++ {
-		rule, err := createOrgRuleForMove(ctx, user, org.ID, fmt.Sprintf("Test Org Rule %d", i), int32(10+i))
-		if err != nil {
-			t.Fatalf("Failed to create rule %d: %v", i, err)
-		}
-		rules[i] = rule
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Move middle rule to first position
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "0")
-
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(rules[1].ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[1].ID)))
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
-	}
-
-	// Verify rule is now first
-	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
-	if err != nil {
-		t.Fatalf("Failed to retrieve rules: %v", err)
-	}
-	orgRules := allRules[org.ID]
-	if len(orgRules) != 3 {
-		t.Fatalf("Expected 3 rules, got %d", len(orgRules))
-	}
-	if orgRules[0].ID != rules[1].ID {
-		t.Errorf("Expected first rule to be rule 1, got rule %d", orgRules[0].ID)
-	}
+	testMoveRulesSuite(t, suite)
 }
 
 func TestRebalancingPropertyRules(t *testing.T) {
@@ -1996,7 +1882,7 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	// Create multiple rules
 	rules := make([]*dbgen.DifficultyRule, 5)
 	for i := 0; i < 5; i++ {
-		rule, err := createPropertyRuleForMove(ctx, user, property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
+		rule, err := createRuleForMove(ctx, user, nil, &property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
 		if err != nil {
 			t.Fatalf("Failed to create rule %d: %v", i, err)
 		}
@@ -2008,6 +1894,7 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Fatalf("Failed to corrupt positions: %v", err)
 	}
 
+	// Set up HTTP server and authentication
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
@@ -2032,10 +1919,12 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[2].ID)))
 
 	w := httptest.NewRecorder()
+
+	// Call through HTTP server
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusOK {
+		t.Fatalf("Move handler returned unexpected status: %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rules are now properly spaced
@@ -2051,7 +1940,7 @@ func TestRebalancingPropertyRules(t *testing.T) {
 	// Verify positions are properly spaced (at least 50.0 apart after rebalancing with step=100)
 	for i := 1; i < len(propertyRules); i++ {
 		delta := propertyRules[i].Position - propertyRules[i-1].Position
-		if delta < 50.0 {
+		if delta < db.RulePositionStep/2 {
 			t.Errorf("Rules %d and %d are too close: delta = %f", i-1, i, delta)
 		}
 	}
