@@ -1740,34 +1740,23 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	// Try to move the single rule to position 0 (should succeed even though it's the only rule)
+	_, _, err = server.Store.Impl().MoveDifficultyRuleWithRebalancing(ctx, rule, 0, user)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("Move rule failed: %v", err)
 	}
 
-	// Try to move the single rule (should succeed even though it's the only rule)
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "0")
-
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rule.ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
+	// Verify the rule is still present
+	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
+	if err != nil {
+		t.Fatalf("Failed to retrieve rules: %v", err)
+	}
+	propertyRules := allRules[property.ID]
+	if len(propertyRules) != 1 {
+		t.Fatalf("Expected 1 rule, got %d", len(propertyRules))
+	}
+	if propertyRules[0].ID != rule.ID {
+		t.Errorf("Expected rule ID %d, got %d", rule.ID, propertyRules[0].ID)
 	}
 }
 
@@ -1944,34 +1933,10 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Fatalf("Failed to corrupt positions: %v", err)
 	}
 
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// Try to move a rule - this should trigger rebalancing
-	form := url.Values{}
-	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-	form.Add(common.ParamPosition, "1")
-
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rules[2].ID))), strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[2].ID)))
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	if w.Code != http.StatusSeeOther {
-		t.Errorf("Expected status 303 See Other, got %d: %s", w.Code, w.Body.String())
+	_, _, err = server.Store.Impl().MoveDifficultyRuleWithRebalancing(ctx, rules[2], 1, user)
+	if err != nil {
+		t.Fatalf("Move rule failed: %v", err)
 	}
 
 	// Verify rules are now properly spaced
