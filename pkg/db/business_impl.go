@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -3327,21 +3326,7 @@ const (
 	// Using 100.0 provides ample room for fractional indexing between positions while
 	// keeping position values human-readable in logs and debugging.
 	RulePositionStep = 100.0
-
-	// noNeighborSentinel is the sentinel value used by GetDifficultyRulePositionNeighbors
-	// to indicate that no neighbor exists at a given position.
-	noNeighborSentinel = -1.0
-
-	// floatComparisonEpsilon is used for comparing float64 values for equality
-	// to account for floating-point precision issues.
-	floatComparisonEpsilon = 1e-9
 )
-
-// isNoNeighbor checks if a position value represents the sentinel value
-// indicating no neighbor exists. Uses epsilon comparison for float equality.
-func isNoNeighbor(pos float64) bool {
-	return math.Abs(pos-noNeighborSentinel) < floatComparisonEpsilon
-}
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
@@ -3362,18 +3347,13 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		return nil, nil, err
 	}
 
-	// Convert interface{} to float64, using -1 as sentinel for NULL
-	prevPos := noNeighborSentinel
-	nextPos := noNeighborSentinel
-	if neighbors.PrevPosition != nil {
-		if f, ok := neighbors.PrevPosition.(float64); ok {
-			prevPos = f
-		}
+	// Extract position values from pgtype.Float8 (will be invalid/null if no neighbor exists)
+	var prevPos, nextPos *float64
+	if neighbors.PrevPosition.Valid {
+		prevPos = &neighbors.PrevPosition.Float64
 	}
-	if neighbors.NextPosition != nil {
-		if f, ok := neighbors.NextPosition.(float64); ok {
-			nextPos = f
-		}
+	if neighbors.NextPosition.Valid {
+		nextPos = &neighbors.NextPosition.Float64
 	}
 
 	// Check if position is already correctly ordered (no-op optimization)
@@ -3386,23 +3366,23 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 
 	if newIndex == 0 {
 		// First position: should be less than next (if exists)
-		if isNoNeighbor(nextPos) {
+		if nextPos == nil {
 			// Only rule, already in correct position
 			isCorrectlyOrdered = true
 		} else {
-			isCorrectlyOrdered = currentPos < nextPos
+			isCorrectlyOrdered = currentPos < *nextPos
 		}
-	} else if isNoNeighbor(nextPos) {
+	} else if nextPos == nil {
 		// Last position: should be greater than prev (if exists)
-		if isNoNeighbor(prevPos) {
+		if prevPos == nil {
 			// Only rule (shouldn't happen for index > 0)
 			isCorrectlyOrdered = false
 		} else {
-			isCorrectlyOrdered = prevPos < currentPos
+			isCorrectlyOrdered = *prevPos < currentPos
 		}
 	} else {
 		// Middle position: should be between prev and next
-		isCorrectlyOrdered = prevPos < currentPos && currentPos < nextPos
+		isCorrectlyOrdered = *prevPos < currentPos && currentPos < *nextPos
 	}
 
 	// If already correctly ordered, skip the update
@@ -3415,37 +3395,37 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	var newPosition float64
 	if newIndex == 0 {
 		// Moving to first position
-		if isNoNeighbor(nextPos) {
+		if nextPos == nil {
 			// No rules exist, start at 0
 			newPosition = 0
 		} else {
 			// Calculate position before the next rule
-			newPosition = nextPos - RulePositionStep
+			newPosition = *nextPos - RulePositionStep
 			// Trigger rebalancing if position would become too negative
 			// This ensures positions stay within a reasonable range
 			if newPosition < -10*RulePositionStep {
 				slog.WarnContext(ctx, "Position would become too negative, need rebalancing",
-					"ruleID", rule.ID, "nextPos", nextPos, "newPosition", newPosition)
+					"ruleID", rule.ID, "nextPos", *nextPos, "newPosition", newPosition)
 				return nil, nil, errRulesNeedRebalancing
 			}
 		}
-	} else if isNoNeighbor(nextPos) {
+	} else if nextPos == nil {
 		// Moving to last position (no next neighbor)
-		if isNoNeighbor(prevPos) {
+		if prevPos == nil {
 			// Should not happen - moving to position > 0 but no prev neighbor
 			newPosition = 0
 		} else {
-			newPosition = prevPos + RulePositionStep
+			newPosition = *prevPos + RulePositionStep
 		}
 	} else {
 		// Moving between two positions
-		newPosition = (prevPos + nextPos) / 2.0
+		newPosition = (*prevPos + *nextPos) / 2.0
 
 		// Check if we have enough precision
-		if delta := nextPos - prevPos; delta < minPositionDelta {
+		if delta := *nextPos - *prevPos; delta < minPositionDelta {
 			// Need rebalancing - return specific error
 			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
-				"prevPos", prevPos, "nextPos", nextPos, "delta", delta)
+				"prevPos", *prevPos, "nextPos", *nextPos, "delta", delta)
 			return nil, nil, errRulesNeedRebalancing
 		}
 	}
