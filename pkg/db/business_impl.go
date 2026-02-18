@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"sort"
 	"strings"
@@ -3330,7 +3331,17 @@ const (
 	// noNeighborSentinel is the sentinel value used by GetDifficultyRulePositionNeighbors
 	// to indicate that no neighbor exists at a given position.
 	noNeighborSentinel = -1.0
+
+	// floatComparisonEpsilon is used for comparing float64 values for equality
+	// to account for floating-point precision issues.
+	floatComparisonEpsilon = 1e-9
 )
+
+// isNoNeighbor checks if a position value represents the sentinel value
+// indicating no neighbor exists. Uses epsilon comparison for float equality.
+func isNoNeighbor(pos float64) bool {
+	return math.Abs(pos-noNeighborSentinel) < floatComparisonEpsilon
+}
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
@@ -3375,15 +3386,15 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 
 	if newIndex == 0 {
 		// First position: should be less than next (if exists)
-		if nextPos == noNeighborSentinel {
+		if isNoNeighbor(nextPos) {
 			// Only rule, already in correct position
 			isCorrectlyOrdered = true
 		} else {
 			isCorrectlyOrdered = currentPos < nextPos
 		}
-	} else if nextPos == noNeighborSentinel {
+	} else if isNoNeighbor(nextPos) {
 		// Last position: should be greater than prev (if exists)
-		if prevPos == noNeighborSentinel {
+		if isNoNeighbor(prevPos) {
 			// Only rule (shouldn't happen for index > 0)
 			isCorrectlyOrdered = false
 		} else {
@@ -3404,15 +3415,23 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	var newPosition float64
 	if newIndex == 0 {
 		// Moving to first position
-		if nextPos == noNeighborSentinel {
+		if isNoNeighbor(nextPos) {
 			// No rules exist, start at 0
 			newPosition = 0
 		} else {
+			// Calculate position before the next rule
 			newPosition = nextPos - RulePositionStep
+			// Trigger rebalancing if position would become too negative
+			// This ensures positions stay within a reasonable range
+			if newPosition < -10*RulePositionStep {
+				slog.WarnContext(ctx, "Position would become too negative, need rebalancing",
+					"ruleID", rule.ID, "nextPos", nextPos, "newPosition", newPosition)
+				return nil, nil, errRulesNeedRebalancing
+			}
 		}
-	} else if nextPos == noNeighborSentinel {
+	} else if isNoNeighbor(nextPos) {
 		// Moving to last position (no next neighbor)
-		if prevPos == noNeighborSentinel {
+		if isNoNeighbor(prevPos) {
 			// Should not happen - moving to position > 0 but no prev neighbor
 			newPosition = 0
 		} else {
