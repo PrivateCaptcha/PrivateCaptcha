@@ -956,7 +956,10 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		if moveErr != nil {
 			return nil, moveErr
 		}
-		return []*common.AuditLogEvent{auditEvent}, nil
+		if auditEvent != nil {
+			return []*common.AuditLogEvent{auditEvent}, nil
+		}
+		return nil, nil
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		return nil, err
@@ -1015,7 +1018,10 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		if moveErr != nil {
 			return nil, moveErr
 		}
-		return []*common.AuditLogEvent{auditEvent}, nil
+		if auditEvent != nil {
+			return []*common.AuditLogEvent{auditEvent}, nil
+		}
+		return nil, nil
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		return nil, err
