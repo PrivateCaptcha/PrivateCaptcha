@@ -2266,3 +2266,184 @@ func TestPropertyRuleCreationWithoutSubscription(t *testing.T) {
 		t.Errorf("Expected error message about subscription required, got: %s", string(body))
 	}
 }
+
+func TestCreateOrgRuleWithDifficultyGrowth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test creating rule with difficulty growth action (bug #1 fix validation)
+	resp := postCreateOrgRule(srv, cookie, user, org, "Growth rule",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"bot",
+		string(dbgen.RuleActionPropertyDifficultyGrowth),
+		"2") // Medium growth
+	if resp.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("Unexpected status code %v, body: %s", resp.StatusCode, string(body))
+	}
+
+	batch := map[int32]uint{org.ID: 1}
+	rulesMap, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rules: %v", err)
+	}
+
+	rules := rulesMap[org.ID]
+	if len(rules) != 1 {
+		t.Fatalf("Expected 1 rule, got %d", len(rules))
+	}
+
+	if rules[0].Name != "Growth rule" {
+		t.Errorf("Unexpected rule name: %s", rules[0].Name)
+	}
+	if rules[0].ActionProperty != dbgen.RuleActionPropertyDifficultyGrowth {
+		t.Errorf("Unexpected action property: %s", rules[0].ActionProperty)
+	}
+	if rules[0].ActionValue != 2 {
+		t.Errorf("Unexpected action value: %d, expected 2", rules[0].ActionValue)
+	}
+}
+
+func TestCreatePropertyRuleWithAllActionTypes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test 1: Difficulty Level action
+	endpoint1 := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	token1 := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params1 := map[string]string{
+		common.ParamName:              "Difficulty Level Rule",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorContains),
+		common.ParamConditionValue:    "test",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		common.ParamActionValue:       "50",
+	}
+	resp1 := postRuleRequest(srv, cookie, "POST", endpoint1, token1, params1)
+	if resp1.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp1.Body)
+		t.Fatalf("Failed to create difficulty level rule: %v, body: %s", resp1.StatusCode, string(body))
+	}
+
+	// Test 2: Difficulty Growth action (bug #1 fix validation)
+	endpoint2 := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	token2 := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params2 := map[string]string{
+		common.ParamName:              "Growth Rule",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorEquals),
+		common.ParamConditionValue:    "crawler",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyGrowth),
+		common.ParamActionValue:       "3", // Fast growth
+	}
+	resp2 := postRuleRequest(srv, cookie, "POST", endpoint2, token2, params2)
+	if resp2.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp2.Body)
+		t.Fatalf("Failed to create growth rule: %v, body: %s", resp2.StatusCode, string(body))
+	}
+
+	// Test 3: HTTP Request Block action
+	endpoint3 := fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)))
+	token3 := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	params3 := map[string]string{
+		common.ParamName:              "Block Rule",
+		common.ParamEnabled:           "on",
+		common.ParamConditionProperty: string(dbgen.RuleConditionPropertyIPAddress),
+		common.ParamConditionOperator: string(dbgen.RuleConditionOperatorMatches),
+		common.ParamConditionValue:    "192.168.0.0/16",
+		common.ParamActionProperty:    string(dbgen.RuleActionPropertyHTTPRequest),
+		common.ParamActionValue:       "1",
+	}
+	resp3 := postRuleRequest(srv, cookie, "POST", endpoint3, token3, params3)
+	if resp3.StatusCode != http.StatusSeeOther {
+		body, _ := io.ReadAll(resp3.Body)
+		t.Fatalf("Failed to create HTTP request rule: %v, body: %s", resp3.StatusCode, string(body))
+	}
+
+	// Verify all three rules were created correctly
+	batch := map[int32]uint{prop.ID: 3}
+	rulesMap, err := store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rules: %v", err)
+	}
+
+	rules := rulesMap[prop.ID]
+	if len(rules) != 3 {
+		t.Fatalf("Expected 3 rules, got %d", len(rules))
+	}
+
+	// Find and verify each rule
+	var foundDifficulty, foundGrowth, foundBlock bool
+	for _, rule := range rules {
+		switch rule.ActionProperty {
+		case dbgen.RuleActionPropertyDifficultyLevelPercent:
+			foundDifficulty = true
+			if rule.ActionValue != 50 {
+				t.Errorf("Unexpected difficulty value: %d, expected 50", rule.ActionValue)
+			}
+		case dbgen.RuleActionPropertyDifficultyGrowth:
+			foundGrowth = true
+			if rule.ActionValue != 3 {
+				t.Errorf("Unexpected growth value: %d, expected 3", rule.ActionValue)
+			}
+		case dbgen.RuleActionPropertyHTTPRequest:
+			foundBlock = true
+			if rule.ActionValue != 1 {
+				t.Errorf("Unexpected block value: %d, expected 1", rule.ActionValue)
+			}
+		}
+	}
+
+	if !foundDifficulty {
+		t.Fatal("Difficulty level rule not found")
+	}
+	if !foundGrowth {
+		t.Fatal("Growth rule not found")
+	}
+	if !foundBlock {
+		t.Fatal("Block rule not found")
+	}
+}
