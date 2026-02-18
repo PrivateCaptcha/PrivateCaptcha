@@ -88,11 +88,12 @@ type propertyDashboardRenderContext struct {
 	CsrfRenderContext
 	// scripts.html is shared so captcha context has to be shared too
 	CaptchaRenderContext
-	Property  *userProperty
-	Org       *userOrg
-	NameError string
-	Tab       int
-	CanEdit   bool
+	Property     *userProperty
+	Org          *userOrg
+	NameError    string
+	Tab          int
+	CanEdit      bool
+	IncludeRules bool
 }
 
 type propertySettingsRenderContext struct {
@@ -653,6 +654,77 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 	common.SendJSONResponse(ctx, w, response, cacheHeaders)
 }
 
+func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	periodStr := r.PathValue(common.ParamPeriod)
+	var period common.TimePeriod
+	switch periodStr {
+	case PeriodEndpointWeek:
+		period = common.TimePeriodWeek
+	case PeriodEndpointMonth:
+		period = common.TimePeriodMonth
+	default:
+		slog.ErrorContext(ctx, "Incorrect period argument for rule stats", "period", periodStr)
+		period = common.TimePeriodWeek
+	}
+
+	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(property.ID)), "rulestats", period.String())
+	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	usage := []*propertyRuleStatsPoint{}
+
+	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
+		anyNonZero := false
+		for _, st := range stats {
+			if st.RequestsCount > 0 {
+				anyNonZero = true
+			}
+			usage = append(usage, &propertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.RequestsCount)})
+		}
+
+		// we want to show "No data available" on the client
+		if !anyNonZero {
+			usage = []*propertyRuleStatsPoint{}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve property rule stats", common.ErrAttr(err))
+	}
+
+	response := propertyRuleStatsResponse{
+		Usage: usage,
+	}
+
+	cacheHeaders := map[string][]string{
+		common.HeaderETag:         []string{etag},
+		common.HeaderCacheControl: common.PrivateCacheControl1m,
+	}
+
+	common.SendJSONResponse(ctx, w, response, cacheHeaders)
+}
+
 func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*propertyDashboardRenderContext, *dbgen.Property, error) {
 	ctx := r.Context()
 
@@ -676,12 +748,19 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		return nil, nil, db.ErrDisabled
 	}
 
+	// Check if property has any difficulty rules for rule stats chart
+	includeRules := false
+	if rules, err := s.Store.Impl().GetCachedPropertyRules(ctx, property.ID); err == nil && len(rules) > 0 {
+		includeRules = true
+	}
+
 	renderCtx := &propertyDashboardRenderContext{
 		CsrfRenderContext:    s.CreateCsrfContext(user),
 		CaptchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
 		Property:             propertyToUserProperty(property, s.IDHasher),
 		Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		IncludeRules:         includeRules,
 	}
 
 	return renderCtx, property, nil

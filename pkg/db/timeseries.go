@@ -454,7 +454,7 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 			slog.ErrorContext(ctx, "Failed to read row from property rule stats query", common.ErrAttr(err))
 			return nil, err
 		}
-		bc.RequestsCount = count
+		bc.RequestsCount = int(count)
 		bc.VerifiesCount = 0 // Rule stats only track requests, not verifies
 		results = append(results, bc)
 	}
