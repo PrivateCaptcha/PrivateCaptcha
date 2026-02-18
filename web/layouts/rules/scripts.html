@@ -4,7 +4,11 @@
 function ruleFormData() {
     const formDataConditionValue = '{{ .Params.ConditionValue }}';
     const formDataConditionProperty = '{{ .Params.ConditionProperty }}';
+    const formDataActionProperty = '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}';
+    const formDataActionValue = '{{ .Params.ActionValue }}';
     const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
+    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionUserAgent }}';
+    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionIPAddress }}';
 
     // Initialize operator with negation suffix if needed
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
@@ -15,10 +19,17 @@ function ruleFormData() {
     return {
         conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
         conditionOperator: initialOperator,
-        conditionNegated: {{ if .Params.ConditionNegated }}true{{ else
-        }}false{{ end }},
-        actionProperty: '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}',
+        conditionNegated: {{ if .Params.ConditionNegated }}true{{ else }}false{{ end }},
+        actionProperty: formDataActionProperty,
+        
+        // Separate condition value fields for each type
+        conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
+        conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
+
+        // Separate action value fields for each type
+        actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '0') : '0',
+        actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
 
         get showConditionValue() {
             const baseOperator = this.conditionOperator.replace('_negated', '');
@@ -35,6 +46,29 @@ function ruleFormData() {
 
         get isIPCondition() {
             return this.conditionProperty === '{{ .Const.ConditionIPAddress }}';
+        },
+
+        // Computed property that returns the active condition value based on current condition type
+        get activeConditionValue() {
+            if (this.isListCondition) {
+                return this.selectedCountries.join(',');
+            } else if (this.isIPCondition) {
+                return this.conditionValueIPAddress;
+            } else {
+                return this.conditionValueUserAgent;
+            }
+        },
+
+        // Computed property that returns the active action value based on current action type
+        get activeActionValue() {
+            if (this.actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}') {
+                return this.actionValueDifficultyLevel;
+            } else if (this.actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}') {
+                return this.actionValueDifficultyGrowth;
+            } else if (this.actionProperty === '{{ .Const.ActionPropertyHTTPRequest }}') {
+                return '1'; // HTTP Request block is always 1 when selected
+            }
+            return '';
         },
 
         get availableOperators() {
@@ -64,11 +98,33 @@ function ruleFormData() {
         },
 
         init() {
+            // Watch for condition property changes and reset operator if needed
             this.$watch('conditionProperty', (value) => {
                 const operators = this.availableOperators;
                 const operatorValues = operators.map(op => op.value);
                 if (!operatorValues.includes(this.conditionOperator)) {
                     this.conditionOperator = operators[0].value;
+                }
+                
+                // Clear the condition value fields when switching types to avoid pollution
+                if (this.isStringCondition) {
+                    this.conditionValueIPAddress = '';
+                    this.selectedCountries = [];
+                } else if (this.isIPCondition) {
+                    this.conditionValueUserAgent = '';
+                    this.selectedCountries = [];
+                } else if (this.isListCondition) {
+                    this.conditionValueUserAgent = '';
+                    this.conditionValueIPAddress = '';
+                }
+            });
+
+            // Watch for action property changes to set sensible defaults
+            this.$watch('actionProperty', (value) => {
+                if (value === '{{ .Const.ActionPropertyDifficultyLevel }}' && this.actionValueDifficultyLevel === '') {
+                    this.actionValueDifficultyLevel = '0';
+                } else if (value === '{{ .Const.ActionPropertyDifficultyGrowth }}' && this.actionValueDifficultyGrowth === '') {
+                    this.actionValueDifficultyGrowth = '0';
                 }
             });
         },
