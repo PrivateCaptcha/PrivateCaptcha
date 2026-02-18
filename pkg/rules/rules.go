@@ -111,12 +111,14 @@ type overrideProperty struct {
 	base   difficulty.Property
 	level  *int16
 	growth *dbgen.DifficultyGrowth
+	ruleID int32
 }
 
 func (op *overrideProperty) ID() int32      { return op.base.ID() }
 func (op *overrideProperty) Valid() bool    { return op.base.Valid() }
 func (op *overrideProperty) OwnerID() int32 { return op.base.OwnerID() }
 func (op *overrideProperty) OrgID() int32   { return op.base.OrgID() }
+func (op *overrideProperty) RuleID() int32  { return op.ruleID }
 func (op *overrideProperty) Level() int16 {
 	if op.level != nil {
 		return *op.level
@@ -130,8 +132,14 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 	return op.base.Growth()
 }
 
+// ruleBase contains common fields for all rule types
+type ruleBase struct {
+	ruleID int32
+}
+
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
+	ruleBase
 	matcher     matcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
@@ -151,11 +159,12 @@ func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 	} else if adjustedLevel > int16(common.MaxDifficultyLevel) {
 		adjustedLevel = int16(common.MaxDifficultyLevel)
 	}
-	return &overrideProperty{base: p, level: &adjustedLevel}
+	return &overrideProperty{base: p, level: &adjustedLevel, ruleID: r.ruleID}
 }
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
+	ruleBase
 	matcher matcher
 	growth  dbgen.DifficultyGrowth
 }
@@ -166,11 +175,12 @@ func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
 	growth := r.growth
-	return &overrideProperty{base: p, growth: &growth}
+	return &overrideProperty{base: p, growth: &growth, ruleID: r.ruleID}
 }
 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
+	ruleBase
 	matcher matcher
 }
 
@@ -258,17 +268,20 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
 		return &difficultyLevelRule{
+			ruleBase:    ruleBase{ruleID: rule.ID},
 			matcher:     matcher,
 			percentDiff: int16(rule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
-			matcher: matcher,
+			ruleBase: ruleBase{ruleID: rule.ID},
+			matcher:  matcher,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
-			matcher: matcher,
-			growth:  growthFromInt(rule.ActionValue),
+			ruleBase: ruleBase{ruleID: rule.ID},
+			matcher:  matcher,
+			growth:   growthFromInt(rule.ActionValue),
 		}, nil
 	default:
 		return nil, ErrUnknownActionProperty

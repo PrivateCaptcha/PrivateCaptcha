@@ -9,6 +9,7 @@ type Property interface {
 	OrgID() int32
 	Level() int16
 	Growth() dbgen.DifficultyGrowth
+	RuleID() int32
 }
 
 func NewDBProperty(p *dbgen.Property) *dbProperty {
@@ -45,6 +46,10 @@ func (dbp *dbProperty) Growth() dbgen.DifficultyGrowth {
 	return dbp.property.Growth
 }
 
+func (dbp *dbProperty) RuleID() int32 {
+	return 0
+}
+
 // StubProperty is a test helper that implements the Property interface
 type StubProperty struct {
 	id      int32
@@ -65,3 +70,4 @@ func (p *StubProperty) OwnerID() int32                 { return p.ownerID }
 func (p *StubProperty) OrgID() int32                   { return p.orgID }
 func (p *StubProperty) Level() int16                   { return p.level }
 func (p *StubProperty) Growth() dbgen.DifficultyGrowth { return p.growth }
+func (p *StubProperty) RuleID() int32                  { return 0 }
