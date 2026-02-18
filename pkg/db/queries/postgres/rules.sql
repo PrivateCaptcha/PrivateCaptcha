@@ -88,37 +88,22 @@ RETURNING *;
 
 -- name: GetDifficultyRulePositionNeighbors :one
 WITH target AS (
-    SELECT t.id AS target_id, t.position, t.property_id, t.org_id
+    SELECT t.position, t.property_id, t.org_id
     FROM backend.difficulty_rules t
     WHERE t.id = $1
 ),
-all_rules AS (
-    SELECT dr.id, dr.position,
+rules_list AS (
+    SELECT dr.id AS id, dr.position AS position,
            ROW_NUMBER() OVER (ORDER BY dr.position ASC) - 1 AS idx
     FROM backend.difficulty_rules dr
     CROSS JOIN target
     WHERE (dr.property_id = target.property_id OR (dr.property_id IS NULL AND target.property_id IS NULL))
       AND (dr.org_id = target.org_id OR (dr.org_id IS NULL AND target.org_id IS NULL))
-),
-current AS (
-    SELECT idx AS current_index
-    FROM all_rules
-    WHERE id = $1
-),
-prev AS (
-    SELECT position AS prev_position
-    FROM all_rules
-    WHERE idx = $2 - 1 AND id != $1
-),
-next AS (
-    SELECT position AS next_position
-    FROM all_rules
-    WHERE idx = $2 AND id != $1
+      AND dr.id != $1
 )
 SELECT
-    COALESCE((SELECT current_index FROM current), -1) AS current_index,
-    COALESCE((SELECT prev_position FROM prev), -1.0::float8) AS prev_position,
-    COALESCE((SELECT next_position FROM next), -1.0::float8) AS next_position;
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2 - 1), -1.0::float8) AS prev_position,
+    COALESCE((SELECT position FROM rules_list WHERE idx = $2), -1.0::float8) AS next_position;
 
 -- name: RebalanceDifficultyRules :exec
 WITH rules_list AS (

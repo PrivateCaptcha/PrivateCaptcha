@@ -3337,7 +3337,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		return nil, nil, ErrInvalidInput
 	}
 
-	// Get neighboring positions and current index
+	// Get neighboring positions
 	neighbors, err := impl.querier.GetDifficultyRulePositionNeighbors(ctx, &dbgen.GetDifficultyRulePositionNeighborsParams{
 		ID:      rule.ID,
 		Column2: int32(newIndex),
@@ -3345,27 +3345,6 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to get position neighbors", "ruleID", rule.ID, "newIndex", newIndex, common.ErrAttr(err))
 		return nil, nil, err
-	}
-
-	// Convert interface{} to int for current index
-	currentIndex := -1
-	if neighbors.CurrentIndex != nil {
-		if val, ok := neighbors.CurrentIndex.(int64); ok {
-			currentIndex = int(val)
-		} else if val, ok := neighbors.CurrentIndex.(int32); ok {
-			currentIndex = int(val)
-		} else if val, ok := neighbors.CurrentIndex.(int); ok {
-			currentIndex = val
-		}
-	}
-
-	// Check if the rule is already at the target position
-	if currentIndex == newIndex {
-		// No need to update - already at the target position
-		// This is cheaper than performing a database update
-		slog.InfoContext(ctx, "Rule already at target position, skipping move", "ruleID", rule.ID, "position", currentIndex)
-		// Return the original rule and no audit event since nothing changed
-		return rule, nil, nil
 	}
 
 	// Convert interface{} to float64, using -1 as sentinel for NULL
@@ -3380,6 +3359,42 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		if f, ok := neighbors.NextPosition.(float64); ok {
 			nextPos = f
 		}
+	}
+
+	// Check if the rule is already correctly positioned
+	// For first position: rule.Position < nextPos (and no prev)
+	// For last position: rule.Position > prevPos (and no next)
+	// For middle position: prevPos < rule.Position < nextPos
+	alreadyCorrect := false
+	if newIndex == 0 {
+		// Moving to first position
+		if nextPos < 0 {
+			// Only one rule, it's already in the right place
+			alreadyCorrect = true
+		} else if rule.Position < nextPos && prevPos < 0 {
+			// Already first and correctly positioned
+			alreadyCorrect = true
+		}
+	} else if nextPos < 0 {
+		// Moving to last position (no next neighbor)
+		if rule.Position > prevPos {
+			// Already last and correctly positioned
+			alreadyCorrect = true
+		}
+	} else {
+		// Moving between two positions
+		if prevPos < rule.Position && rule.Position < nextPos {
+			// Already correctly positioned between prev and next
+			alreadyCorrect = true
+		}
+	}
+
+	if alreadyCorrect {
+		// No need to update - position is already correct
+		// This is cheaper than performing a database update
+		slog.InfoContext(ctx, "Rule already correctly positioned, skipping move", "ruleID", rule.ID, "position", rule.Position, "prevPos", prevPos, "nextPos", nextPos)
+		// Return the original rule and no audit event since nothing changed
+		return rule, nil, nil
 	}
 
 	// Calculate new position using fractional indexing
