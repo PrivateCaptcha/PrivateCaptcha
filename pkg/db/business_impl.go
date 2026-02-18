@@ -3326,6 +3326,10 @@ const (
 	// Using 100.0 provides ample room for fractional indexing between positions while
 	// keeping position values human-readable in logs and debugging.
 	RulePositionStep = 100.0
+
+	// noNeighborSentinel is the sentinel value used by GetDifficultyRulePositionNeighbors
+	// to indicate that no neighbor exists at a given position.
+	noNeighborSentinel = -1.0
 )
 
 func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
@@ -3348,8 +3352,8 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	}
 
 	// Convert interface{} to float64, using -1 as sentinel for NULL
-	prevPos := -1.0
-	nextPos := -1.0
+	prevPos := noNeighborSentinel
+	nextPos := noNeighborSentinel
 	if neighbors.PrevPosition != nil {
 		if f, ok := neighbors.PrevPosition.(float64); ok {
 			prevPos = f
@@ -3371,15 +3375,15 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 
 	if newIndex == 0 {
 		// First position: should be less than next (if exists)
-		if nextPos < 0 {
+		if nextPos == noNeighborSentinel {
 			// Only rule, already in correct position
 			isCorrectlyOrdered = true
 		} else {
 			isCorrectlyOrdered = currentPos < nextPos
 		}
-	} else if nextPos < 0 {
+	} else if nextPos == noNeighborSentinel {
 		// Last position: should be greater than prev (if exists)
-		if prevPos < 0 {
+		if prevPos == noNeighborSentinel {
 			// Only rule (shouldn't happen for index > 0)
 			isCorrectlyOrdered = false
 		} else {
@@ -3400,15 +3404,15 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	var newPosition float64
 	if newIndex == 0 {
 		// Moving to first position
-		if nextPos < 0 {
+		if nextPos == noNeighborSentinel {
 			// No rules exist, start at 0
 			newPosition = 0
 		} else {
 			newPosition = nextPos - RulePositionStep
 		}
-	} else if nextPos < 0 {
+	} else if nextPos == noNeighborSentinel {
 		// Moving to last position (no next neighbor)
-		if prevPos < 0 {
+		if prevPos == noNeighborSentinel {
 			// Should not happen - moving to position > 0 but no prev neighbor
 			newPosition = 0
 		} else {

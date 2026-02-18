@@ -1862,6 +1862,99 @@ func TestMoveOrgRules(t *testing.T) {
 	testMoveRulesSuite(t, suite)
 }
 
+func TestCircularMoveOrgRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	for _, numRules := range []int{2, 3} {
+		numRules := numRules
+		t.Run(fmt.Sprintf("%dRules", numRules), func(t *testing.T) {
+			ctx := t.Context()
+			user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create account: %v", err)
+			}
+
+			// Create rules
+			rules := make([]*dbgen.DifficultyRule, numRules)
+			for i := 0; i < numRules; i++ {
+				rule, err := createRuleForMove(ctx, user, &org.ID, nil, fmt.Sprintf("Test Org Rule %d", i), int32(10+i))
+				if err != nil {
+					t.Fatal(err)
+				}
+				rules[i] = rule
+			}
+
+			// Store original order
+			originalRuleIDs := make([]int32, numRules)
+			for i := 0; i < numRules; i++ {
+				originalRuleIDs[i] = rules[i].ID
+			}
+
+			// Set up HTTP server and authentication
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+			cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Move last rule to first position N times (where N = numRules)
+			// After N moves, the order should be back to the original
+			for moveNum := 0; moveNum < numRules; moveNum++ {
+				// Get current rules order
+				currentRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(currentRules[org.ID]) != numRules {
+					t.Fatalf("Expected %d rules, got %d", numRules, len(currentRules[org.ID]))
+				}
+
+				// Find the last rule's ID
+				lastRuleID := currentRules[org.ID][numRules-1].ID
+
+				// Move last rule to first position
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+				form.Add(common.ParamPosition, "0")
+
+				req := httptest.NewRequest("POST", "/endpoint", strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.AddCookie(cookie)
+				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(lastRuleID)))
+
+				w := httptest.NewRecorder()
+				if _, err := server.postMoveOrgRule(w, req); err != nil {
+					t.Fatalf("Move %d failed: %v", moveNum+1, err)
+				}
+
+				t.Logf("Move %d: Moved rule %d to position 0", moveNum+1, lastRuleID)
+			}
+
+			// Verify final order matches original order
+			finalRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(finalRules[org.ID]) != numRules {
+				t.Fatalf("Expected %d rules, got %d", numRules, len(finalRules[org.ID]))
+			}
+
+			for i := 0; i < numRules; i++ {
+				if finalRules[org.ID][i].ID != originalRuleIDs[i] {
+					t.Errorf("After %d circular moves, rule at index %d should be %d but got %d",
+						numRules, i, originalRuleIDs[i], finalRules[org.ID][i].ID)
+				}
+			}
+
+			t.Logf("Successfully verified circular moves for %d rules", numRules)
+		})
+	}
+}
+
 func TestRebalancingPropertyRules(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
