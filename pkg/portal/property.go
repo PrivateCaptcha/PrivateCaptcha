@@ -750,8 +750,11 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 
 	// Check if property has any difficulty rules for rule stats chart
 	includeRules := false
-	if rules, err := s.Store.Impl().GetCachedPropertyRules(ctx, property.ID); err == nil && len(rules) > 0 {
-		includeRules = true
+	batch := map[int32]uint{property.ID: 1}
+	if rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch); err == nil {
+		if rules, exists := rulesMap[property.ID]; exists && len(rules) > 0 {
+			includeRules = true
+		}
 	}
 
 	renderCtx := &propertyDashboardRenderContext{
