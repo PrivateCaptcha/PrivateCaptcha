@@ -3099,6 +3099,15 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 	return result, nil
 }
 
+func (impl *BusinessStoreImpl) GetCachedOrgRules(ctx context.Context, orgID int32) ([]*dbgen.DifficultyRule, error) {
+	cacheKey := RawOrgRulesCacheKey(orgID)
+	cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	return cachedRules, nil
+}
+
 func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if params == nil {
 		return nil, nil, ErrInvalidInput
