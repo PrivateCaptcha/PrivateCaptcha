@@ -58,15 +58,24 @@
             </div>
         </div>
 
-        <!-- Condition Value for String/IP -->
-        <div x-show="!isListCondition && showConditionValue">
-            <label class="pc-internal-form-label">
-                <span x-text="isIPCondition ? 'IP Address Prefix (CIDR)' : 'Value'"></span>
-            </label>
+        <!-- Condition Value for User Agent -->
+        <div x-show="isStringCondition && showConditionValue">
+            <label class="pc-internal-form-label">Value</label>
             <div class="mt-2">
-                <input type="text" name="{{ .Const.ConditionValue }}" id="{{ .Const.ConditionValue }}" :disabled="isListCondition" placeholder="Enter value..." value="{{ .Params.ConditionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+                <input type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
+
+        <!-- Condition Value for IP Address -->
+        <div x-show="isIPCondition && showConditionValue">
+            <label class="pc-internal-form-label">IP Address Prefix (CIDR)</label>
+            <div class="mt-2">
+                <input type="text" x-model="conditionValueIPAddress" placeholder="Enter IP address..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+            </div>
+        </div>
+
+        <!-- Hidden field that collects the active condition value -->
+        <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
 
         <!-- Country Selection -->
         <div x-show="isListCondition">
@@ -113,9 +122,6 @@
 
                 <p class="mt-1 text-xs text-gray-500 truncate" x-show="selectedCountries">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
 
-                <!-- Hidden input for comma-separated values -->
-                <input type="hidden" name="{{ .Const.ConditionValue }}" :value="selectedCountries.join(',')" />
-
                 <!-- Hidden input for operator with negation -->
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" />
             </div>
@@ -136,9 +142,9 @@
 
         <!-- Difficulty Adjustment -->
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
-            <label for="{{ .Const.ActionValue }}" class="pc-internal-form-label">Difficulty Level (%)</label>
+            <label for="difficulty_level_input" class="pc-internal-form-label">Difficulty Level (%)</label>
             <div class="mt-2">
-                <input type="number" name="{{ .Const.ActionValue }}" id="{{ .Const.ActionValue }}" placeholder="0" min="-100" max="100" value="{{ .Params.ActionValue }}" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
+                <input type="number" x-model.number="actionValueDifficultyLevel" id="difficulty_level_input" placeholder="0" min="-100" max="100" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
                 <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-100%</code> to <code class="px-1 py-0.5 bg-gray-100">+100%</code></p>
             </div>
         </div>
@@ -147,14 +153,17 @@
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
             <div class="mt-2">
-                <select name="{{ .Const.ActionValue }}" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
-                    {{ with .Const.GrowthTypeConstant }}<option value="0" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Constant (no growth)</option>{{end}}
-                    {{ with .Const.GrowthTypeSlow }}<option value="1" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Slow</option>{{end}}
-                    {{ with .Const.GrowthTypeMedium }}<option value="2" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Normal</option>{{end}}
-                    {{ with .Const.GrowthTypeFast }}<option value="3" {{ if eq $.Params.ActionValue . }}selected{{ end }}>Fast</option>{{end}}
+                <select x-model="actionValueDifficultyGrowth" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
+                    {{ with .Const.GrowthTypeConstant }}<option value="0">Constant (no growth)</option>{{end}}
+                    {{ with .Const.GrowthTypeSlow }}<option value="1">Slow</option>{{end}}
+                    {{ with .Const.GrowthTypeMedium }}<option value="2">Normal</option>{{end}}
+                    {{ with .Const.GrowthTypeFast }}<option value="3">Fast</option>{{end}}
                 </select>
             </div>
         </div>
+
+        <!-- Hidden field that collects the active action value -->
+        <input type="hidden" name="{{ .Const.ActionValue }}" :value="activeActionValue" />
     </div>
 </div>
 
