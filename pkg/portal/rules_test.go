@@ -1740,13 +1740,40 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 		t.Fatalf("Failed to create rule: %v", err)
 	}
 
-	// Try to move the single rule to position 0 (should succeed even though it's the only rule)
-	_, _, err = server.Store.Impl().MoveDifficultyRuleWithRebalancing(ctx, rule, 0, user)
+	// Set up HTTP server and authentication
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
-		t.Fatalf("Move rule failed: %v", err)
+		t.Fatal(err)
 	}
 
-	// Verify the rule is still present
+	// Try to move the single rule to position 0 (should succeed even though it's the only rule)
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Add(common.ParamPosition, "0")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
+		server.IDHasher.Encrypt(int(org.ID)),
+		server.IDHasher.Encrypt(int(property.ID)),
+		server.IDHasher.Encrypt(int(rule.ID))), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+	w := httptest.NewRecorder()
+
+	// Call through HTTP server
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK && w.Code != http.StatusSeeOther {
+		t.Fatalf("Move handler returned unexpected status: %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify the rule is still present and at position 0
 	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
 	if err != nil {
 		t.Fatalf("Failed to retrieve rules: %v", err)
@@ -1756,13 +1783,15 @@ func TestMovePropertyRuleSingleRule(t *testing.T) {
 		t.Fatalf("Expected 1 rule, got %d", len(propertyRules))
 	}
 	if propertyRules[0].ID != rule.ID {
-		t.Errorf("Expected rule ID %d, got %d", rule.ID, propertyRules[0].ID)
+		t.Errorf("Expected rule ID %d at index 0, got %d", rule.ID, propertyRules[0].ID)
 	}
 }
 
 type moveRulesTestSuite struct {
 	createRules   func(ctx context.Context, t *testing.T, user *dbgen.User, org *dbgen.Organization, numRules int) ([]*dbgen.DifficultyRule, *dbgen.Property)
 	retrieveRules func(ctx context.Context, t *testing.T, org *dbgen.Organization, property *dbgen.Property) []*dbgen.DifficultyRule
+	moveHandler   func(w http.ResponseWriter, r *http.Request) (*ViewModel, error)
+	getEndpoint   func(orgID, propertyID, ruleID int32) string
 }
 
 func testMoveRulesSuite(t *testing.T, suite moveRulesTestSuite) {
@@ -1792,10 +1821,42 @@ func testMoveRulesSuite(t *testing.T, suite moveRulesTestSuite) {
 						}
 						initialPosition := initialRule.Position
 
-						// Move the rule directly through the store
-						_, _, err = server.Store.Impl().MoveDifficultyRuleWithRebalancing(ctx, rules[fromIndex], toIndex, user)
+						// Set up HTTP server and authentication
+						srv := http.NewServeMux()
+						server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+						cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 						if err != nil {
-							t.Fatalf("Move rule failed: %v", err)
+							t.Fatal(err)
+						}
+
+						// Prepare request for move handler
+						form := url.Values{}
+						form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+						form.Add(common.ParamPosition, strconv.Itoa(toIndex))
+
+						var propertyID int32
+						if property != nil {
+							propertyID = property.ID
+						}
+						endpoint := suite.getEndpoint(org.ID, propertyID, rules[fromIndex].ID)
+
+						req := httptest.NewRequest("POST", endpoint, strings.NewReader(form.Encode()))
+						req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						req.AddCookie(cookie)
+						req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+						if property != nil {
+							req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+						}
+						req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[fromIndex].ID)))
+
+						w := httptest.NewRecorder()
+
+						// Call through HTTP server
+						srv.ServeHTTP(w, req)
+
+						if w.Code != http.StatusOK && w.Code != http.StatusSeeOther {
+							t.Fatalf("Move handler returned unexpected status: %d: %s", w.Code, w.Body.String())
 						}
 
 						// Verify rule moved to correct position
@@ -1821,12 +1882,20 @@ func testMoveRulesSuite(t *testing.T, suite moveRulesTestSuite) {
 							}
 						}
 
+						// Verify the moved rule is at the correct position (toIndex)
+						movedRule, err := server.Store.Impl().RetrieveDifficultyRule(ctx, rules[fromIndex].ID)
+						if err != nil {
+							t.Fatalf("Failed to retrieve moved rule: %v", err)
+						}
+						// Check that the position is between neighbors or at the edges
+						if toIndex > 0 && toIndex < len(movedRules)-1 {
+							if !(movedRules[toIndex-1].Position < movedRule.Position && movedRule.Position < movedRules[toIndex+1].Position) {
+								t.Errorf("Rule position %f is not between neighbors %f and %f", movedRule.Position, movedRules[toIndex-1].Position, movedRules[toIndex+1].Position)
+							}
+						}
+
 						// If moving to same position, verify Position value didn't change (if it was already correct)
 						if fromIndex == toIndex {
-							movedRule, err := server.Store.Impl().RetrieveDifficultyRule(ctx, rules[fromIndex].ID)
-							if err != nil {
-								t.Fatalf("Failed to retrieve moved rule: %v", err)
-							}
 							if movedRule.Position != initialPosition {
 								t.Logf("Position changed from %f to %f for same-position move (may indicate rebalancing)", initialPosition, movedRule.Position)
 							}
@@ -1867,6 +1936,13 @@ func TestMovePropertyRules(t *testing.T) {
 			}
 			return allRules[property.ID]
 		},
+		moveHandler: server.postMovePropertyRule,
+		getEndpoint: func(orgID, propertyID, ruleID int32) string {
+			return fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
+				server.IDHasher.Encrypt(int(orgID)),
+				server.IDHasher.Encrypt(int(propertyID)),
+				server.IDHasher.Encrypt(int(ruleID)))
+		},
 	}
 
 	testMoveRulesSuite(t, suite)
@@ -1895,6 +1971,12 @@ func TestMoveOrgRules(t *testing.T) {
 				t.Fatalf("Failed to retrieve rules: %v", err)
 			}
 			return allRules[org.ID]
+		},
+		moveHandler: server.postMoveOrgRule,
+		getEndpoint: func(orgID, propertyID, ruleID int32) string {
+			return fmt.Sprintf("/org/%s/rules/%s/move",
+				server.IDHasher.Encrypt(int(orgID)),
+				server.IDHasher.Encrypt(int(ruleID)))
 		},
 	}
 
@@ -1933,10 +2015,37 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Fatalf("Failed to corrupt positions: %v", err)
 	}
 
-	// Try to move a rule - this should trigger rebalancing
-	_, _, err = server.Store.Impl().MoveDifficultyRuleWithRebalancing(ctx, rules[2], 1, user)
+	// Set up HTTP server and authentication
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
 	if err != nil {
-		t.Fatalf("Move rule failed: %v", err)
+		t.Fatal(err)
+	}
+
+	// Try to move a rule - this should trigger rebalancing
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Add(common.ParamPosition, "1")
+
+	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
+		server.IDHasher.Encrypt(int(org.ID)),
+		server.IDHasher.Encrypt(int(property.ID)),
+		server.IDHasher.Encrypt(int(rules[2].ID))), strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[2].ID)))
+
+	w := httptest.NewRecorder()
+
+	// Call through HTTP server
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK && w.Code != http.StatusSeeOther {
+		t.Fatalf("Move handler returned unexpected status: %d: %s", w.Code, w.Body.String())
 	}
 
 	// Verify rules are now properly spaced
