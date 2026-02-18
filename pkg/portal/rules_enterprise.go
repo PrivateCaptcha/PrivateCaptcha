@@ -956,28 +956,18 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		if moveErr != nil {
 			return nil, moveErr
 		}
-		if auditEvent != nil {
-			return []*common.AuditLogEvent{auditEvent}, nil
-		}
-		return nil, nil
+		return []*common.AuditLogEvent{auditEvent}, nil
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	// For htmx requests, return the updated view
-	if _, ok := r.Header[common.HeaderHtmxRequest]; ok {
-		renderCtx, _, err := s.getPropertyRules(w, r)
-		if err != nil {
-			return nil, err
-		}
-		return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
+	renderCtx, _, err := s.getPropertyRules(w, r)
+	if err != nil {
+		return nil, err
 	}
 
-	// For regular HTTP requests, redirect back to the property page
-	redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID))) + "?" + common.ParamTab + "=" + common.RulesEndpoint
-	common.Redirect(redirectURL, http.StatusSeeOther, w, r)
-	return &ViewModel{View: "", AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
 }
 
 func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -1025,30 +1015,20 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		if moveErr != nil {
 			return nil, moveErr
 		}
-		if auditEvent != nil {
-			return []*common.AuditLogEvent{auditEvent}, nil
-		}
-		return nil, nil
+		return []*common.AuditLogEvent{auditEvent}, nil
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to move rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	// For htmx requests, return the updated view
-	if _, ok := r.Header[common.HeaderHtmxRequest]; ok {
-		renderCtx, _, err := s.createOrgRulesContext(ctx, org, user)
-		if err != nil {
-			return nil, err
-		}
-		return &ViewModel{
-			Model:      renderCtx,
-			View:       orgRulesTemplate,
-			AuditEvent: auditEvent,
-		}, nil
+	renderCtx, _, err := s.createOrgRulesContext(ctx, org, user)
+	if err != nil {
+		return nil, err
 	}
 
-	// For regular HTTP requests, redirect back to the org page
-	redirectURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))) + "?" + common.ParamTab + "=" + common.RulesEndpoint
-	common.Redirect(redirectURL, http.StatusSeeOther, w, r)
-	return &ViewModel{View: "", AuditEvent: auditEvent}, nil
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgRulesTemplate,
+		AuditEvent: auditEvent,
+	}, nil
 }
