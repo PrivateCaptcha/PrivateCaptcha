@@ -179,6 +179,10 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		} else {
 			actionValue = fmt.Sprintf("%d%%", percent)
 		}
+	case dbgen.RuleActionPropertyDifficultyGrowth:
+		actionProperty = "Difficulty growth"
+		actionAction = "set"
+		actionValue = string(growthLevelFromIndex(int(rule.ActionValue)))
 	default:
 		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
 		actionValue = fmt.Sprintf("%d", rule.ActionValue)
@@ -281,13 +285,7 @@ func growthLevelToIndex(level dbgen.DifficultyGrowth) int {
 	}
 }
 
-func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGrowth {
-	i, err := strconv.Atoi(index)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to convert growth level", "value", index, common.ErrAttr(err))
-		return dbgen.DifficultyGrowthMedium
-	}
-
+func growthLevelFromIndex(i int) dbgen.DifficultyGrowth {
 	switch i {
 	case 0:
 		return dbgen.DifficultyGrowthConstant
@@ -298,9 +296,18 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	case 3:
 		return dbgen.DifficultyGrowthFast
 	default:
-		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
 		return dbgen.DifficultyGrowthMedium
 	}
+}
+
+func growthLevelFromValue(ctx context.Context, index string) dbgen.DifficultyGrowth {
+	i, err := strconv.Atoi(index)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to convert growth level", "value", index, common.ErrAttr(err))
+		return dbgen.DifficultyGrowthMedium
+	}
+
+	return growthLevelFromIndex(i)
 }
 
 func parseMaxReplayCount(ctx context.Context, value string) int32 {
@@ -904,7 +911,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
-	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
+	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]

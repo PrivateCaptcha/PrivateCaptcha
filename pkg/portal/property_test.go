@@ -851,7 +851,7 @@ func TestGrowthLevelFromIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.index, func(t *testing.T) {
-			result := growthLevelFromIndex(ctx, tt.index)
+			result := growthLevelFromValue(ctx, tt.index)
 			if result != tt.expected {
 				t.Errorf("growthLevelFromIndex(%s) = %s, want %s", tt.index, result, tt.expected)
 			}
