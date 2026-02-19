@@ -44,4 +44,5 @@ const (
 	ExportEndpoint        = "export"
 	AsyncTaskEndpoint     = "asynctask"
 	RulesEndpoint         = "rules"
+	RuleStatsEndpoint     = "rulestats"
 )

@@ -3,10 +3,12 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -190,4 +192,89 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	}
 
 	return renderCtx, nil, nil
+}
+
+func (s *Server) shouldIncludeRulesChart(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) bool {
+	// Check for cached property rules
+	if propRules, err := s.Store.Impl().GetCachedPropertyRules(ctx, property.ID); err == nil && len(propRules) > 0 {
+		return true
+	}
+
+	// Check for cached org rules
+	if orgRules, err := s.Store.Impl().GetCachedOrgRules(ctx, org.ID); err == nil && len(orgRules) > 0 {
+		return true
+	}
+
+	return false
+}
+
+func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	property, err := s.Property(org, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	periodStr := r.PathValue(common.ParamPeriod)
+	var period common.TimePeriod
+	switch periodStr {
+	case PeriodEndpointWeek:
+		period = common.TimePeriodWeek
+	case PeriodEndpointMonth:
+		period = common.TimePeriodMonth
+	default:
+		slog.ErrorContext(ctx, "Incorrect period argument for rule stats", "period", periodStr)
+		period = common.TimePeriodWeek
+	}
+
+	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(property.ID)), "rulestats", period.String())
+	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	usage := []*propertyRuleStatsPoint{}
+
+	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
+		anyNonZero := false
+		for _, st := range stats {
+			if st.Count > 0 {
+				anyNonZero = true
+			}
+			usage = append(usage, &propertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.Count)})
+		}
+
+		// we want to show "No data available" on the client
+		if !anyNonZero {
+			usage = []*propertyRuleStatsPoint{}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve property rule stats", common.ErrAttr(err))
+	}
+
+	response := propertyRuleStatsResponse{
+		Usage: usage,
+	}
+
+	cacheHeaders := map[string][]string{
+		common.HeaderETag:         []string{etag},
+		common.HeaderCacheControl: common.PrivateCacheControl1m,
+	}
+
+	common.SendJSONResponse(ctx, w, response, cacheHeaders)
 }

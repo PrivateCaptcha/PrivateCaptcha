@@ -111,3 +111,47 @@
         </div>
     </div>
 </div>
+
+{{ if and $.Platform.Enterprise $.Params.IncludeRules }}
+<div class="overflow-hidden bg-white border border-gray-200 rounded-xl mt-12">
+    <div class="px-4 pt-5 sm:px-6 relative z-0" x-data="ruleChartComponent()">
+        <div class="flex flex-wrap items-center justify-between">
+            <p class="text-base font-bold text-gray-900 lg:order-1">Rule Usage</p>
+
+            <nav class="flex items-center justify-center mt-4 space-x-1 2xl:order-2 lg:order-3 md:mt-0 lg:mt-4 sm:space-x-2 2xl:mt-0">
+                <a href="#" title=""
+                    @click="period = '30d'; updateRuleChart()"
+                    :class="period == '30d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
+                    class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
+                    30 Days
+                </a>
+
+                <a href="#" title=""
+                    @click="period = '7d'; updateRuleChart()"
+                    :class="period == '7d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
+                    class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
+                    7 Days
+                </a>
+            </nav>
+        </div>
+
+        <div>
+            <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-1">
+                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+                    <dt class="truncate text-sm font-medium text-gray-500">Requests Affected by Rules <span class="text-gray-400">(Property and Organization)</span></dt>
+                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-900" x-text="rulesMatched"></dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="mt-6 min-h-96" id="ruleChart" x-ref="ruleChart"></div>
+
+        <div x-show="isLoading" class="absolute inset-0 flex justify-center items-center z-10">
+            <svg id="spinner" class="animate-spin h-10 w-10 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25 " cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+    </div>
+</div>
+{{ end }}

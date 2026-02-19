@@ -88,11 +88,12 @@ type propertyDashboardRenderContext struct {
 	CsrfRenderContext
 	// scripts.html is shared so captcha context has to be shared too
 	CaptchaRenderContext
-	Property  *userProperty
-	Org       *userOrg
-	NameError string
-	Tab       int
-	CanEdit   bool
+	Property     *userProperty
+	Org          *userOrg
+	NameError    string
+	Tab          int
+	CanEdit      bool
+	IncludeRules bool
 }
 
 type propertySettingsRenderContext struct {
@@ -682,6 +683,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		Property:             propertyToUserProperty(property, s.IDHasher),
 		Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		IncludeRules:         s.shouldIncludeRulesChart(ctx, org, property),
 	}
 
 	return renderCtx, property, nil
