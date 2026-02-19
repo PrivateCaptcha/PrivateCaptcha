@@ -695,7 +695,7 @@ func newUpdateRuleAuditLogEvent(updatedRule *dbgen.DifficultyRule, result *dbgen
 func newDeleteRuleAuditLogEvent(rule *dbgen.DifficultyRule, user *dbgen.User) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    user.ID,
-		Action:    common.AuditLogActionSoftDelete,
+		Action:    common.AuditLogActionDelete,
 		EntityID:  int64(rule.ID),
 		TableName: TableNameDifficultyRules,
 		OldValue:  NewAuditLogDifficultyRule(rule),

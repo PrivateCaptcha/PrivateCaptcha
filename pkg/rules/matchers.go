@@ -65,7 +65,6 @@ func (sm *stringMatcher) matches(ri *RequestInfo) bool {
 }
 
 // containsCaseInsensitive checks if s contains substr in a case-insensitive manner
-// This is more efficient than converting strings and avoids allocations
 func containsCaseInsensitive(s, substr string) bool {
 	sLen := len(s)
 	substrLen := len(substr)

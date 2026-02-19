@@ -958,7 +958,7 @@ func TestGrowthLevelFromIndex(t *testing.T) {
 		t.Run(tt.index, func(t *testing.T) {
 			result := growthLevelFromValue(ctx, tt.index)
 			if result != tt.expected {
-				t.Errorf("growthLevelFromIndex(%s) = %s, want %s", tt.index, result, tt.expected)
+				t.Errorf("growthLevelFromValue(%s) = %s, want %s", tt.index, result, tt.expected)
 			}
 		})
 	}

@@ -112,7 +112,7 @@ func stubAuditLogs() []*UserAuditLog {
 func numberedRuleNames(rules []*DifficultyRuleModel) []string {
 	result := make([]string, 0, len(rules))
 	for _, r := range rules {
-		result = append(result, fmt.Sprintf("%s", r.Name))
+		result = append(result, r.Name)
 	}
 	return result
 }

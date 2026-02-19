@@ -48,8 +48,16 @@ func TestStatusCodeString(t *testing.T) {
 		StatusRuleActionPropertyInvalid,
 		StatusRuleIPAddressRequired,
 		StatusRuleCountryRequired,
+		StatusRuleCountryInvalid,
 		StatusRuleDifficultyValueInvalid,
 		StatusRuleDifficultyGrowthInvalid,
+		StatusRuleDomainRequired,
+		StatusRuleDomainInvalid,
+		StatusRuleDomainSubdomain,
+		StatusRulePermissionsError,
+		StatusRulePositionPrecisionError,
+		StatusPropertyRulesLimitError,
+		StatusPropertyRulesSubscriptionRequired,
 	}
 
 	for _, sc := range statusCodes {

@@ -57,6 +57,7 @@ type StubProperty struct {
 	ownerID int32
 	orgID   int32
 	level   int16
+	ruleID  int32
 	growth  dbgen.DifficultyGrowth
 }
 
@@ -70,4 +71,4 @@ func (p *StubProperty) OwnerID() int32                 { return p.ownerID }
 func (p *StubProperty) OrgID() int32                   { return p.orgID }
 func (p *StubProperty) Level() int16                   { return p.level }
 func (p *StubProperty) Growth() dbgen.DifficultyGrowth { return p.growth }
-func (p *StubProperty) RuleID() int32                  { return 0 }
+func (p *StubProperty) RuleID() int32                  { return p.ruleID }

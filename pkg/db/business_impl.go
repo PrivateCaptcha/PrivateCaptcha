@@ -2974,6 +2974,17 @@ func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int3
 	}
 }
 
+func compareDifficultyRules(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
+	switch {
+	case a.Position < b.Position:
+		return -1
+	case a.Position > b.Position:
+		return 1
+	default:
+		return 0
+	}
+}
+
 // NOTE: we kind of repeat the job of StoreBulkReader but the reason it's not refactored instead to support arrays
 // is that here we group results into a map and it's faster to do directly (StoreBulkReader just returns simple array)
 func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.Context, batch map[int32]uint) (map[int32][]*dbgen.DifficultyRule, error) {
@@ -3016,9 +3027,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		// Cache and add to result
 		for propertyID, propertyRules := range rulesByProperty {
 			// Sort by position
-			slices.SortFunc(propertyRules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-				return int(a.Position - b.Position)
-			})
+			slices.SortFunc(propertyRules, compareDifficultyRules)
 			cacheKey := RawPropertyRulesCacheKey(propertyID)
 			_ = impl.cache.SetWithTTL(ctx, cacheKey, propertyRules, propertyTTL)
 			result[propertyID] = propertyRules
@@ -3078,9 +3087,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		// Cache and add to result
 		for orgID, orgRules := range rulesByOrg {
 			// Sort by position
-			slices.SortFunc(orgRules, func(a *dbgen.DifficultyRule, b *dbgen.DifficultyRule) int {
-				return int(a.Position - b.Position)
-			})
+			slices.SortFunc(orgRules, compareDifficultyRules)
 			cacheKey := RawOrgRulesCacheKey(orgID)
 			_ = impl.cache.SetWithTTL(ctx, cacheKey, orgRules, propertyTTL)
 			result[orgID] = orgRules

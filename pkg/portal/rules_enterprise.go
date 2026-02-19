@@ -156,7 +156,7 @@ func (c *RuleWizardRenderContext) parseIPAddressCondition() common.StatusCode {
 	return common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseCountryCodeCondition() common.StatusCode {
+func (c *RuleWizardRenderContext) parseCountryCodeCondition(separator string) common.StatusCode {
 	// Validate operator
 	if c.ConditionOperator != string(dbgen.RuleConditionOperatorIn) {
 		return common.StatusRuleConditionOperatorInvalid
@@ -165,6 +165,14 @@ func (c *RuleWizardRenderContext) parseCountryCodeCondition() common.StatusCode 
 	// Validate value
 	if c.ConditionValue == "" {
 		return common.StatusRuleCountryRequired
+	}
+
+	values := strings.Split(c.ConditionValue, separator)
+	for _, cc := range values {
+		data := countries.ByName(cc)
+		if data == countries.Unknown {
+			return common.StatusRuleCountryInvalid
+		}
 	}
 
 	// Country codes are comma-separated
@@ -503,8 +511,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	case string(dbgen.RuleConditionPropertyIPAddress):
 		parseStatus = renderCtx.parseIPAddressCondition()
 	case string(dbgen.RuleConditionPropertyCountryCode):
-		parseStatus = renderCtx.parseCountryCodeCondition()
 		conditionValueSeparator = db.Text(",")
+		parseStatus = renderCtx.parseCountryCodeCondition(conditionValueSeparator.String)
 	case string(dbgen.RuleConditionPropertyDomain):
 		parseStatus = renderCtx.parseDomainCondition(domain)
 	default:

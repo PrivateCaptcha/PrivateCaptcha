@@ -52,17 +52,18 @@ const (
 	StatusRuleActionPropertyInvalid         StatusCode = 1408
 	StatusRuleIPAddressRequired             StatusCode = 1409
 	StatusRuleCountryRequired               StatusCode = 1410
-	StatusRuleDomainRequired                StatusCode = 1411
-	StatusRuleDomainInvalid                 StatusCode = 1412
-	StatusRuleDomainSubdomain               StatusCode = 1413
-	StatusRuleDifficultyValueInvalid        StatusCode = 1414
-	StatusRuleDifficultyGrowthInvalid       StatusCode = 1415
-	StatusRulePermissionsError              StatusCode = 1416
-	StatusRulePositionPrecisionError        StatusCode = 1417
-	StatusOrgRulesLimitError                StatusCode = 1418
-	StatusPropertyRulesLimitError           StatusCode = 1419
-	StatusOrgRulesSubscriptionRequiredError StatusCode = 1420
-	StatusPropertyRulesSubscriptionRequired StatusCode = 1421
+	StatusRuleCountryInvalid                StatusCode = 1411
+	StatusRuleDomainRequired                StatusCode = 1412
+	StatusRuleDomainInvalid                 StatusCode = 1413
+	StatusRuleDomainSubdomain               StatusCode = 1414
+	StatusRuleDifficultyValueInvalid        StatusCode = 1415
+	StatusRuleDifficultyGrowthInvalid       StatusCode = 1416
+	StatusRulePermissionsError              StatusCode = 1417
+	StatusRulePositionPrecisionError        StatusCode = 1418
+	StatusOrgRulesLimitError                StatusCode = 1419
+	StatusPropertyRulesLimitError           StatusCode = 1420
+	StatusOrgRulesSubscriptionRequiredError StatusCode = 1421
+	StatusPropertyRulesSubscriptionRequired StatusCode = 1422
 )
 
 func (sc StatusCode) Success() bool {
@@ -155,6 +156,8 @@ func (sc StatusCode) String() string {
 		return "IP address prefix is required."
 	case StatusRuleCountryRequired:
 		return "At least one country must be selected."
+	case StatusRuleCountryInvalid:
+		return "Country code is not valid."
 	case StatusRuleDomainRequired:
 		return "Domain is required."
 	case StatusRuleDomainInvalid:
@@ -162,9 +165,9 @@ func (sc StatusCode) String() string {
 	case StatusRuleDomainSubdomain:
 		return "Domain has to be a subdomain of main domain."
 	case StatusRuleDifficultyValueInvalid:
-		return "Difficulty adjustment must be between -100 and 1000."
+		return "Difficulty adjustment must be within the range."
 	case StatusRuleDifficultyGrowthInvalid:
-		return "Difficulty growth must be between 0 and 3."
+		return "Difficulty growth must be a know value."
 	case StatusRulePermissionsError:
 		return "You don't have permission to access this rule."
 	case StatusRulePositionPrecisionError:

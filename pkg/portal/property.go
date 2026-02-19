@@ -128,7 +128,6 @@ type propertyAuditLogsRenderContext struct {
 
 type DifficultyRuleModel struct {
 	ID                string
-	Position          int
 	Name              string
 	Enabled           bool
 	ConditionProperty string
@@ -223,7 +222,6 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 
 	return &DifficultyRuleModel{
 		ID:                hasher.Encrypt(int(rule.ID)),
-		Position:          int(rule.Position) + 1,
 		Name:              rule.Name,
 		Enabled:           rule.Enabled,
 		ConditionProperty: conditionProperty,
