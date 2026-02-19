@@ -80,4 +80,5 @@ var (
 	HeaderSitekey             = http.CanonicalHeaderKey("X-PC-Sitekey")
 	HeaderCacheControl        = http.CanonicalHeaderKey("Cache-Control")
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
+	HeaderOrigin              = http.CanonicalHeaderKey("Origin")
 )

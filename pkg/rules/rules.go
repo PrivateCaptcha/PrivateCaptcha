@@ -209,7 +209,7 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 
 func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode:
+	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
 		value := rule.ConditionValueStr.String
 		sm := &stringMatcher{
 			conditionProperty:        rule.ConditionProperty,

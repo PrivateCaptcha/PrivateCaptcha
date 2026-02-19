@@ -36,6 +36,14 @@ func newTestRequestInfoNoIP(userAgent string) *RequestInfo {
 	return NewRequestInfo(req, "")
 }
 
+func newTestRequestInfoWithDomain(userAgent string, ip netip.Addr, domain string) *RequestInfo {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Origin", "https://"+domain)
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
+	return NewRequestInfo(req.WithContext(ctx), "")
+}
+
 func newStubProperty() *difficulty.StubProperty {
 	return difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthMedium)
 }
@@ -1232,6 +1240,182 @@ func TestCountryCodeNegation(t *testing.T) {
 			}
 
 			ri := newTestRequestInfoWithCountryCode("test", netip.MustParseAddr("1.2.3.4"), "CF-IPCountry", tt.countryCode)
+			gotMatch := compiled.Matches(ri)
+
+			if gotMatch != tt.wantMatch {
+				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
+			}
+		})
+	}
+}
+
+func TestDomainEqualsMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyDomain,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "example.com", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ri := newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), "example.com")
+
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match exact domain")
+	}
+
+	ri2 := newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), "other.com")
+	if compiled.Matches(ri2) {
+		t.Error("Expected rule to not match different domain")
+	}
+}
+
+func TestDomainContainsMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyDomain,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "example", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ri := newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), "test.example.com")
+
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match containing domain")
+	}
+
+	ri2 := newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), "other.com")
+	if compiled.Matches(ri2) {
+		t.Error("Expected rule to not match non-containing domain")
+	}
+}
+
+func TestDomainEmptyMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyDomain,
+		ConditionOperator: dbgen.RuleConditionOperatorEmpty,
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Request with empty domain (no Origin or Referer headers)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", "test")
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
+	ri := NewRequestInfo(req.WithContext(ctx), "")
+
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match empty domain")
+	}
+
+	// Request with non-empty domain
+	ri2 := newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), "example.com")
+	if compiled.Matches(ri2) {
+		t.Error("Expected rule to not match non-empty domain")
+	}
+}
+
+func TestDomainNegation(t *testing.T) {
+	tests := []struct {
+		name      string
+		operator  dbgen.RuleConditionOperator
+		value     string
+		domain    string
+		negated   bool
+		wantMatch bool
+	}{
+		{
+			name:      "equals negated matches different",
+			operator:  dbgen.RuleConditionOperatorEquals,
+			value:     "example.com",
+			domain:    "other.com",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "equals negated not matches same",
+			operator:  dbgen.RuleConditionOperatorEquals,
+			value:     "example.com",
+			domain:    "example.com",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "contains negated matches non-containing",
+			operator:  dbgen.RuleConditionOperatorContains,
+			value:     "example",
+			domain:    "other.com",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "contains negated not matches containing",
+			operator:  dbgen.RuleConditionOperatorContains,
+			value:     "example",
+			domain:    "test.example.com",
+			negated:   true,
+			wantMatch: false,
+		},
+		{
+			name:      "empty negated matches non-empty",
+			operator:  dbgen.RuleConditionOperatorEmpty,
+			domain:    "example.com",
+			negated:   true,
+			wantMatch: true,
+		},
+		{
+			name:      "empty negated not matches empty",
+			operator:  dbgen.RuleConditionOperatorEmpty,
+			domain:    "",
+			negated:   true,
+			wantMatch: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty:        dbgen.RuleConditionPropertyDomain,
+				ConditionOperator:        tt.operator,
+				ConditionOperatorNegated: tt.negated,
+				ConditionValueStr:        pgtype.Text{String: tt.value, Valid: true},
+				ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:              50,
+				Enabled:                  true,
+			}
+
+			compiled, err := CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var ri *RequestInfo
+			if tt.domain == "" {
+				// Create request without Origin/Referer headers for empty domain
+				req := httptest.NewRequest("GET", "/", nil)
+				req.Header.Set("User-Agent", "test")
+				ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
+				ri = NewRequestInfo(req.WithContext(ctx), "")
+			} else {
+				ri = newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), tt.domain)
+			}
 			gotMatch := compiled.Matches(ri)
 
 			if gotMatch != tt.wantMatch {

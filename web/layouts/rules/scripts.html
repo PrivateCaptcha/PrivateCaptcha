@@ -6,9 +6,10 @@ function ruleFormData() {
     const formDataConditionProperty = '{{ .Params.ConditionProperty }}';
     const formDataActionProperty = '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}';
     const formDataActionValue = '{{ .Params.ActionValue }}';
-    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
-    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionUserAgent }}';
-    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionIPAddress }}';
+    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
+    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
+    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
+    const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}';
 
     // Initialize operator with negation suffix if needed
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
@@ -25,6 +26,7 @@ function ruleFormData() {
         // Separate condition value fields for each type
         conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
         conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
+        conditionValueDomain: isDomainCondition ? formDataConditionValue : '',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         // Separate action value fields for each type
@@ -37,15 +39,19 @@ function ruleFormData() {
         },
 
         get isStringCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionUserAgent }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
         },
 
         get isListCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionCountryCode }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
         },
 
         get isIPCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionIPAddress }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
+        },
+
+        get isDomainCondition() {
+            return this.conditionProperty === '{{ .Const.ConditionPropertyDomain }}';
         },
 
         // Computed property that returns the active condition value based on current condition type
@@ -54,6 +60,8 @@ function ruleFormData() {
                 return this.selectedCountries.join(',');
             } else if (this.isIPCondition) {
                 return this.conditionValueIPAddress;
+            } else if (this.isDomainCondition) {
+                return this.conditionValueDomain;
             } else {
                 return this.conditionValueUserAgent;
             }
@@ -84,6 +92,16 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorIn }}', label: 'In' },
                     { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' },
                 ];
+            } else if (this.isDomainCondition) {
+                // Domain operators - same as user agent
+                return [
+                    { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
+                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
+                    { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
+                    { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
+                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                ];
             } else {
                 // String operators for user_agent
                 return [
@@ -109,13 +127,20 @@ function ruleFormData() {
                 // Clear the condition value fields when switching types to avoid pollution
                 if (this.isStringCondition) {
                     this.conditionValueIPAddress = '';
+                    this.conditionValueDomain = '';
                     this.selectedCountries = [];
                 } else if (this.isIPCondition) {
                     this.conditionValueUserAgent = '';
+                    this.conditionValueDomain = '';
+                    this.selectedCountries = [];
+                } else if (this.isDomainCondition) {
+                    this.conditionValueUserAgent = '';
+                    this.conditionValueIPAddress = '';
                     this.selectedCountries = [];
                 } else if (this.isListCondition) {
                     this.conditionValueUserAgent = '';
                     this.conditionValueIPAddress = '';
+                    this.conditionValueDomain = '';
                 }
             });
 

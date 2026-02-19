@@ -28,6 +28,8 @@ func (sm *stringMatcher) extract(ri *RequestInfo) string {
 		return ri.UserAgent()
 	case dbgen.RuleConditionPropertyCountryCode:
 		return ri.CountryCode()
+	case dbgen.RuleConditionPropertyDomain:
+		return ri.Domain()
 	default:
 		return ""
 	}

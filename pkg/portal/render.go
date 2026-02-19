@@ -71,9 +71,6 @@ type RenderConstants struct {
 	APIKeyScopePortalReadOnly      string
 	PropertiesEndpoint             string
 	All                            string
-	ConditionUserAgent             string
-	ConditionIPAddress             string
-	ConditionCountryCode           string
 	ConditionProperty              string
 	ConditionOperator              string
 	ConditionValue                 string
@@ -82,6 +79,7 @@ type RenderConstants struct {
 	ConditionPropertyUserAgent     string
 	ConditionPropertyIPAddress     string
 	ConditionPropertyCountryCode   string
+	ConditionPropertyDomain        string
 	OperatorEquals                 string
 	OperatorContains               string
 	OperatorEmpty                  string
@@ -162,9 +160,6 @@ func NewRenderConstants() *RenderConstants {
 		APIKeyScopePortalReadOnly:      apiKeyScopePortal + apiKeyReadOnlySuffix,
 		PropertiesEndpoint:             common.PropertiesEndpoint,
 		All:                            common.All,
-		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
-		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
-		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
 		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
 		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
 		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
@@ -176,6 +171,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionPropertyUserAgent:     string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionPropertyIPAddress:     string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionPropertyCountryCode:   string(dbgen.RuleConditionPropertyCountryCode),
+		ConditionPropertyDomain:        string(dbgen.RuleConditionPropertyDomain),
 		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
 		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
 		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),

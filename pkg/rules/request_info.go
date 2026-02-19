@@ -16,6 +16,7 @@ type RequestInfo struct {
 	userAgent   *string
 	ipAddr      *netip.Addr
 	countryCode *string
+	domain      *string
 }
 
 func NewRequestInfo(r *http.Request, countryCodeHeader string) *RequestInfo {
@@ -59,4 +60,24 @@ func (ri *RequestInfo) CountryCode() string {
 		ri.countryCode = &cc
 	}
 	return *ri.countryCode
+}
+
+func (ri *RequestInfo) Domain() string {
+	if ri.domain == nil {
+		var d string
+		if ri.r != nil {
+			origin := ri.r.Header.Get(common.HeaderOrigin)
+			if len(origin) == 0 {
+				origin = ri.r.Header.Get(common.HeaderReferer)
+			}
+
+			if len(origin) > 0 {
+				if parsedDomain, err := common.ParseDomainName(origin); err == nil {
+					d = parsedDomain
+				}
+			}
+		}
+		ri.domain = &d
+	}
+	return *ri.domain
 }

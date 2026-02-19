@@ -171,6 +171,34 @@ func (c *RuleWizardRenderContext) parseCountryCodeCondition() common.StatusCode 
 	return common.StatusOK
 }
 
+func (c *RuleWizardRenderContext) parseDomainCondition(domain string) common.StatusCode {
+	// Validate operator
+	switch c.ConditionOperator {
+	case string(dbgen.RuleConditionOperatorEquals),
+		string(dbgen.RuleConditionOperatorContains),
+		string(dbgen.RuleConditionOperatorEmpty):
+	// Valid operators
+	default:
+		return common.StatusRuleConditionOperatorInvalid
+	}
+
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) {
+		if c.ConditionValue == "" {
+			return common.StatusRuleDomainRequired
+		}
+		parsedDomain, err := common.ParseDomainName(c.ConditionValue)
+		if err != nil {
+			return common.StatusRuleDomainInvalid
+		}
+		if !common.IsSubDomainOrDomain(parsedDomain, domain) {
+			return common.StatusRuleDomainSubdomain
+		}
+		c.ConditionValue = parsedDomain
+	}
+
+	return common.StatusOK
+}
+
 func (c *RuleWizardRenderContext) parseDifficultyAction() (int32, common.StatusCode) {
 	if c.ActionValue == "" {
 		return 0, common.StatusRuleActionValueRequired
@@ -347,7 +375,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
-	params, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+	params, statusCode := s.parseRuleForm(ctx, r, renderCtx, property.Domain)
 
 	if !statusCode.Success() {
 		if len(renderCtx.ErrorMessage) == 0 {
@@ -409,8 +437,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
-
-	params, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+	params, statusCode := s.parseRuleForm(ctx, r, renderCtx, "" /*domain*/)
 
 	if !statusCode.Success() {
 		if len(renderCtx.ErrorMessage) == 0 {
@@ -443,7 +470,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
 
-func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *RuleWizardRenderContext) (*dbgen.CreateDifficultyRuleParams, common.StatusCode) {
+func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *RuleWizardRenderContext, domain string) (*dbgen.CreateDifficultyRuleParams, common.StatusCode) {
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
 	if len(renderCtx.Name) == 0 {
 		renderCtx.NameError = common.StatusRuleNameEmptyError.String()
@@ -478,6 +505,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	case string(dbgen.RuleConditionPropertyCountryCode):
 		parseStatus = renderCtx.parseCountryCodeCondition()
 		conditionValueSeparator = db.Text(",")
+	case string(dbgen.RuleConditionPropertyDomain):
+		parseStatus = renderCtx.parseDomainCondition(domain)
 	default:
 		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
 		return nil, common.StatusRuleConditionPropertyInvalid
@@ -701,7 +730,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
-	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx, property.Domain)
 
 	if !statusCode.Success() {
 		if len(renderCtx.ErrorMessage) == 0 {
@@ -783,7 +812,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
-	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx)
+	createParams, statusCode := s.parseRuleForm(ctx, r, renderCtx, "" /*domain*/)
 
 	if !statusCode.Success() {
 		if len(renderCtx.ErrorMessage) == 0 {
