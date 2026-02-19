@@ -346,7 +346,7 @@ func TestParseCountryCodeConditionInvalidOperator(t *testing.T) {
 			ctx := &RuleWizardRenderContext{}
 			ctx.ConditionOperator = tt.operator
 			ctx.ConditionValue = tt.value
-			if got := ctx.parseCountryCodeCondition(); got != tt.expected {
+			if got := ctx.parseCountryCodeCondition(","); got != tt.expected {
 				t.Errorf("parseCountryCodeCondition() = %v, want %v", got, tt.expected)
 			}
 		})

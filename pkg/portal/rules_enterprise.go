@@ -349,6 +349,66 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
 }
 
+// newRuleScope holds the scope-specific parameters for creating a rule,
+// allowing postPropertyNewRule and postOrgNewRule to share the common flow.
+type newRuleScope struct {
+	// property is non-nil for property-scoped rules, nil for org-scoped rules.
+	property *dbgen.Property
+	// domain is used by parseRuleForm for domain condition validation.
+	domain string
+	// validateLimit checks whether the rule creation limit allows a new rule.
+	validateLimit func(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode
+	// setID assigns the appropriate ID field (PropertyID or OrgID) on params.
+	setID func(params *dbgen.CreateDifficultyRuleParams)
+	// redirectURL returns the URL to redirect to after successful rule creation.
+	redirectURL func() string
+}
+
+// handleNewRule executes the shared rule-creation flow parameterized by scope.
+func (s *Server) handleNewRule(w http.ResponseWriter, r *http.Request, org *dbgen.Organization, user *dbgen.User, scope newRuleScope) {
+	ctx := r.Context()
+
+	err := r.ParseForm()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	renderCtx := s.NewRuleWizardRenderContext(user, org, scope.property)
+	params, statusCode := s.parseRuleForm(ctx, r, renderCtx, scope.domain)
+
+	if !statusCode.Success() {
+		if len(renderCtx.ErrorMessage) == 0 {
+			renderCtx.ErrorMessage = statusCode.String()
+		}
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	if limitStatus := scope.validateLimit(ctx, org, user); !limitStatus.Success() {
+		renderCtx.ErrorMessage = limitStatus.String()
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	scope.setID(params)
+	params.CreatorID = db.Int(user.ID)
+
+	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
+		renderCtx.ErrorMessage = common.StatusFailure.String()
+		s.render(w, r, ruleFormTemplate, renderCtx)
+		return
+	}
+
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+
+	// Redirect back to rules tab with success message
+	common.Redirect(scope.redirectURL(), http.StatusOK, w, r)
+}
+
 func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -375,45 +435,19 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
-	params, statusCode := s.parseRuleForm(ctx, r, renderCtx, property.Domain)
-
-	if !statusCode.Success() {
-		if len(renderCtx.ErrorMessage) == 0 {
-			renderCtx.ErrorMessage = statusCode.String()
-		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	if limitStatus := s.validatePropertyRulesLimit(ctx, org, property, user); !limitStatus.Success() {
-		renderCtx.ErrorMessage = limitStatus.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	params.PropertyID = db.Int(property.ID)
-	params.CreatorID = db.Int(user.ID)
-
-	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
-		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
-
-	// Redirect back to rules tab with success message
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	s.handleNewRule(w, r, org, user, newRuleScope{
+		property: property,
+		domain:   property.Domain,
+		validateLimit: func(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode {
+			return s.validatePropertyRulesLimit(ctx, org, property, user)
+		},
+		setID: func(params *dbgen.CreateDifficultyRuleParams) {
+			params.PropertyID = db.Int(property.ID)
+		},
+		redirectURL: func() string {
+			return s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID))) + "?" + common.ParamTab + "=" + common.RulesEndpoint
+		},
+	})
 }
 
 func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
@@ -437,45 +471,19 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse form", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
-	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
-	params, statusCode := s.parseRuleForm(ctx, r, renderCtx, "" /*domain*/)
-
-	if !statusCode.Success() {
-		if len(renderCtx.ErrorMessage) == 0 {
-			renderCtx.ErrorMessage = statusCode.String()
-		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	if limitStatus := s.validateOrgRulesLimit(ctx, org, user); !limitStatus.Success() {
-		renderCtx.ErrorMessage = limitStatus.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	params.OrgID = db.Int(org.ID)
-	params.CreatorID = db.Int(user.ID)
-
-	_, auditEvent, err := s.Store.Impl().CreateDifficultyRule(ctx, user, params)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
-		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
-		return
-	}
-
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
-
-	// Redirect back to rules tab with success message
-	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
+	s.handleNewRule(w, r, org, user, newRuleScope{
+		property: nil,
+		domain:   "",
+		validateLimit: func(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode {
+			return s.validateOrgRulesLimit(ctx, org, user)
+		},
+		setID: func(params *dbgen.CreateDifficultyRuleParams) {
+			params.OrgID = db.Int(org.ID)
+		},
+		redirectURL: func() string {
+			return s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))) + "?" + common.ParamTab + "=" + common.RulesEndpoint
+		},
+	})
 }
 
 func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *RuleWizardRenderContext, domain string) (*dbgen.CreateDifficultyRuleParams, common.StatusCode) {
