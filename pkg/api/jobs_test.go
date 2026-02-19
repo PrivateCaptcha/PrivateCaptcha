@@ -314,12 +314,21 @@ func TestWarmupAPICacheJob(t *testing.T) {
 		Limit:      100,
 	}
 
-	err = job.RunOnce(ctx, job.NewParams())
-	if err != nil {
-		t.Fatalf("WarmupAPICacheJob failed: %v", err)
+	for attempt := 0; attempt < 4; attempt++ {
+		// we now enabled async writes in ClickHouse so flush takes some time
+		time.Sleep(200 * time.Millisecond)
+
+		err = job.RunOnce(ctx, job.NewParams())
+		if err != nil {
+			t.Fatalf("WarmupAPICacheJob failed: %v", err)
+		}
+
+		// Verify that API key is now cached
+		if _, err := store.Impl().GetCachedAPIKey(ctx, apiSecret); err == nil {
+			break
+		}
 	}
 
-	// Verify that API key is now cached
 	cachedKey, err := store.Impl().GetCachedAPIKey(ctx, apiSecret)
 	if err != nil {
 		t.Errorf("Expected API key to be cached after warmup, got error: %v", err)

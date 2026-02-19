@@ -132,7 +132,7 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		return err
 	}
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", AccessLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
@@ -172,7 +172,7 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		return err
 	}
 
-	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s", VerifyLogTableName))
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
 		return err
