@@ -3108,6 +3108,15 @@ func (impl *BusinessStoreImpl) GetCachedOrgRules(ctx context.Context, orgID int3
 	return cachedRules, nil
 }
 
+func (impl *BusinessStoreImpl) GetCachedPropertyRules(ctx context.Context, propertyID int32) ([]*dbgen.DifficultyRule, error) {
+	cacheKey := RawPropertyRulesCacheKey(propertyID)
+	cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey)
+	if err != nil {
+		return nil, err
+	}
+	return cachedRules, nil
+}
+
 func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if params == nil {
 		return nil, nil, ErrInvalidInput

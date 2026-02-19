@@ -173,3 +173,7 @@ func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organizat
 
 	return renderCtx, nil, nil
 }
+
+func (s *Server) shouldIncludeRulesChart(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) bool {
+	return false
+}

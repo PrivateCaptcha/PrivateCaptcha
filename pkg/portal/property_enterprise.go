@@ -3,6 +3,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -190,4 +191,18 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	}
 
 	return renderCtx, nil, nil
+}
+
+func (s *Server) shouldIncludeRulesChart(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) bool {
+	// Check for cached property rules
+	if propRules, err := s.Store.Impl().GetCachedPropertyRules(ctx, property.ID); err == nil && len(propRules) > 0 {
+		return true
+	}
+
+	// Check for cached org rules
+	if orgRules, err := s.Store.Impl().GetCachedOrgRules(ctx, org.ID); err == nil && len(orgRules) > 0 {
+		return true
+	}
+
+	return false
 }

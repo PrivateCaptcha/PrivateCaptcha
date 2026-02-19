@@ -699,10 +699,10 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
 		anyNonZero := false
 		for _, st := range stats {
-			if st.RequestsCount > 0 {
+			if st.Count > 0 {
 				anyNonZero = true
 			}
-			usage = append(usage, &propertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.RequestsCount)})
+			usage = append(usage, &propertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.Count)})
 		}
 
 		// we want to show "No data available" on the client
@@ -748,22 +748,13 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		return nil, nil, db.ErrDisabled
 	}
 
-	// Check if property has any difficulty rules for rule stats chart
-	includeRules := false
-	batch := map[int32]uint{property.ID: 1}
-	if rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, batch); err == nil {
-		if rules, exists := rulesMap[property.ID]; exists && len(rules) > 0 {
-			includeRules = true
-		}
-	}
-
 	renderCtx := &propertyDashboardRenderContext{
 		CsrfRenderContext:    s.CreateCsrfContext(user),
 		CaptchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
 		Property:             propertyToUserProperty(property, s.IDHasher),
 		Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
-		IncludeRules:         includeRules,
+		IncludeRules:         s.shouldIncludeRulesChart(ctx, org, property),
 	}
 
 	return renderCtx, property, nil

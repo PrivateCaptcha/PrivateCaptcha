@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -27,6 +28,10 @@ const (
 	AccessLogTableName1h  = "privatecaptcha.request_logs_1h"
 	AccessLogTableName1d  = "privatecaptcha.request_logs_1d"
 	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
+)
+
+var (
+	ErrUnsupportedPeriod = errors.New("unsupported period")
 )
 
 type TimeSeriesDB struct {
@@ -139,7 +144,7 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.RuleID, r.Timestamp.UTC())
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -387,14 +392,14 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 	return results, nil
 }
 
-func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
+func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
 
 	// Only support week and month periods for rule stats
 	if period != common.TimePeriodWeek && period != common.TimePeriodMonth {
-		return nil, fmt.Errorf("unsupported period for rule stats: %s", period)
+		return nil, ErrUnsupportedPeriod
 	}
 
 	tnow := time.Now().UTC()
@@ -417,7 +422,7 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 	cacheKey = new(CacheKey)
 	*cacheKey = propertyRuleStatsCacheKey(propertyID, timeFrom.Format(time.DateTime))
 
-	if stats, err := FetchCachedArray[common.TimePeriodStat](ctx, ts.Cache, *cacheKey); (err == nil) && (len(stats) > 0) {
+	if stats, err := FetchCachedArray[common.TimeCount](ctx, ts.Cache, *cacheKey); (err == nil) && (len(stats) > 0) {
 		slog.DebugContext(ctx, "Property rule stats were cached", "orgID", orgID, "propertyID", propertyID, "key", *cacheKey, "count", len(stats))
 		return stats, nil
 	}
@@ -445,17 +450,14 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 
 	defer rows.Close()
 
-	results := make([]*common.TimePeriodStat, 0)
+	results := make([]*common.TimeCount, 0)
 
 	for rows.Next() {
-		bc := &common.TimePeriodStat{}
-		var count uint64
-		if err := rows.Scan(&bc.Timestamp, &count); err != nil {
+		bc := &common.TimeCount{}
+		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
 			slog.ErrorContext(ctx, "Failed to read row from property rule stats query", common.ErrAttr(err))
 			return nil, err
 		}
-		bc.RequestsCount = int(count)
-		bc.VerifiesCount = 0 // Rule stats only track requests, not verifies
 		results = append(results, bc)
 	}
 
@@ -726,17 +728,17 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, or
 	return result, nil
 }
 
-func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
+func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	// Only support week and month periods for rule stats
 	if period != common.TimePeriodWeek && period != common.TimePeriodMonth {
-		return nil, fmt.Errorf("unsupported period for rule stats: %s", period)
+		return nil, ErrUnsupportedPeriod
 	}
 
 	from := getStartTime(period)
-	statsMap := make(map[time.Time]*common.TimePeriodStat)
+	statsMap := make(map[time.Time]uint32)
 
 	// For rule stats, always use daily resolution
 	truncate := func(t time.Time) time.Time {
@@ -744,25 +746,18 @@ func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context
 		return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
 	}
 
-	getStat := func(t time.Time) *common.TimePeriodStat {
-		ts := truncate(t)
-		if _, ok := statsMap[ts]; !ok {
-			statsMap[ts] = &common.TimePeriodStat{Timestamp: ts}
-		}
-		return statsMap[ts]
-	}
-
 	// Count only logs with rule_id > 0
 	for _, log := range m.accessLogs {
 		if log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.Before(from) {
-			getStat(log.Timestamp).RequestsCount++
+			ts := truncate(log.Timestamp)
+			statsMap[ts]++
 		}
 	}
 
 	// Convert map to sorted slice
-	result := make([]*common.TimePeriodStat, 0, len(statsMap))
-	for _, v := range statsMap {
-		result = append(result, v)
+	result := make([]*common.TimeCount, 0, len(statsMap))
+	for ts, count := range statsMap {
+		result = append(result, &common.TimeCount{Timestamp: ts, Count: count})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
 
