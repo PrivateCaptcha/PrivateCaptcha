@@ -71,10 +71,6 @@ type RenderConstants struct {
 	APIKeyScopePortalReadOnly      string
 	PropertiesEndpoint             string
 	All                            string
-	ConditionUserAgent             string
-	ConditionIPAddress             string
-	ConditionCountryCode           string
-	ConditionDomain                string
 	ConditionProperty              string
 	ConditionOperator              string
 	ConditionValue                 string
@@ -164,10 +160,6 @@ func NewRenderConstants() *RenderConstants {
 		APIKeyScopePortalReadOnly:      apiKeyScopePortal + apiKeyReadOnlySuffix,
 		PropertiesEndpoint:             common.PropertiesEndpoint,
 		All:                            common.All,
-		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
-		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
-		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
-		ConditionDomain:                string(dbgen.RuleConditionPropertyDomain),
 		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
 		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
 		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),

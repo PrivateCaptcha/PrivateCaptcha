@@ -37,9 +37,9 @@ func newTestRequestInfoNoIP(userAgent string) *RequestInfo {
 }
 
 func newTestRequestInfoWithDomain(userAgent string, ip netip.Addr, domain string) *RequestInfo {
-	req := httptest.NewRequest("GET", "https://"+domain+"/", nil)
+	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("User-Agent", userAgent)
-	req.Host = domain
+	req.Header.Set("Origin", "https://"+domain)
 	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
 	return NewRequestInfo(req.WithContext(ctx), "")
 }
@@ -1315,9 +1315,9 @@ func TestDomainEmptyMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Request with empty domain - need to explicitly clear Host
+	// Request with empty domain (no Origin or Referer headers)
 	req := httptest.NewRequest("GET", "/", nil)
-	req.Host = ""
+	req.Header.Set("User-Agent", "test")
 	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
 	ri := NewRequestInfo(req.WithContext(ctx), "")
 
@@ -1408,9 +1408,9 @@ func TestDomainNegation(t *testing.T) {
 
 			var ri *RequestInfo
 			if tt.domain == "" {
-				// Create request with explicitly empty domain
+				// Create request without Origin/Referer headers for empty domain
 				req := httptest.NewRequest("GET", "/", nil)
-				req.Host = ""
+				req.Header.Set("User-Agent", "test")
 				ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
 				ri = NewRequestInfo(req.WithContext(ctx), "")
 			} else {

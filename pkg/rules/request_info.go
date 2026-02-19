@@ -65,11 +65,19 @@ func (ri *RequestInfo) CountryCode() string {
 func (ri *RequestInfo) Domain() string {
 	if ri.domain == nil {
 		var d string
-		if ri.r != nil && ri.r.URL != nil {
-			d = ri.r.URL.Host
-		}
-		if d == "" && ri.r != nil {
-			d = ri.r.Host
+		if ri.r != nil {
+			// Get domain from Origin header, fallback to Referer
+			origin := ri.r.Header.Get("Origin")
+			if len(origin) == 0 {
+				origin = ri.r.Header.Get("Referer")
+			}
+
+			// Parse domain name from origin/referer
+			if len(origin) > 0 {
+				if parsedDomain, err := common.ParseDomainName(origin); err == nil {
+					d = parsedDomain
+				}
+			}
 		}
 		ri.domain = &d
 	}

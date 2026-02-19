@@ -6,10 +6,10 @@ function ruleFormData() {
     const formDataConditionProperty = '{{ .Params.ConditionProperty }}';
     const formDataActionProperty = '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}';
     const formDataActionValue = '{{ .Params.ActionValue }}';
-    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
-    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionUserAgent }}';
-    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionIPAddress }}';
-    const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionDomain }}';
+    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
+    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
+    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
+    const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}';
 
     // Initialize operator with negation suffix if needed
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
@@ -39,19 +39,19 @@ function ruleFormData() {
         },
 
         get isStringCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionUserAgent }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
         },
 
         get isListCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionCountryCode }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
         },
 
         get isIPCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionIPAddress }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
         },
 
         get isDomainCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionDomain }}';
+            return this.conditionProperty === '{{ .Const.ConditionPropertyDomain }}';
         },
 
         // Computed property that returns the active condition value based on current condition type

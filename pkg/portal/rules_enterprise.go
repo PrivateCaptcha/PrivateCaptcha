@@ -112,12 +112,11 @@ type RuleWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	RuleFormData
-	Countries               []CountryOption
-	CurrentOrg              *userOrg
-	Property                *userProperty
-	RuleID                  string
-	IsEdit                  bool
-	AvailableConditionProps []string
+	Countries  []CountryOption
+	CurrentOrg *userOrg
+	Property   *userProperty
+	RuleID     string
+	IsEdit     bool
 }
 
 func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
@@ -269,18 +268,6 @@ func getAllCountries() []CountryOption {
 }
 
 func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organization, property *dbgen.Property) *RuleWizardRenderContext {
-	// Determine available condition properties based on scope
-	availableProps := []string{
-		string(dbgen.RuleConditionPropertyUserAgent),
-		string(dbgen.RuleConditionPropertyIPAddress),
-		string(dbgen.RuleConditionPropertyCountryCode),
-	}
-
-	// Domain is only available for property-level rules
-	if property != nil {
-		availableProps = append(availableProps, string(dbgen.RuleConditionPropertyDomain))
-	}
-
 	renderCtx := &RuleWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
 		RuleFormData: RuleFormData{
@@ -289,8 +276,7 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
 			ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		},
-		Countries:               getAllCountries(),
-		AvailableConditionProps: availableProps,
+		Countries: getAllCountries(),
 	}
 
 	if property != nil {
