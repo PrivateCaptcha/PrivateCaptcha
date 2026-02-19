@@ -106,16 +106,6 @@ func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHashe
 	}
 }
 
-func usersToOrgUsers(users []*dbgen.GetOrganizationUsersRow, hasher common.IdentifierHasher) []*orgUser {
-	result := make([]*orgUser, 0, len(users))
-
-	for _, user := range users {
-		result = append(result, userToOrgUser(&user.User, string(user.Level), hasher))
-	}
-
-	return result
-}
-
 func userWithEmailInviteToOrgUser(row *dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) *orgUser {
 	ou := &orgUser{
 		Level:     string(row.OrganizationUser.Level),
