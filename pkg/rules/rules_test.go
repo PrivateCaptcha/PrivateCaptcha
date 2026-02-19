@@ -1315,8 +1315,12 @@ func TestDomainEmptyMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Request with empty domain
-	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
+	// Request with empty domain - need to explicitly clear Host
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Host = ""
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
+	ri := NewRequestInfo(req.WithContext(ctx), "")
+
 	if !compiled.Matches(ri) {
 		t.Error("Expected rule to match empty domain")
 	}
@@ -1404,7 +1408,11 @@ func TestDomainNegation(t *testing.T) {
 
 			var ri *RequestInfo
 			if tt.domain == "" {
-				ri = newTestRequestInfo("test", netip.MustParseAddr("1.2.3.4"))
+				// Create request with explicitly empty domain
+				req := httptest.NewRequest("GET", "/", nil)
+				req.Host = ""
+				ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, netip.MustParseAddr("1.2.3.4"))
+				ri = NewRequestInfo(req.WithContext(ctx), "")
 			} else {
 				ri = newTestRequestInfoWithDomain("test", netip.MustParseAddr("1.2.3.4"), tt.domain)
 			}
