@@ -52,14 +52,16 @@ const (
 	StatusRuleActionPropertyInvalid         StatusCode = 1408
 	StatusRuleIPAddressRequired             StatusCode = 1409
 	StatusRuleCountryRequired               StatusCode = 1410
-	StatusRuleDifficultyValueInvalid        StatusCode = 1411
-	StatusRuleDifficultyGrowthInvalid       StatusCode = 1412
-	StatusRulePermissionsError              StatusCode = 1413
-	StatusRulePositionPrecisionError        StatusCode = 1414
-	StatusOrgRulesLimitError                StatusCode = 1415
-	StatusPropertyRulesLimitError           StatusCode = 1416
-	StatusOrgRulesSubscriptionRequiredError StatusCode = 1417
-	StatusPropertyRulesSubscriptionRequired StatusCode = 1418
+	StatusRuleDomainRequired                StatusCode = 1411
+	StatusRuleDomainInvalid                 StatusCode = 1412
+	StatusRuleDifficultyValueInvalid        StatusCode = 1413
+	StatusRuleDifficultyGrowthInvalid       StatusCode = 1414
+	StatusRulePermissionsError              StatusCode = 1415
+	StatusRulePositionPrecisionError        StatusCode = 1416
+	StatusOrgRulesLimitError                StatusCode = 1417
+	StatusPropertyRulesLimitError           StatusCode = 1418
+	StatusOrgRulesSubscriptionRequiredError StatusCode = 1419
+	StatusPropertyRulesSubscriptionRequired StatusCode = 1420
 )
 
 func (sc StatusCode) Success() bool {
@@ -152,6 +154,10 @@ func (sc StatusCode) String() string {
 		return "IP address prefix is required."
 	case StatusRuleCountryRequired:
 		return "At least one country must be selected."
+	case StatusRuleDomainRequired:
+		return "Domain is required."
+	case StatusRuleDomainInvalid:
+		return "Invalid domain name."
 	case StatusRuleDifficultyValueInvalid:
 		return "Difficulty adjustment must be between -100 and 1000."
 	case StatusRuleDifficultyGrowthInvalid:

@@ -9,6 +9,7 @@ function ruleFormData() {
     const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionCountryCode }}';
     const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionUserAgent }}';
     const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionIPAddress }}';
+    const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionDomain }}';
 
     // Initialize operator with negation suffix if needed
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
@@ -25,6 +26,7 @@ function ruleFormData() {
         // Separate condition value fields for each type
         conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
         conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
+        conditionValueDomain: isDomainCondition ? formDataConditionValue : '',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         // Separate action value fields for each type
@@ -48,12 +50,18 @@ function ruleFormData() {
             return this.conditionProperty === '{{ .Const.ConditionIPAddress }}';
         },
 
+        get isDomainCondition() {
+            return this.conditionProperty === '{{ .Const.ConditionDomain }}';
+        },
+
         // Computed property that returns the active condition value based on current condition type
         get activeConditionValue() {
             if (this.isListCondition) {
                 return this.selectedCountries.join(',');
             } else if (this.isIPCondition) {
                 return this.conditionValueIPAddress;
+            } else if (this.isDomainCondition) {
+                return this.conditionValueDomain;
             } else {
                 return this.conditionValueUserAgent;
             }
@@ -84,6 +92,16 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorIn }}', label: 'In' },
                     { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' },
                 ];
+            } else if (this.isDomainCondition) {
+                // Domain operators - same as user agent
+                return [
+                    { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
+                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
+                    { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
+                    { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
+                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                ];
             } else {
                 // String operators for user_agent
                 return [
@@ -109,13 +127,20 @@ function ruleFormData() {
                 // Clear the condition value fields when switching types to avoid pollution
                 if (this.isStringCondition) {
                     this.conditionValueIPAddress = '';
+                    this.conditionValueDomain = '';
                     this.selectedCountries = [];
                 } else if (this.isIPCondition) {
                     this.conditionValueUserAgent = '';
+                    this.conditionValueDomain = '';
+                    this.selectedCountries = [];
+                } else if (this.isDomainCondition) {
+                    this.conditionValueUserAgent = '';
+                    this.conditionValueIPAddress = '';
                     this.selectedCountries = [];
                 } else if (this.isListCondition) {
                     this.conditionValueUserAgent = '';
                     this.conditionValueIPAddress = '';
+                    this.conditionValueDomain = '';
                 }
             });
 

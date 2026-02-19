@@ -328,6 +328,7 @@ const (
 	RuleConditionPropertyUserAgent   RuleConditionProperty = "user_agent"
 	RuleConditionPropertyIPAddress   RuleConditionProperty = "ip_address"
 	RuleConditionPropertyCountryCode RuleConditionProperty = "country_code"
+	RuleConditionPropertyDomain      RuleConditionProperty = "domain"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {

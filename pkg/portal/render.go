@@ -74,6 +74,7 @@ type RenderConstants struct {
 	ConditionUserAgent             string
 	ConditionIPAddress             string
 	ConditionCountryCode           string
+	ConditionDomain                string
 	ConditionProperty              string
 	ConditionOperator              string
 	ConditionValue                 string
@@ -82,6 +83,7 @@ type RenderConstants struct {
 	ConditionPropertyUserAgent     string
 	ConditionPropertyIPAddress     string
 	ConditionPropertyCountryCode   string
+	ConditionPropertyDomain        string
 	OperatorEquals                 string
 	OperatorContains               string
 	OperatorEmpty                  string
@@ -165,6 +167,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionUserAgent:             string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionIPAddress:             string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionCountryCode:           string(dbgen.RuleConditionPropertyCountryCode),
+		ConditionDomain:                string(dbgen.RuleConditionPropertyDomain),
 		OperatorEquals:                 string(dbgen.RuleConditionOperatorEquals),
 		OperatorContains:               string(dbgen.RuleConditionOperatorContains),
 		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
@@ -176,6 +179,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionPropertyUserAgent:     string(dbgen.RuleConditionPropertyUserAgent),
 		ConditionPropertyIPAddress:     string(dbgen.RuleConditionPropertyIPAddress),
 		ConditionPropertyCountryCode:   string(dbgen.RuleConditionPropertyCountryCode),
+		ConditionPropertyDomain:        string(dbgen.RuleConditionPropertyDomain),
 		GrowthTypeConstant:             string(dbgen.DifficultyGrowthConstant),
 		GrowthTypeSlow:                 string(dbgen.DifficultyGrowthSlow),
 		GrowthTypeMedium:               string(dbgen.DifficultyGrowthMedium),

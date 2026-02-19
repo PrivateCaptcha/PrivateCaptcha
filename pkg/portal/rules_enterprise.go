@@ -112,11 +112,12 @@ type RuleWizardRenderContext struct {
 	CsrfRenderContext
 	AlertRenderContext
 	RuleFormData
-	Countries  []CountryOption
-	CurrentOrg *userOrg
-	Property   *userProperty
-	RuleID     string
-	IsEdit     bool
+	Countries               []CountryOption
+	CurrentOrg              *userOrg
+	Property                *userProperty
+	RuleID                  string
+	IsEdit                  bool
+	AvailableConditionProps []string
 }
 
 func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
@@ -168,6 +169,34 @@ func (c *RuleWizardRenderContext) parseCountryCodeCondition() common.StatusCode 
 	}
 
 	// Country codes are comma-separated
+	return common.StatusOK
+}
+
+func (c *RuleWizardRenderContext) parseDomainCondition() common.StatusCode {
+	// Validate operator
+	switch c.ConditionOperator {
+	case string(dbgen.RuleConditionOperatorEquals),
+		string(dbgen.RuleConditionOperatorContains),
+		string(dbgen.RuleConditionOperatorEmpty):
+	// Valid operators
+	default:
+		return common.StatusRuleConditionOperatorInvalid
+	}
+
+	// Validate and parse value
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) {
+		if c.ConditionValue == "" {
+			return common.StatusRuleDomainRequired
+		}
+		// Parse domain name using common.ParseDomainName
+		parsedDomain, err := common.ParseDomainName(c.ConditionValue)
+		if err != nil {
+			return common.StatusRuleDomainInvalid
+		}
+		// Update the condition value with the parsed domain
+		c.ConditionValue = parsedDomain
+	}
+
 	return common.StatusOK
 }
 
@@ -240,6 +269,18 @@ func getAllCountries() []CountryOption {
 }
 
 func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organization, property *dbgen.Property) *RuleWizardRenderContext {
+	// Determine available condition properties based on scope
+	availableProps := []string{
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionPropertyIPAddress),
+		string(dbgen.RuleConditionPropertyCountryCode),
+	}
+
+	// Domain is only available for property-level rules
+	if property != nil {
+		availableProps = append(availableProps, string(dbgen.RuleConditionPropertyDomain))
+	}
+
 	renderCtx := &RuleWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
 		RuleFormData: RuleFormData{
@@ -248,7 +289,8 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
 			ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		},
-		Countries: getAllCountries(),
+		Countries:               getAllCountries(),
+		AvailableConditionProps: availableProps,
 	}
 
 	if property != nil {
@@ -478,6 +520,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	case string(dbgen.RuleConditionPropertyCountryCode):
 		parseStatus = renderCtx.parseCountryCodeCondition()
 		conditionValueSeparator = db.Text(",")
+	case string(dbgen.RuleConditionPropertyDomain):
+		parseStatus = renderCtx.parseDomainCondition()
 	default:
 		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
 		return nil, common.StatusRuleConditionPropertyInvalid
