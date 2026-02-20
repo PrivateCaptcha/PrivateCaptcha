@@ -15,6 +15,8 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"golang.org/x/net/idna"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 const (
@@ -25,12 +27,16 @@ const (
 	propertyDashboardSettingsTemplate     = "property/settings.html"
 	propertyDashboardIntegrationsTemplate = "property/integrations.html"
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
+	propertyDashboardRulesTemplate        = "property/rules.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
-	propertySettingsTabIndex              = 2
-	propertyIntegrationsTabIndex          = 1
-	propertyAuditLogsTabIndex             = 3
-	activeSubscriptionForPropertyError    = "You need an active subscription to create new properties."
+	// Property tab indices
+	propertyReportsTabIndex            = 0
+	propertyIntegrationsTabIndex       = 1
+	propertySettingsTabIndex           = 2
+	propertyRulesTabIndex              = 3
+	propertyAuditLogsTabIndex          = 4
+	activeSubscriptionForPropertyError = "You need an active subscription to create new properties."
 	// Period endpoint constants
 	PeriodEndpointToday = "24h"
 	PeriodEndpointWeek  = "7d"
@@ -82,11 +88,12 @@ type propertyDashboardRenderContext struct {
 	CsrfRenderContext
 	// scripts.html is shared so captcha context has to be shared too
 	CaptchaRenderContext
-	Property  *userProperty
-	Org       *userOrg
-	NameError string
-	Tab       int
-	CanEdit   bool
+	Property     *userProperty
+	Org          *userOrg
+	NameError    string
+	Tab          int
+	CanEdit      bool
+	IncludeRules bool
 }
 
 type propertySettingsRenderContext struct {
@@ -101,7 +108,7 @@ type propertySettingsRenderContext struct {
 func (pc *propertySettingsRenderContext) UpdateLevels() {
 	const epsilon = common.DifficultyDelta
 
-	pc.MinLevel = max(1, pc.EasyLevel-epsilon)
+	pc.MinLevel = max(int(common.MinDifficultyLevel), pc.EasyLevel-epsilon)
 	pc.MaxLevel = min(int(common.MaxDifficultyLevel), pc.HardLevel+epsilon)
 
 	pc.Property.Level = max(pc.MinLevel, min(pc.MaxLevel, pc.Property.Level))
@@ -119,11 +126,111 @@ type propertyAuditLogsRenderContext struct {
 	CanView bool
 }
 
+type DifficultyRuleModel struct {
+	ID                string
+	Name              string
+	Enabled           bool
+	ConditionProperty string
+	ConditionOperator string
+	ConditionValue    string
+	ActionAction      string
+	ActionProperty    string
+	ActionValue       string
+	CanEdit           bool
+}
+
+type propertyRulesRenderContext struct {
+	propertyDashboardRenderContext
+	Rules []*DifficultyRuleModel
+}
+
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
 		EasyLevel:   int(common.DifficultyLevelSmall),
 		NormalLevel: int(common.DifficultyLevelMedium),
 		HardLevel:   int(common.DifficultyLevelHigh),
+	}
+}
+
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
+	conditionValue := ""
+	if rule.ConditionValueStr.Valid {
+		conditionValue = rule.ConditionValueStr.String
+	} else if rule.ConditionValueInt.Valid {
+		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+	}
+
+	titleCase := cases.Title(language.Und)
+
+	var actionProperty string
+	var actionValue string
+	var actionAction string
+
+	switch rule.ActionProperty {
+	case dbgen.RuleActionPropertyHTTPRequest:
+		actionAction = "block"
+		actionProperty = "HTTP request"
+	case dbgen.RuleActionPropertyDifficultyLevelPercent:
+		actionAction = "change"
+		actionProperty = "Difficulty level"
+		// Format percentage with +/- sign
+		if percent := rule.ActionValue; percent >= 0 {
+			actionValue = fmt.Sprintf("+%d%%", percent)
+		} else {
+			actionValue = fmt.Sprintf("%d%%", percent)
+		}
+	case dbgen.RuleActionPropertyDifficultyGrowth:
+		actionProperty = "Difficulty growth"
+		actionAction = "set"
+		actionValue = string(growthLevelFromIndex(int(rule.ActionValue)))
+	default:
+		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
+		actionValue = fmt.Sprintf("%d", rule.ActionValue)
+		actionAction = "set"
+	}
+
+	var conditionOperator string
+	switch rule.ConditionOperator {
+	case dbgen.RuleConditionOperatorEmpty:
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "is not empty"
+		} else {
+			conditionOperator = "is empty"
+		}
+	case dbgen.RuleConditionOperatorIn:
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "is not one of"
+		} else {
+			conditionOperator = "is one of"
+		}
+	default:
+		baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "not " + baseOperator
+		} else {
+			conditionOperator = baseOperator
+		}
+	}
+
+	var conditionProperty string
+	switch rule.ConditionProperty {
+	case dbgen.RuleConditionPropertyIPAddress:
+		conditionProperty = "IP address"
+	default:
+		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
+	}
+
+	return &DifficultyRuleModel{
+		ID:                hasher.Encrypt(int(rule.ID)),
+		Name:              rule.Name,
+		Enabled:           rule.Enabled,
+		ConditionProperty: conditionProperty,
+		ConditionOperator: conditionOperator,
+		ConditionValue:    conditionValue,
+		ActionAction:      actionAction,
+		ActionProperty:    actionProperty,
+		ActionValue:       actionValue,
+		CanEdit:           canEdit,
 	}
 }
 
@@ -177,13 +284,7 @@ func growthLevelToIndex(level dbgen.DifficultyGrowth) int {
 	}
 }
 
-func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGrowth {
-	i, err := strconv.Atoi(index)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to convert growth level", "value", index, common.ErrAttr(err))
-		return dbgen.DifficultyGrowthMedium
-	}
-
+func growthLevelFromIndex(i int) dbgen.DifficultyGrowth {
 	switch i {
 	case 0:
 		return dbgen.DifficultyGrowthConstant
@@ -194,9 +295,18 @@ func growthLevelFromIndex(ctx context.Context, index string) dbgen.DifficultyGro
 	case 3:
 		return dbgen.DifficultyGrowthFast
 	default:
-		slog.WarnContext(ctx, "Invalid growth level index", "index", i)
 		return dbgen.DifficultyGrowthMedium
 	}
+}
+
+func growthLevelFromValue(ctx context.Context, index string) dbgen.DifficultyGrowth {
+	i, err := strconv.Atoi(index)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to convert growth level", "value", index, common.ErrAttr(err))
+		return dbgen.DifficultyGrowthMedium
+	}
+
+	return growthLevelFromIndex(i)
 }
 
 func parseMaxReplayCount(ctx context.Context, value string) int32 {
@@ -223,7 +333,7 @@ func difficultyLevelFromValue(ctx context.Context, value string, minLevel, maxLe
 		return common.DifficultyLevelMedium
 	}
 
-	if (i <= 0) || (i > int(common.MaxDifficultyLevel)) {
+	if (i < int(common.MinDifficultyLevel)) || (i > int(common.MaxDifficultyLevel)) {
 		return common.DifficultyLevelMedium
 	}
 
@@ -457,7 +567,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))
-	dashboardURL += fmt.Sprintf("?%s=integrations", common.ParamTab)
+	dashboardURL += fmt.Sprintf("?%s=%s", common.ParamTab, common.IntegrationsEndpoint)
 	common.Redirect(dashboardURL, http.StatusOK, w, r)
 
 	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
@@ -571,6 +681,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		Property:             propertyToUserProperty(property, s.IDHasher),
 		Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
 		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		IncludeRules:         s.shouldIncludeRulesChart(ctx, org, property),
 	}
 
 	return renderCtx, property, nil
@@ -644,6 +755,13 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (*
 	case common.EventsEndpoint:
 		if auditLogsCtx, ae, err := s.getPropertyAuditLogs(w, r); err == nil {
 			model = auditLogsCtx
+			event = ae
+		} else {
+			derr = err
+		}
+	case common.RulesEndpoint:
+		if rulesCtx, ae, err := s.getPropertyRules(w, r); err == nil {
+			model = rulesCtx
 			event = ae
 		} else {
 			derr = err
@@ -739,6 +857,15 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvent: auditEvent}, nil
 }
 
+func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, auditEvent, err := s.getPropertyRules(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
+}
+
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -785,7 +912,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}
 
 	difficulty := difficultyLevelFromValue(ctx, r.FormValue(common.ParamDifficulty), renderCtx.MinLevel, renderCtx.MaxLevel)
-	growth := growthLevelFromIndex(ctx, r.FormValue(common.ParamGrowth))
+	growth := growthLevelFromValue(ctx, r.FormValue(common.ParamGrowth))
 	validityInterval := puzzle.ValidityIntervalFromIndex(ctx, r.FormValue(common.ParamValidityInterval))
 	_, allowSubdomains := r.Form[common.ParamAllowSubdomains]
 	_, allowLocalhost := r.Form[common.ParamAllowLocalhost]

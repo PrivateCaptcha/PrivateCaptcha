@@ -7,6 +7,7 @@ type AccessRecord struct {
 	UserID      int32
 	OrgID       int32
 	PropertyID  int32
+	RuleID      int32
 	Timestamp   time.Time
 }
 
