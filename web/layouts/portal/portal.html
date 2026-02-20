@@ -161,6 +161,8 @@
                     {{- else if eq .Params.Tab 2 -}}
                     {{template "org-settings.html" .}}
                     {{- else if eq .Params.Tab 3 -}}
+                    {{template "org-rules.html" .}}
+                    {{- else if eq .Params.Tab 4 -}}
                     {{template "org-auditlogs.html" .}}
                     {{- else -}}
                     {{template "org-dashboard.html" .}}

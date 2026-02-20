@@ -14,6 +14,8 @@ type SubscriptionLimits interface {
 	CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckOrgMembersLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
+	CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
+	CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (bool, int, error)
 	RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error)
 	PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
 	OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
@@ -161,6 +163,64 @@ func (sl *SubscriptionLimitsImpl) OrgsLimit(ctx context.Context, subscr *dbgen.S
 	return plan.OrgsLimit(), nil
 }
 
+func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return false, 0, ErrNoActiveSubscription
+	}
+
+	isInternalSubscription := IsInternalSubscription(subscr.Source)
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	// Retrieve rules via cached method
+	rules, err := sl.store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{orgID: 0})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org rules", "orgID", orgID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	count := 0
+	if orgRules, ok := rules[orgID]; ok {
+		count = len(orgRules)
+	}
+
+	ok := (plan.OrgRulesLimit() == 0) || (count < plan.OrgRulesLimit())
+
+	return ok, count - plan.OrgRulesLimit(), nil
+}
+
+func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return false, 0, ErrNoActiveSubscription
+	}
+
+	isInternalSubscription := IsInternalSubscription(subscr.Source)
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	// Retrieve rules via cached method
+	rules, err := sl.store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{propertyID: 0})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve property rules", "propertyID", propertyID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	count := 0
+	if propRules, ok := rules[propertyID]; ok {
+		count = len(propRules)
+	}
+
+	ok := (plan.PropertyRulesLimit() == 0) || (count < plan.PropertyRulesLimit())
+
+	return ok, count - plan.PropertyRulesLimit(), nil
+}
+
 type StubSubscriptionLimits struct{}
 
 func (StubSubscriptionLimits) CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
@@ -170,6 +230,12 @@ func (StubSubscriptionLimits) CheckOrgMembersLimit(ctx context.Context, orgID in
 	return true, 0, nil
 }
 func (StubSubscriptionLimits) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
+	return true, 0, nil
+}
+func (StubSubscriptionLimits) CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
+	return true, 0, nil
+}
+func (StubSubscriptionLimits) CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
 	return true, 0, nil
 }
 func (StubSubscriptionLimits) RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error) {

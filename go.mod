@@ -6,6 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.43.0
 	github.com/PuerkitoBio/goquery v1.11.0
 	github.com/badoux/checkmail v1.2.4
+	github.com/biter777/countries v1.7.5
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/go-gomail/gomail v0.0.0-20160411212932-81ebce5c23df
 	github.com/golang-migrate/migrate/v4 v4.19.1

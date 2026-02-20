@@ -79,6 +79,8 @@ func AssertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
 	data = wrapScriptContentsWithCDATA(data)
 	// special handling for Alpine.js, otherwise we get XML parsing error "attribute expected"
 	data = bytes.ReplaceAll(data, []byte(" @click="), []byte(" click="))
+	data = bytes.ReplaceAll(data, []byte(" @click."), []byte(" click."))
+	data = bytes.ReplaceAll(data, []byte(" @htmx:"), []byte(" htmx-"))
 	data = bytes.ReplaceAll(data, []byte(" hx-on::"), []byte(" hx-on-"))
 
 	decoder := xml.NewDecoder(bytes.NewReader(data))
@@ -93,7 +95,9 @@ func AssertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
 		case nil:
 			// do nothing
 		default:
-			fmt.Println(buf.String())
+			for i, line := range bytes.Split(data, []byte("\n")) {
+				fmt.Printf("%d: %s\n", i+1, line)
+			}
 			t.Fatalf("Error parsing html: %s, %v", err, token)
 		}
 	}
