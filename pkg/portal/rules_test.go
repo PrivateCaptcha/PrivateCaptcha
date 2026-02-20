@@ -2800,11 +2800,15 @@ func TestGetOrgEditRule(t *testing.T) {
 	}
 }
 
-func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
+type memberRuleCreationTestSuite struct {
+	createTarget      func(ctx context.Context, t *testing.T, owner *dbgen.User, org *dbgen.Organization) *dbgen.Property
+	postRule          func(srv *http.ServeMux, cookie *http.Cookie, member *dbgen.User, org *dbgen.Organization, prop *dbgen.Property) *http.Response
+	countRules        func(ctx context.Context, t *testing.T, org *dbgen.Organization, prop *dbgen.Property) int
+	afterJoinSucceeds bool
+}
 
+func runMemberRuleCreationPortalTest(t *testing.T, suite memberRuleCreationTestSuite) {
+	t.Helper()
 	ctx := t.Context()
 
 	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
@@ -2812,10 +2816,7 @@ func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
-	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
-	if err != nil {
-		t.Fatalf("Failed to create property: %v", err)
-	}
+	prop := suite.createTarget(ctx, t, owner, org)
 
 	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
 	if err != nil {
@@ -2830,8 +2831,8 @@ func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Step 1: user who is not yet a member cannot create property rule
-	resp := postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By NonMember", "curl", "50")
+	// Step 1: user who is not yet a member cannot create rule
+	resp := suite.postRule(srv, cookie, member, org, prop)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("Expected redirect for non-member, got %v", resp.StatusCode)
 	}
@@ -2839,14 +2840,17 @@ func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
 	if location == nil || !strings.Contains(location.String(), "error") {
 		t.Fatalf("Expected redirect to error page for non-member, got: %v", location)
 	}
+	if count := suite.countRules(ctx, t, org, prop); count != 0 {
+		t.Errorf("Expected 0 rules after non-member attempt, got %d", count)
+	}
 
 	// Step 2: invite member to org
 	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatalf("Failed to invite member to org: %v", err)
 	}
 
-	// Step 3: invited (but not joined) member cannot create property rule
-	resp = postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By InvitedMember", "curl", "50")
+	// Step 3: invited (but not joined) member cannot create rule
+	resp = suite.postRule(srv, cookie, member, org, prop)
 	if resp.StatusCode != http.StatusSeeOther {
 		t.Fatalf("Expected redirect for invited-but-not-joined member, got %v", resp.StatusCode)
 	}
@@ -2854,99 +2858,92 @@ func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
 	if location == nil || !strings.Contains(location.String(), "error") {
 		t.Fatalf("Expected redirect to error page for invited member, got: %v", location)
 	}
+	if count := suite.countRules(ctx, t, org, prop); count != 0 {
+		t.Errorf("Expected 0 rules after invited-but-not-joined member attempt, got %d", count)
+	}
 
 	// Step 4: member joins the org
 	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
 		t.Fatalf("Failed for member to join org: %v", err)
 	}
 
-	// Step 5: now member can create a property rule
-	resp = postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By Member", "curl", "50")
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("Expected redirect (success) after joining, got %v", resp.StatusCode)
-	}
-	location, _ = resp.Location()
-	if location == nil || strings.Contains(location.String(), "error") {
-		t.Fatalf("Expected successful redirect after joining, got: %v", location)
+	// Step 5: verify behavior after joining depending on whether the suite expects success
+	resp = suite.postRule(srv, cookie, member, org, prop)
+	if suite.afterJoinSucceeds {
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("Expected redirect (success) after joining, got %v", resp.StatusCode)
+		}
+		location, _ = resp.Location()
+		if location == nil || strings.Contains(location.String(), "error") {
+			t.Fatalf("Expected successful redirect after joining, got: %v", location)
+		}
+		if count := suite.countRules(ctx, t, org, prop); count != 1 {
+			t.Errorf("Expected 1 rule after member joined, got %d", count)
+		}
+	} else {
+		if resp.StatusCode != http.StatusSeeOther {
+			t.Fatalf("Expected redirect for non-owner joined member, got %v", resp.StatusCode)
+		}
+		location, _ = resp.Location()
+		if location == nil || !strings.Contains(location.String(), "error") {
+			t.Fatalf("Expected redirect to error page for non-owner member, got: %v", location)
+		}
+		if count := suite.countRules(ctx, t, org, prop); count != 0 {
+			t.Errorf("Expected 0 rules after non-owner joined member attempt, got %d", count)
+		}
 	}
 }
 
-func TestInvitedMemberCannotCreateOrgRule(t *testing.T) {
+func TestMemberRuleCreation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	ctx := t.Context()
+	t.Run("PropertyRule", func(t *testing.T) {
+		runMemberRuleCreationPortalTest(t, memberRuleCreationTestSuite{
+			createTarget: func(ctx context.Context, t *testing.T, owner *dbgen.User, org *dbgen.Organization) *dbgen.Property {
+				safeName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+				prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, safeName+".example.com"), org)
+				if err != nil {
+					t.Fatalf("Failed to create property: %v", err)
+				}
+				return prop
+			},
+			postRule: func(srv *http.ServeMux, cookie *http.Cookie, member *dbgen.User, org *dbgen.Organization, prop *dbgen.Property) *http.Response {
+				return postCreatePropertyRule(srv, cookie, member, org, prop, "Test Rule", "curl", "50")
+			},
+			countRules: func(ctx context.Context, t *testing.T, org *dbgen.Organization, prop *dbgen.Property) int {
+				rulesMap, err := store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{prop.ID: 0})
+				if err != nil {
+					t.Fatalf("Failed to retrieve property rules: %v", err)
+				}
+				return len(rulesMap[prop.ID])
+			},
+			afterJoinSucceeds: true,
+		})
+	})
 
-	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create owner account: %v", err)
-	}
-
-	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
-	if err != nil {
-		t.Fatalf("Failed to create org: %v", err)
-	}
-
-	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create member account: %v", err)
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	postRule := func(user *dbgen.User) *http.Response {
-		return postCreateOrgRule(srv, cookie, user, org, "Test Org Rule",
-			string(dbgen.RuleConditionPropertyUserAgent),
-			string(dbgen.RuleConditionOperatorContains),
-			"curl",
-			string(dbgen.RuleActionPropertyDifficultyLevelPercent),
-			"50")
-	}
-
-	// Step 1: user who is not yet a member cannot create org rule
-	resp := postRule(member)
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("Expected redirect for non-member, got %v", resp.StatusCode)
-	}
-	location, _ := resp.Location()
-	if location == nil || !strings.Contains(location.String(), "error") {
-		t.Fatalf("Expected redirect to error page for non-member, got: %v", location)
-	}
-
-	// Step 2: invite member to org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
-		t.Fatalf("Failed to invite member to org: %v", err)
-	}
-
-	// Step 3: invited (but not joined) member cannot create org rule
-	resp = postRule(member)
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("Expected redirect for invited-but-not-joined member, got %v", resp.StatusCode)
-	}
-	location, _ = resp.Location()
-	if location == nil || !strings.Contains(location.String(), "error") {
-		t.Fatalf("Expected redirect to error page for invited member, got: %v", location)
-	}
-
-	// Step 4: member joins the org
-	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
-		t.Fatalf("Failed for member to join org: %v", err)
-	}
-
-	// Step 5: joined member (non-owner) still cannot create org rule - only org owner can
-	resp = postRule(member)
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("Expected redirect for non-owner member, got %v", resp.StatusCode)
-	}
-	location, _ = resp.Location()
-	if location == nil || !strings.Contains(location.String(), "error") {
-		t.Fatalf("Expected redirect to error page for non-owner member, got: %v", location)
-	}
+	t.Run("OrgRule", func(t *testing.T) {
+		runMemberRuleCreationPortalTest(t, memberRuleCreationTestSuite{
+			createTarget: func(ctx context.Context, t *testing.T, owner *dbgen.User, org *dbgen.Organization) *dbgen.Property {
+				return nil // org-level rules do not need a property
+			},
+			postRule: func(srv *http.ServeMux, cookie *http.Cookie, member *dbgen.User, org *dbgen.Organization, prop *dbgen.Property) *http.Response {
+				return postCreateOrgRule(srv, cookie, member, org, "Test Org Rule",
+					string(dbgen.RuleConditionPropertyUserAgent),
+					string(dbgen.RuleConditionOperatorContains),
+					"curl",
+					string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					"50")
+			},
+			countRules: func(ctx context.Context, t *testing.T, org *dbgen.Organization, prop *dbgen.Property) int {
+				rulesMap, err := store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+				if err != nil {
+					t.Fatalf("Failed to retrieve org rules: %v", err)
+				}
+				return len(rulesMap[org.ID])
+			},
+			afterJoinSucceeds: false,
+		})
+	})
 }
