@@ -1350,6 +1350,12 @@ func TestOrgMemberEndpointsInvalidPathArg(t *testing.T) {
 		{"DeleteOrgMemberInvalidUser", "DELETE", fmt.Sprintf("/org/%s/members/invalid-user-id", orgID), http.StatusSeeOther},
 		{"JoinOrgInvalidOrg", "PUT", "/org/invalid-org-id/members", http.StatusSeeOther},
 		{"LeaveOrgInvalidOrg", "DELETE", "/org/invalid-org-id/members", http.StatusSeeOther},
+		{"GetOrgNewRuleInvalidOrg", "GET", "/org/invalid-org-id/rules/new", http.StatusSeeOther},
+		{"PostOrgNewRuleInvalidOrg", "POST", "/org/invalid-org-id/rules/new", http.StatusSeeOther},
+		{"GetOrgEditRuleInvalidRule", "GET", fmt.Sprintf("/org/%s/rules/invalid-rule/edit", orgID), http.StatusSeeOther},
+		{"PostOrgEditRuleInvalidRule", "POST", fmt.Sprintf("/org/%s/rules/invalid-rule/edit", orgID), http.StatusSeeOther},
+		{"PostOrgMoveRuleInvalidRule", "POST", fmt.Sprintf("/org/%s/rules/invalid-rule/move", orgID), http.StatusSeeOther},
+		{"DeleteOrgRuleInvalidRule", "DELETE", fmt.Sprintf("/org/%s/rules/invalid-rule/delete", orgID), http.StatusSeeOther},
 	}
 
 	for _, tc := range tests {
