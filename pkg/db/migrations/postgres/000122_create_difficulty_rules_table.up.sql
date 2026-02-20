@@ -20,7 +20,10 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     action_value INT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    CONSTRAINT difficulty_rules_scope CHECK (property_id IS NOT NULL OR org_id IS NOT NULL)
+    CONSTRAINT difficulty_rules_scope CHECK (
+        (property_id IS NOT NULL AND org_id IS NULL) OR
+        (property_id IS NULL AND org_id IS NOT NULL)
+    )
 );
 
 CREATE INDEX IF NOT EXISTS index_difficulty_rules_property_position ON backend.difficulty_rules(property_id, position) WHERE property_id IS NOT NULL;

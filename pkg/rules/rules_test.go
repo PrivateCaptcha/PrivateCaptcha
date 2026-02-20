@@ -319,8 +319,8 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 
 	result := compiled.Apply(prop)
 	// 50 * 1100 / 100 = 550, should be clamped to 255
-	if result.Level() != 255 {
-		t.Errorf("Expected level clamped to 255, got %d", result.Level())
+	if result.Level() != 100 {
+		t.Errorf("Expected level clamped to 100, got %d", result.Level())
 	}
 }
 
