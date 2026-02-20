@@ -40,6 +40,30 @@ const (
 	StatusPropertyPermissionsError        StatusCode = 1214
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
+	// rules errors
+	StatusRuleNameEmptyError                StatusCode = 1400
+	StatusRuleConditionPropertyRequired     StatusCode = 1401
+	StatusRuleConditionOperatorInvalid      StatusCode = 1402
+	StatusRuleConditionValueRequired        StatusCode = 1403
+	StatusRuleConditionPropertyInvalid      StatusCode = 1404
+	StatusRuleActionPropertyRequired        StatusCode = 1405
+	StatusRuleActionValueRequired           StatusCode = 1406
+	StatusRuleActionValueInvalid            StatusCode = 1407
+	StatusRuleActionPropertyInvalid         StatusCode = 1408
+	StatusRuleIPAddressRequired             StatusCode = 1409
+	StatusRuleCountryRequired               StatusCode = 1410
+	StatusRuleCountryInvalid                StatusCode = 1411
+	StatusRuleDomainRequired                StatusCode = 1412
+	StatusRuleDomainInvalid                 StatusCode = 1413
+	StatusRuleDomainSubdomain               StatusCode = 1414
+	StatusRuleDifficultyValueInvalid        StatusCode = 1415
+	StatusRuleDifficultyGrowthInvalid       StatusCode = 1416
+	StatusRulePermissionsError              StatusCode = 1417
+	StatusRulePositionPrecisionError        StatusCode = 1418
+	StatusOrgRulesLimitError                StatusCode = 1419
+	StatusPropertyRulesLimitError           StatusCode = 1420
+	StatusOrgRulesSubscriptionRequiredError StatusCode = 1421
+	StatusPropertyRulesSubscriptionRequired StatusCode = 1422
 )
 
 func (sc StatusCode) Success() bool {
@@ -110,6 +134,52 @@ func (sc StatusCode) String() string {
 		return "Property limit reached for current subscription plan."
 	case StatusPropertyPermissionsError:
 		return "Insufficient permissions to update settings."
+	case StatusRuleNameEmptyError:
+		return "Rule name is required."
+	case StatusRuleConditionPropertyRequired:
+		return "Condition property is required."
+	case StatusRuleConditionOperatorInvalid:
+		return "Invalid operator for this condition property."
+	case StatusRuleConditionValueRequired:
+		return "Condition value is required for this operator."
+	case StatusRuleConditionPropertyInvalid:
+		return "Invalid condition property."
+	case StatusRuleActionPropertyRequired:
+		return "Action property is required."
+	case StatusRuleActionValueRequired:
+		return "Action value is required."
+	case StatusRuleActionValueInvalid:
+		return "Invalid action value."
+	case StatusRuleActionPropertyInvalid:
+		return "Invalid action property."
+	case StatusRuleIPAddressRequired:
+		return "IP address prefix is required."
+	case StatusRuleCountryRequired:
+		return "At least one country must be selected."
+	case StatusRuleCountryInvalid:
+		return "Country code is not valid."
+	case StatusRuleDomainRequired:
+		return "Domain is required."
+	case StatusRuleDomainInvalid:
+		return "Invalid domain name."
+	case StatusRuleDomainSubdomain:
+		return "Domain has to be a subdomain of main domain."
+	case StatusRuleDifficultyValueInvalid:
+		return "Difficulty adjustment must be within the range."
+	case StatusRuleDifficultyGrowthInvalid:
+		return "Difficulty growth must be a know value."
+	case StatusRulePermissionsError:
+		return "You don't have permission to access this rule."
+	case StatusRulePositionPrecisionError:
+		return "Rules need rebalancing. Please try again in a moment."
+	case StatusOrgRulesLimitError:
+		return "Organization rules limit reached on your current plan, please upgrade to create more."
+	case StatusPropertyRulesLimitError:
+		return "Property rules limit reached on your current plan, please upgrade to create more."
+	case StatusOrgRulesSubscriptionRequiredError:
+		return "You need an active subscription to create organization rules."
+	case StatusPropertyRulesSubscriptionRequired:
+		return "You need an active subscription to create property rules."
 	default:
 		return strconv.Itoa(int(sc))
 	}
