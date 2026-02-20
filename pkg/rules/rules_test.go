@@ -646,6 +646,144 @@ func TestInvalidIPRuleValue(t *testing.T) {
 	}
 }
 
+func TestIPAddressMatchesMultiplePrefixes(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,192.168.0.0/16", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             25,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri1 := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if !compiled.Matches(ri1) {
+		t.Error("Expected rule to match IP in first prefix 10.0.0.0/8")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("192.168.5.10"))
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule to match IP in second prefix 192.168.0.0/16")
+	}
+
+	ri3 := newTestRequestInfo("test", netip.MustParseAddr("172.16.0.1"))
+	if compiled.Matches(ri3) {
+		t.Error("Expected rule to not match IP outside all prefixes")
+	}
+}
+
+func TestIPAddressMatchesMultipleAddrs(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "1.2.3.4,5.6.7.8,9.10.11.12", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyHTTPRequest,
+		ActionValue:             1,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, ip := range []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"} {
+		ri := newTestRequestInfo("test", netip.MustParseAddr(ip))
+		if !compiled.Matches(ri) {
+			t.Errorf("Expected rule to match IP %s", ip)
+		}
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.5"))
+	if compiled.Matches(ri) {
+		t.Error("Expected rule to not match unlisted IP")
+	}
+}
+
+func TestIPAddressMatchesMixedPrefixAndAddr(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,172.16.0.1", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri1 := newTestRequestInfo("test", netip.MustParseAddr("10.5.5.5"))
+	if !compiled.Matches(ri1) {
+		t.Error("Expected rule to match IP in prefix 10.0.0.0/8")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("172.16.0.1"))
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule to match exact address 172.16.0.1")
+	}
+
+	ri3 := newTestRequestInfo("test", netip.MustParseAddr("172.16.0.2"))
+	if compiled.Matches(ri3) {
+		t.Error("Expected rule to not match 172.16.0.2 (only 172.16.0.1 is listed)")
+	}
+}
+
+func TestIPAddressMatchesMultipleNegated(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:        dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:        dbgen.RuleConditionOperatorMatches,
+		ConditionOperatorNegated: true,
+		ConditionValueStr:        pgtype.Text{String: "10.0.0.0/8,192.168.0.0/16", Valid: true},
+		ConditionValueSeparator:  pgtype.Text{String: ",", Valid: true},
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              50,
+		Enabled:                  true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri1 := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if compiled.Matches(ri1) {
+		t.Error("Expected negated rule to not match IP in a listed prefix")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("172.16.0.1"))
+	if !compiled.Matches(ri2) {
+		t.Error("Expected negated rule to match IP outside all listed prefixes")
+	}
+}
+
+func TestIPAddressInvalidInList(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,not-valid", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != ErrInvalidIPValue {
+		t.Errorf("Expected ErrInvalidIPValue for invalid IP in list, got %v", err)
+	}
+}
+
 func TestUnknownConditionProperty(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: "unknown_prop",
