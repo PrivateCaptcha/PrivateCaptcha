@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
@@ -27,6 +28,10 @@ const (
 	AccessLogTableName1h  = "privatecaptcha.request_logs_1h"
 	AccessLogTableName1d  = "privatecaptcha.request_logs_1d"
 	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
+)
+
+var (
+	ErrUnsupportedPeriod = errors.New("unsupported period")
 )
 
 type TimeSeriesDB struct {
@@ -139,7 +144,7 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC())
+		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.Fingerprint, r.Timestamp.UTC(), r.RuleID)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -382,6 +387,89 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 		const propertyStatsCacheTTL = 5 * time.Minute
 		// we have 5 min buffers for updates and we do NOT delete this cache item
 		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, propertyStatsCacheTTL)
+	}
+
+	return results, nil
+}
+
+func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	// Only support week and month periods for rule stats
+	if period != common.TimePeriodWeek && period != common.TimePeriodMonth {
+		return nil, ErrUnsupportedPeriod
+	}
+
+	tnow := time.Now().UTC()
+	var timeFrom time.Time
+	var timeFunction string
+	var interval string
+	var cacheKey *CacheKey
+
+	switch period {
+	case common.TimePeriodWeek:
+		timeFrom = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
+		cacheKey = new(CacheKey)
+		*cacheKey = propertyRuleStatsCacheKey(propertyID, timeFrom.Format(time.DateTime))
+	case common.TimePeriodMonth:
+		timeFrom = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
+		cacheKey = new(CacheKey)
+		*cacheKey = propertyRuleStatsCacheKey(propertyID, timeFrom.Format(time.DateTime))
+	}
+
+	if cacheKey != nil {
+		if stats, err := FetchCachedArray[common.TimeCount](ctx, ts.Cache, *cacheKey); (err == nil) && (len(stats) > 0) {
+			slog.DebugContext(ctx, "Property rule stats were cached", "orgID", orgID, "propertyID", propertyID, "key", *cacheKey, "count", len(stats))
+			return stats, nil
+		}
+	}
+
+	query := fmt.Sprintf(`SELECT
+		toDateTime(%s) AS agg_time,
+		sum(count) AS count
+	FROM privatecaptcha.rules_logs_1d FINAL
+	WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
+	GROUP BY agg_time
+	ORDER BY agg_time WITH FILL FROM toDateTime(%s) TO now() STEP %s
+	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`,
+		fmt.Sprintf(timeFunction, "timestamp"),
+		fmt.Sprintf(timeFunction, "{timestamp:DateTime}"),
+		interval)
+
+	rows, err := ts.Clickhouse.Query(query,
+		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
+		clickhouse.Named("property_id", strconv.Itoa(int(propertyID))),
+		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query property rule stats", common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.TimeCount, 0)
+
+	for rows.Next() {
+		bc := &common.TimeCount{}
+		if err := rows.Scan(&bc.Timestamp, &bc.Count); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from property rule stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, bc)
+	}
+
+	slog.InfoContext(ctx, "Fetched rule stats", "count", len(results), "orgID", orgID, "propID", propertyID,
+		"from", timeFrom, "period", period)
+
+	if cacheKey != nil {
+		const propertyRuleStatsCacheTTL = 5 * time.Minute
+		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, propertyRuleStatsCacheTTL)
 	}
 
 	return results, nil
@@ -637,6 +725,42 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, or
 	result := make([]*common.TimePeriodStat, 0, len(statsMap))
 	for _, v := range statsMap {
 		result = append(result, v)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
+
+	return result, nil
+}
+
+func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	// Only support week and month periods for rule stats
+	if period != common.TimePeriodWeek && period != common.TimePeriodMonth {
+		return nil, ErrUnsupportedPeriod
+	}
+
+	from := getStartTime(period)
+	statsMap := make(map[time.Time]uint32)
+
+	// For rule stats, always use daily resolution
+	truncate := func(t time.Time) time.Time {
+		y, m, d := t.Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+	}
+
+	// Count only logs with rule_id > 0
+	for _, log := range m.accessLogs {
+		if log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.Before(from) {
+			ts := truncate(log.Timestamp)
+			statsMap[ts]++
+		}
+	}
+
+	// Convert map to sorted slice
+	result := make([]*common.TimeCount, 0, len(statsMap))
+	for ts, count := range statsMap {
+		result = append(result, &common.TimeCount{Timestamp: ts, Count: count})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
 

@@ -180,6 +180,7 @@ func (l *Levels) BackfillAccess(ctx context.Context, result *puzzle.VerifyResult
 		UserID:      result.UserID,
 		OrgID:       result.OrgID,
 		PropertyID:  result.PropertyID,
+		RuleID:      0,
 		Timestamp:   result.CreatedAt,
 	}
 
@@ -206,6 +207,7 @@ func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerpri
 		UserID:      p.OwnerID(),
 		OrgID:       p.OrgID(),
 		PropertyID:  p.ID(),
+		RuleID:      p.RuleID(),
 		Timestamp:   tnow,
 	}
 

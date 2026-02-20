@@ -50,9 +50,27 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.TransferEndpoint), privateWrite, http.HandlerFunc(s.transferOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.MoveEndpoint), privateWrite, http.HandlerFunc(s.moveProperty))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RuleStatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyRuleStats))
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
+
+	// Rules routes
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getOrgNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postOrgNewRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getPropertyNewRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, common.NewEndpoint), privateWrite, http.HandlerFunc(s.postPropertyNewRule))
+
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateRead, s.Handler(s.getOrgEditRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postOrgEditRule))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateRead, s.Handler(s.getPropertyEditRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.EditEndpoint), privateWrite, http.HandlerFunc(s.postPropertyEditRule))
+
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.MoveEndpoint), privateWrite, s.Handler(s.postMoveOrgRule))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.MoveEndpoint), privateWrite, s.Handler(s.postMovePropertyRule))
+
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.RulesEndpoint, arg(common.ParamRule), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteOrgRule))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RulesEndpoint, arg(common.ParamRule), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deletePropertyRule))
 
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
 }

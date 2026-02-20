@@ -403,16 +403,17 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 }
 
 // this struct exists only to check if otter attempted loading OR refreshing the value
-type cachedPropertyReader struct {
-	sitekey     string
-	cache       common.Cache[CacheKey, any]
-	refreshFunc func(context.Context, string)
+type cachedRefreshReader[TKey any, T any] struct {
+	key          TKey
+	cache        common.Cache[CacheKey, any]
+	refreshFunc  func(context.Context, TKey)
+	cacheKeyFunc func(TKey) CacheKey
 }
 
 // refreshing means that value is cached, however it has to be reloaded (which is what we are trying to detect)
-func (sf *cachedPropertyReader) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
+func (sf *cachedRefreshReader[TKey, T]) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
 	if sf.refreshFunc != nil {
-		sf.refreshFunc(ctx, sf.sitekey)
+		sf.refreshFunc(ctx, sf.key)
 	}
 
 	// we keep old value, but (hopefully) trigger a reload using refreshFunc
@@ -420,19 +421,21 @@ func (sf *cachedPropertyReader) Reload(ctx context.Context, _ CacheKey, old any)
 }
 
 // loading means value was not in cache - so we return otter.ErrNotFound anyways
-func (sf *cachedPropertyReader) Load(ctx context.Context, _ CacheKey) (any, error) {
+func (sf *cachedRefreshReader[TKey, T]) Load(ctx context.Context, _ CacheKey) (any, error) {
 	return nil, otter.ErrNotFound
 }
 
-func (sf *cachedPropertyReader) Read(ctx context.Context) (*dbgen.Property, error) {
-	cacheKey := PropertyBySitekeyCacheKey(sf.sitekey)
+func (sf *cachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, error) {
+	cacheKey := sf.cacheKeyFunc(sf.key)
 
 	data, err := sf.cache.GetEx(ctx, cacheKey, sf)
 	if err != nil {
 		return nil, err
 	}
 
-	if t, ok := data.(*dbgen.Property); ok {
+	if t, ok := data.(*T); ok {
+		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", cacheKey)
+
 		return t, nil
 	}
 
@@ -449,7 +452,10 @@ type StoreBulkReader[TArg comparable, TKey any, T any] struct {
 	MinMissingCount uint
 }
 
-// returns cached and fetched items separately
+// We convert []TArg -> []TKey so that QueryFunc for DB query can return []*T
+// (before doing so we filter out cached entries using TArg -> CacheKey (CacheKeyFunc)).
+// We mark missing items with reverse operation T -> TArg -> CacheKey (ArgFunc into CacheKeyFunc).
+// Returns cached and fetched items separately
 func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TArg]uint) ([]*T, []*T, error) {
 	if len(args) == 0 {
 		return []*T{}, []*T{}, nil

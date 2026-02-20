@@ -550,6 +550,30 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, auditEvent, nil
 }
 
+func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &orgRulesRenderContext{
+		portalBaseRenderContext: *s.createPortalTabBaseContext(org, user, portalRulesTabIndex),
+		CurrentOrg:              orgToUserOrg(org, user.ID, s.IDHasher),
+		Rules:                   []*DifficultyRuleModel{},
+		CanEdit:                 org.UserID.Int32 == user.ID,
+	}
+
+	batch := map[int32]uint{org.ID: 1}
+	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve difficulty rules. Please try again later."
+		return renderCtx, nil, nil
+	}
+
+	rules := rulesMap[org.ID]
+	for _, rule := range rules {
+		canEdit := canEditRule(user, org, rule)
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher))
+	}
+
+	return renderCtx, nil, nil
+}
+
 // getOrgInviteRegister handles the register-invite URL for users invited by email
 func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()

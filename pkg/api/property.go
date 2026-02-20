@@ -47,7 +47,7 @@ func (p *apiPropertySettings) Normalize() {
 	p.Name = strings.TrimSpace(p.Name)
 
 	const (
-		minDifficultyLevel = 1
+		minDifficultyLevel = int(common.MinDifficultyLevel)
 		maxDifficultyLevel = int(common.MaxDifficultyLevel)
 	)
 	p.Level = max(minDifficultyLevel, min(maxDifficultyLevel, p.Level))
