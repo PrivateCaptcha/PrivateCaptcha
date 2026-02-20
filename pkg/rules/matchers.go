@@ -84,7 +84,7 @@ func containsCaseInsensitive(s, substr string) bool {
 // ipMatcher handles IP address matching
 type ipMatcher struct {
 	conditionOperator        dbgen.RuleConditionOperator
-	conditionValueIPPrefix   netip.Prefix
+	conditionValueIPPrefixes []netip.Prefix
 	conditionOperatorNegated bool
 }
 
@@ -97,10 +97,13 @@ func (im *ipMatcher) matches(ri *RequestInfo) bool {
 	case dbgen.RuleConditionOperatorEmpty:
 		result = !ip.IsValid()
 	default:
-		if !ip.IsValid() {
-			result = false
-		} else {
-			result = im.conditionValueIPPrefix.Contains(ip)
+		if ip.IsValid() {
+			for _, prefix := range im.conditionValueIPPrefixes {
+				if prefix.Contains(ip) {
+					result = true
+					break
+				}
+			}
 		}
 	}
 

@@ -47,6 +47,8 @@ func TestStatusCodeString(t *testing.T) {
 		StatusRuleActionValueInvalid,
 		StatusRuleActionPropertyInvalid,
 		StatusRuleIPAddressRequired,
+		StatusRuleIPAddressInvalid,
+		StatusRuleIPAddressTooMany,
 		StatusRuleCountryRequired,
 		StatusRuleCountryInvalid,
 		StatusRuleDifficultyValueInvalid,
