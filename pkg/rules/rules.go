@@ -10,6 +10,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/medama-io/go-useragent"
 )
 
 var (
@@ -207,9 +208,35 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
+// Compiler is the interface for compiling database rules into executable rule objects.
+type Compiler interface {
+	Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules
+}
+
+// RulesCompiler compiles database rules into executable rule objects.
+// It owns a reference to the user agent parser for bot detection.
+type RulesCompiler struct {
+	uaParser *useragent.Parser
+}
+
+// NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
+func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
+	return &RulesCompiler{uaParser: uaParser}
+}
+
+var _ Compiler = (*RulesCompiler)(nil)
+
+func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
+	case dbgen.RuleConditionPropertyUserAgent:
+		if rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
+			return &botMatcher{
+				uaParser:                 rc.uaParser,
+				conditionOperatorNegated: rule.ConditionOperatorNegated,
+			}, nil
+		}
+		fallthrough
+	case dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
 		value := rule.ConditionValueStr.String
 		sm := &stringMatcher{
 			conditionProperty:        rule.ConditionProperty,
@@ -259,8 +286,8 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	}
 }
 
-func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
-	matcher, err := buildMatcher(rule)
+func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
+	matcher, err := rc.buildMatcher(rule)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +316,7 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	}
 }
 
-func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
+func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
 	rules := make([]Rule, 0, len(dbRules))
 
 	for _, r := range dbRules {
@@ -297,7 +324,7 @@ func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRule
 			continue
 		}
 
-		compiled, err := CompileRule(ctx, r)
+		compiled, err := rc.CompileRule(ctx, r)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name, common.ErrAttr(err))
 			continue

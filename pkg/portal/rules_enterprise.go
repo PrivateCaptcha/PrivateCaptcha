@@ -124,14 +124,17 @@ func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
 	switch c.ConditionOperator {
 	case string(dbgen.RuleConditionOperatorEquals),
 		string(dbgen.RuleConditionOperatorContains),
-		string(dbgen.RuleConditionOperatorEmpty):
+		string(dbgen.RuleConditionOperatorEmpty),
+		string(dbgen.RuleConditionOperatorBot):
 	// Valid operators
 	default:
 		return common.StatusRuleConditionOperatorInvalid
 	}
 
-	// Validate value
-	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) && c.ConditionValue == "" {
+	// Validate value (bot and empty operators don't require a value)
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) &&
+		c.ConditionOperator != string(dbgen.RuleConditionOperatorBot) &&
+		c.ConditionValue == "" {
 		return common.StatusRuleConditionValueRequired
 	}
 
