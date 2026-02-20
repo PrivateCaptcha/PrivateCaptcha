@@ -48,7 +48,7 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 	ok, extra, err := s.SubscriptionLimits.CheckOrgRulesLimit(ctx, org.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
-			return common.StatusOrgRulesSubscriptionRequiredError
+			return common.StatusOrgRulesSubscriptionRequired
 		}
 		slog.ErrorContext(ctx, "Failed to check org rules limit", "orgID", org.ID, common.ErrAttr(err))
 		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
@@ -180,6 +180,11 @@ func (c *RuleWizardRenderContext) parseCountryCodeCondition(separator string) co
 }
 
 func (c *RuleWizardRenderContext) parseDomainCondition(domain string) common.StatusCode {
+	if len(domain) == 0 {
+		// not supported for orgs (that pass empty domain)
+		return common.StatusRuleConditionPropertyInvalid
+	}
+
 	// Validate operator
 	switch c.ConditionOperator {
 	case string(dbgen.RuleConditionOperatorEquals),
@@ -986,6 +991,18 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, ErrInvalidRequestArg
 	}
 
+	if newIndex < 0 {
+		slog.ErrorContext(ctx, "Invalid position value", "index", newIndex)
+		return nil, ErrInvalidRequestArg
+	}
+
+	if existingRules, err := s.Store.Impl().GetCachedPropertyRules(ctx, property.ID); err == nil {
+		if newIndex >= len(existingRules) {
+			slog.ErrorContext(ctx, "Invalid position value", "index", newIndex, "count", len(existingRules))
+			return nil, ErrInvalidRequestArg
+		}
+	}
+
 	var auditEvent *common.AuditLogEvent
 	if _, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var moveErr error
@@ -1043,6 +1060,18 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 	if err != nil {
 		slog.ErrorContext(ctx, "Invalid position value", "position", positionStr, common.ErrAttr(err))
 		return nil, ErrInvalidRequestArg
+	}
+
+	if newIndex < 0 {
+		slog.ErrorContext(ctx, "Invalid position value", "index", newIndex)
+		return nil, ErrInvalidRequestArg
+	}
+
+	if existingRules, err := s.Store.Impl().GetCachedOrgRules(ctx, org.ID); err == nil {
+		if newIndex >= len(existingRules) {
+			slog.ErrorContext(ctx, "Invalid position value", "index", newIndex, "count", len(existingRules))
+			return nil, ErrInvalidRequestArg
+		}
 	}
 
 	var auditEvent *common.AuditLogEvent
