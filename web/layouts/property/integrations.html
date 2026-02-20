@@ -10,6 +10,7 @@
             <option value="{{ $.Const.ReportsEndpoint }}">Reports</option>
             <option value="{{ $.Const.IntegrationsEndpoint }}" selected>Integrations</option>
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+            <option value="{{ $.Const.RulesEndpoint }}">Rules</option>
             <option value="{{ $.Const.EventsEndpoint }}">Audit logs</option>
         </select>
     </div>
@@ -33,6 +34,12 @@
                 <a href="#"
                     hx-target="#property-tabs"
                     hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.RulesEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Rules</a>
+                <a href="#"
+                    hx-target="#property-tabs"
+                    hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.TabEndpoint $.Const.EventsEndpoint }}"
                     hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.EventsEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
@@ -41,7 +48,7 @@
     </div>
 </div>
 
-<div class="mt-12 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+<div class="mt-12 px-4 sm:px-6 lg:px-8">
     <div class="divide-y divide-gray-200 overflow-hidden rounded-lg bg-gray-50 shadow">
         <div class="px-4 py-5 sm:px-6">
             <div class="-ml-4 -mt-4 flex flex-wrap items-center justify-between sm:flex-nowrap">

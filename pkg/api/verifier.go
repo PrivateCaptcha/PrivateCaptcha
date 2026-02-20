@@ -17,6 +17,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/blake2b"
 )
@@ -277,7 +278,7 @@ func (v *Verifier) baseDifficultyOverride(r *http.Request) uint8 {
 	return 0
 }
 
-func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) (puzzle.Puzzle, *dbgen.Property, error) {
+func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, rulesPair *rules.RulesPair, ri *rules.RequestInfo) (puzzle.Puzzle, *dbgen.Property, error) {
 	ctx := r.Context()
 	property, isProperty := ctx.Value(common.PropertyContextKey).(*dbgen.Property)
 	contextIP := ctx.Value(common.RateLimitKeyContextKey)
@@ -335,7 +336,13 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels) 
 
 	tnow := time.Now()
 	baseDifficulty := v.baseDifficultyOverride(r)
-	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficulty.NewDBProperty(property), baseDifficulty, tnow)
+
+	var difficultyProperty difficulty.Property = difficulty.NewDBProperty(property)
+	if rulesPair != nil {
+		difficultyProperty = rulesPair.Apply(ri, difficultyProperty)
+	}
+
+	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, baseDifficulty, tnow)
 
 	puzzleID := puzzle.NextPuzzleID()
 	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)

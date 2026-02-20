@@ -16,6 +16,7 @@ type Querier interface {
 	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
 	CreateCache(ctx context.Context, arg *CreateCacheParams) error
 	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
+	CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error)
 	CreateNotificationTemplate(ctx context.Context, arg *CreateNotificationTemplateParams) (*NotificationTemplate, error)
 	CreateOrganization(ctx context.Context, arg *CreateOrganizationParams) (*Organization, error)
 	CreateProperty(ctx context.Context, arg *CreatePropertyParams) (*Property, error)
@@ -26,6 +27,7 @@ type Querier interface {
 	DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*APIKey, error)
 	DeleteCachedByKey(ctx context.Context, key string) error
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
+	DeleteDifficultyRule(ctx context.Context, id int32) error
 	DeleteExpiredCache(ctx context.Context) error
 	DeleteLock(ctx context.Context, name string) error
 	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error
@@ -42,6 +44,10 @@ type Querier interface {
 	GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error)
 	GetAsyncTask(ctx context.Context, id pgtype.UUID) (*AsyncTask, error)
 	GetCachedByKey(ctx context.Context, key string) ([]byte, error)
+	GetDifficultyRuleByID(ctx context.Context, id int32) (*DifficultyRule, error)
+	GetDifficultyRulePositionNeighbors(ctx context.Context, arg *GetDifficultyRulePositionNeighborsParams) (*GetDifficultyRulePositionNeighborsRow, error)
+	GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
+	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
 	GetLock(ctx context.Context, name string) (*Lock, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)
@@ -77,8 +83,10 @@ type Querier interface {
 	InviteEmailToOrg(ctx context.Context, arg *InviteEmailToOrgParams) (*OrganizationUser, error)
 	InviteUserToOrg(ctx context.Context, arg *InviteUserToOrgParams) (*OrganizationUser, error)
 	LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) (*OrganizationUser, error)
+	MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRuleParams) (*DifficultyRule, error)
 	MoveProperty(ctx context.Context, arg *MovePropertyParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
+	RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) error
 	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
@@ -95,6 +103,7 @@ type Querier interface {
 	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error
 	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) error
+	UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficultyRuleParams) (*UpdateDifficultyRuleRow, error)
 	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) error
 	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) error
 	UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error)
