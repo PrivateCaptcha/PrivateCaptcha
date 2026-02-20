@@ -48,6 +48,7 @@ type TimeSeriesStore interface {
 	RetrievePropertyStatsSince(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
 	RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*OrgTimeCount, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
+	RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimeCount, error)
 	RetrieveRecentTopProperties(ctx context.Context, limit int) (map[int32]uint, error)
 	DeletePropertiesData(ctx context.Context, propertyIDs []int32) error
 	DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error
@@ -64,12 +65,13 @@ type PlatformMetrics interface {
 type MetricEventType string
 
 const (
-	PuzzleEventType    MetricEventType = "puzzle"
-	VerifyEventType    MetricEventType = "verify"
-	UserLimitEventType MetricEventType = "user_limit"
-	SessionEventType   MetricEventType = "session"
-	SitekeyEventType   MetricEventType = "sitekey"
-	APIKeyEventType    MetricEventType = "apikey"
+	PuzzleEventType        MetricEventType = "puzzle"
+	VerifyEventType        MetricEventType = "verify"
+	UserLimitEventType     MetricEventType = "user_limit"
+	SessionEventType       MetricEventType = "session"
+	SitekeyEventType       MetricEventType = "sitekey"
+	APIKeyEventType        MetricEventType = "apikey"
+	PropertyRulesEventType MetricEventType = "property_rules"
 )
 
 type BaseMetrics interface {
