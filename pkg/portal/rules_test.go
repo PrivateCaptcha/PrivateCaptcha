@@ -71,7 +71,7 @@ func createRuleForMove(ctx context.Context, user *dbgen.User, orgID *int32, prop
 		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
 		ActionValue:              actionValue,
 		CreatorID:                db.Int(user.ID),
-		Column14:                 100.0,
+		Column14:                 db.RulePositionStep,
 	}
 	if orgID != nil {
 		params.OrgID = db.Int(*orgID)
@@ -1729,15 +1729,10 @@ func moveElement[T any](slice []T, i, j int) []T {
 
 func testMoveRulesSuite(t *testing.T, suite moveRulesTestSuite) {
 	for _, numRules := range []int{1, 2, 3} {
-		numRules := numRules
 		t.Run(fmt.Sprintf("%dRules", numRules), func(t *testing.T) {
 			// Test moving each rule to each position
 			for fromIndex := 0; fromIndex < numRules; fromIndex++ {
-				fromIndex := fromIndex
-
 				for toIndex := 0; toIndex < numRules; toIndex++ {
-					toIndex := toIndex
-
 					t.Run(fmt.Sprintf("From%dTo%d", fromIndex, toIndex), func(t *testing.T) {
 						ctx := t.Context()
 						user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
@@ -2203,7 +2198,7 @@ func TestOrgRuleCreationWithoutSubscription(t *testing.T) {
 	}
 
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), common.StatusOrgRulesSubscriptionRequiredError.String()) {
+	if !strings.Contains(string(body), common.StatusOrgRulesSubscriptionRequired.String()) {
 		t.Errorf("Expected error message about subscription required, got: %s", string(body))
 	}
 }
