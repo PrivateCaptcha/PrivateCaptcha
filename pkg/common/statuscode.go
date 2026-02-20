@@ -51,6 +51,8 @@ const (
 	StatusRuleActionValueInvalid            StatusCode = 1407
 	StatusRuleActionPropertyInvalid         StatusCode = 1408
 	StatusRuleIPAddressRequired             StatusCode = 1409
+	StatusRuleIPAddressInvalid              StatusCode = 1423
+	StatusRuleIPAddressTooMany              StatusCode = 1424
 	StatusRuleCountryRequired               StatusCode = 1410
 	StatusRuleCountryInvalid                StatusCode = 1411
 	StatusRuleDomainRequired                StatusCode = 1412
@@ -153,7 +155,11 @@ func (sc StatusCode) String() string {
 	case StatusRuleActionPropertyInvalid:
 		return "Invalid action property."
 	case StatusRuleIPAddressRequired:
-		return "IP address prefix is required."
+		return "IP address or prefix is required."
+	case StatusRuleIPAddressInvalid:
+		return "One or more IP address values are invalid."
+	case StatusRuleIPAddressTooMany:
+		return "Too many IP addresses provided."
 	case StatusRuleCountryRequired:
 		return "At least one country must be selected."
 	case StatusRuleCountryInvalid:

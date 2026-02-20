@@ -20,7 +20,8 @@ var (
 )
 
 const (
-	defaultSeparator = ","
+	defaultSeparator   = ","
+	MaxIPAddressValues = 10
 )
 
 type Rule interface {
@@ -267,16 +268,30 @@ func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, erro
 		}
 
 		if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
-			value := rule.ConditionValueStr.String
-			prefix, err := netip.ParsePrefix(value)
-			if err != nil {
-				addr, addrErr := netip.ParseAddr(value)
-				if addrErr != nil {
-					return nil, ErrInvalidIPValue
-				}
-				prefix = netip.PrefixFrom(addr, addr.BitLen())
+			sep := defaultSeparator
+			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+				sep = rule.ConditionValueSeparator.String
 			}
-			im.conditionValueIPPrefix = prefix
+			value := rule.ConditionValueStr.String
+			items := strings.Split(value, sep)
+			for _, item := range items {
+				item = strings.TrimSpace(item)
+				if len(item) == 0 {
+					continue
+				}
+				prefix, err := netip.ParsePrefix(item)
+				if err != nil {
+					addr, addrErr := netip.ParseAddr(item)
+					if addrErr != nil {
+						return nil, ErrInvalidIPValue
+					}
+					prefix = netip.PrefixFrom(addr, addr.BitLen())
+				}
+				im.conditionValueIPPrefixes = append(im.conditionValueIPPrefixes, prefix)
+			}
+			if len(im.conditionValueIPPrefixes) == 0 {
+				return nil, ErrInvalidIPValue
+			}
 		}
 
 		return im, nil
