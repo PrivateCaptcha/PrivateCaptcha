@@ -6,6 +6,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/biter777/countries"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -141,7 +143,7 @@ func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
 	return common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseIPAddressCondition() common.StatusCode {
+func (c *RuleWizardRenderContext) parseIPAddressCondition(separator string) common.StatusCode {
 	// Validate operator - IP address can use matches or empty
 	switch c.ConditionOperator {
 	case string(dbgen.RuleConditionOperatorMatches),
@@ -152,8 +154,32 @@ func (c *RuleWizardRenderContext) parseIPAddressCondition() common.StatusCode {
 	}
 
 	// Validate value
-	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) && c.ConditionValue == "" {
-		return common.StatusRuleIPAddressRequired
+	if c.ConditionOperator != string(dbgen.RuleConditionOperatorEmpty) {
+		if c.ConditionValue == "" {
+			return common.StatusRuleIPAddressRequired
+		}
+		items := strings.Split(c.ConditionValue, separator)
+		if len(items) > rules.MaxIPAddressValues {
+			return common.StatusRuleIPAddressTooMany
+		}
+		validCount := 0
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			_, err := netip.ParsePrefix(item)
+			if err != nil {
+				_, addrErr := netip.ParseAddr(item)
+				if addrErr != nil {
+					return common.StatusRuleIPAddressInvalid
+				}
+			}
+			validCount++
+		}
+		if validCount == 0 {
+			return common.StatusRuleIPAddressRequired
+		}
 	}
 
 	return common.StatusOK
@@ -517,7 +543,8 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	case string(dbgen.RuleConditionPropertyUserAgent):
 		parseStatus = renderCtx.parseUserAgentCondition()
 	case string(dbgen.RuleConditionPropertyIPAddress):
-		parseStatus = renderCtx.parseIPAddressCondition()
+		conditionValueSeparator = db.Text(",")
+		parseStatus = renderCtx.parseIPAddressCondition(conditionValueSeparator.String)
 	case string(dbgen.RuleConditionPropertyCountryCode):
 		conditionValueSeparator = db.Text(",")
 		parseStatus = renderCtx.parseCountryCodeCondition(conditionValueSeparator.String)

@@ -282,6 +282,60 @@ func TestParseIPAddressConditionInvalidOperator(t *testing.T) {
 			value:    "192.168.0.0/16",
 			expected: common.StatusOK,
 		},
+		{
+			name:     "matches with single exact IP is valid",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "1.2.3.4",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "matches with comma-separated list of IPs is valid",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "1.2.3.4,5.6.7.8,10.0.0.0/8",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "matches with invalid IP in list",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "1.2.3.4,not-an-ip",
+			expected: common.StatusRuleIPAddressInvalid,
+		},
+		{
+			name:     "matches with empty entry in list is skipped",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "1.2.3.4,,5.6.7.8",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "matches with only commas returns required",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    ",,,",
+			expected: common.StatusRuleIPAddressRequired,
+		},
+		{
+			name:     "matches with too many IPs",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "1.0.0.1,1.0.0.2,1.0.0.3,1.0.0.4,1.0.0.5,1.0.0.6,1.0.0.7,1.0.0.8,1.0.0.9,1.0.0.10,1.0.0.11",
+			expected: common.StatusRuleIPAddressTooMany,
+		},
+		{
+			name:     "matches with IPv6 address is valid",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "2001:db8::1",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "matches with IPv6 prefix is valid",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "2001:db8::/32",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "matches with mixed IPv4 and IPv6 list is valid",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "10.0.0.0/8,2001:db8::/32",
+			expected: common.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {
@@ -289,7 +343,7 @@ func TestParseIPAddressConditionInvalidOperator(t *testing.T) {
 			ctx := &RuleWizardRenderContext{}
 			ctx.ConditionOperator = tt.operator
 			ctx.ConditionValue = tt.value
-			if got := ctx.parseIPAddressCondition(); got != tt.expected {
+			if got := ctx.parseIPAddressCondition(","); got != tt.expected {
 				t.Errorf("parseIPAddressCondition() = %v, want %v", got, tt.expected)
 			}
 		})
