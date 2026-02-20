@@ -3000,7 +3000,9 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		cacheKey := RawPropertyRulesCacheKey(propertyID)
 		if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey); err == nil {
 			result[propertyID] = cachedRules
-		} else if err != ErrNegativeCacheHit {
+		} else if err == ErrNegativeCacheHit {
+			result[propertyID] = []*dbgen.DifficultyRule{}
+		} else {
 			uncachedIDs = append(uncachedIDs, propertyID)
 		}
 	}
@@ -3060,7 +3062,9 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		cacheKey := RawOrgRulesCacheKey(orgID)
 		if cachedRules, err := FetchCachedArray[dbgen.DifficultyRule](ctx, impl.cache, cacheKey); err == nil {
 			result[orgID] = cachedRules
-		} else if err != ErrNegativeCacheHit {
+		} else if err == ErrNegativeCacheHit {
+			result[orgID] = []*dbgen.DifficultyRule{}
+		} else {
 			uncachedIDs = append(uncachedIDs, orgID)
 		}
 	}
@@ -3349,11 +3353,10 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 		return nil, nil, ErrMaintenance
 	}
 
-	if rule == nil || user == nil {
+	if (rule == nil) || (user == nil) || (newIndex < 0) {
 		return nil, nil, ErrInvalidInput
 	}
 
-	// Get neighboring positions
 	neighbors, err := impl.querier.GetDifficultyRulePositionNeighbors(ctx, &dbgen.GetDifficultyRulePositionNeighborsParams{
 		ID:      rule.ID,
 		Column2: int32(newIndex),
@@ -3381,27 +3384,21 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	isCorrectlyOrdered := false
 
 	if newIndex == 0 {
-		// First position: should be less than next (if exists)
 		if nextPos == nil {
-			// Only rule, already in correct position
 			isCorrectlyOrdered = true
 		} else {
 			isCorrectlyOrdered = currentPos < *nextPos
 		}
 	} else if nextPos == nil {
-		// Last position: should be greater than prev (if exists)
 		if prevPos == nil {
-			// Only rule (shouldn't happen for index > 0)
 			isCorrectlyOrdered = false
 		} else {
 			isCorrectlyOrdered = *prevPos < currentPos
 		}
 	} else {
-		// Middle position: should be between prev and next
 		isCorrectlyOrdered = *prevPos < currentPos && currentPos < *nextPos
 	}
 
-	// If already correctly ordered, skip the update
 	if isCorrectlyOrdered {
 		slog.InfoContext(ctx, "Rule already in correct position, skipping update", "ruleID", rule.ID, "position", currentPos, "newIndex", newIndex)
 		return rule, nil, nil
@@ -3410,15 +3407,11 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	// Calculate new position using fractional indexing
 	var newPosition float64
 	if newIndex == 0 {
-		// Moving to first position
 		if nextPos == nil {
-			// No rules exist, start at 0
 			newPosition = 0
 		} else {
-			// Calculate position before the next rule
 			newPosition = *nextPos - RulePositionStep
 			// Trigger rebalancing if position would become too negative
-			// This ensures positions stay within a reasonable range
 			if newPosition < -10*RulePositionStep {
 				slog.WarnContext(ctx, "Position would become too negative, need rebalancing",
 					"ruleID", rule.ID, "nextPos", *nextPos, "newPosition", newPosition)
@@ -3426,27 +3419,22 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 			}
 		}
 	} else if nextPos == nil {
-		// Moving to last position (no next neighbor)
 		if prevPos == nil {
-			// Should not happen - moving to position > 0 but no prev neighbor
 			newPosition = 0
 		} else {
 			newPosition = *prevPos + RulePositionStep
 		}
 	} else {
-		// Moving between two positions
 		newPosition = (*prevPos + *nextPos) / 2.0
 
 		// Check if we have enough precision
 		if delta := *nextPos - *prevPos; delta < minPositionDelta {
-			// Need rebalancing - return specific error
 			slog.WarnContext(ctx, "Insufficient position delta, need rebalancing", "ruleID", rule.ID,
 				"prevPos", *prevPos, "nextPos", *nextPos, "delta", delta)
 			return nil, nil, errRulesNeedRebalancing
 		}
 	}
 
-	// Update the rule position
 	updatedRule, err := impl.querier.MoveDifficultyRule(ctx, &dbgen.MoveDifficultyRuleParams{
 		ID:       rule.ID,
 		Position: newPosition,
@@ -3513,12 +3501,11 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
+	if err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: pgtype.Int4{Valid: false},
 		OrgID:      Int(orgID),
 		Column3:    RulePositionStep,
-	})
-	if err != nil {
+	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))
 		return err
 	}
@@ -3554,6 +3541,13 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 			if rebalanceErr != nil {
 				slog.ErrorContext(ctx, "Failed to rebalance rules", "ruleID", rule.ID, common.ErrAttr(rebalanceErr))
 				return nil, nil, rebalanceErr
+			}
+
+			// Re-fetch to get the current position assigned by rebalancing
+			rule, err = impl.RetrieveDifficultyRule(ctx, rule.ID)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to re-fetch rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
+				return nil, nil, err
 			}
 
 			// Try moving again after rebalancing
