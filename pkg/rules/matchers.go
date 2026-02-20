@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/medama-io/go-useragent"
 )
 
 // matcher is the interface that all specialized matchers implement
@@ -104,6 +105,23 @@ func (im *ipMatcher) matches(ri *RequestInfo) bool {
 	}
 
 	if im.conditionOperatorNegated {
+		return !result
+	}
+	return result
+}
+
+// botMatcher handles bot detection for user agent
+type botMatcher struct {
+	uaParser                 *useragent.Parser
+	conditionOperatorNegated bool
+}
+
+// matches returns true if the user agent is a known bot (or empty)
+func (bm *botMatcher) matches(ri *RequestInfo) bool {
+	ua := ri.UserAgent()
+	result := len(ua) == 0 || bm.uaParser.Parse(ua).IsBot()
+
+	if bm.conditionOperatorNegated {
 		return !result
 	}
 	return result
