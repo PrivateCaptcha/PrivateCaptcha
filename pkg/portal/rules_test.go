@@ -208,6 +208,12 @@ func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
 			expected: common.StatusOK,
 		},
 		{
+			name:     "bot operator valid without value",
+			operator: string(dbgen.RuleConditionOperatorBot),
+			value:    "",
+			expected: common.StatusOK,
+		},
+		{
 			name:     "equals with value is valid",
 			operator: string(dbgen.RuleConditionOperatorEquals),
 			value:    "test",
