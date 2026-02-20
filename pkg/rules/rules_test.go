@@ -784,6 +784,108 @@ func TestIPAddressInvalidInList(t *testing.T) {
 	}
 }
 
+func TestIPAddressSkipsEmptyItemsInList(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,,192.168.1.1", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("Expected empty items to be skipped, got error: %v", err)
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("10.5.5.5"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match IP in valid prefix")
+	}
+}
+
+func TestIPAddressAllEmptyItemsInListIsError(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: ",,,", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != ErrInvalidIPValue {
+		t.Errorf("Expected ErrInvalidIPValue for all-empty list, got %v", err)
+	}
+}
+
+func TestIPv6AddressMatchesExact(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr: pgtype.Text{String: "2001:db8::1", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("2001:db8::1"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match exact IPv6 address")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("2001:db8::2"))
+	if compiled.Matches(ri2) {
+		t.Error("Expected rule to not match different IPv6 address")
+	}
+}
+
+func TestIPAddressMatchesMixedIPv4AndIPv6(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,2001:db8::/32", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri1 := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if !compiled.Matches(ri1) {
+		t.Error("Expected rule to match IPv4 in 10.0.0.0/8")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("2001:db8::cafe"))
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule to match IPv6 in 2001:db8::/32")
+	}
+
+	ri3 := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.1"))
+	if compiled.Matches(ri3) {
+		t.Error("Expected rule to not match IP outside all listed prefixes")
+	}
+
+	ri4 := newTestRequestInfo("test", netip.MustParseAddr("2001:db9::1"))
+	if compiled.Matches(ri4) {
+		t.Error("Expected rule to not match IPv6 outside listed prefix")
+	}
+}
+
 func TestUnknownConditionProperty(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: "unknown_prop",

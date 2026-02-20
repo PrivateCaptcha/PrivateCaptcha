@@ -162,10 +162,11 @@ func (c *RuleWizardRenderContext) parseIPAddressCondition(separator string) comm
 		if len(items) > rules.MaxIPAddressValues {
 			return common.StatusRuleIPAddressTooMany
 		}
+		validCount := 0
 		for _, item := range items {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
-				return common.StatusRuleIPAddressInvalid
+				continue
 			}
 			_, err := netip.ParsePrefix(item)
 			if err != nil {
@@ -174,6 +175,10 @@ func (c *RuleWizardRenderContext) parseIPAddressCondition(separator string) comm
 					return common.StatusRuleIPAddressInvalid
 				}
 			}
+			validCount++
+		}
+		if validCount == 0 {
+			return common.StatusRuleIPAddressRequired
 		}
 	}
 

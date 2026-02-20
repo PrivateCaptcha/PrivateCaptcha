@@ -277,7 +277,7 @@ func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, erro
 			for _, item := range items {
 				item = strings.TrimSpace(item)
 				if len(item) == 0 {
-					return nil, ErrInvalidIPValue
+					continue
 				}
 				prefix, err := netip.ParsePrefix(item)
 				if err != nil {
