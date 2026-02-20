@@ -85,6 +85,7 @@ type RenderConstants struct {
 	OperatorEmpty                  string
 	OperatorMatches                string
 	OperatorIn                     string
+	OperatorBot                    string
 	StringOperators                []string
 	IPOperators                    []string
 	GrowthTypeConstant             string
@@ -165,6 +166,7 @@ func NewRenderConstants() *RenderConstants {
 		OperatorEmpty:                  string(dbgen.RuleConditionOperatorEmpty),
 		OperatorMatches:                string(dbgen.RuleConditionOperatorMatches),
 		OperatorIn:                     string(dbgen.RuleConditionOperatorIn),
+		OperatorBot:                    string(dbgen.RuleConditionOperatorBot),
 		StringOperators:                []string{string(dbgen.RuleConditionOperatorEquals), string(dbgen.RuleConditionOperatorContains), string(dbgen.RuleConditionOperatorEmpty)},
 		IPOperators:                    []string{string(dbgen.RuleConditionOperatorMatches), string(dbgen.RuleConditionOperatorEmpty)},
 		ConditionProperty:              common.ParamConditionProperty,

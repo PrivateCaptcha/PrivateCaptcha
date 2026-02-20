@@ -23,6 +23,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/medama-io/go-useragent"
 )
 
 var (
@@ -129,7 +130,7 @@ func TestMain(m *testing.M) {
 	ctx := context.TODO()
 	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
-	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, cfg)
+	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, cfg, useragent.NewParser())
 
 	server = &Server{
 		Stage:      common.StageTest,

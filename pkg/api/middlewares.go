@@ -46,6 +46,7 @@ type AuthMiddleware struct {
 	Limiter               UserLimiter
 	backpressureTimeout   time.Duration
 	Metrics               common.BaseMetrics
+	RulesCompiler         rules.Compiler
 	// this is a simple way to control negative cache spam, disabled by default
 	NegativeSitekeyThreshold uint
 }
@@ -143,7 +144,8 @@ func NewUserLimiter(store db.Implementor) *baseUserLimiter {
 func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService,
-	metrics common.BaseMetrics) *AuthMiddleware {
+	metrics common.BaseMetrics,
+	rulesCompiler rules.Compiler) *AuthMiddleware {
 	const batchSize = 10
 	const apiKeyLastUsedChannelSize = 250
 
@@ -157,6 +159,7 @@ func NewAuthMiddleware(store db.Implementor,
 		RulesChan:             make(chan int32, 10*batchSize),
 		BatchSize:             batchSize,
 		Metrics:               metrics,
+		RulesCompiler:         rulesCompiler,
 		SitekeyBackfillCancel: func() {},
 		UsersBackfillCancel:   func() {},
 		APIKeyLastUsedCancel:  func() {},
@@ -380,7 +383,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	if propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs); err == nil {
 		for propertyID := range uncachedPropertyIDs {
 			propRules := propertyRulesMap[propertyID]
-			compiled := rules.Compile(ctx, propRules)
+			compiled := am.RulesCompiler.Compile(ctx, propRules)
 			impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
 		}
 	} else {
@@ -391,7 +394,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	if orgRulesMap, err := impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs); err == nil {
 		for orgID := range uncachedOrgIDs {
 			oRules := orgRulesMap[orgID]
-			compiled := rules.Compile(ctx, oRules)
+			compiled := am.RulesCompiler.Compile(ctx, oRules)
 			impl.CacheCompiledOrgRules(ctx, orgID, compiled)
 		}
 	} else {
