@@ -96,7 +96,7 @@ func AssertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
 			// do nothing
 		default:
 			for i, line := range bytes.Split(data, []byte("\n")) {
-				fmt.Printf("%d: %s\n", i+1, line)
+				t.Logf("%d: %s\n", i+1, line)
 			}
 			t.Fatalf("Error parsing html: %s, %v", err, token)
 		}
