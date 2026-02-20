@@ -12,6 +12,7 @@
             <option value="{{ $.Const.MembersEndpoint }}">Members</option>
             {{ end }}
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+            <option value="{{ $.Const.RulesEndpoint }}">Rules</option>
             {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
             <option value="{{ $.Const.EventsEndpoint }}" selected>Audit logs</option>
             {{ end }}
@@ -35,6 +36,11 @@
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.RulesEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Rules</a>
                 <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Audit logs</a>
             </nav>
         </div>

@@ -1,0 +1,76 @@
+<div>
+    <div class="sm:hidden">
+        <label for="tabs" class="sr-only">Select a tab</label>
+        <!-- Use an "onChange" listener to redirect the user to the selected tab URL. -->
+        <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
+            hx-target="#org-tabs"
+            hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-swap="innerHTML">
+            <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.MembersEndpoint }}">Members</option>
+            {{ end }}
+            <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
+            <option value="{{ $.Const.RulesEndpoint }}" selected>Rules</option>
+            {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+            <option value="{{ $.Const.EventsEndpoint }}">Audit logs</option>
+            {{ end }}
+        </select>
+    </div>
+    <div class="hidden sm:block">
+        <div class="border-b border-gray-200">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
+                {{ end }}
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.SettingsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Settings</a>
+                <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Rules</a>
+                {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.EventsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
+                {{ end }}
+                {{ if $.Platform.Enterprise }}
+                <div class="grow flex items-center justify-end gap-x-4">
+                    <a type="button"
+                        href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .Const.NewEndpoint }}"
+                        class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300">
+                        <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        Add New Rule
+                    </a>
+                </div>
+                {{ end }}
+            </nav>
+        </div>
+    </div>
+</div>
+
+{{if .Params.ErrorMessage}}
+<div class="pt-5">{{template "error-message.html" .Params.ErrorMessage}}</div>
+{{else if .Params.SuccessMessage}}
+<div class="pt-5">{{template "success-message.html" .Params.SuccessMessage}}</div>
+{{else if .Params.InfoMessage}}
+<div class="pt-5">{{template "info-message.html" .Params.InfoMessage}}</div>
+{{else if .Params.WarningMessage}}
+<div class="pt-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
+{{end}}
+
+{{ template "rules-table.html" . }}
