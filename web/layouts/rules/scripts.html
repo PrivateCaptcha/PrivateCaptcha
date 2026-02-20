@@ -35,7 +35,7 @@ function ruleFormData() {
 
         get showConditionValue() {
             const baseOperator = this.conditionOperator.replace('_negated', '');
-            return baseOperator !== '{{ .Const.OperatorEmpty }}';
+            return baseOperator !== '{{ .Const.OperatorEmpty }}' && baseOperator !== '{{ .Const.OperatorBot }}';
         },
 
         get isStringCondition() {
@@ -110,7 +110,9 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
                     { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
                     { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' },
+                    { value: '{{ .Const.OperatorBot }}', label: 'Known Bot' },
+                    { value: '{{ .Const.OperatorBot }}_negated', label: 'Not Known Bot' }
                 ];
             }
         },
