@@ -53,7 +53,7 @@ type PortalMailer struct {
 	uaParser           *useragent.Parser
 }
 
-func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg common.ConfigStore) *PortalMailer {
+func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg common.ConfigStore, uaParser *useragent.Parser) *PortalMailer {
 	return &PortalMailer{
 		Mailer:             mailer,
 		EmailFrom:          cfg.Get(common.EmailFromKey),
@@ -64,7 +64,7 @@ func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg commo
 		TwofactorTemplate:  emailpkg.TwoFactorEmailTemplate,
 		WelcomeTemplate:    emailpkg.WelcomeEmailTemplate,
 		OrgInviteItemplate: emailpkg.OrgInvitationTemplate,
-		uaParser:           useragent.NewParser(),
+		uaParser:           uaParser,
 	}
 }
 

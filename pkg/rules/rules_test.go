@@ -10,7 +10,10 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/medama-io/go-useragent"
 )
+
+var testCompiler = NewRulesCompiler(useragent.NewParser())
 
 func newTestRequestInfo(userAgent string, ip netip.Addr) *RequestInfo {
 	req := httptest.NewRequest("GET", "/", nil)
@@ -58,7 +61,7 @@ func TestUserAgentEqualsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +87,7 @@ func TestUserAgentContainsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +112,7 @@ func TestUserAgentEmptyMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +139,7 @@ func TestUserAgentInMatch(t *testing.T) {
 		Enabled:                 true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,6 +155,67 @@ func TestUserAgentInMatch(t *testing.T) {
 	}
 }
 
+func TestUserAgentBotMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorBot,
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty user agent counts as bot
+	ri := newTestRequestInfo("", netip.MustParseAddr("1.2.3.4"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match empty user agent as bot")
+	}
+
+	// Known bot user agent should match
+	ri2 := newTestRequestInfo("Googlebot/2.1 (+http://www.google.com/bot.html)", netip.MustParseAddr("1.2.3.4"))
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule to match known bot user agent")
+	}
+
+	// Regular browser should not match
+	ri3 := newTestRequestInfo("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri3) {
+		t.Error("Expected rule to not match regular browser user agent")
+	}
+}
+
+func TestUserAgentBotNegatedMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator:        dbgen.RuleConditionOperatorBot,
+		ConditionOperatorNegated: true,
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              50,
+		Enabled:                  true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Regular browser should match (negated)
+	ri := newTestRequestInfo("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", netip.MustParseAddr("1.2.3.4"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected negated bot rule to match regular browser user agent")
+	}
+
+	// Bot should not match (negated)
+	ri2 := newTestRequestInfo("Googlebot/2.1 (+http://www.google.com/bot.html)", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri2) {
+		t.Error("Expected negated bot rule to not match known bot user agent")
+	}
+}
+
 func TestIPAddressMatchesPrefix(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
@@ -162,7 +226,7 @@ func TestIPAddressMatchesPrefix(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +252,7 @@ func TestIPAddressMatchesExactAddr(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +277,7 @@ func TestIPAddressEmptyMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +303,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +329,7 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +352,7 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -311,7 +375,7 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,7 +398,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +435,7 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules)
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
@@ -408,8 +472,8 @@ func TestRulesPairPropertyBeforeOrg(t *testing.T) {
 		},
 	}
 
-	compiledProp := Compile(context.Background(), propertyRules)
-	compiledOrg := Compile(context.Background(), orgRules)
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 	prop := newStubProperty()
 
@@ -433,7 +497,7 @@ func TestCompiledRulesNoMatch(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules)
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4"))
@@ -460,7 +524,7 @@ func TestNilCompiledRulesApply(t *testing.T) {
 }
 
 func TestEmptyCompileReturnsNil(t *testing.T) {
-	compiled := Compile(context.Background(), nil)
+	compiled := testCompiler.Compile(context.Background(), nil)
 	if compiled != nil {
 		t.Error("Expected nil CompiledRules from empty rule sets")
 	}
@@ -478,7 +542,7 @@ func TestIsRequestBlocked(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules)
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
 
 	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ri) {
@@ -513,7 +577,7 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules)
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ri) {
 		t.Error("Expected block rule to still be checked even when non-block rule also matches")
@@ -550,7 +614,7 @@ func TestIPv6PrefixMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -576,7 +640,7 @@ func TestInvalidIPRuleValue(t *testing.T) {
 		Enabled:           true,
 	}
 
-	_, err := CompileRule(context.Background(), rule)
+	_, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != ErrInvalidIPValue {
 		t.Errorf("Expected ErrInvalidIPValue, got %v", err)
 	}
@@ -592,7 +656,7 @@ func TestUnknownConditionProperty(t *testing.T) {
 		Enabled:           true,
 	}
 
-	_, err := CompileRule(context.Background(), rule)
+	_, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != ErrUnknownConditionProperty {
 		t.Errorf("Expected ErrUnknownConditionProperty, got %v", err)
 	}
@@ -608,7 +672,7 @@ func TestUnknownActionProperty(t *testing.T) {
 		Enabled:           true,
 	}
 
-	_, err := CompileRule(context.Background(), rule)
+	_, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != ErrUnknownActionProperty {
 		t.Errorf("Expected ErrUnknownActionProperty, got %v", err)
 	}
@@ -642,7 +706,7 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 		},
 	}
 
-	compiled := Compile(context.Background(), propertyRules)
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
 	if compiled == nil {
 		t.Fatal("Expected non-nil CompiledRules (one valid rule)")
 	}
@@ -691,7 +755,7 @@ func TestCountryCodeEqualsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -717,7 +781,7 @@ func TestCountryCodeNoHeader(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +802,7 @@ func TestCountryCodeContainsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -764,7 +828,7 @@ func TestCountryCodeInMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +853,7 @@ func TestCountryCodeEmptyMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -870,7 +934,7 @@ func TestRulesPairOrgFallback(t *testing.T) {
 			Enabled:           true,
 		},
 	}
-	org := Compile(context.Background(), orgRules)
+	org := testCompiler.Compile(context.Background(), orgRules)
 	rp := &RulesPair{OrgRules: org}
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
@@ -892,7 +956,7 @@ func TestRulesPairPropertyOnly(t *testing.T) {
 			Enabled:           true,
 		},
 	}
-	prop := Compile(context.Background(), propRules)
+	prop := testCompiler.Compile(context.Background(), propRules)
 	rp := &RulesPair{PropertyRules: prop}
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
@@ -995,7 +1059,7 @@ func TestUserAgentNegation(t *testing.T) {
 				Enabled:                  true,
 			}
 
-			compiled, err := CompileRule(context.Background(), rule)
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1065,7 +1129,7 @@ func TestIPAddressNegation(t *testing.T) {
 				Enabled:                  true,
 			}
 
-			compiled, err := CompileRule(context.Background(), rule)
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1124,7 +1188,7 @@ func TestIPAddressEmptyNegation(t *testing.T) {
 				Enabled:                  true,
 			}
 
-			compiled, err := CompileRule(context.Background(), rule)
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1234,7 +1298,7 @@ func TestCountryCodeNegation(t *testing.T) {
 				Enabled:                  true,
 			}
 
-			compiled, err := CompileRule(context.Background(), rule)
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1259,7 +1323,7 @@ func TestDomainEqualsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1285,7 +1349,7 @@ func TestDomainContainsMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1310,7 +1374,7 @@ func TestDomainEmptyMatch(t *testing.T) {
 		Enabled:           true,
 	}
 
-	compiled, err := CompileRule(context.Background(), rule)
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1401,7 +1465,7 @@ func TestDomainNegation(t *testing.T) {
 				Enabled:                  true,
 			}
 
-			compiled, err := CompileRule(context.Background(), rule)
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
 			if err != nil {
 				t.Fatal(err)
 			}

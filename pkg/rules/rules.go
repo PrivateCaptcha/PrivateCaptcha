@@ -10,6 +10,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
+	"github.com/medama-io/go-useragent"
 )
 
 var (
@@ -259,8 +260,30 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	}
 }
 
-func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
-	matcher, err := buildMatcher(rule)
+// RulesCompiler compiles database rules into executable rule objects.
+// It owns a reference to the user agent parser for bot detection.
+type RulesCompiler struct {
+	uaParser *useragent.Parser
+}
+
+// NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
+func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
+	return &RulesCompiler{uaParser: uaParser}
+}
+
+func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
+	if rule.ConditionProperty == dbgen.RuleConditionPropertyUserAgent &&
+		rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
+		return &botMatcher{
+			uaParser:                 rc.uaParser,
+			conditionOperatorNegated: rule.ConditionOperatorNegated,
+		}, nil
+	}
+	return buildMatcher(rule)
+}
+
+func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
+	matcher, err := rc.buildMatcher(rule)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +312,7 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 	}
 }
 
-func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
+func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
 	rules := make([]Rule, 0, len(dbRules))
 
 	for _, r := range dbRules {
@@ -297,7 +320,7 @@ func Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRule
 			continue
 		}
 
-		compiled, err := CompileRule(ctx, r)
+		compiled, err := rc.CompileRule(ctx, r)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to compile rule", "ruleID", r.ID, "ruleName", r.Name, common.ErrAttr(err))
 			continue

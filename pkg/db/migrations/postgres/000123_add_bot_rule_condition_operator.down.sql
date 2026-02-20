@@ -1,0 +1,1 @@
+-- Cannot remove enum values in PostgreSQL, intentionally left empty

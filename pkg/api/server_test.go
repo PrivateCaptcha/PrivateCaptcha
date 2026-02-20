@@ -17,7 +17,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/medama-io/go-useragent"
 )
 
 var (
@@ -85,7 +87,7 @@ func TestMain(m *testing.M) {
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics),
+		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Verifier:           NewVerifier(cfg, store),
 		Metrics:            metrics,
