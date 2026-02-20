@@ -62,7 +62,7 @@ const (
 	StatusRulePositionPrecisionError        StatusCode = 1418
 	StatusOrgRulesLimitError                StatusCode = 1419
 	StatusPropertyRulesLimitError           StatusCode = 1420
-	StatusOrgRulesSubscriptionRequiredError StatusCode = 1421
+	StatusOrgRulesSubscriptionRequired      StatusCode = 1421
 	StatusPropertyRulesSubscriptionRequired StatusCode = 1422
 )
 
@@ -167,7 +167,7 @@ func (sc StatusCode) String() string {
 	case StatusRuleDifficultyValueInvalid:
 		return "Difficulty adjustment must be within the range."
 	case StatusRuleDifficultyGrowthInvalid:
-		return "Difficulty growth must be a know value."
+		return "Difficulty growth must be a known value."
 	case StatusRulePermissionsError:
 		return "You don't have permission to access this rule."
 	case StatusRulePositionPrecisionError:
@@ -176,7 +176,7 @@ func (sc StatusCode) String() string {
 		return "Organization rules limit reached on your current plan, please upgrade to create more."
 	case StatusPropertyRulesLimitError:
 		return "Property rules limit reached on your current plan, please upgrade to create more."
-	case StatusOrgRulesSubscriptionRequiredError:
+	case StatusOrgRulesSubscriptionRequired:
 		return "You need an active subscription to create organization rules."
 	case StatusPropertyRulesSubscriptionRequired:
 		return "You need an active subscription to create property rules."
