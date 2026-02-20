@@ -1070,6 +1070,12 @@ func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
 
 	orgID := server.IDHasher.Encrypt(int(org.ID))
 
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+	propertyID := server.IDHasher.Encrypt(int(prop.ID))
+
 	tests := []struct {
 		name     string
 		method   string
@@ -1083,6 +1089,12 @@ func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
 		{"GetPropertyAuditLogsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/events", orgID), http.StatusSeeOther},
 		{"GetPropertyStatsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/stats/24h", orgID), http.StatusBadRequest},
 		{"GetPropertyRuleStatsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/rulestats/7d", orgID), http.StatusBadRequest},
+		{"GetPropertyNewRuleInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/rules/new", orgID), http.StatusSeeOther},
+		{"PostPropertyNewRuleInvalidProperty", "POST", fmt.Sprintf("/org/%s/property/invalid-id/rules/new", orgID), http.StatusSeeOther},
+		{"GetPropertyEditRuleInvalidRule", "GET", fmt.Sprintf("/org/%s/property/%s/rules/invalid-rule/edit", orgID, propertyID), http.StatusSeeOther},
+		{"PostPropertyEditRuleInvalidRule", "POST", fmt.Sprintf("/org/%s/property/%s/rules/invalid-rule/edit", orgID, propertyID), http.StatusSeeOther},
+		{"PostPropertyMoveRuleInvalidRule", "POST", fmt.Sprintf("/org/%s/property/%s/rules/invalid-rule/move", orgID, propertyID), http.StatusSeeOther},
+		{"DeletePropertyRuleInvalidRule", "DELETE", fmt.Sprintf("/org/%s/property/%s/rules/invalid-rule/delete", orgID, propertyID), http.StatusSeeOther},
 	}
 
 	for _, tc := range tests {
