@@ -65,6 +65,22 @@ sql:
           backend_audit_log_source_portal: AuditLogSourcePortal
           backend_audit_log_source_api: AuditLogSourceApi
           backend_async_task: AsyncTask
+          backend_difficulty_rule: DifficultyRule
+          backend_rule_condition_property: RuleConditionProperty
+          backend_rule_condition_property_user_agent: RuleConditionPropertyUserAgent
+          backend_rule_condition_property_ip_address: RuleConditionPropertyIPAddress
+          backend_rule_condition_property_country_code: RuleConditionPropertyCountryCode
+          backend_rule_condition_property_domain: RuleConditionPropertyDomain
+          backend_rule_condition_operator: RuleConditionOperator
+          backend_rule_condition_operator_equals: RuleConditionOperatorEquals
+          backend_rule_condition_operator_contains: RuleConditionOperatorContains
+          backend_rule_condition_operator_matches: RuleConditionOperatorMatches
+          backend_rule_condition_operator_empty: RuleConditionOperatorEmpty
+          backend_rule_condition_operator_in: RuleConditionOperatorIn
+          backend_rule_action_property: RuleActionProperty
+          backend_rule_action_property_difficulty_level_percent: RuleActionPropertyDifficultyLevelPercent
+          backend_rule_action_property_http_request: RuleActionPropertyHTTPRequest
+          backend_rule_action_property_difficulty_growth: RuleActionPropertyDifficultyGrowth
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"
