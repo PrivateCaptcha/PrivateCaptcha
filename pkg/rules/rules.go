@@ -267,10 +267,11 @@ func CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) 
 
 	switch rule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
+		percentDiff := max(-100, min(100, rule.ActionValue))
 		return &difficultyLevelRule{
 			ruleBase:    ruleBase{ruleID: rule.ID},
 			matcher:     matcher,
-			percentDiff: int16(rule.ActionValue),
+			percentDiff: int16(percentDiff),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
