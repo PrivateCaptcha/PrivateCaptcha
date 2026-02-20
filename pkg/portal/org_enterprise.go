@@ -588,9 +588,7 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalB
 func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgRulesRenderContext{
 		portalBaseRenderContext: *s.createPortalTabBaseContext(org, user, portalRulesTabIndex),
-		CurrentOrg:              orgToUserOrg(org, user.ID, s.IDHasher),
 		Rules:                   []*DifficultyRuleModel{},
-		CanEdit:                 org.UserID.Int32 == user.ID,
 	}
 
 	batch := map[int32]uint{org.ID: 1}
