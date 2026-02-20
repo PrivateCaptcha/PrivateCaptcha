@@ -2424,3 +2424,529 @@ func TestCreatePropertyRuleWithAllActionTypes(t *testing.T) {
 		t.Fatal("Block rule not found")
 	}
 }
+
+func TestParseDomainCondition(t *testing.T) {
+	tests := []struct {
+		name     string
+		domain   string
+		operator string
+		value    string
+		expected common.StatusCode
+	}{
+		{
+			name:     "empty domain not supported",
+			domain:   "",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "example.com",
+			expected: common.StatusRuleConditionPropertyInvalid,
+		},
+		{
+			name:     "invalid operator matches",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "example.com",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "invalid operator in",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "example.com",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "unknown operator",
+			domain:   "example.com",
+			operator: "unknown",
+			value:    "example.com",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "equals with empty value",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "",
+			expected: common.StatusRuleDomainRequired,
+		},
+		{
+			name:     "contains with empty value",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorContains),
+			value:    "",
+			expected: common.StatusRuleDomainRequired,
+		},
+		{
+			name:     "domain not a subdomain of property domain",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "other.com",
+			expected: common.StatusRuleDomainSubdomain,
+		},
+		{
+			name:     "empty operator valid without value",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEmpty),
+			value:    "",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "equals with same domain is valid",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "example.com",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "equals with subdomain is valid",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "sub.example.com",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "contains with valid domain",
+			domain:   "example.com",
+			operator: string(dbgen.RuleConditionOperatorContains),
+			value:    "example.com",
+			expected: common.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := &RuleWizardRenderContext{}
+			ctx.ConditionOperator = tt.operator
+			ctx.ConditionValue = tt.value
+			if got := ctx.parseDomainCondition(tt.domain); got != tt.expected {
+				t.Errorf("parseDomainCondition() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGetPropertyNewRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/new", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(prop.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyNewRule(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != ruleTemplate {
+		t.Errorf("Expected view to be %s, got %s", ruleTemplate, viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*RuleWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *RuleWizardRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.CurrentOrg == nil {
+		t.Fatal("Expected CurrentOrg to be populated, got nil")
+	}
+
+	if renderCtx.CurrentOrg.ID != server.IDHasher.Encrypt(int(org.ID)) {
+		t.Errorf("Expected org ID %s, got %s", server.IDHasher.Encrypt(int(org.ID)), renderCtx.CurrentOrg.ID)
+	}
+
+	if renderCtx.Property == nil {
+		t.Fatal("Expected Property to be populated, got nil")
+	}
+
+	if renderCtx.Property.Domain != prop.Domain {
+		t.Errorf("Expected property domain %s, got %s", prop.Domain, renderCtx.Property.Domain)
+	}
+
+	if len(renderCtx.Token) == 0 {
+		t.Error("Expected CSRF token to be populated")
+	}
+}
+
+func TestGetOrgNewRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/new", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgNewRule(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != ruleTemplate {
+		t.Errorf("Expected view to be %s, got %s", ruleTemplate, viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*RuleWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *RuleWizardRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.CurrentOrg == nil {
+		t.Fatal("Expected CurrentOrg to be populated, got nil")
+	}
+
+	if renderCtx.CurrentOrg.ID != server.IDHasher.Encrypt(int(org.ID)) {
+		t.Errorf("Expected org ID %s, got %s", server.IDHasher.Encrypt(int(org.ID)), renderCtx.CurrentOrg.ID)
+	}
+
+	if renderCtx.Property != nil {
+		t.Error("Expected Property to be nil for org rule")
+	}
+
+	if len(renderCtx.Token) == 0 {
+		t.Error("Expected CSRF token to be populated")
+	}
+}
+
+func TestGetPropertyEditRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	rule, err := createPropertyRuleUserAgent(ctx, user, prop.ID, "Test Rule")
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/%s/edit",
+		server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(prop.ID)))
+	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getPropertyEditRule(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != ruleTemplate {
+		t.Errorf("Expected view to be %s, got %s", ruleTemplate, viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*RuleWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *RuleWizardRenderContext, got %T", viewModel.Model)
+	}
+
+	if !renderCtx.IsEdit {
+		t.Error("Expected IsEdit to be true")
+	}
+
+	if renderCtx.RuleID != server.IDHasher.Encrypt(int(rule.ID)) {
+		t.Errorf("Expected RuleID %s, got %s", server.IDHasher.Encrypt(int(rule.ID)), renderCtx.RuleID)
+	}
+
+	if renderCtx.Name != rule.Name {
+		t.Errorf("Expected rule name %s, got %s", rule.Name, renderCtx.Name)
+	}
+}
+
+func TestGetOrgEditRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	rule, err := createOrgRuleUserAgent(ctx, user, org.ID, "Test Org Rule")
+	if err != nil {
+		t.Fatalf("Failed to create rule: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/%s/edit",
+		server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getOrgEditRule(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	if viewModel.View != ruleTemplate {
+		t.Errorf("Expected view to be %s, got %s", ruleTemplate, viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*RuleWizardRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *RuleWizardRenderContext, got %T", viewModel.Model)
+	}
+
+	if !renderCtx.IsEdit {
+		t.Error("Expected IsEdit to be true")
+	}
+
+	if renderCtx.RuleID != server.IDHasher.Encrypt(int(rule.ID)) {
+		t.Errorf("Expected RuleID %s, got %s", server.IDHasher.Encrypt(int(rule.ID)), renderCtx.RuleID)
+	}
+
+	if renderCtx.Name != rule.Name {
+		t.Errorf("Expected rule name %s, got %s", rule.Name, renderCtx.Name)
+	}
+
+	if renderCtx.Property != nil {
+		t.Error("Expected Property to be nil for org rule")
+	}
+}
+
+func TestInvitedMemberCannotCreatePropertyRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Step 1: user who is not yet a member cannot create property rule
+	resp := postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By NonMember", "curl", "50")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect for non-member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for non-member, got: %v", location)
+	}
+
+	// Step 2: invite member to org
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	// Step 3: invited (but not joined) member cannot create property rule
+	resp = postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By InvitedMember", "curl", "50")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect for invited-but-not-joined member, got %v", resp.StatusCode)
+	}
+	location, _ = resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for invited member, got: %v", location)
+	}
+
+	// Step 4: member joins the org
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	// Step 5: now member can create a property rule
+	resp = postCreatePropertyRule(srv, cookie, member, org, prop, "Rule By Member", "curl", "50")
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect (success) after joining, got %v", resp.StatusCode)
+	}
+	location, _ = resp.Location()
+	if location == nil || strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected successful redirect after joining, got: %v", location)
+	}
+}
+
+func TestInvitedMemberCannotCreateOrgRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	postRule := func(user *dbgen.User) *http.Response {
+		return postCreateOrgRule(srv, cookie, user, org, "Test Org Rule",
+			string(dbgen.RuleConditionPropertyUserAgent),
+			string(dbgen.RuleConditionOperatorContains),
+			"curl",
+			string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+			"50")
+	}
+
+	// Step 1: user who is not yet a member cannot create org rule
+	resp := postRule(member)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect for non-member, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for non-member, got: %v", location)
+	}
+
+	// Step 2: invite member to org
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member to org: %v", err)
+	}
+
+	// Step 3: invited (but not joined) member cannot create org rule
+	resp = postRule(member)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect for invited-but-not-joined member, got %v", resp.StatusCode)
+	}
+	location, _ = resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for invited member, got: %v", location)
+	}
+
+	// Step 4: member joins the org
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatalf("Failed for member to join org: %v", err)
+	}
+
+	// Step 5: joined member (non-owner) still cannot create org rule - only org owner can
+	resp = postRule(member)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect for non-owner member, got %v", resp.StatusCode)
+	}
+	location, _ = resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page for non-owner member, got: %v", location)
+	}
+}
