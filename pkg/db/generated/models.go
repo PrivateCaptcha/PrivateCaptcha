@@ -285,6 +285,7 @@ const (
 	RuleConditionOperatorMatches  RuleConditionOperator = "matches"
 	RuleConditionOperatorEmpty    RuleConditionOperator = "empty"
 	RuleConditionOperatorIn       RuleConditionOperator = "in"
+	RuleConditionOperatorBot      RuleConditionOperator = "bot"
 )
 
 func (e *RuleConditionOperator) Scan(src interface{}) error {

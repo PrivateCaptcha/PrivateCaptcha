@@ -203,6 +203,12 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		} else {
 			conditionOperator = "is one of"
 		}
+	case dbgen.RuleConditionOperatorBot:
+		if rule.ConditionOperatorNegated {
+			conditionOperator = "is not known bot"
+		} else {
+			conditionOperator = "is known bot"
+		}
 	default:
 		baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
 		if rule.ConditionOperatorNegated {
