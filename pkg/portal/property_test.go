@@ -431,6 +431,111 @@ func TestGetPropertyStats(t *testing.T) {
 	}
 }
 
+func TestGetPropertyRuleStats(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create new property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	// Insert access records with rule IDs
+	accessRecords := []*common.AccessRecord{
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			RuleID:     1, // Fake rule ID
+			Timestamp:  now.Add(-1 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			RuleID:     2, // Another fake rule ID
+			Timestamp:  now.Add(-2 * time.Hour),
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			RuleID:     0, // Should be filtered out
+			Timestamp:  now.Add(-3 * time.Hour),
+		},
+	}
+
+	if err := timeSeries.WriteAccessLogBatch(ctx, accessRecords); err != nil {
+		t.Fatalf("Failed to write access log batch: %v", err)
+	}
+
+	// Give the time series database a moment to process the writes
+	time.Sleep(100 * time.Millisecond)
+
+	// Test supported periods (week and month only)
+	periods := []struct {
+		endpoint string
+		period   common.TimePeriod
+	}{
+		{PeriodEndpointWeek, common.TimePeriodWeek},
+		{PeriodEndpointMonth, common.TimePeriodMonth},
+	}
+
+	for _, p := range periods {
+		t.Run(p.endpoint, func(t *testing.T) {
+			req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rulestats/%s",
+				server.IDHasher.Encrypt(int(org.ID)),
+				server.IDHasher.Encrypt(int(property.ID)),
+				p.endpoint), nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			resp := w.Result()
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("Unexpected status code %v for period %s", resp.StatusCode, p.endpoint)
+			}
+
+			var stats propertyRuleStatsResponse
+			if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
+				t.Fatalf("Failed to decode response for period %s: %v", p.endpoint, err)
+			}
+
+			// Should have data since we inserted records with rule_id > 0
+			if len(stats.Usage) == 0 {
+				t.Errorf("Expected usage data but got none for %s period", p.endpoint)
+			}
+
+			totalUsage := 0
+			for _, pt := range stats.Usage {
+				totalUsage += pt.Value
+			}
+
+			// Should have 2 records (the ones with rule_id > 0)
+			if totalUsage != 2 {
+				t.Errorf("Expected 2 total usage for %s period, got %d", p.endpoint, totalUsage)
+			}
+		})
+	}
+}
+
 func TestGetOrgProperty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -851,9 +956,9 @@ func TestGrowthLevelFromIndex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.index, func(t *testing.T) {
-			result := growthLevelFromIndex(ctx, tt.index)
+			result := growthLevelFromValue(ctx, tt.index)
 			if result != tt.expected {
-				t.Errorf("growthLevelFromIndex(%s) = %s, want %s", tt.index, result, tt.expected)
+				t.Errorf("growthLevelFromValue(%s) = %s, want %s", tt.index, result, tt.expected)
 			}
 		})
 	}
@@ -977,6 +1082,7 @@ func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
 		{"GetPropertyIntegrationsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/integrations", orgID), http.StatusSeeOther},
 		{"GetPropertyAuditLogsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/tab/events", orgID), http.StatusSeeOther},
 		{"GetPropertyStatsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/stats/24h", orgID), http.StatusBadRequest},
+		{"GetPropertyRuleStatsInvalidProperty", "GET", fmt.Sprintf("/org/%s/property/invalid-id/rulestats/7d", orgID), http.StatusBadRequest},
 	}
 
 	for _, tc := range tests {
@@ -1037,6 +1143,7 @@ func TestPropertyEndpointsWrongOwnership(t *testing.T) {
 		{"GetPropertyDashboardWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s", org1ID, propertyID), http.StatusSeeOther, false},
 		{"GetPropertySettingsWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s/tab/settings", org1ID, propertyID), http.StatusSeeOther, false},
 		{"GetPropertyReportsWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s/tab/reports", org1ID, propertyID), http.StatusSeeOther, false},
+		{"GetPropertyRulesWrongOwner", "GET", fmt.Sprintf("/org/%s/property/%s/tab/rules", org1ID, propertyID), http.StatusSeeOther, false},
 		{"DeletePropertyWrongOwner", "DELETE", fmt.Sprintf("/org/%s/property/%s/delete", org1ID, propertyID), http.StatusSeeOther, true},
 	}
 
@@ -1517,6 +1624,7 @@ func TestGetPropertyDashboardAllTabs(t *testing.T) {
 		{"Integrations", common.IntegrationsEndpoint},
 		{"Settings", common.SettingsEndpoint},
 		{"Events", common.EventsEndpoint},
+		{"Rules", common.RulesEndpoint},
 		{"Default", ""},
 		{"Unknown", "unknown-tab"},
 	}

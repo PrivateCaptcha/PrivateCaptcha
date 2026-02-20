@@ -37,3 +37,14 @@ type accountStatsResponse struct {
 	Series []*accountStatsSeries `json:"series"`
 	Data   []*accountStatsPoint  `json:"data"`
 }
+
+//easyjson:json
+type propertyRuleStatsPoint struct {
+	Date  int64 `json:"x"`
+	Value int   `json:"y"`
+}
+
+//easyjson:json
+type propertyRuleStatsResponse struct {
+	Usage []*propertyRuleStatsPoint `json:"usage"`
+}

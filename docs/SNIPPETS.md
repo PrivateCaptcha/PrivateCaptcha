@@ -15,12 +15,13 @@ docker exec -it docker-clickhouse-1 clickhouse-client
 ## Seed clickhouse events
 
 ```sql
-INSERT INTO privatecaptcha.request_logs (user_id, org_id, property_id, fingerprint, timestamp)
+INSERT INTO privatecaptcha.request_logs (user_id, org_id, property_id, fingerprint, rule_id, timestamp)
 SELECT
     1 as user_id,
     1 as org_id,
     1 as property_id,
     rand64() as fingerprint,
+    (rand() % 3) as rule_id,
     now() - toIntervalSecond((rand() % ((3600 * 24) * 365)) + number) AS timestamp
 FROM numbers(100000);
 ```
