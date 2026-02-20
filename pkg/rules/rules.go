@@ -208,9 +208,35 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	}
 }
 
-func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
+// Compiler is the interface for compiling database rules into executable rule objects.
+type Compiler interface {
+	Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules
+}
+
+// RulesCompiler compiles database rules into executable rule objects.
+// It owns a reference to the user agent parser for bot detection.
+type RulesCompiler struct {
+	uaParser *useragent.Parser
+}
+
+// NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
+func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
+	return &RulesCompiler{uaParser: uaParser}
+}
+
+var _ Compiler = (*RulesCompiler)(nil)
+
+func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent, dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
+	case dbgen.RuleConditionPropertyUserAgent:
+		if rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
+			return &botMatcher{
+				uaParser:                 rc.uaParser,
+				conditionOperatorNegated: rule.ConditionOperatorNegated,
+			}, nil
+		}
+		fallthrough
+	case dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
 		value := rule.ConditionValueStr.String
 		sm := &stringMatcher{
 			conditionProperty:        rule.ConditionProperty,
@@ -258,28 +284,6 @@ func buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
 	default:
 		return nil, ErrUnknownConditionProperty
 	}
-}
-
-// RulesCompiler compiles database rules into executable rule objects.
-// It owns a reference to the user agent parser for bot detection.
-type RulesCompiler struct {
-	uaParser *useragent.Parser
-}
-
-// NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
-func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
-	return &RulesCompiler{uaParser: uaParser}
-}
-
-func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
-	if rule.ConditionProperty == dbgen.RuleConditionPropertyUserAgent &&
-		rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
-		return &botMatcher{
-			uaParser:                 rc.uaParser,
-			conditionOperatorNegated: rule.ConditionOperatorNegated,
-		}, nil
-	}
-	return buildMatcher(rule)
 }
 
 func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {

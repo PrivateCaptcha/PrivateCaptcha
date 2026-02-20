@@ -46,7 +46,7 @@ type AuthMiddleware struct {
 	Limiter               UserLimiter
 	backpressureTimeout   time.Duration
 	Metrics               common.BaseMetrics
-	RulesCompiler         *rules.RulesCompiler
+	RulesCompiler         rules.Compiler
 	// this is a simple way to control negative cache spam, disabled by default
 	NegativeSitekeyThreshold uint
 }
@@ -145,7 +145,7 @@ func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService,
 	metrics common.BaseMetrics,
-	rulesCompiler *rules.RulesCompiler) *AuthMiddleware {
+	rulesCompiler rules.Compiler) *AuthMiddleware {
 	const batchSize = 10
 	const apiKeyLastUsedChannelSize = 250
 
