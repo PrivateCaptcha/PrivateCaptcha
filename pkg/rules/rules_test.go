@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -1726,5 +1727,120 @@ func TestDomainNegation(t *testing.T) {
 				t.Errorf("Matches() = %v, want %v", gotMatch, tt.wantMatch)
 			}
 		})
+	}
+}
+
+// customMatcher is a wrapper around StringMatcher that extracts a custom field.
+// This illustrates how external packages can wrap StringMatcher to add new condition properties.
+type customMatcher struct {
+	StringMatcher
+}
+
+func (m *customMatcher) Matches(ri *RequestInfo) bool {
+	// custom extraction: use user agent as the value to match against
+	extracted := ri.UserAgent()
+	switch m.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals:
+		return strings.EqualFold(extracted, m.ConditionValueStr)
+	default:
+		return false
+	}
+}
+
+func TestRegisterMatcherFactory(t *testing.T) {
+	const testCustomPropertyName = "custom_property"
+
+	compiler := NewRulesCompiler(useragent.NewParser())
+
+	compiler.RegisterMatcherFactory(testCustomPropertyName, func(rule *dbgen.DifficultyRule) (Matcher, error) {
+		return &customMatcher{
+			StringMatcher: StringMatcher{
+				ConditionOperator: rule.ConditionOperator,
+				ConditionValueStr: rule.ConditionValueStr.String,
+			},
+		}, nil
+	})
+
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionProperty(testCustomPropertyName),
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "CustomAgent/1.0", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       10,
+		Enabled:           true,
+	}
+
+	compiled, err := compiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatalf("CompileRule() with custom factory failed: %v", err)
+	}
+
+	ri := newTestRequestInfo("CustomAgent/1.0", netip.MustParseAddr("1.2.3.4"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected custom factory rule to match")
+	}
+
+	ri2 := newTestRequestInfo("OtherAgent/2.0", netip.MustParseAddr("1.2.3.4"))
+	if compiled.Matches(ri2) {
+		t.Error("Expected custom factory rule to not match different agent")
+	}
+}
+
+func TestUnknownConditionPropertyReturnsError(t *testing.T) {
+	compiler := NewRulesCompiler(useragent.NewParser())
+
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionProperty("unknown_property"),
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "value", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       10,
+		Enabled:           true,
+	}
+
+	_, err := compiler.CompileRule(context.Background(), rule)
+	if err == nil {
+		t.Error("Expected error for unknown condition property, got nil")
+	}
+}
+
+func TestBuildStringMatcherExported(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "TestAgent/1.0", Valid: true},
+	}
+
+	m, err := BuildStringMatcher(rule)
+	if err != nil {
+		t.Fatalf("BuildStringMatcher() failed: %v", err)
+	}
+
+	ri := newTestRequestInfo("TestAgent/1.0", netip.MustParseAddr("1.2.3.4"))
+	if !m.Matches(ri) {
+		t.Error("Expected BuildStringMatcher result to match")
+	}
+}
+
+func TestBuildIPMatcherExported(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+	}
+
+	m, err := BuildIPMatcher(rule)
+	if err != nil {
+		t.Fatalf("BuildIPMatcher() failed: %v", err)
+	}
+
+	ri := newTestRequestInfo("agent", netip.MustParseAddr("10.1.2.3"))
+	if !m.Matches(ri) {
+		t.Error("Expected BuildIPMatcher result to match IP in range")
+	}
+
+	ri2 := newTestRequestInfo("agent", netip.MustParseAddr("192.168.1.1"))
+	if m.Matches(ri2) {
+		t.Error("Expected BuildIPMatcher result to not match IP out of range")
 	}
 }
