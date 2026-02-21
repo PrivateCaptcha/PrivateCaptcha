@@ -167,6 +167,8 @@ type Server struct {
 	EmailVerifier      common.EmailVerifier
 	TwoFactorDuration  time.Duration
 	LicenseService     common.LicenseService
+	ConditionParsers   map[string]ConditionFormParser
+	ActionParsers      map[string]ActionFormParser
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -209,6 +211,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
+	s.initRuleParsers()
 
 	platformCtx := &PlatformRenderContext{
 		GitCommit:      gitCommit,
