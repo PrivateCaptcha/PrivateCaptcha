@@ -194,6 +194,20 @@ func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
 	return p
 }
 
+// breakRule stops processing following rules
+type breakRule struct {
+	ruleBase
+	matcher Matcher
+}
+
+func (r *breakRule) Matches(ri *RequestInfo) bool {
+	return r.matcher.Matches(ri)
+}
+
+func (r *breakRule) Apply(p difficulty.Property) difficulty.Property {
+	return &overrideProperty{base: p, ruleID: r.ruleID}
+}
+
 func growthFromInt(value int32) dbgen.DifficultyGrowth {
 	switch value {
 	case 0:
@@ -356,6 +370,11 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.Difficulty
 			ruleBase: ruleBase{ruleID: rule.ID},
 			matcher:  matcher,
 			growth:   growthFromInt(rule.ActionValue),
+		}, nil
+	case dbgen.RuleActionPropertyBreak:
+		return &breakRule{
+			ruleBase: ruleBase{ruleID: rule.ID},
+			matcher:  matcher,
 		}, nil
 	default:
 		return nil, ErrUnknownActionProperty

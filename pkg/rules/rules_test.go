@@ -1844,3 +1844,155 @@ func TestBuildIPMatcherExported(t *testing.T) {
 		t.Error("Expected BuildIPMatcher result to not match IP out of range")
 	}
 }
+
+func TestBreakRuleApply(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ID:                1,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyBreak,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected break rule to match")
+	}
+
+	prop := newStubProperty()
+	result := compiled.Apply(prop)
+	if result.Level() != prop.Level() {
+		t.Errorf("Expected break rule to preserve level %d, got %d", prop.Level(), result.Level())
+	}
+	if result.Growth() != prop.Growth() {
+		t.Errorf("Expected break rule to preserve growth %v, got %v", prop.Growth(), result.Growth())
+	}
+	if result.RuleID() != 1 {
+		t.Errorf("Expected break rule to set RuleID to 1, got %d", result.RuleID())
+	}
+}
+
+func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Enabled:           true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	// Break rule should stop processing: level unchanged, org rule NOT applied
+	if result.Level() != 50 {
+		t.Errorf("Expected break rule to preserve original level 50, got %d", result.Level())
+	}
+	if result.RuleID() != 1 {
+		t.Errorf("Expected break rule RuleID 1, got %d", result.RuleID())
+	}
+}
+
+func TestBreakRuleInOrgStopsProcessing(t *testing.T) {
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	// Break rule matched first, so second rule should NOT apply
+	if result.Level() != 50 {
+		t.Errorf("Expected break rule to preserve original level 50, got %d", result.Level())
+	}
+	if result.RuleID() != 1 {
+		t.Errorf("Expected break rule RuleID 1, got %d", result.RuleID())
+	}
+}
+
+func TestBreakRuleNoMatchFallsThrough(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ConditionValueStr: pgtype.Text{String: "SpecificBot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Enabled:           true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("OtherBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	// Break rule does NOT match, so org rule SHOULD apply
+	if result.Level() != 100 {
+		t.Errorf("Expected org rule to apply when break rule does not match, got level %d", result.Level())
+	}
+}
