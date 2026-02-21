@@ -1,6 +1,6 @@
 CREATE TYPE backend.rule_condition_property AS ENUM ('user_agent', 'ip_address', 'country_code', 'domain');
 CREATE TYPE backend.rule_condition_operator AS ENUM ('equals', 'contains', 'matches', 'empty', 'in', 'bot');
-CREATE TYPE backend.rule_action_property AS ENUM ('difficulty_level_percent', 'http_request', 'difficulty_growth');
+CREATE TYPE backend.rule_action_property AS ENUM ('difficulty_level_percent', 'http_request', 'difficulty_growth', 'break');
 
 CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     id SERIAL PRIMARY KEY,

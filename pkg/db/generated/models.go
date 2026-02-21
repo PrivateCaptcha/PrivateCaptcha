@@ -240,6 +240,7 @@ const (
 	RuleActionPropertyDifficultyLevelPercent RuleActionProperty = "difficulty_level_percent"
 	RuleActionPropertyHTTPRequest            RuleActionProperty = "http_request"
 	RuleActionPropertyDifficultyGrowth       RuleActionProperty = "difficulty_growth"
+	RuleActionPropertyBreak                  RuleActionProperty = "break"
 )
 
 func (e *RuleActionProperty) Scan(src interface{}) error {
