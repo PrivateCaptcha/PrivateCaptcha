@@ -8,23 +8,22 @@ import (
 	"github.com/medama-io/go-useragent"
 )
 
-// matcher is the interface that all specialized matchers implement
-type matcher interface {
-	matches(ri *RequestInfo) bool
+// Matcher is the interface that all specialized matchers implement.
+type Matcher interface {
+	Matches(ri *RequestInfo) bool
 }
 
-// stringMatcher handles string-based matching (UserAgent, CountryCode)
-type stringMatcher struct {
-	conditionProperty        dbgen.RuleConditionProperty
-	conditionOperator        dbgen.RuleConditionOperator
-	conditionValueStr        string
-	conditionValueItems      []string // Pre-split items for In operator
-	conditionOperatorNegated bool
+// StringMatcher handles string-based matching (UserAgent, CountryCode, Domain).
+type StringMatcher struct {
+	ConditionProperty        dbgen.RuleConditionProperty
+	ConditionOperator        dbgen.RuleConditionOperator
+	ConditionValueStr        string
+	ConditionValueItems      []string // Pre-split items for In operator
+	ConditionOperatorNegated bool
 }
 
-// extract returns the string value from RequestInfo based on the condition property
-func (sm *stringMatcher) extract(ri *RequestInfo) string {
-	switch sm.conditionProperty {
+func (sm *StringMatcher) extract(ri *RequestInfo) string {
+	switch sm.ConditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent:
 		return ri.UserAgent()
 	case dbgen.RuleConditionPropertyCountryCode:
@@ -36,30 +35,30 @@ func (sm *stringMatcher) extract(ri *RequestInfo) string {
 	}
 }
 
-// matches performs the actual matching logic
-func (sm *stringMatcher) matches(ri *RequestInfo) bool {
+// Matches performs the actual matching logic
+func (sm *StringMatcher) Matches(ri *RequestInfo) bool {
 	var result bool
 
-	switch sm.conditionOperator {
+	switch sm.ConditionOperator {
 	case dbgen.RuleConditionOperatorEquals:
-		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
+		result = strings.EqualFold(sm.extract(ri), sm.ConditionValueStr)
 	case dbgen.RuleConditionOperatorContains:
-		result = containsCaseInsensitive(sm.extract(ri), sm.conditionValueStr)
+		result = containsCaseInsensitive(sm.extract(ri), sm.ConditionValueStr)
 	case dbgen.RuleConditionOperatorEmpty:
 		result = len(sm.extract(ri)) == 0
 	case dbgen.RuleConditionOperatorIn:
 		extractedValue := sm.extract(ri)
-		for _, item := range sm.conditionValueItems {
+		for _, item := range sm.ConditionValueItems {
 			if strings.EqualFold(item, extractedValue) {
 				result = true
 				break
 			}
 		}
 	default:
-		result = strings.EqualFold(sm.extract(ri), sm.conditionValueStr)
+		result = strings.EqualFold(sm.extract(ri), sm.ConditionValueStr)
 	}
 
-	if sm.conditionOperatorNegated {
+	if sm.ConditionOperatorNegated {
 		return !result
 	}
 	return result
@@ -81,24 +80,23 @@ func containsCaseInsensitive(s, substr string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
 }
 
-// ipMatcher handles IP address matching
-type ipMatcher struct {
-	conditionOperator        dbgen.RuleConditionOperator
-	conditionValueIPPrefixes []netip.Prefix
-	conditionOperatorNegated bool
+// IPMatcher handles IP address matching
+type IPMatcher struct {
+	ConditionOperator        dbgen.RuleConditionOperator
+	ConditionValueIPPrefixes []netip.Prefix
+	ConditionOperatorNegated bool
 }
 
-// matches performs IP address matching
-func (im *ipMatcher) matches(ri *RequestInfo) bool {
+func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	ip := ri.IPAddr()
 	var result bool
 
-	switch im.conditionOperator {
+	switch im.ConditionOperator {
 	case dbgen.RuleConditionOperatorEmpty:
 		result = !ip.IsValid()
 	default:
 		if ip.IsValid() {
-			for _, prefix := range im.conditionValueIPPrefixes {
+			for _, prefix := range im.ConditionValueIPPrefixes {
 				if prefix.Contains(ip) {
 					result = true
 					break
@@ -107,24 +105,23 @@ func (im *ipMatcher) matches(ri *RequestInfo) bool {
 		}
 	}
 
-	if im.conditionOperatorNegated {
+	if im.ConditionOperatorNegated {
 		return !result
 	}
 	return result
 }
 
-// botMatcher handles bot detection for user agent
-type botMatcher struct {
-	uaParser                 *useragent.Parser
-	conditionOperatorNegated bool
+// BotMatcher handles bot detection for user agent
+type BotMatcher struct {
+	UAParser                 *useragent.Parser
+	ConditionOperatorNegated bool
 }
 
-// matches returns true if the user agent is a known bot (or empty)
-func (bm *botMatcher) matches(ri *RequestInfo) bool {
+func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 	ua := ri.UserAgent()
-	result := len(ua) == 0 || bm.uaParser.Parse(ua).IsBot()
+	result := len(ua) == 0 || bm.UAParser.Parse(ua).IsBot()
 
-	if bm.conditionOperatorNegated {
+	if bm.ConditionOperatorNegated {
 		return !result
 	}
 	return result
