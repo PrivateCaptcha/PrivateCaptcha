@@ -183,6 +183,9 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		actionProperty = "Difficulty growth"
 		actionAction = "set"
 		actionValue = string(growthLevelFromIndex(int(rule.ActionValue)))
+	case dbgen.RuleActionPropertyBreak:
+		actionAction = "stop"
+		actionProperty = "processing rules"
 	default:
 		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
 		actionValue = fmt.Sprintf("%d", rule.ActionValue)
