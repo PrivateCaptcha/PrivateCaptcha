@@ -142,12 +142,12 @@ type ruleBase struct {
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
 	ruleBase
-	matcher     matcher
+	matcher     Matcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.matches(ri)
+	return r.matcher.Matches(ri)
 }
 
 func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
@@ -167,12 +167,12 @@ func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
 	ruleBase
-	matcher matcher
+	matcher Matcher
 	growth  dbgen.DifficultyGrowth
 }
 
 func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.matches(ri)
+	return r.matcher.Matches(ri)
 }
 
 func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
@@ -183,11 +183,11 @@ func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
 	ruleBase
-	matcher matcher
+	matcher Matcher
 }
 
 func (r *blockRequestRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.matches(ri)
+	return r.matcher.Matches(ri)
 }
 
 func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
@@ -214,91 +214,118 @@ type Compiler interface {
 	Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules
 }
 
+// MatcherFactory creates a Matcher from a database rule.
+type MatcherFactory func(rule *dbgen.DifficultyRule) (Matcher, error)
+
+// BuildStringMatcher creates a StringMatcher from a database rule.
+func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	value := rule.ConditionValueStr.String
+	sm := &StringMatcher{
+		ConditionProperty:        rule.ConditionProperty,
+		ConditionOperator:        rule.ConditionOperator,
+		ConditionValueStr:        value,
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+	}
+
+	if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
+		sep := defaultSeparator
+		if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+			sep = rule.ConditionValueSeparator.String
+		}
+		items := strings.Split(value, sep)
+		for i, item := range items {
+			items[i] = strings.TrimSpace(item)
+		}
+		sm.ConditionValueItems = items
+	}
+
+	return sm, nil
+}
+
+// BuildIPMatcher creates an IPMatcher from a database rule.
+func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	im := &IPMatcher{
+		ConditionOperator:        rule.ConditionOperator,
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+	}
+
+	if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
+		sep := defaultSeparator
+		if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+			sep = rule.ConditionValueSeparator.String
+		}
+		value := rule.ConditionValueStr.String
+		items := strings.Split(value, sep)
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			prefix, err := netip.ParsePrefix(item)
+			if err != nil {
+				addr, addrErr := netip.ParseAddr(item)
+				if addrErr != nil {
+					return nil, ErrInvalidIPValue
+				}
+				prefix = netip.PrefixFrom(addr, addr.BitLen())
+			}
+			im.ConditionValueIPPrefixes = append(im.ConditionValueIPPrefixes, prefix)
+		}
+		if len(im.ConditionValueIPPrefixes) == 0 {
+			return nil, ErrInvalidIPValue
+		}
+	}
+
+	return im, nil
+}
+
 // RulesCompiler compiles database rules into executable rule objects.
-// It owns a reference to the user agent parser for bot detection.
 type RulesCompiler struct {
-	uaParser *useragent.Parser
+	uaParser  *useragent.Parser
+	factories map[string]MatcherFactory
 }
 
 // NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
 func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
-	return &RulesCompiler{uaParser: uaParser}
+	rc := &RulesCompiler{
+		uaParser:  uaParser,
+		factories: make(map[string]MatcherFactory),
+	}
+	rc.registerDefaultFactories()
+	return rc
+}
+
+func (rc *RulesCompiler) registerDefaultFactories() {
+	rc.factories[string(dbgen.RuleConditionPropertyUserAgent)] = rc.buildUserAgentMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyCountryCode)] = BuildStringMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyDomain)] = BuildStringMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
+}
+
+// RegisterMatcherFactory registers a MatcherFactory for the given condition property,
+// replacing any existing factory for that property.
+func (rc *RulesCompiler) RegisterMatcherFactory(property string, factory MatcherFactory) {
+	rc.factories[property] = factory
+}
+
+func (rc *RulesCompiler) buildUserAgentMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	if rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
+		return &BotMatcher{
+			UAParser:                 rc.uaParser,
+			ConditionOperatorNegated: rule.ConditionOperatorNegated,
+		}, nil
+	}
+	return BuildStringMatcher(rule)
 }
 
 var _ Compiler = (*RulesCompiler)(nil)
 
-func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (matcher, error) {
-	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyUserAgent:
-		if rule.ConditionOperator == dbgen.RuleConditionOperatorBot {
-			return &botMatcher{
-				uaParser:                 rc.uaParser,
-				conditionOperatorNegated: rule.ConditionOperatorNegated,
-			}, nil
-		}
-		fallthrough
-	case dbgen.RuleConditionPropertyCountryCode, dbgen.RuleConditionPropertyDomain:
-		value := rule.ConditionValueStr.String
-		sm := &stringMatcher{
-			conditionProperty:        rule.ConditionProperty,
-			conditionOperator:        rule.ConditionOperator,
-			conditionValueStr:        value,
-			conditionOperatorNegated: rule.ConditionOperatorNegated,
-		}
-
-		// Pre-process values for optimized matching
-		if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
-			sep := defaultSeparator
-			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
-				sep = rule.ConditionValueSeparator.String
-			}
-			items := strings.Split(value, sep)
-			for i, item := range items {
-				items[i] = strings.TrimSpace(item)
-			}
-			sm.conditionValueItems = items
-		}
-
-		return sm, nil
-
-	case dbgen.RuleConditionPropertyIPAddress:
-		im := &ipMatcher{
-			conditionOperator:        rule.ConditionOperator,
-			conditionOperatorNegated: rule.ConditionOperatorNegated,
-		}
-
-		if rule.ConditionOperator != dbgen.RuleConditionOperatorEmpty {
-			sep := defaultSeparator
-			if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
-				sep = rule.ConditionValueSeparator.String
-			}
-			value := rule.ConditionValueStr.String
-			items := strings.Split(value, sep)
-			for _, item := range items {
-				item = strings.TrimSpace(item)
-				if len(item) == 0 {
-					continue
-				}
-				prefix, err := netip.ParsePrefix(item)
-				if err != nil {
-					addr, addrErr := netip.ParseAddr(item)
-					if addrErr != nil {
-						return nil, ErrInvalidIPValue
-					}
-					prefix = netip.PrefixFrom(addr, addr.BitLen())
-				}
-				im.conditionValueIPPrefixes = append(im.conditionValueIPPrefixes, prefix)
-			}
-			if len(im.conditionValueIPPrefixes) == 0 {
-				return nil, ErrInvalidIPValue
-			}
-		}
-
-		return im, nil
-
-	default:
+func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	factory, ok := rc.factories[string(rule.ConditionProperty)]
+	if !ok {
 		return nil, ErrUnknownConditionProperty
 	}
+	return factory(rule)
 }
 
 func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
