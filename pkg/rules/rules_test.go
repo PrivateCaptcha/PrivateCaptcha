@@ -2619,3 +2619,43 @@ func TestNonTerminalBlockRuleDoesNotStopProcessing(t *testing.T) {
 		t.Errorf("Expected level 75 from level rule after non-terminal block, got %d", result.Level())
 	}
 }
+
+func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
+	// When Terminal is not set (Go zero value = false), break rule does not stop processing
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			// Terminal not set, defaults to false in Go
+			Enabled: true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	// Break rule without Terminal=true does NOT stop org fallback
+	if result.Level() != 100 {
+		t.Errorf("Expected org rule to apply when break is non-terminal, got level %d", result.Level())
+	}
+}
