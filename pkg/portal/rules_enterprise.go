@@ -275,6 +275,10 @@ func difficultyGrowthActionParser(actionValue string) (int32, common.StatusCode)
 	return int32(val), common.StatusOK
 }
 
+func breakActionParser(actionValue string) (int32, common.StatusCode) {
+	return 0, common.StatusOK
+}
+
 func (s *Server) initRuleParsers() {
 	s.ConditionParsers = map[string]ConditionFormParser{
 		string(dbgen.RuleConditionPropertyUserAgent):   userAgentConditionParser,
@@ -286,6 +290,7 @@ func (s *Server) initRuleParsers() {
 		string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
 		string(dbgen.RuleActionPropertyHTTPRequest):            httpRequestActionParser,
 		string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
+		string(dbgen.RuleActionPropertyBreak):                  breakActionParser,
 	}
 }
 
