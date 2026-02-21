@@ -95,6 +95,7 @@ type RenderConstants struct {
 	ActionPropertyDifficultyLevel  string
 	ActionPropertyDifficultyGrowth string
 	ActionPropertyHTTPRequest      string
+	ActionPropertyBreak            string
 	Enabled                        string
 	ConditionNegated               string
 	RulesEndpoint                  string
@@ -181,6 +182,7 @@ func NewRenderConstants() *RenderConstants {
 		ActionPropertyDifficultyLevel:  string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		ActionPropertyDifficultyGrowth: string(dbgen.RuleActionPropertyDifficultyGrowth),
 		ActionPropertyHTTPRequest:      string(dbgen.RuleActionPropertyHTTPRequest),
+		ActionPropertyBreak:            string(dbgen.RuleActionPropertyBreak),
 		ActionProperty:                 common.ParamActionProperty,
 		ConditionOperator:              common.ParamConditionOperator,
 		ConditionValue:                 common.ParamConditionValue,
