@@ -223,11 +223,9 @@ func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ConditionOperator = tt.operator
-			ctx.ConditionValue = tt.value
-			if got := ctx.parseUserAgentCondition(); got != tt.expected {
-				t.Errorf("parseUserAgentCondition() = %v, want %v", got, tt.expected)
+			_, _, got := userAgentConditionParser(tt.operator, tt.value, "")
+			if got != tt.expected {
+				t.Errorf("userAgentConditionParser() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -340,11 +338,9 @@ func TestParseIPAddressConditionInvalidOperator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ConditionOperator = tt.operator
-			ctx.ConditionValue = tt.value
-			if got := ctx.parseIPAddressCondition(","); got != tt.expected {
-				t.Errorf("parseIPAddressCondition() = %v, want %v", got, tt.expected)
+			_, _, got := ipAddressConditionParser(tt.operator, tt.value, "")
+			if got != tt.expected {
+				t.Errorf("ipAddressConditionParser() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -403,11 +399,9 @@ func TestParseCountryCodeConditionInvalidOperator(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ConditionOperator = tt.operator
-			ctx.ConditionValue = tt.value
-			if got := ctx.parseCountryCodeCondition(","); got != tt.expected {
-				t.Errorf("parseCountryCodeCondition() = %v, want %v", got, tt.expected)
+			_, _, got := countryCodeConditionParser(tt.operator, tt.value, "")
+			if got != tt.expected {
+				t.Errorf("countryCodeConditionParser() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
@@ -472,14 +466,12 @@ func TestParseDifficultyAction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ActionValue = tt.value
-			val, code := ctx.parseDifficultyAction()
+			val, code := difficultyActionParser(tt.value)
 			if code != tt.expectedCode {
-				t.Errorf("parseDifficultyAction() code = %v, want %v", code, tt.expectedCode)
+				t.Errorf("difficultyActionParser() code = %v, want %v", code, tt.expectedCode)
 			}
 			if val != tt.expectedVal {
-				t.Errorf("parseDifficultyAction() val = %v, want %v", val, tt.expectedVal)
+				t.Errorf("difficultyActionParser() val = %v, want %v", val, tt.expectedVal)
 			}
 		})
 	}
@@ -532,14 +524,12 @@ func TestParseDifficultyGrowthAction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ActionValue = tt.value
-			val, code := ctx.parseDifficultyGrowthAction()
+			val, code := difficultyGrowthActionParser(tt.value)
 			if code != tt.expectedCode {
-				t.Errorf("parseDifficultyGrowthAction() code = %v, want %v", code, tt.expectedCode)
+				t.Errorf("difficultyGrowthActionParser() code = %v, want %v", code, tt.expectedCode)
 			}
 			if val != tt.expectedVal {
-				t.Errorf("parseDifficultyGrowthAction() val = %v, want %v", val, tt.expectedVal)
+				t.Errorf("difficultyGrowthActionParser() val = %v, want %v", val, tt.expectedVal)
 			}
 		})
 	}
@@ -568,14 +558,12 @@ func TestParseHTTPRequestAction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ActionValue = tt.value
-			val, code := ctx.parseHTTPRequestAction()
+			val, code := httpRequestActionParser(tt.value)
 			if code != tt.expectedCode {
-				t.Errorf("parseHTTPRequestAction() code = %v, want %v", code, tt.expectedCode)
+				t.Errorf("httpRequestActionParser() code = %v, want %v", code, tt.expectedCode)
 			}
 			if val != tt.expectedVal {
-				t.Errorf("parseHTTPRequestAction() val = %v, want %v", val, tt.expectedVal)
+				t.Errorf("httpRequestActionParser() val = %v, want %v", val, tt.expectedVal)
 			}
 		})
 	}
@@ -2574,11 +2562,9 @@ func TestParseDomainCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := &RuleWizardRenderContext{}
-			ctx.ConditionOperator = tt.operator
-			ctx.ConditionValue = tt.value
-			if got := ctx.parseDomainCondition(tt.domain); got != tt.expected {
-				t.Errorf("parseDomainCondition() = %v, want %v", got, tt.expected)
+			_, _, got := domainConditionParser(tt.operator, tt.value, tt.domain)
+			if got != tt.expected {
+				t.Errorf("domainConditionParser() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
