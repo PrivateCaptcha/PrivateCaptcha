@@ -9,28 +9,20 @@ import (
 )
 
 // Matcher is the interface that all specialized matchers implement.
-// It can be used by external packages to implement custom matching logic.
 type Matcher interface {
 	Matches(ri *RequestInfo) bool
 }
 
 // StringMatcher handles string-based matching (UserAgent, CountryCode, Domain).
-// Extractor may be set to a custom function to extract the value from RequestInfo;
-// if nil, the default extraction based on ConditionProperty is used.
 type StringMatcher struct {
 	ConditionProperty        dbgen.RuleConditionProperty
 	ConditionOperator        dbgen.RuleConditionOperator
 	ConditionValueStr        string
 	ConditionValueItems      []string // Pre-split items for In operator
 	ConditionOperatorNegated bool
-	Extractor                func(*RequestInfo) string
 }
 
-// extract returns the string value from RequestInfo based on the condition property
 func (sm *StringMatcher) extract(ri *RequestInfo) string {
-	if sm.Extractor != nil {
-		return sm.Extractor(ri)
-	}
 	switch sm.ConditionProperty {
 	case dbgen.RuleConditionPropertyUserAgent:
 		return ri.UserAgent()
@@ -95,7 +87,6 @@ type IPMatcher struct {
 	ConditionOperatorNegated bool
 }
 
-// Matches performs IP address matching
 func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	ip := ri.IPAddr()
 	var result bool
@@ -126,7 +117,6 @@ type BotMatcher struct {
 	ConditionOperatorNegated bool
 }
 
-// Matches returns true if the user agent is a known bot (or empty)
 func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 	ua := ri.UserAgent()
 	result := len(ua) == 0 || bm.UAParser.Parse(ua).IsBot()

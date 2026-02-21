@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http/httptest"
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -1729,18 +1730,33 @@ func TestDomainNegation(t *testing.T) {
 	}
 }
 
+// customMatcher is a wrapper around StringMatcher that extracts a custom field.
+// This illustrates how external packages can wrap StringMatcher to add new condition properties.
+type customMatcher struct {
+	StringMatcher
+}
+
+func (m *customMatcher) Matches(ri *RequestInfo) bool {
+	// custom extraction: use user agent as the value to match against
+	extracted := ri.UserAgent()
+	switch m.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals:
+		return strings.EqualFold(extracted, m.ConditionValueStr)
+	default:
+		return false
+	}
+}
+
 func TestRegisterMatcherFactory(t *testing.T) {
 	const testCustomPropertyName = "custom_property"
 
 	compiler := NewRulesCompiler(useragent.NewParser())
 
-	// Register a custom factory that matches on user agent using StringMatcher with Extractor
 	compiler.RegisterMatcherFactory(testCustomPropertyName, func(rule *dbgen.DifficultyRule) (Matcher, error) {
-		return &StringMatcher{
-			ConditionOperator: rule.ConditionOperator,
-			ConditionValueStr: rule.ConditionValueStr.String,
-			Extractor: func(ri *RequestInfo) string {
-				return ri.UserAgent()
+		return &customMatcher{
+			StringMatcher: StringMatcher{
+				ConditionOperator: rule.ConditionOperator,
+				ConditionValueStr: rule.ConditionValueStr.String,
 			},
 		}, nil
 	})
@@ -1785,24 +1801,6 @@ func TestUnknownConditionPropertyReturnsError(t *testing.T) {
 	_, err := compiler.CompileRule(context.Background(), rule)
 	if err == nil {
 		t.Error("Expected error for unknown condition property, got nil")
-	}
-}
-
-func TestStringMatcherWithCustomExtractor(t *testing.T) {
-	customValue := "custom-header-value"
-	sm := &StringMatcher{
-		ConditionOperator: dbgen.RuleConditionOperatorEquals,
-		ConditionValueStr: customValue,
-		Extractor: func(ri *RequestInfo) string {
-			return customValue
-		},
-	}
-
-	req := httptest.NewRequest("GET", "/", nil)
-	ri := NewRequestInfo(req, "")
-
-	if !sm.Matches(ri) {
-		t.Error("Expected StringMatcher with custom Extractor to match")
 	}
 }
 

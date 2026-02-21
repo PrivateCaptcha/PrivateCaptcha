@@ -9,15 +9,12 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-// ConditionFormParser validates and parses a rule condition from form data.
-// conditionOperator and conditionValue come from the submitted form.
-// domain is the property domain (empty for org-level rules).
-// Returns the normalized condition value, separator (empty means none), and parse status.
+// ConditionFormParser validates a rule condition from form data and returns the
+// normalized value, separator (empty if none), and a status code.
 type ConditionFormParser func(conditionOperator, conditionValue, domain string) (normalizedValue, separator string, status common.StatusCode)
 
-// ActionFormParser validates and parses a rule action from form data.
-// actionValue comes from the submitted form.
-// Returns the integer action value and parse status.
+// ActionFormParser validates a rule action value from form data and returns the
+// integer value and a status code.
 type ActionFormParser func(actionValue string) (int32, common.StatusCode)
 
 // canEditRule checks if a user can edit a rule (org owner OR rule creator)

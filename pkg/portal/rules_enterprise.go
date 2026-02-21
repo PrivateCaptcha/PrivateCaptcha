@@ -122,18 +122,15 @@ type RuleWizardRenderContext struct {
 }
 
 func userAgentConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
-	// Validate operator
 	switch conditionOperator {
 	case string(dbgen.RuleConditionOperatorEquals),
 		string(dbgen.RuleConditionOperatorContains),
 		string(dbgen.RuleConditionOperatorEmpty),
 		string(dbgen.RuleConditionOperatorBot):
-	// Valid operators
 	default:
 		return "", "", common.StatusRuleConditionOperatorInvalid
 	}
 
-	// Validate value (bot and empty operators don't require a value)
 	if conditionOperator != string(dbgen.RuleConditionOperatorEmpty) &&
 		conditionOperator != string(dbgen.RuleConditionOperatorBot) &&
 		conditionValue == "" {
@@ -143,24 +140,16 @@ func userAgentConditionParser(conditionOperator, conditionValue, _ string) (stri
 	return conditionValue, "", common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseUserAgentCondition() common.StatusCode {
-	_, _, status := userAgentConditionParser(c.ConditionOperator, c.ConditionValue, "")
-	return status
-}
-
 func ipAddressConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
 	const separator = ","
 
-	// Validate operator - IP address can use matches or empty
 	switch conditionOperator {
 	case string(dbgen.RuleConditionOperatorMatches),
 		string(dbgen.RuleConditionOperatorEmpty):
-	// Valid operators
 	default:
 		return "", "", common.StatusRuleConditionOperatorInvalid
 	}
 
-	// Validate value
 	if conditionOperator != string(dbgen.RuleConditionOperatorEmpty) {
 		if conditionValue == "" {
 			return "", "", common.StatusRuleIPAddressRequired
@@ -192,20 +181,13 @@ func ipAddressConditionParser(conditionOperator, conditionValue, _ string) (stri
 	return conditionValue, separator, common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseIPAddressCondition(separator string) common.StatusCode {
-	_, _, status := ipAddressConditionParser(c.ConditionOperator, c.ConditionValue, "")
-	return status
-}
-
 func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
 	const separator = ","
 
-	// Validate operator
 	if conditionOperator != string(dbgen.RuleConditionOperatorIn) {
 		return "", "", common.StatusRuleConditionOperatorInvalid
 	}
 
-	// Validate value
 	if conditionValue == "" {
 		return "", "", common.StatusRuleCountryRequired
 	}
@@ -221,23 +203,16 @@ func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (st
 	return conditionValue, separator, common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseCountryCodeCondition(separator string) common.StatusCode {
-	_, _, status := countryCodeConditionParser(c.ConditionOperator, c.ConditionValue, "")
-	return status
-}
-
 func domainConditionParser(conditionOperator, conditionValue, domain string) (string, string, common.StatusCode) {
 	if len(domain) == 0 {
 		// not supported for orgs (that pass empty domain)
 		return "", "", common.StatusRuleConditionPropertyInvalid
 	}
 
-	// Validate operator
 	switch conditionOperator {
 	case string(dbgen.RuleConditionOperatorEquals),
 		string(dbgen.RuleConditionOperatorContains),
 		string(dbgen.RuleConditionOperatorEmpty):
-	// Valid operators
 	default:
 		return "", "", common.StatusRuleConditionOperatorInvalid
 	}
@@ -259,14 +234,6 @@ func domainConditionParser(conditionOperator, conditionValue, domain string) (st
 	return conditionValue, "", common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseDomainCondition(domain string) common.StatusCode {
-	normalized, _, status := domainConditionParser(c.ConditionOperator, c.ConditionValue, domain)
-	if status.Success() {
-		c.ConditionValue = normalized
-	}
-	return status
-}
-
 func difficultyActionParser(actionValue string) (int32, common.StatusCode) {
 	if actionValue == "" {
 		return 0, common.StatusRuleActionValueRequired
@@ -284,19 +251,11 @@ func difficultyActionParser(actionValue string) (int32, common.StatusCode) {
 	return int32(val), common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseDifficultyAction() (int32, common.StatusCode) {
-	return difficultyActionParser(c.ActionValue)
-}
-
 func httpRequestActionParser(actionValue string) (int32, common.StatusCode) {
 	if len(actionValue) > 0 {
 		return 1, common.StatusOK
 	}
 	return 0, common.StatusOK
-}
-
-func (c *RuleWizardRenderContext) parseHTTPRequestAction() (int32, common.StatusCode) {
-	return httpRequestActionParser(c.ActionValue)
 }
 
 func difficultyGrowthActionParser(actionValue string) (int32, common.StatusCode) {
@@ -316,12 +275,6 @@ func difficultyGrowthActionParser(actionValue string) (int32, common.StatusCode)
 	return int32(val), common.StatusOK
 }
 
-func (c *RuleWizardRenderContext) parseDifficultyGrowthAction() (int32, common.StatusCode) {
-	return difficultyGrowthActionParser(c.ActionValue)
-}
-
-// initRuleParsers registers the default condition and action parsers.
-// Called from Server.Init(); external packages may call RegisterConditionParser/RegisterActionParser afterwards.
 func (s *Server) initRuleParsers() {
 	s.ConditionParsers = map[string]ConditionFormParser{
 		string(dbgen.RuleConditionPropertyUserAgent):   userAgentConditionParser,
@@ -334,20 +287,6 @@ func (s *Server) initRuleParsers() {
 		string(dbgen.RuleActionPropertyHTTPRequest):            httpRequestActionParser,
 		string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
 	}
-}
-
-// RegisterConditionParser registers a custom ConditionFormParser for the given condition property.
-// This allows external packages to add support for new condition property types in the portal form.
-// Calling this with an existing property name replaces the existing parser.
-func (s *Server) RegisterConditionParser(property string, parser ConditionFormParser) {
-	s.ConditionParsers[property] = parser
-}
-
-// RegisterActionParser registers a custom ActionFormParser for the given action property.
-// This allows external packages to add support for new action property types in the portal form.
-// Calling this with an existing property name replaces the existing parser.
-func (s *Server) RegisterActionParser(property string, parser ActionFormParser) {
-	s.ActionParsers[property] = parser
 }
 
 var (
@@ -594,20 +533,30 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		return nil, common.StatusRuleConditionPropertyRequired
 	}
 
-	renderCtx.ConditionOperator = r.FormValue(common.ParamConditionOperator)
-	renderCtx.ConditionValue = strings.TrimSpace(r.FormValue(common.ParamConditionValue))
-
-	// Parse operator for negation
-	if strings.HasSuffix(renderCtx.ConditionOperator, "_negated") {
-		renderCtx.ConditionNegated = true
-		renderCtx.ConditionOperator = strings.TrimSuffix(renderCtx.ConditionOperator, "_negated")
+	renderCtx.ActionProperty = r.FormValue(common.ParamActionProperty)
+	if len(renderCtx.ActionProperty) == 0 {
+		slog.WarnContext(ctx, "Empty action property")
+		return nil, common.StatusRuleActionPropertyRequired
 	}
 
-	// Look up the registered condition parser
 	conditionParser, ok := s.ConditionParsers[renderCtx.ConditionProperty]
 	if !ok {
 		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
 		return nil, common.StatusRuleConditionPropertyInvalid
+	}
+
+	actionParser, ok := s.ActionParsers[renderCtx.ActionProperty]
+	if !ok {
+		slog.WarnContext(ctx, "Invalid action property", "action", renderCtx.ActionProperty)
+		return nil, common.StatusRuleActionPropertyInvalid
+	}
+
+	renderCtx.ConditionOperator = r.FormValue(common.ParamConditionOperator)
+	renderCtx.ConditionValue = strings.TrimSpace(r.FormValue(common.ParamConditionValue))
+
+	if strings.HasSuffix(renderCtx.ConditionOperator, "_negated") {
+		renderCtx.ConditionNegated = true
+		renderCtx.ConditionOperator = strings.TrimSuffix(renderCtx.ConditionOperator, "_negated")
 	}
 
 	normalizedValue, separatorStr, parseStatus := conditionParser(renderCtx.ConditionOperator, renderCtx.ConditionValue, domain)
@@ -616,7 +565,6 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 			"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated, "status", parseStatus.String())
 		return nil, parseStatus
 	}
-	// normalizedValue may equal the input (e.g. user agent) or differ (e.g. domain parsed/cleaned)
 	renderCtx.ConditionValue = normalizedValue
 
 	var conditionValueSeparator pgtype.Text
@@ -627,20 +575,7 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	slog.DebugContext(ctx, "Parsed rule condition", "condition", renderCtx.ConditionProperty, "operator", renderCtx.ConditionOperator,
 		"value", renderCtx.ConditionValue, "negated", renderCtx.ConditionNegated)
 
-	renderCtx.ActionProperty = r.FormValue(common.ParamActionProperty)
-	if len(renderCtx.ActionProperty) == 0 {
-		slog.WarnContext(ctx, "Empty action property")
-		return nil, common.StatusRuleActionPropertyRequired
-	}
-
 	renderCtx.ActionValue = strings.TrimSpace(r.FormValue(common.ParamActionValue))
-
-	// Look up the registered action parser
-	actionParser, ok := s.ActionParsers[renderCtx.ActionProperty]
-	if !ok {
-		slog.WarnContext(ctx, "Invalid action property", "action", renderCtx.ActionProperty)
-		return nil, common.StatusRuleActionPropertyInvalid
-	}
 
 	actionValue, actionStatus := actionParser(renderCtx.ActionValue)
 	if !actionStatus.Success() {

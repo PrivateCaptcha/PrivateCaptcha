@@ -215,11 +215,9 @@ type Compiler interface {
 }
 
 // MatcherFactory creates a Matcher from a database rule.
-// It is used to register custom condition property handlers in RulesCompiler.
 type MatcherFactory func(rule *dbgen.DifficultyRule) (Matcher, error)
 
 // BuildStringMatcher creates a StringMatcher from a database rule.
-// It can be used as a MatcherFactory or reused when registering custom condition properties.
 func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	value := rule.ConditionValueStr.String
 	sm := &StringMatcher{
@@ -229,7 +227,6 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 		ConditionOperatorNegated: rule.ConditionOperatorNegated,
 	}
 
-	// Pre-process values for optimized matching
 	if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
 		sep := defaultSeparator
 		if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
@@ -246,7 +243,6 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 }
 
 // BuildIPMatcher creates an IPMatcher from a database rule.
-// It can be used as a MatcherFactory or reused when registering custom condition properties.
 func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	im := &IPMatcher{
 		ConditionOperator:        rule.ConditionOperator,
@@ -284,7 +280,6 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 }
 
 // RulesCompiler compiles database rules into executable rule objects.
-// It owns a reference to the user agent parser for bot detection.
 type RulesCompiler struct {
 	uaParser  *useragent.Parser
 	factories map[string]MatcherFactory
@@ -307,9 +302,8 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
 }
 
-// RegisterMatcherFactory registers a custom MatcherFactory for the given condition property.
-// This allows external packages to add support for new condition property types.
-// Calling this with an existing property name replaces the existing factory.
+// RegisterMatcherFactory registers a MatcherFactory for the given condition property,
+// replacing any existing factory for that property.
 func (rc *RulesCompiler) RegisterMatcherFactory(property string, factory MatcherFactory) {
 	rc.factories[property] = factory
 }
