@@ -27,6 +27,7 @@ const (
 type Rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(p difficulty.Property) difficulty.Property
+	isTerminal() bool
 }
 
 type CompiledRules struct {
@@ -54,10 +55,63 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 		return p, false
 	}
 
+	var result *overrideProperty
+	anyMatched := false
+
 	for _, rule := range cr.rules {
-		if rule.Matches(ri) {
-			return rule.Apply(p), true
+		if !rule.Matches(ri) {
+			continue
 		}
+
+		applied := rule.Apply(p)
+		op, isOverride := applied.(*overrideProperty)
+		if !isOverride {
+			// blockRequestRule returns the original property unchanged
+			anyMatched = true
+			if rule.isTerminal() {
+				if result != nil {
+					return result, true
+				}
+				return p, true
+			}
+			continue
+		}
+
+		if result == nil {
+			result = &overrideProperty{base: p, ruleID: op.ruleID}
+		}
+
+		// Accumulate maximum level
+		if op.level != nil {
+			if result.level == nil || *op.level > *result.level {
+				level := *op.level
+				result.level = &level
+				result.ruleID = op.ruleID
+			}
+		}
+
+		// Accumulate maximum growth
+		if op.growth != nil {
+			if result.growth == nil || growthOrder(*op.growth) > growthOrder(*result.growth) {
+				growth := *op.growth
+				result.growth = &growth
+				result.ruleID = op.ruleID
+			}
+		}
+
+		anyMatched = true
+
+		if rule.isTerminal() {
+			return result, true
+		}
+	}
+
+	if result != nil {
+		return result, false
+	}
+
+	if anyMatched {
+		return p, false
 	}
 
 	return p, false
@@ -82,15 +136,22 @@ func (rp *RulesPair) Apply(ri *RequestInfo, p difficulty.Property) difficulty.Pr
 		return p
 	}
 
-	if result, found := rp.PropertyRules.Apply(ri, p); found {
-		return result
+	current := p
+	propResult, terminal := rp.PropertyRules.Apply(ri, current)
+	if propResult != current {
+		current = propResult
 	}
 
-	if result, found := rp.OrgRules.Apply(ri, p); found {
-		return result
+	if terminal {
+		return current
 	}
 
-	return p
+	orgResult, _ := rp.OrgRules.Apply(ri, current)
+	if orgResult != current {
+		current = orgResult
+	}
+
+	return current
 }
 
 func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
@@ -136,8 +197,11 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 
 // ruleBase contains common fields for all rule types
 type ruleBase struct {
-	ruleID int32
+	ruleID   int32
+	terminal bool
 }
+
+func (rb *ruleBase) isTerminal() bool { return rb.terminal }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
@@ -220,6 +284,21 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 		return dbgen.DifficultyGrowthFast
 	default:
 		return dbgen.DifficultyGrowthMedium
+	}
+}
+
+func growthOrder(g dbgen.DifficultyGrowth) int {
+	switch g {
+	case dbgen.DifficultyGrowthConstant:
+		return 0
+	case dbgen.DifficultyGrowthSlow:
+		return 1
+	case dbgen.DifficultyGrowthMedium:
+		return 2
+	case dbgen.DifficultyGrowthFast:
+		return 3
+	default:
+		return 2
 	}
 }
 
@@ -356,24 +435,24 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.Difficulty
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
 		percentDiff := max(-100, min(100, rule.ActionValue))
 		return &difficultyLevelRule{
-			ruleBase:    ruleBase{ruleID: rule.ID},
+			ruleBase:    ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
 			matcher:     matcher,
 			percentDiff: int16(percentDiff),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
-			ruleBase: ruleBase{ruleID: rule.ID},
+			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
 			matcher:  matcher,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
-			ruleBase: ruleBase{ruleID: rule.ID},
+			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
 			matcher:  matcher,
 			growth:   growthFromInt(rule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyBreak:
 		return &breakRule{
-			ruleBase: ruleBase{ruleID: rule.ID},
+			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
 			matcher:  matcher,
 		}, nil
 	default:

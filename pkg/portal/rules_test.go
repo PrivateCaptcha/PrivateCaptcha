@@ -71,7 +71,7 @@ func createRuleForMove(ctx context.Context, user *dbgen.User, orgID *int32, prop
 		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
 		ActionValue:              actionValue,
 		CreatorID:                db.Int(user.ID),
-		Column14:                 db.RulePositionStep,
+		Column15:                 db.RulePositionStep,
 	}
 	if orgID != nil {
 		params.OrgID = db.Int(*orgID)

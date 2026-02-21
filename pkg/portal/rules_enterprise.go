@@ -591,6 +591,11 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 
 	slog.DebugContext(ctx, "Parsed rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue)
 
+	// Determine terminal flag based on action type:
+	// break and block request are terminal, difficulty adjustments are not
+	actionPropertyEnum := dbgen.RuleActionProperty(renderCtx.ActionProperty)
+	terminal := actionPropertyEnum == dbgen.RuleActionPropertyBreak || actionPropertyEnum == dbgen.RuleActionPropertyHTTPRequest
+
 	params := &dbgen.CreateDifficultyRuleParams{
 		Name:                     renderCtx.Name,
 		Enabled:                  renderCtx.Enabled,
@@ -599,8 +604,9 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		ConditionOperatorNegated: renderCtx.ConditionNegated,
 		ConditionValueStr:        db.Text(renderCtx.ConditionValue),
 		ConditionValueSeparator:  conditionValueSeparator,
-		ActionProperty:           dbgen.RuleActionProperty(renderCtx.ActionProperty),
+		ActionProperty:           actionPropertyEnum,
 		ActionValue:              actionValue,
+		Terminal:                 terminal,
 	}
 
 	return params, common.StatusOK
@@ -791,6 +797,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		ConditionValueSeparator:  createParams.ConditionValueSeparator,
 		ActionProperty:           createParams.ActionProperty,
 		ActionValue:              createParams.ActionValue,
+		Terminal:                 createParams.Terminal,
 	}
 
 	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, property, user, updateParams)
@@ -873,6 +880,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		ConditionValueSeparator:  createParams.ConditionValueSeparator,
 		ActionProperty:           createParams.ActionProperty,
 		ActionValue:              createParams.ActionValue,
+		Terminal:                 createParams.Terminal,
 	}
 
 	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, nil, user, updateParams)

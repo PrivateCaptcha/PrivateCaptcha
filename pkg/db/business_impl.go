@@ -3137,7 +3137,7 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 		return nil, nil, ErrMaintenance
 	}
 
-	params.Column14 = RulePositionStep
+	params.Column15 = RulePositionStep
 	rule, err := impl.querier.CreateDifficultyRule(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create difficulty rule", common.ErrAttr(err))
@@ -3243,6 +3243,7 @@ func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.D
 		ActionValue:              result.ActionValue,
 		CreatedAt:                result.CreatedAt,
 		UpdatedAt:                result.UpdatedAt,
+		Terminal:                 result.Terminal,
 	}
 }
 
@@ -3256,14 +3257,14 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 	}
 
 	// Set permission check parameters (used in SQL WHERE clause)
-	// Note: Column13 is org owner ID - sqlc generates this name because the parameter
-	// is used in a comparison ($12 = $13) rather than a column reference
-	params.CreatorID = Int(user.ID)    // $12: user ID for permission check
-	params.Column13 = org.UserID.Int32 // $13: org owner ID for permission check
+	// Note: Column14 is org owner ID - sqlc generates this name because the parameter
+	// is used in a comparison ($13 = $14) rather than a column reference
+	params.CreatorID = Int(user.ID)    // $13: user ID for permission check
+	params.Column14 = org.UserID.Int32 // $14: org owner ID for permission check
 	if property != nil {
-		params.PropertyID = Int(property.ID) // $14: property ID for scope validation
+		params.PropertyID = Int(property.ID) // $15: property ID for scope validation
 	}
-	params.OrgID = Int(org.ID) // $15: org ID for scope validation
+	params.OrgID = Int(org.ID) // $16: org ID for scope validation
 
 	result, err := impl.querier.UpdateDifficultyRule(ctx, params)
 	if err != nil {
