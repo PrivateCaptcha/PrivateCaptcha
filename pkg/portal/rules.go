@@ -9,6 +9,17 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
+// ConditionFormParser validates and parses a rule condition from form data.
+// conditionOperator and conditionValue come from the submitted form.
+// domain is the property domain (empty for org-level rules).
+// Returns the normalized condition value, separator (empty means none), and parse status.
+type ConditionFormParser func(conditionOperator, conditionValue, domain string) (normalizedValue, separator string, status common.StatusCode)
+
+// ActionFormParser validates and parses a rule action from form data.
+// actionValue comes from the submitted form.
+// Returns the integer action value and parse status.
+type ActionFormParser func(actionValue string) (int32, common.StatusCode)
+
 // canEditRule checks if a user can edit a rule (org owner OR rule creator)
 func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule) bool {
 	// Handle nil cases (e.g., from stub data)
