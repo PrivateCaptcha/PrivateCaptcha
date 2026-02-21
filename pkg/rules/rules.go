@@ -233,10 +233,14 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 			sep = rule.ConditionValueSeparator.String
 		}
 		items := strings.Split(value, sep)
-		for i, item := range items {
-			items[i] = strings.TrimSpace(item)
+		sm.ConditionValueItems = make([]string, 0, len(items))
+		for _, item := range items {
+			var item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			sm.ConditionValueItems = append(sm.ConditionValueItems, item)
 		}
-		sm.ConditionValueItems = items
 	}
 
 	return sm, nil
