@@ -145,6 +145,7 @@
                     {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
                     {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
                     {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
+                    {{ with .Const.ActionPropertyBreak }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Stop Processing Following Rules</option>{{end}}
                 </select>
             </div>
         </div>
