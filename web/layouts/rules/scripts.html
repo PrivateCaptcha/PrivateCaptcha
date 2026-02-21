@@ -75,6 +75,8 @@ function ruleFormData() {
                 return this.actionValueDifficultyGrowth;
             } else if (this.actionProperty === '{{ .Const.ActionPropertyHTTPRequest }}') {
                 return '1'; // HTTP Request block is always 1 when selected
+            } else if (this.actionProperty === '{{ .Const.ActionPropertyBreak }}') {
+                return '0'; // Break has no value
             }
             return '';
         },
