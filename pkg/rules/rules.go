@@ -213,8 +213,7 @@ type blockRequestRule struct {
 
 func (r *blockRequestRule) Apply(op *overrideProperty) bool {
 	op.ruleID = r.ruleID
-	// block request is always terminal
-	return true
+	return r.terminal
 }
 
 // breakRule stops processing following rules
@@ -224,8 +223,7 @@ type breakRule struct {
 
 func (r *breakRule) Apply(op *overrideProperty) bool {
 	op.ruleID = r.ruleID
-	// break is always terminal
-	return true
+	return r.terminal
 }
 
 func growthFromInt(value int32) dbgen.DifficultyGrowth {
