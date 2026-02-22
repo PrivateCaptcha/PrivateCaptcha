@@ -168,9 +168,9 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	return renderCtx, nil, nil
 }
 
-func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgRulesRenderContext{
-		portalBaseRenderContext: *s.createPortalTabBaseContext(org, user, portalRulesTabIndex),
+		portalBaseRenderContext: *baseCtx,
 		Rules:                   stubDifficultyRules(),
 	}
 
