@@ -171,8 +171,8 @@ func (op *overrideProperty) applyMaxGrowth(growth dbgen.DifficultyGrowth, ruleID
 // ruleBase contains common fields for all rule types
 type ruleBase struct {
 	ruleID   int32
-	terminal bool
 	matcher  Matcher
+	terminal bool
 }
 
 func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.matcher.Matches(ri) }
@@ -213,7 +213,8 @@ type blockRequestRule struct {
 
 func (r *blockRequestRule) Apply(op *overrideProperty) bool {
 	op.ruleID = r.ruleID
-	return r.terminal
+	// block request is always terminal
+	return true
 }
 
 // breakRule stops processing following rules
@@ -223,7 +224,8 @@ type breakRule struct {
 
 func (r *breakRule) Apply(op *overrideProperty) bool {
 	op.ruleID = r.ruleID
-	return r.terminal
+	// break is always terminal
+	return true
 }
 
 func growthFromInt(value int32) dbgen.DifficultyGrowth {
@@ -385,7 +387,7 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 		return nil, err
 	}
 
-	base := ruleBase{ruleID: dbRule.ID, terminal: dbRule.Terminal, matcher: matcher}
+	base := ruleBase{ruleID: dbRule.ID, matcher: matcher, terminal: dbRule.Terminal}
 
 	switch dbRule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
