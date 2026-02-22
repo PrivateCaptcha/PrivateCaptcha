@@ -628,6 +628,7 @@ type AuditLogDifficultyRule struct {
 	ActionValue              int32   `json:"action_value,omitempty"`
 	Enabled                  bool    `json:"enabled"`
 	ConditionOperatorNegated bool    `json:"condition_operator_negated"`
+	Terminal                 bool    `json:"terminal"`
 }
 
 func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRule {
@@ -644,6 +645,7 @@ func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRu
 		Position:                 rule.Position,
 		ActionProperty:           string(rule.ActionProperty),
 		ActionValue:              rule.ActionValue,
+		Terminal:                 rule.Terminal,
 	}
 
 	if rule.PropertyID.Valid {

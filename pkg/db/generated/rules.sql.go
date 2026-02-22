@@ -37,7 +37,7 @@ INSERT INTO backend.difficulty_rules (
 ) VALUES (
     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT new_position FROM max_pos), $11, $12, $13, $14
 )
-RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal
+RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at
 `
 
 type CreateDifficultyRuleParams struct {
@@ -93,9 +93,9 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 		&i.Position,
 		&i.ActionProperty,
 		&i.ActionValue,
+		&i.Terminal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Terminal,
 	)
 	return &i, err
 }
@@ -110,7 +110,7 @@ func (q *Queries) DeleteDifficultyRule(ctx context.Context, id int32) error {
 }
 
 const getDifficultyRuleByID = `-- name: GetDifficultyRuleByID :one
-SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal FROM backend.difficulty_rules
+SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at FROM backend.difficulty_rules
 WHERE id = $1
 `
 
@@ -133,9 +133,9 @@ func (q *Queries) GetDifficultyRuleByID(ctx context.Context, id int32) (*Difficu
 		&i.Position,
 		&i.ActionProperty,
 		&i.ActionValue,
+		&i.Terminal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Terminal,
 	)
 	return &i, err
 }
@@ -178,7 +178,7 @@ func (q *Queries) GetDifficultyRulePositionNeighbors(ctx context.Context, arg *G
 }
 
 const getDifficultyRulesByOrgIDs = `-- name: GetDifficultyRulesByOrgIDs :many
-SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal FROM backend.difficulty_rules
+SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at FROM backend.difficulty_rules
 WHERE org_id = ANY($1::INT[]) AND property_id IS NULL
 ORDER BY org_id, position ASC
 `
@@ -208,9 +208,9 @@ func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int
 			&i.Position,
 			&i.ActionProperty,
 			&i.ActionValue,
+			&i.Terminal,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.Terminal,
 		); err != nil {
 			return nil, err
 		}
@@ -223,7 +223,7 @@ func (q *Queries) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int
 }
 
 const getDifficultyRulesByPropertyIDs = `-- name: GetDifficultyRulesByPropertyIDs :many
-SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal FROM backend.difficulty_rules
+SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at FROM backend.difficulty_rules
 WHERE property_id = ANY($1::INT[]) AND org_id IS NULL
 ORDER BY property_id, position ASC
 `
@@ -253,9 +253,9 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 			&i.Position,
 			&i.ActionProperty,
 			&i.ActionValue,
+			&i.Terminal,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.Terminal,
 		); err != nil {
 			return nil, err
 		}
@@ -271,7 +271,7 @@ const moveDifficultyRule = `-- name: MoveDifficultyRule :one
 UPDATE backend.difficulty_rules
 SET position = $2, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal
+RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at
 `
 
 type MoveDifficultyRuleParams struct {
@@ -298,9 +298,9 @@ func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRul
 		&i.Position,
 		&i.ActionProperty,
 		&i.ActionValue,
+		&i.Terminal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Terminal,
 	)
 	return &i, err
 }
@@ -331,7 +331,7 @@ func (q *Queries) RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDi
 
 const updateDifficultyRule = `-- name: UpdateDifficultyRule :one
 WITH old AS (
-    SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal FROM backend.difficulty_rules dr
+    SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at FROM backend.difficulty_rules dr
     WHERE dr.id = $1
     AND (dr.creator_id = $13 OR $13 = $14)
     AND ((dr.property_id IS NOT NULL AND (dr.property_id = $15 OR $15 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $16 OR $16 IS NULL)))
@@ -352,10 +352,10 @@ upd AS (
         terminal = $12,
         updated_at = NOW()
     WHERE dr.id = (SELECT id FROM old)
-    RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, created_at, updated_at, terminal
+    RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at
 )
 SELECT
-    upd.id, upd.name, upd.property_id, upd.org_id, upd.creator_id, upd.enabled, upd.condition_property, upd.condition_operator, upd.condition_operator_negated, upd.condition_value_str, upd.condition_value_int, upd.condition_value_separator, upd.position, upd.action_property, upd.action_value, upd.created_at, upd.updated_at, upd.terminal,
+    upd.id, upd.name, upd.property_id, upd.org_id, upd.creator_id, upd.enabled, upd.condition_property, upd.condition_operator, upd.condition_operator_negated, upd.condition_value_str, upd.condition_value_int, upd.condition_value_separator, upd.position, upd.action_property, upd.action_value, upd.terminal, upd.created_at, upd.updated_at,
     old.name AS old_name,
     old.enabled AS old_enabled,
     old.condition_property AS old_condition_property,
@@ -405,9 +405,9 @@ type UpdateDifficultyRuleRow struct {
 	Position                    float64               `db:"position" json:"position"`
 	ActionProperty              RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue                 int32                 `db:"action_value" json:"action_value"`
+	Terminal                    bool                  `db:"terminal" json:"terminal"`
 	CreatedAt                   pgtype.Timestamptz    `db:"created_at" json:"created_at"`
 	UpdatedAt                   pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
-	Terminal                    bool                  `db:"terminal" json:"terminal"`
 	OldName                     string                `db:"old_name" json:"old_name"`
 	OldEnabled                  bool                  `db:"old_enabled" json:"old_enabled"`
 	OldConditionProperty        RuleConditionProperty `db:"old_condition_property" json:"old_condition_property"`
@@ -456,9 +456,9 @@ func (q *Queries) UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficult
 		&i.Position,
 		&i.ActionProperty,
 		&i.ActionValue,
+		&i.Terminal,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.Terminal,
 		&i.OldName,
 		&i.OldEnabled,
 		&i.OldConditionProperty,

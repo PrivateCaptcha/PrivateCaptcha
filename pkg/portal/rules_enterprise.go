@@ -108,6 +108,7 @@ type RuleFormData struct {
 	ActionValue       string
 	Enabled           bool
 	ConditionNegated  bool
+	Terminal          bool
 }
 
 type RuleWizardRenderContext struct {
@@ -592,9 +593,17 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 	slog.DebugContext(ctx, "Parsed rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue)
 
 	// Determine terminal flag based on action type:
-	// break and block request are terminal, difficulty adjustments are not
+	// break and block request are always terminal
+	// difficulty adjustments can be optionally terminal via checkbox
 	actionPropertyEnum := dbgen.RuleActionProperty(renderCtx.ActionProperty)
-	terminal := actionPropertyEnum == dbgen.RuleActionPropertyBreak || actionPropertyEnum == dbgen.RuleActionPropertyHTTPRequest
+	alwaysTerminal := actionPropertyEnum == dbgen.RuleActionPropertyBreak || actionPropertyEnum == dbgen.RuleActionPropertyHTTPRequest
+	var terminal bool
+	if alwaysTerminal {
+		terminal = true
+	} else {
+		_, terminal = r.Form[common.ParamTerminal]
+	}
+	renderCtx.Terminal = terminal
 
 	params := &dbgen.CreateDifficultyRuleParams{
 		Name:                     renderCtx.Name,
@@ -629,6 +638,7 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 		ActionProperty:    string(rule.ActionProperty),
 		ActionValue:       strconv.Itoa(int(rule.ActionValue)),
 		ConditionNegated:  rule.ConditionOperatorNegated,
+		Terminal:          rule.Terminal,
 	}
 }
 

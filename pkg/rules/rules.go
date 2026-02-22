@@ -24,21 +24,20 @@ const (
 	MaxIPAddressValues = 10
 )
 
-type Rule interface {
+type rule interface {
 	Matches(ri *RequestInfo) bool
-	Apply(p difficulty.Property) difficulty.Property
-	isTerminal() bool
+	Apply(op *overrideProperty) bool
 }
 
 type CompiledRules struct {
-	rules []Rule
+	rules []rule
 }
 
-func NewCompiledRules(rules []Rule) *CompiledRules {
+func NewCompiledRules(rules []rule) *CompiledRules {
 	return &CompiledRules{rules: rules}
 }
 
-func isBlockedByRules(rules []Rule, ri *RequestInfo) bool {
+func isBlockedByRules(rules []rule, ri *RequestInfo) bool {
 	for _, rule := range rules {
 		if _, ok := rule.(*blockRequestRule); ok {
 			if rule.Matches(ri) {
@@ -55,7 +54,7 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 		return p, false
 	}
 
-	var result *overrideProperty
+	op := &overrideProperty{base: p}
 	anyMatched := false
 
 	for _, rule := range cr.rules {
@@ -63,55 +62,15 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 			continue
 		}
 
-		applied := rule.Apply(p)
-		op, isOverride := applied.(*overrideProperty)
-		if !isOverride {
-			// blockRequestRule returns the original property unchanged
-			anyMatched = true
-			if rule.isTerminal() {
-				if result != nil {
-					return result, true
-				}
-				return p, true
-			}
-			continue
-		}
-
-		if result == nil {
-			result = &overrideProperty{base: p, ruleID: op.ruleID}
-		}
-
-		// Accumulate maximum level
-		if op.level != nil {
-			if result.level == nil || *op.level > *result.level {
-				level := *op.level
-				result.level = &level
-				result.ruleID = op.ruleID
-			}
-		}
-
-		// Accumulate maximum growth
-		if op.growth != nil {
-			if result.growth == nil || growthOrder(*op.growth) > growthOrder(*result.growth) {
-				growth := *op.growth
-				result.growth = &growth
-				result.ruleID = op.ruleID
-			}
-		}
-
 		anyMatched = true
 
-		if rule.isTerminal() {
-			return result, true
+		if rule.Apply(op) {
+			return op, true
 		}
-	}
-
-	if result != nil {
-		return result, false
 	}
 
 	if anyMatched {
-		return p, false
+		return op, false
 	}
 
 	return p, false
@@ -195,81 +154,77 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 	return op.base.Growth()
 }
 
+func (op *overrideProperty) applyMaxLevel(level int16, ruleID int32) {
+	if op.level == nil || level > *op.level {
+		op.level = &level
+		op.ruleID = ruleID
+	}
+}
+
+func (op *overrideProperty) applyMaxGrowth(growth dbgen.DifficultyGrowth, ruleID int32) {
+	if op.growth == nil || growthOrder(growth) > growthOrder(*op.growth) {
+		op.growth = &growth
+		op.ruleID = ruleID
+	}
+}
+
 // ruleBase contains common fields for all rule types
 type ruleBase struct {
 	ruleID   int32
 	terminal bool
+	matcher  Matcher
 }
 
-func (rb *ruleBase) isTerminal() bool { return rb.terminal }
+func (rb *ruleBase) IsTerminal() bool             { return rb.terminal }
+func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.matcher.Matches(ri) }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
 	ruleBase
-	matcher     Matcher
 	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
-func (r *difficultyLevelRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.Matches(ri)
-}
-
-func (r *difficultyLevelRule) Apply(p difficulty.Property) difficulty.Property {
-	baseLevel := p.Level()
-	// Calculate adjusted level: baseLevel * (100 + percentDiff) / 100
-	// Add 50 to numerator for rounding to nearest integer
+func (r *difficultyLevelRule) Apply(op *overrideProperty) bool {
+	baseLevel := op.base.Level()
 	adjustedLevel := int16((int32(baseLevel)*(100+int32(r.percentDiff)) + 50) / 100)
-	// Clamp to valid range [1, 255]
 	if adjustedLevel < int16(common.MinDifficultyLevel) {
 		adjustedLevel = int16(common.MinDifficultyLevel)
 	} else if adjustedLevel > int16(common.MaxDifficultyLevel) {
 		adjustedLevel = int16(common.MaxDifficultyLevel)
 	}
-	return &overrideProperty{base: p, level: &adjustedLevel, ruleID: r.ruleID}
+	op.applyMaxLevel(adjustedLevel, r.ruleID)
+	return r.terminal
 }
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
 	ruleBase
-	matcher Matcher
-	growth  dbgen.DifficultyGrowth
+	growth dbgen.DifficultyGrowth
 }
 
-func (r *difficultyGrowthRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.Matches(ri)
-}
-
-func (r *difficultyGrowthRule) Apply(p difficulty.Property) difficulty.Property {
-	growth := r.growth
-	return &overrideProperty{base: p, growth: &growth, ruleID: r.ruleID}
+func (r *difficultyGrowthRule) Apply(op *overrideProperty) bool {
+	op.applyMaxGrowth(r.growth, r.ruleID)
+	return r.terminal
 }
 
 // blockRequestRule blocks matching requests
 type blockRequestRule struct {
 	ruleBase
-	matcher Matcher
 }
 
-func (r *blockRequestRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.Matches(ri)
-}
-
-func (r *blockRequestRule) Apply(p difficulty.Property) difficulty.Property {
-	return p
+func (r *blockRequestRule) Apply(op *overrideProperty) bool {
+	op.ruleID = r.ruleID
+	return r.terminal
 }
 
 // breakRule stops processing following rules
 type breakRule struct {
 	ruleBase
-	matcher Matcher
 }
 
-func (r *breakRule) Matches(ri *RequestInfo) bool {
-	return r.matcher.Matches(ri)
-}
-
-func (r *breakRule) Apply(p difficulty.Property) difficulty.Property {
-	return &overrideProperty{base: p, ruleID: r.ruleID}
+func (r *breakRule) Apply(op *overrideProperty) bool {
+	op.ruleID = r.ruleID
+	return r.terminal
 }
 
 func growthFromInt(value int32) dbgen.DifficultyGrowth {
@@ -425,35 +380,33 @@ func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (Matcher, erro
 	return factory(rule)
 }
 
-func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.DifficultyRule) (Rule, error) {
-	matcher, err := rc.buildMatcher(rule)
+func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.DifficultyRule) (rule, error) {
+	matcher, err := rc.buildMatcher(dbRule)
 	if err != nil {
 		return nil, err
 	}
 
-	switch rule.ActionProperty {
+	base := ruleBase{ruleID: dbRule.ID, terminal: dbRule.Terminal, matcher: matcher}
+
+	switch dbRule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
-		percentDiff := max(-100, min(100, rule.ActionValue))
+		percentDiff := max(-100, min(100, dbRule.ActionValue))
 		return &difficultyLevelRule{
-			ruleBase:    ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
-			matcher:     matcher,
+			ruleBase:    base,
 			percentDiff: int16(percentDiff),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
 		return &blockRequestRule{
-			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
-			matcher:  matcher,
+			ruleBase: base,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
-			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
-			matcher:  matcher,
-			growth:   growthFromInt(rule.ActionValue),
+			ruleBase: base,
+			growth:   growthFromInt(dbRule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyBreak:
 		return &breakRule{
-			ruleBase: ruleBase{ruleID: rule.ID, terminal: rule.Terminal},
-			matcher:  matcher,
+			ruleBase: base,
 		}, nil
 	default:
 		return nil, ErrUnknownActionProperty
@@ -461,7 +414,7 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, rule *dbgen.Difficulty
 }
 
 func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
-	rules := make([]Rule, 0, len(dbRules))
+	rules := make([]rule, 0, len(dbRules))
 
 	for _, r := range dbRules {
 		if !r.Enabled {

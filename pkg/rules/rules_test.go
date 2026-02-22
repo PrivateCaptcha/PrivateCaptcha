@@ -52,6 +52,12 @@ func newStubProperty() *difficulty.StubProperty {
 	return difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthMedium)
 }
 
+func applyRule(r rule, p difficulty.Property) *overrideProperty {
+	op := &overrideProperty{base: p}
+	r.Apply(op)
+	return op
+}
+
 func TestUserAgentEqualsMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -310,7 +316,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// Base level is 50, +100% doubles to 100
 	if result.Level() != 100 {
 		t.Errorf("Expected level 100 (50 + 100%%), got %d", result.Level())
@@ -336,7 +342,7 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// Base level is 50, -20% gives 40
 	if result.Level() != 40 {
 		t.Errorf("Expected level 40 (50 - 20%%), got %d", result.Level())
@@ -359,7 +365,7 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// 50 * 1 / 100 with rounding = 1 (rounded up from 0.5), then clamped to minimum 1
 	if result.Level() != 1 {
 		t.Errorf("Expected level clamped to 1, got %d", result.Level())
@@ -382,7 +388,7 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// 50 * 1100 / 100 = 550, should be clamped to 255
 	if result.Level() != 100 {
 		t.Errorf("Expected level clamped to 100, got %d", result.Level())
@@ -405,7 +411,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	}
 	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthSlow)
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	if result.Growth() != dbgen.DifficultyGrowthFast {
 		t.Errorf("Expected growth to be fast, got %s", result.Growth())
 	}
@@ -1874,7 +1880,7 @@ func TestBreakRuleApply(t *testing.T) {
 	}
 
 	prop := newStubProperty()
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	if result.Level() != prop.Level() {
 		t.Errorf("Expected break rule to preserve level %d, got %d", prop.Level(), result.Level())
 	}

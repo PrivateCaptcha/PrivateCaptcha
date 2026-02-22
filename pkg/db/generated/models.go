@@ -487,9 +487,9 @@ type DifficultyRule struct {
 	Position                 float64               `db:"position" json:"position"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
+	Terminal                 bool                  `db:"terminal" json:"terminal"`
 	CreatedAt                pgtype.Timestamptz    `db:"created_at" json:"created_at"`
 	UpdatedAt                pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
-	Terminal                 bool                  `db:"terminal" json:"terminal"`
 }
 
 type Lock struct {
