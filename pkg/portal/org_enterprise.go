@@ -550,11 +550,12 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, auditEvent, nil
 }
 
-func (s *Server) createOrgRulesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &orgRulesRenderContext{
-		portalBaseRenderContext: *s.createPortalTabBaseContext(org, user, portalRulesTabIndex),
+		portalBaseRenderContext: *baseCtx,
 		Rules:                   []*DifficultyRuleModel{},
 	}
+	renderCtx.Tab = portalRulesTabIndex
 
 	batch := map[int32]uint{org.ID: 1}
 	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)

@@ -376,6 +376,13 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		} else {
 			derr = err
 		}
+	case common.RulesEndpoint:
+		if vm, ae, err := s.createOrgRulesContext(ctx, baseCtx, org, user); err == nil {
+			model = vm
+			event = ae
+		} else {
+			derr = err
+		}
 	default:
 		if (tabParam != "") && (tabParam != common.DashboardEndpoint) {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
@@ -650,7 +657,8 @@ func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return nil, db.ErrPermissions
 	}
 
-	renderCtx, auditEvent, err := s.createOrgRulesContext(ctx, org, user)
+	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
+	renderCtx, auditEvent, err := s.createOrgRulesContext(ctx, baseCtx, org, user)
 	if err != nil {
 		return nil, err
 	}
