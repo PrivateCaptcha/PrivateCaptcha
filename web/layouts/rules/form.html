@@ -152,7 +152,7 @@
 
         <!-- Difficulty Adjustment -->
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
-            <label for="difficulty_level_input" class="pc-internal-form-label">Difficulty Level (%)</label>
+            <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change to initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Level (%)</label>
             <div class="mt-2">
                 <input type="number" x-model.number="actionValueDifficultyLevel" id="difficulty_level_input" placeholder="0" min="-100" max="100" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
                 <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-100%</code> to <code class="px-1 py-0.5 bg-gray-100">+100%</code></p>
@@ -161,7 +161,7 @@
 
         <!-- Difficulty Growth -->
         <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
-            <label for="growth_select" class="pc-internal-form-label">Difficulty Growth</label>
+            <label for="growth_select" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests">Difficulty Growth</label>
             <div class="mt-2">
                 <select x-model="actionValueDifficultyGrowth" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
                     {{ with .Const.GrowthTypeConstant }}<option value="0">Constant (no growth)</option>{{end}}
@@ -188,8 +188,8 @@
                     </div>
                 </div>
                 <div class="text-sm/6">
-                    <label for="{{ .Const.Terminal }}" class="font-medium text-gray-900">Stop processing</label>
-                    <span id="{{ .Const.Terminal }}-description" class="text-gray-500"><span class="sr-only">Stop processing </span>following rules after this one</span>
+                    <label for="{{ .Const.Terminal }}" class="font-medium text-gray-900">Stop processing following rules</label>
+                    <span id="{{ .Const.Terminal }}-description" class="text-gray-500"><span class="sr-only">Stop processing following rules</span> after this one</span>
                 </div>
             </div>
         </div>
