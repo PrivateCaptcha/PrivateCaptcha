@@ -137,6 +137,7 @@ type DifficultyRuleModel struct {
 	ActionProperty    string
 	ActionValue       string
 	CanEdit           bool
+	Terminal          bool
 }
 
 type propertyRulesRenderContext struct {
@@ -240,6 +241,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		ActionProperty:    actionProperty,
 		ActionValue:       actionValue,
 		CanEdit:           canEdit,
+		Terminal:          rule.Terminal,
 	}
 }
 
