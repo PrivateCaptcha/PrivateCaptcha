@@ -15,8 +15,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"golang.org/x/net/idna"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 const (
@@ -126,20 +124,6 @@ type propertyAuditLogsRenderContext struct {
 	CanView bool
 }
 
-type DifficultyRuleModel struct {
-	ID                string
-	Name              string
-	Enabled           bool
-	ConditionProperty string
-	ConditionOperator string
-	ConditionValue    string
-	ActionAction      string
-	ActionProperty    string
-	ActionValue       string
-	CanEdit           bool
-	Terminal          bool
-}
-
 type propertyRulesRenderContext struct {
 	propertyDashboardRenderContext
 	Rules []*DifficultyRuleModel
@@ -150,98 +134,6 @@ func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 		EasyLevel:   int(common.DifficultyLevelSmall),
 		NormalLevel: int(common.DifficultyLevelMedium),
 		HardLevel:   int(common.DifficultyLevelHigh),
-	}
-}
-
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
-	conditionValue := ""
-	if rule.ConditionValueStr.Valid {
-		conditionValue = rule.ConditionValueStr.String
-	} else if rule.ConditionValueInt.Valid {
-		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
-	}
-
-	titleCase := cases.Title(language.Und)
-
-	var actionProperty string
-	var actionValue string
-	var actionAction string
-
-	switch rule.ActionProperty {
-	case dbgen.RuleActionPropertyHTTPRequest:
-		actionAction = "block"
-		actionProperty = "HTTP request"
-	case dbgen.RuleActionPropertyDifficultyLevelPercent:
-		actionAction = "change"
-		actionProperty = "Difficulty level"
-		// Format percentage with +/- sign
-		if percent := rule.ActionValue; percent >= 0 {
-			actionValue = fmt.Sprintf("+%d%%", percent)
-		} else {
-			actionValue = fmt.Sprintf("%d%%", percent)
-		}
-	case dbgen.RuleActionPropertyDifficultyGrowth:
-		actionProperty = "Difficulty growth"
-		actionAction = "set"
-		actionValue = string(growthLevelFromIndex(int(rule.ActionValue)))
-	case dbgen.RuleActionPropertyBreak:
-		actionAction = "stop"
-		actionProperty = "processing rules"
-	default:
-		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
-		actionValue = fmt.Sprintf("%d", rule.ActionValue)
-		actionAction = "set"
-	}
-
-	var conditionOperator string
-	switch rule.ConditionOperator {
-	case dbgen.RuleConditionOperatorEmpty:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not empty"
-		} else {
-			conditionOperator = "is empty"
-		}
-	case dbgen.RuleConditionOperatorIn:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not one of"
-		} else {
-			conditionOperator = "is one of"
-		}
-	case dbgen.RuleConditionOperatorBot:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not known bot"
-		} else {
-			conditionOperator = "is known bot"
-		}
-	default:
-		baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "not " + baseOperator
-		} else {
-			conditionOperator = baseOperator
-		}
-	}
-
-	var conditionProperty string
-	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyIPAddress:
-		conditionProperty = "IP address"
-	default:
-		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
-	}
-
-	return &DifficultyRuleModel{
-		ID:                hasher.Encrypt(int(rule.ID)),
-		Name:              rule.Name,
-		Enabled:           rule.Enabled,
-		ConditionProperty: conditionProperty,
-		ConditionOperator: conditionOperator,
-		ConditionValue:    conditionValue,
-		ActionAction:      actionAction,
-		ActionProperty:    actionProperty,
-		ActionValue:       actionValue,
-		CanEdit:           canEdit,
-		Terminal:          rule.Terminal,
 	}
 }
 
