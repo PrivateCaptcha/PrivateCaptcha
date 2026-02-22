@@ -59,6 +59,7 @@ const (
 	ParamConditionNegated  = "condition_negated"
 	ParamActionProperty    = "action_property"
 	ParamActionValue       = "action_value"
+	ParamTerminal          = "terminal"
 	ParamPosition          = "position"
 	All                    = "all"
 )

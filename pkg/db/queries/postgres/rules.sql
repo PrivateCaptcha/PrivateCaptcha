@@ -10,7 +10,7 @@ ORDER BY org_id, position ASC;
 
 -- name: CreateDifficultyRule :one
 WITH max_pos AS (
-    SELECT COALESCE(MAX(position), -$14::float8) + $14::float8 AS new_position
+    SELECT COALESCE(MAX(position), -$15::float8) + $15::float8 AS new_position
     FROM backend.difficulty_rules
     WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
       AND (org_id = $3 OR (org_id IS NULL AND $3 IS NULL))
@@ -29,9 +29,10 @@ INSERT INTO backend.difficulty_rules (
     position,
     action_property,
     action_value,
-    creator_id
+    creator_id,
+    terminal
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT new_position FROM max_pos), $11, $12, $13
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, (SELECT new_position FROM max_pos), $11, $12, $13, $14
 )
 RETURNING *;
 
@@ -43,8 +44,8 @@ WHERE id = $1;
 WITH old AS (
     SELECT * FROM backend.difficulty_rules dr
     WHERE dr.id = $1
-    AND (dr.creator_id = $12 OR $12 = $13)
-    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $14 OR $14 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $15 OR $15 IS NULL)))
+    AND (dr.creator_id = $13 OR $13 = $14)
+    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $15 OR $15 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $16 OR $16 IS NULL)))
     FOR UPDATE
 ),
 upd AS (
@@ -59,6 +60,7 @@ upd AS (
         condition_value_separator = $9,
         action_property = $10,
         action_value = $11,
+        terminal = $12,
         updated_at = NOW()
     WHERE dr.id = (SELECT id FROM old)
     RETURNING *
@@ -73,7 +75,8 @@ SELECT
     old.condition_value_str AS old_condition_value_str,
     old.condition_value_int AS old_condition_value_int,
     old.action_property AS old_action_property,
-    old.action_value AS old_action_value
+    old.action_value AS old_action_value,
+    old.terminal AS old_terminal
 FROM upd
 CROSS JOIN old;
 
