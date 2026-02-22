@@ -19,10 +19,10 @@ function ruleFormData() {
 
     return {
         conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
-        conditionOperator: initialOperator,
+        conditionOperator: null,
         conditionNegated: {{ if .Params.ConditionNegated }}true{{ else }}false{{ end }},
         actionProperty: formDataActionProperty,
-        
+
         // Separate condition value fields for each type
         conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
         conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
@@ -120,6 +120,11 @@ function ruleFormData() {
         },
 
         init() {
+            // Wait for the DOM to update (x-for to render options) before applying the initial operator
+            this.$nextTick(() => {
+                this.conditionOperator = initialOperator;
+            });
+
             // Watch for condition property changes and reset operator if needed
             this.$watch('conditionProperty', (value) => {
                 const operators = this.availableOperators;
@@ -127,7 +132,7 @@ function ruleFormData() {
                 if (!operatorValues.includes(this.conditionOperator)) {
                     this.conditionOperator = operators[0].value;
                 }
-                
+
                 // Clear the condition value fields when switching types to avoid pollution
                 if (this.isStringCondition) {
                     this.conditionValueIPAddress = '';

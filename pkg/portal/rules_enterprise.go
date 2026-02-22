@@ -326,10 +326,11 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 	renderCtx := &RuleWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
 		RuleFormData: RuleFormData{
-			Enabled:           true,
 			ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
-			ConditionOperator: string(dbgen.RuleConditionOperatorEquals),
+			ConditionOperator: string(dbgen.RuleConditionOperatorBot),
 			ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+			Enabled:           true,
+			Terminal:          true,
 		},
 		Countries: getAllCountries(),
 	}
@@ -1131,7 +1132,8 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	renderCtx, _, err := s.createOrgRulesContext(ctx, org, user)
+	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
+	renderCtx, _, err := s.createOrgRulesContext(ctx, baseCtx, org, user)
 	if err != nil {
 		return nil, err
 	}
