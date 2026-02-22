@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS backend.difficulty_rules(
     position DOUBLE PRECISION NOT NULL DEFAULT 0,
     action_property backend.rule_action_property NOT NULL,
     action_value INT NOT NULL DEFAULT 0,
+    terminal BOOL NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     CONSTRAINT difficulty_rules_scope CHECK (
