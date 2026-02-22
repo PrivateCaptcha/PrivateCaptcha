@@ -175,7 +175,6 @@ type ruleBase struct {
 	matcher  Matcher
 }
 
-func (rb *ruleBase) IsTerminal() bool             { return rb.terminal }
 func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.matcher.Matches(ri) }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
