@@ -108,6 +108,7 @@ type RuleFormData struct {
 	ActionValue       string
 	Enabled           bool
 	ConditionNegated  bool
+	Terminal          bool
 }
 
 type RuleWizardRenderContext struct {
@@ -591,6 +592,19 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 
 	slog.DebugContext(ctx, "Parsed rule action", "action", renderCtx.ActionProperty, "value", renderCtx.ActionValue)
 
+	// Determine terminal flag based on action type:
+	// break and block request are always terminal
+	// difficulty adjustments can be optionally terminal via checkbox
+	actionPropertyEnum := dbgen.RuleActionProperty(renderCtx.ActionProperty)
+	alwaysTerminal := actionPropertyEnum == dbgen.RuleActionPropertyBreak || actionPropertyEnum == dbgen.RuleActionPropertyHTTPRequest
+	var terminal bool
+	if alwaysTerminal {
+		terminal = true
+	} else {
+		_, terminal = r.Form[common.ParamTerminal]
+	}
+	renderCtx.Terminal = terminal
+
 	params := &dbgen.CreateDifficultyRuleParams{
 		Name:                     renderCtx.Name,
 		Enabled:                  renderCtx.Enabled,
@@ -599,8 +613,9 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		ConditionOperatorNegated: renderCtx.ConditionNegated,
 		ConditionValueStr:        db.Text(renderCtx.ConditionValue),
 		ConditionValueSeparator:  conditionValueSeparator,
-		ActionProperty:           dbgen.RuleActionProperty(renderCtx.ActionProperty),
+		ActionProperty:           actionPropertyEnum,
 		ActionValue:              actionValue,
+		Terminal:                 terminal,
 	}
 
 	return params, common.StatusOK
@@ -623,6 +638,7 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 		ActionProperty:    string(rule.ActionProperty),
 		ActionValue:       strconv.Itoa(int(rule.ActionValue)),
 		ConditionNegated:  rule.ConditionOperatorNegated,
+		Terminal:          rule.Terminal,
 	}
 }
 
@@ -791,6 +807,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		ConditionValueSeparator:  createParams.ConditionValueSeparator,
 		ActionProperty:           createParams.ActionProperty,
 		ActionValue:              createParams.ActionValue,
+		Terminal:                 createParams.Terminal,
 	}
 
 	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, property, user, updateParams)
@@ -873,6 +890,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		ConditionValueSeparator:  createParams.ConditionValueSeparator,
 		ActionProperty:           createParams.ActionProperty,
 		ActionValue:              createParams.ActionValue,
+		Terminal:                 createParams.Terminal,
 	}
 
 	_, auditEvent, err := s.Store.Impl().UpdateDifficultyRule(ctx, org, nil, user, updateParams)

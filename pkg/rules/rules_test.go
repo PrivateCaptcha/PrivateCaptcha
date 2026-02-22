@@ -52,6 +52,12 @@ func newStubProperty() *difficulty.StubProperty {
 	return difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthMedium)
 }
 
+func applyRule(r rule, p difficulty.Property) *overrideProperty {
+	op := &overrideProperty{base: p}
+	r.Apply(op)
+	return op
+}
+
 func TestUserAgentEqualsMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -310,7 +316,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// Base level is 50, +100% doubles to 100
 	if result.Level() != 100 {
 		t.Errorf("Expected level 100 (50 + 100%%), got %d", result.Level())
@@ -336,7 +342,7 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// Base level is 50, -20% gives 40
 	if result.Level() != 40 {
 		t.Errorf("Expected level 40 (50 - 20%%), got %d", result.Level())
@@ -359,7 +365,7 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// 50 * 1 / 100 with rounding = 1 (rounded up from 0.5), then clamped to minimum 1
 	if result.Level() != 1 {
 		t.Errorf("Expected level clamped to 1, got %d", result.Level())
@@ -382,7 +388,7 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 	}
 	prop := newStubProperty() // has level 50
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	// 50 * 1100 / 100 = 550, should be clamped to 255
 	if result.Level() != 100 {
 		t.Errorf("Expected level clamped to 100, got %d", result.Level())
@@ -405,7 +411,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	}
 	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthSlow)
 
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	if result.Growth() != dbgen.DifficultyGrowthFast {
 		t.Errorf("Expected growth to be fast, got %s", result.Growth())
 	}
@@ -414,7 +420,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	}
 }
 
-func TestCompiledRulesApplyFirstMatch(t *testing.T) {
+func TestCompiledRulesApplyMaxLevel(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -440,14 +446,17 @@ func TestCompiledRulesApplyFirstMatch(t *testing.T) {
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result, found := compiled.Apply(ri, prop)
-	// Base level is 50, first rule has +50% so result should be 50 * 1.5 = 75
-	if !found || result.Level() != 75 {
-		t.Errorf("Expected first matching rule (+50%% = level 75), got %d", result.Level())
+	result, terminal := compiled.Apply(ri, prop)
+	// Both rules match; max level wins: max(75, 100) = 100
+	if terminal {
+		t.Error("Expected non-terminal result for level rules")
+	}
+	if result.Level() != 100 {
+		t.Errorf("Expected max level 100, got %d", result.Level())
 	}
 }
 
-func TestRulesPairPropertyBeforeOrg(t *testing.T) {
+func TestRulesPairPropertyAndOrgCumulative(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -480,9 +489,10 @@ func TestRulesPairPropertyBeforeOrg(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Base level is 50, property rule has +30% so result should be 50 * 1.3 = 65
-	if result.Level() != 65 {
-		t.Errorf("Expected property-level rule (+30%% = level 65) to take precedence, got %d", result.Level())
+	// Property rule: 50 * 1.3 = 65 (non-terminal, so org rules also apply)
+	// Org rule sees base 65: 65 * 2.0 = 130
+	if result.Level() != 130 {
+		t.Errorf("Expected cumulative level 130 from property+org rules, got %d", result.Level())
 	}
 }
 
@@ -954,9 +964,12 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 
 	prop := newStubProperty()
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	result, found := compiled.Apply(ri, prop)
+	result, terminal := compiled.Apply(ri, prop)
 	// Base level is 50, valid rule has +25% so result should be 50 * 1.25 = 62.5 rounded to 63
-	if !found || result.Level() != 63 {
+	if terminal {
+		t.Error("Expected non-terminal result for level rule")
+	}
+	if result.Level() != 63 {
 		t.Errorf("Expected level 63 (+25%% with rounding) from valid rule, got %d", result.Level())
 	}
 }
@@ -1852,6 +1865,7 @@ func TestBreakRuleApply(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 		ActionProperty:    dbgen.RuleActionPropertyBreak,
+		Terminal:          true,
 		Enabled:           true,
 	}
 
@@ -1866,7 +1880,7 @@ func TestBreakRuleApply(t *testing.T) {
 	}
 
 	prop := newStubProperty()
-	result := compiled.Apply(prop)
+	result := applyRule(compiled, prop)
 	if result.Level() != prop.Level() {
 		t.Errorf("Expected break rule to preserve level %d, got %d", prop.Level(), result.Level())
 	}
@@ -1887,6 +1901,7 @@ func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
 			Enabled:           true,
 		},
 	}
@@ -1928,6 +1943,7 @@ func TestBreakRuleInOrgStopsProcessing(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
 			Position:          1,
 			Enabled:           true,
 		},
@@ -1968,6 +1984,7 @@ func TestBreakRuleNoMatchFallsThrough(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "SpecificBot", Valid: true},
 			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
 			Enabled:           true,
 		},
 	}
@@ -1994,5 +2011,657 @@ func TestBreakRuleNoMatchFallsThrough(t *testing.T) {
 	// Break rule does NOT match, so org rule SHOULD apply
 	if result.Level() != 100 {
 		t.Errorf("Expected org rule to apply when break rule does not match, got level %d", result.Level())
+	}
+}
+
+// Terminal logic tests
+
+func TestTerminalLevelRuleStopsProcessing(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75 from terminal rule, got %d", result.Level())
+	}
+}
+
+func TestNonTerminalLevelRulesCumulative(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       20,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected max level 75, got %d", result.Level())
+	}
+}
+
+func TestNonTerminalGrowthRulesCumulativeMax(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       1,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       3,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthConstant)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Growth() != dbgen.DifficultyGrowthFast {
+		t.Errorf("Expected max growth fast, got %s", result.Growth())
+	}
+}
+
+func TestNonTerminalGrowthRulesMaxReversed(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       3,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       1,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthConstant)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Growth() != dbgen.DifficultyGrowthFast {
+		t.Errorf("Expected max growth fast, got %s", result.Growth())
+	}
+}
+
+func TestMixedLevelAndGrowthCumulative(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       3,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthSlow)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75, got %d", result.Level())
+	}
+	if result.Growth() != dbgen.DifficultyGrowthFast {
+		t.Errorf("Expected growth fast, got %s", result.Growth())
+	}
+}
+
+func TestTerminalBreakStopsLevelAccumulation(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       20,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
+			Position:          2,
+			Enabled:           true,
+		},
+		{
+			ID:                3,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          3,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result from break rule")
+	}
+	if result.Level() != 60 {
+		t.Errorf("Expected level 60 (only first level rule applied before break), got %d", result.Level())
+	}
+}
+
+func TestTerminalBlockRequestStopsProcessing(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+			ConditionOperator: dbgen.RuleConditionOperatorMatches,
+			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result from block rule")
+	}
+	if result.Level() != 50 {
+		t.Errorf("Expected original level 50 after terminal block, got %d", result.Level())
+	}
+}
+
+func TestTerminalPropertyRuleStopsOrgRules(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       30,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	if result.Level() != 65 {
+		t.Errorf("Expected level 65 from terminal property rule only, got %d", result.Level())
+	}
+}
+
+func TestNonTerminalPropertyRuleAllowsOrgRules(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       1,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       3,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthConstant)
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	if result.Growth() != dbgen.DifficultyGrowthFast {
+		t.Errorf("Expected growth fast from org rule, got %s", result.Growth())
+	}
+}
+
+func TestTerminalLevelRuleInMiddle(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       20,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Terminal:          true,
+			Position:          2,
+			Enabled:           true,
+		},
+		{
+			ID:                3,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          3,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75 (max before terminal stop), got %d", result.Level())
+	}
+}
+
+func TestBlockRuleTerminalWithPriorLevel(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+			ConditionOperator: dbgen.RuleConditionOperatorMatches,
+			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Terminal:          true,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result from block rule")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75 (accumulated before block), got %d", result.Level())
+	}
+}
+
+func TestMultipleNonTerminalOnlyHigherLevelWins(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       20,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Level() != 100 {
+		t.Errorf("Expected max level 100, got %d", result.Level())
+	}
+}
+
+func TestOnlySecondRuleMatches(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ConditionValueStr: pgtype.Text{String: "SpecificBot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("OtherBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75 from second rule only, got %d", result.Level())
+	}
+}
+
+func TestGrowthOrderFunction(t *testing.T) {
+	tests := []struct {
+		growth   dbgen.DifficultyGrowth
+		expected int
+	}{
+		{dbgen.DifficultyGrowthConstant, 0},
+		{dbgen.DifficultyGrowthSlow, 1},
+		{dbgen.DifficultyGrowthMedium, 2},
+		{dbgen.DifficultyGrowthFast, 3},
+		{"unknown", 2},
+	}
+
+	for _, tt := range tests {
+		result := growthOrder(tt.growth)
+		if result != tt.expected {
+			t.Errorf("growthOrder(%s) = %d, want %d", tt.growth, result, tt.expected)
+		}
+	}
+}
+
+func TestTerminalBreakRulePreservesAccumulatedGrowth(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+			ActionValue:       3,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
+			Position:          2,
+			Enabled:           true,
+		},
+		{
+			ID:                3,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          3,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthSlow)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result, terminal := compiled.Apply(ri, prop)
+	if !terminal {
+		t.Error("Expected terminal result")
+	}
+	if result.Growth() != dbgen.DifficultyGrowthFast {
+		t.Errorf("Expected accumulated growth fast, got %s", result.Growth())
+	}
+	if result.Level() != 50 {
+		t.Errorf("Expected original level 50, got %d", result.Level())
+	}
+}
+
+func TestNonTerminalBlockRuleDoesNotStopProcessing(t *testing.T) {
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+			ConditionOperator: dbgen.RuleConditionOperatorMatches,
+			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Terminal:          false,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
+	result, terminal := compiled.Apply(ri, prop)
+	if terminal {
+		t.Error("Expected non-terminal result when block rule is non-terminal")
+	}
+	if result.Level() != 75 {
+		t.Errorf("Expected level 75 from level rule after non-terminal block, got %d", result.Level())
+	}
+}
+
+func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
+	// When Terminal is not set (Go zero value = false), break rule does not stop processing
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			// Terminal not set, defaults to false in Go
+			Enabled: true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+	prop := newStubProperty()
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	result := rp.Apply(ri, prop)
+	// Break rule without Terminal=true does NOT stop org fallback
+	if result.Level() != 100 {
+		t.Errorf("Expected org rule to apply when break is non-terminal, got level %d", result.Level())
 	}
 }
