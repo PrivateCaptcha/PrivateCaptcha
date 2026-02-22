@@ -101,6 +101,7 @@ type RenderConstants struct {
 	ConditionNegated               string
 	RulesEndpoint                  string
 	RuleStatsEndpoint              string
+	Terminal                       string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -193,6 +194,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionNegated:               common.ParamConditionNegated,
 		RulesEndpoint:                  common.RulesEndpoint,
 		RuleStatsEndpoint:              common.RuleStatsEndpoint,
+		Terminal:                       common.ParamTerminal,
 	}
 }
 

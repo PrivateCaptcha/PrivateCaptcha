@@ -174,6 +174,25 @@
 
         <!-- Hidden field that collects the active action value -->
         <input type="hidden" name="{{ .Const.ActionValue }}" :value="activeActionValue" />
+
+        <!-- Terminal checkbox - only shown for difficulty level and growth actions -->
+        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' || actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
+            <div class="flex gap-3">
+                <div class="flex h-6 shrink-0 items-center">
+                    <div class="group grid size-4 grid-cols-1">
+                        <input id="{{ .Const.Terminal }}" name="{{ .Const.Terminal }}" type="checkbox" {{ if .Params.Terminal }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox" />
+                        <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                            <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="text-sm/6">
+                    <label for="{{ .Const.Terminal }}" class="font-medium text-gray-900">Stop processing</label>
+                    <span id="{{ .Const.Terminal }}-description" class="text-gray-500"><span class="sr-only">Stop processing </span>following rules after this one</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
