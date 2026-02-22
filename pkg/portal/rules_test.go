@@ -1905,11 +1905,7 @@ func TestMoveOrgRules(t *testing.T) {
 	testMoveRulesSuite(t, suite)
 }
 
-func TestCircularMoveOrgRules(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
+func testCircularMoveOrgRulesSuite(t *testing.T, moveToLast bool) {
 	for _, numRules := range []int{2, 3} {
 		numRules := numRules
 		t.Run(fmt.Sprintf("%dRules", numRules), func(t *testing.T) {
@@ -1943,7 +1939,14 @@ func TestCircularMoveOrgRules(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			// Move last rule to first position N times (where N = numRules)
+			sourcePosition := numRules - 1
+			targetPosition := 0
+			if moveToLast {
+				sourcePosition = 0
+				targetPosition = numRules - 1
+			}
+
+			// Move one end rule to the opposite end N times (where N = numRules)
 			// After N moves, the order should be back to the original
 			for moveNum := 0; moveNum < numRules; moveNum++ {
 				// Get current rules order
@@ -1955,26 +1958,26 @@ func TestCircularMoveOrgRules(t *testing.T) {
 					t.Fatalf("Expected %d rules, got %d", numRules, len(currentRules[org.ID]))
 				}
 
-				// Find the last rule's ID
-				lastRuleID := currentRules[org.ID][numRules-1].ID
+				// Find the selected rule's ID
+				selectedRuleID := currentRules[org.ID][sourcePosition].ID
 
-				// Move last rule to first position
+				// Move selected rule to target position
 				form := url.Values{}
 				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
-				form.Add(common.ParamPosition, "0")
+				form.Add(common.ParamPosition, strconv.Itoa(targetPosition))
 
 				req := httptest.NewRequest("POST", "/endpoint", strings.NewReader(form.Encode()))
 				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				req.AddCookie(cookie)
 				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(lastRuleID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(selectedRuleID)))
 
 				w := httptest.NewRecorder()
 				if _, err := server.postMoveOrgRule(w, req); err != nil {
 					t.Fatalf("Move %d failed: %v", moveNum+1, err)
 				}
 
-				t.Logf("Move %d: Moved rule %d to position 0", moveNum+1, lastRuleID)
+				t.Logf("Move %d: Moved rule %d to position %d", moveNum+1, selectedRuleID, targetPosition)
 			}
 
 			// Verify final order matches original order
@@ -1996,6 +1999,22 @@ func TestCircularMoveOrgRules(t *testing.T) {
 			t.Logf("Successfully verified circular moves for %d rules", numRules)
 		})
 	}
+}
+
+func TestCircularMoveOrgRulesFirstPosition(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testCircularMoveOrgRulesSuite(t, false)
+}
+
+func TestCircularMoveOrgRulesLastPosition(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	testCircularMoveOrgRulesSuite(t, true)
 }
 
 func TestRebalancingPropertyRules(t *testing.T) {
