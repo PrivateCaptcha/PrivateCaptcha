@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/biter777/countries"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/net/http/httpguts"
 )
 
 const (
@@ -280,12 +281,48 @@ func breakActionParser(actionValue string) (int32, common.StatusCode) {
 	return 0, common.StatusOK
 }
 
+func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
+	const separator = ","
+
+	switch conditionOperator {
+	case string(dbgen.RuleConditionOperatorEquals),
+		string(dbgen.RuleConditionOperatorIn):
+	default:
+		return "", "", common.StatusRuleConditionOperatorInvalid
+	}
+
+	if conditionValue == "" {
+		return "", "", common.StatusRuleHTTPHeaderNameRequired
+	}
+
+	if conditionOperator == string(dbgen.RuleConditionOperatorIn) {
+		items := strings.Split(conditionValue, separator)
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			if !httpguts.ValidHeaderFieldName(item) {
+				return "", "", common.StatusRuleHTTPHeaderNameInvalid
+			}
+		}
+		return conditionValue, separator, common.StatusOK
+	}
+
+	if !httpguts.ValidHeaderFieldName(conditionValue) {
+		return "", "", common.StatusRuleHTTPHeaderNameInvalid
+	}
+
+	return conditionValue, "", common.StatusOK
+}
+
 func (s *Server) initRuleParsers() {
 	s.ConditionParsers = map[string]ConditionFormParser{
-		string(dbgen.RuleConditionPropertyUserAgent):   userAgentConditionParser,
-		string(dbgen.RuleConditionPropertyIPAddress):   ipAddressConditionParser,
-		string(dbgen.RuleConditionPropertyCountryCode): countryCodeConditionParser,
-		string(dbgen.RuleConditionPropertyDomain):      domainConditionParser,
+		string(dbgen.RuleConditionPropertyUserAgent):      userAgentConditionParser,
+		string(dbgen.RuleConditionPropertyIPAddress):      ipAddressConditionParser,
+		string(dbgen.RuleConditionPropertyCountryCode):    countryCodeConditionParser,
+		string(dbgen.RuleConditionPropertyDomain):         domainConditionParser,
+		string(dbgen.RuleConditionPropertyHTTPHeaderName): httpHeaderNameConditionParser,
 	}
 	s.ActionParsers = map[string]ActionFormParser{
 		string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
