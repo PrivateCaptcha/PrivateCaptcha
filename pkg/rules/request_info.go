@@ -62,6 +62,11 @@ func (ri *RequestInfo) CountryCode() string {
 	return *ri.countryCode
 }
 
+func (ri *RequestInfo) HasHeader(name string) bool {
+	_, ok := ri.r.Header[name]
+	return ok
+}
+
 func (ri *RequestInfo) Domain() string {
 	if ri.domain == nil {
 		var d string
