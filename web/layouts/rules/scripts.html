@@ -10,6 +10,7 @@ function ruleFormData() {
     const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
     const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
     const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}';
+    const isHTTPHeaderNameCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}';
 
     // Initialize operator with negation suffix if needed
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
@@ -27,6 +28,7 @@ function ruleFormData() {
         conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
         conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
         conditionValueDomain: isDomainCondition ? formDataConditionValue : '',
+        conditionValueHTTPHeaderName: isHTTPHeaderNameCondition ? formDataConditionValue : '',
         selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
 
         // Separate action value fields for each type
@@ -54,6 +56,10 @@ function ruleFormData() {
             return this.conditionProperty === '{{ .Const.ConditionPropertyDomain }}';
         },
 
+        get isHTTPHeaderNameCondition() {
+            return this.conditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}';
+        },
+
         // Computed property that returns the active condition value based on current condition type
         get activeConditionValue() {
             if (this.isListCondition) {
@@ -62,6 +68,8 @@ function ruleFormData() {
                 return this.conditionValueIPAddress;
             } else if (this.isDomainCondition) {
                 return this.conditionValueDomain;
+            } else if (this.isHTTPHeaderNameCondition) {
+                return this.conditionValueHTTPHeaderName;
             } else {
                 return this.conditionValueUserAgent;
             }
@@ -104,6 +112,13 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
                     { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
                 ];
+            } else if (this.isHTTPHeaderNameCondition) {
+                return [
+                    { value: '{{ .Const.OperatorEquals }}', label: 'Header Exists' },
+                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Header Does Not Exist' },
+                    { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
+                    { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' },
+                ];
             } else {
                 // String operators for user_agent
                 return [
@@ -137,19 +152,28 @@ function ruleFormData() {
                 if (this.isStringCondition) {
                     this.conditionValueIPAddress = '';
                     this.conditionValueDomain = '';
+                    this.conditionValueHTTPHeaderName = '';
                     this.selectedCountries = [];
                 } else if (this.isIPCondition) {
                     this.conditionValueUserAgent = '';
                     this.conditionValueDomain = '';
+                    this.conditionValueHTTPHeaderName = '';
                     this.selectedCountries = [];
                 } else if (this.isDomainCondition) {
                     this.conditionValueUserAgent = '';
                     this.conditionValueIPAddress = '';
+                    this.conditionValueHTTPHeaderName = '';
+                    this.selectedCountries = [];
+                } else if (this.isHTTPHeaderNameCondition) {
+                    this.conditionValueUserAgent = '';
+                    this.conditionValueIPAddress = '';
+                    this.conditionValueDomain = '';
                     this.selectedCountries = [];
                 } else if (this.isListCondition) {
                     this.conditionValueUserAgent = '';
                     this.conditionValueIPAddress = '';
                     this.conditionValueDomain = '';
+                    this.conditionValueHTTPHeaderName = '';
                 }
             });
 

@@ -112,6 +112,37 @@ func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	return result
 }
 
+// HeaderMatcher checks for the presence of HTTP header names (case-insensitive).
+// Only supports Equals and In operators.
+type HeaderMatcher struct {
+	ConditionOperator        dbgen.RuleConditionOperator
+	ConditionValueStr        string   // header name for Equals operator
+	ConditionValueItems      []string // pre-split header names for In operator
+	ConditionOperatorNegated bool
+}
+
+// Matches checks whether the request contains the header name(s) specified in the condition.
+func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
+	var result bool
+
+	switch hm.ConditionOperator {
+	case dbgen.RuleConditionOperatorIn:
+		for _, name := range hm.ConditionValueItems {
+			if ri.HasHeader(name) {
+				result = true
+				break
+			}
+		}
+	default: // equals
+		result = ri.HasHeader(hm.ConditionValueStr)
+	}
+
+	if hm.ConditionOperatorNegated {
+		return !result
+	}
+	return result
+}
+
 // BotMatcher handles bot detection for user agent
 type BotMatcher struct {
 	UAParser                 *useragent.Parser

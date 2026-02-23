@@ -48,6 +48,16 @@ func newTestRequestInfoWithDomain(userAgent string, ip netip.Addr, domain string
 	return NewRequestInfo(req.WithContext(ctx), "")
 }
 
+func newTestRequestInfoWithHeaders(userAgent string, ip netip.Addr, headers map[string]string) *RequestInfo {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", userAgent)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
+	return NewRequestInfo(req.WithContext(ctx), "")
+}
+
 func newStubProperty() *difficulty.StubProperty {
 	return difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthMedium)
 }
@@ -2663,5 +2673,155 @@ func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
 	// Break rule without Terminal=true does NOT stop org fallback
 	if result.Level() != 100 {
 		t.Errorf("Expected org rule to apply when break is non-terminal, got level %d", result.Level())
+	}
+}
+
+func TestHTTPHeaderNameEqualsMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "X-Custom-Header", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match when header exists")
+	}
+
+	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{})
+	if compiled.Matches(ri2) {
+		t.Error("Expected rule to not match when header is absent")
+	}
+}
+
+func TestHTTPHeaderNameEqualsCaseInsensitive(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "x-custom-header", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match header name case-insensitively")
+	}
+}
+
+func TestHTTPHeaderNameEqualsNegated(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:        dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:        dbgen.RuleConditionOperatorEquals,
+		ConditionOperatorNegated: true,
+		ConditionValueStr:        pgtype.Text{String: "X-Custom-Header", Valid: true},
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              50,
+		Enabled:                  true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{})
+	if !compiled.Matches(ri) {
+		t.Error("Expected negated rule to match when header is absent")
+	}
+
+	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
+	if compiled.Matches(ri2) {
+		t.Error("Expected negated rule to not match when header exists")
+	}
+}
+
+func TestHTTPHeaderNameInMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "X-Header-A,X-Header-B", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Header-A": "val"})
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule to match when first header in list exists")
+	}
+
+	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Header-B": "val"})
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule to match when second header in list exists")
+	}
+
+	ri3 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{})
+	if compiled.Matches(ri3) {
+		t.Error("Expected rule to not match when none of the headers exist")
+	}
+}
+
+func TestHTTPHeaderNameInNegated(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:        dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:        dbgen.RuleConditionOperatorIn,
+		ConditionOperatorNegated: true,
+		ConditionValueStr:        pgtype.Text{String: "X-Header-A,X-Header-B", Valid: true},
+		ConditionValueSeparator:  pgtype.Text{String: ",", Valid: true},
+		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:              50,
+		Enabled:                  true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{})
+	if !compiled.Matches(ri) {
+		t.Error("Expected negated rule to match when no headers in list exist")
+	}
+
+	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Header-A": "val"})
+	if compiled.Matches(ri2) {
+		t.Error("Expected negated rule to not match when a header in list exists")
+	}
+}
+
+func TestHTTPHeaderNameHasHeader(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("X-Forwarded-For", "1.2.3.4")
+	ri := NewRequestInfo(req, "")
+
+	if !ri.HasHeader("X-Forwarded-For") {
+		t.Error("Expected HasHeader to return true for existing header")
+	}
+	if !ri.HasHeader("x-forwarded-for") {
+		t.Error("Expected HasHeader to return true case-insensitively")
+	}
+	if ri.HasHeader("X-Missing-Header") {
+		t.Error("Expected HasHeader to return false for missing header")
 	}
 }

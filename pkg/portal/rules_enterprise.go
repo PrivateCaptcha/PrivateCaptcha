@@ -280,12 +280,66 @@ func breakActionParser(actionValue string) (int32, common.StatusCode) {
 	return 0, common.StatusOK
 }
 
+func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
+	const separator = ","
+
+	switch conditionOperator {
+	case string(dbgen.RuleConditionOperatorEquals),
+		string(dbgen.RuleConditionOperatorIn):
+	default:
+		return "", "", common.StatusRuleConditionOperatorInvalid
+	}
+
+	if conditionValue == "" {
+		return "", "", common.StatusRuleHTTPHeaderNameRequired
+	}
+
+	if conditionOperator == string(dbgen.RuleConditionOperatorIn) {
+		items := strings.Split(conditionValue, separator)
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			if !isValidHTTPHeaderName(item) {
+				return "", "", common.StatusRuleHTTPHeaderNameInvalid
+			}
+		}
+		return conditionValue, separator, common.StatusOK
+	}
+
+	if !isValidHTTPHeaderName(conditionValue) {
+		return "", "", common.StatusRuleHTTPHeaderNameInvalid
+	}
+
+	return conditionValue, "", common.StatusOK
+}
+
+// isValidHTTPHeaderName checks that the header name is a valid HTTP token (non-empty, no whitespace or separators).
+func isValidHTTPHeaderName(name string) bool {
+	if len(name) == 0 {
+		return false
+	}
+	for _, c := range name {
+		// HTTP header name tokens must be visible ASCII, no separators or whitespace
+		if c <= 32 || c > 126 {
+			return false
+		}
+		switch c {
+		case '(', ')', '<', '>', '@', ',', ';', ':', '\\', '"', '/', '[', ']', '?', '=', '{', '}', ' ', '\t':
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) initRuleParsers() {
 	s.ConditionParsers = map[string]ConditionFormParser{
-		string(dbgen.RuleConditionPropertyUserAgent):   userAgentConditionParser,
-		string(dbgen.RuleConditionPropertyIPAddress):   ipAddressConditionParser,
-		string(dbgen.RuleConditionPropertyCountryCode): countryCodeConditionParser,
-		string(dbgen.RuleConditionPropertyDomain):      domainConditionParser,
+		string(dbgen.RuleConditionPropertyUserAgent):      userAgentConditionParser,
+		string(dbgen.RuleConditionPropertyIPAddress):      ipAddressConditionParser,
+		string(dbgen.RuleConditionPropertyCountryCode):    countryCodeConditionParser,
+		string(dbgen.RuleConditionPropertyDomain):         domainConditionParser,
+		string(dbgen.RuleConditionPropertyHTTPHeaderName): httpHeaderNameConditionParser,
 	}
 	s.ActionParsers = map[string]ActionFormParser{
 		string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,

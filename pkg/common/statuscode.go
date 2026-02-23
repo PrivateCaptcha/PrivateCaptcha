@@ -66,6 +66,8 @@ const (
 	StatusPropertyRulesLimitError           StatusCode = 1420
 	StatusOrgRulesSubscriptionRequired      StatusCode = 1421
 	StatusPropertyRulesSubscriptionRequired StatusCode = 1422
+	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
+	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
 )
 
 func (sc StatusCode) Success() bool {
@@ -186,6 +188,10 @@ func (sc StatusCode) String() string {
 		return "You need an active subscription to create organization rules."
 	case StatusPropertyRulesSubscriptionRequired:
 		return "You need an active subscription to create property rules."
+	case StatusRuleHTTPHeaderNameRequired:
+		return "HTTP header name is required."
+	case StatusRuleHTTPHeaderNameInvalid:
+		return "HTTP header name is not valid."
 	default:
 		return strconv.Itoa(int(sc))
 	}
