@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"strings"
 
@@ -330,6 +331,34 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	return im, nil
 }
 
+func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	value := rule.ConditionValueStr.String
+	hm := &HeaderMatcher{
+		ConditionOperator:        rule.ConditionOperator,
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+	}
+
+	if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
+		sep := defaultSeparator
+		if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+			sep = rule.ConditionValueSeparator.String
+		}
+		items := strings.Split(value, sep)
+		hm.ConditionValueItems = make([]string, 0, len(items))
+		for _, item := range items {
+			item = strings.TrimSpace(item)
+			if len(item) == 0 {
+				continue
+			}
+			hm.ConditionValueItems = append(hm.ConditionValueItems, http.CanonicalHeaderKey(item))
+		}
+	} else {
+		hm.ConditionValueStr = http.CanonicalHeaderKey(value)
+	}
+
+	return hm, nil
+}
+
 // RulesCompiler compiles database rules into executable rule objects.
 type RulesCompiler struct {
 	uaParser  *useragent.Parser
@@ -351,6 +380,7 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 	rc.factories[string(dbgen.RuleConditionPropertyCountryCode)] = BuildStringMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyDomain)] = BuildStringMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyHTTPHeaderName)] = BuildHeaderMatcher
 }
 
 // RegisterMatcherFactory registers a MatcherFactory for the given condition property,
