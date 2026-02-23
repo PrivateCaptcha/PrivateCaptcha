@@ -6,6 +6,7 @@ import (
 
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/medama-io/go-useragent"
+	"github.com/medama-io/go-useragent/agents"
 )
 
 // Matcher is the interface that all specialized matchers implement.
@@ -117,9 +118,39 @@ type BotMatcher struct {
 	ConditionOperatorNegated bool
 }
 
+func (bm *BotMatcher) looksLikeBot(ua string) bool {
+	if len(ua) == 0 {
+		return true
+	}
+
+	parsed := bm.UAParser.Parse(ua)
+
+	if parsed.IsBot() {
+		return true
+	}
+
+	switch parsed.OS() {
+	case "":
+		return true
+	case agents.OSWindows:
+		for _, suspicious := range []string{"Windows 95", "Windows 98", "Windows CE", "Win 9x"} {
+			if strings.Contains(ua, suspicious) {
+				return true
+			}
+		}
+	case agents.OSIOS:
+		for _, suspicious := range []string{"iPod"} {
+			if strings.Contains(ua, suspicious) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
-	ua := ri.UserAgent()
-	result := len(ua) == 0 || bm.UAParser.Parse(ua).IsBot()
+	result := bm.looksLikeBot(ri.UserAgent())
 
 	if bm.ConditionOperatorNegated {
 		return !result
