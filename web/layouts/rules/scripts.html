@@ -148,33 +148,16 @@ function ruleFormData() {
                     this.conditionOperator = operators[0].value;
                 }
 
-                // Clear the condition value fields when switching types to avoid pollution
-                if (this.isStringCondition) {
-                    this.conditionValueIPAddress = '';
-                    this.conditionValueDomain = '';
-                    this.conditionValueHTTPHeaderName = '';
-                    this.selectedCountries = [];
-                } else if (this.isIPCondition) {
-                    this.conditionValueUserAgent = '';
-                    this.conditionValueDomain = '';
-                    this.conditionValueHTTPHeaderName = '';
-                    this.selectedCountries = [];
-                } else if (this.isDomainCondition) {
-                    this.conditionValueUserAgent = '';
-                    this.conditionValueIPAddress = '';
-                    this.conditionValueHTTPHeaderName = '';
-                    this.selectedCountries = [];
-                } else if (this.isHTTPHeaderNameCondition) {
-                    this.conditionValueUserAgent = '';
-                    this.conditionValueIPAddress = '';
-                    this.conditionValueDomain = '';
-                    this.selectedCountries = [];
-                } else if (this.isListCondition) {
-                    this.conditionValueUserAgent = '';
-                    this.conditionValueIPAddress = '';
-                    this.conditionValueDomain = '';
-                    this.conditionValueHTTPHeaderName = '';
-                }
+                const activeUserAgent = this.isStringCondition ? this.conditionValueUserAgent : '';
+                const activeIP = this.isIPCondition ? this.conditionValueIPAddress : '';
+                const activeDomain = this.isDomainCondition ? this.conditionValueDomain : '';
+                const activeHeader = this.isHTTPHeaderNameCondition ? this.conditionValueHTTPHeaderName : '';
+                const activeCountries = this.isListCondition ? this.selectedCountries : [];
+                this.conditionValueUserAgent = activeUserAgent;
+                this.conditionValueIPAddress = activeIP;
+                this.conditionValueDomain = activeDomain;
+                this.conditionValueHTTPHeaderName = activeHeader;
+                this.selectedCountries = activeCountries;
             });
 
             // Watch for action property changes to set sensible defaults

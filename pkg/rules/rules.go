@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http"
 	"net/netip"
 	"strings"
 
@@ -330,12 +331,11 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	return im, nil
 }
 
-// BuildHeaderMatcher creates a HeaderMatcher from a database rule.
 func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	value := rule.ConditionValueStr.String
 	hm := &HeaderMatcher{
 		ConditionOperator:        rule.ConditionOperator,
-		ConditionValueStr:        value,
+		ConditionValueStr:        http.CanonicalHeaderKey(value),
 		ConditionOperatorNegated: rule.ConditionOperatorNegated,
 	}
 
@@ -351,7 +351,7 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 			if len(item) == 0 {
 				continue
 			}
-			hm.ConditionValueItems = append(hm.ConditionValueItems, item)
+			hm.ConditionValueItems = append(hm.ConditionValueItems, http.CanonicalHeaderKey(item))
 		}
 	}
 

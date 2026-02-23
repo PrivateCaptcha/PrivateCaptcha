@@ -315,22 +315,8 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 	return conditionValue, "", common.StatusOK
 }
 
-// isValidHTTPHeaderName checks that the header name is a valid HTTP token (non-empty, no whitespace or separators).
 func isValidHTTPHeaderName(name string) bool {
-	if len(name) == 0 {
-		return false
-	}
-	for _, c := range name {
-		// HTTP header name tokens must be visible ASCII, no separators or whitespace
-		if c <= 32 || c > 126 {
-			return false
-		}
-		switch c {
-		case '(', ')', '<', '>', '@', ',', ';', ':', '\\', '"', '/', '[', ']', '?', '=', '{', '}', ' ', '\t':
-			return false
-		}
-	}
-	return true
+	return len(name) > 0 && http.CanonicalHeaderKey(name) == name
 }
 
 func (s *Server) initRuleParsers() {

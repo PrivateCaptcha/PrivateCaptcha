@@ -2818,10 +2818,58 @@ func TestHTTPHeaderNameHasHeader(t *testing.T) {
 	if !ri.HasHeader("X-Forwarded-For") {
 		t.Error("Expected HasHeader to return true for existing header")
 	}
-	if !ri.HasHeader("x-forwarded-for") {
-		t.Error("Expected HasHeader to return true case-insensitively")
+	if ri.HasHeader("x-forwarded-for") {
+		t.Error("Expected HasHeader to return false for non-canonical name (no conversion in HasHeader)")
 	}
 	if ri.HasHeader("X-Missing-Header") {
 		t.Error("Expected HasHeader to return false for missing header")
+	}
+}
+
+func TestHTTPHeaderNameNonCanonicalRule(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "x-custom-header", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule with non-canonical header name to match after canonicalization in BuildHeaderMatcher")
+	}
+}
+
+func TestHTTPHeaderNameNonCanonicalInRule(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "x-header-a,X-HEADER-B", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Header-A": "val"})
+	if !compiled.Matches(ri) {
+		t.Error("Expected rule with lowercase header name in In list to match after canonicalization")
+	}
+
+	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Header-B": "val"})
+	if !compiled.Matches(ri2) {
+		t.Error("Expected rule with uppercase header name in In list to match after canonicalization")
 	}
 }

@@ -51,8 +51,6 @@ const (
 	StatusRuleActionValueInvalid            StatusCode = 1407
 	StatusRuleActionPropertyInvalid         StatusCode = 1408
 	StatusRuleIPAddressRequired             StatusCode = 1409
-	StatusRuleIPAddressInvalid              StatusCode = 1423
-	StatusRuleIPAddressTooMany              StatusCode = 1424
 	StatusRuleCountryRequired               StatusCode = 1410
 	StatusRuleCountryInvalid                StatusCode = 1411
 	StatusRuleDomainRequired                StatusCode = 1412
@@ -66,6 +64,8 @@ const (
 	StatusPropertyRulesLimitError           StatusCode = 1420
 	StatusOrgRulesSubscriptionRequired      StatusCode = 1421
 	StatusPropertyRulesSubscriptionRequired StatusCode = 1422
+	StatusRuleIPAddressInvalid              StatusCode = 1423
+	StatusRuleIPAddressTooMany              StatusCode = 1424
 	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
 	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
 )

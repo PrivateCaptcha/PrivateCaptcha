@@ -63,7 +63,7 @@ func (ri *RequestInfo) CountryCode() string {
 }
 
 func (ri *RequestInfo) HasHeader(name string) bool {
-	_, ok := ri.r.Header[http.CanonicalHeaderKey(name)]
+	_, ok := ri.r.Header[name]
 	return ok
 }
 
