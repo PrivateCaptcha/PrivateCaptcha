@@ -112,6 +112,36 @@ func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	return result
 }
 
+type HeaderMatcher struct {
+	ConditionOperator        dbgen.RuleConditionOperator
+	ConditionValueStr        string
+	ConditionValueItems      []string
+	ConditionOperatorNegated bool
+}
+
+func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
+	var result bool
+
+	switch hm.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals:
+		result = ri.HasHeader(hm.ConditionValueStr)
+	case dbgen.RuleConditionOperatorIn:
+		for _, name := range hm.ConditionValueItems {
+			if ri.HasHeader(name) {
+				result = true
+				break
+			}
+		}
+	default:
+		return false
+	}
+
+	if hm.ConditionOperatorNegated {
+		return !result
+	}
+	return result
+}
+
 // BotMatcher handles bot detection for user agent
 type BotMatcher struct {
 	UAParser                 *useragent.Parser
