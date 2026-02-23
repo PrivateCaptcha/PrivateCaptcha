@@ -327,10 +327,11 @@ func (ns NullRuleConditionOperator) Value() (driver.Value, error) {
 type RuleConditionProperty string
 
 const (
-	RuleConditionPropertyUserAgent   RuleConditionProperty = "user_agent"
-	RuleConditionPropertyIPAddress   RuleConditionProperty = "ip_address"
-	RuleConditionPropertyCountryCode RuleConditionProperty = "country_code"
-	RuleConditionPropertyDomain      RuleConditionProperty = "domain"
+	RuleConditionPropertyUserAgent      RuleConditionProperty = "user_agent"
+	RuleConditionPropertyIPAddress      RuleConditionProperty = "ip_address"
+	RuleConditionPropertyCountryCode    RuleConditionProperty = "country_code"
+	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
+	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {
