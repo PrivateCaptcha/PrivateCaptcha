@@ -335,7 +335,6 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	value := rule.ConditionValueStr.String
 	hm := &HeaderMatcher{
 		ConditionOperator:        rule.ConditionOperator,
-		ConditionValueStr:        http.CanonicalHeaderKey(value),
 		ConditionOperatorNegated: rule.ConditionOperatorNegated,
 	}
 
@@ -353,6 +352,8 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 			}
 			hm.ConditionValueItems = append(hm.ConditionValueItems, http.CanonicalHeaderKey(item))
 		}
+	} else {
+		hm.ConditionValueStr = http.CanonicalHeaderKey(value)
 	}
 
 	return hm, nil

@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/biter777/countries"
 	"github.com/jackc/pgx/v5/pgtype"
+	"golang.org/x/net/http/httpguts"
 )
 
 const (
@@ -301,22 +302,18 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 			if len(item) == 0 {
 				continue
 			}
-			if !isValidHTTPHeaderName(item) {
+			if !httpguts.ValidHeaderFieldName(item) {
 				return "", "", common.StatusRuleHTTPHeaderNameInvalid
 			}
 		}
 		return conditionValue, separator, common.StatusOK
 	}
 
-	if !isValidHTTPHeaderName(conditionValue) {
+	if !httpguts.ValidHeaderFieldName(conditionValue) {
 		return "", "", common.StatusRuleHTTPHeaderNameInvalid
 	}
 
 	return conditionValue, "", common.StatusOK
-}
-
-func isValidHTTPHeaderName(name string) bool {
-	return len(name) > 0 && http.CanonicalHeaderKey(name) == name
 }
 
 func (s *Server) initRuleParsers() {
