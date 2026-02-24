@@ -605,6 +605,29 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 	}
 }
 
+func TestIsRequestBlockedNoBlockRulesShortCircuit(t *testing.T) {
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+			ConditionOperator: dbgen.RuleConditionOperatorMatches,
+			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), propertyRules)
+	if compiled.hasBlockRules {
+		t.Error("Expected hasBlockRules to be false when no block rules are present")
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if compiled.IsRequestBlocked(ri) {
+		t.Error("Expected request to not be blocked when no block rules are present")
+	}
+}
+
 func TestGrowthFromInt(t *testing.T) {
 	tests := []struct {
 		input    int32
