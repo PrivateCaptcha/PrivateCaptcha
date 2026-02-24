@@ -449,6 +449,7 @@ func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.Difficult
 		if !r.Enabled {
 			continue
 		}
+		// Zero percent difficulty rules have no effect and are treated like disabled.
 		if r.ActionProperty == dbgen.RuleActionPropertyDifficultyLevelPercent && r.ActionValue == 0 {
 			continue
 		}
