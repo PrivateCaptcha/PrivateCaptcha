@@ -439,6 +439,12 @@ func TestParseDifficultyAction(t *testing.T) {
 			expectedCode: common.StatusRuleDifficultyValueInvalid,
 		},
 		{
+			name:         "zero value",
+			value:        "0",
+			expectedVal:  0,
+			expectedCode: common.StatusRuleDifficultyValueInvalid,
+		},
+		{
 			name:         "valid positive value",
 			value:        "50",
 			expectedVal:  50,

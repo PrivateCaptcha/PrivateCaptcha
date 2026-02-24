@@ -449,6 +449,9 @@ func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.Difficult
 		if !r.Enabled {
 			continue
 		}
+		if r.ActionProperty == dbgen.RuleActionPropertyDifficultyLevelPercent && r.ActionValue == 0 {
+			continue
+		}
 
 		compiled, err := rc.CompileRule(ctx, r)
 		if err != nil {
