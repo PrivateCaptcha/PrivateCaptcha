@@ -31,11 +31,19 @@ type rule interface {
 }
 
 type CompiledRules struct {
-	rules []rule
+	rules         []rule
+	hasBlockRules bool
 }
 
 func NewCompiledRules(rules []rule) *CompiledRules {
-	return &CompiledRules{rules: rules}
+	cr := &CompiledRules{rules: rules}
+	for _, r := range rules {
+		if _, ok := r.(*blockRequestRule); ok {
+			cr.hasBlockRules = true
+			break
+		}
+	}
+	return cr
 }
 
 func isBlockedByRules(rules []rule, ri *RequestInfo) bool {
@@ -78,7 +86,7 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 }
 
 func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
-	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) {
+	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) || !cr.hasBlockRules {
 		return false
 	}
 	return isBlockedByRules(cr.rules, ri)
@@ -119,15 +127,11 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 		return false
 	}
 
-	if rp.PropertyRules != nil && isBlockedByRules(rp.PropertyRules.rules, ri) {
+	if rp.PropertyRules.IsRequestBlocked(ri) {
 		return true
 	}
 
-	if rp.OrgRules != nil && isBlockedByRules(rp.OrgRules.rules, ri) {
-		return true
-	}
-
-	return false
+	return rp.OrgRules.IsRequestBlocked(ri)
 }
 
 type overrideProperty struct {
