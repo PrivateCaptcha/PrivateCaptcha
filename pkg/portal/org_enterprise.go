@@ -337,12 +337,16 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if auditEvent, err := s.Store.Impl().RemoveUserFromOrg(ctx, user, org, int32(userID)); err != nil {
+	auditEvent, err := s.Store.Impl().RemoveUserFromOrg(ctx, user, org, int32(userID))
+	if err == db.ErrPermissions {
+		// ErrPermissions may mean the ID belongs to an email-only invite (not a linked user)
+		auditEvent, err = s.Store.Impl().RemoveEmailInviteFromOrg(ctx, user, org, int32(userID))
+	}
+	if err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
-	} else {
-		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	}
+	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -578,9 +582,10 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	// The actual invite validation will happen after 2FA in the background job
 	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
 		if invite.UserID.Valid {
-			// Invite already linked to a user - this is an error
-			slog.ErrorContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
-			return nil, ErrInvalidRequestArg
+			// Invite already accepted - redirect to login
+			slog.InfoContext(ctx, "Invite already linked to a user, redirecting to login", "inviteID", inviteID)
+			common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusSeeOther, w, r)
+			return &ViewModel{}, nil
 		}
 
 		model.Email = invite.Email.String

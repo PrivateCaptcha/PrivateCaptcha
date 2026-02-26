@@ -1508,12 +1508,12 @@ func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
+		t.Errorf("Expected redirect, got status code %v", resp.StatusCode)
 	}
 
 	location, _ := resp.Location()
-	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
-		t.Errorf("Expected error redirect, got: %s", location.String())
+	if !strings.HasPrefix(location.String(), "/"+common.LoginEndpoint) {
+		t.Errorf("Expected login redirect, got: %s", location.String())
 	}
 }
 
@@ -1796,6 +1796,99 @@ func TestDeleteOrgMembers(t *testing.T) {
 	for _, m := range members {
 		if m.User.ID == member.ID {
 			t.Error("Member should no longer be in org after deletion")
+		}
+	}
+}
+
+// TestDeleteEmailOnlyInviteFromOrg tests that an owner can delete an org member who was
+// invited by email but has not yet accepted the invite, using the URL generated the same
+// way as createOrgMembersRenderContext and org-members.html do.
+func TestDeleteEmailOnlyInviteFromOrg(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create owner account
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Invite a user by email (not yet registered - email-only invite)
+	inviteEmail := "email-only-delete-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, inviteEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	// Build the member ID as createOrgMembersRenderContext / org-members.html would:
+	// for email-only invites, member.ID = encrypt(organization_users.id)
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/tab/members", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.getOrgMembers(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error getting org members, got: %v", err)
+	}
+
+	renderCtx, ok := viewModel.Model.(*orgMemberRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *orgMemberRenderContext, got %T", viewModel.Model)
+	}
+
+	// Find the email invite in the members list and get its encrypted ID (as shown in the template)
+	var emailInviteMemberID string
+	for _, m := range renderCtx.Members {
+		if m.Email == common.MaskEmail(inviteEmail, '*') {
+			emailInviteMemberID = m.ID
+			break
+		}
+	}
+	if emailInviteMemberID == "" {
+		t.Fatalf("Email invite not found in members list")
+	}
+
+	// Verify that the encrypted ID is the org_user record ID (not user ID), as org-members.html uses it
+	orgUserID, err := server.IDHasher.Decrypt(emailInviteMemberID)
+	if err != nil || int32(orgUserID) != inviteRecord.ID {
+		t.Fatalf("Expected encrypted member ID to be org_user.id=%d, got orgUserID=%d err=%v", inviteRecord.ID, orgUserID, err)
+	}
+
+	// Delete using the same URL format that org-members.html generates via hx-delete
+	orgEncID := server.IDHasher.Encrypt(int(org.ID))
+	deleteReq := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", orgEncID, emailInviteMemberID), nil)
+	deleteReq.AddCookie(cookie)
+	deleteReq.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	deleteReq.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+
+	deleteW := httptest.NewRecorder()
+	srv.ServeHTTP(deleteW, deleteReq)
+
+	if deleteW.Code != http.StatusOK {
+		t.Errorf("Expected status OK when deleting email invite, got %d", deleteW.Code)
+	}
+
+	// Verify the email invite is no longer in org members
+	membersAfter, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve members after deletion: %v", err)
+	}
+
+	for _, m := range membersAfter {
+		if m.OrganizationUser.ID == inviteRecord.ID {
+			t.Error("Email invite should no longer be in org after deletion")
 		}
 	}
 }
