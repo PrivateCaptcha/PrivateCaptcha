@@ -307,13 +307,6 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = r.ParseForm()
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
-	}
-
 	userID, value, err := common.IntPathArg(r, common.ParamUser, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse user from request", "value", value, common.ErrAttr(err))
@@ -344,6 +337,7 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	}
 
+	slog.InfoContext(ctx, "Removed org member", "userID", userID, "orgID", org.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -384,6 +378,7 @@ func (s *Server) deleteOrgInvite(w http.ResponseWriter, r *http.Request) {
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	}
 
+	slog.InfoContext(ctx, "Removed org email invite", "inviteID", inviteID, "orgID", org.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -623,11 +618,10 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 			currentUser, sessionErr := s.SessionUser(ctx, sess)
 			if sessionErr == nil && currentUser.ID == invite.UserID.Int32 {
 				slog.InfoContext(ctx, "Invite already accepted by same user, showing login", "inviteID", inviteID, "userID", invite.UserID.Int32)
-				return &ViewModel{Model: &loginRenderContext{
-					CsrfRenderContext:    CsrfRenderContext{Token: s.XSRF.Token("")},
-					CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
-					CanRegister:          s.canRegister.Load(),
-				}, View: loginTemplate}, nil
+				model.CaptchaRenderContext = s.CreateCaptchaRenderContext(db.PortalLoginSitekey)
+				model.IsRegister = false
+				model.CanRegister = s.canRegister.Load()
+				return &ViewModel{Model: model, View: loginTemplate}, nil
 			}
 			if sessionErr != nil {
 				slog.Log(ctx, common.LevelTrace, "No authenticated user when accessing already-linked invite", "inviteID", inviteID, common.ErrAttr(sessionErr))

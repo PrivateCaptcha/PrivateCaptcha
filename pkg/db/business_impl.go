@@ -1381,18 +1381,8 @@ func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, use
 		return nil, ErrMaintenance
 	}
 
-	invite, err := impl.querier.GetOrgInviteByID(ctx, inviteID)
+	email, err := impl.querier.RemoveUnlinkedOrgInviteByID(ctx, inviteID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to get org invite", "inviteID", inviteID, common.ErrAttr(err))
-		return nil, err
-	}
-
-	if invite.UserID.Valid {
-		slog.WarnContext(ctx, "Invite already linked to a user, cannot remove as email invite", "inviteID", inviteID)
-		return nil, ErrPermissions
-	}
-
-	if err = impl.querier.RemoveOrgInviteByID(ctx, inviteID); err != nil {
 		slog.ErrorContext(ctx, "Failed to remove org email invite", "inviteID", inviteID, "orgID", org.ID, common.ErrAttr(err))
 		return nil, err
 	}
@@ -1402,7 +1392,7 @@ func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, use
 	_ = impl.cache.Delete(ctx, orgInviteCacheKey(inviteID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 
-	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0 /*no linked user ID for email-only invites*/, invite.Email.String)
+	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0 /*no linked user ID for email-only invites*/, email.String)
 
 	return auditEvent, nil
 }
