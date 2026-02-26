@@ -1560,7 +1560,7 @@ func TestOrgInviteRegisterAlreadyLinkedSameUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The same user tries to access the invite URL again - should redirect to login
+	// The same user tries to access the invite URL again - should show the login page (200 OK)
 	req := httptest.NewRequest("GET", "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/signup", nil)
 	req.AddCookie(cookie)
 
@@ -1568,13 +1568,8 @@ func TestOrgInviteRegisterAlreadyLinkedSameUser(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect, got status code %v", resp.StatusCode)
-	}
-
-	location, _ := resp.Location()
-	if !strings.HasSuffix(location.String(), "/"+common.LoginEndpoint) {
-		t.Errorf("Expected login redirect, got: %s", location.String())
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected 200 OK (login page), got status code %v", resp.StatusCode)
 	}
 }
 
@@ -1908,9 +1903,12 @@ func TestDeleteOrgMembersEmailInvite(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Delete the email invite using the OrgInviteEndpoint
+	// Delete the email invite using the OrgInviteEndpoint with org prefix
+	orgID := server.IDHasher.Encrypt(int(org.ID))
 	inviteID := server.IDHasher.Encrypt(int(inviteRecord.ID))
-	req := httptest.NewRequest("DELETE", fmt.Sprintf("/orginvite/%s", inviteID), nil)
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/orginvite/%s", orgID, inviteID), nil)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamID, inviteID)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))

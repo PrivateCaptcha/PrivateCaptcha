@@ -55,5 +55,5 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.ExportEndpoint), privateRead, http.HandlerFunc(s.exportAuditLogsCSV))
 
 	rg.Handle(rg.Get(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint), openRead, s.Handler(s.getOrgInviteRegister))
-	rg.Handle(rg.Delete(common.OrgInviteEndpoint, arg(common.ParamID)), privateWrite, http.HandlerFunc(s.deleteOrgInvite))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.OrgInviteEndpoint, arg(common.ParamID)), privateWrite, http.HandlerFunc(s.deleteOrgInvite))
 }

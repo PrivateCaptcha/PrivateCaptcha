@@ -1376,7 +1376,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 	return auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, user *dbgen.User, inviteID int32) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteID int32) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -1392,25 +1392,15 @@ func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, use
 		return nil, ErrPermissions
 	}
 
-	org, level, err := impl.retrieveOrganizationWithAccess(ctx, user.ID, invite.OrgID)
-	if err != nil {
-		return nil, err
-	}
-
-	if !level.Valid || level.AccessLevel != dbgen.AccessLevelOwner {
-		slog.WarnContext(ctx, "User is not org owner", "userID", user.ID, "orgID", invite.OrgID)
-		return nil, ErrPermissions
-	}
-
 	if err = impl.querier.RemoveOrgInviteByID(ctx, inviteID); err != nil {
-		slog.ErrorContext(ctx, "Failed to remove org email invite", "inviteID", inviteID, "orgID", invite.OrgID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to remove org email invite", "inviteID", inviteID, "orgID", org.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Removed org email invite", "inviteID", inviteID, "orgID", invite.OrgID)
+	slog.InfoContext(ctx, "Removed org email invite", "inviteID", inviteID, "orgID", org.ID)
 
 	_ = impl.cache.Delete(ctx, orgInviteCacheKey(inviteID))
-	_ = impl.cache.Delete(ctx, orgUsersCacheKey(invite.OrgID))
+	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 
 	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0 /*no linked user ID for email-only invites*/, invite.Email.String)
 

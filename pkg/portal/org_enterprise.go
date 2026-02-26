@@ -362,12 +362,23 @@ func (s *Server) deleteOrgInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if auditEvent, err := s.Store.Impl().RemoveEmailInviteFromOrg(ctx, user, int32(inviteID)); err != nil {
+	org, _, err := s.Org(user, r)
+	if err != nil {
 		code := http.StatusInternalServerError
 		if err == db.ErrPermissions {
 			code = http.StatusForbidden
 		}
 		s.RedirectError(code, w, r)
+		return
+	}
+
+	if org.UserID.Int32 != user.ID {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	if auditEvent, err := s.Store.Impl().RemoveEmailInviteFromOrg(ctx, user, org, int32(inviteID)); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
 		return
 	} else {
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
@@ -607,12 +618,16 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	// The actual invite validation will happen after 2FA in the background job
 	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
 		if invite.UserID.Valid {
-			// Invite already linked to a user - if the same user is logged in, redirect to login
+			// Invite already linked to a user - if the same user is logged in, show login page
 			sess := s.Sessions.SessionStart(w, r)
 			currentUser, sessionErr := s.SessionUser(ctx, sess)
 			if sessionErr == nil && currentUser.ID == invite.UserID.Int32 {
-				common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusSeeOther, w, r)
-				return &ViewModel{}, nil
+				slog.InfoContext(ctx, "Invite already accepted by same user, showing login", "inviteID", inviteID, "userID", invite.UserID.Int32)
+				return &ViewModel{Model: &loginRenderContext{
+					CsrfRenderContext:    CsrfRenderContext{Token: s.XSRF.Token("")},
+					CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
+					CanRegister:          s.canRegister.Load(),
+				}, View: loginTemplate}, nil
 			}
 			if sessionErr != nil {
 				slog.Log(ctx, common.LevelTrace, "No authenticated user when accessing already-linked invite", "inviteID", inviteID, common.ErrAttr(sessionErr))
