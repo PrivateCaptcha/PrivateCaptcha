@@ -180,6 +180,25 @@ jobs:
           bin/server.sha256sum
         retention-days: 7
 
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25.7'
+
+    - name: Install govulncheck
+      run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Run govulncheck
+      run: govulncheck ./...
+
   sonarqube:
     name: SonarQube Scan
     runs-on: ubuntu-latest
