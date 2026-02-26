@@ -2047,9 +2047,9 @@ func TestDeleteOrgMemberNonExistent(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	// The endpoint should return an error status since the user is not a member
-	if resp.StatusCode == http.StatusOK {
-		t.Error("Expected error status when trying to delete a non-member, got OK")
+	// The delete is idempotent - deleting a non-existent org_users.id is a no-op and returns OK
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected OK for idempotent delete of non-existent member, got %d", resp.StatusCode)
 	}
 }
 
@@ -2565,7 +2565,7 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
 
-	// Try to remove using org_users.id (member cannot do this - not the owner)
+	// Try to delete a member (even themselves) - should fail because only owners can delete members
 	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(memberOrgUserID))), nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderCSRFToken, csrfToken)
@@ -2573,7 +2573,7 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	// Member cannot delete others - should redirect to error
+	// Non-owner cannot delete members - should redirect to error
 	if w.Code != http.StatusSeeOther {
 		t.Errorf("Expected redirect (303), got %d", w.Code)
 	}

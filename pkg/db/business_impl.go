@@ -1381,6 +1381,25 @@ func (impl *BusinessStoreImpl) RemoveOrgMemberByID(ctx context.Context, user *db
 		return nil, ErrMaintenance
 	}
 
+	// Try to find member details before deletion for audit logging
+	var memberUserID int32
+	var memberEmail string
+	if cachedInvite, err := FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(orgUserID)); err == nil {
+		memberUserID = cachedInvite.UserID.Int32
+		memberEmail = cachedInvite.Email.String
+	} else if users, err := FetchCachedArray[dbgen.GetOrganizationUsersWithEmailInvitesRow](ctx, impl.cache, orgUsersCacheKey(org.ID)); err == nil {
+		for _, u := range users {
+			if u.OrganizationUser.ID == orgUserID {
+				memberUserID = u.LinkedUserID.Int32
+				memberEmail = u.UserEmail.String
+				if memberEmail == "" {
+					memberEmail = u.OrganizationUser.Email.String
+				}
+				break
+			}
+		}
+	}
+
 	err := impl.querier.RemoveOrgMemberByID(ctx, &dbgen.RemoveOrgMemberByIDParams{
 		ID:    orgUserID,
 		OrgID: org.ID,
@@ -1394,10 +1413,13 @@ func (impl *BusinessStoreImpl) RemoveOrgMemberByID(ctx context.Context, user *db
 	slog.InfoContext(ctx, "Removed org member by ID", "orgID", org.ID, "orgUserID", orgUserID)
 
 	// invalidate relevant caches
+	if memberUserID > 0 {
+		_ = impl.cache.Delete(ctx, userOrgsCacheKey(memberUserID))
+	}
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgInviteCacheKey(orgUserID))
 
-	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, orgUserID, "")
+	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, memberUserID, memberEmail)
 
 	return auditEvent, nil
 }
