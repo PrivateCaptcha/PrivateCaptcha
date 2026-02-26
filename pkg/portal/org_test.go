@@ -142,13 +142,29 @@ func TestDeleteUserFromOrgPermissions(t *testing.T) {
 	}
 
 	for _, user := range []*dbgen.User{userMember1, userMember2} {
-		if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
+		if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
 			t.Fatal(err)
 		}
 
 		if _, err := store.Impl().JoinOrg(ctx, org.ID, user); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	// Look up org_users.id for userMember2
+	orgMembers, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var member2OrgUserID int32
+	for _, m := range orgMembers {
+		if m.LinkedUserID.Valid && m.LinkedUserID.Int32 == userMember2.ID {
+			member2OrgUserID = m.OrganizationUser.ID
+			break
+		}
+	}
+	if member2OrgUserID == 0 {
+		t.Fatal("Failed to find org_users.id for userMember2")
 	}
 
 	srv := http.NewServeMux()
@@ -159,8 +175,8 @@ func TestDeleteUserFromOrgPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// user1 tries to delete user2 from org, despite note being the owner
-	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(userMember2.ID))), nil)
+	// user1 tries to delete user2 from org, despite not being the owner
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(member2OrgUserID))), nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(userMember1.ID))))
@@ -609,7 +625,7 @@ func TestJoinOrg(t *testing.T) {
 		t.Fatalf("Failed to create user account: %v", err)
 	}
 
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
 		t.Fatal(err)
 	}
 
@@ -667,7 +683,7 @@ func TestLeaveOrg(t *testing.T) {
 		t.Fatalf("Failed to create user account: %v", err)
 	}
 
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, user); err != nil {
 		t.Fatal(err)
 	}
 
@@ -776,7 +792,7 @@ func TestTransferOrg(t *testing.T) {
 	}
 
 	// Invite and join the new owner as a member
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
 		t.Fatal(err)
 	}
 
@@ -899,7 +915,7 @@ func TestTransferOrgNotOwner(t *testing.T) {
 	}
 
 	// Invite and join member
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
@@ -1004,7 +1020,7 @@ func TestTransferOrgToInvitedMember(t *testing.T) {
 	}
 
 	// Invite user but do NOT have them join
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, invitedUser); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, invitedUser); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1575,7 +1591,7 @@ func TestOrgMembersShowsEmailInvites(t *testing.T) {
 		t.Fatalf("Failed to create existing user account: %v", err)
 	}
 
-	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, existingUser)
+	_, _, err = store.Impl().InviteUserToOrg(ctx, owner, org, existingUser)
 	if err != nil {
 		t.Fatalf("Failed to invite existing user: %v", err)
 	}
@@ -1735,7 +1751,7 @@ func TestDeleteOrgMembers(t *testing.T) {
 	}
 
 	// Invite member to org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatalf("Failed to invite member: %v", err)
 	}
 
@@ -1744,21 +1760,21 @@ func TestDeleteOrgMembers(t *testing.T) {
 		t.Fatalf("Failed to join org: %v", err)
 	}
 
-	// Verify member is in org
-	members, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	// Look up org_users.id for the member
+	orgMembers, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
 	if err != nil {
-		t.Fatalf("Failed to retrieve members: %v", err)
+		t.Fatalf("Failed to retrieve org members: %v", err)
 	}
 
-	foundMember := false
-	for _, m := range members {
-		if m.User.ID == member.ID {
-			foundMember = true
+	var memberOrgUserID int32
+	for _, m := range orgMembers {
+		if m.LinkedUserID.Valid && m.LinkedUserID.Int32 == member.ID {
+			memberOrgUserID = m.OrganizationUser.ID
 			break
 		}
 	}
-	if !foundMember {
-		t.Fatal("Member should be in org before deletion")
+	if memberOrgUserID == 0 {
+		t.Fatal("Failed to find org_users.id for member")
 	}
 
 	// Setup server
@@ -1771,9 +1787,9 @@ func TestDeleteOrgMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Delete member from org
+	// Delete member from org using organization_users.id
 	orgID := server.IDHasher.Encrypt(int(org.ID))
-	memberID := server.IDHasher.Encrypt(int(member.ID))
+	memberID := server.IDHasher.Encrypt(int(memberOrgUserID))
 
 	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", orgID, memberID), nil)
 	req.AddCookie(cookie)
@@ -1788,12 +1804,12 @@ func TestDeleteOrgMembers(t *testing.T) {
 	}
 
 	// Verify member is no longer in org
-	members, err = store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
+	membersAfterDelete, err := store.Impl().RetrieveOrganizationUsers(ctx, org.ID)
 	if err != nil {
 		t.Fatalf("Failed to retrieve members after deletion: %v", err)
 	}
 
-	for _, m := range members {
+	for _, m := range membersAfterDelete {
 		if m.User.ID == member.ID {
 			t.Error("Member should no longer be in org after deletion")
 		}
@@ -1824,7 +1840,7 @@ func TestDeleteEmailOnlyInviteFromOrg(t *testing.T) {
 	}
 
 	// Build the member ID as createOrgMembersRenderContext / org-members.html would:
-	// for email-only invites, member.ID = encrypt(organization_users.id)
+	// all members use organization_users.id for the delete URL
 	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/tab/members", server.IDHasher.Encrypt(int(org.ID))), nil)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
@@ -1860,7 +1876,7 @@ func TestDeleteEmailOnlyInviteFromOrg(t *testing.T) {
 		t.Fatalf("Email invite not found in members list")
 	}
 
-	// Verify that the encrypted ID is the org_user record ID (not user ID), as org-members.html uses it
+	// Verify that the encrypted ID is the org_user record ID, as org-members.html uses it
 	orgUserID, err := server.IDHasher.Decrypt(emailInviteMemberID)
 	if err != nil || int32(orgUserID) != inviteRecord.ID {
 		t.Fatalf("Expected encrypted member ID to be org_user.id=%d, got orgUserID=%d err=%v", inviteRecord.ID, orgUserID, err)
@@ -2238,7 +2254,7 @@ func TestRetrieveOrgOwnerWithSubscriptionNonOwner(t *testing.T) {
 	}
 
 	// Invite and add non-owner as a member
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, nonOwner); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, nonOwner); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2512,7 +2528,7 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 	}
 
 	// Add member to org
-	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	_, _, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2520,6 +2536,22 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// Look up org_users.id for the member
+	orgMembers, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var memberOrgUserID int32
+	for _, m := range orgMembers {
+		if m.LinkedUserID.Valid && m.LinkedUserID.Int32 == member.ID {
+			memberOrgUserID = m.OrganizationUser.ID
+			break
+		}
+	}
+	if memberOrgUserID == 0 {
+		t.Fatal("Failed to find org_users.id for member")
 	}
 
 	srv := http.NewServeMux()
@@ -2533,8 +2565,8 @@ func TestDeleteOrgMembersMemberNotOwner(t *testing.T) {
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(member.ID)))
 
-	// Try to remove owner (member cannot do this)
-	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(owner.ID))), nil)
+	// Try to remove using org_users.id (member cannot do this - not the owner)
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/members/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(memberOrgUserID))), nil)
 	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderCSRFToken, csrfToken)
 

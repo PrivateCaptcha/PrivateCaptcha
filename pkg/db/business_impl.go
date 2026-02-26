@@ -1189,19 +1189,19 @@ func (impl *BusinessStoreImpl) RetrieveOrganizationUsersWithEmailInvites(ctx con
 	return impl.querier.GetOrganizationUsersWithEmailInvites(ctx, orgID)
 }
 
-func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteUser *dbgen.User) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteUser *dbgen.User) (*dbgen.OrganizationUser, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
-		return nil, ErrMaintenance
+		return nil, nil, ErrMaintenance
 	}
 
-	_, err := impl.querier.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
+	orgUser, err := impl.querier.InviteUserToOrg(ctx, &dbgen.InviteUserToOrgParams{
 		OrgID:  org.ID,
 		UserID: Int(inviteUser.ID),
 	})
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to invite user to org", "orgID", org.ID, "userID", inviteUser.ID, common.ErrAttr(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	slog.InfoContext(ctx, "Added org membership invite", "orgID", org.ID, "userID", inviteUser.ID)
@@ -1212,7 +1212,7 @@ func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.
 
 	auditEvent := newOrgInviteAuditLogEvent(user, org, inviteUser)
 
-	return auditEvent, nil
+	return orgUser, auditEvent, nil
 }
 
 func (impl *BusinessStoreImpl) InviteEmailToOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, email string) (*dbgen.OrganizationUser, *common.AuditLogEvent, error) {
@@ -1376,35 +1376,28 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 	return auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, orgUserID int32) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) RemoveOrgMemberByID(ctx context.Context, user *dbgen.User, org *dbgen.Organization, orgUserID int32) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	inviteEmail := ""
-	if cachedInvite, err := FetchCachedOne[dbgen.OrganizationUser](ctx, impl.cache, orgInviteCacheKey(orgUserID)); err == nil {
-		inviteEmail = cachedInvite.Email.String
-	} else {
-		slog.Log(ctx, common.LevelTrace, "Email invite not found in cache for audit log", "orgUserID", orgUserID, common.ErrAttr(err))
-	}
-
-	err := impl.querier.RemoveEmailOrgInviteFromOrg(ctx, &dbgen.RemoveEmailOrgInviteFromOrgParams{
+	err := impl.querier.RemoveOrgMemberByID(ctx, &dbgen.RemoveOrgMemberByIDParams{
 		ID:    orgUserID,
 		OrgID: org.ID,
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to remove email invite from org", "orgID", org.ID, "orgUserID", orgUserID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to remove org member by ID", "orgID", org.ID, "orgUserID", orgUserID, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Removed email invite from org", "orgID", org.ID, "orgUserID", orgUserID)
+	slog.InfoContext(ctx, "Removed org member by ID", "orgID", org.ID, "orgUserID", orgUserID)
 
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgInviteCacheKey(orgUserID))
 
-	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0, inviteEmail)
+	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, orgUserID, "")
 
 	return auditEvent, nil
 }

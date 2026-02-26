@@ -834,7 +834,7 @@ func TestVerifyByOrgMember(t *testing.T) {
 	}
 
 	// join the org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatal(err)
 	}
 

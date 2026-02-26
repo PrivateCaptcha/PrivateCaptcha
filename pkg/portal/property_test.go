@@ -1394,7 +1394,7 @@ func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *db
 	}
 
 	// Step 2: Invite member to org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatalf("Failed to invite member to org: %v", err)
 	}
 
@@ -1635,7 +1635,7 @@ func TestPutPropertyCannotEdit(t *testing.T) {
 		t.Fatalf("Failed to create member account: %v", err)
 	}
 
-	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	_, _, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1777,7 +1777,7 @@ func TestDeletePropertyCannotDelete(t *testing.T) {
 		t.Fatalf("Failed to create member account: %v", err)
 	}
 
-	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	_, _, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
 	if err != nil {
 		t.Fatal(err)
 	}

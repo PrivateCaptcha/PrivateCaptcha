@@ -255,10 +255,17 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	var auditEvent *common.AuditLogEvent
-	if auditEvent, err = s.Store.Impl().InviteUserToOrg(ctx, user, org, inviteUser); err != nil {
+	var inviteRecord *dbgen.OrganizationUser
+	if inviteRecord, auditEvent, err = s.Store.Impl().InviteUserToOrg(ctx, user, org, inviteUser); err != nil {
 		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
 	} else {
-		ou := userToOrgUser(inviteUser, string(dbgen.AccessLevelInvited), s.IDHasher)
+		ou := &orgUser{
+			ID:        s.IDHasher.Encrypt(int(inviteRecord.ID)),
+			Name:      inviteUser.Name,
+			Email:     common.MaskEmail(inviteUser.Email, '*'),
+			Level:     string(dbgen.AccessLevelInvited),
+			CreatedAt: inviteRecord.CreatedAt.Time.Format(orgUserCreatedAtFormat),
+		}
 		renderCtx.Members = append(renderCtx.Members, ou)
 		renderCtx.SuccessMessage = "Invite is sent."
 
@@ -314,9 +321,9 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, value, err := common.IntPathArg(r, common.ParamUser, s.IDHasher)
+	orgUserID, value, err := common.IntPathArg(r, common.ParamUser, s.IDHasher)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse user from request", "value", value, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to parse org member from request", "value", value, common.ErrAttr(err))
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
 	}
@@ -337,16 +344,12 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEvent, err := s.Store.Impl().RemoveUserFromOrg(ctx, user, org, int32(userID))
-	if err == db.ErrPermissions {
-		// ErrPermissions may mean the ID belongs to an email-only invite (not a linked user)
-		auditEvent, err = s.Store.Impl().RemoveEmailInviteFromOrg(ctx, user, org, int32(userID))
-	}
-	if err != nil {
+	if auditEvent, err := s.Store.Impl().RemoveOrgMemberByID(ctx, user, org, int32(orgUserID)); err != nil {
 		http.Error(w, "", http.StatusInternalServerError)
 		return
+	} else {
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 	}
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
 
 	w.WriteHeader(http.StatusOK)
 }

@@ -1838,7 +1838,7 @@ func runOrgMemberPropertyCreationTest(t *testing.T, memberSubscrParams *dbgen.Cr
 	}
 
 	// Step 2: Invite member to org
-	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+	if _, _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
 		t.Fatalf("Failed to invite member to org: %v", err)
 	}
 

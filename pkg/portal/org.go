@@ -108,18 +108,17 @@ func userToOrgUser(user *dbgen.User, level string, hasher common.IdentifierHashe
 
 func userWithEmailInviteToOrgUser(row *dbgen.GetOrganizationUsersWithEmailInvitesRow, hasher common.IdentifierHasher) *orgUser {
 	ou := &orgUser{
+		ID:        hasher.Encrypt(int(row.OrganizationUser.ID)),
 		Level:     string(row.OrganizationUser.Level),
 		CreatedAt: row.OrganizationUser.CreatedAt.Time.Format(orgUserCreatedAtFormat),
 	}
 
 	if row.LinkedUserID.Valid {
 		// Linked user invite
-		ou.ID = hasher.Encrypt(int(row.LinkedUserID.Int32))
 		ou.Name = row.UserName.String
 		ou.Email = common.MaskEmail(row.UserEmail.String, '*')
 	} else if row.OrganizationUser.Email.Valid {
 		// Email-only invite (not yet linked to a user)
-		ou.ID = hasher.Encrypt(int(row.OrganizationUser.ID))
 		ou.Email = common.MaskEmail(row.OrganizationUser.Email.String, '*')
 	}
 
