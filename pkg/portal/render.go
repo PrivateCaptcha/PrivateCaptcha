@@ -71,6 +71,7 @@ type RenderConstants struct {
 	APIKeyScopePortalReadOnly  string
 	PropertiesEndpoint         string
 	All                        string
+	OrgInviteEndpoint          string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -133,6 +134,7 @@ func NewRenderConstants() *RenderConstants {
 		APIKeyScopePortalReadOnly:  apiKeyScopePortal + apiKeyReadOnlySuffix,
 		PropertiesEndpoint:         common.PropertiesEndpoint,
 		All:                        common.All,
+		OrgInviteEndpoint:          common.OrgInviteEndpoint,
 	}
 }
 

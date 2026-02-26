@@ -347,6 +347,35 @@ func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (s *Server) deleteOrgInvite(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	inviteID, value, err := common.IntPathArg(r, common.ParamID, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse invite from request", "value", value, common.ErrAttr(err))
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	if auditEvent, err := s.Store.Impl().RemoveEmailInviteFromOrg(ctx, user, int32(inviteID)); err != nil {
+		code := http.StatusInternalServerError
+		if err == db.ErrPermissions {
+			code = http.StatusForbidden
+		}
+		s.RedirectError(code, w, r)
+		return
+	} else {
+		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -578,7 +607,16 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	// The actual invite validation will happen after 2FA in the background job
 	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
 		if invite.UserID.Valid {
-			// Invite already linked to a user - this is an error
+			// Invite already linked to a user - if the same user is logged in, redirect to login
+			sess := s.Sessions.SessionStart(w, r)
+			currentUser, sessionErr := s.SessionUser(ctx, sess)
+			if sessionErr == nil && currentUser.ID == invite.UserID.Int32 {
+				common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusSeeOther, w, r)
+				return &ViewModel{}, nil
+			}
+			if sessionErr != nil {
+				slog.Log(ctx, common.LevelTrace, "No authenticated user when accessing already-linked invite", "inviteID", inviteID, common.ErrAttr(sessionErr))
+			}
 			slog.ErrorContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
 			return nil, ErrInvalidRequestArg
 		}
