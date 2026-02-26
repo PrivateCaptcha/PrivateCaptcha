@@ -32,11 +32,16 @@ widget/test/bundle.test.js.map
 
 pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env
-.aider*
-.aicodeprep-gui
 fullcode.txt
 .env
 .DS_Store
+
+.aider*
+.aicodeprep-gui
+.claude/
+.cursor/
+.continue/
+.copilot/
 
 coverage_*.out
 coverage_*.cov
