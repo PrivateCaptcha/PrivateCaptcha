@@ -613,21 +613,12 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	// The actual invite validation will happen after 2FA in the background job
 	if invite, err := s.Store.Impl().GetCachedOrgInviteByID(ctx, int32(inviteID)); err == nil {
 		if invite.UserID.Valid {
-			// Invite already linked to a user - if the same user is logged in, show login page
-			sess := s.Sessions.SessionStart(w, r)
-			currentUser, sessionErr := s.SessionUser(ctx, sess)
-			if sessionErr == nil && currentUser.ID == invite.UserID.Int32 {
-				slog.InfoContext(ctx, "Invite already accepted by same user, showing login", "inviteID", inviteID, "userID", invite.UserID.Int32)
-				model.CaptchaRenderContext = s.CreateCaptchaRenderContext(db.PortalLoginSitekey)
-				model.IsRegister = false
-				model.CanRegister = s.canRegister.Load()
-				return &ViewModel{Model: model, View: loginTemplate}, nil
-			}
-			if sessionErr != nil {
-				slog.Log(ctx, common.LevelTrace, "No authenticated user when accessing already-linked invite", "inviteID", inviteID, common.ErrAttr(sessionErr))
-			}
-			slog.ErrorContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
-			return nil, ErrInvalidRequestArg
+			// Invite already linked to a user
+			slog.InfoContext(ctx, "Invite already linked to a user", "inviteID", inviteID, "userID", invite.UserID.Int32)
+			model.CaptchaRenderContext = s.CreateCaptchaRenderContext(db.PortalLoginSitekey)
+			model.IsRegister = false
+			model.CanRegister = s.canRegister.Load()
+			return &ViewModel{Model: model, View: loginTemplate}, nil
 		}
 
 		model.Email = invite.Email.String
