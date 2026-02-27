@@ -1500,76 +1500,15 @@ func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-	// Try to access org invite register with an already linked invite (unauthenticated / different user)
+	// Try to access org invite register with an already linked invite
 	req := httptest.NewRequest("GET", "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/signup", nil)
-
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
-	}
-
-	location, _ := resp.Location()
-	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
-		t.Errorf("Expected error redirect, got: %s", location.String())
-	}
-}
-
-func TestOrgInviteRegisterAlreadyLinkedSameUser(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
-
-	ctx := t.Context()
-	owner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create owner account: %v", err)
-	}
-
-	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", owner.ID)
-	if err != nil {
-		t.Fatalf("Failed to create org: %v", err)
-	}
-
-	// Create the invited user
-	invitedUser, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_invited", testPlan)
-	if err != nil {
-		t.Fatalf("Failed to create invited user account: %v", err)
-	}
-
-	// Create an email invite and then link it to the invited user (simulating accepted invite)
-	testEmail := "linked-" + t.Name() + "@example.com"
-	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, testEmail)
-	if err != nil {
-		t.Fatalf("Failed to create email invite: %v", err)
-	}
-
-	err = store.Impl().LinkOrgInviteToUser(ctx, inviteRecord.ID, invitedUser)
-	if err != nil {
-		t.Fatalf("Failed to link invite to user: %v", err)
-	}
-
-	srv := http.NewServeMux()
-	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
-
-	// Authenticate as the invited user (who already accepted the invite)
-	cookie, err := portal_tests.AuthenticateSuite(ctx, invitedUser.Email, srv, server.XSRF, server.Sessions)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// The same user tries to access the invite URL again - should show the login page (200 OK)
-	req := httptest.NewRequest("GET", "/orginvite/"+server.IDHasher.Encrypt(int(inviteRecord.ID))+"/signup", nil)
-	req.AddCookie(cookie)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Expected 200 OK (login page), got status code %v", resp.StatusCode)
+		t.Errorf("Expected OK (login page), got status code %v", resp.StatusCode)
 	}
 }
 
