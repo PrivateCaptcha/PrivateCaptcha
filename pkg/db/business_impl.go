@@ -1376,6 +1376,27 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 	return auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) RemoveEmailInviteFromOrg(ctx context.Context, user *dbgen.User, org *dbgen.Organization, inviteID int32) (*common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	email, err := impl.querier.RemoveUnlinkedOrgInviteByID(ctx, inviteID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to remove org email invite", "inviteID", inviteID, "orgID", org.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Removed org email invite", "inviteID", inviteID, "orgID", org.ID)
+
+	_ = impl.cache.Delete(ctx, orgInviteCacheKey(inviteID))
+	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
+
+	auditEvent := newOrgMemberDeleteAuditLogEvent(user, org, 0 /*no linked user ID for email-only invites*/, email.String)
+
+	return auditEvent, nil
+}
+
 func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user *dbgen.User, subscription *dbgen.Subscription) (*dbgen.User, *common.AuditLogEvent, error) {
 	if subscription == nil {
 		return nil, nil, ErrInvalidInput

@@ -1507,13 +1507,8 @@ func TestOrgInviteRegisterAlreadyLinked(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Errorf("Expected redirect (error), got status code %v", resp.StatusCode)
-	}
-
-	location, _ := resp.Location()
-	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
-		t.Errorf("Expected error redirect, got: %s", location.String())
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected OK (login page), got status code %v", resp.StatusCode)
 	}
 }
 
@@ -1796,6 +1791,83 @@ func TestDeleteOrgMembers(t *testing.T) {
 	for _, m := range members {
 		if m.User.ID == member.ID {
 			t.Error("Member should no longer be in org after deletion")
+		}
+	}
+}
+
+func TestDeleteOrgMembersEmailInvite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	// Create owner account
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	// Create an email-only invite (invited user has not yet accepted)
+	inviteEmail := "email-invite-" + t.Name() + "@example.com"
+	inviteRecord, _, err := store.Impl().InviteEmailToOrg(ctx, owner, org, inviteEmail)
+	if err != nil {
+		t.Fatalf("Failed to create email invite: %v", err)
+	}
+
+	// Verify invite is in org members
+	inviteMembers, err := store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve members: %v", err)
+	}
+
+	foundInvite := false
+	for _, m := range inviteMembers {
+		if m.OrganizationUser.ID == inviteRecord.ID {
+			foundInvite = true
+			break
+		}
+	}
+	if !foundInvite {
+		t.Fatal("Email invite should be in org members before deletion")
+	}
+
+	// Setup server
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	// Authenticate as owner
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the email invite using the OrgInviteEndpoint with org prefix
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	inviteID := server.IDHasher.Encrypt(int(inviteRecord.ID))
+	req := httptest.NewRequest("DELETE", fmt.Sprintf("/org/%s/orginvite/%s", orgID, inviteID), nil)
+	req.SetPathValue(common.ParamOrg, orgID)
+	req.SetPathValue(common.ParamID, inviteID)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status OK, got %d", w.Code)
+	}
+
+	// Verify invite is no longer in org members
+	inviteMembers, err = store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, org.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve members after deletion: %v", err)
+	}
+
+	for _, m := range inviteMembers {
+		if m.OrganizationUser.ID == inviteRecord.ID {
+			t.Error("Email invite should no longer be in org after deletion")
 		}
 	}
 }

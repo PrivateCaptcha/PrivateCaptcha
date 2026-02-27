@@ -28,8 +28,8 @@ UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_i
 -- name: RemoveUserFromOrg :exec
 DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2;
 
--- name: RemoveOrgInviteByID :exec
-DELETE FROM backend.organization_users WHERE id = $1;
+-- name: RemoveUnlinkedOrgInviteByID :one
+DELETE FROM backend.organization_users WHERE id = $1 AND user_id IS NULL RETURNING email;
 
 -- name: SwapOrgOwnership :exec
 WITH delete_new_owner AS (

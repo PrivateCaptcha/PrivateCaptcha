@@ -173,13 +173,15 @@ func (q *Queries) LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToU
 	return &i, err
 }
 
-const removeOrgInviteByID = `-- name: RemoveOrgInviteByID :exec
-DELETE FROM backend.organization_users WHERE id = $1
+const removeUnlinkedOrgInviteByID = `-- name: RemoveUnlinkedOrgInviteByID :one
+DELETE FROM backend.organization_users WHERE id = $1 AND user_id IS NULL RETURNING email
 `
 
-func (q *Queries) RemoveOrgInviteByID(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, removeOrgInviteByID, id)
-	return err
+func (q *Queries) RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, removeUnlinkedOrgInviteByID, id)
+	var email pgtype.Text
+	err := row.Scan(&email)
+	return email, err
 }
 
 const removeUserFromOrg = `-- name: RemoveUserFromOrg :exec

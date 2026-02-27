@@ -79,7 +79,7 @@ type Querier interface {
 	LinkOrgInviteToUser(ctx context.Context, arg *LinkOrgInviteToUserParams) (*OrganizationUser, error)
 	MoveProperty(ctx context.Context, arg *MovePropertyParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
-	RemoveOrgInviteByID(ctx context.Context, id int32) error
+	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)

@@ -65,11 +65,12 @@ type orgAuditLogsRenderContext struct {
 }
 
 type orgUser struct {
-	Name      string
-	Email     string
-	ID        string
-	Level     string
-	CreatedAt string
+	Name          string
+	Email         string
+	ID            string
+	Level         string
+	CreatedAt     string
+	IsEmailInvite bool
 }
 
 type orgMemberRenderContext struct {
@@ -121,6 +122,7 @@ func userWithEmailInviteToOrgUser(row *dbgen.GetOrganizationUsersWithEmailInvite
 		// Email-only invite (not yet linked to a user)
 		ou.ID = hasher.Encrypt(int(row.OrganizationUser.ID))
 		ou.Email = common.MaskEmail(row.OrganizationUser.Email.String, '*')
+		ou.IsEmailInvite = true
 	}
 
 	return ou
