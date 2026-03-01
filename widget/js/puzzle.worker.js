@@ -31,7 +31,7 @@ function readUInt32LE(buffer, offset) {
 }
 
 function thresholdFromDifficulty(d) {
-    return (Math.pow(2, (255.999 - d) / 8.0)) >>> 0;
+    return (Math.pow(2, Math.floor((255.999 - d) / 8.0))) >>> 0;
 }
 
 function findSolution(threshold, puzzleIndex, debug) {
