@@ -6,11 +6,6 @@ while IFS= read -r f; do
   STAGED_GO_FILES+=("$f")
 done < <(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/' || true)
 
-# macOS ships bash 3.2 which lacks mapfile/readarray.
-#mapfile -t STAGED_GO_FILES < <(
-#  git diff --cached --name-only --diff-filter=ACM | grep '\.go$' | grep -v '^vendor/' || true
-#)
-
 if [ ${#STAGED_GO_FILES[@]} -eq 0 ]; then
   exit 0
 fi
@@ -27,7 +22,10 @@ if [ -n "$UNFORMATTED" ]; then
     exit 1
 fi
 
-mapfile -t PACKAGES < <(
+PACKAGES=()
+while IFS= read -r p; do
+  PACKAGES+=("$p")
+done < <(
   printf "%s\n" "${STAGED_GO_FILES[@]}" \
     | xargs -n1 dirname \
     | sort -u \
