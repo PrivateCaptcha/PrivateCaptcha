@@ -7,7 +7,7 @@ const (
 	// difficulty change incurrs 2^(1/8) = 1.0905077 jump in computations (9.05%)
 	// so to get +100% computations we use 8 difficulty steps (so +16 steps is 300%)
 	DifficultyDelta                       = 16
-	DifficultyLevelSmall  DifficultyLevel = 140
+	DifficultyLevelSmall  DifficultyLevel = 136
 	DifficultyLevelMedium DifficultyLevel = DifficultyLevelSmall + DifficultyDelta
 	DifficultyLevelHigh   DifficultyLevel = DifficultyLevelMedium + DifficultyDelta
 	MaxDifficultyLevel    DifficultyLevel = 255
