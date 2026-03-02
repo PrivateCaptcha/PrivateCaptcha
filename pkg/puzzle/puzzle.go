@@ -23,7 +23,7 @@ const (
 	UserDataSize          = 16
 	DefaultValidityPeriod = 30 * time.Minute
 	puzzleVersion         = 1
-	solutionsCount        = 16
+	solutionsCount        = 24
 )
 
 var (
