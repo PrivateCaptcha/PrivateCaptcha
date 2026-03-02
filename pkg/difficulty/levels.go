@@ -74,11 +74,11 @@ func requestsToDifficulty(requests float64, minDifficulty float64, level dbgen.D
 	a := 1.0
 	switch level {
 	case dbgen.DifficultyGrowthSlow:
-		a = 0.9
+		a = 0.044
 	case dbgen.DifficultyGrowthMedium:
-		a = 1.0
+		a = 0.06
 	case dbgen.DifficultyGrowthFast:
-		a = 1.1
+		a = 0.1
 	}
 
 	log2A := math.Log2(a)
