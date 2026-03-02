@@ -12,6 +12,12 @@ import (
 //go:embed static
 var staticFiles embed.FS
 
+var (
+	widgetCachedHeaders = map[string][]string{
+		common.HeaderCacheControl: []string{"public, max-age=300, must-revalidate"},
+	}
+)
+
 func Static(gitHash string) http.HandlerFunc {
 	sub, _ := fs.Sub(staticFiles, "static")
 	srv := http.FileServer(http.FS(sub))
@@ -29,7 +35,7 @@ func Static(gitHash string) http.HandlerFunc {
 			return
 		}
 
-		common.WriteHeaders(w, common.CachedHeaders)
+		common.WriteHeaders(w, widgetCachedHeaders)
 		common.WriteHeaders(w, common.CorsAllowAllHeaders)
 		common.WriteHeaders(w, etagHeaders)
 		srv.ServeHTTP(w, r)
