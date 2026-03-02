@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -42,6 +43,7 @@ func (s *server) Setup(router *http.ServeMux) {
 
 func (s *server) setupWithPrefix(prefix string, router *http.ServeMux) {
 	router.Handle(prefix+common.PuzzleEndpoint, monitoring.Logged(http.HandlerFunc(s.chaos(s.puzzle))))
+	router.Handle(prefix+common.PuzzleEndpoint+"/{level}", monitoring.Logged(http.HandlerFunc(s.chaos(s.puzzle))))
 	router.Handle(prefix+common.EchoPuzzleEndpoint, monitoring.Logged(http.HandlerFunc(s.chaos(s.zeroPuzzle))))
 	router.Handle(http.MethodPost+" "+prefix+"submit", monitoring.Logged(http.HandlerFunc(s.submit)))
 }
@@ -72,12 +74,23 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p := puzzle.NewComputePuzzle(0 /*puzzle ID*/, [16]byte{}, uint8(common.DifficultyLevelMedium))
+	level := int(common.DifficultyLevelMedium)
+	if levelStr := r.PathValue("level"); len(levelStr) > 0 {
+		if value, err := strconv.Atoi(levelStr); err == nil && (value > 0) && (value < int(common.MaxDifficultyLevel)) {
+			level = value
+		} else {
+			slog.ErrorContext(ctx, "Failed to parse level", common.ErrAttr(err))
+		}
+	}
+
+	p := puzzle.NewComputePuzzle(0 /*puzzle ID*/, [16]byte{}, uint8(level))
 	if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
 		slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
+
+	slog.DebugContext(ctx, "Serving puzzle", "level", level)
 
 	s.writePuzzle(ctx, p, propertySalt, w)
 }

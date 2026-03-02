@@ -148,7 +148,7 @@ func (s *Server) CreateCaptchaRenderContext(sitekey string) CaptchaRenderContext
 
 func (s *Server) createDemoCaptchaRenderContext(sitekey string) CaptchaRenderContext {
 	return CaptchaRenderContext{
-		CaptchaEndpoint:      "/" + common.EchoPuzzleEndpoint,
+		CaptchaEndpoint:      s.RelURL(common.EchoPuzzleEndpoint),
 		CaptchaDebug:         (s.Stage == common.StageDev) || (s.Stage == common.StageStaging),
 		CaptchaSolutionField: common.ParamPortalSolution,
 		CaptchaSitekey:       sitekey,

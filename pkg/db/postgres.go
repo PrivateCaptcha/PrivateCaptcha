@@ -133,6 +133,11 @@ type PostgresMigrateContext struct {
 	AdminEmail               string
 	PortalLoginDifficulty    common.DifficultyLevel
 	PortalRegisterDifficulty common.DifficultyLevel
+	// levels have to be `int` because we use `sub` function
+	OldSmallLevel int
+	OldDelta      int
+	NewSmallLevel int
+	NewDelta      int
 }
 
 func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, planService billing.PlanService) *PostgresMigrateContext {
@@ -142,17 +147,26 @@ func NewPostgresMigrateContext(ctx context.Context, cfg common.ConfigStore, plan
 	adminPlan := planService.GetInternalAdminPlan()
 	_, priceIDYearly := adminPlan.PriceIDs()
 
+	const (
+		oldSmallDifficultyLevel = 80
+		oldDelta                = 15
+	)
+
 	return &PostgresMigrateContext{
 		Stage:                    stage,
+		ExternalProductID:        adminPlan.ProductID(),
+		ExternalPriceID:          priceIDYearly,
+		ExternalStatus:           planService.ActiveTrialStatus(),
 		PortalLoginPropertyID:    PortalLoginPropertyID,
 		PortalRegisterPropertyID: PortalRegisterPropertyID,
 		PortalDomain:             portalDomain,
 		AdminEmail:               cfg.Get(common.AdminEmailKey).Value(),
-		ExternalProductID:        adminPlan.ProductID(),
-		ExternalPriceID:          priceIDYearly,
-		ExternalStatus:           planService.ActiveTrialStatus(),
-		PortalLoginDifficulty:    common.DifficultyLevelSmall,
-		PortalRegisterDifficulty: common.DifficultyLevelSmall,
+		PortalLoginDifficulty:    oldSmallDifficultyLevel,
+		PortalRegisterDifficulty: oldSmallDifficultyLevel,
+		OldSmallLevel:            oldSmallDifficultyLevel,
+		OldDelta:                 oldDelta,
+		NewSmallLevel:            int(common.DifficultyLevelSmall),
+		NewDelta:                 common.DifficultyDelta,
 	}
 }
 

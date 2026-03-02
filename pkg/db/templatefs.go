@@ -9,8 +9,9 @@ import (
 
 // templateFS is a wrapper around fs.FS that executes templates
 type templateFS struct {
-	fs   fs.FS
-	data interface{}
+	fs        fs.FS
+	data      interface{}
+	functions template.FuncMap
 }
 
 // NewTemplateFS creates a new TemplateFS
@@ -18,6 +19,9 @@ func NewTemplateFS(filesystem fs.FS, data interface{}) *templateFS {
 	return &templateFS{
 		fs:   filesystem,
 		data: data,
+		functions: template.FuncMap{
+			"sub": func(a, b int) int { return a - b },
+		},
 	}
 }
 
@@ -28,7 +32,7 @@ func (tfs *templateFS) Open(name string) (fs.File, error) {
 		return nil, err
 	}
 
-	return &templateFile{file: file, data: tfs.data}, nil
+	return &templateFile{file: file, data: tfs.data, functions: tfs.functions}, nil
 }
 
 // ReadDir implements fs.ReadDirFS interface
@@ -47,9 +51,10 @@ func (tfs *templateFS) ReadDir(name string) ([]fs.DirEntry, error) {
 
 // templateFile is a wrapper around fs.File that executes templates
 type templateFile struct {
-	file fs.File
-	data interface{}
-	buf  *bytes.Buffer
+	file      fs.File
+	data      interface{}
+	buf       *bytes.Buffer
+	functions template.FuncMap
 }
 
 // Read implements io.Reader interface
@@ -60,7 +65,7 @@ func (tf *templateFile) Read(p []byte) (n int, err error) {
 			return 0, err
 		}
 
-		tmpl, err := template.New("file").Parse(string(content))
+		tmpl, err := template.New("file").Funcs(tf.functions).Parse(string(content))
 		if err != nil {
 			return 0, err
 		}
