@@ -131,7 +131,9 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
 	}
-	defer scope.Rollback()
+	defer func() {
+		_ = scope.Rollback()
+	}()
 
 	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
 	if err != nil {
@@ -172,7 +174,9 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
 	}
-	defer scope.Rollback()
+	defer func() {
+		_ = scope.Rollback()
+	}()
 
 	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
 	if err != nil {
