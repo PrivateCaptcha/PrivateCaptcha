@@ -17,7 +17,7 @@ func TestDifficultyFormula(t *testing.T) {
 		{0.0, 10, dbgen.DifficultyGrowthMedium, 10},
 		{0.0, 100, dbgen.DifficultyGrowthMedium, 100},
 		{1.0, 100, dbgen.DifficultyGrowthMedium, 100},
-		{3.0, 100, dbgen.DifficultyGrowthMedium, 101},
+		{100.0, 100, dbgen.DifficultyGrowthMedium, 101},
 	}
 
 	for i, tc := range testCases {

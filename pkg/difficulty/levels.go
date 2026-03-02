@@ -71,21 +71,21 @@ func requestsToDifficulty(requests float64, minDifficulty float64, level dbgen.D
 	// y = log2(log2(x**a)) * x**b
 	// parameter "a" affects sensitivity to growth
 
-	a := 1.0
+	a := 0.3
 	switch level {
 	case dbgen.DifficultyGrowthSlow:
-		a = 0.044
+		a = 0.2
 	case dbgen.DifficultyGrowthMedium:
-		a = 0.06
+		a = 0.3
 	case dbgen.DifficultyGrowthFast:
-		a = 0.1
+		a = 0.5
 	}
 
 	log2A := math.Log2(a)
 
 	m := log2A
-	if requests > 2.0 {
-		m += math.Log2(math.Log2(requests))
+	if requests > 1.0 {
+		m += math.Log10(requests)
 	}
 	m = math.Max(m, 0.0)
 
