@@ -116,7 +116,7 @@ func solutionsSuite(ctx context.Context, sitekey, domain string) (string, string
 	}
 
 	solver := &puzzle.ComputeSolver{}
-	solutions, err := solver.Solve(p)
+	solutions, err := solver.Solve(ctx, p)
 	if err != nil {
 		return puzzleStr, "", err
 	}
@@ -763,7 +763,7 @@ func TestVerifyTestShortcut(t *testing.T) {
 	ctx := t.Context()
 
 	solver := &puzzle.ComputeSolver{}
-	solutions, _ := solver.Solve(server.Verifier.TestPuzzle)
+	solutions, _ := solver.Solve(ctx, server.Verifier.TestPuzzle)
 
 	var buf bytes.Buffer
 

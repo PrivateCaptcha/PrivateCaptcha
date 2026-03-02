@@ -2,6 +2,7 @@ package puzzle
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -157,7 +158,7 @@ func TestPuzzlePayloadSuffix(t *testing.T) {
 	p := NewComputePuzzle(0 /*puzzle ID*/, propertyID, 0 /*difficulty*/)
 
 	solver := &ComputeSolver{}
-	solutions, err := solver.Solve(p)
+	solutions, err := solver.Solve(context.Background(), p)
 	if err != nil {
 		t.Fatal(err)
 	}

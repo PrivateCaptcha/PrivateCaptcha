@@ -2,6 +2,7 @@ package puzzle
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"log/slog"
 	"sync"
@@ -56,7 +57,7 @@ func normalizePuzzleBuffer(buf []byte) []byte {
 	return buf
 }
 
-func (s *ComputeSolver) Solve(p Puzzle) (*Solutions, error) {
+func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error) {
 	if p.IsZero() {
 		return emptySolutions(max(p.SolutionsCount(), solutionsCount)), nil
 	}
@@ -78,6 +79,10 @@ func (s *ComputeSolver) Solve(p Puzzle) (*Solutions, error) {
 	startTime := time.Now()
 
 	for i := 0; i < p.SolutionsCount(); i++ {
+		if ctx.Err() != nil {
+			break
+		}
+
 		wg.Add(1)
 
 		bufCopy := make([]byte, len(buf))

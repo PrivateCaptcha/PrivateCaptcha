@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -46,7 +47,7 @@ func main() {
 
 	if *solveFlag {
 		solver := &puzzle.ComputeSolver{}
-		solutions, err := solver.Solve(p)
+		solutions, err := solver.Solve(context.Background(), p)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error solving puzzle: %v\n", err)
 			os.Exit(5)
