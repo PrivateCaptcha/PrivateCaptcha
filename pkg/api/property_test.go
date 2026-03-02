@@ -67,7 +67,7 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				Domain: "example.com",
 				apiPropertySettings: apiPropertySettings{
 					Name:            "Test",
-					Level:           1,
+					Level:           int(common.DifficultyLevelSmall - common.DifficultyDelta),
 					Growth:          "medium",
 					ValiditySeconds: int((6 * time.Hour).Seconds()),
 					MaxReplayCount:  1,
@@ -80,7 +80,7 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				Domain: "example.com",
 				apiPropertySettings: apiPropertySettings{
 					Name:            "Test Property",
-					Level:           5,
+					Level:           int(common.DifficultyLevelSmall - common.DifficultyDelta + 1),
 					Growth:          "fast",
 					ValiditySeconds: 3600,
 					MaxReplayCount:  100,
@@ -90,7 +90,7 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				Domain: "example.com",
 				apiPropertySettings: apiPropertySettings{
 					Name:            "Test Property",
-					Level:           5,
+					Level:           int(common.DifficultyLevelSmall - common.DifficultyDelta + 1),
 					Growth:          "fast",
 					ValiditySeconds: 3600,
 					MaxReplayCount:  100,
@@ -103,7 +103,7 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				Domain: "example.com",
 				apiPropertySettings: apiPropertySettings{
 					Name:            "Test",
-					Level:           5,
+					Level:           int(common.DifficultyLevelSmall - common.DifficultyDelta + 1),
 					Growth:          "constant",
 					ValiditySeconds: 3600,
 					MaxReplayCount:  100,
@@ -113,7 +113,7 @@ func TestNormalizeApiPropertyInput(t *testing.T) {
 				Domain: "example.com",
 				apiPropertySettings: apiPropertySettings{
 					Name:            "Test",
-					Level:           5,
+					Level:           int(common.DifficultyLevelSmall - common.DifficultyDelta + 1),
 					Growth:          "constant",
 					ValiditySeconds: 3600,
 					MaxReplayCount:  100,
