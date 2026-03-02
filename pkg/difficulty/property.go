@@ -1,6 +1,9 @@
 package difficulty
 
-import dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+import (
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+)
 
 type Property interface {
 	ID() int32
@@ -38,7 +41,7 @@ func (dbp *dbProperty) OrgID() int32 {
 }
 
 func (dbp *dbProperty) Level() int16 {
-	return dbp.property.Level.Int16
+	return max(dbp.property.Level.Int16, int16(common.DifficultyLevelSmall-common.DifficultyDelta))
 }
 
 func (dbp *dbProperty) Growth() dbgen.DifficultyGrowth {
