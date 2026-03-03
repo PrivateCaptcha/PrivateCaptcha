@@ -323,7 +323,7 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 		difficultyProperty = rulesPair.Apply(ri, difficultyProperty)
 	}
 
-	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, 0, tnow)
+	puzzleDifficulty, _, err := levels.DifficultyEx(ctx, fingerprint, difficultyProperty, tnow)
 
 	puzzleID := puzzle.NextPuzzleID()
 	result := v.Create(puzzleID, property.ExternalID.Bytes, puzzleDifficulty)
