@@ -39,6 +39,9 @@ var (
 	CachedHeaders = map[string][]string{
 		HeaderCacheControl: []string{"public, max-age=86400"},
 	}
+	APICachedHeaders = map[string][]string{
+		HeaderCacheControl: []string{"public, max-age=300"},
+	}
 	SecurityHeaders = map[string][]string{
 		http.CanonicalHeaderKey("X-Frame-Options"):        []string{"DENY"},
 		http.CanonicalHeaderKey("X-Content-Type-Options"): []string{"nosniff"},

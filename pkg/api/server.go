@@ -263,7 +263,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:
-			common.WriteHeaders(w, common.CachedHeaders)
+			common.WriteHeaders(w, common.APICachedHeaders)
 			// we cache test property responses, can as well allow them anywhere
 			common.WriteHeaders(w, headersAnyOrigin)
 			common.WriteHeaders(w, headersContentPlain)
