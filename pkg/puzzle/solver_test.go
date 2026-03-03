@@ -92,9 +92,8 @@ func TestSolverCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedFullSize := p.SolutionsCount() * SolutionLength
-	if len(solutions.Buffer) >= expectedFullSize {
-		t.Errorf("Expected fewer solutions after cancellation, but got full buffer of %v bytes", len(solutions.Buffer))
+	if err := solutions.CheckUnique(); err == nil {
+		t.Error("Expected not unique solutions after cancellation")
 	}
 }
 

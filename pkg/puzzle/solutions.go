@@ -256,6 +256,14 @@ func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty u
 	validSolutions := 0
 	threshold := thresholdFromDifficulty(difficulty)
 
+	h, err := blake2b.New256(nil)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create hasher", common.ErrAttr(err))
+		return 0, err
+	}
+
+	var hash [blake2b.Size256]byte
+
 	// TODO: Shuffle solutions before checking
 	// (to decrease resource exhaustion attack surface)
 	for start := 0; start < len(s.Buffer); start += SolutionLength {
@@ -263,13 +271,14 @@ func (s *Solutions) Verify(ctx context.Context, puzzleBytes []byte, difficulty u
 		sIndex := solution[0]
 		copy(puzzleBytes[PuzzleBytesLength-SolutionLength:], solution)
 
-		hash := blake2b.Sum256(puzzleBytes)
-		var resultInt uint32
-		err := binary.Read(bytes.NewReader(hash[:4]), binary.LittleEndian, &resultInt)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to read hash prefix", "solution", sIndex, "size", 4, common.ErrAttr(err))
+		h.Reset()
+		if _, err := h.Write(puzzleBytes); err != nil {
+			slog.WarnContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(err))
 			continue
 		}
+		_ = h.Sum(hash[:0])
+
+		resultInt := binary.LittleEndian.Uint32(hash[:4])
 
 		if resultInt > threshold {
 			slog.WarnContext(ctx, "Solution prefix is larger than threshold", "solution", sIndex, "prefix", resultInt,

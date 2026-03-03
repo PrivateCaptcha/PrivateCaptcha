@@ -1,22 +1,36 @@
 package puzzle
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"log/slog"
+	"runtime"
 	"sync"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"golang.org/x/crypto/blake2b"
 )
 
 type ComputeSolver struct {
 }
 
-func (s *ComputeSolver) solveOne(buf []byte, threshold uint32) []byte {
+func (s *ComputeSolver) solveOne(ctx context.Context, buf []byte, threshold uint32) ([]byte, error) {
 	size := len(buf)
+
+	h, err := blake2b.New256(nil)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create hasher", common.ErrAttr(err))
+		return nil, err
+	}
+
+	var hash [blake2b.Size256]byte
+
 	for i := 0; i < 256; i++ {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+
 		buf[size-1-3] = byte(i)
 
 		for j := 0; j < 256; j++ {
@@ -28,23 +42,27 @@ func (s *ComputeSolver) solveOne(buf []byte, threshold uint32) []byte {
 				for l := 0; l < 256; l++ {
 					buf[size-1-0] = byte(l)
 
-					hash := blake2b.Sum256(buf)
-					var resultInt uint32
-					err := binary.Read(bytes.NewReader(hash[:4]), binary.LittleEndian, &resultInt)
-					if err != nil {
-						slog.Error("Failed to read hash prefix", "error", err)
-						continue
+					h.Reset()
+					if _, err := h.Write(buf); err != nil {
+						slog.ErrorContext(ctx, "Failed to hash puzzle bytes", common.ErrAttr(err))
+						return nil, err
 					}
+					_ = h.Sum(hash[:0])
+
+					resultInt := binary.LittleEndian.Uint32(hash[:4])
 
 					if resultInt <= threshold {
-						return buf[size-SolutionLength:]
+						// Return a copy so we don't accidentally leak the underlying array
+						sol := make([]byte, SolutionLength)
+						copy(sol, buf[size-SolutionLength:])
+						return sol, nil
 					}
 				}
 			}
 		}
 	}
 
-	return make([]byte, SolutionLength)
+	return make([]byte, SolutionLength), nil
 }
 
 func normalizePuzzleBuffer(buf []byte) []byte {
@@ -62,8 +80,6 @@ func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error)
 		return emptySolutions(max(p.SolutionsCount(), solutionsCount)), nil
 	}
 
-	var wg sync.WaitGroup
-
 	buf, err := p.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -71,45 +87,46 @@ func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error)
 
 	buf = normalizePuzzleBuffer(buf)
 
-	solutions := make([][]byte, 0)
-	size := 0
-	var mux sync.Mutex
-
 	threshold := thresholdFromDifficulty(p.Difficulty())
 	startTime := time.Now()
+	count := p.SolutionsCount()
 
-	for i := 0; i < p.SolutionsCount(); i++ {
-		if ctx.Err() != nil {
-			break
-		}
+	numWorkers := runtime.NumCPU()
 
+	type workItem struct {
+		index int
+		data  []byte
+	}
+
+	buffer := make([]byte, count*SolutionLength)
+	jobs := make(chan workItem, count)
+	var wg sync.WaitGroup
+
+	// Spawn fixed worker pool
+	for w := 0; w < numWorkers; w++ {
 		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for job := range jobs {
+				if sol, err := s.solveOne(ctx, job.data, threshold); err == nil {
+					// Each job writes to its own slice of buffer
+					copy(buffer[job.index*SolutionLength:], sol)
+				}
+			}
+		}()
+	}
 
+	// Feed work
+	for i := 0; i < count; i++ {
 		bufCopy := make([]byte, len(buf))
 		copy(bufCopy, buf)
 		bufCopy[len(buf)-SolutionLength] = byte(i)
-
-		go func(data []byte) {
-			defer wg.Done()
-			solution := s.solveOne(data, threshold)
-
-			mux.Lock()
-			defer mux.Unlock()
-			solutions = append(solutions, solution)
-			size += len(solution)
-		}(bufCopy)
+		jobs <- workItem{index: i, data: bufCopy}
 	}
-
+	close(jobs)
 	wg.Wait()
 
-	buffer := make([]byte, size)
-	offset := 0
-	for _, s := range solutions {
-		offset += copy(buffer[offset:], s)
-	}
-
 	elapsed := time.Since(startTime)
-
 	return &Solutions{
 		Buffer: buffer,
 		Metadata: &Metadata{
