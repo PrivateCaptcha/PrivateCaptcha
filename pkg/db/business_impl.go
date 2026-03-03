@@ -3200,11 +3200,11 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 }
 
 func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
-	reader := &cachedRefreshReader[int32, rules.CompiledRules]{
-		key:          propertyID,
-		cache:        impl.cache,
-		refreshFunc:  refreshFunc,
-		cacheKeyFunc: CompiledPropertyRulesCacheKey,
+	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
+		Key:          propertyID,
+		Cache:        impl.cache,
+		RefreshFunc:  refreshFunc,
+		CacheKeyFunc: CompiledPropertyRulesCacheKey,
 	}
 
 	return reader.Read(ctx)
@@ -3220,11 +3220,11 @@ func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, p
 }
 
 func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
-	reader := &cachedRefreshReader[int32, rules.CompiledRules]{
-		key:          orgID,
-		cache:        impl.cache,
-		refreshFunc:  refreshFunc,
-		cacheKeyFunc: CompiledOrgRulesCacheKey,
+	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
+		Key:          orgID,
+		Cache:        impl.cache,
+		RefreshFunc:  refreshFunc,
+		CacheKeyFunc: CompiledOrgRulesCacheKey,
 	}
 
 	return reader.Read(ctx)
