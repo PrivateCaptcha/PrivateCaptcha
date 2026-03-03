@@ -87,13 +87,8 @@ func TestSolverCancellation(t *testing.T) {
 	cancel()
 
 	solver := &ComputeSolver{}
-	solutions, err := solver.Solve(ctx, p)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := solutions.CheckUnique(); err == nil {
-		t.Error("Expected not unique solutions after cancellation")
+	if _, err := solver.Solve(ctx, p); err == nil {
+		t.Fatal("Solve was not cancelled")
 	}
 }
 
