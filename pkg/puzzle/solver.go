@@ -126,6 +126,10 @@ func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error)
 	close(jobs)
 	wg.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	elapsed := time.Since(startTime)
 	return &Solutions{
 		Buffer: buffer,
