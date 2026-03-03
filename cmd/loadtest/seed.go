@@ -162,7 +162,7 @@ func seedUser(ctx context.Context, u int, orgsCount, propertiesCount, solutionsC
 					defer func() { <-solutionsSemaphore }()
 					defer wg.Done()
 
-					if solutions, err := solver.Solve(pzzl); err == nil {
+					if solutions, err := solver.Solve(ctx, pzzl); err == nil {
 						if payload, err := pzzl.Serialize(ctx, salt.Value(), extraSalt); err == nil {
 							var buf bytes.Buffer
 

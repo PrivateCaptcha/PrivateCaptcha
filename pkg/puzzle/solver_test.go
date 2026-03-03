@@ -1,6 +1,7 @@
 package puzzle
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -48,7 +49,7 @@ func TestSolver(t *testing.T) {
 			}
 
 			solver := &ComputeSolver{}
-			solutions, err := solver.Solve(p)
+			solutions, err := solver.Solve(t.Context(), p)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -71,6 +72,32 @@ func TestSolver(t *testing.T) {
 	}
 }
 
+func TestSolverCancellation(t *testing.T) {
+	t.Parallel()
+
+	propertyID := [16]byte{}
+	randInit(propertyID[:])
+
+	p := NewComputePuzzle(NextPuzzleID(), propertyID, 160)
+	if err := p.Init(DefaultValidityPeriod); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	solver := &ComputeSolver{}
+	solutions, err := solver.Solve(ctx, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedFullSize := p.SolutionsCount() * SolutionLength
+	if len(solutions.Buffer) >= expectedFullSize {
+		t.Errorf("Expected fewer solutions after cancellation, but got full buffer of %v bytes", len(solutions.Buffer))
+	}
+}
+
 func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		p := NewComputePuzzle(0, [16]byte{}, difficulty)
@@ -79,7 +106,7 @@ func benchmarkDifficulty(difficulty uint8, b *testing.B) {
 		}
 
 		solver := &ComputeSolver{}
-		solutions, err := solver.Solve(p)
+		solutions, err := solver.Solve(b.Context(), p)
 		if err != nil {
 			b.Fatal(err)
 		}
