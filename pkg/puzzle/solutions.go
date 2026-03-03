@@ -195,7 +195,8 @@ func thresholdFromDifficulty(difficulty uint8) uint32 {
 }
 
 func (s *Solutions) CheckUnique() error {
-	if solutionsCount < 64 {
+	count := len(s.Buffer) / SolutionLength
+	if count < 64 {
 		return s.checkUniqueArray()
 	}
 
@@ -203,7 +204,8 @@ func (s *Solutions) CheckUnique() error {
 }
 
 func (s *Solutions) checkUniqueMap() error {
-	uniqueSolutions := make(map[uint64]struct{}, solutionsCount)
+	count := len(s.Buffer) / SolutionLength
+	uniqueSolutions := make(map[uint64]struct{}, count)
 
 	for start := 0; start < len(s.Buffer); start += SolutionLength {
 		solution := s.Buffer[start:(start + SolutionLength)]
@@ -222,7 +224,8 @@ func (s *Solutions) checkUniqueMap() error {
 
 func (s *Solutions) checkUniqueArray() error {
 	// NOTE: this is given that solutions count is kind of small
-	var seen [solutionsCount]uint64
+	count := len(s.Buffer) / SolutionLength
+	seen := make([]uint64, count)
 	foundSoFar := 0
 
 	for start := 0; start < len(s.Buffer); start += SolutionLength {
@@ -234,7 +237,7 @@ func (s *Solutions) checkUniqueArray() error {
 			}
 		}
 
-		if foundSoFar < solutionsCount {
+		if foundSoFar < count {
 			seen[foundSoFar] = val
 			foundSoFar++
 		}

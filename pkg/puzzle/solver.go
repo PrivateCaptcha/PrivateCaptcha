@@ -77,7 +77,7 @@ func normalizePuzzleBuffer(buf []byte) []byte {
 
 func (s *ComputeSolver) Solve(ctx context.Context, p Puzzle) (*Solutions, error) {
 	if p.IsZero() {
-		return emptySolutions(max(p.SolutionsCount(), solutionsCount)), nil
+		return emptySolutions(p.SolutionsCount()), nil
 	}
 
 	buf, err := p.MarshalBinary()

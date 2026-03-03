@@ -23,7 +23,6 @@ const (
 	UserDataSize          = 16
 	DefaultValidityPeriod = 30 * time.Minute
 	puzzleVersion         = 1
-	solutionsCount        = 24
 )
 
 var (
@@ -43,6 +42,16 @@ type ComputePuzzle struct {
 var _ Puzzle = (*ComputePuzzle)(nil)
 
 func NewComputePuzzle(puzzleID uint64, propertyID [PropertyIDSize]byte, difficulty uint8) *ComputePuzzle {
+	const (
+		reaSolutionsCount  uint8 = 24
+		stubSolutionsCount uint8 = 16
+	)
+
+	solutionsCount := reaSolutionsCount
+	if puzzleID == 0 {
+		solutionsCount = stubSolutionsCount
+	}
+
 	return &ComputePuzzle{
 		version:        puzzleVersion,
 		difficulty:     difficulty,

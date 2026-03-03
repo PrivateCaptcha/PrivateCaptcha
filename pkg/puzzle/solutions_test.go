@@ -293,6 +293,9 @@ func TestSolutionsVerifyInvalidPuzzleBytes(t *testing.T) {
 }
 
 func setupSolutionsBenchmark() *Solutions {
+	const (
+		solutionsCount = 24
+	)
 	// Create a buffer with 16 unique uint64 values
 	buf := make([]byte, solutionsCount*SolutionLength)
 	for i := 0; i < solutionsCount; i++ {
