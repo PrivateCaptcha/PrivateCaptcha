@@ -2047,10 +2047,11 @@ func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, s
 		return nil, ErrInvalidInput
 	}
 
-	reader := &cachedPropertyReader{
-		sitekey:     sitekey,
-		cache:       impl.cache,
-		refreshFunc: refreshFunc,
+	reader := &CachedRefreshReader[string, dbgen.Property]{
+		Key:          sitekey,
+		Cache:        impl.cache,
+		RefreshFunc:  refreshFunc,
+		CacheKeyFunc: PropertyBySitekeyCacheKey,
 	}
 
 	// we should NOT check for soft-deleted state because soft-deleted properties are deleted from cache in the first place

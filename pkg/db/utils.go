@@ -403,16 +403,20 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 }
 
 // this struct exists only to check if otter attempted loading OR refreshing the value
-type cachedPropertyReader struct {
-	sitekey     string
-	cache       common.Cache[CacheKey, any]
-	refreshFunc func(context.Context, string)
+type CachedRefreshReader[TKey any, T any] struct {
+	Key          TKey
+	Cache        common.Cache[CacheKey, any]
+	RefreshFunc  func(context.Context, TKey)
+	CacheKeyFunc func(TKey) CacheKey
+	refreshed    atomic.Bool
 }
 
 // refreshing means that value is cached, however it has to be reloaded (which is what we are trying to detect)
-func (sf *cachedPropertyReader) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
-	if sf.refreshFunc != nil {
-		sf.refreshFunc(ctx, sf.sitekey)
+func (sf *CachedRefreshReader[TKey, T]) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
+	sf.refreshed.Store(true)
+
+	if sf.RefreshFunc != nil {
+		sf.RefreshFunc(ctx, sf.Key)
 	}
 
 	// we keep old value, but (hopefully) trigger a reload using refreshFunc
@@ -420,23 +424,29 @@ func (sf *cachedPropertyReader) Reload(ctx context.Context, _ CacheKey, old any)
 }
 
 // loading means value was not in cache - so we return otter.ErrNotFound anyways
-func (sf *cachedPropertyReader) Load(ctx context.Context, _ CacheKey) (any, error) {
+func (sf *CachedRefreshReader[TKey, T]) Load(ctx context.Context, _ CacheKey) (any, error) {
 	return nil, otter.ErrNotFound
 }
 
-func (sf *cachedPropertyReader) Read(ctx context.Context) (*dbgen.Property, error) {
-	cacheKey := PropertyBySitekeyCacheKey(sf.sitekey)
+func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, error) {
+	cacheKey := sf.CacheKeyFunc(sf.Key)
 
-	data, err := sf.cache.GetEx(ctx, cacheKey, sf)
+	data, err := sf.Cache.GetEx(ctx, cacheKey, sf)
 	if err != nil {
 		return nil, err
 	}
 
-	if t, ok := data.(*dbgen.Property); ok {
+	if t, ok := data.(*T); ok {
+		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", cacheKey)
+
 		return t, nil
 	}
 
 	return nil, errInvalidCacheType
+}
+
+func (sf *CachedRefreshReader[TKey, T]) Refreshed() bool {
+	return sf.refreshed.Load()
 }
 
 // TODO: Refactor this to use otter.Cache BulkGet() API
@@ -461,10 +471,18 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 	anyInputError := false
 
 	for arg := range args {
-		cacheKey := br.CacheKeyFunc(arg)
-		if t, err := FetchCachedOne[T](ctx, br.Cache, cacheKey); err == nil {
-			cached = append(cached, t)
-			continue
+		reader := &CachedRefreshReader[TArg, T]{
+			Key:          arg,
+			Cache:        br.Cache,
+			RefreshFunc:  nil,
+			CacheKeyFunc: br.CacheKeyFunc,
+		}
+
+		if t, err := reader.Read(ctx); err == nil {
+			if (br.QueryFunc == nil) || !reader.Refreshed() {
+				cached = append(cached, t)
+				continue
+			}
 		} else if err == ErrNegativeCacheHit {
 			continue
 		}
