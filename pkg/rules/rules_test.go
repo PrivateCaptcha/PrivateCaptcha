@@ -2154,8 +2154,9 @@ func TestTerminalLevelRuleStopsProcessing(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result")
 	}
-	if result.Level() != expectedDifficultyLevel(50, 50) {
-		t.Errorf("Expected level %d from terminal rule, got %d", expectedDifficultyLevel(50, 50), result.Level())
+	expected := expectedDifficultyLevel(50, 50)
+	if result.Level() != expected {
+		t.Errorf("Expected level %d from terminal rule, got %d", expected, result.Level())
 	}
 }
 
@@ -2299,8 +2300,9 @@ func TestMixedLevelAndGrowthCumulative(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Level() != expectedDifficultyLevel(50, 50) {
-		t.Errorf("Expected level %d, got %d", expectedDifficultyLevel(50, 50), result.Level())
+	expected := expectedDifficultyLevel(50, 50)
+	if result.Level() != expected {
+		t.Errorf("Expected level %d, got %d", expected, result.Level())
 	}
 	if result.Growth() != dbgen.DifficultyGrowthFast {
 		t.Errorf("Expected growth fast, got %s", result.Growth())
