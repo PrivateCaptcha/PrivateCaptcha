@@ -132,7 +132,9 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		return err
 	}
 	defer func() {
-		_ = scope.Rollback()
+		if rerr := scope.Rollback(); rerr != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
 	}()
 
 	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", AccessLogTableName))
@@ -175,7 +177,9 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		return err
 	}
 	defer func() {
-		_ = scope.Rollback()
+		if rerr := scope.Rollback(); rerr != nil {
+			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		}
 	}()
 
 	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", VerifyLogTableName))
