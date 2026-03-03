@@ -173,7 +173,7 @@ func (sc StatusCode) String() string {
 	case StatusRuleDomainSubdomain:
 		return "Domain has to be a subdomain of main domain."
 	case StatusRuleDifficultyValueInvalid:
-		return "Difficulty adjustment must be within the range."
+		return "Difficulty adjustment must be within -300% to +300% range."
 	case StatusRuleDifficultyGrowthInvalid:
 		return "Difficulty growth must be a known value."
 	case StatusRulePermissionsError:

@@ -316,7 +316,7 @@ func TestDifficultyLevelApply(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       100, // doubles the difficulty (+100%)
+		ActionValue:       100, // +100% adds 8 difficulty levels
 		Enabled:           true,
 	}
 
@@ -327,9 +327,9 @@ func TestDifficultyLevelApply(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := applyRule(compiled, prop)
-	// Base level is 50, +100% doubles to 100
-	if result.Level() != 100 {
-		t.Errorf("Expected level 100 (50 + 100%%), got %d", result.Level())
+	// Base level is 50, +100% adds DifficultyDelta/2=8 levels: 50 + 8 = 58
+	if result.Level() != 58 {
+		t.Errorf("Expected level 58 (50 + 8), got %d", result.Level())
 	}
 	if result.Growth() != dbgen.DifficultyGrowthMedium {
 		t.Errorf("Expected growth to remain medium, got %s", result.Growth())
@@ -353,9 +353,9 @@ func TestDifficultyLevelNegativePercentApply(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := applyRule(compiled, prop)
-	// Base level is 50, -20% gives 40
-	if result.Level() != 40 {
-		t.Errorf("Expected level 40 (50 - 20%%), got %d", result.Level())
+	// Base level is 50, -20% subtracts 20*8/100=1 level: 50 - 1 = 49
+	if result.Level() != 49 {
+		t.Errorf("Expected level 49 (50 - 1), got %d", result.Level())
 	}
 }
 
@@ -365,7 +365,7 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Test", Valid: true},
 		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       -99, // -99% should clamp to minimum
+		ActionValue:       -300, // -300% subtracts 24 levels
 		Enabled:           true,
 	}
 
@@ -376,9 +376,9 @@ func TestDifficultyLevelClampingLow(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := applyRule(compiled, prop)
-	// 50 * 1 / 100 with rounding = 1 (rounded up from 0.5), then clamped to minimum 1
-	if result.Level() != 1 {
-		t.Errorf("Expected level clamped to 1, got %d", result.Level())
+	// 50 - 24 = 26
+	if result.Level() != 26 {
+		t.Errorf("Expected level 26 (50 - 24), got %d", result.Level())
 	}
 }
 
@@ -388,7 +388,7 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 		ConditionOperator: dbgen.RuleConditionOperatorContains,
 		ConditionValueStr: pgtype.Text{String: "Test", Valid: true},
 		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       1000, // +1000% should clamp to maximum
+		ActionValue:       1000, // +1000% clamped to +300%, adds 24 levels
 		Enabled:           true,
 	}
 
@@ -399,9 +399,59 @@ func TestDifficultyLevelClampingHigh(t *testing.T) {
 	prop := newStubProperty() // has level 50
 
 	result := applyRule(compiled, prop)
-	// 50 * 1100 / 100 = 550, should be clamped to 255
-	if result.Level() != 100 {
-		t.Errorf("Expected level clamped to 100, got %d", result.Level())
+	// 1000 is clamped to 300 at compile time, 50 + 300*8/100 = 50 + 24 = 74
+	if result.Level() != 74 {
+		t.Errorf("Expected level 74 (50 + 24), got %d", result.Level())
+	}
+}
+
+func TestDifficultyLevelPercentRanges(t *testing.T) {
+	tests := []struct {
+		name          string
+		percentDiff   int32
+		baseLevel     int16
+		expectedLevel int16
+	}{
+		{"plus 100 percent adds 8 levels", 100, 50, 58},
+		{"plus 200 percent adds 16 levels", 200, 50, 66},
+		{"plus 300 percent adds 24 levels", 300, 50, 74},
+		{"minus 100 percent subtracts 8 levels", -100, 50, 42},
+		{"minus 200 percent subtracts 16 levels", -200, 50, 34},
+		{"minus 300 percent subtracts 24 levels", -300, 50, 26},
+		{"plus 50 percent adds 4 levels", 50, 100, 104},
+		{"minus 50 percent subtracts 4 levels", -50, 100, 96},
+		{"plus 25 percent adds 2 levels", 25, 100, 102},
+		{"small percent rounds toward zero", 10, 50, 50},
+		{"negative clamp to minimum", -300, 10, 1},
+		{"positive clamp to maximum", 300, 240, 255},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := &dbgen.DifficultyRule{
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorContains,
+				ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+				ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:       tt.percentDiff,
+				Enabled:           true,
+			}
+
+			compiled, err := testCompiler.CompileRule(context.Background(), rule)
+			if err != nil {
+				t.Fatal(err)
+			}
+			prop := difficulty.NewStubProperty(1, true, 1, 1, tt.baseLevel, dbgen.DifficultyGrowthMedium)
+
+			ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+			op := &overrideProperty{base: prop}
+			compiled.Matches(ri)
+			compiled.Apply(op)
+
+			if op.Level() != tt.expectedLevel {
+				t.Errorf("Expected level %d, got %d", tt.expectedLevel, op.Level())
+			}
+		})
 	}
 }
 
@@ -457,12 +507,12 @@ func TestCompiledRulesApplyMaxLevel(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, terminal := compiled.Apply(ri, prop)
-	// Both rules match; max level wins: max(75, 100) = 100
+	// Both rules match; max level wins: max(54, 58) = 58
 	if terminal {
 		t.Error("Expected non-terminal result for level rules")
 	}
-	if result.Level() != 100 {
-		t.Errorf("Expected max level 100, got %d", result.Level())
+	if result.Level() != 58 {
+		t.Errorf("Expected max level 58, got %d", result.Level())
 	}
 }
 
@@ -499,10 +549,10 @@ func TestRulesPairPropertyAndOrgCumulative(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Property rule: 50 * 1.3 = 65 (non-terminal, so org rules also apply)
-	// Org rule sees base 65: 65 * 2.0 = 130
-	if result.Level() != 130 {
-		t.Errorf("Expected cumulative level 130 from property+org rules, got %d", result.Level())
+	// Property rule: 50 + 30*8/100 = 52 (non-terminal, so org rules also apply)
+	// Org rule sees base 52: 52 + 100*8/100 = 60
+	if result.Level() != 60 {
+		t.Errorf("Expected cumulative level 60 from property+org rules, got %d", result.Level())
 	}
 }
 
@@ -1006,12 +1056,12 @@ func TestCompileSkipsInvalidAndDisabledRules(t *testing.T) {
 	prop := newStubProperty()
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, terminal := compiled.Apply(ri, prop)
-	// Base level is 50, valid rule has +25% so result should be 50 * 1.25 = 62.5 rounded to 63
+	// Base level is 50, valid rule has +25% so result should be 50 + 25*8/100 = 52
 	if terminal {
 		t.Error("Expected non-terminal result for level rule")
 	}
-	if result.Level() != 63 {
-		t.Errorf("Expected level 63 (+25%% with rounding) from valid rule, got %d", result.Level())
+	if result.Level() != 52 {
+		t.Errorf("Expected level 52 (+25%%) from valid rule, got %d", result.Level())
 	}
 }
 
@@ -1235,8 +1285,8 @@ func TestRulesPairOrgFallback(t *testing.T) {
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	prop := newStubProperty()
 	result := rp.Apply(ri, prop)
-	if result.Level() != 100 {
-		t.Errorf("Expected org rule (100) when no property rules, got %d", result.Level())
+	if result.Level() != 58 {
+		t.Errorf("Expected org rule (58) when no property rules, got %d", result.Level())
 	}
 }
 
@@ -1257,9 +1307,9 @@ func TestRulesPairPropertyOnly(t *testing.T) {
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	p := newStubProperty()
 	result := rp.Apply(ri, p)
-	// Base level is 50, rule has +50% so result should be 50 * 1.5 = 75
-	if result.Level() != 75 {
-		t.Errorf("Expected property rule (+50%% = level 75) when no org rules, got %d", result.Level())
+	// Base level is 50, rule has +50% so result should be 50 + 50*8/100 = 54
+	if result.Level() != 54 {
+		t.Errorf("Expected property rule (+50%% = level 54) when no org rules, got %d", result.Level())
 	}
 }
 
@@ -2050,7 +2100,7 @@ func TestBreakRuleNoMatchFallsThrough(t *testing.T) {
 	ri := newTestRequestInfo("OtherBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
 	// Break rule does NOT match, so org rule SHOULD apply
-	if result.Level() != 100 {
+	if result.Level() != 58 {
 		t.Errorf("Expected org rule to apply when break rule does not match, got level %d", result.Level())
 	}
 }
@@ -2089,8 +2139,8 @@ func TestTerminalLevelRuleStopsProcessing(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75 from terminal rule, got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54 from terminal rule, got %d", result.Level())
 	}
 }
 
@@ -2125,8 +2175,8 @@ func TestNonTerminalLevelRulesCumulative(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected max level 75, got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected max level 54, got %d", result.Level())
 	}
 }
 
@@ -2233,8 +2283,8 @@ func TestMixedLevelAndGrowthCumulative(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75, got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54, got %d", result.Level())
 	}
 	if result.Growth() != dbgen.DifficultyGrowthFast {
 		t.Errorf("Expected growth fast, got %s", result.Growth())
@@ -2282,8 +2332,8 @@ func TestTerminalBreakStopsLevelAccumulation(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result from break rule")
 	}
-	if result.Level() != 60 {
-		t.Errorf("Expected level 60 (only first level rule applied before break), got %d", result.Level())
+	if result.Level() != 51 {
+		t.Errorf("Expected level 51 (only first level rule applied before break), got %d", result.Level())
 	}
 }
 
@@ -2360,8 +2410,8 @@ func TestTerminalPropertyRuleStopsOrgRules(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	if result.Level() != 65 {
-		t.Errorf("Expected level 65 from terminal property rule only, got %d", result.Level())
+	if result.Level() != 52 {
+		t.Errorf("Expected level 52 from terminal property rule only, got %d", result.Level())
 	}
 }
 
@@ -2447,8 +2497,8 @@ func TestTerminalLevelRuleInMiddle(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75 (max before terminal stop), got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54 (max before terminal stop), got %d", result.Level())
 	}
 }
 
@@ -2484,8 +2534,8 @@ func TestBlockRuleTerminalWithPriorLevel(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result from block rule")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75 (accumulated before block), got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54 (accumulated before block), got %d", result.Level())
 	}
 }
 
@@ -2520,8 +2570,8 @@ func TestMultipleNonTerminalOnlyHigherLevelWins(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Level() != 100 {
-		t.Errorf("Expected max level 100, got %d", result.Level())
+	if result.Level() != 58 {
+		t.Errorf("Expected max level 58, got %d", result.Level())
 	}
 }
 
@@ -2556,8 +2606,8 @@ func TestOnlySecondRuleMatches(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75 from second rule only, got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54 from second rule only, got %d", result.Level())
 	}
 }
 
@@ -2662,8 +2712,8 @@ func TestNonTerminalBlockRuleDoesNotStopProcessing(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result when block rule is non-terminal")
 	}
-	if result.Level() != 75 {
-		t.Errorf("Expected level 75 from level rule after non-terminal block, got %d", result.Level())
+	if result.Level() != 54 {
+		t.Errorf("Expected level 54 from level rule after non-terminal block, got %d", result.Level())
 	}
 }
 
@@ -2702,7 +2752,7 @@ func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
 	// Break rule without Terminal=true does NOT stop org fallback
-	if result.Level() != 100 {
+	if result.Level() != 58 {
 		t.Errorf("Expected org rule to apply when break is non-terminal, got level %d", result.Level())
 	}
 }
