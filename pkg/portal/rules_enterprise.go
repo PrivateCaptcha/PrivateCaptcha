@@ -195,11 +195,21 @@ func countryCodeConditionParser(conditionOperator, conditionValue, _ string) (st
 	}
 
 	values := strings.Split(conditionValue, separator)
+	validCount := 0
 	for _, cc := range values {
+		cc = strings.TrimSpace(cc)
+		if len(cc) == 0 {
+			continue
+		}
 		data := countries.ByName(cc)
 		if data == countries.Unknown {
 			return "", "", common.StatusRuleCountryInvalid
 		}
+		validCount++
+	}
+
+	if validCount == 0 {
+		return "", "", common.StatusRuleCountryRequired
 	}
 
 	return conditionValue, separator, common.StatusOK
@@ -299,6 +309,7 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 	}
 
 	if conditionOperator == string(dbgen.RuleConditionOperatorIn) {
+		validCount := 0
 		items := strings.Split(conditionValue, separator)
 		for _, item := range items {
 			item = strings.TrimSpace(item)
@@ -308,7 +319,13 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 			if !httpguts.ValidHeaderFieldName(item) {
 				return "", "", common.StatusRuleHTTPHeaderNameInvalid
 			}
+			validCount++
 		}
+
+		if validCount == 0 {
+			return "", "", common.StatusRuleHTTPHeaderNameRequired
+		}
+
 		return conditionValue, separator, common.StatusOK
 	}
 
