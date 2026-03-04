@@ -595,6 +595,7 @@ func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseR
 	batch := map[int32]uint{org.ID: 1}
 	rulesMap, err := s.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, batch)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org difficulty rules", "orgID", org.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to retrieve difficulty rules. Please try again later."
 		return renderCtx, nil, nil
 	}
