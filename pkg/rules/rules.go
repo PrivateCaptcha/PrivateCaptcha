@@ -28,6 +28,7 @@ const (
 type rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(op *overrideProperty) bool
+	IsTerminal() bool
 }
 
 type CompiledRules struct {
@@ -42,7 +43,7 @@ func NewCompiledRules(rules []rule) *CompiledRules {
 		if _, ok := r.(*blockRequestRule); ok {
 			cr.hasBlockRules = true
 		}
-		if tr, ok := r.(interface{ IsTerminal() bool }); ok && tr.IsTerminal() {
+		if r.IsTerminal() {
 			cr.hasTerminalRules = true
 		}
 	}
@@ -57,7 +58,7 @@ func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal boo
 		if _, ok := r.(*blockRequestRule); ok {
 			return true, true
 		}
-		if tr, ok := r.(interface{ IsTerminal() bool }); ok && tr.IsTerminal() {
+		if r.IsTerminal() {
 			return false, true
 		}
 	}

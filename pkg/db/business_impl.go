@@ -3327,7 +3327,7 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 	return updatedRule, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -3337,10 +3337,6 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *db
 		CreatorID: Int(user.ID),
 		Column3:   org.UserID.Int32,
 	}
-	if property != nil {
-		params.PropertyID = Int(property.ID)
-	}
-	params.OrgID = Int(org.ID)
 
 	if err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))

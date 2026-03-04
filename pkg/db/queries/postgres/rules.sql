@@ -83,8 +83,7 @@ CROSS JOIN old;
 -- name: DeleteDifficultyRule :exec
 DELETE FROM backend.difficulty_rules dr
 WHERE dr.id = $1
-AND (dr.creator_id = $2 OR $2 = $3)
-AND ((dr.property_id IS NOT NULL AND (dr.property_id = $4 OR $4 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $5 OR $5 IS NULL)));
+AND (dr.creator_id = $2 OR $2 = $3);
 
 -- name: MoveDifficultyRule :one
 UPDATE backend.difficulty_rules

@@ -981,7 +981,7 @@ func (s *Server) deletePropertyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEvent, err := s.Store.Impl().DeleteDifficultyRule(ctx, org, property, rule, user)
+	auditEvent, err := s.Store.Impl().DeleteDifficultyRule(ctx, org, rule, user)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
@@ -1021,7 +1021,7 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auditEvent, err := s.Store.Impl().DeleteDifficultyRule(ctx, org, nil, rule, user)
+	auditEvent, err := s.Store.Impl().DeleteDifficultyRule(ctx, org, rule, user)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		s.RedirectError(http.StatusInternalServerError, w, r)
