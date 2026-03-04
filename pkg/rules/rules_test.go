@@ -2981,3 +2981,108 @@ func TestHTTPHeaderNameNonCanonicalInRule(t *testing.T) {
 		t.Error("Expected rule with uppercase header name in In list to match after canonicalization")
 	}
 }
+
+func TestTerminalRulePreventsBlockInIsRequestBlocked(t *testing.T) {
+	// A terminal break rule before a block rule should prevent blocking
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+
+	if compiled.IsRequestBlocked(ri) {
+		t.Error("Expected terminal break rule to prevent block rule from triggering")
+	}
+}
+
+func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
+	// A non-terminal non-block rule before a block rule should NOT prevent blocking
+	rules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Position:          2,
+			Enabled:           true,
+		},
+	}
+
+	compiled := testCompiler.Compile(context.Background(), rules)
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+
+	if !compiled.IsRequestBlocked(ri) {
+		t.Error("Expected block rule to still trigger when prior rule is not terminal")
+	}
+}
+
+func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
+	// A terminal break rule in property rules should prevent org block rules
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+	orgRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+			ActionValue:       1,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
+	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
+
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+	if rp.IsRequestBlocked(ri) {
+		t.Error("Expected terminal property break rule to prevent org block rule")
+	}
+}
