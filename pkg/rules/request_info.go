@@ -63,6 +63,7 @@ func (ri *RequestInfo) CountryCode() string {
 }
 
 func (ri *RequestInfo) HasHeader(name string) bool {
+	// we canonicalize header name before
 	_, ok := ri.r.Header[name]
 	return ok
 }
