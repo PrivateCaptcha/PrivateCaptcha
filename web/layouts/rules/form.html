@@ -49,7 +49,7 @@
         </div>
 
         <!-- Condition Operator -->
-        <div x-show="!isListCondition">
+        <div x-cloak x-show="!isListCondition">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
             <div class="mt-2">
                 <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
@@ -61,7 +61,7 @@
         </div>
 
         <!-- Condition Value for User Agent -->
-        <div x-show="isStringCondition && showConditionValue">
+        <div x-cloak x-show="isStringCondition && showConditionValue">
             <label class="pc-internal-form-label">Value</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
@@ -69,7 +69,7 @@
         </div>
 
         <!-- Condition Value for Domain -->
-        <div x-show="isDomainCondition && showConditionValue">
+        <div x-cloak x-show="isDomainCondition && showConditionValue">
             <label class="pc-internal-form-label">Domain</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueDomain" placeholder="example.com" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
@@ -77,7 +77,7 @@
         </div>
 
         <!-- Condition Value for IP Address -->
-        <div x-show="isIPCondition && showConditionValue">
+        <div x-cloak x-show="isIPCondition && showConditionValue">
             <label class="pc-internal-form-label">IP Address Prefix (CIDR)</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueIPAddress" placeholder="Enter IP address..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
@@ -85,7 +85,7 @@
         </div>
 
         <!-- Condition Value for HTTP Header Name -->
-        <div x-show="isHTTPHeaderNameCondition && showConditionValue">
+        <div x-cloak x-show="isHTTPHeaderNameCondition && showConditionValue">
             <label class="pc-internal-form-label">HTTP Header Name</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
@@ -96,7 +96,7 @@
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
 
         <!-- Country Selection -->
-        <div x-show="isListCondition">
+        <div x-cloak x-show="isListCondition">
             <label class="pc-internal-form-label">Countries</label>
 
             <!-- Negation toggle -->
@@ -138,7 +138,7 @@
                     {{ end }}
                 </div>
 
-                <p class="mt-1 text-xs text-gray-500 truncate" x-show="selectedCountries">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
+                <p class="mt-1 text-xs text-gray-500 truncate" x-cloak x-show="selectedCountries">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
 
                 <!-- Hidden input for operator with negation -->
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" />
@@ -160,7 +160,7 @@
         </div>
 
         <!-- Difficulty Adjustment -->
-        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
+        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
             <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change to initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Level (%)</label>
             <div class="mt-2">
                 <input type="number" x-model.number="actionValueDifficultyLevel" id="difficulty_level_input" placeholder="0" min="-300" max="300" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
@@ -169,7 +169,7 @@
         </div>
 
         <!-- Difficulty Growth -->
-        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
+        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <label for="growth_select" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests">Difficulty Growth</label>
             <div class="mt-2">
                 <select x-model="actionValueDifficultyGrowth" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
@@ -185,7 +185,7 @@
         <input type="hidden" name="{{ .Const.ActionValue }}" :value="activeActionValue" />
 
         <!-- Terminal checkbox - only shown for difficulty level and growth actions -->
-        <div x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' || actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
+        <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' || actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <div class="flex gap-3">
                 <div class="flex h-6 shrink-0 items-center">
                     <div class="group grid size-4 grid-cols-1">
