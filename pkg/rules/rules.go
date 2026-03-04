@@ -190,7 +190,7 @@ type difficultyLevelRule struct {
 
 func (r *difficultyLevelRule) Apply(op *overrideProperty) bool {
 	baseLevel := op.base.Level()
-	adjustedLevel := int16((int32(baseLevel)*(100+int32(r.percentDiff)) + 50) / 100)
+	adjustedLevel := baseLevel + int16(int32(r.percentDiff)*(common.DifficultyDelta/2)/100)
 	if adjustedLevel < int16(common.MinDifficultyLevel) {
 		adjustedLevel = int16(common.MinDifficultyLevel)
 	} else if adjustedLevel > int16(common.MaxDifficultyLevel) {
@@ -423,7 +423,7 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 
 	switch dbRule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
-		percentDiff := max(-100, min(100, dbRule.ActionValue))
+		percentDiff := max(-300, min(300, dbRule.ActionValue))
 		return &difficultyLevelRule{
 			ruleBase:    base,
 			percentDiff: int16(percentDiff),
