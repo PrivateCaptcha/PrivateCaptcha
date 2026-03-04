@@ -50,7 +50,7 @@
 
         <!-- Condition Operator -->
         <div x-cloak x-show="!isListCondition">
-            <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label">Operator</label>
+            <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label tooltip" data-tooltip="How to evaluate Condition">Operator</label>
             <div class="mt-2">
                 <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
                     <template x-for="op in availableOperators" :key="op.value">
@@ -161,7 +161,7 @@
 
         <!-- Difficulty Adjustment -->
         <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}'">
-            <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change to initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Level (%)</label>
+            <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Level (%)</label>
             <div class="mt-2">
                 <input type="number" x-model.number="actionValueDifficultyLevel" id="difficulty_level_input" placeholder="0" min="-300" max="300" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-red-600 focus:ring-red-600" />
                 <p class="mt-1 text-xs text-gray-500">Range: <code class="px-1 py-0.5 bg-gray-100">-300%</code> to <code class="px-1 py-0.5 bg-gray-100">+300%</code></p>
@@ -216,7 +216,9 @@
         Delete
     </button>
     {{ else }}
-    <div></div>
+    <div>
+        <a href="https://docs.privatecaptcha.com/docs/reference/rules/" target="_blank" class="text-sm/6 font-semibold text-pclime-600 hover:text-pclime-500">Docs <span aria-hidden="true">&rarr;</span></a>
+    </div>
     {{ end }}
 
     <div class="flex items-center space-x-6">
