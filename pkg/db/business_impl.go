@@ -3573,6 +3573,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 			}
 
 			// Re-fetch to get the current position assigned by rebalancing
+			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
 			rule, err = impl.RetrieveDifficultyRule(ctx, rule.ID)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to re-fetch rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
