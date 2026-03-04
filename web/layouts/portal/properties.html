@@ -11,7 +11,7 @@
             <div class="min-w-0 flex-1">
                 <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.PropertyEndpoint $property.ID }}" class="focus:outline-none">
                     <span class="absolute inset-0" aria-hidden="true"></span>
-                    <p class="flex flex-row items-center gap-x-2 property-name text-sm font-medium text-gray-900">{{ $property.Name }}{{ if $property.AllowLocalhost }}<span class="inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Testing</span>{{ end }}<span x-show="showSitekeys" class="inline-flex items-center gap-x-1 rounded-md px-1.5 py-0.5 text-xs ring-1 ring-inset ring-gray-200 text-gray-500">
+                    <p class="flex flex-row items-center gap-x-2 property-name text-sm font-medium text-gray-900">{{ $property.Name }}{{ if $property.AllowLocalhost }}<span class="inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Testing</span>{{ end }}<span x-cloak x-show="showSitekeys" class="inline-flex items-center gap-x-1 rounded-md px-1.5 py-0.5 text-xs ring-1 ring-inset ring-gray-200 text-gray-500">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-2.5 h-2.5 fill-gray-400" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd" />
                         </svg>

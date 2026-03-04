@@ -4,7 +4,7 @@
   <div class="flex w-full flex-col items-center space-y-4 sm:items-end">
     <div id="system-notification" hx-target="this" hx-swap="outerHTML swap:1s"
         class="pointer-events-auto w-full max-w-sm overflow-hidden rounded-lg bg-white shadow-lg ring-1 ring-black ring-opacity-5 "
-        x-show="notificationOpen"
+        x-cloak x-show="notificationOpen"
         x-transition:enter="transform ease-out duration-300 transition"
         x-transition:enter-start="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
         x-transition:enter-end="translate-y-0 opacity-100 sm:translate-x-0"

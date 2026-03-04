@@ -2,7 +2,7 @@
 <header>
     <nav class="bg-pcteal-800" x-data="{profileMenuOpen: false, mobileMenuOpen: false}">
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-            <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="profileMenuOpen = false" x-show="profileMenuOpen"></div>
+            <div class="absolute top-0 left-0 w-full h-screen z-0 bg-transparent" x-on:click="profileMenuOpen = false" x-cloak x-show="profileMenuOpen"></div>
             <div class="border-b border-gray-700">
                 <div class="flex h-16 items-center justify-between px-4 sm:px-0">
                     <div class="flex items-center">
@@ -35,7 +35,7 @@
                                     </button>
                                 </div>
                                 <div
-                                    x-show="profileMenuOpen"
+                                    x-cloak x-show="profileMenuOpen"
                                     x-transition:enter="transition ease-out duration-100"
                                     x-transition:enter-start="transform opacity-0 scale-95"
                                     x-transition:enter-end="transform opacity-100 scale-100"
@@ -78,7 +78,7 @@
         </div>
 
         <!-- Mobile menu, show/hide based on menu state. -->
-        <div x-show="mobileMenuOpen" class="border-b border-gray-700 md:hidden" id="mobile-menu">
+        <div x-cloak x-show="mobileMenuOpen" class="border-b border-gray-700 md:hidden" id="mobile-menu">
             <div class="space-y-1 px-2 py-3 sm:px-3">
                 <!-- Current: "bg-pcteal-900 text-white", Default: "text-gray-300 hover:bg-pcteal-700 hover:text-white" -->
                 <a href="{{ relURL "/" }}" class="bg-pcteal-900 text-white block rounded-md px-3 py-2 text-base font-medium" aria-current="page">Dashboard</a>
