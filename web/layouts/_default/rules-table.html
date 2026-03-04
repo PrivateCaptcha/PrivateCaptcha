@@ -53,7 +53,7 @@
         {{ end }}
     </div>
     {{ if $.Platform.Enterprise }}
-    <div class="relative z-10" x-show="moveOpen" x-cloak aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="relative z-10" x-cloak x-show="moveOpen" x-cloak aria-labelledby="modal-title" role="dialog" aria-modal="true">
         <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
         <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
@@ -76,7 +76,7 @@
                                         <div class="mt-2">
                                             <select name="position" x-model="newPosition" class="w-full pc-internal-form-select">
                                                 <template x-for="(n, index) in rulesCount" :key="index">
-                                                    <option x-show="index !== moveRuleIndex" :value="index" x-text="'Position ' + (index + 1)"></option>
+                                                    <option x-cloak x-show="index !== moveRuleIndex" :value="index" x-text="'Position ' + (index + 1)"></option>
                                                 </template>
                                             </select>
                                         </div>
