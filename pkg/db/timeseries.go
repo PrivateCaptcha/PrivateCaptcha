@@ -131,9 +131,13 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
 	}
+
+	var committed bool
 	defer func() {
-		if rerr := scope.Rollback(); rerr != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		if !committed {
+			if rerr := scope.Rollback(); rerr != nil {
+				slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(rerr))
+			}
 		}
 	}()
 
@@ -153,6 +157,7 @@ func (ts *TimeSeriesDB) WriteAccessLogBatch(ctx context.Context, records []*comm
 
 	err = scope.Commit()
 	if err == nil {
+		committed = true
 		slog.InfoContext(ctx, "Inserted batch of access records", "size", len(records))
 	} else {
 		slog.ErrorContext(ctx, "Failed to insert access log batch", common.ErrAttr(err))
@@ -176,9 +181,12 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
 		return err
 	}
+	var committed bool
 	defer func() {
-		if rerr := scope.Rollback(); rerr != nil {
-			slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(err))
+		if !committed {
+			if rerr := scope.Rollback(); rerr != nil {
+				slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(rerr))
+			}
 		}
 	}()
 
@@ -198,6 +206,7 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 
 	err = scope.Commit()
 	if err == nil {
+		committed = true
 		slog.InfoContext(ctx, "Inserted batch of verify records", "size", len(records))
 	} else {
 		slog.ErrorContext(ctx, "Failed to insert verify log batch", common.ErrAttr(err))
