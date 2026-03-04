@@ -31,8 +31,9 @@ type rule interface {
 }
 
 type CompiledRules struct {
-	rules         []rule
-	hasBlockRules bool
+	rules            []rule
+	hasBlockRules    bool
+	hasTerminalRules bool
 }
 
 func NewCompiledRules(rules []rule) *CompiledRules {
@@ -40,22 +41,28 @@ func NewCompiledRules(rules []rule) *CompiledRules {
 	for _, r := range rules {
 		if _, ok := r.(*blockRequestRule); ok {
 			cr.hasBlockRules = true
-			break
+		}
+		if tr, ok := r.(interface{ IsTerminal() bool }); ok && tr.IsTerminal() {
+			cr.hasTerminalRules = true
 		}
 	}
 	return cr
 }
 
-func isBlockedByRules(rules []rule, ri *RequestInfo) bool {
-	for _, rule := range rules {
-		if _, ok := rule.(*blockRequestRule); ok {
-			if rule.Matches(ri) {
-				return true
-			}
+func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal bool) {
+	for _, r := range rules {
+		if !r.Matches(ri) {
+			continue
+		}
+		if _, ok := r.(*blockRequestRule); ok {
+			return true, true
+		}
+		if tr, ok := r.(interface{ IsTerminal() bool }); ok && tr.IsTerminal() {
+			return false, true
 		}
 	}
 
-	return false
+	return false, false
 }
 
 func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficulty.Property, bool) {
@@ -86,8 +93,13 @@ func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficul
 }
 
 func (cr *CompiledRules) IsRequestBlocked(ri *RequestInfo) bool {
-	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) || !cr.hasBlockRules {
-		return false
+	blocked, _ := cr.checkRequestBlocked(ri)
+	return blocked
+}
+
+func (cr *CompiledRules) checkRequestBlocked(ri *RequestInfo) (blocked bool, terminal bool) {
+	if (cr == nil) || (len(cr.rules) == 0) || (ri == nil) || (!cr.hasBlockRules && !cr.hasTerminalRules) {
+		return false, false
 	}
 	return isBlockedByRules(cr.rules, ri)
 }
@@ -127,8 +139,13 @@ func (rp *RulesPair) IsRequestBlocked(ri *RequestInfo) bool {
 		return false
 	}
 
-	if rp.PropertyRules.IsRequestBlocked(ri) {
+	blocked, terminal := rp.PropertyRules.checkRequestBlocked(ri)
+	if blocked {
 		return true
+	}
+
+	if terminal {
+		return false
 	}
 
 	return rp.OrgRules.IsRequestBlocked(ri)
@@ -181,6 +198,7 @@ type ruleBase struct {
 }
 
 func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.matcher.Matches(ri) }
+func (rb *ruleBase) IsTerminal() bool             { return rb.terminal }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
@@ -370,6 +388,7 @@ type RulesCompiler struct {
 }
 
 // NewRulesCompiler creates a new RulesCompiler with the provided user agent parser.
+// The uaParser must not be nil; it is required for compiling user-agent based rules.
 func NewRulesCompiler(uaParser *useragent.Parser) *RulesCompiler {
 	rc := &RulesCompiler{
 		uaParser:  uaParser,

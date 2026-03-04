@@ -101,11 +101,28 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 }
 
 const deleteDifficultyRule = `-- name: DeleteDifficultyRule :exec
-DELETE FROM backend.difficulty_rules WHERE id = $1
+DELETE FROM backend.difficulty_rules dr
+WHERE dr.id = $1
+AND (dr.creator_id = $2 OR $2 = $3)
+AND ((dr.property_id IS NOT NULL AND (dr.property_id = $4 OR $4 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $5 OR $5 IS NULL)))
 `
 
-func (q *Queries) DeleteDifficultyRule(ctx context.Context, id int32) error {
-	_, err := q.db.Exec(ctx, deleteDifficultyRule, id)
+type DeleteDifficultyRuleParams struct {
+	ID         int32       `db:"id" json:"id"`
+	CreatorID  pgtype.Int4 `db:"creator_id" json:"creator_id"`
+	Column3    interface{} `db:"column_3" json:"column_3"`
+	PropertyID pgtype.Int4 `db:"property_id" json:"property_id"`
+	OrgID      pgtype.Int4 `db:"org_id" json:"org_id"`
+}
+
+func (q *Queries) DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) error {
+	_, err := q.db.Exec(ctx, deleteDifficultyRule,
+		arg.ID,
+		arg.CreatorID,
+		arg.Column3,
+		arg.PropertyID,
+		arg.OrgID,
+	)
 	return err
 }
 

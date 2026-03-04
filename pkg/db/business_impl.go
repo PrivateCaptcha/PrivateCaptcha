@@ -3252,6 +3252,7 @@ func newDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.D
 		Name:                     result.Name,
 		PropertyID:               result.PropertyID,
 		OrgID:                    result.OrgID,
+		CreatorID:                result.CreatorID,
 		Enabled:                  result.Enabled,
 		ConditionProperty:        result.ConditionProperty,
 		ConditionOperator:        result.ConditionOperator,
@@ -3326,12 +3327,22 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 	return updatedRule, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteDifficultyRule(ctx, rule.ID); err != nil {
+	params := &dbgen.DeleteDifficultyRuleParams{
+		ID:        rule.ID,
+		CreatorID: Int(user.ID),
+		Column3:   org.UserID.Int32,
+	}
+	if property != nil {
+		params.PropertyID = Int(property.ID)
+	}
+	params.OrgID = Int(org.ID)
+
+	if err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))
 		return nil, err
 	}
