@@ -69,7 +69,7 @@
 {{else if .Params.WarningMessage}}
 <div class="pt-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
 {{else}}
-{{ if and $.Platform.Enterprise .Params.Rules }}
+{{ if and $.Platform.Enterprise (gt (len $.Params.Rules) 1) }}
 <div class="pt-5">{{template "info-link-message.html" (dict "Text" "Difficulty rules are applied in order from top to bottom. If multiple difficulty adjustments apply, the highest value is used." "Link" "https://docs.privatecaptcha.com/docs/reference/rules/" "LinkText" "Docs")}}</div>
 {{end}}
 {{end}}
