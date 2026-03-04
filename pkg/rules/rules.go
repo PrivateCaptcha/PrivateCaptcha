@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"sort"
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -448,6 +449,10 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 
 func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
 	rules := make([]rule, 0, len(dbRules))
+
+	sort.SliceStable(dbRules, func(i, j int) bool {
+		return dbRules[i].Position < dbRules[j].Position
+	})
 
 	for _, r := range dbRules {
 		if !r.Enabled {
