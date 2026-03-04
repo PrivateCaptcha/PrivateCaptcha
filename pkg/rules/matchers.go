@@ -56,7 +56,7 @@ func (sm *StringMatcher) Matches(ri *RequestInfo) bool {
 			}
 		}
 	default:
-		result = strings.EqualFold(sm.extract(ri), sm.ConditionValueStr)
+		result = false
 	}
 
 	if sm.ConditionOperatorNegated {
