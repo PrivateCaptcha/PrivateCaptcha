@@ -246,7 +246,7 @@ func difficultyActionParser(actionValue string) (int32, common.StatusCode) {
 		return 0, common.StatusRuleActionValueInvalid
 	}
 
-	if val < -100 || val > 100 {
+	if val < -300 || val > 300 {
 		return 0, common.StatusRuleDifficultyValueInvalid
 	}
 	if val == 0 {

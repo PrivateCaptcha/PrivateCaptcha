@@ -428,13 +428,13 @@ func TestParseDifficultyAction(t *testing.T) {
 		},
 		{
 			name:         "value too low",
-			value:        "-101",
+			value:        "-301",
 			expectedVal:  0,
 			expectedCode: common.StatusRuleDifficultyValueInvalid,
 		},
 		{
 			name:         "value too high",
-			value:        "101",
+			value:        "301",
 			expectedVal:  0,
 			expectedCode: common.StatusRuleDifficultyValueInvalid,
 		},
@@ -458,14 +458,14 @@ func TestParseDifficultyAction(t *testing.T) {
 		},
 		{
 			name:         "boundary min value",
-			value:        "-100",
-			expectedVal:  -100,
+			value:        "-300",
+			expectedVal:  -300,
 			expectedCode: common.StatusOK,
 		},
 		{
 			name:         "boundary max value",
-			value:        "100",
-			expectedVal:  100,
+			value:        "300",
+			expectedVal:  300,
 			expectedCode: common.StatusOK,
 		},
 	}
