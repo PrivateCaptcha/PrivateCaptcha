@@ -286,3 +286,7 @@ func (e RetriableError) Error() string {
 func (e RetriableError) Unwrap() error {
 	return e.err
 }
+
+func SafeString(s string, maxLen int) string {
+	return s[:min(len(s), maxLen)]
+}

@@ -330,8 +330,8 @@ func (am *AuthMiddleware) SitekeyOptions(next http.Handler) http.Handler {
 
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
 		// don't validate all characters for speed reasons
-		if len(sitekey) != db.SitekeyLen {
-			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid", "method", r.Method)
+		if sitekeyLen := len(sitekey); sitekeyLen != db.SitekeyLen {
+			slog.Log(ctx, common.LevelTrace, "Sitekey is not valid", "method", r.Method, "length", sitekeyLen)
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}

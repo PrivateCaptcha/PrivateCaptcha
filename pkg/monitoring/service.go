@@ -208,15 +208,13 @@ func NewService() *Service {
 		Registry: reg,
 		fineAPIMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:            MetricsNamespaceAPI,
-			DisableMeasureSize: true,
-			Recorder:           fineRecorder,
+			Service:  MetricsNamespaceAPI,
+			Recorder: fineRecorder,
 		}),
 		finePortalMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
-			Service:            MetricsNamespacePortal,
-			DisableMeasureSize: true,
-			Recorder:           fineRecorder,
+			Service:  MetricsNamespacePortal,
+			Recorder: fineRecorder,
 		}),
 		coarseServerMiddleware: middleware.New(middleware.Config{
 			// this is added as Service label
