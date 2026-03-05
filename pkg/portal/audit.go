@@ -226,6 +226,53 @@ func (ul *UserAuditLog) initFromAPIKey(oldValue, newValue *db.AuditLogAPIKey) er
 	return nil
 }
 
+func (ul *UserAuditLog) initFromDifficultyRule(oldValue, newValue *db.AuditLogDifficultyRule) error {
+	ul.Resource = "Difficulty rule"
+
+	if (oldValue != nil) && (newValue != nil) {
+		ul.Resource = fmt.Sprintf("Difficulty rule '%s'", oldValue.Name)
+		if oldValue.Name != newValue.Name {
+			ul.Property = "Name"
+			ul.Value = newValue.Name
+		} else if oldValue.Enabled != newValue.Enabled {
+			ul.Property = "Enabled"
+			ul.Value = strconv.FormatBool(newValue.Enabled)
+		} else if oldValue.ConditionProperty != newValue.ConditionProperty {
+			ul.Property = "Condition property"
+			ul.Value = newValue.ConditionProperty
+		} else if oldValue.ConditionOperator != newValue.ConditionOperator {
+			ul.Property = "Condition operator"
+			ul.Value = newValue.ConditionOperator
+		} else if oldValue.ConditionOperatorNegated != newValue.ConditionOperatorNegated {
+			ul.Property = "Condition negated"
+			ul.Value = strconv.FormatBool(newValue.ConditionOperatorNegated)
+		} else if oldValue.ConditionValueStr != newValue.ConditionValueStr {
+			ul.Property = "Condition value"
+			ul.Value = newValue.ConditionValueStr
+		} else if oldValue.ConditionValueInt != newValue.ConditionValueInt {
+			ul.Property = "Condition value"
+			ul.Value = strconv.Itoa(int(newValue.ConditionValueInt))
+		} else if oldValue.ActionProperty != newValue.ActionProperty {
+			ul.Property = "Action property"
+			ul.Value = newValue.ActionProperty
+		} else if oldValue.ActionValue != newValue.ActionValue {
+			ul.Property = "Action value"
+			ul.Value = strconv.Itoa(int(newValue.ActionValue))
+		} else if oldValue.Terminal != newValue.Terminal {
+			ul.Property = "Terminal"
+			ul.Value = strconv.FormatBool(newValue.Terminal)
+		}
+	} else if (oldValue != nil) || (newValue != nil) {
+		rule := newValue
+		if rule == nil {
+			rule = oldValue
+		}
+		ul.Resource = fmt.Sprintf("Difficulty rule '%s'", rule.Name)
+	}
+
+	return nil
+}
+
 func (ul *UserAuditLog) initFromAccess(log *dbgen.AuditLog, payload *db.AuditLogAccess) error {
 	if payload == nil {
 		return errUnexpectedAuditLogPayload
@@ -327,6 +374,11 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 			var oldOrgUser, newOrgUser *db.AuditLogOrgUser
 			if oldOrgUser, newOrgUser, err = db.ParseAuditLogPayloads[db.AuditLogOrgUser](ctx, log); err == nil {
 				err = ul.initFromOrgUser(oldOrgUser, newOrgUser)
+			}
+		case db.TableNameDifficultyRules:
+			var oldRule, newRule *db.AuditLogDifficultyRule
+			if oldRule, newRule, err = db.ParseAuditLogPayloads[db.AuditLogDifficultyRule](ctx, log); err == nil {
+				err = ul.initFromDifficultyRule(oldRule, newRule)
 			}
 		default:
 			// Allow extensions to handle custom audit log types

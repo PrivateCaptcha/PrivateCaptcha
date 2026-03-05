@@ -353,6 +353,112 @@ func TestUserAuditLogInitFromAPIKey(t *testing.T) {
 	}
 }
 
+func TestUserAuditLogInitFromDifficultyRule(t *testing.T) {
+	tests := []struct {
+		name     string
+		oldValue *db.AuditLogDifficultyRule
+		newValue *db.AuditLogDifficultyRule
+		wantErr  bool
+	}{
+		{
+			name: "rule name change",
+			oldValue: &db.AuditLogDifficultyRule{
+				Name:              "Old Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			newValue: &db.AuditLogDifficultyRule{
+				Name:              "New Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "rule enabled change",
+			oldValue: &db.AuditLogDifficultyRule{
+				Name:              "Test Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			newValue: &db.AuditLogDifficultyRule{
+				Name:              "Test Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           false,
+			},
+			wantErr: false,
+		},
+		{
+			name: "rule action value change",
+			oldValue: &db.AuditLogDifficultyRule{
+				Name:              "Test Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			newValue: &db.AuditLogDifficultyRule{
+				Name:              "Test Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       10,
+				Enabled:           true,
+			},
+			wantErr: false,
+		},
+		{
+			name:     "rule creation",
+			oldValue: nil,
+			newValue: &db.AuditLogDifficultyRule{
+				Name:              "New Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			wantErr: false,
+		},
+		{
+			name: "rule deletion",
+			oldValue: &db.AuditLogDifficultyRule{
+				Name:              "Old Rule",
+				ConditionProperty: "country",
+				ConditionOperator: "equals",
+				ActionProperty:    "difficulty",
+				ActionValue:       5,
+				Enabled:           true,
+			},
+			newValue: nil,
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ul := &UserAuditLog{}
+			err := ul.initFromDifficultyRule(tt.oldValue, tt.newValue)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("initFromDifficultyRule() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestUserAuditLogInitFromAccess(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -468,6 +574,19 @@ func TestNewUserAuditLog(t *testing.T) {
 				CreatedAt:   db.Timestampz(time.Now()),
 				Source:      dbgen.AuditLogSourceApi,
 				NewValue:    mustMarshalJSON(&db.AuditLogAPIKey{Name: "Test Key"}),
+			},
+			wantErr: false,
+		},
+		{
+			name: "difficulty rule audit log",
+			log: &dbgen.AuditLog{
+				ID:          6,
+				UserID:      db.Int(1),
+				Action:      dbgen.AuditLogActionCreate,
+				EntityTable: db.TableNameDifficultyRules,
+				CreatedAt:   db.Timestampz(time.Now()),
+				Source:      dbgen.AuditLogSourcePortal,
+				NewValue:    mustMarshalJSON(&db.AuditLogDifficultyRule{Name: "Test Rule", ConditionProperty: "country", ActionProperty: "difficulty", ActionValue: 5, Enabled: true}),
 			},
 			wantErr: false,
 		},
