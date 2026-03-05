@@ -36,7 +36,7 @@ function ruleFormData() {
         actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
 
         get showConditionValue() {
-            const baseOperator = this.conditionOperator.replace('_negated', '');
+            const baseOperator = (this.conditionOperator || '').replace('_negated', '');
             return baseOperator !== '{{ .Const.OperatorEmpty }}' && baseOperator !== '{{ .Const.OperatorBot }}';
         },
 
