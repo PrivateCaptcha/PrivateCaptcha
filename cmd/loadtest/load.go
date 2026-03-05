@@ -26,7 +26,7 @@ import (
 func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error) {
 	ctx := context.TODO()
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/, nil)
 	if dberr != nil {
 		return nil, dberr
 	}
@@ -49,7 +49,7 @@ func loadProperties(count int, cfg common.ConfigStore) ([]*dbgen.Property, error
 func loadPropertiesEx(count int, cfg common.ConfigStore) (map[[16]byte]*dbgen.Property, map[int32]*dbgen.APIKey, error) {
 	ctx := context.TODO()
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/, nil)
 	if dberr != nil {
 		return nil, nil, dberr
 	}
@@ -101,7 +101,7 @@ func loadPropertiesEx(count int, cfg common.ConfigStore) (map[[16]byte]*dbgen.Pr
 func loadProperty(cfg common.ConfigStore) (*dbgen.Property, *dbgen.APIKey, error) {
 	ctx := context.TODO()
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/, nil)
 	if dberr != nil {
 		return nil, nil, dberr
 	}
