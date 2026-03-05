@@ -49,10 +49,10 @@
         </div>
 
         <!-- Condition Operator -->
-        <div x-cloak x-show="!isListCondition">
+        <div x-cloak x-show="!isCountryCondition">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label tooltip" data-tooltip="How to evaluate Condition">Operator</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isListCondition" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
+                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="isCountryCondition" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
                     <template x-for="op in availableOperators" :key="op.value">
                         <option :value="op.value" x-text="op.label"></option>
                     </template>
@@ -96,7 +96,7 @@
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
 
         <!-- Country Selection -->
-        <div x-cloak x-show="isListCondition">
+        <div x-cloak x-show="isCountryCondition">
             <label class="pc-internal-form-label">Countries</label>
 
             <!-- Negation toggle -->
@@ -141,7 +141,7 @@
                 <p class="mt-1 text-xs text-gray-500 truncate" x-cloak x-show="selectedCountries">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
 
                 <!-- Hidden input for operator with negation -->
-                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="!isListCondition" />
+                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="!isCountryCondition" />
             </div>
         </div>
     </div>
