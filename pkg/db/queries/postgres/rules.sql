@@ -69,6 +69,7 @@ SELECT
     upd.*,
     old.name AS old_name,
     old.enabled AS old_enabled,
+    old.position AS old_position,
     old.condition_property AS old_condition_property,
     old.condition_operator AS old_condition_operator,
     old.condition_operator_negated AS old_condition_operator_negated,
