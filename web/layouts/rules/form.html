@@ -141,7 +141,7 @@
                 <p class="mt-1 text-xs text-gray-500 truncate" x-cloak x-show="selectedCountries">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
 
                 <!-- Hidden input for operator with negation -->
-                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" />
+                <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="!isListCondition" />
             </div>
         </div>
     </div>
