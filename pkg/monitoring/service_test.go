@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
@@ -92,6 +93,77 @@ func TestServiceObserveHealth(t *testing.T) {
 	service.ObserveHealth(true, false)
 	service.ObserveHealth(false, true)
 	service.ObserveHealth(false, false)
+}
+
+func TestServiceObserveQueryDuration(t *testing.T) {
+	t.Parallel()
+
+	service := NewService()
+
+	// Test various query durations
+	service.ObserveQueryDuration(0.001)
+	service.ObserveQueryDuration(0.05)
+	service.ObserveQueryDuration(1.5)
+}
+
+func TestServiceObserveQueryError(t *testing.T) {
+	t.Parallel()
+
+	service := NewService()
+
+	// Test that ObserveQueryError does not panic
+	service.ObserveQueryError()
+	service.ObserveQueryError()
+}
+
+type mockPoolStat struct {
+	totalConns      int32
+	acquireCount    int64
+	acquireDuration time.Duration
+}
+
+func (m *mockPoolStat) TotalConns() int32              { return m.totalConns }
+func (m *mockPoolStat) AcquireCount() int64            { return m.acquireCount }
+func (m *mockPoolStat) AcquireDuration() time.Duration { return m.acquireDuration }
+
+func TestServiceRegisterPgxPoolStats(t *testing.T) {
+	t.Parallel()
+
+	service := NewService()
+
+	mock := &mockPoolStat{
+		totalConns:      5,
+		acquireCount:    100,
+		acquireDuration: 2 * time.Second,
+	}
+
+	service.RegisterPgxPoolStats(func() PgxPoolStatProvider {
+		return mock
+	})
+
+	// Gather metrics to verify the collector works
+	metrics, err := service.Registry.Gather()
+	if err != nil {
+		t.Fatalf("Failed to gather metrics: %v", err)
+	}
+
+	found := map[string]bool{
+		"server_postgres_pool_total_conns":                    false,
+		"server_postgres_pool_acquire_count_total":            false,
+		"server_postgres_pool_acquire_duration_seconds_total": false,
+	}
+
+	for _, mf := range metrics {
+		if _, ok := found[mf.GetName()]; ok {
+			found[mf.GetName()] = true
+		}
+	}
+
+	for name, wasFound := range found {
+		if !wasFound {
+			t.Errorf("Expected metric %q to be present", name)
+		}
+	}
 }
 
 func TestServiceHandler(t *testing.T) {

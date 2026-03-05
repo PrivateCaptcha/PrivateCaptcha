@@ -139,7 +139,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	planService := billing.NewPlanService(nil)
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, false /*admin*/)
+	metrics := monitoring.NewService()
+
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, false /*admin*/, metrics)
 	if dberr != nil {
 		return dberr
 	}
@@ -152,7 +154,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	puzzleVerifier := api.NewVerifier(cfg, businessDB)
 
-	metrics := monitoring.NewService()
+	metrics.RegisterPgxPoolStats(func() monitoring.PgxPoolStatProvider {
+		return pool.Stat()
+	})
 
 	cdnURLConfig := config.AsURL(ctx, cfg.Get(common.CDNBaseURLKey))
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
@@ -478,7 +482,7 @@ func migrate(ctx context.Context, cfg common.ConfigStore, up bool, autoClose boo
 
 	planService := billing.NewPlanService(nil)
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, true /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, _dbConnectTimeout, true /*admin*/, nil)
 	if dberr != nil {
 		return dberr
 	}

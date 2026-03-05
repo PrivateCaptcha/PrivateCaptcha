@@ -23,9 +23,9 @@ var (
 	errConnectionTimeout = errors.New("connection timeout")
 )
 
-func Connect(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool) (*pgxpool.Pool, *sql.DB, error) {
+func Connect(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool, metrics common.PlatformMetrics) (*pgxpool.Pool, *sql.DB, error) {
 	connectOnce.Do(func() {
-		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, timeout, admin)
+		globalPool, globalClickhouse, globalDBErr = connectEx(ctx, cfg, timeout, admin, metrics)
 	})
 	return globalPool, globalClickhouse, globalDBErr
 }
@@ -70,7 +70,7 @@ func clickHousePassword(cfg common.ConfigStore, admin bool) string {
 	return cfg.Get(common.ClickHousePasswordKey).Value()
 }
 
-func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
+func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duration, admin bool, metrics common.PlatformMetrics) (pool *pgxpool.Pool, clickhouse *sql.DB, err error) {
 	errs, ctx := errgroup.WithContext(ctx)
 
 	errs.Go(func() error {
@@ -97,7 +97,7 @@ func connectEx(ctx context.Context, cfg common.ConfigStore, timeout time.Duratio
 	})
 
 	errs.Go(func() error {
-		config, cerr := createPgxConfig(ctx, cfg, admin)
+		config, cerr := createPgxConfig(ctx, cfg, admin, metrics)
 		if cerr != nil {
 			return cerr
 		}
