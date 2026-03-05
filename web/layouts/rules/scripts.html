@@ -44,7 +44,7 @@ function ruleFormData() {
             return this.conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
         },
 
-        get isListCondition() {
+        get isCountryCondition() {
             return this.conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
         },
 
@@ -62,7 +62,7 @@ function ruleFormData() {
 
         // Computed property that returns the active condition value based on current condition type
         get activeConditionValue() {
-            if (this.isListCondition) {
+            if (this.isCountryCondition) {
                 return this.selectedCountries.join(',');
             } else if (this.isIPCondition) {
                 return this.conditionValueIPAddress;
@@ -97,7 +97,7 @@ function ruleFormData() {
                     { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
                     { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
                 ];
-            } else if (this.isListCondition) {
+            } else if (this.isCountryCondition) {
                 return [
                     { value: '{{ .Const.OperatorIn }}', label: 'In' },
                     { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' },
@@ -152,7 +152,7 @@ function ruleFormData() {
                 const activeIP = this.isIPCondition ? this.conditionValueIPAddress : '';
                 const activeDomain = this.isDomainCondition ? this.conditionValueDomain : '';
                 const activeHeader = this.isHTTPHeaderNameCondition ? this.conditionValueHTTPHeaderName : '';
-                const activeCountries = this.isListCondition ? this.selectedCountries : [];
+                const activeCountries = this.isCountryCondition ? this.selectedCountries : [];
                 this.conditionValueUserAgent = activeUserAgent;
                 this.conditionValueIPAddress = activeIP;
                 this.conditionValueDomain = activeDomain;
