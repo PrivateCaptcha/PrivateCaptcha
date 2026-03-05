@@ -366,6 +366,7 @@ SELECT
     upd.id, upd.name, upd.property_id, upd.org_id, upd.creator_id, upd.enabled, upd.condition_property, upd.condition_operator, upd.condition_operator_negated, upd.condition_value_str, upd.condition_value_int, upd.condition_value_separator, upd.position, upd.action_property, upd.action_value, upd.terminal, upd.created_at, upd.updated_at,
     old.name AS old_name,
     old.enabled AS old_enabled,
+    old.position AS old_position,
     old.condition_property AS old_condition_property,
     old.condition_operator AS old_condition_operator,
     old.condition_operator_negated AS old_condition_operator_negated,
@@ -418,6 +419,7 @@ type UpdateDifficultyRuleRow struct {
 	UpdatedAt                   pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
 	OldName                     string                `db:"old_name" json:"old_name"`
 	OldEnabled                  bool                  `db:"old_enabled" json:"old_enabled"`
+	OldPosition                 float64               `db:"old_position" json:"old_position"`
 	OldConditionProperty        RuleConditionProperty `db:"old_condition_property" json:"old_condition_property"`
 	OldConditionOperator        RuleConditionOperator `db:"old_condition_operator" json:"old_condition_operator"`
 	OldConditionOperatorNegated bool                  `db:"old_condition_operator_negated" json:"old_condition_operator_negated"`
@@ -469,6 +471,7 @@ func (q *Queries) UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficult
 		&i.UpdatedAt,
 		&i.OldName,
 		&i.OldEnabled,
+		&i.OldPosition,
 		&i.OldConditionProperty,
 		&i.OldConditionOperator,
 		&i.OldConditionOperatorNegated,

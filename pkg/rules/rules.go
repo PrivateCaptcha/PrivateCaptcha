@@ -411,6 +411,10 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 // RegisterMatcherFactory registers a MatcherFactory for the given condition property,
 // replacing any existing factory for that property.
 func (rc *RulesCompiler) RegisterMatcherFactory(property string, factory MatcherFactory) {
+	if property == "" || factory == nil {
+		return
+	}
+
 	rc.factories[property] = factory
 }
 
@@ -428,7 +432,7 @@ var _ Compiler = (*RulesCompiler)(nil)
 
 func (rc *RulesCompiler) buildMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	factory, ok := rc.factories[string(rule.ConditionProperty)]
-	if !ok {
+	if !ok || factory == nil {
 		return nil, ErrUnknownConditionProperty
 	}
 	return factory(rule)
