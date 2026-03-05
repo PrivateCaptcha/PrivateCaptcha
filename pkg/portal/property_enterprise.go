@@ -172,9 +172,9 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	// Check for cached org rules and show info message if they exist
 	if orgRules, err := s.Store.Impl().GetCachedOrgRules(ctx, org.ID); err == nil && len(orgRules) > 0 {
 		if len(orgRules) == 1 {
-			renderCtx.InfoMessage = "1 organization rule is also applied to this property."
+			renderCtx.InfoMessage = "1 organization rule is also applied to this property (evaluated after property rules)."
 		} else {
-			renderCtx.InfoMessage = fmt.Sprintf("%d organization rules are also applied to this property.", len(orgRules))
+			renderCtx.InfoMessage = fmt.Sprintf("%d organization rules are also applied to this property (evaluated after property rules).", len(orgRules))
 		}
 	}
 
