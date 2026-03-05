@@ -17,10 +17,12 @@ var _ common.APIMetrics = (*stubMetrics)(nil)
 var _ common.PortalMetrics = (*stubMetrics)(nil)
 var _ common.BaseMetrics = (*stubMetrics)(nil)
 
-func (sm *stubMetrics) Handler(h http.Handler) http.Handler {
-	return h
+func (sm *stubMetrics) PortalHandler(h http.Handler) http.Handler { return h }
+func (sm *stubMetrics) APIHandler(h http.Handler) http.Handler    { return h }
+func (sm *stubMetrics) PortalHandlerIDFunc(func() string) func(http.Handler) http.Handler {
+	return common.NoopMiddleware
 }
-func (sm *stubMetrics) HandlerIDFunc(func() string) func(http.Handler) http.Handler {
+func (sm *stubMetrics) APIHandlerIDFunc(func() string) func(http.Handler) http.Handler {
 	return common.NoopMiddleware
 }
 

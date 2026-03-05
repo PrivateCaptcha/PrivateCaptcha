@@ -61,11 +61,6 @@ type PlatformMetrics interface {
 	ObserveQueryError()
 }
 
-type HTTPMetrics interface {
-	Handler(h http.Handler) http.Handler
-	HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
-}
-
 type MetricEventType string
 
 const (
@@ -84,7 +79,8 @@ type BaseMetrics interface {
 
 type APIMetrics interface {
 	BaseMetrics
-	HTTPMetrics
+	APIHandler(h http.Handler) http.Handler
+	APIHandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
 	ObservePuzzleCreated(userID int32)
 	ObservePuzzleVerified(userID int32, result string, isStub bool)
 	ObserveApiError(handlerID string, method string, code int)
@@ -92,7 +88,8 @@ type APIMetrics interface {
 
 type PortalMetrics interface {
 	BaseMetrics
-	HTTPMetrics
+	PortalHandler(h http.Handler) http.Handler
+	PortalHandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler
 	// this method is used for our error page redirects that are not captured by usual monitoring middleware
 	// as we don't actually return an HTTP error out
 	ObserveHttpError(handlerID string, method string, code int)

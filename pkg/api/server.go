@@ -218,7 +218,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	recovered := common.Recovered(s.Metrics)
 	publicChain := alice.New(svc, recovered, security)
 	// NOTE: auth middleware provides rate limiting internally
-	puzzleChain := publicChain.Append(s.Metrics.Handler, s.RateLimiter.RateLimit, monitoring.Traced, common.SoftTimeoutHandler(1*time.Second))
+	puzzleChain := publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, monitoring.Traced, common.SoftTimeoutHandler(1*time.Second))
 	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(corsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))
 	rg.Handle(rg.Options(common.PuzzleEndpoint), puzzleChain.Append(common.Cached, corsHandler, s.Auth.SitekeyOptions), http.HandlerFunc(s.puzzlePreFlight))
 
@@ -231,7 +231,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	)
 	apiRateLimiter := s.RateLimiter.RateLimitExFunc(apiKeyLeakyBucketCap, apiKeyLeakInterval)
 
-	verifyChain := publicChain.Append(s.Metrics.Handler, apiRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second))
+	verifyChain := publicChain.Append(s.Metrics.APIHandler, apiRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second))
 	// reCAPTCHA compatibility
 	// the difference from our side is _when_ we fetch API key: for reCAPTCHA it comes in form field "secret" and
 	// we want to put it _behind_ the MaxBytesHandler, while for Private Captcha format (header) it can be before
@@ -243,7 +243,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
 	// "root" access
-	rg.Handle(&common.Route{Prefix: rg.Prefix + "{$}"}, publicChain.Append(s.Metrics.Handler), common.HttpStatus(http.StatusForbidden))
+	rg.Handle(&common.Route{Prefix: rg.Prefix + "{$}"}, publicChain.Append(s.Metrics.APIHandler), common.HttpStatus(http.StatusForbidden))
 }
 
 func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {

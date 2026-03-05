@@ -280,7 +280,7 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 	cop := http.NewCrossOriginProtection()
 	recovered := common.Recovered(s.Metrics)
 
-	return alice.New(svc, recovered, security, s.Metrics.HandlerIDFunc(rg.LastPath), ratelimiter, cop.Handler, monitoring.Logged)
+	return alice.New(svc, recovered, security, s.Metrics.PortalHandlerIDFunc(rg.LastPath), ratelimiter, cop.Handler, monitoring.Logged)
 }
 
 func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout alice.Constructor) alice.Chain {

@@ -270,10 +270,14 @@ func NewService() *Service {
 	}
 }
 
-// this belongs only to APIMetrics interface (at this time)
-func (s *Service) Handler(h http.Handler) http.Handler {
+func (s *Service) APIHandler(h http.Handler) http.Handler {
 	// handlerID is taken from the request path in this case
 	return std.Handler("", s.fineAPIMiddleware, h)
+}
+
+func (s *Service) PortalHandler(h http.Handler) http.Handler {
+	// handlerID is taken from the request path in this case
+	return std.Handler("", s.finePortalMiddleware, h)
 }
 
 func (s *Service) CDNHandler(h http.Handler) http.Handler {
@@ -285,10 +289,17 @@ func (s *Service) IgnoredHandler(h http.Handler) http.Handler {
 	return std.Handler("_ignored", s.coarseServerMiddleware, h)
 }
 
-func (s *Service) HandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
+func (s *Service) PortalHandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
 	return func(h http.Handler) http.Handler {
 		handlerID := handlerIDFunc()
 		return std.Handler(handlerID, s.finePortalMiddleware, h)
+	}
+}
+
+func (s *Service) APIHandlerIDFunc(handlerIDFunc func() string) func(http.Handler) http.Handler {
+	return func(h http.Handler) http.Handler {
+		handlerID := handlerIDFunc()
+		return std.Handler(handlerID, s.fineAPIMiddleware, h)
 	}
 }
 

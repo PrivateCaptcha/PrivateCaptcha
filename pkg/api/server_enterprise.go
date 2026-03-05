@@ -31,7 +31,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, publicChain alice.Ch
 	}
 
 	// "portal" API
-	portalAPIChain := publicChain.Append(s.Metrics.HandlerIDFunc(rg.LastPath), apiRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePortal))
+	portalAPIChain := publicChain.Append(s.Metrics.APIHandlerIDFunc(rg.LastPath), apiRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePortal))
 	// tasks
 	rg.Handle(rg.Get(common.AsyncTaskEndpoint, arg(common.ParamID)), portalAPIChain, http.HandlerFunc(s.getAsyncTask))
 	// orgs

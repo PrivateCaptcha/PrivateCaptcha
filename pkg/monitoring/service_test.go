@@ -177,7 +177,7 @@ func TestServiceHandler(t *testing.T) {
 	})
 
 	// Wrap with metrics
-	wrapped := service.Handler(inner)
+	wrapped := service.APIHandler(inner)
 	if wrapped == nil {
 		t.Fatal("Expected Handler to return non-nil handler")
 	}
@@ -253,7 +253,7 @@ func TestServiceHandlerIDFunc(t *testing.T) {
 		return "/custom/handler"
 	}
 
-	middleware := service.HandlerIDFunc(handlerIDFunc)
+	middleware := service.APIHandlerIDFunc(handlerIDFunc)
 	if middleware == nil {
 		t.Fatal("Expected HandlerIDFunc to return non-nil middleware")
 	}
