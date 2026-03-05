@@ -152,6 +152,10 @@ func (s *Server) sendHTTPErrorResponse(err error, w http.ResponseWriter) {
 		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 	case db.ErrSoftDeleted:
 		http.Error(w, http.StatusText(http.StatusConflict), http.StatusConflict)
+	case context.DeadlineExceeded:
+		http.Error(w, http.StatusText(http.StatusGatewayTimeout), http.StatusGatewayTimeout)
+	case context.Canceled:
+		// Client disconnected, no need to send a response
 	default:
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}

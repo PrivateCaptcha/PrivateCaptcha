@@ -406,6 +406,8 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 				s.RedirectError(http.StatusPaymentRequired, w, r)
 			case context.DeadlineExceeded:
 				slog.WarnContext(ctx, "Context deadline exceeded during model function", common.ErrAttr(err))
+			case context.Canceled:
+				slog.WarnContext(ctx, "Context canceled during model function", common.ErrAttr(err))
 			default:
 				slog.ErrorContext(ctx, "Failed to create model for request", common.ErrAttr(err))
 				s.RedirectError(http.StatusInternalServerError, w, r)

@@ -195,8 +195,11 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		}
 	} else {
 		errorStatus := http.StatusInternalServerError
-		if err == context.DeadlineExceeded {
+		switch err {
+		case context.DeadlineExceeded:
 			errorStatus = http.StatusGatewayTimeout
+		case context.Canceled:
+			return
 		}
 		s.renderError(ctx, w, errorStatus)
 	}
