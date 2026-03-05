@@ -174,6 +174,8 @@ func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseR
 		Rules:                   stubDifficultyRules(),
 	}
 
+	renderCtx.Tab = portalRulesTabIndex
+
 	return renderCtx, nil, nil
 }
 
