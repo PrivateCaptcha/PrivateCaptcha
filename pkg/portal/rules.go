@@ -134,7 +134,7 @@ func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.Difficul
 		return false
 	}
 	// Org owner can always edit
-	if user.ID == org.UserID.Int32 {
+	if org.UserID.Valid && (user.ID == org.UserID.Int32) {
 		return true
 	}
 	// Rule creator can edit
