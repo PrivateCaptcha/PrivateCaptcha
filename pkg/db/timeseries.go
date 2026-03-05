@@ -28,6 +28,7 @@ const (
 	AccessLogTableName1h  = "privatecaptcha.request_logs_1h"
 	AccessLogTableName1d  = "privatecaptcha.request_logs_1d"
 	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
+	RulesLogsTableName1d  = "privatecaptcha.rules_logs_1d"
 )
 
 var (
@@ -557,7 +558,7 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 	// NOTE: access table for 1 month is not included as it does not have property_id column
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
-		VerifyLogTable1h, VerifyLogTable1d,
+		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
@@ -577,7 +578,7 @@ func (ts *TimeSeriesDB) DeleteOrganizationsData(ctx context.Context, orgIDs []in
 
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
-		VerifyLogTable1h, VerifyLogTable1d,
+		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "org_id", ids)
@@ -597,7 +598,7 @@ func (ts *TimeSeriesDB) DeleteUsersData(ctx context.Context, userIDs []int32) er
 
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
-		VerifyLogTable1h, VerifyLogTable1d,
+		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
 	}
 
 	return ts.lightDelete(ctx, tables, "user_id", ids)
