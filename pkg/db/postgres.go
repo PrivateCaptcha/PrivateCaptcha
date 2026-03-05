@@ -23,12 +23,15 @@ const (
 	pgMigrationsSchema                = "public"
 	pgIdleInTransactionSessionTimeout = 10 * time.Second
 	pgStatementTimeout                = 10 * time.Second
+	pgLockTimeout                     = 10 * time.Second
+	pgConnectTimeout                  = 5
 )
 
 //go:embed migrations/postgres/*.sql
 var postgresMigrationsFS embed.FS
 
 type myQueryTracer struct {
+	metrics common.PlatformMetrics
 }
 
 func (tracer *myQueryTracer) TraceQueryStart(
@@ -42,12 +45,19 @@ func (tracer *myQueryTracer) TraceQueryStart(
 func (tracer *myQueryTracer) TraceQueryEnd(ctx context.Context, conn *pgx.Conn, data pgx.TraceQueryEndData) {
 	if data.Err != nil {
 		slog.Log(ctx, common.LevelTrace, "SQL command failed", common.ErrAttr(data.Err), "source", "postgres")
+		if tracer.metrics != nil {
+			tracer.metrics.ObserveQueryError()
+		}
 	} else {
 		t, ok := ctx.Value(common.TimeContextKey).(time.Time)
 		if !ok {
 			t = time.Now()
 		}
-		slog.Log(ctx, common.LevelTrace, "SQL command finished", "source", "postgres", "duration", time.Since(t).Milliseconds())
+		duration := time.Since(t)
+		slog.Log(ctx, common.LevelTrace, "SQL command finished", "source", "postgres", "duration", duration.Milliseconds())
+		if tracer.metrics != nil {
+			tracer.metrics.ObserveQueryDuration(duration.Seconds())
+		}
 	}
 }
 
@@ -71,7 +81,7 @@ func postgresPassword(cfg common.ConfigStore, admin bool) string {
 	return cfg.Get(common.PostgresPasswordKey).Value()
 }
 
-func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool) (config *pgxpool.Config, err error) {
+func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool, metrics common.PlatformMetrics) (config *pgxpool.Config, err error) {
 	dbURL := cfg.Get(common.PostgresKey).Value()
 	config, err = pgxpool.ParseConfig(dbURL)
 	if err != nil {
@@ -88,13 +98,18 @@ func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool) 
 		config.ConnConfig.TLSConfig = nil // not using SSL
 	}
 
-	config.ConnConfig.Tracer = &myQueryTracer{}
+	config.ConnConfig.Tracer = &myQueryTracer{metrics: metrics}
 
 	config.ConnConfig.RuntimeParams["application_name"] = "privatecaptcha"
 	config.ConnConfig.RuntimeParams["idle_in_transaction_session_timeout"] =
 		strconv.Itoa(int(pgIdleInTransactionSessionTimeout.Milliseconds()))
 	config.ConnConfig.RuntimeParams["statement_timeout"] =
 		strconv.Itoa(int(pgStatementTimeout.Milliseconds()))
+	config.ConnConfig.RuntimeParams["lock_timeout"] =
+		strconv.Itoa(int(pgLockTimeout.Milliseconds()))
+	// connect_timeout is in seconds per PostgreSQL documentation, unlike the millisecond-based timeouts above
+	config.ConnConfig.RuntimeParams["connect_timeout"] =
+		strconv.Itoa(pgConnectTimeout)
 
 	return
 }

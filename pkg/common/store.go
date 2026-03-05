@@ -57,6 +57,8 @@ type TimeSeriesStore interface {
 type PlatformMetrics interface {
 	ObserveHealth(postgres, clickhouse bool)
 	ObserveCacheHitRatio(ratio float64)
+	ObserveQueryDuration(duration float64)
+	ObserveQueryError()
 }
 
 type HTTPMetrics interface {

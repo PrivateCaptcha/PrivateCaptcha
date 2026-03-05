@@ -35,7 +35,7 @@ var (
 func seed(usersCount, orgsCount, propertiesCount, solutionsCount int, solutionsFile string, billingSvc billing.PlanService, cfg common.ConfigStore) error {
 	ctx := context.TODO()
 
-	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/)
+	pool, clickhouse, dberr := db.Connect(ctx, cfg, 5*time.Second, false /*admin*/, nil)
 	if dberr != nil {
 		return dberr
 	}

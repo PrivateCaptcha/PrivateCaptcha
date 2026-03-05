@@ -24,6 +24,7 @@ const (
 	MetricsNamespacePortal   = "portal"
 	puzzleMetricsSubsystem   = "puzzle"
 	platformMetricsSubsystem = "platform"
+	pgxpoolMetricsSubsystem  = "pgxpool"
 	apiMetricsSubsystem      = "api"
 	userIDLabel              = "user_id"
 	stubLabel                = "stub"
@@ -51,6 +52,8 @@ type Service struct {
 	hitRatioGauge          *prometheus.GaugeVec
 	clickhouseHealthGauge  *prometheus.GaugeVec
 	postgresHealthGauge    *prometheus.GaugeVec
+	queryDurationHistogram prometheus.Histogram
+	queryErrorCounter      prometheus.Counter
 }
 
 var _ common.PlatformMetrics = (*Service)(nil)
@@ -192,16 +195,37 @@ func NewService() *Service {
 	)
 	reg.MustRegister(hitRatioGauge)
 
+	queryDurationHistogram := prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Namespace: MetricsNamespaceServer,
+			Subsystem: pgxpoolMetricsSubsystem,
+			Name:      "query_duration_seconds",
+			Help:      "Duration of Postgres queries in seconds",
+			Buckets:   []float64{.05, .1, .25, .5, 1, 2.5, 5},
+		},
+	)
+	reg.MustRegister(queryDurationHistogram)
+
+	queryErrorCounter := prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: MetricsNamespaceServer,
+			Subsystem: pgxpoolMetricsSubsystem,
+			Name:      "query_errors_total",
+			Help:      "Total number of Postgres query errors",
+		},
+	)
+	reg.MustRegister(queryErrorCounter)
+
 	fineRecorder := prometheus_metrics.NewRecorder(prometheus_metrics.Config{
 		Prefix:          "fine",
 		Registry:        reg,
-		DurationBuckets: []float64{.05, .1, .25, .5, 1, 2.5},
+		DurationBuckets: []float64{.05, .1, .25, .5, 1, 2.5, 5},
 	})
 
 	coarseRecorder := prometheus_metrics.NewRecorder(prometheus_metrics.Config{
 		Prefix:          "coarse",
 		Registry:        reg,
-		DurationBuckets: []float64{.05, .1, .5, 1, 2.5},
+		DurationBuckets: []float64{.05, .1, .5, 1, 2.5, 5},
 	})
 
 	return &Service{
@@ -232,15 +256,17 @@ func NewService() *Service {
 			DisableMeasureInflight: true,
 			Recorder:               coarseRecorder,
 		}),
-		puzzleCounter:         puzzleCounter,
-		verifyCounter:         verifyCounter,
-		hitRatioGauge:         hitRatioGauge,
-		clickhouseHealthGauge: clickhouseHealthGauge,
-		postgresHealthGauge:   postgresHealthGauge,
-		portalErrorCounter:    portalErrorCounter,
-		apiErrorCounter:       apiErrorCounter,
-		dropCounter:           eventDropCounter,
-		panicCounter:          panicCounter,
+		puzzleCounter:          puzzleCounter,
+		verifyCounter:          verifyCounter,
+		hitRatioGauge:          hitRatioGauge,
+		clickhouseHealthGauge:  clickhouseHealthGauge,
+		postgresHealthGauge:    postgresHealthGauge,
+		portalErrorCounter:     portalErrorCounter,
+		apiErrorCounter:        apiErrorCounter,
+		dropCounter:            eventDropCounter,
+		panicCounter:           panicCounter,
+		queryDurationHistogram: queryDurationHistogram,
+		queryErrorCounter:      queryErrorCounter,
 	}
 }
 
@@ -329,6 +355,70 @@ func (s *Service) ObserveHealth(postgres, clickhouse bool) {
 
 	s.postgresHealthGauge.With(prometheus.Labels{}).Set(pgVal)
 	s.clickhouseHealthGauge.With(prometheus.Labels{}).Set(chVal)
+}
+
+func (s *Service) ObserveQueryDuration(duration float64) {
+	s.queryDurationHistogram.Observe(duration)
+}
+
+func (s *Service) ObserveQueryError() {
+	s.queryErrorCounter.Inc()
+}
+
+// PgxPoolStatProvider abstracts pgxpool stat retrieval for metrics collection.
+type PgxPoolStatProvider interface {
+	TotalConns() int32
+	AcquireCount() int64
+	AcquireDuration() time.Duration
+}
+
+// PgxPoolStatFunc is a function that returns current pool stats.
+type PgxPoolStatFunc func() PgxPoolStatProvider
+
+type pgxPoolStatsCollector struct {
+	statFunc         PgxPoolStatFunc
+	totalConnsDesc   *prometheus.Desc
+	acquireCountDesc *prometheus.Desc
+	acquireDurDesc   *prometheus.Desc
+}
+
+func newPgxPoolStatsCollector(statFunc PgxPoolStatFunc) *pgxPoolStatsCollector {
+	return &pgxPoolStatsCollector{
+		statFunc: statFunc,
+		totalConnsDesc: prometheus.NewDesc(
+			prometheus.BuildFQName(MetricsNamespaceServer, pgxpoolMetricsSubsystem, "total_conns"),
+			"Total number of connections in the pgxpool",
+			nil, nil,
+		),
+		acquireCountDesc: prometheus.NewDesc(
+			prometheus.BuildFQName(MetricsNamespaceServer, pgxpoolMetricsSubsystem, "acquire_count_total"),
+			"Cumulative count of successful connection acquires from the pgxpool",
+			nil, nil,
+		),
+		acquireDurDesc: prometheus.NewDesc(
+			prometheus.BuildFQName(MetricsNamespaceServer, pgxpoolMetricsSubsystem, "acquire_duration_seconds_total"),
+			"Cumulative time spent acquiring connections from the pgxpool in seconds",
+			nil, nil,
+		),
+	}
+}
+
+func (c *pgxPoolStatsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.totalConnsDesc
+	ch <- c.acquireCountDesc
+	ch <- c.acquireDurDesc
+}
+
+func (c *pgxPoolStatsCollector) Collect(ch chan<- prometheus.Metric) {
+	stat := c.statFunc()
+	ch <- prometheus.MustNewConstMetric(c.totalConnsDesc, prometheus.GaugeValue, float64(stat.TotalConns()))
+	ch <- prometheus.MustNewConstMetric(c.acquireCountDesc, prometheus.CounterValue, float64(stat.AcquireCount()))
+	ch <- prometheus.MustNewConstMetric(c.acquireDurDesc, prometheus.CounterValue, stat.AcquireDuration().Seconds())
+}
+
+// RegisterPgxPoolStats registers a custom collector that exposes pgxpool statistics.
+func (s *Service) RegisterPgxPoolStats(statFunc PgxPoolStatFunc) {
+	s.Registry.MustRegister(newPgxPoolStatsCollector(statFunc))
 }
 
 func (s *Service) Setup(mux *http.ServeMux) {

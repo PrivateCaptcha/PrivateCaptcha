@@ -122,7 +122,7 @@ func TestCheckLicenseJobValidLicense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestCheckLicenseJobExpiredLicense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestCheckLicenseJobInvalidSignature(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestCheckLicenseJobServerError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestCheckLicenseJobNoLicenseKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig(""), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig(""), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +471,7 @@ func TestCheckLicenseJobCachedValidLicense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false)
+	pool, _, err := db.Connect(ctx, licenseTestConfig("test-license-key"), 3*time.Second, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
