@@ -24,7 +24,6 @@ const (
 	pgIdleInTransactionSessionTimeout = 10 * time.Second
 	pgStatementTimeout                = 10 * time.Second
 	pgLockTimeout                     = 10 * time.Second
-	pgConnectTimeout                  = 5
 )
 
 //go:embed migrations/postgres/*.sql
@@ -107,9 +106,6 @@ func createPgxConfig(ctx context.Context, cfg common.ConfigStore, migrate bool, 
 		strconv.Itoa(int(pgStatementTimeout.Milliseconds()))
 	config.ConnConfig.RuntimeParams["lock_timeout"] =
 		strconv.Itoa(int(pgLockTimeout.Milliseconds()))
-	// connect_timeout is in seconds per PostgreSQL documentation, unlike the millisecond-based timeouts above
-	config.ConnConfig.RuntimeParams["connect_timeout"] =
-		strconv.Itoa(pgConnectTimeout)
 
 	return
 }
