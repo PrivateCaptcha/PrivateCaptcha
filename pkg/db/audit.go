@@ -677,7 +677,7 @@ func newOldDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbge
 		ConditionOperatorNegated: result.OldConditionOperatorNegated,
 		ConditionValueStr:        result.OldConditionValueStr,
 		ConditionValueInt:        result.OldConditionValueInt,
-		Position:                 result.Position,
+		Position:                 result.OldPosition,
 		ActionProperty:           result.OldActionProperty,
 		ActionValue:              result.OldActionValue,
 		Terminal:                 result.OldTerminal,
