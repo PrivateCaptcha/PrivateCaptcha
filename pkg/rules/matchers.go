@@ -153,6 +153,10 @@ func (bm *BotMatcher) looksLikeBot(ua string) bool {
 		return true
 	}
 
+	if bm.UAParser == nil {
+		return false
+	}
+
 	parsed := bm.UAParser.Parse(ua)
 
 	if parsed.IsBot() {
