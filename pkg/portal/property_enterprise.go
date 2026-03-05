@@ -218,9 +218,14 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we fetch full org and property to verify parameters as they should be cached anyways, if correct
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 
