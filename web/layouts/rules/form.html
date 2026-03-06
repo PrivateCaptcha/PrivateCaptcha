@@ -44,6 +44,7 @@
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                     {{ if .Params.Property }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
                     {{ with .Const.ConditionPropertyHTTPHeaderName }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>HTTP Header Name</option>{{ end }}
+                    {{ template "rule-condition-properties-custom" . }}
                 </select>
             </div>
         </div>
@@ -91,6 +92,8 @@
                 <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
+
+        {{ template "rule-condition-value-custom" . }}
 
         <!-- Hidden field that collects the active condition value -->
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
