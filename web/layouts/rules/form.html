@@ -44,6 +44,7 @@
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                     {{ if .Params.Property }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
                     {{ with .Const.ConditionPropertyHTTPHeaderName }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>HTTP Header Name</option>{{ end }}
+                    {{ template "rule-condition-property-custom" . }}
                 </select>
             </div>
         </div>
@@ -91,6 +92,7 @@
                 <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
+
 
         <!-- Hidden field that collects the active condition value -->
         <input type="hidden" name="{{ .Const.ConditionValue }}" :value="activeConditionValue" />
@@ -144,6 +146,8 @@
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="!isCountryCondition" />
             </div>
         </div>
+
+        {{ template "rule-condition-value-custom" . }}
     </div>
 
     <div class="space-y-4 bg-pcred-50 p-4 rounded-md">
