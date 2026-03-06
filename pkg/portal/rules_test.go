@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -156,6 +157,50 @@ func postEditOrgRule(srv *http.ServeMux, cookie *http.Cookie, user *dbgen.User, 
 		common.ParamActionValue:       actionValue,
 	}
 	return postRuleRequest(srv, cookie, "POST", endpoint, token, params)
+}
+
+func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+
+	rule := &dbgen.DifficultyRule{
+		ID:                1,
+		Name:              "Test rule",
+		Enabled:           true,
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorMatches,
+		ConditionValueStr: db.Text("10.0.0.0/8"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       20,
+	}
+
+	// without override map, should use default display name
+	model := difficultyRuleToDisplay(rule, true, hasher, nil)
+	if model.ConditionProperty != "Ip Address" {
+		t.Errorf("Expected 'Ip Address', got '%s'", model.ConditionProperty)
+	}
+
+	// with override map, should use custom display name
+	customNames := map[dbgen.RuleConditionProperty]string{
+		dbgen.RuleConditionPropertyIPAddress: "Custom IP Display",
+	}
+	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
+	if model.ConditionProperty != "Custom IP Display" {
+		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
+	}
+
+	// unknown property without override should fall back to title case
+	rule.ConditionProperty = "some_custom_property"
+	model = difficultyRuleToDisplay(rule, true, hasher, nil)
+	if model.ConditionProperty != "Some Custom Property" {
+		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
+	}
+
+	// unknown property with override should use custom display name
+	customNames[dbgen.RuleConditionProperty("some_custom_property")] = "My Custom Prop"
+	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
+	if model.ConditionProperty != "My Custom Prop" {
+		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
+	}
 }
 
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
