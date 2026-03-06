@@ -9,7 +9,10 @@ WHERE org_id = ANY($1::INT[]) AND property_id IS NULL
 ORDER BY org_id, position ASC;
 
 -- name: CreateDifficultyRule :one
-WITH max_pos AS (
+WITH scope_lock AS (
+    SELECT pg_advisory_xact_lock(COALESCE($2, -1), COALESCE($3, -1))
+),
+max_pos AS (
     SELECT COALESCE(MAX(position), -$15::float8) + $15::float8 AS new_position
     FROM backend.difficulty_rules
     WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
@@ -89,7 +92,7 @@ AND (dr.creator_id = $2 OR $2 = $3);
 -- name: MoveDifficultyRule :one
 UPDATE backend.difficulty_rules
 SET position = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND (creator_id = $3 OR $3 = $4)
 RETURNING *;
 
 -- name: GetDifficultyRulePositionNeighbors :one
@@ -108,8 +111,12 @@ rules_list AS (
       AND dr.id != $1
 )
 SELECT
-    (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
-    (SELECT position FROM rules_list WHERE idx = $2) AS next_position;
+    prev_row.position AS prev_position,
+    next_row.position AS next_position
+FROM
+    (SELECT 1) AS dummy
+LEFT JOIN rules_list prev_row ON prev_row.idx = $2 - 1
+LEFT JOIN rules_list next_row ON next_row.idx = $2;
 
 -- name: RebalanceDifficultyRules :exec
 WITH rules_list AS (
