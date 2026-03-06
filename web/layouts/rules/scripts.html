@@ -6,76 +6,111 @@ function ruleFormData() {
     const formDataConditionProperty = '{{ .Params.ConditionProperty }}';
     const formDataActionProperty = '{{ if .Params.ActionProperty }}{{ .Params.ActionProperty }}{{ else }}{{ .Const.ActionPropertyDifficultyLevel }}{{ end }}';
     const formDataActionValue = '{{ .Params.ActionValue }}';
-    const isCountryCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
-    const isUserAgentCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
-    const isIPCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
-    const isDomainCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}';
-    const isHTTPHeaderNameCondition = formDataConditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}';
 
-    // Initialize operator with negation suffix if needed
+    // Centralized Extensible Registry
+    const conditionRegistry = {
+        '{{ .Const.ConditionPropertyCountryCode }}': {
+            stateField: 'selectedCountries',
+            emptyValue: [],
+            initialValue: (formDataConditionProperty === '{{ .Const.ConditionPropertyCountryCode }}' && formDataConditionValue) 
+                ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) 
+                : [],
+            getFormattedValue: (ctx) => ctx.selectedCountries.join(','),
+            operators: [
+                { value: '{{ .Const.OperatorIn }}', label: 'In' },
+                { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' }
+            ]
+        },
+        '{{ .Const.ConditionPropertyUserAgent }}': {
+            stateField: 'conditionValueUserAgent',
+            emptyValue: '',
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}' ? formDataConditionValue : '',
+            getFormattedValue: (ctx) => ctx.conditionValueUserAgent,
+            operators: [
+                { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
+                { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
+                { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
+                { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
+                { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' },
+                { value: '{{ .Const.OperatorBot }}', label: 'Is Known Bot' },
+                { value: '{{ .Const.OperatorBot }}_negated', label: 'Is Not Known Bot' }
+            ]
+        },
+        '{{ .Const.ConditionPropertyIPAddress }}': {
+            stateField: 'conditionValueIPAddress',
+            emptyValue: '',
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}' ? formDataConditionValue : '',
+            getFormattedValue: (ctx) => ctx.conditionValueIPAddress,
+            operators: [
+                { value: '{{ .Const.OperatorMatches }}', label: 'Matches' },
+                { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
+                { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+            ]
+        },
+        '{{ .Const.ConditionPropertyDomain }}': {
+            stateField: 'conditionValueDomain',
+            emptyValue: '',
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}' ? formDataConditionValue : '',
+            getFormattedValue: (ctx) => ctx.conditionValueDomain,
+            operators: [
+                { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
+                { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
+                { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
+                { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
+                { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
+                { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
+            ]
+        },
+        '{{ .Const.ConditionPropertyHTTPHeaderName }}': {
+            stateField: 'conditionValueHTTPHeaderName',
+            emptyValue: '',
+            initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}' ? formDataConditionValue : '',
+            getFormattedValue: (ctx) => ctx.conditionValueHTTPHeaderName,
+            operators: [
+                { value: '{{ .Const.OperatorEquals }}', label: 'Header Exists' },
+                { value: '{{ .Const.OperatorEquals }}_negated', label: 'Header Does Not Exist' },
+                { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
+                { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' }
+            ]
+        }
+    };
+
+    // Child repositories can override this block to inject custom rules into `conditionRegistry`.
+    {{ block "rule-conditions-registry-extension" . }}{{ end }}
+
     let initialOperator = '{{ if .Params.ConditionOperator }}{{ .Params.ConditionOperator }}{{ else }}{{ index .Const.StringOperators 0 }}{{ end }}';
     {{ if .Params.ConditionNegated }}
     initialOperator = initialOperator + '_negated';
     {{ end }}
 
-    return {
+    // 3. Define the Core Component 
+    const componentData = {
         conditionProperty: formDataConditionProperty || '{{ .Const.ConditionPropertyUserAgent }}',
         conditionOperator: null,
         conditionNegated: {{ if .Params.ConditionNegated }}true{{ else }}false{{ end }},
+
         actionProperty: formDataActionProperty,
-
-        // Separate condition value fields for each type
-        conditionValueUserAgent: isUserAgentCondition ? formDataConditionValue : '',
-        conditionValueIPAddress: isIPCondition ? formDataConditionValue : '',
-        conditionValueDomain: isDomainCondition ? formDataConditionValue : '',
-        conditionValueHTTPHeaderName: isHTTPHeaderNameCondition ? formDataConditionValue : '',
-        selectedCountries: (isCountryCondition && formDataConditionValue) ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) : [],
-
-        // Separate action value fields for each type
         actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '0') : '0',
         actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
 
+        // Hides inputs when operator is Empty or Bot
         get showConditionValue() {
             const baseOperator = (this.conditionOperator || '').replace('_negated', '');
             return baseOperator !== '{{ .Const.OperatorEmpty }}' && baseOperator !== '{{ .Const.OperatorBot }}';
         },
 
-        get isStringCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}';
-        },
-
-        get isCountryCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}';
-        },
-
-        get isIPCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionPropertyIPAddress }}';
-        },
-
-        get isDomainCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionPropertyDomain }}';
-        },
-
-        get isHTTPHeaderNameCondition() {
-            return this.conditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}';
-        },
-
-        // Computed property that returns the active condition value based on current condition type
         get activeConditionValue() {
-            if (this.isCountryCondition) {
-                return this.selectedCountries.join(',');
-            } else if (this.isIPCondition) {
-                return this.conditionValueIPAddress;
-            } else if (this.isDomainCondition) {
-                return this.conditionValueDomain;
-            } else if (this.isHTTPHeaderNameCondition) {
-                return this.conditionValueHTTPHeaderName;
-            } else {
-                return this.conditionValueUserAgent;
-            }
+            const config = conditionRegistry[this.conditionProperty] || conditionRegistry['{{ .Const.ConditionPropertyUserAgent }}'];
+            return config.getFormattedValue(this);
         },
 
-        // Computed property that returns the active action value based on current action type
+        get availableOperators() {
+            const config = conditionRegistry[this.conditionProperty] || conditionRegistry['{{ .Const.ConditionPropertyUserAgent }}'];
+            return config.operators;
+        },
+
         get activeActionValue() {
             if (this.actionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}') {
                 return this.actionValueDifficultyLevel;
@@ -89,78 +124,30 @@ function ruleFormData() {
             return '';
         },
 
-        get availableOperators() {
-            if (this.isIPCondition) {
-                return [
-                    { value: '{{ .Const.OperatorMatches }}', label: 'Matches' },
-                    { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
-                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
-                ];
-            } else if (this.isCountryCondition) {
-                return [
-                    { value: '{{ .Const.OperatorIn }}', label: 'In' },
-                    { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' },
-                ];
-            } else if (this.isDomainCondition) {
-                // Domain operators - same as user agent
-                return [
-                    { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
-                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
-                    { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
-                    { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
-                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' }
-                ];
-            } else if (this.isHTTPHeaderNameCondition) {
-                return [
-                    { value: '{{ .Const.OperatorEquals }}', label: 'Header Exists' },
-                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Header Does Not Exist' },
-                    { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
-                    { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' },
-                ];
-            } else {
-                // String operators for user_agent
-                return [
-                    { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
-                    { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
-                    { value: '{{ .Const.OperatorContains }}', label: 'Contains' },
-                    { value: '{{ .Const.OperatorContains }}_negated', label: 'Not Contains' },
-                    { value: '{{ .Const.OperatorEmpty }}', label: 'Is Empty' },
-                    { value: '{{ .Const.OperatorEmpty }}_negated', label: 'Is Not Empty' },
-                    { value: '{{ .Const.OperatorBot }}', label: 'Is Known Bot' },
-                    { value: '{{ .Const.OperatorBot }}_negated', label: 'Is Not Known Bot' }
-                ];
-            }
-        },
-
         init() {
-            // Wait for the DOM to update (x-for to render options) before applying the initial operator
+            // Apply initial operator once DOM is ready
             this.$nextTick(() => {
                 this.conditionOperator = initialOperator;
             });
 
-            // Watch for condition property changes and reset operator if needed
-            this.$watch('conditionProperty', (value) => {
-                const operators = this.availableOperators;
-                const operatorValues = operators.map(op => op.value);
-                if (!operatorValues.includes(this.conditionOperator)) {
-                    this.conditionOperator = operators[0].value;
+            // Watch for changes and automate state cleanup
+            this.$watch('conditionProperty', (newVal) => {
+                const config = conditionRegistry[newVal] || conditionRegistry['{{ .Const.ConditionPropertyUserAgent }}'];
+                const validOperatorValues = config.operators.map(op => op.value);
+
+                // Fallback operator if the currently selected one isn't supported by the new property
+                if (!validOperatorValues.includes(this.conditionOperator) && validOperatorValues.length > 0) {
+                    this.conditionOperator = validOperatorValues[0];
                 }
 
-                const activeUserAgent = this.isStringCondition ? this.conditionValueUserAgent : '';
-                const activeIP = this.isIPCondition ? this.conditionValueIPAddress : '';
-                const activeDomain = this.isDomainCondition ? this.conditionValueDomain : '';
-                const activeHeader = this.isHTTPHeaderNameCondition ? this.conditionValueHTTPHeaderName : '';
-                const activeCountries = this.isCountryCondition ? this.selectedCountries : [];
-                this.conditionValueUserAgent = activeUserAgent;
-                this.conditionValueIPAddress = activeIP;
-                this.conditionValueDomain = activeDomain;
-                this.conditionValueHTTPHeaderName = activeHeader;
-                this.selectedCountries = activeCountries;
+                // Clear out inactive values so they don't persist hidden in the background
+                Object.entries(conditionRegistry).forEach(([prop, regConfig]) => {
+                    if (prop !== newVal) {
+                        this[regConfig.stateField] = Array.isArray(regConfig.emptyValue) ? [] : '';
+                    }
+                });
             });
 
-            // Watch for action property changes to set sensible defaults
             this.$watch('actionProperty', (value) => {
                 if (value === '{{ .Const.ActionPropertyDifficultyLevel }}' && this.actionValueDifficultyLevel === '') {
                     this.actionValueDifficultyLevel = '0';
@@ -182,8 +169,17 @@ function ruleFormData() {
         isCountrySelected(code) {
             return this.selectedCountries.includes(code);
         }
+
+        // Final Extension Hook for arbitrary methods
+        {{ block "rule-methods-extension" . }}{{ end }}
     };
+
+    // Inject all the condition variables into Alpine dynamically
+    Object.values(conditionRegistry).forEach(config => {
+        componentData[config.stateField] = config.initialValue;
+    });
+
+    return componentData;
 }
 </script>
-{{ template "rule-scripts-custom" . }}
 {{end}}
