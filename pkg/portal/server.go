@@ -210,6 +210,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
+	s.Rules = NewRuleRegistry()
 	s.initRuleParsers()
 
 	platformCtx := &PlatformRenderContext{

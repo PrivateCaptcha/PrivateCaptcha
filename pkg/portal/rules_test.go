@@ -194,6 +194,12 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
 	}
 
+	// unknown property with registry should fall back to title case from ConditionDisplayName
+	model = difficultyRuleToDisplay(rule, true, hasher, registry)
+	if model.ConditionProperty != "Some Custom Property" {
+		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
+	}
+
 	// unknown property with registry override should use custom display name
 	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop")
 	model = difficultyRuleToDisplay(rule, true, hasher, registry)

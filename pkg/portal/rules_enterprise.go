@@ -326,11 +326,10 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 }
 
 func (s *Server) initRuleParsers() {
-	s.Rules = NewRuleRegistry()
-	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), userAgentConditionParser, "")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), userAgentConditionParser, "User Agent")
 	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), ipAddressConditionParser, "IP address")
-	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyCountryCode), countryCodeConditionParser, "")
-	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyDomain), domainConditionParser, "")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyCountryCode), countryCodeConditionParser, "Country Code")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyDomain), domainConditionParser, "Domain")
 	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyHTTPHeaderName), httpHeaderNameConditionParser, "HTTP Header Name")
 	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyDifficultyLevelPercent), difficultyActionParser)
 	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyHTTPRequest), httpRequestActionParser)
