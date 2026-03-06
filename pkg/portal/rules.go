@@ -27,7 +27,7 @@ type DifficultyRuleModel struct {
 	Terminal          bool
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, conditionPropertyDisplayNames map[dbgen.RuleConditionProperty]string) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, conditionPropertyNames map[string]string) *DifficultyRuleModel {
 	if rule == nil {
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
@@ -100,7 +100,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		}
 	}
 
-	conditionProperty, ok := conditionPropertyDisplayNames[rule.ConditionProperty]
+	conditionProperty, ok := conditionPropertyNames[string(rule.ConditionProperty)]
 	if !ok {
 		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
 	}
