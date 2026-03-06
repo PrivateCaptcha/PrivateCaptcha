@@ -26,6 +26,7 @@ function ruleFormData() {
             emptyValue: '',
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueUserAgent,
+            tooltip: 'Text value',
             operators: [
                 { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
                 { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
@@ -42,6 +43,7 @@ function ruleFormData() {
             emptyValue: '',
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueIPAddress,
+            tooltip: 'Comma-separated list of IP addresses or CIDR prefixes',
             operators: [
                 { value: '{{ .Const.OperatorMatches }}', label: 'Matches' },
                 { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
@@ -54,6 +56,7 @@ function ruleFormData() {
             emptyValue: '',
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueDomain,
+            tooltip: 'Domain name',
             operators: [
                 { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
                 { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
@@ -68,9 +71,8 @@ function ruleFormData() {
             emptyValue: '',
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueHTTPHeaderName,
+            tooltip: 'Comma-separated list of HTTP header names',
             operators: [
-                { value: '{{ .Const.OperatorEquals }}', label: 'Header Exists' },
-                { value: '{{ .Const.OperatorEquals }}_negated', label: 'Header Does Not Exist' },
                 { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
                 { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' }
             ]
@@ -99,6 +101,11 @@ function ruleFormData() {
         get showConditionValue() {
             const baseOperator = (this.conditionOperator || '').replace('_negated', '');
             return baseOperator !== '{{ .Const.OperatorEmpty }}' && baseOperator !== '{{ .Const.OperatorBot }}';
+        },
+
+        get conditionValueTooltip() {
+            const config = conditionRegistry[this.conditionProperty];
+            return (config && config.tooltip) ? config.tooltip : '';
         },
 
         get activeConditionValue() {
