@@ -164,6 +164,9 @@ function ruleFormData() {
             });
         },
 
+        // Final Extension Hook for arbitrary methods
+        {{ block "rule-methods-extension" . }}{{ end }}
+
         toggleCountry(code) {
             const index = this.selectedCountries.indexOf(code);
             if (index > -1) {
@@ -176,9 +179,6 @@ function ruleFormData() {
         isCountrySelected(code) {
             return this.selectedCountries.includes(code);
         }
-
-        // Final Extension Hook for arbitrary methods
-        {{ block "rule-methods-extension" . }}{{ end }}
     };
 
     // Inject all the condition variables into Alpine dynamically
