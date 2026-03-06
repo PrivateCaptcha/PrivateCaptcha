@@ -1108,7 +1108,7 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 	var auditEvent *common.AuditLogEvent
 	if _, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var moveErr error
-		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, org, rule, newIndex, user)
 		if moveErr != nil {
 			return nil, moveErr
 		}
@@ -1179,7 +1179,7 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 	var auditEvent *common.AuditLogEvent
 	if _, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 		var moveErr error
-		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, rule, newIndex, user)
+		_, auditEvent, moveErr = impl.MoveDifficultyRuleWithRebalancing(ctx, org, rule, newIndex, user)
 		if moveErr != nil {
 			return nil, moveErr
 		}

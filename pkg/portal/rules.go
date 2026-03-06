@@ -28,6 +28,10 @@ type DifficultyRuleModel struct {
 }
 
 func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
+	if rule == nil {
+		return &DifficultyRuleModel{CanEdit: canEdit}
+	}
+
 	conditionValue := ""
 	if rule.ConditionValueStr.Valid {
 		conditionValue = rule.ConditionValueStr.String

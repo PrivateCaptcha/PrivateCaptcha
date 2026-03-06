@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	ErrUnknownConditionProperty = errors.New("unknown rule condition property")
-	ErrUnknownActionProperty    = errors.New("unknown rule action property")
-	ErrInvalidIPValue           = errors.New("invalid IP address or prefix value")
+	ErrUnknownConditionProperty     = errors.New("unknown rule condition property")
+	ErrUnknownActionProperty        = errors.New("unknown rule action property")
+	ErrInvalidIPValue               = errors.New("invalid IP address or prefix value")
+	ErrUnsupportedConditionOperator = errors.New("unsupported condition operator for rule")
 )
 
 const (
@@ -291,6 +292,15 @@ type MatcherFactory func(rule *dbgen.DifficultyRule) (Matcher, error)
 
 // BuildStringMatcher creates a StringMatcher from a database rule.
 func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	switch rule.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals,
+		dbgen.RuleConditionOperatorContains,
+		dbgen.RuleConditionOperatorEmpty,
+		dbgen.RuleConditionOperatorIn:
+	default:
+		return nil, ErrUnsupportedConditionOperator
+	}
+
 	value := rule.ConditionValueStr.String
 	sm := &StringMatcher{
 		ConditionProperty:        rule.ConditionProperty,
@@ -320,6 +330,15 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 
 // BuildIPMatcher creates an IPMatcher from a database rule.
 func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	switch rule.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals,
+		dbgen.RuleConditionOperatorMatches,
+		dbgen.RuleConditionOperatorIn,
+		dbgen.RuleConditionOperatorEmpty:
+	default:
+		return nil, ErrUnsupportedConditionOperator
+	}
+
 	im := &IPMatcher{
 		ConditionOperator:        rule.ConditionOperator,
 		ConditionOperatorNegated: rule.ConditionOperatorNegated,
@@ -332,10 +351,15 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 		}
 		value := rule.ConditionValueStr.String
 		items := strings.Split(value, sep)
+		validCount := 0
 		for _, item := range items {
 			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
+			}
+			validCount++
+			if validCount > MaxIPAddressValues {
+				return nil, ErrInvalidIPValue
 			}
 			prefix, err := netip.ParsePrefix(item)
 			if err != nil {
@@ -356,6 +380,13 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 }
 
 func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
+	switch rule.ConditionOperator {
+	case dbgen.RuleConditionOperatorEquals,
+		dbgen.RuleConditionOperatorIn:
+	default:
+		return nil, ErrUnsupportedConditionOperator
+	}
+
 	value := rule.ConditionValueStr.String
 	hm := &HeaderMatcher{
 		ConditionOperator:        rule.ConditionOperator,
