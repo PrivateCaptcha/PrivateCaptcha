@@ -137,39 +137,39 @@ func (ac *AlertRenderContext) ClearAlerts() {
 }
 
 type Server struct {
-	Store                         db.Implementor
-	TimeSeries                    common.TimeSeriesStore
-	APIURL                        string
-	CDNURL                        string
-	Prefix                        string
-	IDHasher                      common.IdentifierHasher
-	template                      *Templates
-	XSRF                          *common.XSRFMiddleware
-	Sessions                      *session.Manager
-	Mailer                        common.Mailer
-	Stage                         string
-	PlanService                   billing.PlanService
-	PuzzleEngine                  puzzle.Engine
-	Metrics                       common.PortalMetrics
-	maintenanceMode               atomic.Bool
-	canRegister                   atomic.Bool
-	SettingsTabs                  []*SettingsTab
-	RateLimiter                   ratelimit.HTTPRateLimiter
-	RenderConstants               interface{}
-	Jobs                          Jobs
-	PlatformCtx                   interface{}
-	DataCtx                       interface{}
-	CountryCodeHeader             common.ConfigItem
-	UserLimiter                   api.UserLimiter
-	AuditLogsFunc                 AuditLogsConstructor
-	AuditLogParser                AuditLogParser
-	SubscriptionLimits            db.SubscriptionLimits
-	EmailVerifier                 common.EmailVerifier
-	TwoFactorDuration             time.Duration
-	LicenseService                common.LicenseService
-	ConditionParsers              map[string]ConditionFormParser
-	ActionParsers                 map[string]ActionFormParser
-	ConditionPropertyDisplayNames map[dbgen.RuleConditionProperty]string
+	Store                  db.Implementor
+	TimeSeries             common.TimeSeriesStore
+	APIURL                 string
+	CDNURL                 string
+	Prefix                 string
+	IDHasher               common.IdentifierHasher
+	template               *Templates
+	XSRF                   *common.XSRFMiddleware
+	Sessions               *session.Manager
+	Mailer                 common.Mailer
+	Stage                  string
+	PlanService            billing.PlanService
+	PuzzleEngine           puzzle.Engine
+	Metrics                common.PortalMetrics
+	maintenanceMode        atomic.Bool
+	canRegister            atomic.Bool
+	SettingsTabs           []*SettingsTab
+	RateLimiter            ratelimit.HTTPRateLimiter
+	RenderConstants        interface{}
+	Jobs                   Jobs
+	PlatformCtx            interface{}
+	DataCtx                interface{}
+	CountryCodeHeader      common.ConfigItem
+	UserLimiter            api.UserLimiter
+	AuditLogsFunc          AuditLogsConstructor
+	AuditLogParser         AuditLogParser
+	SubscriptionLimits     db.SubscriptionLimits
+	EmailVerifier          common.EmailVerifier
+	TwoFactorDuration      time.Duration
+	LicenseService         common.LicenseService
+	ConditionParsers       map[string]ConditionFormParser
+	ActionParsers          map[string]ActionFormParser
+	ConditionPropertyNames map[dbgen.RuleConditionProperty]string
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
