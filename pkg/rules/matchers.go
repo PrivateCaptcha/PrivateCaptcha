@@ -114,7 +114,6 @@ func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 
 type HeaderMatcher struct {
 	ConditionOperator        dbgen.RuleConditionOperator
-	ConditionValueStr        string
 	ConditionValueItems      []string
 	ConditionOperatorNegated bool
 }
@@ -122,18 +121,13 @@ type HeaderMatcher struct {
 func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
 	var result bool
 
-	switch hm.ConditionOperator {
-	case dbgen.RuleConditionOperatorEquals:
-		result = ri.HasHeader(hm.ConditionValueStr)
-	case dbgen.RuleConditionOperatorIn:
+	if hm.ConditionOperator == dbgen.RuleConditionOperatorIn {
 		for _, name := range hm.ConditionValueItems {
 			if ri.HasHeader(name) {
 				result = true
 				break
 			}
 		}
-	default:
-		return false
 	}
 
 	if hm.ConditionOperatorNegated {

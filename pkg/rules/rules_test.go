@@ -2784,14 +2784,15 @@ func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
 	}
 }
 
-func TestHTTPHeaderNameEqualsMatch(t *testing.T) {
+func TestHTTPHeaderNameInSingleMatch(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
-		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
-		ConditionOperator: dbgen.RuleConditionOperatorEquals,
-		ConditionValueStr: pgtype.Text{String: "X-Custom-Header", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-		Enabled:           true,
+		ConditionProperty:       dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "X-Custom-Header", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
 	}
 
 	compiled, err := testCompiler.CompileRule(context.Background(), rule)
@@ -2810,14 +2811,15 @@ func TestHTTPHeaderNameEqualsMatch(t *testing.T) {
 	}
 }
 
-func TestHTTPHeaderNameEqualsCaseInsensitive(t *testing.T) {
+func TestHTTPHeaderNameInSingleCaseInsensitive(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
-		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
-		ConditionOperator: dbgen.RuleConditionOperatorEquals,
-		ConditionValueStr: pgtype.Text{String: "x-custom-header", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-		Enabled:           true,
+		ConditionProperty:       dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "x-custom-header", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
 	}
 
 	compiled, err := testCompiler.CompileRule(context.Background(), rule)
@@ -2831,12 +2833,13 @@ func TestHTTPHeaderNameEqualsCaseInsensitive(t *testing.T) {
 	}
 }
 
-func TestHTTPHeaderNameEqualsNegated(t *testing.T) {
+func TestHTTPHeaderNameInSingleNegated(t *testing.T) {
 	rule := &dbgen.DifficultyRule{
 		ConditionProperty:        dbgen.RuleConditionPropertyHTTPHeaderName,
-		ConditionOperator:        dbgen.RuleConditionOperatorEquals,
+		ConditionOperator:        dbgen.RuleConditionOperatorIn,
 		ConditionOperatorNegated: true,
 		ConditionValueStr:        pgtype.Text{String: "X-Custom-Header", Valid: true},
+		ConditionValueSeparator:  pgtype.Text{String: ",", Valid: true},
 		ActionProperty:           dbgen.RuleActionPropertyDifficultyLevelPercent,
 		ActionValue:              50,
 		Enabled:                  true,
@@ -2855,6 +2858,22 @@ func TestHTTPHeaderNameEqualsNegated(t *testing.T) {
 	ri2 := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
 	if compiled.Matches(ri2) {
 		t.Error("Expected negated rule to not match when header exists")
+	}
+}
+
+func TestHTTPHeaderNameEqualsUnsupported(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "X-Custom-Header", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err == nil {
+		t.Error("Expected error when using equals operator for HTTP header condition")
 	}
 }
 
@@ -2931,27 +2950,6 @@ func TestHTTPHeaderNameHasHeader(t *testing.T) {
 	}
 	if ri.HasHeader("X-Missing-Header") {
 		t.Error("Expected HasHeader to return false for missing header")
-	}
-}
-
-func TestHTTPHeaderNameNonCanonicalRule(t *testing.T) {
-	rule := &dbgen.DifficultyRule{
-		ConditionProperty: dbgen.RuleConditionPropertyHTTPHeaderName,
-		ConditionOperator: dbgen.RuleConditionOperatorEquals,
-		ConditionValueStr: pgtype.Text{String: "x-custom-header", Valid: true},
-		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-		ActionValue:       50,
-		Enabled:           true,
-	}
-
-	compiled, err := testCompiler.CompileRule(context.Background(), rule)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ri := newTestRequestInfoWithHeaders("agent", netip.MustParseAddr("1.2.3.4"), map[string]string{"X-Custom-Header": "value"})
-	if !compiled.Matches(ri) {
-		t.Error("Expected rule with non-canonical header name to match after canonicalization in BuildHeaderMatcher")
 	}
 }
 
