@@ -665,6 +665,10 @@ func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRu
 }
 
 func newOldDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	if result == nil {
+		return nil
+	}
+
 	return &dbgen.DifficultyRule{
 		ID:                       result.ID,
 		Name:                     result.OldName,
