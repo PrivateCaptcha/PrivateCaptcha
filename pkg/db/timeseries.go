@@ -453,12 +453,13 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 	query := fmt.Sprintf(`SELECT
 		toDateTime(%s) AS agg_time,
 		sum(count) AS count
-	FROM privatecaptcha.rules_logs_1d FINAL
+	FROM %s FINAL
 	WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 	GROUP BY agg_time
 	ORDER BY agg_time WITH FILL FROM toDateTime(%s) TO now() STEP %s
 	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`,
 		fmt.Sprintf(timeFunction, "timestamp"),
+		RulesLogsTableName1d,
 		fmt.Sprintf(timeFunction, "{timestamp:DateTime}"),
 		interval)
 

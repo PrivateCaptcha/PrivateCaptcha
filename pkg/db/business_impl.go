@@ -3377,7 +3377,7 @@ const (
 	RulePositionStep = 100.0
 )
 
-func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, ErrMaintenance
 	}
@@ -3465,8 +3465,10 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, rule *dbg
 	}
 
 	updatedRule, err := impl.querier.MoveDifficultyRule(ctx, &dbgen.MoveDifficultyRuleParams{
-		ID:       rule.ID,
-		Position: newPosition,
+		ID:        rule.ID,
+		Position:  newPosition,
+		CreatorID: Int(user.ID),
+		Column4:   org.UserID.Int32,
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "newPosition", newPosition, common.ErrAttr(err))
@@ -3548,9 +3550,9 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 	return nil
 }
 
-func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Context, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
+func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, newIndex int, user *dbgen.User) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
 	// Move the rule
-	updatedRule, auditEvent, err := impl.MoveDifficultyRule(ctx, rule, newIndex, user)
+	updatedRule, auditEvent, err := impl.MoveDifficultyRule(ctx, org, rule, newIndex, user)
 	if err != nil {
 		// Check if we need rebalancing
 		if errors.Is(err, errRulesNeedRebalancing) {
@@ -3573,15 +3575,17 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 			}
 
 			// Re-fetch to get the current position assigned by rebalancing
-			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
-			rule, err = impl.RetrieveDifficultyRule(ctx, rule.ID)
+			ruleID := rule.ID
+			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(ruleID))
+			refreshedRule, err := impl.RetrieveDifficultyRule(ctx, ruleID)
 			if err != nil {
-				slog.ErrorContext(ctx, "Failed to re-fetch rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
+				slog.ErrorContext(ctx, "Failed to re-fetch rule after rebalancing", "ruleID", ruleID, common.ErrAttr(err))
 				return nil, nil, err
 			}
+			rule = refreshedRule
 
 			// Try moving again after rebalancing
-			updatedRule, auditEvent, err = impl.MoveDifficultyRule(ctx, rule, newIndex, user)
+			updatedRule, auditEvent, err = impl.MoveDifficultyRule(ctx, org, rule, newIndex, user)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to move rule after rebalancing", "ruleID", rule.ID, common.ErrAttr(err))
 				return nil, nil, err

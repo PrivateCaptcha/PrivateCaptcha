@@ -12,7 +12,10 @@ import (
 )
 
 const createDifficultyRule = `-- name: CreateDifficultyRule :one
-WITH max_pos AS (
+WITH scope_lock AS (
+    SELECT pg_advisory_xact_lock(COALESCE($2, -1), COALESCE($3, -1))
+),
+max_pos AS (
     SELECT COALESCE(MAX(position), -$15::float8) + $15::float8 AS new_position
     FROM backend.difficulty_rules
     WHERE (property_id = $2 OR (property_id IS NULL AND $2 IS NULL))
@@ -164,8 +167,12 @@ rules_list AS (
       AND dr.id != $1
 )
 SELECT
-    (SELECT position FROM rules_list WHERE idx = $2 - 1) AS prev_position,
-    (SELECT position FROM rules_list WHERE idx = $2) AS next_position
+    prev_row.position AS prev_position,
+    next_row.position AS next_position
+FROM
+    (SELECT 1) AS dummy
+LEFT JOIN rules_list prev_row ON prev_row.idx = $2 - 1
+LEFT JOIN rules_list next_row ON next_row.idx = $2
 `
 
 type GetDifficultyRulePositionNeighborsParams struct {
@@ -278,17 +285,24 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 const moveDifficultyRule = `-- name: MoveDifficultyRule :one
 UPDATE backend.difficulty_rules
 SET position = $2, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND (creator_id = $3 OR $3 = $4)
 RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at
 `
 
 type MoveDifficultyRuleParams struct {
-	ID       int32   `db:"id" json:"id"`
-	Position float64 `db:"position" json:"position"`
+	ID        int32       `db:"id" json:"id"`
+	Position  float64     `db:"position" json:"position"`
+	CreatorID pgtype.Int4 `db:"creator_id" json:"creator_id"`
+	Column4   interface{} `db:"column_4" json:"column_4"`
 }
 
 func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRuleParams) (*DifficultyRule, error) {
-	row := q.db.QueryRow(ctx, moveDifficultyRule, arg.ID, arg.Position)
+	row := q.db.QueryRow(ctx, moveDifficultyRule,
+		arg.ID,
+		arg.Position,
+		arg.CreatorID,
+		arg.Column4,
+	)
 	var i DifficultyRule
 	err := row.Scan(
 		&i.ID,
