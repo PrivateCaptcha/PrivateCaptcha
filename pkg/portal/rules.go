@@ -178,7 +178,8 @@ func (r *RuleRegistry) ActionParser(key string) (ActionFormParser, bool) {
 }
 
 // ConditionDisplayName returns the display name for a condition property.
-// Returns the registered display name and true if found, or empty string and false otherwise.
+// Returns the registered display name and true if the condition exists and has a non-empty display name.
+// Returns empty string and false if the condition is not registered or has no custom display name.
 func (r *RuleRegistry) ConditionDisplayName(key string) (string, bool) {
 	reg, ok := r.conditions[key]
 	if !ok || reg.DisplayName == "" {
