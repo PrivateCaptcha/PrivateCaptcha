@@ -339,7 +339,7 @@ func (s *Server) initRuleParsers() {
 		string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
 		string(dbgen.RuleActionPropertyBreak):                  breakActionParser,
 	}
-	s.ConditionPropertyDisplayNames = map[dbgen.RuleConditionProperty]string{
+	s.ConditionPropertyNames = map[dbgen.RuleConditionProperty]string{
 		dbgen.RuleConditionPropertyIPAddress:      "IP address",
 		dbgen.RuleConditionPropertyHTTPHeaderName: "HTTP Header Name",
 	}
