@@ -603,7 +603,7 @@ func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseR
 	rules := rulesMap[org.ID]
 	for _, rule := range rules {
 		canEdit := canEditRule(user, org, rule)
-		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher, s.ConditionPropertyDisplayNames))
+		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher, s.ConditionPropertyNames))
 	}
 
 	return renderCtx, nil, nil
