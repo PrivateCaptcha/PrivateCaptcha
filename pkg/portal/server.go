@@ -169,7 +169,7 @@ type Server struct {
 	LicenseService         common.LicenseService
 	ConditionParsers       map[string]ConditionFormParser
 	ActionParsers          map[string]ActionFormParser
-	ConditionPropertyNames map[dbgen.RuleConditionProperty]string
+	ConditionPropertyNames map[string]string
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
