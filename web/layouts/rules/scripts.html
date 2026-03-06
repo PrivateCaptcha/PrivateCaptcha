@@ -16,6 +16,7 @@ function ruleFormData() {
                 ? formDataConditionValue.split(',').map(c => c.trim()).filter(c => c) 
                 : [],
             getFormattedValue: (ctx) => ctx.selectedCountries.join(','),
+            showOperator: false,
             operators: [
                 { value: '{{ .Const.OperatorIn }}', label: 'In' },
                 { value: '{{ .Const.OperatorIn }}_negated', label: 'Not In' }
@@ -27,6 +28,7 @@ function ruleFormData() {
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyUserAgent }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueUserAgent,
             tooltip: 'Text value',
+            showOperator: true,
             operators: [
                 { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
                 { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
@@ -44,6 +46,7 @@ function ruleFormData() {
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyIPAddress }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueIPAddress,
             tooltip: 'Comma-separated list of IP addresses or CIDR prefixes',
+            showOperator: true,
             operators: [
                 { value: '{{ .Const.OperatorMatches }}', label: 'Matches' },
                 { value: '{{ .Const.OperatorMatches }}_negated', label: 'Not Matches' },
@@ -57,6 +60,7 @@ function ruleFormData() {
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyDomain }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueDomain,
             tooltip: 'Domain name',
+            showOperator: true,
             operators: [
                 { value: '{{ .Const.OperatorEquals }}', label: 'Equals' },
                 { value: '{{ .Const.OperatorEquals }}_negated', label: 'Not Equals' },
@@ -72,6 +76,7 @@ function ruleFormData() {
             initialValue: formDataConditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}' ? formDataConditionValue : '',
             getFormattedValue: (ctx) => ctx.conditionValueHTTPHeaderName,
             tooltip: 'Comma-separated list of HTTP header names',
+            showOperator: true,
             operators: [
                 { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
                 { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' }
@@ -96,6 +101,11 @@ function ruleFormData() {
         actionProperty: formDataActionProperty,
         actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '0') : '0',
         actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
+
+        get showConditionOperator() {
+            const config = conditionRegistry[this.conditionProperty];
+            return config ? config.showOperator !== false : true;
+        },
 
         // Hides inputs when operator is Empty or Bot
         get showConditionValue() {
