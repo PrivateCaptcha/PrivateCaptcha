@@ -27,7 +27,7 @@ type DifficultyRuleModel struct {
 	Terminal          bool
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, conditionPropertyNames map[string]string) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, registry *RuleRegistry) *DifficultyRuleModel {
 	if rule == nil {
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
@@ -100,8 +100,11 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		}
 	}
 
-	conditionProperty, ok := conditionPropertyNames[string(rule.ConditionProperty)]
-	if !ok {
+	var conditionProperty string
+	if registry != nil {
+		conditionProperty, _ = registry.ConditionDisplayName(string(rule.ConditionProperty))
+	}
+	if conditionProperty == "" {
 		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
 	}
 
@@ -127,6 +130,62 @@ type ConditionFormParser func(conditionOperator, conditionValue, domain string) 
 // ActionFormParser validates a rule action value from form data and returns the
 // integer value and a status code.
 type ActionFormParser func(actionValue string) (int32, common.StatusCode)
+
+// ConditionRegistration holds a condition parser and its display name.
+type ConditionRegistration struct {
+	Parser      ConditionFormParser
+	DisplayName string
+}
+
+// RuleRegistry manages registration and lookup of rule condition and action parsers.
+type RuleRegistry struct {
+	conditions map[string]ConditionRegistration
+	actions    map[string]ActionFormParser
+}
+
+// NewRuleRegistry creates a new empty RuleRegistry.
+func NewRuleRegistry() *RuleRegistry {
+	return &RuleRegistry{
+		conditions: make(map[string]ConditionRegistration),
+		actions:    make(map[string]ActionFormParser),
+	}
+}
+
+// RegisterCondition adds a condition parser with an optional display name.
+// If displayName is empty, the default title-case formatting is used at display time.
+func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser, displayName string) {
+	r.conditions[key] = ConditionRegistration{Parser: parser, DisplayName: displayName}
+}
+
+// RegisterAction adds an action parser.
+func (r *RuleRegistry) RegisterAction(key string, parser ActionFormParser) {
+	r.actions[key] = parser
+}
+
+// ConditionParser returns the condition parser for the given key and whether it exists.
+func (r *RuleRegistry) ConditionParser(key string) (ConditionFormParser, bool) {
+	reg, ok := r.conditions[key]
+	if !ok {
+		return nil, false
+	}
+	return reg.Parser, true
+}
+
+// ActionParser returns the action parser for the given key and whether it exists.
+func (r *RuleRegistry) ActionParser(key string) (ActionFormParser, bool) {
+	parser, ok := r.actions[key]
+	return parser, ok
+}
+
+// ConditionDisplayName returns the display name for a condition property.
+// Returns the registered display name and true if found, or empty string and false otherwise.
+func (r *RuleRegistry) ConditionDisplayName(key string) (string, bool) {
+	reg, ok := r.conditions[key]
+	if !ok || reg.DisplayName == "" {
+		return "", false
+	}
+	return reg.DisplayName, true
+}
 
 // canEditRule checks if a user can edit a rule (org owner OR rule creator)
 func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule) bool {

@@ -326,23 +326,16 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 }
 
 func (s *Server) initRuleParsers() {
-	s.ConditionParsers = map[string]ConditionFormParser{
-		string(dbgen.RuleConditionPropertyUserAgent):      userAgentConditionParser,
-		string(dbgen.RuleConditionPropertyIPAddress):      ipAddressConditionParser,
-		string(dbgen.RuleConditionPropertyCountryCode):    countryCodeConditionParser,
-		string(dbgen.RuleConditionPropertyDomain):         domainConditionParser,
-		string(dbgen.RuleConditionPropertyHTTPHeaderName): httpHeaderNameConditionParser,
-	}
-	s.ActionParsers = map[string]ActionFormParser{
-		string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
-		string(dbgen.RuleActionPropertyHTTPRequest):            httpRequestActionParser,
-		string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
-		string(dbgen.RuleActionPropertyBreak):                  breakActionParser,
-	}
-	s.ConditionPropertyNames = map[string]string{
-		string(dbgen.RuleConditionPropertyIPAddress):      "IP address",
-		string(dbgen.RuleConditionPropertyHTTPHeaderName): "HTTP Header Name",
-	}
+	s.Rules = NewRuleRegistry()
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), userAgentConditionParser, "")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), ipAddressConditionParser, "IP address")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyCountryCode), countryCodeConditionParser, "")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyDomain), domainConditionParser, "")
+	s.Rules.RegisterCondition(string(dbgen.RuleConditionPropertyHTTPHeaderName), httpHeaderNameConditionParser, "HTTP Header Name")
+	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyDifficultyLevelPercent), difficultyActionParser)
+	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyHTTPRequest), httpRequestActionParser)
+	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyDifficultyGrowth), difficultyGrowthActionParser)
+	s.Rules.RegisterAction(string(dbgen.RuleActionPropertyBreak), breakActionParser)
 }
 
 var (
@@ -596,13 +589,13 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 		return nil, common.StatusRuleActionPropertyRequired
 	}
 
-	conditionParser, ok := s.ConditionParsers[renderCtx.ConditionProperty]
+	conditionParser, ok := s.Rules.ConditionParser(renderCtx.ConditionProperty)
 	if !ok {
 		slog.WarnContext(ctx, "Invalid condition property", "condition", renderCtx.ConditionProperty)
 		return nil, common.StatusRuleConditionPropertyInvalid
 	}
 
-	actionParser, ok := s.ActionParsers[renderCtx.ActionProperty]
+	actionParser, ok := s.Rules.ActionParser(renderCtx.ActionProperty)
 	if !ok {
 		slog.WarnContext(ctx, "Invalid action property", "action", renderCtx.ActionProperty)
 		return nil, common.StatusRuleActionPropertyInvalid

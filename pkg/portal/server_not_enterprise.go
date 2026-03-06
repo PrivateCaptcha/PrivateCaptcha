@@ -19,7 +19,9 @@ func (s *Server) isEnterprise() bool {
 	return false
 }
 
-func (s *Server) initRuleParsers() {}
+func (s *Server) initRuleParsers() {
+	s.Rules = NewRuleRegistry()
+}
 
 // in not-EE environment user can only load the org they own
 func (s *Server) checkUserOrgAccess(user *dbgen.User, org *dbgen.Organization) bool {
