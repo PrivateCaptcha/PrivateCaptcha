@@ -27,7 +27,7 @@ type DifficultyRuleModel struct {
 	Terminal          bool
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, conditionPropertyDisplayNames map[dbgen.RuleConditionProperty]string) *DifficultyRuleModel {
 	if rule == nil {
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
@@ -100,14 +100,16 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		}
 	}
 
-	var conditionProperty string
-	switch rule.ConditionProperty {
-	case dbgen.RuleConditionPropertyIPAddress:
-		conditionProperty = "IP address"
-	case dbgen.RuleConditionPropertyHTTPHeaderName:
-		conditionProperty = "HTTP Header Name"
-	default:
-		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
+	conditionProperty, ok := conditionPropertyDisplayNames[rule.ConditionProperty]
+	if !ok {
+		switch rule.ConditionProperty {
+		case dbgen.RuleConditionPropertyIPAddress:
+			conditionProperty = "IP address"
+		case dbgen.RuleConditionPropertyHTTPHeaderName:
+			conditionProperty = "HTTP Header Name"
+		default:
+			conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
+		}
 	}
 
 	return &DifficultyRuleModel{
@@ -168,7 +170,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, false, hasher),
+		}, false, hasher, nil),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block empty User-Agents",
 			Enabled:                  false,
@@ -180,7 +182,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              0,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, false, hasher),
+		}, false, hasher, nil),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
@@ -193,7 +195,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -20,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, false, hasher),
+		}, false, hasher, nil),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
@@ -206,7 +208,7 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              50,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, false, hasher),
+		}, false, hasher, nil),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
@@ -219,6 +221,6 @@ func stubDifficultyRules() []*DifficultyRuleModel {
 			ActionValue:              -30,
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
-		}, false, hasher),
+		}, false, hasher, nil),
 	}
 }
