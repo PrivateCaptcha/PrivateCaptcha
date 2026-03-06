@@ -380,10 +380,7 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 }
 
 func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
-	switch rule.ConditionOperator {
-	case dbgen.RuleConditionOperatorEquals,
-		dbgen.RuleConditionOperatorIn:
-	default:
+	if rule.ConditionOperator != dbgen.RuleConditionOperatorIn {
 		return nil, ErrUnsupportedConditionOperator
 	}
 
@@ -393,22 +390,18 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 		ConditionOperatorNegated: rule.ConditionOperatorNegated,
 	}
 
-	if rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
-		sep := defaultSeparator
-		if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
-			sep = rule.ConditionValueSeparator.String
+	sep := defaultSeparator
+	if rule.ConditionValueSeparator.Valid && len(rule.ConditionValueSeparator.String) > 0 {
+		sep = rule.ConditionValueSeparator.String
+	}
+	items := strings.Split(value, sep)
+	hm.ConditionValueItems = make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if len(item) == 0 {
+			continue
 		}
-		items := strings.Split(value, sep)
-		hm.ConditionValueItems = make([]string, 0, len(items))
-		for _, item := range items {
-			item = strings.TrimSpace(item)
-			if len(item) == 0 {
-				continue
-			}
-			hm.ConditionValueItems = append(hm.ConditionValueItems, http.CanonicalHeaderKey(item))
-		}
-	} else {
-		hm.ConditionValueStr = http.CanonicalHeaderKey(value)
+		hm.ConditionValueItems = append(hm.ConditionValueItems, http.CanonicalHeaderKey(item))
 	}
 
 	return hm, nil
