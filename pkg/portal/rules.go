@@ -104,6 +104,8 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 	switch rule.ConditionProperty {
 	case dbgen.RuleConditionPropertyIPAddress:
 		conditionProperty = "IP address"
+	case dbgen.RuleConditionPropertyHTTPHeaderName:
+		conditionProperty = "HTTP Header Name"
 	default:
 		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
 	}
