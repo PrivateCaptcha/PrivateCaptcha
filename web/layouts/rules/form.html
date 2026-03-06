@@ -49,10 +49,10 @@
             </div>
         </div>
 
-        <div x-cloak x-show="conditionProperty !== '{{ .Const.ConditionPropertyCountryCode }}'">
+        <div x-cloak x-show="showConditionOperator">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label tooltip" data-tooltip="How to evaluate Condition">Operator</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="conditionProperty === '{{ .Const.ConditionPropertyCountryCode }}'" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
+                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="!showConditionOperator" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
                     <template x-for="op in availableOperators" :key="op.value">
                         <option :value="op.value" x-text="op.label"></option>
                     </template>
