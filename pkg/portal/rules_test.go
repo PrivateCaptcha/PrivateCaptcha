@@ -2595,6 +2595,85 @@ func TestParseDomainCondition(t *testing.T) {
 	}
 }
 
+func TestParseHTTPHeaderNameCondition(t *testing.T) {
+	tests := []struct {
+		name     string
+		operator string
+		value    string
+		expected common.StatusCode
+	}{
+		{
+			name:     "invalid operator equals",
+			operator: string(dbgen.RuleConditionOperatorEquals),
+			value:    "X-Custom-Header",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "invalid operator contains",
+			operator: string(dbgen.RuleConditionOperatorContains),
+			value:    "X-Custom-Header",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "invalid operator matches",
+			operator: string(dbgen.RuleConditionOperatorMatches),
+			value:    "X-Custom-Header",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "invalid operator empty",
+			operator: string(dbgen.RuleConditionOperatorEmpty),
+			value:    "",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "unknown operator",
+			operator: "unknown",
+			value:    "X-Custom-Header",
+			expected: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name:     "in with empty value",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "",
+			expected: common.StatusRuleHTTPHeaderNameRequired,
+		},
+		{
+			name:     "in with single valid header",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "X-Custom-Header",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "in with multiple valid headers",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "X-Header-A,X-Header-B",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "in with invalid header name",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "Invalid Header!",
+			expected: common.StatusRuleHTTPHeaderNameInvalid,
+		},
+		{
+			name:     "in with only commas returns required",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    ",,,",
+			expected: common.StatusRuleHTTPHeaderNameRequired,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, _, got := httpHeaderNameConditionParser(tt.operator, tt.value, "")
+			if got != tt.expected {
+				t.Errorf("httpHeaderNameConditionParser() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGetPropertyNewRule(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
