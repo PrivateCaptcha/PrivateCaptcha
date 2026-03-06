@@ -61,28 +61,28 @@
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}' && showConditionValue">
-            <label class="pc-internal-form-label">Value</label>
+            <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">Value</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyDomain }}' && showConditionValue">
-            <label class="pc-internal-form-label">Domain</label>
+            <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">Domain</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueDomain" placeholder="example.com" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyIPAddress }}' && showConditionValue">
-            <label class="pc-internal-form-label">IP Address Prefix (CIDR)</label>
+            <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">IP Address Prefix (CIDR)</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueIPAddress" placeholder="Enter IP address..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}' && showConditionValue">
-            <label class="pc-internal-form-label">HTTP Header Name</label>
+            <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">HTTP Header Name</label>
             <div class="mt-2">
                 <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
             </div>
