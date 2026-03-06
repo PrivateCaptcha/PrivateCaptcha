@@ -339,9 +339,9 @@ func (s *Server) initRuleParsers() {
 		string(dbgen.RuleActionPropertyDifficultyGrowth):       difficultyGrowthActionParser,
 		string(dbgen.RuleActionPropertyBreak):                  breakActionParser,
 	}
-	s.ConditionPropertyNames = map[dbgen.RuleConditionProperty]string{
-		dbgen.RuleConditionPropertyIPAddress:      "IP address",
-		dbgen.RuleConditionPropertyHTTPHeaderName: "HTTP Header Name",
+	s.ConditionPropertyNames = map[string]string{
+		string(dbgen.RuleConditionPropertyIPAddress):      "IP address",
+		string(dbgen.RuleConditionPropertyHTTPHeaderName): "HTTP Header Name",
 	}
 }
 
