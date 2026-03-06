@@ -180,8 +180,8 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// with override map, should use custom display name
-	customNames := map[dbgen.RuleConditionProperty]string{
-		dbgen.RuleConditionPropertyIPAddress: "Custom IP Display",
+	customNames := map[string]string{
+		string(dbgen.RuleConditionPropertyIPAddress): "Custom IP Display",
 	}
 	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
 	if model.ConditionProperty != "Custom IP Display" {
@@ -196,7 +196,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// unknown property with override should use custom display name
-	customNames[dbgen.RuleConditionProperty("some_custom_property")] = "My Custom Prop"
+	customNames["some_custom_property"] = "My Custom Prop"
 	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
