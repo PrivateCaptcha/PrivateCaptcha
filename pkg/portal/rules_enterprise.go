@@ -297,10 +297,7 @@ func breakActionParser(actionValue string) (int32, common.StatusCode) {
 func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) (string, string, common.StatusCode) {
 	const separator = ","
 
-	switch conditionOperator {
-	case string(dbgen.RuleConditionOperatorEquals),
-		string(dbgen.RuleConditionOperatorIn):
-	default:
+	if conditionOperator != string(dbgen.RuleConditionOperatorIn) {
 		return "", "", common.StatusRuleConditionOperatorInvalid
 	}
 
@@ -308,32 +305,24 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 		return "", "", common.StatusRuleHTTPHeaderNameRequired
 	}
 
-	if conditionOperator == string(dbgen.RuleConditionOperatorIn) {
-		validCount := 0
-		items := strings.Split(conditionValue, separator)
-		for _, item := range items {
-			item = strings.TrimSpace(item)
-			if len(item) == 0 {
-				continue
-			}
-			if !httpguts.ValidHeaderFieldName(item) {
-				return "", "", common.StatusRuleHTTPHeaderNameInvalid
-			}
-			validCount++
+	validCount := 0
+	items := strings.Split(conditionValue, separator)
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if len(item) == 0 {
+			continue
 		}
-
-		if validCount == 0 {
-			return "", "", common.StatusRuleHTTPHeaderNameRequired
+		if !httpguts.ValidHeaderFieldName(item) {
+			return "", "", common.StatusRuleHTTPHeaderNameInvalid
 		}
-
-		return conditionValue, separator, common.StatusOK
+		validCount++
 	}
 
-	if !httpguts.ValidHeaderFieldName(conditionValue) {
-		return "", "", common.StatusRuleHTTPHeaderNameInvalid
+	if validCount == 0 {
+		return "", "", common.StatusRuleHTTPHeaderNameRequired
 	}
 
-	return conditionValue, "", common.StatusOK
+	return conditionValue, separator, common.StatusOK
 }
 
 func (s *Server) initRuleParsers() {
