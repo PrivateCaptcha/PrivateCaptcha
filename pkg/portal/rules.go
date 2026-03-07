@@ -219,7 +219,7 @@ func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.Difficul
 }
 
 // nolint:unused
-func stubDifficultyRules() []*DifficultyRuleModel {
+func StubDifficultyRules() []*DifficultyRuleModel {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	// For stub data, pass nil for user and org (CanEdit will be false)
 	return []*DifficultyRuleModel{
