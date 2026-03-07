@@ -137,12 +137,16 @@ type RuleRegistry struct {
 	actions    map[string]ActionFormParser
 }
 
-func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser, displayName string) error {
+func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser, displayName string, valueFormatter ...ConditionValueFormatter) error {
 	if len(key) == 0 {
 		return errRuleConditionPropertyEmpty
 	}
 
-	r.conditions[key] = ConditionRegistration{Parser: parser, DisplayName: displayName}
+	reg := ConditionRegistration{Parser: parser, DisplayName: displayName}
+	if len(valueFormatter) > 0 {
+		reg.ValueFormatter = valueFormatter[0]
+	}
+	r.conditions[key] = reg
 
 	return nil
 }

@@ -285,13 +285,9 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition("custom_property", nil, "Custom Prop")
-		registry.conditions["custom_property"] = ConditionRegistration{
-			DisplayName: "Custom Prop",
-			ValueFormatter: func(r *dbgen.DifficultyRule) string {
-				return fmt.Sprintf("Level %d", r.ConditionValueInt.Int32)
-			},
-		}
+		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
+			return fmt.Sprintf("Level %d", r.ConditionValueInt.Int32)
+		})
 		result := registry.FormatConditionValue(rule)
 		if result != "Level 5" {
 			t.Errorf("Expected 'Level 5', got '%s'", result)
@@ -325,12 +321,9 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.conditions["custom_property"] = ConditionRegistration{
-			DisplayName: "Custom Prop",
-			ValueFormatter: func(r *dbgen.DifficultyRule) string {
-				return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
-			},
-		}
+		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
+			return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
+		})
 
 		model := difficultyRuleToDisplay(rule, true, hasher, registry)
 		if model.ConditionValue != "option-3" {
