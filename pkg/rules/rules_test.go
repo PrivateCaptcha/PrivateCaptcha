@@ -622,6 +622,7 @@ func TestIsRequestBlocked(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
 			ActionValue:       1,
+			Terminal:          true,
 			Enabled:           true,
 		},
 	}
@@ -656,6 +657,7 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
 			ActionValue:       1,
+			Terminal:          true,
 			Position:          2,
 			Enabled:           true,
 		},
@@ -664,7 +666,7 @@ func TestIsRequestBlockedChecksTypeFirst(t *testing.T) {
 	compiled := testCompiler.Compile(context.Background(), propertyRules)
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
 	if !compiled.IsRequestBlocked(ri) {
-		t.Error("Expected block rule to still be checked even when non-block rule also matches")
+		t.Error("Expected terminal block rule to still be checked even when non-terminal rule also matches")
 	}
 }
 
@@ -2705,7 +2707,9 @@ func TestTerminalBreakRulePreservesAccumulatedGrowth(t *testing.T) {
 	}
 }
 
-func TestNonTerminalBlockRuleDoesNotStopProcessing(t *testing.T) {
+func TestNonTerminalBlockRuleSkippedByIsBlocked(t *testing.T) {
+	// Non-terminal block rules are skipped by isBlockedByRules since
+	// non-terminal rules cannot be blocking.
 	rules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2718,28 +2722,12 @@ func TestNonTerminalBlockRuleDoesNotStopProcessing(t *testing.T) {
 			Position:          1,
 			Enabled:           true,
 		},
-		{
-			ID:                2,
-			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator: dbgen.RuleConditionOperatorContains,
-			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:       50,
-			Position:          2,
-			Enabled:           true,
-		},
 	}
 
 	compiled := testCompiler.Compile(context.Background(), rules)
-	prop := newStubProperty()
-	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("10.1.2.3"))
-	result, terminal := compiled.Apply(ri, prop)
-	if terminal {
-		t.Error("Expected non-terminal result when block rule is non-terminal")
-	}
-	expected := expectedDifficultyLevel(50, 50)
-	if result.Level() != expected {
-		t.Errorf("Expected level %d from level rule after non-terminal block, got %d", expected, result.Level())
+	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
+	if compiled.IsRequestBlocked(ri) {
+		t.Error("Expected non-terminal block rule to be skipped by isBlockedByRules")
 	}
 }
 
@@ -3014,7 +3002,7 @@ func TestTerminalRulePreventsBlockInIsRequestBlocked(t *testing.T) {
 }
 
 func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
-	// A non-terminal non-block rule before a block rule should NOT prevent blocking
+	// A non-terminal non-block rule before a terminal block rule should NOT prevent blocking
 	rules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -3033,6 +3021,7 @@ func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
 			ActionValue:       1,
+			Terminal:          true,
 			Position:          2,
 			Enabled:           true,
 		},
@@ -3042,7 +3031,7 @@ func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 
 	if !compiled.IsRequestBlocked(ri) {
-		t.Error("Expected block rule to still trigger when prior rule is not terminal")
+		t.Error("Expected terminal block rule to still trigger when prior rule is not terminal")
 	}
 }
 

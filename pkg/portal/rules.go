@@ -39,12 +39,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
 
-	conditionValue := ""
-	if rule.ConditionValueStr.Valid {
-		conditionValue = rule.ConditionValueStr.String
-	} else if rule.ConditionValueInt.Valid {
-		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
-	}
+	conditionValue := registry.FormatConditionValue(rule)
 
 	var actionProperty string
 	var actionValue string
@@ -129,10 +124,12 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 
 type ConditionFormParser func(conditionOperator, conditionValue, domain string) (normalizedValue, separator string, status common.StatusCode)
 type ActionFormParser func(actionValue string) (int32, common.StatusCode)
+type ConditionValueFormatter func(rule *dbgen.DifficultyRule) string
 
 type ConditionRegistration struct {
-	Parser      ConditionFormParser
-	DisplayName string
+	Parser         ConditionFormParser
+	DisplayName    string
+	ValueFormatter ConditionValueFormatter
 }
 
 type RuleRegistry struct {
@@ -181,6 +178,23 @@ func (r *RuleRegistry) ConditionDisplayName(key string) string {
 
 	titleCase := cases.Title(language.Und)
 	return titleCase.String(strings.ReplaceAll(key, "_", " "))
+}
+
+func (r *RuleRegistry) FormatConditionValue(rule *dbgen.DifficultyRule) string {
+	if r != nil {
+		reg, ok := r.conditions[string(rule.ConditionProperty)]
+		if ok && reg.ValueFormatter != nil {
+			return reg.ValueFormatter(rule)
+		}
+	}
+
+	if rule.ConditionValueStr.Valid {
+		return rule.ConditionValueStr.String
+	}
+	if rule.ConditionValueInt.Valid {
+		return fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
+	}
+	return ""
 }
 
 // canEditRule checks if a user can edit a rule (org owner OR rule creator)
