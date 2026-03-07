@@ -54,15 +54,16 @@ func NewCompiledRules(rules []rule) *CompiledRules {
 
 func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal bool) {
 	for _, r := range rules {
+		if !r.IsTerminal() {
+			continue
+		}
 		if !r.Matches(ri) {
 			continue
 		}
 		if _, ok := r.(*blockRequestRule); ok {
 			return true, true
 		}
-		if r.IsTerminal() {
-			return false, true
-		}
+		return false, true
 	}
 
 	return false, false
