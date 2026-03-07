@@ -66,12 +66,13 @@ type orgAuditLogsRenderContext struct {
 	CanView bool
 }
 
-type orgRulesRenderContext struct {
+type OrgRulesRenderContext struct {
 	portalBaseRenderContext
 	AlertRenderContext
 	// Property is a stub to distinguish org rules from property rules in shared templates
-	Property interface{}
-	Rules    []*DifficultyRuleModel
+	Property  interface{}
+	Rules     []*DifficultyRuleModel
+	CanAddNew bool
 }
 
 type orgUser struct {
@@ -379,7 +380,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			derr = err
 		}
 	case common.RulesEndpoint:
-		if vm, ae, err := s.createOrgRulesContext(ctx, baseCtx, org, user); err == nil {
+		if vm, ae, err := s.createOrgRulesCtx(ctx, baseCtx, org, user); err == nil {
 			model = vm
 			event = ae
 		} else {
@@ -642,25 +643,29 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 	}, nil
 }
 
-func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+func (s *Server) CreateOrgRulesContext(w http.ResponseWriter, r *http.Request) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	org, level, err := s.Org(user, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
 		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
-		return nil, db.ErrPermissions
+		return nil, nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
-	renderCtx, auditEvent, err := s.createOrgRulesContext(ctx, baseCtx, org, user)
+	return s.createOrgRulesCtx(ctx, baseCtx, org, user)
+}
+
+func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, auditEvent, err := s.OrgRulesFunc(w, r)
 	if err != nil {
 		return nil, err
 	}
