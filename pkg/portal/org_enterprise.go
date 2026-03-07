@@ -585,10 +585,11 @@ func (s *Server) createOrgAuditLogsContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, auditEvent, nil
 }
 
-func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
-	renderCtx := &orgRulesRenderContext{
+func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &OrgRulesRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		Rules:                   []*DifficultyRuleModel{},
+		CanAddNew:               true,
 	}
 	renderCtx.Tab = portalRulesTabIndex
 

@@ -1109,7 +1109,7 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, err
 	}
 
-	renderCtx, _, err := s.getPropertyRules(w, r)
+	renderCtx, _, err := s.PropertyRulesFunc(w, r)
 	if err != nil {
 		return nil, err
 	}
@@ -1180,8 +1180,7 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
-	renderCtx, _, err := s.createOrgRulesContext(ctx, baseCtx, org, user)
+	renderCtx, _, err := s.OrgRulesFunc(w, r)
 	if err != nil {
 		return nil, err
 	}
