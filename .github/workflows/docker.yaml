@@ -28,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version: '1.25.8'
 
       - name: Retrieve the activation keys
         working-directory: ./cmd/keyspack
@@ -83,7 +83,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.5'
+          go-version: '1.25.8'
 
       - name: Retrieve the activation keys
         working-directory: ./cmd/keyspack
