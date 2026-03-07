@@ -1180,8 +1180,7 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
-	renderCtx, _, err := s.createOrgRulesCtx(ctx, baseCtx, org, user)
+	renderCtx, _, err := s.OrgRulesFunc(w, r)
 	if err != nil {
 		return nil, err
 	}
