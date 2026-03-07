@@ -1622,7 +1622,7 @@ func TestRetrievePropertyRulesWithCache(t *testing.T) {
 				_ = cache.Delete(ctx, db.RawPropertyRulesCacheKey(prop.ID))
 			}
 
-			// Read rules via server's getPropertyRules method
+			// Read rules via server's CreatePropertyRulesContext method
 			req := httptest.NewRequest("GET",
 				fmt.Sprintf("/org/%s/property/%s/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), common.TabEndpoint, common.RulesEndpoint),
 				nil)
@@ -1757,7 +1757,7 @@ func TestRetrieveOrgRulesWithCache(t *testing.T) {
 				_ = cache.Delete(ctx, db.RawOrgRulesCacheKey(org.ID))
 			}
 
-			// Read rules via server's createOrgRulesContext method
+			// Read rules via server's CreateOrgRulesContext method
 			req := httptest.NewRequest("GET",
 				fmt.Sprintf("/org/%s?tab=rules", server.IDHasher.Encrypt(int(org.ID))),
 				nil)

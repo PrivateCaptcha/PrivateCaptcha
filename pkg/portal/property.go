@@ -124,9 +124,10 @@ type propertyAuditLogsRenderContext struct {
 	CanView bool
 }
 
-type propertyRulesRenderContext struct {
+type PropertyRulesRenderContext struct {
 	propertyDashboardRenderContext
-	Rules []*DifficultyRuleModel
+	Rules     []*DifficultyRuleModel
+	CanAddNew bool
 }
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
@@ -663,7 +664,7 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (*
 			derr = err
 		}
 	case common.RulesEndpoint:
-		if rulesCtx, ae, err := s.getPropertyRules(w, r); err == nil {
+		if rulesCtx, ae, err := s.PropertyRulesFunc(w, r); err == nil {
 			model = rulesCtx
 			event = ae
 		} else {
@@ -761,7 +762,7 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
-	renderCtx, auditEvent, err := s.getPropertyRules(w, r)
+	renderCtx, auditEvent, err := s.PropertyRulesFunc(w, r)
 	if err != nil {
 		return nil, err
 	}

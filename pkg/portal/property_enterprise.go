@@ -140,7 +140,7 @@ func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*
 	return renderCtx, auditEvent, nil
 }
 
-func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Request) (*PropertyRulesRenderContext, *common.AuditLogEvent, error) {
 	dashboardCtx, property, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, nil, err
@@ -162,9 +162,10 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 		return nil, nil, db.ErrPermissions
 	}
 
-	renderCtx := &propertyRulesRenderContext{
+	renderCtx := &PropertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
 		Rules:                          []*DifficultyRuleModel{},
+		CanAddNew:                      true,
 	}
 
 	renderCtx.Tab = propertyRulesTabIndex
