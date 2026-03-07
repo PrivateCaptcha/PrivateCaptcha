@@ -182,7 +182,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 
 	// with registry, should use custom display name
 	registry := NewRuleRegistry()
-	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display")
+	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display", nil)
 	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Custom IP Display" {
 		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
@@ -202,7 +202,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// unknown property with registry override should use custom display name
-	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop")
+	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop", nil)
 	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
@@ -257,7 +257,7 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent")
+		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
 		result := registry.FormatConditionValue(rule)
 		if result != "curl/7.0" {
 			t.Errorf("Expected 'curl/7.0', got '%s'", result)
@@ -271,7 +271,7 @@ func TestFormatConditionValue(t *testing.T) {
 		}
 
 		registry := NewRuleRegistry()
-		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent")
+		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
 		result := registry.FormatConditionValue(rule)
 		if result != "99" {
 			t.Errorf("Expected '99', got '%s'", result)
