@@ -19,8 +19,6 @@ func (s *Server) isEnterprise() bool {
 	return false
 }
 
-func (s *Server) initRuleParsers() {}
-
 // in not-EE environment user can only load the org they own
 func (s *Server) checkUserOrgAccess(user *dbgen.User, org *dbgen.Organization) bool {
 	return (user != nil) &&
@@ -59,6 +57,13 @@ func maxAuditLogsForDays(days int) int {
 
 func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
 	return 14 * 24 * time.Hour
+}
+
+func NewRuleRegistry() *RuleRegistry {
+	return &RuleRegistry{
+		conditions: make(map[string]ConditionRegistration),
+		actions:    make(map[string]ActionFormParser),
+	}
 }
 
 func newStubAuditLog() *UserAuditLog {

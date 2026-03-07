@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,12 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+)
+
+var (
+	errRuleConditionPropertyEmpty = errors.New("rule condition property is empty")
+	errRuleActionEmpty            = errors.New("rule action is empty")
+	titleCaser                    = cases.Title(language.Und)
 )
 
 type DifficultyRuleModel struct {
@@ -27,7 +34,7 @@ type DifficultyRuleModel struct {
 	Terminal          bool
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, conditionPropertyNames map[string]string) *DifficultyRuleModel {
+func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, registry *RuleRegistry) *DifficultyRuleModel {
 	if rule == nil {
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
@@ -38,8 +45,6 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 	} else if rule.ConditionValueInt.Valid {
 		conditionValue = fmt.Sprintf("%d", rule.ConditionValueInt.Int32)
 	}
-
-	titleCase := cases.Title(language.Und)
 
 	var actionProperty string
 	var actionValue string
@@ -66,7 +71,7 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		actionAction = "stop"
 		actionProperty = "processing rules"
 	default:
-		actionProperty = titleCase.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
+		actionProperty = titleCaser.String(strings.ReplaceAll(string(rule.ActionProperty), "_", " "))
 		actionValue = fmt.Sprintf("%d", rule.ActionValue)
 		actionAction = "set"
 	}
@@ -100,9 +105,11 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 		}
 	}
 
-	conditionProperty, ok := conditionPropertyNames[string(rule.ConditionProperty)]
-	if !ok {
-		conditionProperty = titleCase.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
+	var conditionProperty string
+	if registry != nil {
+		conditionProperty = registry.ConditionDisplayName(string(rule.ConditionProperty))
+	} else {
+		conditionProperty = titleCaser.String(strings.ReplaceAll(string(rule.ConditionProperty), "_", " "))
 	}
 
 	return &DifficultyRuleModel{
@@ -120,13 +127,61 @@ func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 	}
 }
 
-// ConditionFormParser validates a rule condition from form data and returns the
-// normalized value, separator (empty if none), and a status code.
 type ConditionFormParser func(conditionOperator, conditionValue, domain string) (normalizedValue, separator string, status common.StatusCode)
-
-// ActionFormParser validates a rule action value from form data and returns the
-// integer value and a status code.
 type ActionFormParser func(actionValue string) (int32, common.StatusCode)
+
+type ConditionRegistration struct {
+	Parser      ConditionFormParser
+	DisplayName string
+}
+
+type RuleRegistry struct {
+	conditions map[string]ConditionRegistration
+	actions    map[string]ActionFormParser
+}
+
+func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser, displayName string) error {
+	if len(key) == 0 {
+		return errRuleConditionPropertyEmpty
+	}
+
+	r.conditions[key] = ConditionRegistration{Parser: parser, DisplayName: displayName}
+
+	return nil
+}
+
+func (r *RuleRegistry) RegisterAction(key string, parser ActionFormParser) error {
+	if len(key) == 0 {
+		return errRuleActionEmpty
+	}
+
+	r.actions[key] = parser
+
+	return nil
+}
+
+func (r *RuleRegistry) ConditionParser(key string) (ConditionFormParser, bool) {
+	reg, ok := r.conditions[key]
+	if !ok {
+		return nil, false
+	}
+	return reg.Parser, true
+}
+
+func (r *RuleRegistry) ActionParser(key string) (ActionFormParser, bool) {
+	parser, ok := r.actions[key]
+	return parser, ok
+}
+
+func (r *RuleRegistry) ConditionDisplayName(key string) string {
+	reg, ok := r.conditions[key]
+	if ok && (len(reg.DisplayName) > 0) {
+		return reg.DisplayName
+	}
+
+	titleCase := cases.Title(language.Und)
+	return titleCase.String(strings.ReplaceAll(key, "_", " "))
+}
 
 // canEditRule checks if a user can edit a rule (org owner OR rule creator)
 func canEditRule(user *dbgen.User, org *dbgen.Organization, rule *dbgen.DifficultyRule) bool {
