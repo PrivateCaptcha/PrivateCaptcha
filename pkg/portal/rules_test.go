@@ -17,6 +17,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func createPropertyRuleUserAgent(ctx context.Context, user *dbgen.User, propertyID int32, name string) (*dbgen.DifficultyRule, error) {
@@ -181,7 +182,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 
 	// with registry, should use custom display name
 	registry := NewRuleRegistry()
-	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display")
+	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display", nil)
 	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Custom IP Display" {
 		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
@@ -201,11 +202,134 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// unknown property with registry override should use custom display name
-	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop")
+	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop", nil)
 	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
 	}
+}
+
+func TestFormatConditionValue(t *testing.T) {
+	t.Parallel()
+
+	t.Run("NilRegistryWithStringValue", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionValueStr: db.Text("Mozilla/5.0"),
+		}
+
+		var registry *RuleRegistry
+		result := registry.FormatConditionValue(rule)
+		if result != "Mozilla/5.0" {
+			t.Errorf("Expected 'Mozilla/5.0', got '%s'", result)
+		}
+	})
+
+	t.Run("NilRegistryWithIntValue", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionValueInt: pgtype.Int4{Int32: 42, Valid: true},
+		}
+
+		var registry *RuleRegistry
+		result := registry.FormatConditionValue(rule)
+		if result != "42" {
+			t.Errorf("Expected '42', got '%s'", result)
+		}
+	})
+
+	t.Run("NilRegistryWithNoValue", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		}
+
+		var registry *RuleRegistry
+		result := registry.FormatConditionValue(rule)
+		if result != "" {
+			t.Errorf("Expected empty string, got '%s'", result)
+		}
+	})
+
+	t.Run("RegistryWithoutFormatterFallsBackToString", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionValueStr: db.Text("curl/7.0"),
+		}
+
+		registry := NewRuleRegistry()
+		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
+		result := registry.FormatConditionValue(rule)
+		if result != "curl/7.0" {
+			t.Errorf("Expected 'curl/7.0', got '%s'", result)
+		}
+	})
+
+	t.Run("RegistryWithoutFormatterFallsBackToInt", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionValueInt: pgtype.Int4{Int32: 99, Valid: true},
+		}
+
+		registry := NewRuleRegistry()
+		registry.RegisterCondition(string(dbgen.RuleConditionPropertyUserAgent), nil, "User Agent", nil)
+		result := registry.FormatConditionValue(rule)
+		if result != "99" {
+			t.Errorf("Expected '99', got '%s'", result)
+		}
+	})
+
+	t.Run("RegistryWithCustomFormatter", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: "custom_property",
+			ConditionValueInt: pgtype.Int4{Int32: 5, Valid: true},
+		}
+
+		registry := NewRuleRegistry()
+		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
+			return fmt.Sprintf("Level %d", r.ConditionValueInt.Int32)
+		})
+		result := registry.FormatConditionValue(rule)
+		if result != "Level 5" {
+			t.Errorf("Expected 'Level 5', got '%s'", result)
+		}
+	})
+
+	t.Run("RegistryWithUnregisteredPropertyFallsBack", func(t *testing.T) {
+		rule := &dbgen.DifficultyRule{
+			ConditionProperty: "unknown_property",
+			ConditionValueStr: db.Text("test-value"),
+		}
+
+		registry := NewRuleRegistry()
+		result := registry.FormatConditionValue(rule)
+		if result != "test-value" {
+			t.Errorf("Expected 'test-value', got '%s'", result)
+		}
+	})
+
+	t.Run("FormatterUsedInDifficultyRuleToDisplay", func(t *testing.T) {
+		hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+		rule := &dbgen.DifficultyRule{
+			ID:                1,
+			Name:              "Custom format rule",
+			Enabled:           true,
+			ConditionProperty: "custom_property",
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ConditionValueInt: pgtype.Int4{Int32: 3, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       20,
+		}
+
+		registry := NewRuleRegistry()
+		registry.RegisterCondition("custom_property", nil, "Custom Prop", func(r *dbgen.DifficultyRule) string {
+			return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
+		})
+
+		model := difficultyRuleToDisplay(rule, true, hasher, registry)
+		if model.ConditionValue != "option-3" {
+			t.Errorf("Expected 'option-3', got '%s'", model.ConditionValue)
+		}
+	})
 }
 
 func TestParseUserAgentConditionInvalidOperator(t *testing.T) {
