@@ -458,7 +458,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
 			template: orgRulesTemplate,
-			model: &orgRulesRenderContext{
+			model: &OrgRulesRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
 					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
@@ -475,7 +475,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "000", common.RulesEndpoint},
 			template: orgRulesTemplate,
-			model: &orgRulesRenderContext{
+			model: &OrgRulesRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
 					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
@@ -490,7 +490,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint, "123", common.RulesEndpoint},
 			template: propertyDashboardRulesTemplate,
-			model: &propertyRulesRenderContext{
+			model: &PropertyRulesRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
 					CsrfRenderContext: stubToken(),
 					Property:          stubProperty("Foo", "123"),
@@ -507,7 +507,7 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "000", common.PropertiesEndpoint, "000", common.RulesEndpoint},
 			template: propertyDashboardRulesTemplate,
-			model: &propertyRulesRenderContext{
+			model: &PropertyRulesRenderContext{
 				propertyDashboardRenderContext: propertyDashboardRenderContext{
 					CsrfRenderContext: stubToken(),
 					Property:          stubProperty("Foo", "123"),
