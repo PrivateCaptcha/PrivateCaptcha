@@ -157,13 +157,13 @@ func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, d
 	}, nil
 }
 
-func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*propertyRulesRenderContext, *common.AuditLogEvent, error) {
+func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Request) (*PropertyRulesRenderContext, *common.AuditLogEvent, error) {
 	dashboardCtx, _, err := s.getOrgProperty(w, r)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	renderCtx := &propertyRulesRenderContext{
+	renderCtx := &PropertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
 		Rules:                          stubDifficultyRules(),
 	}
@@ -173,8 +173,8 @@ func (s *Server) getPropertyRules(w http.ResponseWriter, r *http.Request) (*prop
 	return renderCtx, nil, nil
 }
 
-func (s *Server) createOrgRulesContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgRulesRenderContext, *common.AuditLogEvent, error) {
-	renderCtx := &orgRulesRenderContext{
+func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &OrgRulesRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		Rules:                   stubDifficultyRules(),
 	}

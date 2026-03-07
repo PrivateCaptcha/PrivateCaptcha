@@ -63,6 +63,8 @@ type ViewModel struct {
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
+type PropertyRulesConstructor func(http.ResponseWriter, *http.Request) (*PropertyRulesRenderContext, *common.AuditLogEvent, error)
+type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (*OrgRulesRenderContext, *common.AuditLogEvent, error)
 
 // AuditLogParser is a function type for parsing custom audit log types.
 // It receives the context, the raw audit log, and a pointer to the UserAuditLog to populate.
@@ -163,6 +165,8 @@ type Server struct {
 	UserLimiter        api.UserLimiter
 	AuditLogsFunc      AuditLogsConstructor
 	AuditLogParser     AuditLogParser
+	PropertyRulesFunc  PropertyRulesConstructor
+	OrgRulesFunc       OrgRulesConstructor
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
 	TwoFactorDuration  time.Duration
@@ -210,6 +214,8 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
+	s.PropertyRulesFunc = s.CreatePropertyRulesContext
+	s.OrgRulesFunc = s.CreateOrgRulesContext
 	s.Rules = NewRuleRegistry()
 
 	platformCtx := &PlatformRenderContext{
