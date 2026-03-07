@@ -173,31 +173,36 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 		ActionValue:       20,
 	}
 
-	// without override map, should use default display name
+	// without registry, should use default display name
 	model := difficultyRuleToDisplay(rule, true, hasher, nil)
 	if model.ConditionProperty != "Ip Address" {
 		t.Errorf("Expected 'Ip Address', got '%s'", model.ConditionProperty)
 	}
 
-	// with override map, should use custom display name
-	customNames := map[string]string{
-		string(dbgen.RuleConditionPropertyIPAddress): "Custom IP Display",
-	}
-	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
+	// with registry, should use custom display name
+	registry := NewRuleRegistry()
+	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display")
+	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Custom IP Display" {
 		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
 	}
 
-	// unknown property without override should fall back to title case
+	// unknown property without registry should fall back to title case
 	rule.ConditionProperty = "some_custom_property"
 	model = difficultyRuleToDisplay(rule, true, hasher, nil)
 	if model.ConditionProperty != "Some Custom Property" {
 		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
 	}
 
-	// unknown property with override should use custom display name
-	customNames["some_custom_property"] = "My Custom Prop"
-	model = difficultyRuleToDisplay(rule, true, hasher, customNames)
+	// unknown property with registry should fall back to title case from ConditionDisplayName
+	model = difficultyRuleToDisplay(rule, true, hasher, registry)
+	if model.ConditionProperty != "Some Custom Property" {
+		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
+	}
+
+	// unknown property with registry override should use custom display name
+	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop")
+	model = difficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
 	}
