@@ -187,7 +187,8 @@ func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID 
 		count = len(orgRules)
 	}
 
-	ok := (plan.OrgRulesLimit() == 0) || (count < plan.OrgRulesLimit())
+	// for rules, 0 means "zero" and not unlimited (like for orgs/properties)
+	ok := /*(plan.OrgRulesLimit() == 0) || */ (count < plan.OrgRulesLimit())
 
 	return ok, count - plan.OrgRulesLimit(), nil
 }
@@ -216,7 +217,8 @@ func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, p
 		count = len(propRules)
 	}
 
-	ok := (plan.PropertyRulesLimit() == 0) || (count < plan.PropertyRulesLimit())
+	// for rules, 0 means "zero" and not unlimited (like for orgs/properties)
+	ok := /*(plan.PropertyRulesLimit() == 0) ||*/ (count < plan.PropertyRulesLimit())
 
 	return ok, count - plan.PropertyRulesLimit(), nil
 }
