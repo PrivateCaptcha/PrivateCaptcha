@@ -68,6 +68,7 @@ const (
 	StatusRuleIPAddressTooMany              StatusCode = 1424
 	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
 	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
+	StatusRuleNameInvalidCharsError         StatusCode = 1427
 )
 
 func (sc StatusCode) Success() bool {
@@ -192,6 +193,8 @@ func (sc StatusCode) String() string {
 		return "HTTP header name is required."
 	case StatusRuleHTTPHeaderNameInvalid:
 		return "HTTP header name is not valid."
+	case StatusRuleNameInvalidCharsError:
+		return "Rule name can only contain letters, numbers, and spaces."
 	default:
 		return strconv.Itoa(int(sc))
 	}

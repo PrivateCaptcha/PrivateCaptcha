@@ -258,7 +258,7 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 
 	usage := []*propertyRuleStatsPoint{}
 
-	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
+	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, property.OrgOwnerID.Int32, org.ID, property.ID, period); err == nil {
 		anyNonZero := false
 		for _, st := range stats {
 			if st.Count > 0 {
