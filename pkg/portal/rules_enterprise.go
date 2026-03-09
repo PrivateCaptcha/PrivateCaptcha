@@ -576,7 +576,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 
 func isRuleNameValid(name string) bool {
 	for _, r := range name {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ') {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' || r == '-' || r == '.') {
 			return false
 		}
 	}

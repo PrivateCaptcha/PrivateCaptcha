@@ -194,7 +194,7 @@ func (sc StatusCode) String() string {
 	case StatusRuleHTTPHeaderNameInvalid:
 		return "HTTP header name is not valid."
 	case StatusRuleNameInvalidCharsError:
-		return "Rule name can only contain letters, numbers, and spaces."
+		return "Rule name can only contain letters, numbers, spaces, hyphens, and dots."
 	default:
 		return strconv.Itoa(int(sc))
 	}
