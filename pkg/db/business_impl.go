@@ -3534,7 +3534,14 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 
 	slog.InfoContext(ctx, "Rebalanced difficulty rules for property", "propertyID", propertyID)
 
-	// Clear caches
+	// Evict per-rule cache entries so RetrieveDifficultyRule reads fresh positions
+	if cachedRules, err := impl.GetCachedPropertyRules(ctx, propertyID); err == nil {
+		for _, rule := range cachedRules {
+			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
+		}
+	}
+
+	// Clear list and compiled caches
 	_ = impl.cache.Delete(ctx, RawPropertyRulesCacheKey(propertyID))
 	_ = impl.cache.Delete(ctx, CompiledPropertyRulesCacheKey(propertyID))
 
@@ -3557,7 +3564,14 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 
 	slog.InfoContext(ctx, "Rebalanced difficulty rules for org", "orgID", orgID)
 
-	// Clear caches
+	// Evict per-rule cache entries so RetrieveDifficultyRule reads fresh positions
+	if cachedRules, err := impl.GetCachedOrgRules(ctx, orgID); err == nil {
+		for _, rule := range cachedRules {
+			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
+		}
+	}
+
+	// Clear list and compiled caches
 	_ = impl.cache.Delete(ctx, RawOrgRulesCacheKey(orgID))
 	_ = impl.cache.Delete(ctx, CompiledOrgRulesCacheKey(orgID))
 

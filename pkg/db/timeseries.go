@@ -422,7 +422,7 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 	return results, nil
 }
 
-func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
+func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -464,7 +464,7 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 		toDateTime(%s) AS agg_time,
 		sum(count) AS count
 	FROM %s FINAL
-	WHERE org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
+	WHERE user_id = {user_id:UInt32} AND org_id = {org_id:UInt32} AND property_id = {property_id:UInt32} AND timestamp >= {timestamp:DateTime}
 	GROUP BY agg_time
 	ORDER BY agg_time WITH FILL FROM toDateTime(%s) TO now() STEP %s
 	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`,
@@ -474,6 +474,7 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, o
 		interval)
 
 	rows, err := ts.Clickhouse.Query(query,
+		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
 		clickhouse.Named("property_id", strconv.Itoa(int(propertyID))),
 		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
@@ -793,7 +794,7 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, or
 	return result, nil
 }
 
-func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
+func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -813,7 +814,7 @@ func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context
 
 	// Count only logs with rule_id > 0
 	for _, log := range m.accessLogs {
-		if log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.Before(from) {
+		if log.UserID == userID && log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.Before(from) {
 			ts := truncate(log.Timestamp)
 			statsMap[ts]++
 		}
