@@ -580,3 +580,48 @@ func TestRenderHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderRuleNameInputConstraints(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+	path := server.RelURL(strings.Join([]string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, common.NewEndpoint}, "/"))
+
+	buf, err := server.RenderResponse(t.Context(), ruleTemplate, &RuleWizardRenderContext{
+		CsrfRenderContext:  stubToken(),
+		AlertRenderContext: AlertRenderContext{},
+		RuleFormData: RuleFormData{
+			Name: "Existing Rule",
+		},
+		CurrentOrg: stubOrg("123"),
+		Property:   stubProperty("my property", "123"),
+		Countries:  []CountryOption{},
+	}, &RequestContext{Path: path}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+	selection := document.Find("input[name='" + common.ParamName + "']")
+	if len(selection.Nodes) != 1 {
+		t.Fatalf("Expected 1 rule name input, got %d", len(selection.Nodes))
+	}
+
+	if pattern, exists := selection.Attr("pattern"); !exists || pattern != `(?=.*[A-Za-z0-9.\-\u00A1-\uFFFF])[A-Za-z0-9 .\-\u00A1-\uFFFF]+` {
+		t.Fatalf("Expected pattern attribute to match backend constraints, got %q", pattern)
+	}
+
+	if title, exists := selection.Attr("title"); !exists || title != "Use letters, numbers, spaces, hyphens, or dots" {
+		t.Fatalf("Expected title attribute describing rule name constraints, got %q", title)
+	}
+
+	if maxlength, exists := selection.Attr("maxlength"); !exists || maxlength != "255" {
+		t.Fatalf("Expected maxlength=255, got %q", maxlength)
+	}
+
+	if _, exists := selection.Attr("required"); !exists {
+		t.Fatal("Expected rule name input to be required")
+	}
+}

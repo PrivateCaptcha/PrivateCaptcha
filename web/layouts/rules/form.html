@@ -11,7 +11,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.Name }}" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" pattern="(?=.*[A-Za-z0-9.\-\u00A1-\uFFFF])[A-Za-z0-9 .\-\u00A1-\uFFFF]+" title="Use letters, numbers, spaces, hyphens, or dots" value="{{ .Params.Name }}" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>
