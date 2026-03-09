@@ -44,12 +44,14 @@
                 </ul>
             </div>
         </div>
+        {{ block "rules-blocker" . }}
         {{ if not $.Platform.Enterprise }}
         <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-lg" aria-hidden="true"></div>
 
         <div class="absolute inset-0 z-10">
             {{ template "enterprise.html" "Difficulty rules are only available in the enterprise edition of Private Captcha." }}
         </div>
+        {{ end }}
         {{ end }}
     </div>
     {{ if $.Platform.Enterprise }}
