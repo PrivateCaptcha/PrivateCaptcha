@@ -109,7 +109,7 @@ func stubAuditLogs() []*UserAuditLog {
 	return result
 }
 
-func numberedRuleNames(rules []*DifficultyRuleModel) []string {
+func ruleNames(rules []*DifficultyRuleModel) []string {
 	result := make([]string, 0, len(rules))
 	for _, r := range rules {
 		result = append(result, r.Name)
@@ -465,10 +465,13 @@ func TestRenderHTML(t *testing.T) {
 					CanEdit:    true,
 				},
 				AlertRenderContext: AlertRenderContext{},
-				Rules:              StubDifficultyRules(),
+				rulesRenderContext: rulesRenderContext{
+					Rules:     StubDifficultyRules(),
+					CanAddNew: true,
+				},
 			},
 			selector:   "p.rule-name",
-			matches:    numberedRuleNames(StubDifficultyRules()),
+			matches:    ruleNames(StubDifficultyRules()),
 			enterprise: enterpriseOnly,
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
@@ -482,7 +485,10 @@ func TestRenderHTML(t *testing.T) {
 					CanEdit:    true,
 				},
 				AlertRenderContext: AlertRenderContext{},
-				Rules:              []*DifficultyRuleModel{},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     []*DifficultyRuleModel{},
+					CanAddNew: true,
+				},
 			},
 			selector: "p.rule-name",
 			matches:  []string{},
@@ -497,10 +503,13 @@ func TestRenderHTML(t *testing.T) {
 					Org:               stubOrg("123"),
 					CanEdit:           true,
 				},
-				Rules: StubDifficultyRules(),
+				rulesRenderContext: rulesRenderContext{
+					Rules:     StubDifficultyRules(),
+					CanAddNew: true,
+				},
 			},
 			selector:   "p.rule-name",
-			matches:    numberedRuleNames(StubDifficultyRules()),
+			matches:    ruleNames(StubDifficultyRules()),
 			enterprise: enterpriseOnly,
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
@@ -514,7 +523,10 @@ func TestRenderHTML(t *testing.T) {
 					Org:               stubOrg("123"),
 					CanEdit:           true,
 				},
-				Rules: []*DifficultyRuleModel{},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     []*DifficultyRuleModel{},
+					CanAddNew: true,
+				},
 			},
 			selector: "p.rule-name",
 			matches:  []string{},

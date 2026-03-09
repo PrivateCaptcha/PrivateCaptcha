@@ -164,8 +164,10 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 
 	renderCtx := &PropertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
-		Rules:                          []*DifficultyRuleModel{},
-		CanAddNew:                      true,
+		rulesRenderContext: rulesRenderContext{
+			Rules:     []*DifficultyRuleModel{},
+			CanAddNew: true,
+		},
 	}
 
 	renderCtx.Tab = propertyRulesTabIndex

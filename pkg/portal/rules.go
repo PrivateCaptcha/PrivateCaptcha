@@ -20,6 +20,11 @@ var (
 	titleCaser                    = cases.Title(language.Und)
 )
 
+type rulesRenderContext struct {
+	Rules     []*DifficultyRuleModel
+	CanAddNew bool
+}
+
 type DifficultyRuleModel struct {
 	ID                string
 	Name              string
