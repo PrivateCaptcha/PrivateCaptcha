@@ -574,6 +574,48 @@ func accountStatsSuite(t *testing.T, ctx context.Context) *accountStatsSuiteResu
 		t.Fatalf("Failed to write access log batch: %v", err)
 	}
 
+	verifyRecords := []*common.VerifyRecord{
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-1 * time.Hour),
+			Status:     1,
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-2 * time.Hour),
+			Status:     1,
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-3 * time.Hour),
+			Status:     1,
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-4 * time.Hour),
+			Status:     1,
+		},
+		{
+			UserID:     user.ID,
+			OrgID:      org.ID,
+			PropertyID: property.ID,
+			Timestamp:  now.Add(-5 * time.Hour),
+			Status:     1,
+		},
+	}
+
+	if err := timeSeries.WriteVerifyLogBatch(ctx, verifyRecords); err != nil {
+		t.Fatalf("Failed to write verify log batch: %v", err)
+	}
+
 	time.Sleep(100 * time.Millisecond)
 
 	return &accountStatsSuiteResult{user: user, srv: srv, cookie: cookie}
@@ -620,8 +662,8 @@ func TestGetAccountStats(t *testing.T) {
 		}
 	}
 
-	if totalCount != 3 {
-		t.Errorf("Expected 3 total requests, got %d", totalCount)
+	if totalCount != 5 {
+		t.Errorf("Expected 5 total (max of requests and verifies), got %d", totalCount)
 	}
 }
 

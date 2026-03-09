@@ -80,7 +80,7 @@ func TestMemoryTimeSeriesRetrievePropertyStatsSince(t *testing.T) {
 }
 
 func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
-	// Aggregates by month
+	// Aggregates by month, uses max of request and verify counts
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()
 	fixedTime := time.Date(2023, 10, 15, 12, 0, 0, 0, time.UTC)
@@ -91,6 +91,13 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 		{UserID: 2, OrgID: 10, Timestamp: fixedTime},
 	}
 	ts.WriteAccessLogBatch(ctx, records)
+
+	verifyRecords := []*common.VerifyRecord{
+		{UserID: 1, OrgID: 10, Timestamp: fixedTime, Status: 1},
+		{UserID: 1, OrgID: 10, Timestamp: fixedTime.Add(1 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, Timestamp: fixedTime.Add(2 * time.Hour), Status: 1},
+	}
+	ts.WriteVerifyLogBatch(ctx, verifyRecords)
 
 	accountStats, err := ts.RetrieveAccountStats(ctx, 1, fixedTime.Add(-24*time.Hour))
 	if err != nil {
@@ -110,9 +117,11 @@ func TestMemoryTimeSeriesRetrieveAccountStats(t *testing.T) {
 		counts[stat.OrgID] = stat.Count
 	}
 
-	if counts[10] != 2 {
-		t.Errorf("RetrieveAccountStats() org 10 count = %d, want 2", counts[10])
+	// org 10: max(2 requests, 3 verifies) = 3
+	if counts[10] != 3 {
+		t.Errorf("RetrieveAccountStats() org 10 count = %d, want 3", counts[10])
 	}
+	// org 20: max(1 request, 0 verifies) = 1
 	if counts[20] != 1 {
 		t.Errorf("RetrieveAccountStats() org 20 count = %d, want 1", counts[20])
 	}

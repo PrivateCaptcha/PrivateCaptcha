@@ -266,12 +266,21 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 		return stats, nil
 	}
 
-	query := `SELECT org_id, timestamp, sum(count) as count
-FROM %s FINAL
-WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
+	query := `SELECT org_id, timestamp, max(count) as count
+FROM (
+    SELECT org_id, timestamp, sum(count) as count
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
+    GROUP BY org_id, timestamp
+    UNION ALL
+    SELECT org_id, toStartOfMonth(timestamp) as timestamp, sum(success_count + failure_count) as count
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
+    GROUP BY org_id, toStartOfMonth(timestamp)
+)
 GROUP BY org_id, timestamp
 ORDER BY org_id, timestamp`
-	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo),
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo, VerifyLogTable1d),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", fromStr))
 	if err != nil {
@@ -568,16 +577,47 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	counts := make(map[int32]map[time.Time]uint32)
+	reqCounts := make(map[int32]map[time.Time]uint32)
 	for _, log := range m.accessLogs {
 		if log.UserID == userID && !log.Timestamp.Before(from) {
 			// Real DB uses request_logs_1mo which is aggregated by month
 			y, month, _ := log.Timestamp.Date()
 			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
-			if _, ok := counts[log.OrgID]; !ok {
-				counts[log.OrgID] = make(map[time.Time]uint32)
+			if _, ok := reqCounts[log.OrgID]; !ok {
+				reqCounts[log.OrgID] = make(map[time.Time]uint32)
 			}
-			counts[log.OrgID][ts]++
+			reqCounts[log.OrgID][ts]++
+		}
+	}
+
+	verCounts := make(map[int32]map[time.Time]uint32)
+	for _, log := range m.verifyLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) {
+			y, month, _ := log.Timestamp.Date()
+			ts := time.Date(y, month, 1, 0, 0, 0, 0, log.Timestamp.Location())
+			if _, ok := verCounts[log.OrgID]; !ok {
+				verCounts[log.OrgID] = make(map[time.Time]uint32)
+			}
+			verCounts[log.OrgID][ts]++
+		}
+	}
+
+	// For each (orgID, month) use max of request and verify counts
+	counts := make(map[int32]map[time.Time]uint32)
+	for orgID, orgCounts := range reqCounts {
+		counts[orgID] = make(map[time.Time]uint32)
+		for ts, count := range orgCounts {
+			counts[orgID][ts] = count
+		}
+	}
+	for orgID, orgCounts := range verCounts {
+		if _, ok := counts[orgID]; !ok {
+			counts[orgID] = make(map[time.Time]uint32)
+		}
+		for ts, count := range orgCounts {
+			if count > counts[orgID][ts] {
+				counts[orgID][ts] = count
+			}
 		}
 	}
 
