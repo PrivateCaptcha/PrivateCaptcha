@@ -577,6 +577,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 
 func isRuleNameValid(name string) bool {
 	for _, r := range name {
+		// nolint:staticcheck
 		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || (r == ' ') || (r == '-') || (r == '.')) {
 			return false
 		}
