@@ -269,12 +269,12 @@ func (ts *TimeSeriesDB) RetrieveAccountStats(ctx context.Context, userID int32, 
 	query := `SELECT org_id, ts, max(count) as count
 FROM (
     SELECT org_id, timestamp as ts, sum(count) as count
-    FROM %s FINAL
+    FROM %s
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
     GROUP BY org_id, timestamp
     UNION ALL
     SELECT org_id, toStartOfMonth(timestamp) as ts, sum(success_count + failure_count) as count
-    FROM %s FINAL
+    FROM %s
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
     GROUP BY org_id, toStartOfMonth(timestamp)
 )
