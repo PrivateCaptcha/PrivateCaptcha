@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -574,11 +575,25 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.RulesEndpoint, http.StatusOK, w, r)
 }
 
+func isRuleNameValid(name string) bool {
+	for _, r := range name {
+		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || (r == ' ') || (r == '-') || (r == '.')) {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *RuleWizardRenderContext, domain string) (*dbgen.CreateDifficultyRuleParams, common.StatusCode) {
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
 	if len(renderCtx.Name) == 0 {
 		renderCtx.NameError = common.StatusRuleNameEmptyError.String()
 		return nil, common.StatusRuleNameEmptyError
+	}
+
+	if !isRuleNameValid(renderCtx.Name) {
+		renderCtx.NameError = common.StatusRuleNameInvalidCharsError.String()
+		return nil, common.StatusRuleNameInvalidCharsError
 	}
 
 	_, renderCtx.Enabled = r.Form[common.ParamEnabled]
