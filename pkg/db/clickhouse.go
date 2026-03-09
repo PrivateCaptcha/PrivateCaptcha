@@ -37,6 +37,10 @@ func (opts *ClickHouseConnectOpts) Empty() bool {
 
 func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB {
 	slog.DebugContext(ctx, "Connecting to ClickHouse", "host", opts.Host, "db", opts.Database, "user", opts.User)
+	var chLogger *slog.Logger
+	if opts.Verbose {
+		chLogger = slog.Default()
+	}
 	options := &clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%v", opts.Host, opts.Port)},
 		Auth: clickhouse.Auth{
@@ -52,10 +56,7 @@ func connectClickhouse(ctx context.Context, opts ClickHouseConnectOpts) *sql.DB 
 		//Compression: &clickhouse.Compression{
 		//	Method: clickhouse.CompressionLZ4,
 		//},
-		Debug: opts.Verbose,
-		Debugf: func(format string, v ...any) {
-			slog.Log(context.TODO(), common.LevelTrace, fmt.Sprintf(format, v...), common.TraceIDAttr("clickhouse"))
-		},
+		Logger: chLogger,
 		//BlockBufferSize:      10,
 		//MaxCompressionBuffer: 10240,
 	}
