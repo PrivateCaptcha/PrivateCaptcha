@@ -589,8 +589,7 @@ func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRende
 	renderCtx := &OrgRulesRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		rulesRenderContext: rulesRenderContext{
-			Rules:     []*DifficultyRuleModel{},
-			CanAddNew: true,
+			Rules: []*DifficultyRuleModel{},
 		},
 	}
 	renderCtx.Tab = portalRulesTabIndex
@@ -607,6 +606,10 @@ func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRende
 	for _, rule := range rules {
 		canEdit := canEditRule(user, org, rule)
 		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher, s.Rules))
+	}
+
+	if code := s.validateOrgRulesLimit(ctx, org, user); code.Success() {
+		renderCtx.CanAddNew = true
 	}
 
 	return renderCtx, nil, nil
