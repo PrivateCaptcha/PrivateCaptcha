@@ -1076,6 +1076,8 @@ func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
 	}
 	propertyID := server.IDHasher.Encrypt(int(prop.ID))
 
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
 	tests := []struct {
 		name     string
 		method   string
@@ -1099,7 +1101,19 @@ func TestPropertyEndpointsInvalidPathArg(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(tc.method, tc.path, nil)
+			var req *http.Request
+			switch tc.method {
+			case "POST":
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, csrfToken)
+				req = httptest.NewRequest(tc.method, tc.path, strings.NewReader(form.Encode()))
+				req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			case "DELETE":
+				req = httptest.NewRequest(tc.method, tc.path, nil)
+				req.Header.Set(common.HeaderCSRFToken, csrfToken)
+			default:
+				req = httptest.NewRequest(tc.method, tc.path, nil)
+			}
 			req.AddCookie(cookie)
 
 			w := httptest.NewRecorder()
