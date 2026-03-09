@@ -280,6 +280,7 @@ FROM (
 )
 GROUP BY org_id, timestamp
 ORDER BY org_id, timestamp`
+	// Use max of request and verify counts per (org_id, month)
 	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1mo, VerifyLogTable1d),
 		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
 		clickhouse.Named("timestamp", fromStr))
