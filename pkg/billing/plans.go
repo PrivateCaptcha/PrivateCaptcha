@@ -124,7 +124,7 @@ var (
 		priceMonthly:         0,
 		priceYearly:          0,
 		orgsLimit:            adminOrgsLimit,
-		rulesLimit:           0,
+		rulesLimit:           1_000,
 		version:              version1,
 		requestsLimit:        1_000_000,
 		throttleLimit:        2_000_000,

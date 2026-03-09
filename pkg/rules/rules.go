@@ -479,6 +479,7 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 			percentDiff: int16(percentDiff),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
+		base.terminal = true
 		return &blockRequestRule{
 			ruleBase: base,
 		}, nil
@@ -488,6 +489,7 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 			growth:   growthFromInt(dbRule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyBreak:
+		base.terminal = true
 		return &breakRule{
 			ruleBase: base,
 		}, nil
@@ -497,13 +499,14 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 }
 
 func (rc *RulesCompiler) Compile(ctx context.Context, dbRules []*dbgen.DifficultyRule) *CompiledRules {
+	ordered := append([]*dbgen.DifficultyRule(nil), dbRules...)
 	rules := make([]rule, 0, len(dbRules))
 
-	sort.SliceStable(dbRules, func(i, j int) bool {
-		return dbRules[i].Position < dbRules[j].Position
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return ordered[i].Position < ordered[j].Position
 	})
 
-	for _, r := range dbRules {
+	for _, r := range ordered {
 		if !r.Enabled {
 			continue
 		}
