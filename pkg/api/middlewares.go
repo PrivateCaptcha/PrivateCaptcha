@@ -424,7 +424,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 // resolveOwnerRulesLimits resolves subscription-based rules limits for property and org rules.
 // It returns maps from propertyID/orgID to the maximum number of rules allowed.
 // Missing entries in the returned maps mean the limit could not be determined (no restriction applied).
-func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, properties []*dbgen.Property) (propertyLimits map[int32]int, orgLimits map[int32]int) {
+func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, properties []*dbgen.Property) (propertyRulesLimits map[int32]int, orgRulesLimits map[int32]int) {
 	if am.SubscriptionLimits == nil {
 		return nil, nil
 	}
@@ -448,7 +448,7 @@ func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, propertie
 		}
 
 		user, err := impl.RetrieveUser(ctx, ownerID)
-		if err != nil || !user.SubscriptionID.Valid {
+		if err != nil || user == nil || !user.SubscriptionID.Valid {
 			ownerCache[ownerID] = nil
 			continue
 		}
@@ -473,8 +473,8 @@ func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, propertie
 	}
 
 	// build per-property and per-org limit maps
-	propertyLimits = make(map[int32]int, len(properties))
-	orgLimits = make(map[int32]int)
+	propertyRulesLimits = make(map[int32]int, len(properties))
+	orgRulesLimits = make(map[int32]int)
 	for _, p := range properties {
 		if !p.OrgOwnerID.Valid {
 			continue
@@ -484,14 +484,14 @@ func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, propertie
 			continue
 		}
 		if limits.propertyRulesLimit > 0 {
-			propertyLimits[p.ID] = limits.propertyRulesLimit
+			propertyRulesLimits[p.ID] = limits.propertyRulesLimit
 		}
 		if p.OrgID.Valid && limits.orgRulesLimit > 0 {
-			orgLimits[p.OrgID.Int32] = limits.orgRulesLimit
+			orgRulesLimits[p.OrgID.Int32] = limits.orgRulesLimit
 		}
 	}
 
-	return propertyLimits, orgLimits
+	return propertyRulesLimits, orgRulesLimits
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
