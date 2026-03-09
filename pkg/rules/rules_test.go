@@ -2707,9 +2707,9 @@ func TestTerminalBreakRulePreservesAccumulatedGrowth(t *testing.T) {
 	}
 }
 
-func TestNonTerminalBlockRuleSkippedByIsBlocked(t *testing.T) {
-	// Non-terminal block rules are skipped by isBlockedByRules since
-	// non-terminal rules cannot be blocking.
+func TestBlockRuleAlwaysTerminalEvenIfNotSetInDB(t *testing.T) {
+	// Block rules always have terminal forced to true by the compiler,
+	// regardless of the Terminal field in the DB. So they always block.
 	rules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2726,13 +2726,14 @@ func TestNonTerminalBlockRuleSkippedByIsBlocked(t *testing.T) {
 
 	compiled := testCompiler.Compile(context.Background(), rules)
 	ri := newTestRequestInfo("test", netip.MustParseAddr("10.1.2.3"))
-	if compiled.IsRequestBlocked(ri) {
-		t.Error("Expected non-terminal block rule to be skipped by isBlockedByRules")
+	if !compiled.IsRequestBlocked(ri) {
+		t.Error("Expected block rule to always block regardless of Terminal field in DB")
 	}
 }
 
-func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
-	// When Terminal is not set (Go zero value = false), break rule does not stop processing
+func TestBreakRuleAlwaysStopsOrgFallback(t *testing.T) {
+	// Break rules always have terminal forced to true by the compiler,
+	// regardless of the Terminal field in the DB. So they always stop org fallback.
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2741,7 +2742,7 @@ func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyBreak,
-			// Terminal not set, defaults to false in Go
+			// Terminal not set, defaults to false in Go, but compiler forces it to true
 			Enabled: true,
 		},
 	}
@@ -2765,10 +2766,9 @@ func TestBreakRuleWithoutTerminalDoesNotStopOrgFallback(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Break rule without Terminal=true does NOT stop org fallback
-	expected := expectedDifficultyLevel(50, 100)
-	if result.Level() != expected {
-		t.Errorf("Expected org rule to apply when break is non-terminal, got level %d", result.Level())
+	// Break rule always stops org fallback (terminal is forced to true by compiler)
+	if result.Level() != prop.Level() {
+		t.Errorf("Expected org rule to be skipped when break rule matches, got level %d", result.Level())
 	}
 }
 
