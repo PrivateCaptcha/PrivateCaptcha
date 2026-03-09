@@ -276,7 +276,7 @@ FROM (
     SELECT org_id, toStartOfMonth(timestamp) as ts, sum(success_count + failure_count) as count
     FROM %s FINAL
     WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
-    GROUP BY org_id, ts
+    GROUP BY org_id, toStartOfMonth(timestamp)
 )
 GROUP BY org_id, ts
 ORDER BY org_id, ts`
