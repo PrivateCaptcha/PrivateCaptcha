@@ -126,8 +126,7 @@ type propertyAuditLogsRenderContext struct {
 
 type PropertyRulesRenderContext struct {
 	propertyDashboardRenderContext
-	Rules     []*DifficultyRuleModel
-	CanAddNew bool
+	rulesRenderContext
 }
 
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
