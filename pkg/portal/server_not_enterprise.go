@@ -165,7 +165,9 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 
 	renderCtx := &PropertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
-		Rules:                          StubDifficultyRules(),
+		rulesRenderContext: rulesRenderContext{
+			Rules: StubDifficultyRules(),
+		},
 	}
 
 	renderCtx.Tab = propertyRulesTabIndex
@@ -176,7 +178,9 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
 	renderCtx := &OrgRulesRenderContext{
 		portalBaseRenderContext: *baseCtx,
-		Rules:                   StubDifficultyRules(),
+		rulesRenderContext: rulesRenderContext{
+			Rules: StubDifficultyRules(),
+		},
 	}
 
 	renderCtx.Tab = portalRulesTabIndex
