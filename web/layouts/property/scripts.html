@@ -356,18 +356,7 @@
         const usageColor = '#9B9193'; // pcgray-400
         const grayColor = "#6b7280";
 
-        const weekdayFormat = d3.timeFormat("%a");
         const monthlyFormat = d3.timeFormat("%b");
-
-        const monthlyTicks = (date, i) => {
-            const day = date.getDate();
-            const month = date.getMonth();
-            if ((day === 1) && (month === 0)) {
-                return date.getFullYear();
-            } else {
-                return monthlyFormat(date);
-            }
-        };
 
         const yTickFormat = function(d) {
             if (d >= 1000000000) {
@@ -392,23 +381,18 @@
             '30d': evenTickFilter
         }
 
-        const tickFunction = {
-            '7d': function(date, i) {
-                const day = date.getDate();
-                if (day === 1) {
-                    return monthlyFormat(date);
-                } else {
-                    return day;
-                }
-            },
-            '30d': function(date, i) {
-                const day = date.getDate();
-                if (day === 1) {
-                    return monthlyFormat(date);
-                } else {
-                    return day;
-                }
+        const dayTickFunction = function(date, i) {
+            const day = date.getDate();
+            if (day === 1) {
+                return monthlyFormat(date);
+            } else {
+                return day;
             }
+        };
+
+        const tickFunction = {
+            '7d': dayTickFunction,
+            '30d': dayTickFunction
         };
 
         const drawNoData = (element, xTickFunction, periodLengthDays) => {
@@ -514,7 +498,6 @@
 
             // Append the rectangles for the bar chart
             let barsUsage = chartElement.selectAll("bar-usage").data(usage);
-            const barSpacing = 2;
             barsUsage.enter().append("rect")
                 .attr("class", "bar")
                 .attr("x", function(d) { 

@@ -3160,7 +3160,7 @@ func (impl *BusinessStoreImpl) GetCachedPropertyRules(ctx context.Context, prope
 }
 
 func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *dbgen.User, params *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, *common.AuditLogEvent, error) {
-	if params == nil {
+	if (params == nil) || (user == nil) {
 		return nil, nil, ErrInvalidInput
 	}
 
@@ -3338,6 +3338,10 @@ func (impl *BusinessStoreImpl) UpdateDifficultyRule(ctx context.Context, org *db
 }
 
 func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *dbgen.Organization, rule *dbgen.DifficultyRule, user *dbgen.User) (*common.AuditLogEvent, error) {
+	if org == nil || rule == nil || user == nil {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -3392,7 +3396,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, org *dbge
 		return nil, nil, ErrMaintenance
 	}
 
-	if (rule == nil) || (user == nil) || (newIndex < 0) {
+	if (org == nil) || (rule == nil) || (user == nil) || (newIndex < 0) {
 		return nil, nil, ErrInvalidInput
 	}
 
