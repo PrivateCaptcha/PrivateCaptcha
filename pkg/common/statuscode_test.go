@@ -62,6 +62,7 @@ func TestStatusCodeString(t *testing.T) {
 		StatusPropertyRulesSubscriptionRequired,
 		StatusRuleHTTPHeaderNameRequired,
 		StatusRuleHTTPHeaderNameInvalid,
+		StatusRuleNameInvalidCharsError,
 	}
 
 	for _, sc := range statusCodes {
