@@ -69,10 +69,9 @@ type orgAuditLogsRenderContext struct {
 type OrgRulesRenderContext struct {
 	portalBaseRenderContext
 	AlertRenderContext
+	rulesRenderContext
 	// Property is a stub to distinguish org rules from property rules in shared templates
-	Property  interface{}
-	Rules     []*DifficultyRuleModel
-	CanAddNew bool
+	Property interface{}
 }
 
 type orgUser struct {
