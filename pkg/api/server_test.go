@@ -87,7 +87,7 @@ func TestMain(m *testing.M) {
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
+		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, db.NewSubscriptionLimits(common.StageTest, store, planService), metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Verifier:           NewVerifier(cfg, store),
 		Metrics:            metrics,

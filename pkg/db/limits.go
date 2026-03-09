@@ -19,6 +19,8 @@ type SubscriptionLimits interface {
 	RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error)
 	PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
 	OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
+	PropertyRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
+	OrgRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
 }
 
 var (
@@ -223,6 +225,34 @@ func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, p
 	return ok, count - plan.PropertyRulesLimit(), nil
 }
 
+func (sl *SubscriptionLimitsImpl) PropertyRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return 0, ErrNoActiveSubscription
+	}
+
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage,
+		IsInternalSubscription(subscr.Source))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscr.ExternalProductID, "priceID", subscr.ExternalPriceID, common.ErrAttr(err))
+		return 0, err
+	}
+	return plan.PropertyRulesLimit(), nil
+}
+
+func (sl *SubscriptionLimitsImpl) OrgRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return 0, ErrNoActiveSubscription
+	}
+
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage,
+		IsInternalSubscription(subscr.Source))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscr.ExternalProductID, "priceID", subscr.ExternalPriceID, common.ErrAttr(err))
+		return 0, err
+	}
+	return plan.OrgRulesLimit(), nil
+}
+
 type StubSubscriptionLimits struct{}
 
 func (StubSubscriptionLimits) CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
@@ -247,6 +277,12 @@ func (StubSubscriptionLimits) PropertiesLimit(ctx context.Context, subscr *dbgen
 	return 0, nil
 }
 func (StubSubscriptionLimits) OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return 0, nil
+}
+func (StubSubscriptionLimits) PropertyRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return 0, nil
+}
+func (StubSubscriptionLimits) OrgRulesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
 	return 0, nil
 }
 

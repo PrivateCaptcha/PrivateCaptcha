@@ -185,7 +185,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BusinessDB:         businessDB,
 		TimeSeries:         timeSeriesDB,
 		RateLimiter:        ipRateLimiter,
-		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
+		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, subscriptionLimits, metrics, rulesCompiler),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		Verifier:           puzzleVerifier,
 		Metrics:            metrics,

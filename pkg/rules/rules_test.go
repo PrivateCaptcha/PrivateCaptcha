@@ -3073,3 +3073,80 @@ func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
 		t.Error("Expected terminal property break rule to prevent org block rule")
 	}
 }
+
+func TestCompileWithTruncatedRulesRespectsLimit(t *testing.T) {
+	t.Parallel()
+
+	// Simulate rules sorted by position (as done by RetrieveDifficultyRulesByPropertyIDs)
+	allRules := []*dbgen.DifficultyRule{
+		{
+			ID:                1,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Position:          1,
+			Enabled:           true,
+		},
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Position:          2,
+			Enabled:           true,
+		},
+		{
+			ID:                3,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       200,
+			Position:          3,
+			Enabled:           true,
+		},
+	}
+
+	ctx := context.Background()
+	prop := newStubProperty()
+	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
+
+	// Compile all 3 rules
+	compiledAll := testCompiler.Compile(ctx, allRules)
+	resultAll, _ := compiledAll.Apply(ri, prop)
+
+	// Truncate to limit of 2 (simulating subscription limit enforcement)
+	limit := 2
+	truncatedRules := allRules[:limit]
+	compiledLimited := testCompiler.Compile(ctx, truncatedRules)
+	resultLimited, _ := compiledLimited.Apply(ri, prop)
+
+	// All rules result should have higher level than limited (more rules = more cumulative effect)
+	if resultAll.Level() <= resultLimited.Level() {
+		t.Errorf("Expected all rules level (%d) > limited rules level (%d)", resultAll.Level(), resultLimited.Level())
+	}
+
+	// Limited should only apply first 2 rules (position 1 and 2)
+	compiledFirstTwo := testCompiler.Compile(ctx, allRules[:2])
+	resultFirstTwo, _ := compiledFirstTwo.Apply(ri, prop)
+	if resultLimited.Level() != resultFirstTwo.Level() {
+		t.Errorf("Expected limited level (%d) == first two level (%d)", resultLimited.Level(), resultFirstTwo.Level())
+	}
+
+	// Truncate to limit of 1
+	compiledOne := testCompiler.Compile(ctx, allRules[:1])
+	resultOne, _ := compiledOne.Apply(ri, prop)
+	if resultLimited.Level() <= resultOne.Level() {
+		t.Errorf("Expected limited level (%d) > single rule level (%d)", resultLimited.Level(), resultOne.Level())
+	}
+
+	// Truncate to 0 should return nil
+	compiledNone := testCompiler.Compile(ctx, allRules[:0])
+	if compiledNone != nil {
+		t.Error("Expected nil compiled rules for empty slice")
+	}
+}

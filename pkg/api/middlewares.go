@@ -34,6 +34,7 @@ type UserLimiter interface {
 type AuthMiddleware struct {
 	Store                 db.Implementor
 	PlanService           billing.PlanService
+	SubscriptionLimits    db.SubscriptionLimits
 	SitekeyChan           chan string
 	UsersChan             chan int32
 	APIKeyLastUsedChan    chan int32
@@ -144,6 +145,7 @@ func NewUserLimiter(store db.Implementor) *baseUserLimiter {
 func NewAuthMiddleware(store db.Implementor,
 	userLimiter UserLimiter,
 	planService billing.PlanService,
+	subscriptionLimits db.SubscriptionLimits,
 	metrics common.BaseMetrics,
 	rulesCompiler rules.Compiler) *AuthMiddleware {
 	const batchSize = 10
@@ -153,6 +155,7 @@ func NewAuthMiddleware(store db.Implementor,
 		Store:                 store,
 		Limiter:               userLimiter,
 		PlanService:           planService,
+		SubscriptionLimits:    subscriptionLimits,
 		SitekeyChan:           make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
@@ -355,6 +358,9 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		return err
 	}
 
+	// resolve subscription-based rules limits per owner
+	propertyRulesLimits, orgRulesLimits := am.resolveOwnerRulesLimits(ctx, properties)
+
 	uncachedOrgIDs := make(map[int32]uint, len(properties)/2)
 	for _, p := range properties {
 		if p.OrgID.Valid {
@@ -383,6 +389,10 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	if propertyRulesMap, err := impl.RetrieveDifficultyRulesByPropertyIDs(ctx, uncachedPropertyIDs); err == nil {
 		for propertyID := range uncachedPropertyIDs {
 			propRules := propertyRulesMap[propertyID]
+			if limit, ok := propertyRulesLimits[propertyID]; ok && limit > 0 && len(propRules) > limit {
+				slog.DebugContext(ctx, "Truncating property rules to subscription limit", "propertyID", propertyID, "total", len(propRules), "limit", limit)
+				propRules = propRules[:limit]
+			}
 			compiled := am.RulesCompiler.Compile(ctx, propRules)
 			impl.CacheCompiledPropertyRules(ctx, propertyID, compiled)
 		}
@@ -394,6 +404,10 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	if orgRulesMap, err := impl.RetrieveDifficultyRulesByOrgIDs(ctx, uncachedOrgIDs); err == nil {
 		for orgID := range uncachedOrgIDs {
 			oRules := orgRulesMap[orgID]
+			if limit, ok := orgRulesLimits[orgID]; ok && limit > 0 && len(oRules) > limit {
+				slog.DebugContext(ctx, "Truncating org rules to subscription limit", "orgID", orgID, "total", len(oRules), "limit", limit)
+				oRules = oRules[:limit]
+			}
 			compiled := am.RulesCompiler.Compile(ctx, oRules)
 			impl.CacheCompiledOrgRules(ctx, orgID, compiled)
 		}
@@ -405,6 +419,79 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	slog.DebugContext(ctx, "Finished processing difficulty rules batch", "properties", len(uncachedPropertyIDs), "orgs", len(uncachedOrgIDs))
 
 	return anyError
+}
+
+// resolveOwnerRulesLimits resolves subscription-based rules limits for property and org rules.
+// It returns maps from propertyID/orgID to the maximum number of rules allowed.
+// Missing entries in the returned maps mean the limit could not be determined (no restriction applied).
+func (am *AuthMiddleware) resolveOwnerRulesLimits(ctx context.Context, properties []*dbgen.Property) (propertyLimits map[int32]int, orgLimits map[int32]int) {
+	if am.SubscriptionLimits == nil {
+		return nil, nil
+	}
+
+	impl := am.Store.Impl()
+
+	type ownerLimits struct {
+		propertyRulesLimit int
+		orgRulesLimit      int
+	}
+
+	// resolve limits per unique owner (all lookups are cache-first)
+	ownerCache := make(map[int32]*ownerLimits)
+	for _, p := range properties {
+		if !p.OrgOwnerID.Valid {
+			continue
+		}
+		ownerID := p.OrgOwnerID.Int32
+		if _, seen := ownerCache[ownerID]; seen {
+			continue
+		}
+
+		user, err := impl.RetrieveUser(ctx, ownerID)
+		if err != nil || !user.SubscriptionID.Valid {
+			ownerCache[ownerID] = nil
+			continue
+		}
+
+		subscr, err := impl.RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		if err != nil {
+			ownerCache[ownerID] = nil
+			continue
+		}
+
+		propLimit, propErr := am.SubscriptionLimits.PropertyRulesLimit(ctx, subscr)
+		orgLimit, orgErr := am.SubscriptionLimits.OrgRulesLimit(ctx, subscr)
+		if propErr != nil && orgErr != nil {
+			ownerCache[ownerID] = nil
+			continue
+		}
+
+		ownerCache[ownerID] = &ownerLimits{
+			propertyRulesLimit: propLimit,
+			orgRulesLimit:      orgLimit,
+		}
+	}
+
+	// build per-property and per-org limit maps
+	propertyLimits = make(map[int32]int, len(properties))
+	orgLimits = make(map[int32]int)
+	for _, p := range properties {
+		if !p.OrgOwnerID.Valid {
+			continue
+		}
+		limits := ownerCache[p.OrgOwnerID.Int32]
+		if limits == nil {
+			continue
+		}
+		if limits.propertyRulesLimit > 0 {
+			propertyLimits[p.ID] = limits.propertyRulesLimit
+		}
+		if p.OrgID.Valid && limits.orgRulesLimit > 0 {
+			orgLimits[p.OrgID.Int32] = limits.orgRulesLimit
+		}
+	}
+
+	return propertyLimits, orgLimits
 }
 
 func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, []string) {
