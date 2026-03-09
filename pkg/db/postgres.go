@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"embed"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"strconv"
@@ -24,6 +25,7 @@ const (
 	pgIdleInTransactionSessionTimeout = 10 * time.Second
 	pgStatementTimeout                = 10 * time.Second
 	pgLockTimeout                     = 10 * time.Second
+	maxArgsLogLength                  = 200
 )
 
 //go:embed migrations/postgres/*.sql
@@ -33,11 +35,21 @@ type myQueryTracer struct {
 	metrics common.PlatformMetrics
 }
 
+type truncatedArgs []any
+
+func (t truncatedArgs) LogValue() slog.Value {
+	s := fmt.Sprintf("%v", []any(t))
+	if len(s) > maxArgsLogLength {
+		return slog.StringValue(s[:maxArgsLogLength] + "...")
+	}
+	return slog.StringValue(s)
+}
+
 func (tracer *myQueryTracer) TraceQueryStart(
 	ctx context.Context,
 	_ *pgx.Conn,
 	data pgx.TraceQueryStartData) context.Context {
-	slog.Log(ctx, common.LevelTrace, "Starting SQL command", "sql", data.SQL, "args", data.Args, "source", "postgres")
+	slog.Log(ctx, common.LevelTrace, "Starting SQL command", "sql", data.SQL, "args", truncatedArgs(data.Args), "source", "postgres")
 	return context.WithValue(ctx, common.TimeContextKey, time.Now())
 }
 
