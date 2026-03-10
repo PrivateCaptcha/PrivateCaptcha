@@ -63,8 +63,8 @@ type ViewModel struct {
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
-type PropertyRulesConstructor func(http.ResponseWriter, *http.Request) (*PropertyRulesRenderContext, *common.AuditLogEvent, error)
-type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (*OrgRulesRenderContext, *common.AuditLogEvent, error)
+type PropertyRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
+type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
 
 // AuditLogParser is a function type for parsing custom audit log types.
 // It receives the context, the raw audit log, and a pointer to the UserAuditLog to populate.
@@ -214,8 +214,12 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
-	s.PropertyRulesFunc = s.CreatePropertyRulesContext
-	s.OrgRulesFunc = s.CreateOrgRulesContext
+	s.PropertyRulesFunc = func(w http.ResponseWriter, r *http.Request) (Model, *common.AuditLogEvent, error) {
+		return s.CreatePropertyRulesContext(w, r)
+	}
+	s.OrgRulesFunc = func(w http.ResponseWriter, r *http.Request) (Model, *common.AuditLogEvent, error) {
+		return s.CreateOrgRulesContext(w, r)
+	}
 	s.Rules = NewRuleRegistry()
 
 	platformCtx := &PlatformRenderContext{
