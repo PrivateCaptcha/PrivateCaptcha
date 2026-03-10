@@ -96,3 +96,30 @@ func TestUnknownStatusCode(t *testing.T) {
 		t.Errorf("Unknown status code should return numeric string, got %s", str)
 	}
 }
+
+func TestRegisterStatusCodes(t *testing.T) {
+	customCode := StatusCode(2401)
+
+	t.Cleanup(func() {
+		delete(extraStatusCodeStrings, customCode)
+	})
+
+	// Before registration, should return numeric string
+	if str := customCode.String(); str != "2401" {
+		t.Errorf("Unregistered status code should return numeric string, got %s", str)
+	}
+
+	RegisterStatusCodes(map[StatusCode]string{
+		customCode: "Custom error message.",
+	})
+
+	// After registration, should return the registered string
+	if str := customCode.String(); str != "Custom error message." {
+		t.Errorf("Registered status code should return registered string, got %s", str)
+	}
+
+	// Built-in codes should still work
+	if str := StatusOK.String(); str != "OK" {
+		t.Errorf("Built-in status code should still work, got %s", str)
+	}
+}
