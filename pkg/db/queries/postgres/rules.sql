@@ -48,8 +48,7 @@ WITH old AS (
     SELECT * FROM backend.difficulty_rules dr
     WHERE dr.id = $1
     AND (dr.creator_id = $13 OR $13 = $14)
-    AND (($15 IS NOT NULL AND dr.property_id = $15 AND dr.org_id IS NULL)
-      OR ($16 IS NOT NULL AND dr.org_id = $16 AND dr.property_id IS NULL))
+    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $15 OR $15 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $16 OR $16 IS NULL)))
     FOR UPDATE
 ),
 upd AS (
