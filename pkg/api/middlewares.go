@@ -349,7 +349,8 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	}
 
 	// resolve org IDs from properties (they should supposedly be all cached at this time due to other code branches)
-	properties, err := impl.RetrievePropertiesByID(ctx, uncachedPropertyIDs)
+	// we have to use non-cached version to later update org rules of active properties
+	properties, err := impl.RetrievePropertiesByID(ctx, batch)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve properties for rules backfill", common.ErrAttr(err))
 		return err

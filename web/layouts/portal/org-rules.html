@@ -50,7 +50,7 @@
                 <div class="grow flex items-center justify-end gap-x-4">
                     <a type="button"
                         {{ if not .Params.CanAddNew }}tabindex="-1"{{ end }}
-                        href="{{ if .Params.CanAddNew }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint .Const.NewEndpoint }}{{ else }}#{{ end }}"
+                        href="{{ if .Params.CanAddNew }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $.Const.NewEndpoint }}{{ else }}#{{ end }}"
                         class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 {{ if .Params.CanAddNew }}hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300{{ else }}opacity-50 cursor-not-allowed pointer-events-none{{ end }}">
                         <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

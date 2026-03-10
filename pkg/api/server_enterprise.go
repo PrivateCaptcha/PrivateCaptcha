@@ -211,6 +211,8 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 		propertyRules = cached
 	} else if err == db.ErrCacheMiss {
 		needsBackfill = true
+	} else {
+		slog.ErrorContext(ctx, "Failed to load cached compiled property rules", "propertyID", property.ID, common.ErrAttr(err))
 	}
 
 	var orgRules *rules.CompiledRules
@@ -219,6 +221,8 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 			orgRules = cached
 		} else if err == db.ErrCacheMiss {
 			needsBackfill = true
+		} else {
+			slog.ErrorContext(ctx, "Failed to load cached compiled org rules", "orgID", property.OrgID.Int32, common.ErrAttr(err))
 		}
 	}
 

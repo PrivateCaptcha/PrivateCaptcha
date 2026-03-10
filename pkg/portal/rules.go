@@ -185,8 +185,7 @@ func (r *RuleRegistry) ConditionDisplayName(key string) string {
 		return reg.DisplayName
 	}
 
-	titleCase := cases.Title(language.Und)
-	return titleCase.String(strings.ReplaceAll(key, "_", " "))
+	return titleCaser.String(strings.ReplaceAll(key, "_", " "))
 }
 
 func (r *RuleRegistry) FormatConditionValue(rule *dbgen.DifficultyRule) string {

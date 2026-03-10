@@ -590,7 +590,7 @@ func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRende
 		portalBaseRenderContext: *baseCtx,
 		rulesRenderContext: rulesRenderContext{
 			Rules:     []*DifficultyRuleModel{},
-			CanAddNew: true,
+			CanAddNew: baseCtx.CanEdit,
 		},
 	}
 	renderCtx.Tab = portalRulesTabIndex
