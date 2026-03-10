@@ -580,3 +580,48 @@ func TestRenderHTML(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderRuleDifficultyLevelInputValidation(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(
+		t.Context(),
+		ruleTemplate,
+		&RuleWizardRenderContext{
+			CsrfRenderContext: stubToken(),
+			RuleFormData: RuleFormData{
+				ActionProperty: string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				ActionValue:    "-50",
+			},
+			CurrentOrg: stubOrg("123"),
+			Property:   stubProperty("my property", "123"),
+			Countries:  []CountryOption{},
+		},
+		&RequestContext{Path: server.RelURL("/org/123/property/456/rules/new")},
+		platformCtx,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+	input := document.Find("#difficulty_level_input")
+	if len(input.Nodes) != 1 {
+		t.Fatalf("Expected difficulty level input to be rendered once, got %d", len(input.Nodes))
+	}
+
+	if got := input.AttrOr("type", ""); got != "text" {
+		t.Fatalf("Expected difficulty level input type to be text, got %q", got)
+	}
+
+	if got := input.AttrOr("pattern", ""); got != "^-?(?:[1-9]\\d?|[12]\\d{2}|300)$" {
+		t.Fatalf("Expected difficulty level input pattern to reject zero and allow range boundaries, got %q", got)
+	}
+
+	if _, ok := input.Attr("required"); !ok {
+		t.Fatal("Expected difficulty level input to be required")
+	}
+}
