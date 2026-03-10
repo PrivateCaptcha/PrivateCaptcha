@@ -120,15 +120,15 @@
 
             <nav class="flex items-center justify-center mt-4 space-x-1 2xl:order-2 lg:order-3 md:mt-0 lg:mt-4 sm:space-x-2 2xl:mt-0">
                 <a href="#" title=""
-                    @click="period = '30d'; updateRuleChart()"
-                    :class="period == '30d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
+                    @click="if (!isLoading) { period = '30d'; updateRuleChart() }"
+                    :class="[period == '30d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent', isLoading ? 'pointer-events-none opacity-50' : '']"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     30 Days
                 </a>
 
                 <a href="#" title=""
-                    @click="period = '7d'; updateRuleChart()"
-                    :class="period == '7d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent'"
+                    @click="if (!isLoading) { period = '7d'; updateRuleChart() }"
+                    :class="[period == '7d' ? 'text-pclime-600 border-pclime-600' : 'text-gray-500 border-transparent', isLoading ? 'pointer-events-none opacity-50' : '']"
                     class="px-2 py-2 text-xs font-bold transition-all border rounded-md sm:px-4 hover:bg-gray-100 duration-200">
                     7 Days
                 </a>
