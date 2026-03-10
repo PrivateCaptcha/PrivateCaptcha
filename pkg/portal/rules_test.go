@@ -2126,9 +2126,26 @@ func testCircularMoveOrgRulesSuite(t *testing.T, moveToLast bool) {
 				targetPosition = numRules - 1
 			}
 
-			// Move one end rule to the opposite end N times (where N = numRules)
-			// After N moves, the order should be back to the original
-			for moveNum := 0; moveNum < numRules; moveNum++ {
+			assertRuleOrder := func(moveCount int) {
+				currentRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(currentRules[org.ID]) != numRules {
+					t.Fatalf("Expected %d rules, got %d", numRules, len(currentRules[org.ID]))
+				}
+
+				for i := 0; i < numRules; i++ {
+					if currentRules[org.ID][i].ID != originalRuleIDs[i] {
+						t.Errorf("After %d circular moves, rule at index %d should be %d but got %d",
+							moveCount, i, originalRuleIDs[i], currentRules[org.ID][i].ID)
+					}
+				}
+			}
+
+			// Move one end rule to the opposite end 2*N times and verify the order
+			// returns to the original state each time we complete another full cycle.
+			for moveNum := 1; moveNum <= 2*numRules; moveNum++ {
 				// Get current rules order
 				currentRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
 				if err != nil {
@@ -2154,29 +2171,17 @@ func testCircularMoveOrgRulesSuite(t *testing.T, moveToLast bool) {
 
 				w := httptest.NewRecorder()
 				if _, err := server.postMoveOrgRule(w, req); err != nil {
-					t.Fatalf("Move %d failed: %v", moveNum+1, err)
+					t.Fatalf("Move %d failed: %v", moveNum, err)
 				}
 
-				t.Logf("Move %d: Moved rule %d to position %d", moveNum+1, selectedRuleID, targetPosition)
-			}
+				t.Logf("Move %d: Moved rule %d to position %d", moveNum, selectedRuleID, targetPosition)
 
-			// Verify final order matches original order
-			finalRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{org.ID: 0})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(finalRules[org.ID]) != numRules {
-				t.Fatalf("Expected %d rules, got %d", numRules, len(finalRules[org.ID]))
-			}
-
-			for i := 0; i < numRules; i++ {
-				if finalRules[org.ID][i].ID != originalRuleIDs[i] {
-					t.Errorf("After %d circular moves, rule at index %d should be %d but got %d",
-						numRules, i, originalRuleIDs[i], finalRules[org.ID][i].ID)
+				if moveNum%numRules == 0 {
+					assertRuleOrder(moveNum)
 				}
 			}
 
-			t.Logf("Successfully verified circular moves for %d rules", numRules)
+			t.Logf("Successfully verified circular moves for %d rules after %d moves", numRules, 2*numRules)
 		})
 	}
 }
