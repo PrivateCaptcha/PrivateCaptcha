@@ -318,7 +318,7 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 		items := strings.Split(value, sep)
 		sm.ConditionValueItems = make([]string, 0, len(items))
 		for _, item := range items {
-			var item = strings.TrimSpace(item)
+			item = strings.TrimSpace(item)
 			if len(item) == 0 {
 				continue
 			}
