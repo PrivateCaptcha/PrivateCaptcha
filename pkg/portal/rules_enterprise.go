@@ -860,6 +860,15 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !rule.Enabled && createParams.Enabled {
+		if limitStatus := s.validatePropertyRulesLimit(ctx, org, property, user); !limitStatus.Success() {
+			slog.WarnContext(ctx, "Cannot enable property rule due to rules limit", "ruleID", rule.ID, "propertyID", property.ID)
+			renderCtx.ErrorMessage = limitStatus.String()
+			s.render(w, r, ruleFormTemplate, renderCtx)
+			return
+		}
+	}
+
 	updateParams := &dbgen.UpdateDifficultyRuleParams{
 		ID:                       rule.ID,
 		Name:                     createParams.Name,
@@ -941,6 +950,15 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		}
 		s.render(w, r, ruleFormTemplate, renderCtx)
 		return
+	}
+
+	if !rule.Enabled && createParams.Enabled {
+		if limitStatus := s.validateOrgRulesLimit(ctx, org, user); !limitStatus.Success() {
+			slog.WarnContext(ctx, "Cannot enable org rule due to rules limit", "ruleID", rule.ID, "orgID", org.ID)
+			renderCtx.ErrorMessage = limitStatus.String()
+			s.render(w, r, ruleFormTemplate, renderCtx)
+			return
+		}
 	}
 
 	updateParams := &dbgen.UpdateDifficultyRuleParams{
