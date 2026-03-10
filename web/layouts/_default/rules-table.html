@@ -1,7 +1,7 @@
 {{ if .Params.Rules }}
 <div x-data="{ moveOpen: false, moveRuleIndex: 0, moveRuleID: '', moveRuleName: '', newPosition: 0, rulesCount: 0 }"
     x-init="moveOpen = false; rulesCount = {{ len .Params.Rules }}">
-    <div class="mt-4 flow-root{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}">
+    <div class="mt-4 flow-root{{block "rules-blocker-style"}}{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}{{ end }}">
         <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div class="inline-block min-w-full align-middle sm:px-6 lg:px-8">
                 <ul role="list" class="divide-y divide-gray-100">
