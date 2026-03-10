@@ -2491,6 +2491,164 @@ func TestPropertyRuleCreationWithoutSubscription(t *testing.T) {
 	}
 }
 
+func TestEditPropertyRuleEnableOverLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 10 property rules (hitting the trial plan limit)
+	for i := 0; i < 10; i++ {
+		resp := postCreatePropertyRule(srv, cookie, user, org, property,
+			fmt.Sprintf("Property Rule %d", i),
+			fmt.Sprintf("test-%d", i),
+			"10")
+
+		if resp.StatusCode != http.StatusSeeOther {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Failed to create property rule %d: status code %v, body: %s", i, resp.StatusCode, string(body))
+		}
+	}
+
+	// Create a disabled rule directly via DB (bypassing portal limits)
+	disabledRule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Disabled Rule",
+		PropertyID:        db.Int(property.ID),
+		Enabled:           false,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("disabled-test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(user.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create disabled rule: %v", err)
+	}
+
+	// Try to edit the disabled rule to enable it (should fail due to limit)
+	resp := postEditPropertyRule(srv, cookie, user, org, property, disabledRule,
+		"Disabled Rule Updated",
+		string(dbgen.RuleConditionOperatorContains),
+		"disabled-test",
+		"50")
+
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected property rule enable to fail due to limit, but it succeeded")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusPropertyRulesLimitError.String()) {
+		t.Errorf("Expected error message about property rules limit, got: %s", string(body))
+	}
+
+	// Verify the rule is still disabled
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, disabledRule.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+	if updatedRule.Enabled {
+		t.Error("Expected rule to still be disabled after failed enable attempt")
+	}
+}
+
+func TestEditOrgRuleEnableOverLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create 10 org rules (hitting the trial plan limit)
+	for i := 0; i < 10; i++ {
+		resp := postCreateOrgRule(srv, cookie, user, org,
+			fmt.Sprintf("Org Rule %d", i),
+			string(dbgen.RuleConditionPropertyUserAgent),
+			string(dbgen.RuleConditionOperatorContains),
+			fmt.Sprintf("test-%d", i),
+			string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+			"10")
+
+		if resp.StatusCode != http.StatusSeeOther {
+			body, _ := io.ReadAll(resp.Body)
+			t.Fatalf("Failed to create org rule %d: status code %v, body: %s", i, resp.StatusCode, string(body))
+		}
+	}
+
+	// Create a disabled org rule directly via DB (bypassing portal limits)
+	disabledRule, _, err := store.Impl().CreateDifficultyRule(ctx, user, &dbgen.CreateDifficultyRuleParams{
+		Name:              "Disabled Org Rule",
+		OrgID:             db.Int(org.ID),
+		Enabled:           false,
+		ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+		ConditionOperator: dbgen.RuleConditionOperatorContains,
+		ConditionValueStr: db.Text("disabled-test"),
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		CreatorID:         db.Int(user.ID),
+	})
+	if err != nil {
+		t.Fatalf("Failed to create disabled rule: %v", err)
+	}
+
+	// Try to edit the disabled org rule to enable it (should fail due to limit)
+	resp := postEditOrgRule(srv, cookie, user, org, disabledRule,
+		"Disabled Org Rule Updated",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"disabled-test",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"50")
+
+	if resp.StatusCode == http.StatusSeeOther {
+		t.Fatal("Expected org rule enable to fail due to limit, but it succeeded")
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusOrgRulesLimitError.String()) {
+		t.Errorf("Expected error message about org rules limit, got: %s", string(body))
+	}
+
+	// Verify the rule is still disabled
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, disabledRule.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve rule: %v", err)
+	}
+	if updatedRule.Enabled {
+		t.Error("Expected rule to still be disabled after failed enable attempt")
+	}
+}
+
 func TestCreateOrgRuleWithDifficultyGrowth(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
