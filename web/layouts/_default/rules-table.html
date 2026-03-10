@@ -25,8 +25,8 @@
 
                             {{ if $rule.CanEdit }}
                             {{ if gt (len $.Params.Rules) 1 }}
-                            <button type="button" 
-                                @click="moveRuleIndex = {{ $index }}; moveRuleID = '{{ $rule.ID }}'; moveRuleName = '{{ $rule.Name }}'; moveOpen = true"
+                            <button type="button"
+                                @click="moveRuleIndex = {{ $index }}; moveRuleID = '{{ $rule.ID }}'; moveRuleName = '{{ $rule.Name }}'; newPosition = {{ $index }}; moveOpen = true"
                                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
                                 Reorder<span class="sr-only">, difficulty rule</span>
                             </button>
@@ -78,7 +78,7 @@
                                         <div class="mt-2">
                                             <select name="position" x-model="newPosition" class="w-full pc-internal-form-select">
                                                 <template x-for="(n, index) in rulesCount" :key="index">
-                                                    <option x-cloak x-show="index !== moveRuleIndex" :value="index" x-text="'Position ' + (index + 1)"></option>
+                                                    <option :value="index" :disabled="index === moveRuleIndex" x-text="'Position ' + (index + 1) + (index === moveRuleIndex ? ' (current)' : '')"></option>
                                                 </template>
                                             </select>
                                         </div>
@@ -88,7 +88,7 @@
                         </div>
                         <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
                             <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
-                               Save 
+                               Save
                             </button>
                             <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary sm:w-auto" @click="moveOpen = false">Cancel</button>
                         </div>
@@ -103,7 +103,7 @@
 <div class="flex-1 flex items-center">
     <div class="text-center mx-auto px-44 py-28 mt-12 border-2 border-dashed rounded-xl hover:border-gray-600">
         <h1 class="mt-6 text-xl font-bold tracking-tight text-gray-600">No rules</h1>
-        {{ if $.Params.CanAddNew }}
+        {{ if and $.Params.CanAddNew $.Platform.Enterprise }}
         <p class="mt-4 text-base leading-7 text-gray-600">Get started by creating a new rule</p>
         <div class="mt-6 flex items-center justify-center gap-x-6">
             <a
