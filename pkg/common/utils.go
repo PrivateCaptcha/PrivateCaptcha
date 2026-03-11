@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"maps"
 
@@ -147,16 +146,6 @@ func isLowerCase(s string) bool {
 	return true
 }
 
-var skipNames = map[string]bool{
-	"web":         true,
-	"admin":       true,
-	"admins":      true,
-	"team":        true,
-	"it":          true,
-	"development": true,
-	"informatika": true,
-}
-
 func emailDomain(email string) string {
 	atIdx := strings.LastIndex(email, "@")
 	if atIdx < 0 || atIdx >= len(email)-1 {
@@ -185,13 +174,33 @@ func isAllCaps(s string) bool {
 	return hasLetter
 }
 
+func isSkipName(p string) bool {
+	switch {
+	case strings.EqualFold(p, "web"):
+		return true
+	case strings.EqualFold(p, "admin"):
+		return true
+	case strings.EqualFold(p, "admins"):
+		return true
+	case strings.EqualFold(p, "team"):
+		return true
+	case strings.EqualFold(p, "it"):
+		return true
+	case strings.EqualFold(p, "development"):
+		return true
+	case strings.EqualFold(p, "informatika"):
+		return true
+	default:
+		return false
+	}
+}
+
 func shouldSkipPart(p string, domain string) bool {
-	if utf8.RuneCountInString(p) <= 1 {
+	if len(p) <= 1 {
 		return true
 	}
 
-	lower := strings.ToLower(p)
-	if skipNames[lower] {
+	if isSkipName(p) {
 		return true
 	}
 
@@ -199,7 +208,7 @@ func shouldSkipPart(p string, domain string) bool {
 		return true
 	}
 
-	if len(domain) > 0 && lower == domain {
+	if len(domain) > 0 && strings.EqualFold(p, domain) {
 		return true
 	}
 
@@ -208,7 +217,7 @@ func shouldSkipPart(p string, domain string) bool {
 
 func GuessFirstName(username string, email string) string {
 	parts := strings.Fields(username)
-	domain := strings.ToLower(emailDomain(email))
+	domain := emailDomain(email)
 
 	for _, p := range parts {
 		if !containsAlphabetic(p) {
