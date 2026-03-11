@@ -32,8 +32,6 @@ func TestLoadTemplatesUsesEmailTemplateHash(t *testing.T) {
 }
 
 func TestHomepageIncludesTemplateIDNextToLink(t *testing.T) {
-	t.Parallel()
-
 	prevTemplates := templates
 	templates = map[string]emailTemplateView{
 		"zzz": {TemplateID: "hash-zzz", ContentHTML: "<p>z</p>"},
