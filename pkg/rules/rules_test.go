@@ -491,7 +491,7 @@ func TestDifficultyGrowthApply(t *testing.T) {
 	}
 }
 
-func TestCompiledRulesApplyMaxLevel(t *testing.T) {
+func TestCompiledRulesApplyLastMatchWinsLevel(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
@@ -518,13 +518,14 @@ func TestCompiledRulesApplyMaxLevel(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result, terminal := compiled.Apply(ri, prop)
-	// Both rules match; max level wins
-	expected := max(expectedDifficultyLevel(50, 50), expectedDifficultyLevel(50, 100))
+	// Both rules match; last rule applies on top of first rule's result
+	firstLevel := expectedDifficultyLevel(50, 50)
+	expected := expectedDifficultyLevel(firstLevel, 100)
 	if terminal {
 		t.Error("Expected non-terminal result for level rules")
 	}
 	if result.Level() != expected {
-		t.Errorf("Expected max level %d, got %d", expected, result.Level())
+		t.Errorf("Expected last-match-wins level %d, got %d", expected, result.Level())
 	}
 }
 
@@ -992,6 +993,111 @@ func TestIPAddressMatchesMixedIPv4AndIPv6(t *testing.T) {
 	ri4 := newTestRequestInfo("test", netip.MustParseAddr("2001:db9::1"))
 	if compiled.Matches(ri4) {
 		t.Error("Expected rule to not match IPv6 outside listed prefix")
+	}
+}
+
+func TestIPAddressEqualsExactMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "192.168.1.100", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.100"))
+	if !compiled.Matches(ri) {
+		t.Error("Expected equals rule to match exact IP address")
+	}
+
+	ri2 := newTestRequestInfo("test", netip.MustParseAddr("192.168.1.101"))
+	if compiled.Matches(ri2) {
+		t.Error("Expected equals rule to not match different IP")
+	}
+}
+
+func TestIPAddressEqualsRejectsCIDR(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator: dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr: pgtype.Text{String: "10.0.0.0/8", Valid: true},
+		ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:       50,
+		Enabled:           true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != ErrIPNonSingletonPrefix {
+		t.Errorf("Expected ErrIPNonSingletonPrefix for CIDR in equals, got %v", err)
+	}
+}
+
+func TestIPAddressEqualsRejectsMultipleValues(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorEquals,
+		ConditionValueStr:       pgtype.Text{String: "1.2.3.4,5.6.7.8", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != ErrIPEqualsMultipleValues {
+		t.Errorf("Expected ErrIPEqualsMultipleValues for multiple IPs in equals, got %v", err)
+	}
+}
+
+func TestIPAddressInSingleIPMatch(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "1.2.3.4,5.6.7.8,9.10.11.12", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	compiled, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, ip := range []string{"1.2.3.4", "5.6.7.8", "9.10.11.12"} {
+		ri := newTestRequestInfo("test", netip.MustParseAddr(ip))
+		if !compiled.Matches(ri) {
+			t.Errorf("Expected in rule to match listed IP %s", ip)
+		}
+	}
+
+	ri := newTestRequestInfo("test", netip.MustParseAddr("1.2.3.5"))
+	if compiled.Matches(ri) {
+		t.Error("Expected in rule to not match unlisted IP")
+	}
+}
+
+func TestIPAddressInRejectsCIDR(t *testing.T) {
+	rule := &dbgen.DifficultyRule{
+		ConditionProperty:       dbgen.RuleConditionPropertyIPAddress,
+		ConditionOperator:       dbgen.RuleConditionOperatorIn,
+		ConditionValueStr:       pgtype.Text{String: "10.0.0.0/8,1.2.3.4", Valid: true},
+		ConditionValueSeparator: pgtype.Text{String: ",", Valid: true},
+		ActionProperty:          dbgen.RuleActionPropertyDifficultyLevelPercent,
+		ActionValue:             50,
+		Enabled:                 true,
+	}
+
+	_, err := testCompiler.CompileRule(context.Background(), rule)
+	if err != ErrIPNonSingletonPrefix {
+		t.Errorf("Expected ErrIPNonSingletonPrefix for CIDR in 'in' operator, got %v", err)
 	}
 }
 
@@ -2193,9 +2299,10 @@ func TestNonTerminalLevelRulesCumulative(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	expected := max(expectedDifficultyLevel(50, 20), expectedDifficultyLevel(50, 50))
+	firstLevel := expectedDifficultyLevel(50, 20)
+	expected := expectedDifficultyLevel(firstLevel, 50)
 	if result.Level() != expected {
-		t.Errorf("Expected max level %d, got %d", expected, result.Level())
+		t.Errorf("Expected last-match-wins level %d, got %d", expected, result.Level())
 	}
 }
 
@@ -2235,7 +2342,7 @@ func TestNonTerminalGrowthRulesCumulativeMax(t *testing.T) {
 	}
 }
 
-func TestNonTerminalGrowthRulesMaxReversed(t *testing.T) {
+func TestNonTerminalGrowthRulesLastMatchWins(t *testing.T) {
 	rules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2266,8 +2373,8 @@ func TestNonTerminalGrowthRulesMaxReversed(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	if result.Growth() != dbgen.DifficultyGrowthFast {
-		t.Errorf("Expected max growth fast, got %s", result.Growth())
+	if result.Growth() != dbgen.DifficultyGrowthSlow {
+		t.Errorf("Expected last-match-wins growth slow, got %s", result.Growth())
 	}
 }
 
@@ -2519,10 +2626,11 @@ func TestTerminalLevelRuleInMiddle(t *testing.T) {
 	if !terminal {
 		t.Error("Expected terminal result")
 	}
-	// max of +20% and +50% (terminal), rule 3 (+100%) not reached
-	expected := max(expectedDifficultyLevel(50, 20), expectedDifficultyLevel(50, 50))
+	// Rule 1 (+20%) applies first, then rule 2 (+50% terminal) applies on top; rule 3 (+100%) not reached
+	firstLevel := expectedDifficultyLevel(50, 20)
+	expected := expectedDifficultyLevel(firstLevel, 50)
 	if result.Level() != expected {
-		t.Errorf("Expected level %d (max before terminal stop), got %d", expected, result.Level())
+		t.Errorf("Expected level %d (last-match-wins before terminal stop), got %d", expected, result.Level())
 	}
 }
 
@@ -2564,7 +2672,7 @@ func TestBlockRuleTerminalWithPriorLevel(t *testing.T) {
 	}
 }
 
-func TestMultipleNonTerminalOnlyHigherLevelWins(t *testing.T) {
+func TestMultipleNonTerminalLastMatchWinsLevel(t *testing.T) {
 	rules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2595,9 +2703,10 @@ func TestMultipleNonTerminalOnlyHigherLevelWins(t *testing.T) {
 	if terminal {
 		t.Error("Expected non-terminal result")
 	}
-	expected := max(expectedDifficultyLevel(50, 100), expectedDifficultyLevel(50, 20))
+	firstLevel := expectedDifficultyLevel(50, 100)
+	expected := expectedDifficultyLevel(firstLevel, 20)
 	if result.Level() != expected {
-		t.Errorf("Expected max level %d, got %d", expected, result.Level())
+		t.Errorf("Expected last-match-wins level %d, got %d", expected, result.Level())
 	}
 }
 
