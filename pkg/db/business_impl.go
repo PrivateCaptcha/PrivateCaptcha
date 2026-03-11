@@ -3035,9 +3035,11 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 		}
 
 		rules, err := impl.querier.GetDifficultyRulesByPropertyIDs(ctx, uncachedIDs)
-		if err != nil && err != pgx.ErrNoRows {
-			slog.ErrorContext(ctx, "Failed to query property rules", "propertyIDs", uncachedIDs, common.ErrAttr(err))
-			return result, err
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				slog.ErrorContext(ctx, "Failed to query property rules", "propertyIDs", uncachedIDs, common.ErrAttr(err))
+				return result, err
+			}
 		}
 
 		// Group rules by property ID
@@ -3097,9 +3099,11 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 		}
 
 		rules, err := impl.querier.GetDifficultyRulesByOrgIDs(ctx, uncachedIDs)
-		if err != nil && err != pgx.ErrNoRows {
-			slog.ErrorContext(ctx, "Failed to query org rules", "orgIDs", uncachedIDs, common.ErrAttr(err))
-			return result, err
+		if err != nil {
+			if !errors.Is(err, pgx.ErrNoRows) {
+				slog.ErrorContext(ctx, "Failed to query org rules", "orgIDs", uncachedIDs, common.ErrAttr(err))
+				return result, err
+			}
 		}
 
 		// Group rules by org ID
@@ -3343,7 +3347,7 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *db
 	}
 
 	if err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
-		slog.ErrorContext(ctx, "Failed to soft delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))
 		return nil, err
 	}
 
