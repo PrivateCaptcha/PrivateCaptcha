@@ -95,6 +95,19 @@ func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	switch im.ConditionOperator {
 	case dbgen.RuleConditionOperatorEmpty:
 		result = !ip.IsValid()
+	case dbgen.RuleConditionOperatorEquals:
+		if ip.IsValid() && len(im.ConditionValueIPPrefixes) == 1 {
+			result = im.ConditionValueIPPrefixes[0].Addr() == ip
+		}
+	case dbgen.RuleConditionOperatorIn:
+		if ip.IsValid() {
+			for _, p := range im.ConditionValueIPPrefixes {
+				if p.Addr() == ip {
+					result = true
+					break
+				}
+			}
+		}
 	default:
 		if ip.IsValid() {
 			for _, prefix := range im.ConditionValueIPPrefixes {

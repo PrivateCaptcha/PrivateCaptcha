@@ -19,6 +19,8 @@ var (
 	ErrUnknownConditionProperty     = errors.New("unknown rule condition property")
 	ErrUnknownActionProperty        = errors.New("unknown rule action property")
 	ErrInvalidIPValue               = errors.New("invalid IP address or prefix value")
+	ErrIPEqualsMultipleValues       = errors.New("equals operator requires exactly one IP address value")
+	ErrIPNonSingletonPrefix         = errors.New("equals/in operator requires single IP addresses, not CIDR ranges")
 	ErrUnsupportedConditionOperator = errors.New("unsupported condition operator for rule")
 )
 
@@ -180,18 +182,14 @@ func (op *overrideProperty) Growth() dbgen.DifficultyGrowth {
 	return op.base.Growth()
 }
 
-func (op *overrideProperty) applyMaxLevel(level int16, ruleID int32) {
-	if op.level == nil || level > *op.level {
-		op.level = &level
-		op.ruleID = ruleID
-	}
+func (op *overrideProperty) applyLevel(level int16, ruleID int32) {
+	op.level = &level
+	op.ruleID = ruleID
 }
 
-func (op *overrideProperty) applyMaxGrowth(growth dbgen.DifficultyGrowth, ruleID int32) {
-	if op.growth == nil || growthOrder(growth) > growthOrder(*op.growth) {
-		op.growth = &growth
-		op.ruleID = ruleID
-	}
+func (op *overrideProperty) applyGrowth(growth dbgen.DifficultyGrowth, ruleID int32) {
+	op.growth = &growth
+	op.ruleID = ruleID
 }
 
 // ruleBase contains common fields for all rule types
@@ -211,14 +209,14 @@ type difficultyLevelRule struct {
 }
 
 func (r *difficultyLevelRule) Apply(op *overrideProperty) bool {
-	baseLevel := op.base.Level()
+	baseLevel := op.Level()
 	adjustedLevel := baseLevel + int16(int32(r.percentDiff)*(common.DifficultyDelta/2)/100)
 	if adjustedLevel < int16(common.MinDifficultyLevel) {
 		adjustedLevel = int16(common.MinDifficultyLevel)
 	} else if adjustedLevel > int16(common.MaxDifficultyLevel) {
 		adjustedLevel = int16(common.MaxDifficultyLevel)
 	}
-	op.applyMaxLevel(adjustedLevel, r.ruleID)
+	op.applyLevel(adjustedLevel, r.ruleID)
 	return r.terminal
 }
 
@@ -229,7 +227,7 @@ type difficultyGrowthRule struct {
 }
 
 func (r *difficultyGrowthRule) Apply(op *overrideProperty) bool {
-	op.applyMaxGrowth(r.growth, r.ruleID)
+	op.applyGrowth(r.growth, r.ruleID)
 	return r.terminal
 }
 
@@ -265,21 +263,6 @@ func growthFromInt(value int32) dbgen.DifficultyGrowth {
 		return dbgen.DifficultyGrowthFast
 	default:
 		return dbgen.DifficultyGrowthMedium
-	}
-}
-
-func growthOrder(g dbgen.DifficultyGrowth) int {
-	switch g {
-	case dbgen.DifficultyGrowthConstant:
-		return 0
-	case dbgen.DifficultyGrowthSlow:
-		return 1
-	case dbgen.DifficultyGrowthMedium:
-		return 2
-	case dbgen.DifficultyGrowthFast:
-		return 3
-	default:
-		return 2
 	}
 }
 
@@ -370,10 +353,22 @@ func BuildIPMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 				}
 				prefix = netip.PrefixFrom(addr, addr.BitLen())
 			}
+
+			if rule.ConditionOperator == dbgen.RuleConditionOperatorEquals ||
+				rule.ConditionOperator == dbgen.RuleConditionOperatorIn {
+				if prefix.Bits() != prefix.Addr().BitLen() {
+					return nil, ErrIPNonSingletonPrefix
+				}
+			}
+
 			im.ConditionValueIPPrefixes = append(im.ConditionValueIPPrefixes, prefix)
 		}
 		if len(im.ConditionValueIPPrefixes) == 0 {
 			return nil, ErrInvalidIPValue
+		}
+
+		if rule.ConditionOperator == dbgen.RuleConditionOperatorEquals && len(im.ConditionValueIPPrefixes) > 1 {
+			return nil, ErrIPEqualsMultipleValues
 		}
 	}
 
