@@ -99,7 +99,7 @@ function ruleFormData() {
         conditionNegated: {{ if .Params.ConditionNegated }}true{{ else }}false{{ end }},
 
         actionProperty: formDataActionProperty,
-        actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '0') : '0',
+        actionValueDifficultyLevel: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyLevel }}' ? (formDataActionValue || '50') : '50',
         actionValueDifficultyGrowth: formDataActionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}' ? (formDataActionValue || '0') : '0',
 
         get showConditionOperator() {
@@ -141,6 +141,15 @@ function ruleFormData() {
             return '';
         },
 
+        get difficultyLevelLabel() {
+            const val = parseInt(this.actionValueDifficultyLevel) || 50;
+            return (val > 0 ? '+' : '') + val + '%';
+        },
+
+        get difficultyLevelAccent() {
+            return (parseInt(this.actionValueDifficultyLevel) || 50) < 0 ? 'accent-pclime-600' : 'accent-pcred-500';
+        },
+
         init() {
             // Apply initial operator once DOM is ready
             this.$nextTick(() => {
@@ -167,7 +176,7 @@ function ruleFormData() {
 
             this.$watch('actionProperty', (value) => {
                 if (value === '{{ .Const.ActionPropertyDifficultyLevel }}' && this.actionValueDifficultyLevel === '') {
-                    this.actionValueDifficultyLevel = '0';
+                    this.actionValueDifficultyLevel = '50';
                 } else if (value === '{{ .Const.ActionPropertyDifficultyGrowth }}' && this.actionValueDifficultyGrowth === '') {
                     this.actionValueDifficultyGrowth = '0';
                 }
