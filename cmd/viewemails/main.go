@@ -26,8 +26,13 @@ const (
 </html>`
 )
 
+type emailTemplateView struct {
+	TemplateID  string
+	ContentHTML string
+}
+
 var (
-	templates = map[string]string{}
+	templates = loadTemplates()
 )
 
 func homepage(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +46,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		_, _ = fmt.Fprintf(w, "<li><a href=\"/%s\">%s</a></li>\n", k, k)
+		_, _ = fmt.Fprintf(w, "<li><a href=\"/%s\">%s</a> <code>%s</code></li>\n", k, k, templates[k].TemplateID)
 	}
 	_, _ = w.Write([]byte(rootTemplateEnd))
 }
@@ -111,22 +116,31 @@ func serveTemplate(name string) http.HandlerFunc {
 
 		mode := r.URL.Query().Get("mode")
 		if mode == "raw" {
-			_, _ = w.Write([]byte(templates[name]))
+			_, _ = w.Write([]byte(templates[name].ContentHTML))
 			return
 		}
 
-		if err := serveExecute(templates[name], r, w); err != nil {
-			_, _ = w.Write([]byte(templates[name]))
+		if err := serveExecute(templates[name].ContentHTML, r, w); err != nil {
+			_, _ = w.Write([]byte(templates[name].ContentHTML))
 		}
 	}
 }
 
-func main() {
-	http.HandleFunc("/", homepage)
+func loadTemplates() map[string]emailTemplateView {
+	result := make(map[string]emailTemplateView, len(email.Templates()))
 
 	for _, tpl := range email.Templates() {
-		templates[tpl.Name()] = tpl.ContentHTML()
+		result[tpl.Name()] = emailTemplateView{
+			TemplateID:  tpl.Hash(),
+			ContentHTML: tpl.ContentHTML(),
+		}
 	}
+
+	return result
+}
+
+func main() {
+	http.HandleFunc("/", homepage)
 
 	for k := range templates {
 		http.HandleFunc("/"+k, serveTemplate(k))
