@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"maps"
 
@@ -172,16 +173,20 @@ func emailDomain(email string) string {
 }
 
 func isAllCaps(s string) bool {
+	hasLetter := false
 	for _, r := range s {
-		if unicode.IsLetter(r) && !unicode.IsUpper(r) {
-			return false
+		if unicode.IsLetter(r) {
+			hasLetter = true
+			if !unicode.IsUpper(r) {
+				return false
+			}
 		}
 	}
-	return true
+	return hasLetter
 }
 
 func shouldSkipPart(p string, domain string) bool {
-	if len([]rune(p)) <= 1 {
+	if utf8.RuneCountInString(p) <= 1 {
 		return true
 	}
 
