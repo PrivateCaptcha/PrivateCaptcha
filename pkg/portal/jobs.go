@@ -63,7 +63,7 @@ func (j *onboardUserJob) RunOnce(ctx context.Context, params any) error {
 		}
 	}
 
-	return j.mailer.SendWelcome(ctx, j.user.Email, common.GuessFirstName(j.user.Name))
+	return j.mailer.SendWelcome(ctx, j.user.Email, common.GuessFirstName(j.user.Name, j.user.Email))
 }
 
 type LoginUserJob struct {

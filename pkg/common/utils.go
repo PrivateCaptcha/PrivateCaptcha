@@ -146,19 +146,81 @@ func isLowerCase(s string) bool {
 	return true
 }
 
-func GuessFirstName(username string) string {
+var skipNames = map[string]bool{
+	"web":         true,
+	"admin":       true,
+	"admins":      true,
+	"team":        true,
+	"it":          true,
+	"development": true,
+	"informatika": true,
+}
+
+func emailDomain(email string) string {
+	atIdx := strings.LastIndex(email, "@")
+	if atIdx < 0 || atIdx >= len(email)-1 {
+		return ""
+	}
+
+	domain := email[atIdx+1:]
+	dotIdx := strings.Index(domain, ".")
+	if dotIdx > 0 {
+		return domain[:dotIdx]
+	}
+
+	return domain
+}
+
+func isAllCaps(s string) bool {
+	for _, r := range s {
+		if unicode.IsLetter(r) && !unicode.IsUpper(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func shouldSkipPart(p string, domain string) bool {
+	if len([]rune(p)) <= 1 {
+		return true
+	}
+
+	lower := strings.ToLower(p)
+	if skipNames[lower] {
+		return true
+	}
+
+	if onlyAlphabetic(p) && isAllCaps(p) {
+		return true
+	}
+
+	if len(domain) > 0 && lower == domain {
+		return true
+	}
+
+	return false
+}
+
+func GuessFirstName(username string, email string) string {
 	parts := strings.Fields(username)
+	domain := strings.ToLower(emailDomain(email))
 
 	for _, p := range parts {
-		if containsAlphabetic(p) {
-			if onlyAlphabetic(p) && isLowerCase(p) {
-				runes := []rune(p)
-				runes[0] = unicode.ToUpper(runes[0])
-				return string(runes)
-			}
-
-			return p
+		if !containsAlphabetic(p) {
+			continue
 		}
+
+		if shouldSkipPart(p, domain) {
+			continue
+		}
+
+		if onlyAlphabetic(p) && isLowerCase(p) {
+			runes := []rune(p)
+			runes[0] = unicode.ToUpper(runes[0])
+			return string(runes)
+		}
+
+		return p
 	}
 
 	return username

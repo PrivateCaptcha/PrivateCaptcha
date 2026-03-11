@@ -264,8 +264,8 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 
 		go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 			orgURLPath := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))
-			return s.Mailer.SendOrgInvite(bctx, inviteUser.Email, common.GuessFirstName(inviteUser.Name),
-				org.Name, user.Email, common.GuessFirstName(user.Name), orgURLPath, false /* register*/)
+			return s.Mailer.SendOrgInvite(bctx, inviteUser.Email, common.GuessFirstName(inviteUser.Name, inviteUser.Email),
+				org.Name, user.Email, common.GuessFirstName(user.Name, user.Email), orgURLPath, false /* register*/)
 		})
 	}
 
@@ -293,7 +293,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 	// Send invite email with registration link
 	go common.RunAdHocFunc(common.CopyTraceID(ctx, context.Background()), func(bctx context.Context) error {
 		registerInviteURL := s.PartsURL(common.OrgInviteEndpoint, s.IDHasher.Encrypt(int(inviteRecord.ID)), common.RegisterEndpoint)
-		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name), registerInviteURL, true /*register*/)
+		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name, user.Email), registerInviteURL, true /*register*/)
 	})
 
 	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil

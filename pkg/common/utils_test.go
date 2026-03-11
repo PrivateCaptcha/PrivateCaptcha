@@ -145,9 +145,119 @@ func TestGuessFirstName(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		actual := GuessFirstName(tt.username)
+		actual := GuessFirstName(tt.username, "")
 		if actual != tt.expected {
 			t.Errorf("GuessFirstName(%q) = %q; want %q", tt.username, actual, tt.expected)
+		}
+	}
+}
+
+func TestGuessFirstNameSkipSingleChar(t *testing.T) {
+	tests := []struct {
+		username string
+		expected string
+	}{
+		{"a john", "John"},
+		{"X alice", "Alice"},
+		{"b", "b"},
+		{"j doe", "Doe"},
+	}
+
+	for _, tt := range tests {
+		actual := GuessFirstName(tt.username, "")
+		if actual != tt.expected {
+			t.Errorf("GuessFirstName(%q) = %q; want %q", tt.username, actual, tt.expected)
+		}
+	}
+}
+
+func TestGuessFirstNameSkipBlacklist(t *testing.T) {
+	tests := []struct {
+		username string
+		expected string
+	}{
+		{"admin john", "John"},
+		{"Admin john", "John"},
+		{"ADMIN john", "John"},
+		{"admins alice", "Alice"},
+		{"team bob", "Bob"},
+		{"web carol", "Carol"},
+		{"it dave", "Dave"},
+		{"development emily", "Emily"},
+		{"informatika frank", "Frank"},
+		{"IT development admin", "IT development admin"},
+	}
+
+	for _, tt := range tests {
+		actual := GuessFirstName(tt.username, "")
+		if actual != tt.expected {
+			t.Errorf("GuessFirstName(%q) = %q; want %q", tt.username, actual, tt.expected)
+		}
+	}
+}
+
+func TestGuessFirstNameSkipAllCaps(t *testing.T) {
+	tests := []struct {
+		username string
+		expected string
+	}{
+		{"ABC john", "John"},
+		{"XYZ alice", "Alice"},
+		{"AB CD ef", "Ef"},
+		{"ABC DEF", "ABC DEF"},
+	}
+
+	for _, tt := range tests {
+		actual := GuessFirstName(tt.username, "")
+		if actual != tt.expected {
+			t.Errorf("GuessFirstName(%q) = %q; want %q", tt.username, actual, tt.expected)
+		}
+	}
+}
+
+func TestGuessFirstNameWithEmail(t *testing.T) {
+	tests := []struct {
+		username string
+		email    string
+		expected string
+	}{
+		{"acme john", "user@acme.com", "John"},
+		{"Acme alice", "user@acme.co.uk", "Alice"},
+		{"google bob", "admin@google.org", "Bob"},
+		{"john acme", "user@acme.com", "John"},
+		{"acme", "user@acme.com", "acme"},
+		{"john doe", "user@example.com", "John"},
+		{"john doe", "", "John"},
+		{"example john", "user@example.com", "John"},
+		{"EXAMPLE john", "user@example.com", "John"},
+	}
+
+	for _, tt := range tests {
+		actual := GuessFirstName(tt.username, tt.email)
+		if actual != tt.expected {
+			t.Errorf("GuessFirstName(%q, %q) = %q; want %q", tt.username, tt.email, actual, tt.expected)
+		}
+	}
+}
+
+func TestGuessFirstNameFallback(t *testing.T) {
+	tests := []struct {
+		username string
+		email    string
+		expected string
+	}{
+		{"admin", "", "admin"},
+		{"admin team", "", "admin team"},
+		{"IT", "", "IT"},
+		{"AB CD", "", "AB CD"},
+		{"a b c", "", "a b c"},
+		{"web admin team", "user@example.com", "web admin team"},
+	}
+
+	for _, tt := range tests {
+		actual := GuessFirstName(tt.username, tt.email)
+		if actual != tt.expected {
+			t.Errorf("GuessFirstName(%q, %q) = %q; want %q", tt.username, tt.email, actual, tt.expected)
 		}
 	}
 }
