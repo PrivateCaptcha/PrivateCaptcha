@@ -132,7 +132,7 @@ func (l *Levels) Shutdown() {
 func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
 	err := l.recordAccess(ctx, fingerprint, p, tnow)
 
-	minDifficulty := float64(p.Level())
+	minDifficulty := float64(max(int16(common.MinDifficultyLevel), min(p.Level(), int16(common.MaxDifficultyLevel))))
 
 	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
 	if !propertyAddResult.Found {
