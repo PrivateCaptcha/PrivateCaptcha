@@ -126,6 +126,46 @@ func TestSubDomain(t *testing.T) {
 	}
 }
 
+func TestIsSkipName(t *testing.T) {
+	tests := []struct {
+		name     string
+		expected bool
+	}{
+		{"web", true},
+		{"Admin", true},
+		{"CAPTCHA", true},
+		{"john", false},
+		{"developers", false},
+	}
+
+	for _, tt := range tests {
+		actual := isSkipName(tt.name)
+		if actual != tt.expected {
+			t.Errorf("isSkipName(%q) = %v; want %v", tt.name, actual, tt.expected)
+		}
+	}
+}
+
+func TestIsAllCaps(t *testing.T) {
+	tests := []struct {
+		value    string
+		expected bool
+	}{
+		{"ABC", true},
+		{"ABC123", true},
+		{"AbC", false},
+		{"abc", false},
+		{"123", false},
+	}
+
+	for _, tt := range tests {
+		actual := isAllCaps(tt.value)
+		if actual != tt.expected {
+			t.Errorf("isAllCaps(%q) = %v; want %v", tt.value, actual, tt.expected)
+		}
+	}
+}
+
 func TestGuessFirstName(t *testing.T) {
 	tests := []struct {
 		username string
