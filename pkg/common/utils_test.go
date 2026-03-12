@@ -133,6 +133,11 @@ func TestIsSkipName(t *testing.T) {
 	}{
 		{"web", true},
 		{"Admin", true},
+		{"admins", true},
+		{"team", true},
+		{"it", true},
+		{"development", true},
+		{"informatika", true},
 		{"CAPTCHA", true},
 		{"john", false},
 		{"developers", false},
