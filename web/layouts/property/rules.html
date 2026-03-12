@@ -45,7 +45,7 @@
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
                 {{ if $.Platform.Enterprise }}
                 <div class="grow flex items-center justify-end gap-x-4">
-                    <a type="button"
+                    <a
                         {{ if not .Params.CanAddNew }}tabindex="-1"{{ end }}
                         href="{{ if .Params.CanAddNew }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint $.Const.NewEndpoint }}{{ else }}#{{ end }}"
                         class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 {{ if .Params.CanAddNew }}hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300{{ else }}opacity-50 cursor-not-allowed pointer-events-none{{ end }}">

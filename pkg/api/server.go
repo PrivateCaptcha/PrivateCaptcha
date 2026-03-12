@@ -267,7 +267,11 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 
 	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
 		rulesPair = s.retrievePropertyRules(ctx, property)
-		ri = rules.NewRequestInfo(r, s.CountryCodeHeader.Value())
+		countryCodeHeader := ""
+		if s.CountryCodeHeader != nil {
+			countryCodeHeader = s.CountryCodeHeader.Value()
+		}
+		ri = rules.NewRequestInfo(r, countryCodeHeader)
 
 		if rulesPair.IsRequestBlocked(ri) {
 			slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
