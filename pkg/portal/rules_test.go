@@ -3893,8 +3893,9 @@ func TestParseRuleFormNegativeCases(t *testing.T) {
 }
 
 type cannotEditRuleTestSuite struct {
-	name string
-	run  func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux)
+	name      string
+	isOrgRule bool
+	run       func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux)
 }
 
 func TestMemberCannotEditRuleSuite(t *testing.T) {
@@ -3904,7 +3905,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 
 	suites := []cannotEditRuleTestSuite{
 		{
-			name: "getPropertyEditRule",
+			name:      "getPropertyEditRule",
+			isOrgRule: false,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/%s/edit",
 					server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
@@ -3921,7 +3923,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 			},
 		},
 		{
-			name: "postPropertyEditRule",
+			name:      "postPropertyEditRule",
+			isOrgRule: false,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				resp := postEditPropertyRule(srv, cookie, member, org, prop, rule, "Updated",
 					string(dbgen.RuleConditionOperatorEquals), "test", "50")
@@ -3935,7 +3938,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 			},
 		},
 		{
-			name: "getOrgEditRule",
+			name:      "getOrgEditRule",
+			isOrgRule: true,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/%s/edit",
 					server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
@@ -3951,7 +3955,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 			},
 		},
 		{
-			name: "postOrgEditRule",
+			name:      "postOrgEditRule",
+			isOrgRule: true,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				resp := postEditOrgRule(srv, cookie, member, org, rule, "Updated",
 					string(dbgen.RuleConditionPropertyUserAgent),
@@ -3969,7 +3974,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 			},
 		},
 		{
-			name: "postMovePropertyRule",
+			name:      "postMovePropertyRule",
+			isOrgRule: false,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				form := url.Values{}
 				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
@@ -3990,7 +3996,8 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 			},
 		},
 		{
-			name: "postMoveOrgRule",
+			name:      "postMoveOrgRule",
+			isOrgRule: true,
 			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
 				form := url.Values{}
 				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
@@ -4026,11 +4033,9 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 				t.Fatalf("Failed to create property: %v", err)
 			}
 
-			// Owner creates a rule
-			rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+			// Owner creates a rule - scoped to either property or org (not both)
+			ruleParams := &dbgen.CreateDifficultyRuleParams{
 				Name:              "Owner Rule",
-				PropertyID:        db.Int(prop.ID),
-				OrgID:             db.Int(org.ID),
 				Enabled:           true,
 				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 				ConditionOperator: dbgen.RuleConditionOperatorContains,
@@ -4038,7 +4043,14 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 				ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
 				ActionValue:       50,
 				CreatorID:         db.Int(owner.ID),
-			})
+			}
+			if suite.isOrgRule {
+				ruleParams.OrgID = db.Int(org.ID)
+			} else {
+				ruleParams.PropertyID = db.Int(prop.ID)
+			}
+
+			rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, ruleParams)
 			if err != nil {
 				t.Fatalf("Failed to create rule: %v", err)
 			}
