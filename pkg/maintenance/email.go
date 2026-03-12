@@ -367,12 +367,22 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 			}
 		}
 
+		notifEmailFrom := emailFrom
+		if un.EmailFrom.Valid && (len(un.EmailFrom.String) > 0) {
+			notifEmailFrom = un.EmailFrom.String
+		}
+
+		notifReplyTo := replyToEmail
+		if un.ReplyToEmail.Valid {
+			notifReplyTo = un.ReplyToEmail.String
+		}
+
 		msg := &email.Message{
 			Subject:   un.Subject,
 			EmailTo:   n.Email,
-			EmailFrom: emailFrom,
+			EmailFrom: notifEmailFrom,
 			NameFrom:  common.PrivateCaptchaTeam,
-			ReplyTo:   replyToEmail,
+			ReplyTo:   notifReplyTo,
 			HTMLBody:  htmlBodyTpl.String(),
 			TextBody:  textBodyTpl.String(),
 		}
