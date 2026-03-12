@@ -68,7 +68,7 @@ func TestMain(m *testing.M) {
 	}
 
 	var err error
-	cache, err = db.NewMemoryCache[db.CacheKey, any]("default", 1000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
+	cache, err = db.NewMemoryCache[db.CacheKey, any]("default", 100_000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
 	if err != nil {
 		panic(err)
 	}
