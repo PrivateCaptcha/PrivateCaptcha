@@ -32,6 +32,7 @@ func TestStatusCodeString(t *testing.T) {
 		StatusPropertyDomainNameInvalidError,
 		StatusPropertyDomainResolveError,
 		StatusPropertyDomainFormatError,
+		StatusPropertyDomainPortError,
 		StatusPropertyIDEmptyError,
 		StatusPropertyIDInvalidError,
 		StatusPropertyIDDuplicateError,

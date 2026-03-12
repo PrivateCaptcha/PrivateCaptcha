@@ -417,6 +417,13 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
+	if common.DomainContainsPort(renderCtx.Domain) {
+		slog.WarnContext(ctx, "Domain contains port number", "domain", renderCtx.Domain)
+		renderCtx.DomainError = common.StatusPropertyDomainPortError.String()
+		s.render(w, r, createPropertyFormTemplate, renderCtx)
+		return
+	}
+
 	domain, err := common.ParseDomainName(renderCtx.Domain)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))

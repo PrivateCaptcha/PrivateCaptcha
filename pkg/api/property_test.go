@@ -1454,6 +1454,13 @@ func TestApiPostPropertiesValidationErrors(t *testing.T) {
 			wantCode: common.StatusPropertyDomainIPAddrError,
 		},
 		{
+			name: "Domain With Port",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Valid Name"}, Domain: "example.com:8080"},
+			},
+			wantCode: common.StatusPropertyDomainPortError,
+		},
+		{
 			name: "Empty Property Name",
 			input: []*apiCreatePropertyInput{
 				{apiPropertySettings: apiPropertySettings{Name: ""}, Domain: "example.com"},

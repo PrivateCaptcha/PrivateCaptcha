@@ -135,6 +135,11 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 			return nil, common.StatusPropertyDomainEmptyError, nil
 		}
 
+		if common.DomainContainsPort(input.Domain) {
+			ilog.WarnContext(ctx, "Property domain contains port number")
+			return nil, common.StatusPropertyDomainPortError, nil
+		}
+
 		domain, err := common.ParseDomainName(input.Domain)
 		if err != nil {
 			ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))

@@ -38,6 +38,7 @@ const (
 	StatusPropertyIDInvalidError          StatusCode = 1212
 	StatusPropertyIDDuplicateError        StatusCode = 1213
 	StatusPropertyPermissionsError        StatusCode = 1214
+	StatusPropertyDomainPortError         StatusCode = 1215
 	// subscription errors
 	StatusSubscriptionPropertyLimitError StatusCode = 1300
 )
@@ -100,6 +101,8 @@ func (sc StatusCode) String() string {
 		return "Failed to resolve domain name."
 	case StatusPropertyDomainFormatError:
 		return "Invalid format of domain name."
+	case StatusPropertyDomainPortError:
+		return "Port number is not allowed in domain name."
 	case StatusPropertyIDEmptyError:
 		return "Property ID cannot be empty."
 	case StatusPropertyIDInvalidError:

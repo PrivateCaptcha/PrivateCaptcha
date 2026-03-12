@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -304,6 +305,20 @@ func ParseDomainName(input string) (string, error) {
 	}
 
 	return domain, nil
+}
+
+func DomainContainsPort(input string) bool {
+	cleaned := input
+	if idx := strings.Index(cleaned, "://"); idx != -1 {
+		cleaned = cleaned[idx+3:]
+	}
+
+	if idx := strings.Index(cleaned, "/"); idx != -1 {
+		cleaned = cleaned[:idx]
+	}
+
+	_, port, err := net.SplitHostPort(cleaned)
+	return err == nil && len(port) > 0
 }
 
 func IsLocalhost(address string) bool {

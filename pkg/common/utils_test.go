@@ -96,6 +96,34 @@ func TestCleanupDomain(t *testing.T) {
 	}
 }
 
+func TestDomainContainsPort(t *testing.T) {
+	testCases := []struct {
+		domain   string
+		expected bool
+	}{
+		{"bar.com", false},
+		{"bar.com:8080", true},
+		{"bar.com:443", true},
+		{"http://bar.com", false},
+		{"http://bar.com:8080", true},
+		{"https://bar.com:443", true},
+		{"http://bar.com:3000/path", true},
+		{"bar.com/path", false},
+		{"localhost:3000", true},
+		{"", false},
+		{"bar.com:", false},
+	}
+
+	for i, tc := range testCases {
+		t.Run(fmt.Sprintf("domainContainsPort_%v", i), func(t *testing.T) {
+			actual := DomainContainsPort(tc.domain)
+			if actual != tc.expected {
+				t.Errorf("DomainContainsPort(%q) = %v, want %v", tc.domain, actual, tc.expected)
+			}
+		})
+	}
+}
+
 func TestSubDomain(t *testing.T) {
 	testCases := []struct {
 		subDomain string
