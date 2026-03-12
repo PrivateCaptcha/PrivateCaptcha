@@ -139,10 +139,12 @@ func TestIsSkipName(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		actual := isSkipName(tt.name)
-		if actual != tt.expected {
-			t.Errorf("isSkipName(%q) = %v; want %v", tt.name, actual, tt.expected)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			actual := isSkipName(tt.name)
+			if actual != tt.expected {
+				t.Errorf("isSkipName(%q) = %v; want %v", tt.name, actual, tt.expected)
+			}
+		})
 	}
 }
 
@@ -159,10 +161,12 @@ func TestIsAllCaps(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		actual := isAllCaps(tt.value)
-		if actual != tt.expected {
-			t.Errorf("isAllCaps(%q) = %v; want %v", tt.value, actual, tt.expected)
-		}
+		t.Run(tt.value, func(t *testing.T) {
+			actual := isAllCaps(tt.value)
+			if actual != tt.expected {
+				t.Errorf("isAllCaps(%q) = %v; want %v", tt.value, actual, tt.expected)
+			}
+		})
 	}
 }
 
