@@ -31,7 +31,7 @@ const (
           <td>
             <img alt="Private Captcha" height="40" src="{{.CDNURL}}/portal/img/pc-logo-dark.png" style="display:block;outline:none;border:none;text-decoration:none" />
             <p style="font-size:16px;line-height:26px;margin:32px 0 16px">
-              Hello {{.UserName}},
+              Hello{{if .UserName}} {{.UserName}}{{end}},
             </p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Welcome to Private Captcha, a privacy- and user-friendly protection from bots and spam.
@@ -53,7 +53,7 @@ const (
   </body>
 </html>`
 
-	welcomeTextTemplate = `Hello,
+	welcomeTextTemplate = `Hello{{if .UserName}} {{.UserName}}{{end}},
 
 Welcome to Private Captcha, a privacy- and user-friendly protection from bots and spam.
 
