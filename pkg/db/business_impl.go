@@ -3523,7 +3523,7 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 		return ErrMaintenance
 	}
 
-	err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
+	ruleIDs, err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: Int(propertyID),
 		OrgID:      pgtype.Int4{Valid: false},
 		Column3:    RulePositionStep,
@@ -3533,13 +3533,11 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForProperty(ctx context.C
 		return err
 	}
 
-	slog.InfoContext(ctx, "Rebalanced difficulty rules for property", "propertyID", propertyID)
+	slog.InfoContext(ctx, "Rebalanced difficulty rules for property", "propertyID", propertyID, "count", len(ruleIDs))
 
-	// Evict per-rule cache entries so RetrieveDifficultyRule reads fresh positions
-	if cachedRules, err := impl.GetCachedPropertyRules(ctx, propertyID); err == nil {
-		for _, rule := range cachedRules {
-			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
-		}
+	// Evict per-rule cache entries using IDs returned by the rebalance query
+	for _, ruleID := range ruleIDs {
+		_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(ruleID))
 	}
 
 	// Clear list and compiled caches
@@ -3554,22 +3552,21 @@ func (impl *BusinessStoreImpl) RebalanceDifficultyRulesForOrg(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
+	ruleIDs, err := impl.querier.RebalanceDifficultyRules(ctx, &dbgen.RebalanceDifficultyRulesParams{
 		PropertyID: pgtype.Int4{Valid: false},
 		OrgID:      Int(orgID),
 		Column3:    RulePositionStep,
-	}); err != nil {
+	})
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to rebalance difficulty rules for org", "orgID", orgID, common.ErrAttr(err))
 		return err
 	}
 
-	slog.InfoContext(ctx, "Rebalanced difficulty rules for org", "orgID", orgID)
+	slog.InfoContext(ctx, "Rebalanced difficulty rules for org", "orgID", orgID, "count", len(ruleIDs))
 
-	// Evict per-rule cache entries so RetrieveDifficultyRule reads fresh positions
-	if cachedRules, err := impl.GetCachedOrgRules(ctx, orgID); err == nil {
-		for _, rule := range cachedRules {
-			_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(rule.ID))
-		}
+	// Evict per-rule cache entries using IDs returned by the rebalance query
+	for _, ruleID := range ruleIDs {
+		_ = impl.cache.Delete(ctx, DifficultyRuleCacheKey(ruleID))
 	}
 
 	// Clear list and compiled caches

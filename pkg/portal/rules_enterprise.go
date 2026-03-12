@@ -725,6 +725,52 @@ func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
 	return rule, nil
 }
 
+func (s *Server) RuleForProperty(r *http.Request, propertyID int32) (*dbgen.DifficultyRule, error) {
+	ctx := r.Context()
+
+	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	if !rule.PropertyID.Valid || rule.PropertyID.Int32 != propertyID {
+		slog.ErrorContext(ctx, "Rule does not belong to property", "ruleID", rule.ID, "rulePropertyID", rule.PropertyID, "expectedPropertyID", propertyID)
+		return nil, db.ErrPermissions
+	}
+
+	return rule, nil
+}
+
+func (s *Server) RuleForOrg(r *http.Request, orgID int32) (*dbgen.DifficultyRule, error) {
+	ctx := r.Context()
+
+	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
+		return nil, errInvalidPathArg
+	}
+
+	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	if !rule.OrgID.Valid || rule.OrgID.Int32 != orgID {
+		slog.ErrorContext(ctx, "Rule does not belong to org", "ruleID", rule.ID, "ruleOrgID", rule.OrgID, "expectedOrgID", orgID)
+		return nil, db.ErrPermissions
+	}
+
+	return rule, nil
+}
+
 func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -746,7 +792,7 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 		return nil, db.ErrPermissions
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForProperty(r, property.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -781,7 +827,7 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, db.ErrPermissions
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForOrg(r, org.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -826,7 +872,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForProperty(r, property.ID)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -918,7 +964,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForOrg(r, org.ID)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -1010,7 +1056,7 @@ func (s *Server) deletePropertyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForProperty(r, property.ID)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -1050,7 +1096,7 @@ func (s *Server) deleteOrgRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForOrg(r, org.ID)
 	if err != nil {
 		s.RedirectError(http.StatusBadRequest, w, r)
 		return
@@ -1093,7 +1139,7 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, err
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForProperty(r, property.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -1164,7 +1210,7 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	rule, err := s.Rule(r)
+	rule, err := s.RuleForOrg(r, org.ID)
 	if err != nil {
 		return nil, err
 	}

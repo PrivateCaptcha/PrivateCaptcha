@@ -327,7 +327,7 @@ func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRul
 	return &i, err
 }
 
-const rebalanceDifficultyRules = `-- name: RebalanceDifficultyRules :exec
+const rebalanceDifficultyRules = `-- name: RebalanceDifficultyRules :many
 WITH rules_list AS (
     SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
     FROM backend.difficulty_rules dr
@@ -338,6 +338,7 @@ UPDATE backend.difficulty_rules dr
 SET position = (rl.row_num - 1) * $3::float8, updated_at = NOW()
 FROM rules_list rl
 WHERE dr.id = rl.id
+RETURNING dr.id
 `
 
 type RebalanceDifficultyRulesParams struct {
@@ -346,9 +347,24 @@ type RebalanceDifficultyRulesParams struct {
 	Column3    float64     `db:"column_3" json:"column_3"`
 }
 
-func (q *Queries) RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) error {
-	_, err := q.db.Exec(ctx, rebalanceDifficultyRules, arg.PropertyID, arg.OrgID, arg.Column3)
-	return err
+func (q *Queries) RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) ([]int32, error) {
+	rows, err := q.db.Query(ctx, rebalanceDifficultyRules, arg.PropertyID, arg.OrgID, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int32
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateDifficultyRule = `-- name: UpdateDifficultyRule :one
