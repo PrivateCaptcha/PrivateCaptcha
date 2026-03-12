@@ -1194,6 +1194,29 @@ func TestPropertyEndpointsInvalidFormArgs(t *testing.T) {
 		}
 	})
 
+	t.Run("PostNewPropertyLocalhostWithPort", func(t *testing.T) {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "ValidName")
+		form.Set(common.ParamDomain, "http://localhost:1234")
+
+		req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/new", orgID), strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", w.Code)
+		}
+
+		body := w.Body.String()
+		if !strings.Contains(strings.ToLower(body), "port") {
+			t.Error("Expected response to mention port validation error for http://localhost:1234")
+		}
+	})
+
 	t.Run("PostNewPropertyEmptyName", func(t *testing.T) {
 		form := url.Values{}
 		form.Set(common.ParamCSRFToken, csrfToken)

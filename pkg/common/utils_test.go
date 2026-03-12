@@ -110,6 +110,7 @@ func TestDomainContainsPort(t *testing.T) {
 		{"http://bar.com:3000/path", true},
 		{"bar.com/path", false},
 		{"localhost:3000", true},
+		{"http://localhost:1234", true},
 		{"", false},
 		{"bar.com:", false},
 	}
