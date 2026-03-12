@@ -3434,3 +3434,637 @@ func TestMemberRuleCreation(t *testing.T) {
 		})
 	})
 }
+
+func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
+	t.Parallel()
+
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
+
+	tests := []struct {
+		name                   string
+		rule                   *dbgen.DifficultyRule
+		expectedActionAction   string
+		expectedActionProperty string
+		expectedActionValue    string
+		expectedCondOperator   string
+	}{
+		{
+			name: "nil rule returns empty model",
+		},
+		{
+			name: "action HTTPRequest shows block",
+			rule: &dbgen.DifficultyRule{
+				ID:                1,
+				Name:              "Block rule",
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorEquals,
+				ActionProperty:    dbgen.RuleActionPropertyHTTPRequest,
+				ActionValue:       0,
+			},
+			expectedActionAction:   "block",
+			expectedActionProperty: "HTTP request",
+			expectedActionValue:    "",
+			expectedCondOperator:   "equals",
+		},
+		{
+			name: "action DifficultyLevelPercent positive",
+			rule: &dbgen.DifficultyRule{
+				ID:                2,
+				Name:              "Increase difficulty",
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorContains,
+				ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:       50,
+			},
+			expectedActionAction:   "change",
+			expectedActionProperty: "Difficulty level",
+			expectedActionValue:    "+50%",
+			expectedCondOperator:   "contains",
+		},
+		{
+			name: "action DifficultyLevelPercent negative",
+			rule: &dbgen.DifficultyRule{
+				ID:                3,
+				Name:              "Decrease difficulty",
+				ConditionProperty: dbgen.RuleConditionPropertyIPAddress,
+				ConditionOperator: dbgen.RuleConditionOperatorMatches,
+				ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:       -30,
+			},
+			expectedActionAction:   "change",
+			expectedActionProperty: "Difficulty level",
+			expectedActionValue:    "-30%",
+			expectedCondOperator:   "matches",
+		},
+		{
+			name: "action DifficultyGrowth",
+			rule: &dbgen.DifficultyRule{
+				ID:                4,
+				Name:              "Set growth",
+				ConditionProperty: dbgen.RuleConditionPropertyCountryCode,
+				ConditionOperator: dbgen.RuleConditionOperatorIn,
+				ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
+				ActionValue:       2,
+			},
+			expectedActionAction:   "set",
+			expectedActionProperty: "Difficulty growth",
+			expectedActionValue:    string(growthLevelFromIndex(2)),
+			expectedCondOperator:   "is one of",
+		},
+		{
+			name: "action Break",
+			rule: &dbgen.DifficultyRule{
+				ID:                5,
+				Name:              "Break",
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorBot,
+				ActionProperty:    dbgen.RuleActionPropertyBreak,
+			},
+			expectedActionAction:   "stop",
+			expectedActionProperty: "processing rules",
+			expectedActionValue:    "",
+			expectedCondOperator:   "is known bot",
+		},
+		{
+			name: "action default unknown action property",
+			rule: &dbgen.DifficultyRule{
+				ID:                6,
+				Name:              "Unknown action",
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorEmpty,
+				ActionProperty:    "some_unknown_action",
+				ActionValue:       42,
+			},
+			expectedActionAction:   "set",
+			expectedActionProperty: "Some Unknown Action",
+			expectedActionValue:    "42",
+			expectedCondOperator:   "is empty",
+		},
+		{
+			name: "condition operator Empty negated",
+			rule: &dbgen.DifficultyRule{
+				ID:                       7,
+				Name:                     "Not empty",
+				ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator:        dbgen.RuleConditionOperatorEmpty,
+				ConditionOperatorNegated: true,
+				ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+			},
+			expectedActionAction:   "block",
+			expectedActionProperty: "HTTP request",
+			expectedCondOperator:   "is not empty",
+		},
+		{
+			name: "condition operator In negated",
+			rule: &dbgen.DifficultyRule{
+				ID:                       8,
+				Name:                     "Not in",
+				ConditionProperty:        dbgen.RuleConditionPropertyCountryCode,
+				ConditionOperator:        dbgen.RuleConditionOperatorIn,
+				ConditionOperatorNegated: true,
+				ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+			},
+			expectedActionAction:   "block",
+			expectedActionProperty: "HTTP request",
+			expectedCondOperator:   "is not one of",
+		},
+		{
+			name: "condition operator Bot negated",
+			rule: &dbgen.DifficultyRule{
+				ID:                       9,
+				Name:                     "Not bot",
+				ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator:        dbgen.RuleConditionOperatorBot,
+				ConditionOperatorNegated: true,
+				ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+			},
+			expectedActionAction:   "block",
+			expectedActionProperty: "HTTP request",
+			expectedCondOperator:   "is not known bot",
+		},
+		{
+			name: "condition operator default negated",
+			rule: &dbgen.DifficultyRule{
+				ID:                       10,
+				Name:                     "Default negated",
+				ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator:        dbgen.RuleConditionOperatorContains,
+				ConditionOperatorNegated: true,
+				ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
+			},
+			expectedActionAction:   "block",
+			expectedActionProperty: "HTTP request",
+			expectedCondOperator:   "not contains",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			model := difficultyRuleToDisplay(tt.rule, true, hasher, nil)
+			if model == nil {
+				t.Fatal("Expected non-nil model")
+			}
+			if tt.rule == nil {
+				if model.CanEdit != true {
+					t.Error("Expected CanEdit to be true for nil rule")
+				}
+				return
+			}
+			if model.ActionAction != tt.expectedActionAction {
+				t.Errorf("ActionAction = %q, want %q", model.ActionAction, tt.expectedActionAction)
+			}
+			if model.ActionProperty != tt.expectedActionProperty {
+				t.Errorf("ActionProperty = %q, want %q", model.ActionProperty, tt.expectedActionProperty)
+			}
+			if model.ActionValue != tt.expectedActionValue {
+				t.Errorf("ActionValue = %q, want %q", model.ActionValue, tt.expectedActionValue)
+			}
+			if model.ConditionOperator != tt.expectedCondOperator {
+				t.Errorf("ConditionOperator = %q, want %q", model.ConditionOperator, tt.expectedCondOperator)
+			}
+		})
+	}
+}
+
+func TestRegisterAction(t *testing.T) {
+	t.Parallel()
+
+	registry := &RuleRegistry{
+		conditions: map[string]ConditionRegistration{},
+		actions:    map[string]ActionFormParser{},
+	}
+
+	t.Run("empty key returns error", func(t *testing.T) {
+		err := registry.RegisterAction("", func(v string) (int32, common.StatusCode) {
+			return 0, common.StatusOK
+		})
+		if err == nil {
+			t.Fatal("Expected error for empty key")
+		}
+		if err != errRuleActionEmpty {
+			t.Errorf("Expected errRuleActionEmpty, got: %v", err)
+		}
+	})
+
+	t.Run("valid registration", func(t *testing.T) {
+		err := registry.RegisterAction("test_action", func(v string) (int32, common.StatusCode) {
+			return 42, common.StatusOK
+		})
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		parser, ok := registry.ActionParser("test_action")
+		if !ok {
+			t.Fatal("Expected action parser to be registered")
+		}
+		val, status := parser("anything")
+		if val != 42 || status != common.StatusOK {
+			t.Errorf("Unexpected parser result: val=%d, status=%v", val, status)
+		}
+	})
+
+	t.Run("unregistered key returns false", func(t *testing.T) {
+		_, ok := registry.ActionParser("nonexistent")
+		if ok {
+			t.Error("Expected false for unregistered key")
+		}
+	})
+}
+
+func TestPostPropertyNewRuleParseRuleFormFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, t.Name()+".example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send form with empty name to trigger parseRuleForm failure
+	resp := postCreatePropertyRule(srv, cookie, user, org, prop, "", "curl", "50")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 (form re-rendered with error), got %v", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusRuleNameEmptyError.String()) {
+		t.Error("Expected error message about empty rule name in response body")
+	}
+}
+
+func TestPostOrgNewRuleParseRuleFormFails(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	org, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Send form with empty name to trigger parseRuleForm failure
+	resp := postCreateOrgRule(srv, cookie, user, org, "",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"curl",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"50")
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status 200 (form re-rendered with error), got %v", resp.StatusCode)
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), common.StatusRuleNameEmptyError.String()) {
+		t.Error("Expected error message about empty rule name in response body")
+	}
+}
+
+func TestIsRuleNameValidInvalid(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"contains exclamation", "Hello!"},
+		{"contains at sign", "rule@name"},
+		{"contains slash", "rule/name"},
+		{"contains hash", "rule#1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if isRuleNameValid(tt.input) {
+				t.Errorf("Expected isRuleNameValid(%q) to return false", tt.input)
+			}
+		})
+	}
+}
+
+func TestParseRuleFormNegativeCases(t *testing.T) {
+	t.Parallel()
+
+	registry := NewRuleRegistry()
+
+	makeServer := func() *Server {
+		return &Server{
+			Rules: registry,
+		}
+	}
+
+	tests := []struct {
+		name         string
+		formValues   map[string]string
+		expectedCode common.StatusCode
+	}{
+		{
+			name:         "empty name",
+			formValues:   map[string]string{},
+			expectedCode: common.StatusRuleNameEmptyError,
+		},
+		{
+			name: "invalid name chars",
+			formValues: map[string]string{
+				common.ParamName: "Rule@invalid!",
+			},
+			expectedCode: common.StatusRuleNameInvalidCharsError,
+		},
+		{
+			name: "empty condition property",
+			formValues: map[string]string{
+				common.ParamName: "Valid Name",
+			},
+			expectedCode: common.StatusRuleConditionPropertyRequired,
+		},
+		{
+			name: "empty action property",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+			},
+			expectedCode: common.StatusRuleActionPropertyRequired,
+		},
+		{
+			name: "invalid condition property",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: "unknown_condition",
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+			},
+			expectedCode: common.StatusRuleConditionPropertyInvalid,
+		},
+		{
+			name: "invalid action property",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+				common.ParamActionProperty:    "unknown_action",
+			},
+			expectedCode: common.StatusRuleActionPropertyInvalid,
+		},
+		{
+			name: "condition parser fails",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+				common.ParamConditionOperator: "invalid_operator",
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				common.ParamActionValue:       "50",
+			},
+			expectedCode: common.StatusRuleConditionOperatorInvalid,
+		},
+		{
+			name: "action parser fails",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+				common.ParamConditionOperator: string(dbgen.RuleConditionOperatorBot),
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				common.ParamActionValue:       "0",
+			},
+			expectedCode: common.StatusRuleDifficultyValueInvalid,
+		},
+		{
+			name: "negated operator suffix is trimmed",
+			formValues: map[string]string{
+				common.ParamName:              "Valid Name",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+				common.ParamConditionOperator: string(dbgen.RuleConditionOperatorContains) + "_negated",
+				common.ParamConditionValue:    "test",
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				common.ParamActionValue:       "50",
+			},
+			expectedCode: common.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := makeServer()
+			form := url.Values{}
+			for k, v := range tt.formValues {
+				form.Set(k, v)
+			}
+
+			req := httptest.NewRequest("POST", "/test", strings.NewReader(form.Encode()))
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+			if err := req.ParseForm(); err != nil {
+				t.Fatalf("Failed to parse form: %v", err)
+			}
+
+			renderCtx := &RuleWizardRenderContext{}
+			_, statusCode := s.parseRuleForm(t.Context(), req, renderCtx, "example.com")
+
+			if statusCode != tt.expectedCode {
+				t.Errorf("parseRuleForm() = %v, want %v", statusCode, tt.expectedCode)
+			}
+		})
+	}
+}
+
+type cannotEditRuleTestSuite struct {
+	name string
+	run  func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux)
+}
+
+func TestMemberCannotEditRuleSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	suites := []cannotEditRuleTestSuite{
+		{
+			name: "getPropertyEditRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/property/%s/rules/%s/edit",
+					server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(prop.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
+				req.AddCookie(cookie)
+				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(prop.ID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+				w := httptest.NewRecorder()
+				_, err := server.getPropertyEditRule(w, req)
+				if err == nil {
+					t.Fatal("Expected error from getPropertyEditRule")
+				}
+			},
+		},
+		{
+			name: "postPropertyEditRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				resp := postEditPropertyRule(srv, cookie, member, org, prop, rule, "Updated",
+					string(dbgen.RuleConditionOperatorEquals), "test", "50")
+				if resp.StatusCode != http.StatusSeeOther {
+					t.Fatalf("Expected redirect, got %v", resp.StatusCode)
+				}
+				location, _ := resp.Location()
+				if location == nil || !strings.Contains(location.String(), "error") {
+					t.Errorf("Expected redirect to error page, got: %v", location)
+				}
+			},
+		},
+		{
+			name: "getOrgEditRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/rules/%s/edit",
+					server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(rule.ID))), nil)
+				req.AddCookie(cookie)
+				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+				w := httptest.NewRecorder()
+				_, err := server.getOrgEditRule(w, req)
+				if err == nil {
+					t.Fatal("Expected error from getOrgEditRule")
+				}
+			},
+		},
+		{
+			name: "postOrgEditRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				resp := postEditOrgRule(srv, cookie, member, org, rule, "Updated",
+					string(dbgen.RuleConditionPropertyUserAgent),
+					string(dbgen.RuleConditionOperatorEquals),
+					"test",
+					string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					"50")
+				if resp.StatusCode != http.StatusSeeOther {
+					t.Fatalf("Expected redirect, got %v", resp.StatusCode)
+				}
+				location, _ := resp.Location()
+				if location == nil || !strings.Contains(location.String(), "error") {
+					t.Errorf("Expected redirect to error page, got: %v", location)
+				}
+			},
+		},
+		{
+			name: "postMovePropertyRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+				form.Set(common.ParamPosition, "0")
+
+				req := httptest.NewRequest("POST", "/endpoint", strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.AddCookie(cookie)
+				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(prop.ID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+				w := httptest.NewRecorder()
+				_, err := server.postMovePropertyRule(w, req)
+				if err == nil {
+					t.Fatal("Expected error from postMovePropertyRule")
+				}
+			},
+		},
+		{
+			name: "postMoveOrgRule",
+			run: func(t *testing.T, owner *dbgen.User, org *dbgen.Organization, prop *dbgen.Property, rule *dbgen.DifficultyRule, member *dbgen.User, cookie *http.Cookie, srv *http.ServeMux) {
+				form := url.Values{}
+				form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+				form.Set(common.ParamPosition, "0")
+
+				req := httptest.NewRequest("POST", "/endpoint", strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				req.AddCookie(cookie)
+				req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+				req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rule.ID)))
+
+				w := httptest.NewRecorder()
+				_, err := server.postMoveOrgRule(w, req)
+				if err == nil {
+					t.Fatal("Expected error from postMoveOrgRule")
+				}
+			},
+		},
+	}
+
+	for _, suite := range suites {
+		t.Run(suite.name, func(t *testing.T) {
+			ctx := t.Context()
+
+			owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create owner account: %v", err)
+			}
+
+			safeName := strings.ToLower(strings.ReplaceAll(t.Name(), "/", "-"))
+			prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, safeName+".example.com"), org)
+			if err != nil {
+				t.Fatalf("Failed to create property: %v", err)
+			}
+
+			// Owner creates a rule
+			rule, _, err := store.Impl().CreateDifficultyRule(ctx, owner, &dbgen.CreateDifficultyRuleParams{
+				Name:              "Owner Rule",
+				PropertyID:        db.Int(prop.ID),
+				OrgID:             db.Int(org.ID),
+				Enabled:           true,
+				ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+				ConditionOperator: dbgen.RuleConditionOperatorContains,
+				ConditionValueStr: db.Text("test"),
+				ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+				ActionValue:       50,
+				CreatorID:         db.Int(owner.ID),
+			})
+			if err != nil {
+				t.Fatalf("Failed to create rule: %v", err)
+			}
+
+			// Create member and join org
+			member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+			if err != nil {
+				t.Fatalf("Failed to create member account: %v", err)
+			}
+
+			if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+				t.Fatalf("Failed to invite member: %v", err)
+			}
+			if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+				t.Fatalf("Failed to join org: %v", err)
+			}
+
+			srv := http.NewServeMux()
+			server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+			cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			suite.run(t, owner, org, prop, rule, member, cookie, srv)
+		})
+	}
+}
