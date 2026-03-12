@@ -69,6 +69,13 @@ func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*
 }
 
 func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
+	// Re-cache session data in memory to ensure it survives otter eviction.
+	// Without this, otter's async TinyLFU maintenance can evict a freshly-added
+	// session entry before it is read back or batch-persisted to DB.
+	if err := ss.store.Impl().CacheUserSession(ctx, sd.Data()); err != nil {
+		slog.ErrorContext(ctx, "Failed to re-cache session", common.SessionIDAttr(sd.ID()), common.ErrAttr(err))
+	}
+
 	timer := time.NewTimer(sessionBackpressureTimeout)
 	defer timer.Stop()
 
