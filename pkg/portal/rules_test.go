@@ -3605,7 +3605,7 @@ func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
 				t.Fatal("Expected non-nil model")
 			}
 			if tt.rule == nil {
-				if model.CanEdit != true {
+				if !model.CanEdit {
 					t.Error("Expected CanEdit to be true for nil rule")
 				}
 				return
