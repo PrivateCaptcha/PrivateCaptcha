@@ -86,7 +86,7 @@ type Querier interface {
 	MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRuleParams) (*DifficultyRule, error)
 	MoveProperty(ctx context.Context, arg *MovePropertyParams) (*Property, error)
 	Ping(ctx context.Context) (int32, error)
-	RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) error
+	RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) ([]int32, error)
 	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
 	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)

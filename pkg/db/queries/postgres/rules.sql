@@ -118,7 +118,7 @@ FROM
 LEFT JOIN rules_list prev_row ON prev_row.idx = $2 - 1
 LEFT JOIN rules_list next_row ON next_row.idx = $2;
 
--- name: RebalanceDifficultyRules :exec
+-- name: RebalanceDifficultyRules :many
 WITH rules_list AS (
     SELECT dr.id, ROW_NUMBER() OVER (ORDER BY dr.position ASC) AS row_num
     FROM backend.difficulty_rules dr
@@ -128,4 +128,5 @@ WITH rules_list AS (
 UPDATE backend.difficulty_rules dr
 SET position = (rl.row_num - 1) * $3::float8, updated_at = NOW()
 FROM rules_list rl
-WHERE dr.id = rl.id;
+WHERE dr.id = rl.id
+RETURNING dr.id;

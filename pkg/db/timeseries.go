@@ -803,18 +803,18 @@ func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context
 		return nil, ErrUnsupportedPeriod
 	}
 
-	from := getStartTime(period)
+	from := getStartTime(period).UTC()
 	statsMap := make(map[time.Time]uint32)
 
 	// For rule stats, always use daily resolution
 	truncate := func(t time.Time) time.Time {
-		y, m, d := t.Date()
-		return time.Date(y, m, d, 0, 0, 0, 0, t.Location())
+		y, m, d := t.UTC().Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 	}
 
 	// Count only logs with rule_id > 0
 	for _, log := range m.accessLogs {
-		if log.UserID == userID && log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.Before(from) {
+		if log.UserID == userID && log.OrgID == orgID && log.PropertyID == propertyID && log.RuleID > 0 && !log.Timestamp.UTC().Before(from) {
 			ts := truncate(log.Timestamp)
 			statsMap[ts]++
 		}
