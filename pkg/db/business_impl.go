@@ -2250,6 +2250,13 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 		Persistent:  n.Persistent,
 	}
 
+	if len(n.EmailFrom) > 0 {
+		params.EmailFrom = Text(n.EmailFrom)
+	}
+	if len(n.ReplyToEmail) > 0 {
+		params.ReplyToEmail = Text(n.ReplyToEmail)
+	}
+
 	switch n.Condition {
 	case common.EmptyNotificationCondition:
 		params.RequiresSubscription = pgtype.Bool{Valid: false}

@@ -59,6 +59,8 @@ func TestUserNotificationsJob(t *testing.T) {
 		DateTime:     tnow.Add(-10 * time.Minute),
 		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
+		EmailFrom:    "custom-from@example.com",
+		ReplyToEmail: "custom-reply@example.com",
 	}
 	if _, err := store.Impl().CreateUserNotification(ctx, n); err != nil {
 		t.Fatal(err)
@@ -85,6 +87,16 @@ func TestUserNotificationsJob(t *testing.T) {
 
 	if sender.Count != 1 {
 		t.Errorf("Unexpected number of sent emails: %v", sender.Count)
+	}
+
+	if sender.LastMessage == nil {
+		t.Fatal("Expected last message to be set")
+	}
+	if sender.LastMessage.EmailFrom != "custom-from@example.com" {
+		t.Errorf("Expected EmailFrom to be custom-from@example.com, got %v", sender.LastMessage.EmailFrom)
+	}
+	if sender.LastMessage.ReplyTo != "custom-reply@example.com" {
+		t.Errorf("Expected ReplyTo to be custom-reply@example.com, got %v", sender.LastMessage.ReplyTo)
 	}
 
 	// run again, but the notification should be processed by now

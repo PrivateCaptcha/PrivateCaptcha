@@ -27,8 +27,8 @@ RETURNING *;
 SELECT * FROM backend.notification_templates WHERE external_id = $1;
 
 -- name: CreateUserNotification :one
-INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 RETURNING *;
 
 -- name: DeletePendingUserNotification :exec
