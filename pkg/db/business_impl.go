@@ -2253,8 +2253,8 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 	if len(n.EmailFrom) > 0 {
 		params.EmailFrom = Text(n.EmailFrom)
 	}
-	if len(n.ReplyToEmail) > 0 {
-		params.ReplyToEmail = Text(n.ReplyToEmail)
+	if n.ReplyToEmail != nil {
+		params.ReplyToEmail = Text(*n.ReplyToEmail)
 	}
 
 	switch n.Condition {

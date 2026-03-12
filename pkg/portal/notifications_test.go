@@ -50,6 +50,8 @@ func TestUserNotificationsJob(t *testing.T) {
 
 	const referenceID = "referenceID"
 
+	customReplyTo := "custom-reply@example.com"
+
 	n := &common.ScheduledNotification{
 		UserID:       user.ID,
 		ReferenceID:  referenceID,
@@ -60,7 +62,7 @@ func TestUserNotificationsJob(t *testing.T) {
 		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 		EmailFrom:    "custom-from@example.com",
-		ReplyToEmail: "custom-reply@example.com",
+		ReplyToEmail: &customReplyTo,
 	}
 	if _, err := store.Impl().CreateUserNotification(ctx, n); err != nil {
 		t.Fatal(err)
