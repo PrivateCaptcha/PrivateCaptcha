@@ -332,7 +332,7 @@ func SessionCacheKey(id string) CacheKey { return StringCacheKey(sessionCacheKey
 func UserCacheKey(id int32) CacheKey     { return Int32CacheKey(userCacheKeyPrefix, id) }
 func APIKeyCacheKey(str string) CacheKey { return StringCacheKey(apiKeyCacheKeyPrefix, str) }
 func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefix, orgID) }
-func orgPropertiesCacheKey(orgID int32, key string) CacheKey {
+func OrgPropertiesCacheKey(orgID int32, key string) CacheKey {
 	return CacheKey{Prefix: orgPropertiesCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }
 func propertyByIDCacheKey(propID int32) CacheKey {
@@ -344,7 +344,7 @@ func PropertyByIDCacheKey(propID int32) CacheKey {
 func PropertyBySitekeyCacheKey(sitekey string) CacheKey {
 	return StringCacheKey(propertyBySitekeyCacheKeyPrefix, sitekey)
 }
-func userOrgsCacheKey(userID int32) CacheKey { return Int32CacheKey(userOrgsCacheKeyPrefix, userID) }
+func UserOrgsCacheKey(userID int32) CacheKey { return Int32CacheKey(userOrgsCacheKeyPrefix, userID) }
 func orgUsersCacheKey(orgID int32) CacheKey  { return Int32CacheKey(orgUsersCacheKeyPrefix, orgID) }
 func UserAPIKeysCacheKey(userID int32) CacheKey {
 	return Int32CacheKey(userAPIKeysCacheKeyPrefix, userID)

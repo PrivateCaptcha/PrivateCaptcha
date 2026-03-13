@@ -276,7 +276,7 @@ func (impl *BusinessStoreImpl) CreateNewOrganization(ctx context.Context, name s
 		_ = impl.cache.Set(ctx, cacheKey, org)
 
 		// invalidate user orgs in cache as we just created another one
-		_ = impl.cache.Delete(ctx, userOrgsCacheKey(org.UserID.Int32))
+		_ = impl.cache.Delete(ctx, UserOrgsCacheKey(org.UserID.Int32))
 
 		auditEvent = newOrgAuditLogEvent(userID, org, common.AuditLogActionCreate)
 	}
@@ -314,11 +314,11 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 	// TODO: Delete user API keys from cache
 
 	// invalidate user caches
-	userOrgsCacheKey := userOrgsCacheKey(user.ID)
+	userOrgsCacheKey := UserOrgsCacheKey(user.ID)
 	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey); err == nil {
 		for _, org := range orgs {
 			_ = impl.cache.Delete(ctx, orgCacheKey(org.Organization.ID))
-			_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.Organization.ID, orgPropertiesCacheKeyStr))
+			_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(org.Organization.ID, orgPropertiesCacheKeyStr))
 		}
 		_ = impl.cache.Delete(ctx, userOrgsCacheKey)
 	}
@@ -659,7 +659,7 @@ func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string
 
 func (impl *BusinessStoreImpl) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
 	reader := &StoreArrayReader[pgtype.Int4, dbgen.GetUserOrganizationsRow]{
-		CacheKey: userOrgsCacheKey(userID),
+		CacheKey: UserOrgsCacheKey(userID),
 		Cache:    impl.cache,
 	}
 
@@ -705,7 +705,7 @@ func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 	}
 
 	// this value should be in cache for "normal" use-cases (e.g. user logs in to the portal)
-	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, userOrgsCacheKey(userID)); err == nil {
+	if orgs, err := FetchCachedArray[dbgen.GetUserOrganizationsRow](ctx, impl.cache, UserOrgsCacheKey(userID)); err == nil {
 		if index := slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID }); index != -1 {
 			slog.Log(ctx, common.LevelTrace, "Found cached org from user organizations", "orgID", orgID, "userID", userID)
 			org := &dbgen.Organization{}
@@ -780,14 +780,14 @@ func (impl *BusinessStoreImpl) InvalidatePropertyCache(ctx context.Context, prop
 		return
 	}
 
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(property.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(property.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 }
 
 func (impl *BusinessStoreImpl) GetCachedOrgProperties(ctx context.Context, orgID int32) ([]*dbgen.Property, error) {
-	return FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr))
+	return FetchCachedArray[dbgen.Property](ctx, impl.cache, OrgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr))
 }
 
 func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, propID int32) (*dbgen.Property, error) {
@@ -799,7 +799,7 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 		return nil, ErrNegativeCacheHit
 	}
 
-	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, orgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr)); err == nil {
+	if properties, err := FetchCachedArray[dbgen.Property](ctx, impl.cache, OrgPropertiesCacheKey(orgID, orgPropertiesCacheKeyStr)); err == nil {
 		if index := slices.IndexFunc(properties, func(p *dbgen.Property) bool { return p.ID == propID }); index != -1 {
 			property := properties[index]
 			impl.cacheProperty(ctx, property)
@@ -916,7 +916,7 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 
 	impl.cacheProperty(ctx, property)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(params.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(params.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.CreatorID.Int32))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(property.OrgID.Int32))
@@ -984,7 +984,7 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	cacheProperty := createPropertyFromUpdate(updatedProperty)
 	impl.cacheProperty(ctx, cacheProperty)
 	// invalidate org properties in cache as we just created a new property
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, propertyAuditLogsCacheKey(updatedProperty.ID))
 
 	auditEvent := newUpdatePropertyAuditLogEvent(cacheProperty, updatedProperty, org, user)
@@ -1072,7 +1072,7 @@ func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *d
 
 	if offset == 0 {
 		reader := &StoreArrayReader[*dbgen.GetOrgPropertiesParams, dbgen.Property]{
-			CacheKey: orgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
+			CacheKey: OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
 			Cache:    impl.cache,
 		}
 
@@ -1131,7 +1131,7 @@ func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbg
 	cacheKey := orgCacheKey(org.ID)
 	_ = impl.cache.Set(ctx, cacheKey, org)
 	// invalidate user orgs in cache as we just updated name
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(org.UserID.Int32))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(org.UserID.Int32))
 
 	auditEvent := newUpdateOrgAuditLogEvent(user, org, oldName)
 
@@ -1157,7 +1157,7 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(org.ID))
 	// invalidate user orgs in cache as we just deleted one
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
 
 	auditEvent := newOrgAuditLogEvent(user.ID, org, common.AuditLogActionSoftDelete)
@@ -1207,7 +1207,7 @@ func (impl *BusinessStoreImpl) InviteUserToOrg(ctx context.Context, user *dbgen.
 	slog.InfoContext(ctx, "Added org membership invite", "orgID", org.ID, "userID", inviteUser.ID)
 
 	// invalidate relevant caches
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(inviteUser.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(inviteUser.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 
 	auditEvent := newOrgInviteAuditLogEvent(user, org, inviteUser)
@@ -1265,7 +1265,7 @@ func (impl *BusinessStoreImpl) LinkOrgInviteToUser(ctx context.Context, inviteID
 
 	// update relevant caches
 	_ = impl.cache.Set(ctx, orgInviteCacheKey(orgUser.ID), orgUser)
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 
 	return nil
 }
@@ -1290,7 +1290,7 @@ func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *d
 	slog.InfoContext(ctx, "Accepted org invite", "orgID", orgID, "userID", user.ID)
 
 	// invalidate relevant caches
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(orgID))
 
 	var orgName string
@@ -1323,7 +1323,7 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 	slog.InfoContext(ctx, "Left organization", "orgID", orgID, "userID", user.ID)
 
 	// invalidate relevant caches
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(orgID))
 
 	var orgName string
@@ -1363,7 +1363,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 	slog.InfoContext(ctx, "Removed user from org", "orgID", org.ID, "userID", userID)
 
 	// invalidate relevant caches
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(userID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 
 	userEmail := ""
@@ -2476,8 +2476,8 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	slog.InfoContext(ctx, "Moved property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID)
 
 	// Invalidate cache for both old and new organizations
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
 	// and cache property
@@ -2537,11 +2537,11 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	slog.InfoContext(ctx, "Transferred organization", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID)
 
 	// Invalidate caches for both old and new users
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(user.ID))
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(newOwner.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(newOwner.ID))
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
-	_ = impl.cache.Delete(ctx, orgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
 
@@ -2991,7 +2991,7 @@ func (impl *BusinessStoreImpl) RetrieveOrgPropertiesCount(ctx context.Context, o
 }
 
 func (impl *BusinessStoreImpl) CleanupUserCache(ctx context.Context, userID int32) {
-	_ = impl.cache.Delete(ctx, userOrgsCacheKey(userID))
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(userID))
 	_ = impl.cache.Delete(ctx, UserAPIKeysCacheKey(userID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(userID))
 
