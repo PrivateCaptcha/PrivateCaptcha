@@ -709,12 +709,12 @@ func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen
 	var errs []error
 	minNotificationDate := time.Now().UTC().AddDate(0, 0, apiKeyExpirationNotificationDays)
 	if key.ExpiresAt.Valid && key.ExpiresAt.Time.After(minNotificationDate) {
-		if _, err := s.Store.Impl().CreateUserNotification(ctx, createAPIKeyExpirationNotification(key, userKey)); err != nil {
+		if _, err := s.Store.Impl().CreateUserNotification(ctx, createAPIKeyExpirationNotification(key, userKey)); err != nil && !errors.Is(err, db.ErrAlreadyExists) {
 			errs = append(errs, err)
 		}
 	}
 
-	if _, err := s.Store.Impl().CreateUserNotification(ctx, createAPIKeyExpiredNotification(key, userKey)); err != nil {
+	if _, err := s.Store.Impl().CreateUserNotification(ctx, createAPIKeyExpiredNotification(key, userKey)); err != nil && !errors.Is(err, db.ErrAlreadyExists) {
 		errs = append(errs, err)
 	}
 

@@ -80,6 +80,8 @@ func (q *Queries) CreateSystemNotification(ctx context.Context, arg *CreateSyste
 const createUserNotification = `-- name: CreateUserNotification :one
 INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+ON CONFLICT (user_id, reference_id) WHERE (persistent = true) OR (processed_at IS NULL)
+DO NOTHING
 RETURNING id, user_id, template_id, payload, subject, reference_id, processing_attempts, persistent, requires_subscription, created_at, updated_at, scheduled_at, processed_at, email_from, reply_to_email
 `
 

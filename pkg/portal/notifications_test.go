@@ -8,6 +8,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
@@ -142,8 +143,8 @@ func TestDeleteSentNotifications(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := store.Impl().CreateUserNotification(ctx, sn); err == nil {
-		t.Fatal("Shouldn't create a notification with the same referenceID")
+	if _, err := store.Impl().CreateUserNotification(ctx, sn); !errors.Is(err, db.ErrAlreadyExists) {
+		t.Fatalf("Expected ErrAlreadyExists, got: %v", err)
 	}
 
 	if err := store.Impl().MarkUserNotificationsProcessed(ctx, []int32{notif.ID}, tnow.Add(-2*time.Minute)); err != nil {
@@ -189,8 +190,8 @@ func TestDeleteScheduledNotification(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := store.Impl().CreateUserNotification(ctx, sn); err == nil {
-		t.Fatal("Shouldn't create a notification with the same referenceID")
+	if _, err := store.Impl().CreateUserNotification(ctx, sn); !errors.Is(err, db.ErrAlreadyExists) {
+		t.Fatalf("Expected ErrAlreadyExists, got: %v", err)
 	}
 
 	if err := store.Impl().DeletePendingUserNotification(ctx, user, sn.ReferenceID); err != nil {

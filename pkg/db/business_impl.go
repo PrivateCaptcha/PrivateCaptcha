@@ -2270,8 +2270,11 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 
 	notif, err := impl.querier.CreateUserNotification(ctx, params)
 	if err != nil {
-		// warning and not error (as usual) because constraints are part of deduplication logic and we let caller decide
-		// (and also - it's not such an important error in the end)
+		// ON CONFLICT DO NOTHING returns no rows when a duplicate exists
+		if errors.Is(err, pgx.ErrNoRows) {
+			rlog.WarnContext(ctx, "User notification already exists")
+			return nil, ErrAlreadyExists
+		}
 		rlog.WarnContext(ctx, "Failed to create user notification", common.ErrAttr(err))
 		return nil, err
 	}
