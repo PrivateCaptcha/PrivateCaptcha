@@ -53,23 +53,23 @@
                         <div class="ml-4">
                             <h3 class="text-base font-semibold leading-6 text-gray-900">HTML/JS Snippet</h3>
                             <p class="text-sm text-gray-500">
-                            Works with any web application
+                            Client-side part of the integration
                             </p>
                         </div>
                     </div>
                 </div>
                 <div class="flex ml-4 mt-4 items-center">
-                    <a href="https://docs.privatecaptcha.com/docs/reference/widget-options" target="_blank" class="text-sm/6 font-semibold text-gray-900 hover:text-pclime-600">Docs <span aria-hidden="true">&rarr;</span></a>
+                    <a href="https://docs.privatecaptcha.com/docs/integrations/client-side/" target="_blank" class="text-sm/6 font-semibold text-gray-900 hover:text-pclime-600">Docs <span aria-hidden="true">&rarr;</span></a>
                 </div>
             </div>
         </div>
         <div class="bg-gray-200 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
             <div class="grow">
                 <code class="block rounded-md bg-gray-200 text-gray-800">
-                    <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this to the <head> of your website -->` }}
+                    <textarea id="snippet" class="h-28 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this inside the <head> of your website -->` }}
 {{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
 
-{{ `<!-- Add this to your form -->` }}
+{{ `<!-- Add this inside your form -->` }}
 {{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
                 </code>
             </div>
@@ -85,7 +85,7 @@
     <div class="mt-10">
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
-                <h3 class="mt-2 ml-2 text-base font-semibold text-gray-900">Other integrations</h3>
+                <h3 class="mt-2 ml-2 text-base font-semibold text-gray-900">All integrations</h3>
                 <p class="mt-1 ml-2 truncate text-sm text-gray-500">use sitekey <code class="rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ .Params.Sitekey }}</code> and <a class="underline hover:text-pclime-600" href="{{ relURL .Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{ $.Const.APIKeysEndpoint }}">create an API key</a></p>
             </div>
             <ul class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">

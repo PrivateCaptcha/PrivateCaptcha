@@ -4,7 +4,7 @@
     {{- end -}}
 
     <div>
-        <label for="{{ .Const.Name }}" class="pc-internal-form-label"> Name </label>
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label tooltip" data-tooltip="Convenience name for the resource protected by CAPTCHA"> Name </label>
         <div class="mt-2 relative">
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
@@ -17,7 +17,7 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Domain }}" class="pc-internal-form-label"> Domain </label>
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label tooltip" data-tooltip="Address of the website you are protecting by CAPTCHA"> Domain </label>
         <div class="mt-2 relative">
             {{- if .Params.DomainError -}}
             {{template "info-icon-red.html" .}}
