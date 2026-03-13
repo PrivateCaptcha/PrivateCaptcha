@@ -2270,6 +2270,7 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 
 	notif, err := impl.querier.CreateUserNotification(ctx, params)
 	if err != nil {
+		// ON CONFLICT DO NOTHING returns no rows when a duplicate exists
 		if errors.Is(err, pgx.ErrNoRows) {
 			rlog.WarnContext(ctx, "User notification already exists")
 			return nil, ErrAlreadyExists
