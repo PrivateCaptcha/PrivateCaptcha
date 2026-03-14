@@ -12,7 +12,7 @@ docker run -d --rm \
     -v $(pwd)/docker/clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml \
     -v $(pwd)/docker/clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml \
     -v $(pwd)/pkg/db/migrations/init/clickhouse.sh:/docker-entrypoint-initdb.d/myinit.sh \
-    clickhouse/clickhouse-server:24.12.6-alpine
+    clickhouse/clickhouse-server:26.1.3-alpine
 
 echo "Waiting for clickhouse healthcheck..."
 
