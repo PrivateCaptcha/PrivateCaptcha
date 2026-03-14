@@ -131,14 +131,17 @@ run:
 
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/error-logs-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ce:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ce.yml up --build
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/error-logs-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ee:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ee.yml up --build
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/error-logs-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 profile-docker:
