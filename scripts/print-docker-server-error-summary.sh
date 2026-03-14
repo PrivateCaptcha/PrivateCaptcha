@@ -3,7 +3,7 @@
 printf "%s\n" "Top server ERROR log messages:"
 
 logs="$(
-	grep 'ERROR' 2>/dev/null | \
+	grep '"level":"ERROR"' 2>/dev/null | \
 	jq -Rr 'fromjson? | select(.level=="ERROR" and (.msg | type == "string")) | .msg' 2>/dev/null | \
 	sort | uniq -c | sort -rn | head -n 5
 )"
