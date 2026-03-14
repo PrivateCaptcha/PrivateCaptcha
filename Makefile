@@ -129,31 +129,19 @@ serve: build-js build-widget-script copy-static-js build-server
 run:
 	reflex -r '^(pkg|cmd|vendor|web)/' -R '^(web/static/js|web/node_modules)' -s -- sh -c 'make serve'
 
-# Parse JSON log lines when available and ignore non-JSON lines gracefully.
-print-docker-server-error-summary:
-	@{ \
-		printf "%s\n" "Top server ERROR log messages:"; \
-		logs="$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | jq -Rr 'fromjson? | select(.level=="ERROR" and (.msg | type == "string")) | .msg' 2>/dev/null | sort | uniq -c | sort -rn | head -n 5 )"; \
-		if [ -n "$$logs" ]; then \
-			printf "%s\n" "$$logs"; \
-		else \
-			printf "%s\n" "No ERROR log messages found or logs unavailable."; \
-		fi; \
-	} || true
-
 run-docker:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml up --build
-	@$(MAKE) --no-print-directory print-docker-server-error-summary
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/print-docker-server-error-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ce:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ce.yml up --build
-	@$(MAKE) --no-print-directory print-docker-server-error-summary
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/print-docker-server-error-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 run-docker-ee:
 	@env GIT_COMMIT="$(GIT_COMMIT)" $(DOCKER) compose -f docker/docker-compose.base.yml -f docker/docker-compose.local.yml -f docker/docker-compose.ee.yml up --build
-	@$(MAKE) --no-print-directory print-docker-server-error-summary
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | ./scripts/print-docker-server-error-summary.sh || true
 	@$(OPEN) "$$( $(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix | go run cmd/formatlogs/main.go )"
 
 profile-docker:
