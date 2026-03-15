@@ -242,10 +242,10 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}, false, hasher, nil),
 		difficultyRuleToDisplay(&dbgen.DifficultyRule{
-			Name:                     "Block empty User-Agents",
+			Name:                     "Block bot User-Agents",
 			Enabled:                  false,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator:        dbgen.RuleConditionOperatorEmpty,
+			ConditionOperator:        dbgen.RuleConditionOperatorBot,
 			ConditionOperatorNegated: false,
 			Position:                 1,
 			ActionProperty:           dbgen.RuleActionPropertyHTTPRequest,
