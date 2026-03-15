@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	ruleTemplate     = "rules/rule.html"
-	ruleFormTemplate = "rules/form.html"
+	ruleTemplate       = "rules/rule.html"
+	ruleFormTemplate   = "rules/form.html"
+	maxHTTPHeaderNames = 10
 )
 
 func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organization, user *dbgen.User) common.StatusCode {
@@ -317,6 +318,9 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 			return "", "", common.StatusRuleHTTPHeaderNameInvalid
 		}
 		validCount++
+		if validCount > maxHTTPHeaderNames {
+			return "", "", common.StatusRuleHTTPHeaderNameTooMany
+		}
 	}
 
 	if validCount == 0 {

@@ -2988,6 +2988,18 @@ func TestParseHTTPHeaderNameCondition(t *testing.T) {
 			expected: common.StatusOK,
 		},
 		{
+			name:     "in with 10 valid headers",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "X-Header-1,X-Header-2,X-Header-3,X-Header-4,X-Header-5,X-Header-6,X-Header-7,X-Header-8,X-Header-9,X-Header-10",
+			expected: common.StatusOK,
+		},
+		{
+			name:     "in with too many valid headers",
+			operator: string(dbgen.RuleConditionOperatorIn),
+			value:    "X-Header-1,X-Header-2,X-Header-3,X-Header-4,X-Header-5,X-Header-6,X-Header-7,X-Header-8,X-Header-9,X-Header-10,X-Header-11",
+			expected: common.StatusRuleHTTPHeaderNameTooMany,
+		},
+		{
 			name:     "in with invalid header name",
 			operator: string(dbgen.RuleConditionOperatorIn),
 			value:    "Invalid Header!",
