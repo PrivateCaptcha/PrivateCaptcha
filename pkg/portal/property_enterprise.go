@@ -191,7 +191,7 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 	rules := rulesMap[property.ID]
 	for _, rule := range rules {
 		canEdit := canEditRule(user, org, rule)
-		renderCtx.Rules = append(renderCtx.Rules, difficultyRuleToDisplay(rule, canEdit, s.IDHasher, s.Rules))
+		renderCtx.Rules = append(renderCtx.Rules, DifficultyRuleToDisplay(rule, canEdit, s.IDHasher, s.Rules))
 	}
 
 	return renderCtx, nil, nil

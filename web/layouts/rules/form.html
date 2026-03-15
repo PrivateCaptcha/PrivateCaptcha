@@ -11,7 +11,7 @@
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.Name }}" pattern="[\p{L}\p{N} \-\._]+" title="Only standard letters, numbers, spaces, hyphens, and periods are allowed." class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+            <input type="text" name="{{ .Const.Name }}" id="{{ .Const.Name }}" placeholder="Custom captcha rule" maxlength="255" value="{{ .Params.Name }}" pattern="[\p{L}\p{N} \-\._,]+" title="Only standard letters, numbers, spaces, hyphens, and periods are allowed." class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
         </div>
         {{- if .Params.NameError -}}
         <p class="pc-form-error-text">{{ .Params.NameError }}</p>

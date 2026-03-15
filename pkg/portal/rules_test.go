@@ -175,7 +175,7 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	}
 
 	// without registry, should use default display name
-	model := difficultyRuleToDisplay(rule, true, hasher, nil)
+	model := DifficultyRuleToDisplay(rule, true, hasher, nil)
 	if model.ConditionProperty != "Ip Address" {
 		t.Errorf("Expected 'Ip Address', got '%s'", model.ConditionProperty)
 	}
@@ -183,27 +183,27 @@ func TestDifficultyRuleToDisplayConditionPropertyOverride(t *testing.T) {
 	// with registry, should use custom display name
 	registry := NewRuleRegistry()
 	registry.RegisterCondition(string(dbgen.RuleConditionPropertyIPAddress), nil, "Custom IP Display", nil)
-	model = difficultyRuleToDisplay(rule, true, hasher, registry)
+	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Custom IP Display" {
 		t.Errorf("Expected 'Custom IP Display', got '%s'", model.ConditionProperty)
 	}
 
 	// unknown property without registry should fall back to title case
 	rule.ConditionProperty = "some_custom_property"
-	model = difficultyRuleToDisplay(rule, true, hasher, nil)
+	model = DifficultyRuleToDisplay(rule, true, hasher, nil)
 	if model.ConditionProperty != "Some Custom Property" {
 		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
 	}
 
 	// unknown property with registry should fall back to title case from ConditionDisplayName
-	model = difficultyRuleToDisplay(rule, true, hasher, registry)
+	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "Some Custom Property" {
 		t.Errorf("Expected 'Some Custom Property', got '%s'", model.ConditionProperty)
 	}
 
 	// unknown property with registry override should use custom display name
 	registry.RegisterCondition("some_custom_property", nil, "My Custom Prop", nil)
-	model = difficultyRuleToDisplay(rule, true, hasher, registry)
+	model = DifficultyRuleToDisplay(rule, true, hasher, registry)
 	if model.ConditionProperty != "My Custom Prop" {
 		t.Errorf("Expected 'My Custom Prop', got '%s'", model.ConditionProperty)
 	}
@@ -325,7 +325,7 @@ func TestFormatConditionValue(t *testing.T) {
 			return fmt.Sprintf("option-%d", r.ConditionValueInt.Int32)
 		})
 
-		model := difficultyRuleToDisplay(rule, true, hasher, registry)
+		model := DifficultyRuleToDisplay(rule, true, hasher, registry)
 		if model.ConditionValue != "option-3" {
 			t.Errorf("Expected 'option-3', got '%s'", model.ConditionValue)
 		}
@@ -3600,7 +3600,7 @@ func TestDifficultyRuleToDisplayAllSwitchCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			model := difficultyRuleToDisplay(tt.rule, true, hasher, nil)
+			model := DifficultyRuleToDisplay(tt.rule, true, hasher, nil)
 			if model == nil {
 				t.Fatal("Expected non-nil model")
 			}

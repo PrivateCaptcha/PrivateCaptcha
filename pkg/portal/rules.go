@@ -39,7 +39,7 @@ type DifficultyRuleModel struct {
 	Terminal          bool
 }
 
-func difficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, registry *RuleRegistry) *DifficultyRuleModel {
+func DifficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher common.IdentifierHasher, registry *RuleRegistry) *DifficultyRuleModel {
 	if rule == nil {
 		return &DifficultyRuleModel{CanEdit: canEdit}
 	}
@@ -235,7 +235,7 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt"))
 	// For stub data, pass nil for user and org (CanEdit will be false)
 	return []*DifficultyRuleModel{
-		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+		DifficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block suspicious countries",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyCountryCode,
@@ -249,7 +249,7 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}, false, hasher, nil),
-		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+		DifficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Block bot User-Agents",
 			Enabled:                  false,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -261,7 +261,7 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}, false, hasher, nil),
-		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+		DifficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for mobile",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -274,7 +274,7 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}, false, hasher, nil),
-		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+		DifficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Raise difficulty for crawlers",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyUserAgent,
@@ -287,7 +287,7 @@ func StubDifficultyRules() []*DifficultyRuleModel {
 			CreatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 			UpdatedAt:                db.Timestampz(time.Now().Add(-2 * time.Hour)),
 		}, false, hasher, nil),
-		difficultyRuleToDisplay(&dbgen.DifficultyRule{
+		DifficultyRuleToDisplay(&dbgen.DifficultyRule{
 			Name:                     "Lower difficulty for trusted IPs",
 			Enabled:                  true,
 			ConditionProperty:        dbgen.RuleConditionPropertyIPAddress,
