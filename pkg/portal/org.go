@@ -330,22 +330,27 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		orgID = -1
 	}
 
-	baseCtx, org, err := s.createPortalBaseContext(ctx, orgID, sess, portalPropertiesTabIndex)
-	if err != nil {
-		s.handlePortalError(orgID, err, w, r)
-		return
-	}
-
-	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
-		s.render(w, r, portalTemplate, &orgDashboardRenderContext{
-			portalBaseRenderContext: *baseCtx,
-			Properties:              []*userProperty{},
-		})
-		return
-	}
-
 	tabParam := r.URL.Query().Get(common.ParamTab)
 	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
+
+	var baseCtx *portalBaseRenderContext
+	var org *dbgen.Organization
+
+	if tabParam != common.RulesEndpoint {
+		baseCtx, org, err = s.createPortalBaseContext(ctx, orgID, sess, portalPropertiesTabIndex)
+		if err != nil {
+			s.handlePortalError(orgID, err, w, r)
+			return
+		}
+
+		if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
+				portalBaseRenderContext: *baseCtx,
+				Properties:              []*userProperty{},
+			})
+			return
+		}
+	}
 
 	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
@@ -379,7 +384,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			derr = err
 		}
 	case common.RulesEndpoint:
-		if vm, ae, err := s.createOrgRulesCtx(ctx, baseCtx, org, user); err == nil {
+		if vm, ae, err := s.OrgRulesFunc(w, r); err == nil {
 			model = vm
 			event = ae
 		} else {

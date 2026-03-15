@@ -707,24 +707,6 @@ func ruleToFormData(rule *dbgen.DifficultyRule) RuleFormData {
 	}
 }
 
-func (s *Server) Rule(r *http.Request) (*dbgen.DifficultyRule, error) {
-	ctx := r.Context()
-
-	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
-	}
-
-	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to find rule by ID", "ruleID", ruleID, common.ErrAttr(err))
-		return nil, err
-	}
-
-	return rule, nil
-}
-
 func (s *Server) RuleForProperty(r *http.Request, propertyID int32) (*dbgen.DifficultyRule, error) {
 	ctx := r.Context()
 
