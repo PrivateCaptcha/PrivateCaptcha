@@ -68,7 +68,7 @@ type Implementor interface {
 var _ Implementor = (*BusinessStore)(nil)
 
 func NewBusiness(pool *pgxpool.Pool) *BusinessStore {
-	const maxCacheSize = 1_000_000
+	const maxCacheSize = 10_000_000
 	var cache common.Cache[CacheKey, any]
 	var err error
 	cache, err = NewMemoryCache[CacheKey, any]("default", maxCacheSize, &struct{}{}, defaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
