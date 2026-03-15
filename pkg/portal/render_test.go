@@ -466,12 +466,12 @@ func TestRenderHTML(t *testing.T) {
 				},
 				AlertRenderContext: AlertRenderContext{},
 				rulesRenderContext: rulesRenderContext{
-					Rules:     StubDifficultyRules(),
+					Rules:     stubDifficultyRules(),
 					CanAddNew: true,
 				},
 			},
 			selector:   "p.rule-name",
-			matches:    ruleNames(StubDifficultyRules()),
+			matches:    ruleNames(stubDifficultyRules()),
 			enterprise: enterpriseOnly,
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
@@ -504,12 +504,12 @@ func TestRenderHTML(t *testing.T) {
 					CanEdit:           true,
 				},
 				rulesRenderContext: rulesRenderContext{
-					Rules:     StubDifficultyRules(),
+					Rules:     stubDifficultyRules(),
 					CanAddNew: true,
 				},
 			},
 			selector:   "p.rule-name",
-			matches:    ruleNames(StubDifficultyRules()),
+			matches:    ruleNames(stubDifficultyRules()),
 			enterprise: enterpriseOnly,
 		},
 		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
