@@ -29,10 +29,12 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
 	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 	"github.com/justinas/alice"
+	"github.com/medama-io/go-useragent"
 )
 
 const (
@@ -162,7 +164,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	portalURLConfig := config.AsURL(ctx, cfg.Get(common.PortalBaseURLKey))
 
 	sender := email.NewMailSender(cfg)
-	mailer := portal.NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), sender, cfg)
+	uaParser := useragent.NewParser()
+	mailer := portal.NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), sender, cfg, uaParser)
 
 	rateLimitHeader := cfg.Get(common.RateLimitHeaderKey).Value()
 	ipRateLimiter := ratelimit.NewIPAddrRateLimiter(rateLimitHeader, newIPAddrBuckets(cfg))
@@ -173,6 +176,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	// special case for async jobs (register handlers before adding)
 	asyncTasksJob := maintenance.NewAsyncTasksJob(businessDB)
 
+	rulesCompiler := rules.NewRulesCompiler(uaParser)
+
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiServer := &api.Server{
 		Stage:              stage,
@@ -180,7 +185,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		BusinessDB:         businessDB,
 		TimeSeries:         timeSeriesDB,
 		RateLimiter:        ipRateLimiter,
-		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics),
+		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		Verifier:           puzzleVerifier,
 		Metrics:            metrics,
@@ -190,6 +195,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		SubscriptionLimits: subscriptionLimits,
 		IDHasher:           idHasher,
 		AsyncTasks:         asyncTasksJob,
+		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 	}
 	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
 		return err

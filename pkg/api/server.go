@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/justinas/alice"
 	easyjson "github.com/mailru/easyjson"
 	"github.com/rs/cors"
@@ -89,6 +90,7 @@ type Server struct {
 	SubscriptionLimits db.SubscriptionLimits
 	IDHasher           common.IdentifierHasher
 	AsyncTasks         db.AsyncTasks
+	CountryCodeHeader  common.ConfigItem
 }
 
 type apiKeyOwnerSource struct {
@@ -259,7 +261,26 @@ func (s *Server) puzzlePreFlight(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels)
+
+	var rulesPair *rules.RulesPair
+	var ri *rules.RequestInfo
+
+	if property, ok := ctx.Value(common.PropertyContextKey).(*dbgen.Property); ok && property != nil {
+		rulesPair = s.retrievePropertyRules(ctx, property)
+		countryCodeHeader := ""
+		if s.CountryCodeHeader != nil {
+			countryCodeHeader = s.CountryCodeHeader.Value()
+		}
+		ri = rules.NewRequestInfo(r, countryCodeHeader)
+
+		if rulesPair.IsRequestBlocked(ri) {
+			slog.Log(ctx, common.LevelTrace, "Request blocked by difficulty rules")
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+	}
+
+	puzzle, property, err := s.Verifier.PuzzleForRequest(r, s.Levels, rulesPair, ri)
 	if err != nil {
 		switch err {
 		case db.ErrTestProperty:

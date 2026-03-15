@@ -614,3 +614,100 @@ type AuditLogAccess struct {
 	View       string `json:"view,omitempty"`
 	EntityName string `json:"name,omitempty"`
 }
+
+type AuditLogDifficultyRule struct {
+	Name                     string  `json:"name,omitempty"`
+	PropertyID               int32   `json:"property_id,omitempty"`
+	OrgID                    int32   `json:"org_id,omitempty"`
+	ConditionProperty        string  `json:"condition_property,omitempty"`
+	ConditionOperator        string  `json:"condition_operator,omitempty"`
+	ConditionValueStr        string  `json:"condition_value_str,omitempty"`
+	ConditionValueInt        int32   `json:"condition_value_int,omitempty"`
+	Position                 float64 `json:"position,omitempty"`
+	ActionProperty           string  `json:"action_property,omitempty"`
+	ActionValue              int32   `json:"action_value,omitempty"`
+	Enabled                  bool    `json:"enabled"`
+	ConditionOperatorNegated bool    `json:"condition_operator_negated"`
+	Terminal                 bool    `json:"terminal"`
+}
+
+func NewAuditLogDifficultyRule(rule *dbgen.DifficultyRule) *AuditLogDifficultyRule {
+	if rule == nil {
+		return nil
+	}
+
+	event := &AuditLogDifficultyRule{
+		Name:                     rule.Name,
+		Enabled:                  rule.Enabled,
+		ConditionProperty:        string(rule.ConditionProperty),
+		ConditionOperator:        string(rule.ConditionOperator),
+		ConditionOperatorNegated: rule.ConditionOperatorNegated,
+		Position:                 rule.Position,
+		ActionProperty:           string(rule.ActionProperty),
+		ActionValue:              rule.ActionValue,
+		Terminal:                 rule.Terminal,
+	}
+
+	if rule.PropertyID.Valid {
+		event.PropertyID = rule.PropertyID.Int32
+	}
+	if rule.OrgID.Valid {
+		event.OrgID = rule.OrgID.Int32
+	}
+	if rule.ConditionValueStr.Valid {
+		event.ConditionValueStr = rule.ConditionValueStr.String
+	}
+	if rule.ConditionValueInt.Valid {
+		event.ConditionValueInt = rule.ConditionValueInt.Int32
+	}
+
+	return event
+}
+
+func newOldDifficultyRuleFromUpdate(result *dbgen.UpdateDifficultyRuleRow) *dbgen.DifficultyRule {
+	if result == nil {
+		return nil
+	}
+
+	return &dbgen.DifficultyRule{
+		ID:                       result.ID,
+		Name:                     result.OldName,
+		PropertyID:               result.PropertyID,
+		OrgID:                    result.OrgID,
+		CreatorID:                result.CreatorID,
+		Enabled:                  result.OldEnabled,
+		ConditionProperty:        result.OldConditionProperty,
+		ConditionOperator:        result.OldConditionOperator,
+		ConditionOperatorNegated: result.OldConditionOperatorNegated,
+		ConditionValueStr:        result.OldConditionValueStr,
+		ConditionValueInt:        result.OldConditionValueInt,
+		Position:                 result.OldPosition,
+		ActionProperty:           result.OldActionProperty,
+		ActionValue:              result.OldActionValue,
+		Terminal:                 result.OldTerminal,
+	}
+}
+
+func newUpdateRuleAuditLogEvent(updatedRule *dbgen.DifficultyRule, result *dbgen.UpdateDifficultyRuleRow, user *dbgen.User) *common.AuditLogEvent {
+	oldRule := newOldDifficultyRuleFromUpdate(result)
+
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(updatedRule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(oldRule),
+		NewValue:  NewAuditLogDifficultyRule(updatedRule),
+	}
+}
+
+func newDeleteRuleAuditLogEvent(rule *dbgen.DifficultyRule, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionDelete,
+		EntityID:  int64(rule.ID),
+		TableName: TableNameDifficultyRules,
+		OldValue:  NewAuditLogDifficultyRule(rule),
+		NewValue:  nil,
+	}
+}

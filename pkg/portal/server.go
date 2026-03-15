@@ -63,6 +63,8 @@ type ViewModel struct {
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
+type PropertyRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
+type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
 
 // AuditLogParser is a function type for parsing custom audit log types.
 // It receives the context, the raw audit log, and a pointer to the UserAuditLog to populate.
@@ -163,10 +165,13 @@ type Server struct {
 	UserLimiter        api.UserLimiter
 	AuditLogsFunc      AuditLogsConstructor
 	AuditLogParser     AuditLogParser
+	PropertyRulesFunc  PropertyRulesConstructor
+	OrgRulesFunc       OrgRulesConstructor
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
 	TwoFactorDuration  time.Duration
 	LicenseService     common.LicenseService
+	Rules              *RuleRegistry
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -209,6 +214,13 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 	s.SettingsTabs = s.createSettingsTabs()
 	s.RenderConstants = NewRenderConstants()
 	s.AuditLogsFunc = s.CreateAuditLogsContext
+	s.PropertyRulesFunc = func(w http.ResponseWriter, r *http.Request) (Model, *common.AuditLogEvent, error) {
+		return s.CreatePropertyRulesContext(w, r)
+	}
+	s.OrgRulesFunc = func(w http.ResponseWriter, r *http.Request) (Model, *common.AuditLogEvent, error) {
+		return s.CreateOrgRulesContext(w, r)
+	}
+	s.Rules = NewRuleRegistry()
 
 	platformCtx := &PlatformRenderContext{
 		GitCommit:      gitCommit,
@@ -327,6 +339,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.MembersEndpoint), privateRead, s.Handler(s.getOrgMembers))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getOrgSettings))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getOrgAuditLogs))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getOrgRules))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
@@ -338,6 +351,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getPropertySettingsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getPropertyIntegrationsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getPropertyAuditLogsTab))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getPropertyRulesTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.StatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyStats))
 
 	rg.Handle(rg.Get(common.SettingsEndpoint), privateRead, s.Handler(s.getSettings))

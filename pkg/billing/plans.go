@@ -23,6 +23,7 @@ type basePlan struct {
 	priceMonthly         int
 	priceYearly          int
 	orgsLimit            int
+	rulesLimit           int
 	version              int
 	requestsLimit        int64
 	throttleLimit        int64
@@ -52,6 +53,8 @@ func (p *basePlan) APIRequestsPerSecond() float64 { return p.apiRequestsPerSecon
 func (p *basePlan) PropertiesLimit() int          { return 50 }
 func (p *basePlan) OrgsLimit() int                { return p.orgsLimit }
 func (p *basePlan) OrgMembersLimit() int          { return 10 }
+func (p *basePlan) OrgRulesLimit() int            { return p.rulesLimit }
+func (p *basePlan) PropertyRulesLimit() int       { return p.rulesLimit }
 
 const (
 	version1 = 1
@@ -74,6 +77,8 @@ type Plan interface {
 	PropertiesLimit() int
 	OrgsLimit() int
 	OrgMembersLimit() int
+	OrgRulesLimit() int
+	PropertyRulesLimit() int
 	APIRequestsPerSecond() float64
 }
 
@@ -103,6 +108,7 @@ var (
 		priceMonthly:         0,
 		priceYearly:          0,
 		orgsLimit:            1,
+		rulesLimit:           10,
 		version:              version1,
 		requestsLimit:        1_000,
 		throttleLimit:        2_000,
@@ -118,6 +124,7 @@ var (
 		priceMonthly:         0,
 		priceYearly:          0,
 		orgsLimit:            adminOrgsLimit,
+		rulesLimit:           1_000,
 		version:              version1,
 		requestsLimit:        1_000_000,
 		throttleLimit:        2_000_000,

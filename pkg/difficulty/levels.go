@@ -129,10 +129,10 @@ func (l *Levels) Shutdown() {
 	close(l.backfillChan)
 }
 
-func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, baseDifficulty uint8, tnow time.Time) (uint8, leakybucket.TLevel, error) {
+func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
 	err := l.recordAccess(ctx, fingerprint, p, tnow)
 
-	minDifficulty := float64(max(p.Level(), int16(baseDifficulty)))
+	minDifficulty := float64(max(int16(common.MinDifficultyLevel), min(p.Level(), int16(common.MaxDifficultyLevel))))
 
 	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
 	if !propertyAddResult.Found {
@@ -153,7 +153,7 @@ func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerpri
 }
 
 func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {
-	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, 0, tnow)
+	diff, _, _ := l.DifficultyEx(ctx, fingerprint, p, tnow)
 	return diff
 }
 
@@ -180,6 +180,7 @@ func (l *Levels) BackfillAccess(ctx context.Context, result *puzzle.VerifyResult
 		UserID:      result.UserID,
 		OrgID:       result.OrgID,
 		PropertyID:  result.PropertyID,
+		RuleID:      0,
 		Timestamp:   result.CreatedAt,
 	}
 
@@ -206,6 +207,7 @@ func (l *Levels) recordAccess(ctx context.Context, fingerprint common.TFingerpri
 		UserID:      p.OwnerID(),
 		OrgID:       p.OrgID(),
 		PropertyID:  p.ID(),
+		RuleID:      p.RuleID(),
 		Timestamp:   tnow,
 	}
 

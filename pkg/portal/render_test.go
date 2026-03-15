@@ -109,13 +109,25 @@ func stubAuditLogs() []*UserAuditLog {
 	return result
 }
 
+func ruleNames(rules []*DifficultyRuleModel) []string {
+	result := make([]string, 0, len(rules))
+	for _, r := range rules {
+		result = append(result, r.Name)
+	}
+	return result
+}
+
 func TestRenderHTML(t *testing.T) {
+	enterpriseOnly := new(bool)
+	*enterpriseOnly = true
+
 	testCases := []struct {
-		path     []string
-		template string
-		model    interface{}
-		selector string
-		matches  []string
+		path       []string
+		template   string
+		model      interface{}
+		selector   string
+		enterprise *bool
+		matches    []string
 	}{
 		{
 			path:     []string{common.ErrorEndpoint, "404"},
@@ -288,7 +300,7 @@ func TestRenderHTML(t *testing.T) {
 					NameError:         common.StatusPropertyNameEmptyError.String(),
 				},
 				Orgs:     []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				MinLevel: 1,
+				MinLevel: int(common.MinDifficultyLevel),
 				MaxLevel: int(common.MaxDifficultyLevel),
 			},
 		},
@@ -390,13 +402,147 @@ func TestRenderHTML(t *testing.T) {
 				To:   10,
 				Days: 365,
 			},
+			// TODO: Add selector tests for audit logs
 			selector: "",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, common.NewEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext:  stubToken(),
+				AlertRenderContext: AlertRenderContext{},
+				RuleFormData: RuleFormData{
+					Name:              "Name",
+					NameError:         "Name not good",
+					ConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
+					ConditionOperator: string(dbgen.RuleConditionOperatorIn),
+					ConditionValue:    "US",
+					ActionProperty:    string(dbgen.RuleActionPropertyDifficultyGrowth),
+					ActionValue:       string(dbgen.DifficultyGrowthFast),
+					Enabled:           true,
+					ConditionNegated:  false,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property:   stubProperty("my property", "123"),
+				Countries:  []CountryOption{},
+			},
+			selector: "",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "789", common.EditEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext:  stubToken(),
+				AlertRenderContext: AlertRenderContext{},
+				RuleFormData: RuleFormData{
+					Name:              "Existing Rule",
+					ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+					ConditionOperator: string(dbgen.RuleConditionOperatorContains),
+					ConditionValue:    "curl",
+					ActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+					ActionValue:       "50",
+					Enabled:           true,
+					ConditionNegated:  false,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property:   stubProperty("my property", "123"),
+				Countries:  []CountryOption{},
+				RuleID:     "789",
+				IsEdit:     true,
+			},
+			selector: "",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.RulesEndpoint},
+			template: orgRulesTemplate,
+			model: &OrgRulesRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					CanEdit:    true,
+				},
+				AlertRenderContext: AlertRenderContext{},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     stubDifficultyRules(),
+					CanAddNew: true,
+				},
+			},
+			selector:   "p.rule-name",
+			matches:    ruleNames(stubDifficultyRules()),
+			enterprise: enterpriseOnly,
+		},
+		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
+		{
+			path:     []string{common.OrgEndpoint, "000", common.RulesEndpoint},
+			template: orgRulesTemplate,
+			model: &OrgRulesRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					CanEdit:    true,
+				},
+				AlertRenderContext: AlertRenderContext{},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     []*DifficultyRuleModel{},
+					CanAddNew: true,
+				},
+			},
+			selector: "p.rule-name",
+			matches:  []string{},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertiesEndpoint, "123", common.RulesEndpoint},
+			template: propertyDashboardRulesTemplate,
+			model: &PropertyRulesRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     stubDifficultyRules(),
+					CanAddNew: true,
+				},
+			},
+			selector:   "p.rule-name",
+			matches:    ruleNames(stubDifficultyRules()),
+			enterprise: enterpriseOnly,
+		},
+		// same as above but empty rules to check for placeholder (also doubles for enterprise and non-enterprise)
+		{
+			path:     []string{common.OrgEndpoint, "000", common.PropertiesEndpoint, "000", common.RulesEndpoint},
+			template: propertyDashboardRulesTemplate,
+			model: &PropertyRulesRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				rulesRenderContext: rulesRenderContext{
+					Rules:     []*DifficultyRuleModel{},
+					CanAddNew: true,
+				},
+			},
+			selector: "p.rule-name",
 			matches:  []string{},
 		},
 	}
 
 	for _, tc := range testCases {
-		for _, enterprise := range []bool{false, true} {
+		enterpriseArray := make([]bool, 0, 2)
+		if tc.enterprise != nil {
+			enterpriseArray = append(enterpriseArray, *tc.enterprise)
+		} else {
+			enterpriseArray = append(enterpriseArray, false)
+			enterpriseArray = append(enterpriseArray, true)
+		}
+
+		for _, enterprise := range enterpriseArray {
 			version := "community"
 			if enterprise {
 				version = "enterprise"

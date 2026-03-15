@@ -29,6 +29,7 @@ const (
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
 	orgAuditLogsTemplate          = "portal/org-auditlogs.html"
+	orgRulesTemplate              = "portal/org-rules.html"
 	orgWizardTemplate             = "org-wizard/wizard.html"
 	portalTemplate                = "portal/portal.html"
 	activeSubscriptionForOrgError = "You need an active subscription to create new organizations."
@@ -37,7 +38,8 @@ const (
 	portalPropertiesTabIndex      = 0
 	portalMembersTabIndex         = 1
 	portalSettingsTabIndex        = 2
-	portalEventsTabIndex          = 3
+	portalRulesTabIndex           = 3
+	portalEventsTabIndex          = 4
 )
 
 type portalBaseRenderContext struct {
@@ -62,6 +64,14 @@ type orgAuditLogsRenderContext struct {
 	AlertRenderContext
 	AuditLogsRenderContext
 	CanView bool
+}
+
+type OrgRulesRenderContext struct {
+	portalBaseRenderContext
+	AlertRenderContext
+	rulesRenderContext
+	// Property is a stub to distinguish org rules from property rules in shared templates
+	Property interface{}
 }
 
 type orgUser struct {
@@ -320,22 +330,27 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		orgID = -1
 	}
 
-	baseCtx, org, err := s.createPortalBaseContext(ctx, orgID, sess, portalPropertiesTabIndex)
-	if err != nil {
-		s.handlePortalError(orgID, err, w, r)
-		return
-	}
-
-	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
-		s.render(w, r, portalTemplate, &orgDashboardRenderContext{
-			portalBaseRenderContext: *baseCtx,
-			Properties:              []*userProperty{},
-		})
-		return
-	}
-
 	tabParam := r.URL.Query().Get(common.ParamTab)
 	slog.Log(ctx, common.LevelTrace, "Portal tab was requested", "tab", tabParam)
+
+	var baseCtx *portalBaseRenderContext
+	var org *dbgen.Organization
+
+	if tabParam != common.RulesEndpoint {
+		baseCtx, org, err = s.createPortalBaseContext(ctx, orgID, sess, portalPropertiesTabIndex)
+		if err != nil {
+			s.handlePortalError(orgID, err, w, r)
+			return
+		}
+
+		if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
+				portalBaseRenderContext: *baseCtx,
+				Properties:              []*userProperty{},
+			})
+			return
+		}
+	}
 
 	user, err := s.SessionUser(ctx, sess)
 	if err != nil {
@@ -363,6 +378,13 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		}
 	case common.EventsEndpoint:
 		if vm, ae, err := s.createOrgAuditLogsContext(ctx, baseCtx, org, user); err == nil {
+			model = vm
+			event = ae
+		} else {
+			derr = err
+		}
+	case common.RulesEndpoint:
+		if vm, ae, err := s.OrgRulesFunc(w, r); err == nil {
 			model = vm
 			event = ae
 		} else {
@@ -621,6 +643,40 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 	return &ViewModel{
 		Model:      renderCtx,
 		View:       orgAuditLogsTemplate,
+		AuditEvent: auditEvent,
+	}, nil
+}
+
+func (s *Server) CreateOrgRulesContext(w http.ResponseWriter, r *http.Request) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, nil, db.ErrPermissions
+	}
+
+	baseCtx := s.createPortalTabBaseContext(org, user, portalRulesTabIndex)
+	return s.createOrgRulesCtx(ctx, baseCtx, org, user)
+}
+
+func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, auditEvent, err := s.OrgRulesFunc(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       orgRulesTemplate,
 		AuditEvent: auditEvent,
 	}, nil
 }

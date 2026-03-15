@@ -234,6 +234,141 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 	return string(ns.DifficultyGrowth), nil
 }
 
+type RuleActionProperty string
+
+const (
+	RuleActionPropertyDifficultyLevelPercent RuleActionProperty = "difficulty_level_percent"
+	RuleActionPropertyHTTPRequest            RuleActionProperty = "http_request"
+	RuleActionPropertyDifficultyGrowth       RuleActionProperty = "difficulty_growth"
+	RuleActionPropertyBreak                  RuleActionProperty = "break"
+)
+
+func (e *RuleActionProperty) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RuleActionProperty(s)
+	case string:
+		*e = RuleActionProperty(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RuleActionProperty: %T", src)
+	}
+	return nil
+}
+
+type NullRuleActionProperty struct {
+	RuleActionProperty RuleActionProperty `json:"backend_rule_action_property"`
+	Valid              bool               `json:"valid"` // Valid is true if RuleActionProperty is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRuleActionProperty) Scan(value interface{}) error {
+	if value == nil {
+		ns.RuleActionProperty, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RuleActionProperty.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRuleActionProperty) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RuleActionProperty), nil
+}
+
+type RuleConditionOperator string
+
+const (
+	RuleConditionOperatorEquals   RuleConditionOperator = "equals"
+	RuleConditionOperatorContains RuleConditionOperator = "contains"
+	RuleConditionOperatorMatches  RuleConditionOperator = "matches"
+	RuleConditionOperatorEmpty    RuleConditionOperator = "empty"
+	RuleConditionOperatorIn       RuleConditionOperator = "in"
+	RuleConditionOperatorBot      RuleConditionOperator = "bot"
+)
+
+func (e *RuleConditionOperator) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RuleConditionOperator(s)
+	case string:
+		*e = RuleConditionOperator(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RuleConditionOperator: %T", src)
+	}
+	return nil
+}
+
+type NullRuleConditionOperator struct {
+	RuleConditionOperator RuleConditionOperator `json:"backend_rule_condition_operator"`
+	Valid                 bool                  `json:"valid"` // Valid is true if RuleConditionOperator is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRuleConditionOperator) Scan(value interface{}) error {
+	if value == nil {
+		ns.RuleConditionOperator, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RuleConditionOperator.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRuleConditionOperator) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RuleConditionOperator), nil
+}
+
+type RuleConditionProperty string
+
+const (
+	RuleConditionPropertyUserAgent      RuleConditionProperty = "user_agent"
+	RuleConditionPropertyIPAddress      RuleConditionProperty = "ip_address"
+	RuleConditionPropertyCountryCode    RuleConditionProperty = "country_code"
+	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
+	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
+)
+
+func (e *RuleConditionProperty) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RuleConditionProperty(s)
+	case string:
+		*e = RuleConditionProperty(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RuleConditionProperty: %T", src)
+	}
+	return nil
+}
+
+type NullRuleConditionProperty struct {
+	RuleConditionProperty RuleConditionProperty `json:"backend_rule_condition_property"`
+	Valid                 bool                  `json:"valid"` // Valid is true if RuleConditionProperty is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRuleConditionProperty) Scan(value interface{}) error {
+	if value == nil {
+		ns.RuleConditionProperty, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RuleConditionProperty.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRuleConditionProperty) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RuleConditionProperty), nil
+}
+
 type SubscriptionSource string
 
 const (
@@ -335,6 +470,27 @@ type DeletedRecord struct {
 	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	TableName string             `db:"table_name" json:"table_name"`
 	UpdatedAt pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+}
+
+type DifficultyRule struct {
+	ID                       int32                 `db:"id" json:"id"`
+	Name                     string                `db:"name" json:"name"`
+	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
+	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
+	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
+	Enabled                  bool                  `db:"enabled" json:"enabled"`
+	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
+	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
+	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
+	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
+	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
+	Position                 float64               `db:"position" json:"position"`
+	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
+	ActionValue              int32                 `db:"action_value" json:"action_value"`
+	Terminal                 bool                  `db:"terminal" json:"terminal"`
+	CreatedAt                pgtype.Timestamptz    `db:"created_at" json:"created_at"`
+	UpdatedAt                pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
 }
 
 type Lock struct {

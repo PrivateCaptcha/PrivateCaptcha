@@ -59,6 +59,13 @@ func MaxAuditLogsRetention(cfg common.ConfigStore) time.Duration {
 	return 14 * 24 * time.Hour
 }
 
+func NewRuleRegistry() *RuleRegistry {
+	return &RuleRegistry{
+		conditions: make(map[string]ConditionRegistration),
+		actions:    make(map[string]ActionFormParser),
+	}
+}
+
 func newStubAuditLog() *UserAuditLog {
 	actions := []dbgen.AuditLogAction{dbgen.AuditLogActionAccess, dbgen.AuditLogActionCreate, dbgen.AuditLogActionUpdate,
 		dbgen.AuditLogActionDelete, dbgen.AuditLogActionUnknown}
@@ -148,4 +155,39 @@ func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, d
 		From: 1,
 		To:   len(logs),
 	}, nil
+}
+
+func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Request) (*PropertyRulesRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, _, err := s.getOrgProperty(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &PropertyRulesRenderContext{
+		propertyDashboardRenderContext: *dashboardCtx,
+		rulesRenderContext: rulesRenderContext{
+			Rules: stubDifficultyRules(),
+		},
+	}
+
+	renderCtx.Tab = propertyRulesTabIndex
+
+	return renderCtx, nil, nil
+}
+
+func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*OrgRulesRenderContext, *common.AuditLogEvent, error) {
+	renderCtx := &OrgRulesRenderContext{
+		portalBaseRenderContext: *baseCtx,
+		rulesRenderContext: rulesRenderContext{
+			Rules: stubDifficultyRules(),
+		},
+	}
+
+	renderCtx.Tab = portalRulesTabIndex
+
+	return renderCtx, nil, nil
+}
+
+func (s *Server) shouldIncludeRulesChart(ctx context.Context, org *dbgen.Organization, property *dbgen.Property) bool {
+	return false
 }

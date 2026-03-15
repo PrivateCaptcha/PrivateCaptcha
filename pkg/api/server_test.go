@@ -17,7 +17,9 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/medama-io/go-useragent"
 )
 
 var (
@@ -39,6 +41,7 @@ func testsConfigStore() common.ConfigStore {
 	baseCfg.Add(config.NewStaticValue(common.RateLimitBurstKey, "20"))
 	baseCfg.Add(config.NewStaticValue(common.RateLimitRateKey, "10"))
 	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
+	baseCfg.Add(config.NewStaticValue(common.CountryCodeHeaderKey, "CF-IPCountry"))
 	return baseCfg
 }
 
@@ -85,7 +88,7 @@ func TestMain(m *testing.M) {
 		BusinessDB:         store,
 		TimeSeries:         timeSeries,
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics),
+		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
 		Verifier:           NewVerifier(cfg, store),
 		Metrics:            metrics,
@@ -95,6 +98,7 @@ func TestMain(m *testing.M) {
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
+		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 	}
 	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
 		panic(err)
