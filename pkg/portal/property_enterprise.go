@@ -269,6 +269,7 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 
 		// we want to show "No data available" on the client
 		if !anyNonZero {
+			slog.DebugContext(ctx, "Property rule stats returned all zero counts", "propID", property.ID, "period", period)
 			usage = []*propertyRuleStatsPoint{}
 		}
 	} else {

@@ -147,6 +147,10 @@ func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser,
 		return errRuleConditionPropertyEmpty
 	}
 
+	if r.conditions == nil {
+		r.conditions = make(map[string]ConditionRegistration)
+	}
+
 	reg := ConditionRegistration{Parser: parser, DisplayName: displayName}
 	if valueFormatter != nil {
 		reg.ValueFormatter = valueFormatter
@@ -159,6 +163,10 @@ func (r *RuleRegistry) RegisterCondition(key string, parser ConditionFormParser,
 func (r *RuleRegistry) RegisterAction(key string, parser ActionFormParser) error {
 	if len(key) == 0 {
 		return errRuleActionEmpty
+	}
+
+	if r.actions == nil {
+		r.actions = make(map[string]ActionFormParser)
 	}
 
 	r.actions[key] = parser

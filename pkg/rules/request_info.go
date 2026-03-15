@@ -37,7 +37,7 @@ func (ri *RequestInfo) UserAgent() string {
 func (ri *RequestInfo) IPAddr() netip.Addr {
 	if ri.ipAddr == nil {
 		var addr netip.Addr
-		if ip, ok := ri.r.Context().Value(common.RateLimitKeyContextKey).(netip.Addr); ok {
+		if ip, ok := ri.r.Context().Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
 			addr = ip
 		} else if host, _, err := net.SplitHostPort(ri.r.RemoteAddr); err == nil {
 			if parsed, err := netip.ParseAddr(host); err == nil {

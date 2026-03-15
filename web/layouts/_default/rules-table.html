@@ -26,7 +26,7 @@
                             {{ if $rule.CanEdit }}
                             {{ if gt (len $.Params.Rules) 1 }}
                             <button type="button"
-                                @click="moveRuleIndex = {{ $index }}; moveRuleID = '{{ $rule.ID }}'; moveRuleName = {{ printf "%q" $rule.Name }}; newPosition = {{ $index }}; moveOpen = true"
+                                @click="moveRuleIndex = {{ $index }}; moveRuleID = {{ printf "%q" $rule.ID }}; moveRuleName = {{ printf "%q" $rule.Name }}; newPosition = {{ $index }}; moveOpen = true"
                                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
                                 Reorder<span class="sr-only">, difficulty rule</span>
                             </button>
@@ -76,7 +76,7 @@
                                     <div class="mt-4">
                                         <label for="position" class="pc-internal-form-label">New Position</label>
                                         <div class="mt-2">
-                                            <select name="position" x-model="newPosition" class="w-full pc-internal-form-select">
+                                            <select id="position" name="position" x-model="newPosition" class="w-full pc-internal-form-select">
                                                 <template x-for="(n, index) in rulesCount" :key="index">
                                                     <option :value="index" :disabled="index === moveRuleIndex" x-text="'Position ' + (index + 1) + (index === moveRuleIndex ? ' (current)' : '')"></option>
                                                 </template>
