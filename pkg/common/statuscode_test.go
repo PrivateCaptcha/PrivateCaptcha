@@ -62,6 +62,7 @@ func TestStatusCodeString(t *testing.T) {
 		StatusPropertyRulesSubscriptionRequired,
 		StatusRuleHTTPHeaderNameRequired,
 		StatusRuleHTTPHeaderNameInvalid,
+		StatusRuleHTTPHeaderNameTooMany,
 		StatusRuleNameInvalidCharsError,
 		StatusOrgRulesLimitError,
 		StatusOrgRulesSubscriptionRequired,

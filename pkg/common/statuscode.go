@@ -80,6 +80,7 @@ const (
 	StatusRuleHTTPHeaderNameRequired        StatusCode = 1425
 	StatusRuleHTTPHeaderNameInvalid         StatusCode = 1426
 	StatusRuleNameInvalidCharsError         StatusCode = 1427
+	StatusRuleHTTPHeaderNameTooMany         StatusCode = 1428
 )
 
 func (sc StatusCode) Success() bool {
@@ -204,6 +205,8 @@ func (sc StatusCode) String() string {
 		return "HTTP header name is required."
 	case StatusRuleHTTPHeaderNameInvalid:
 		return "HTTP header name is not valid."
+	case StatusRuleHTTPHeaderNameTooMany:
+		return "Too many HTTP header names specified."
 	case StatusRuleNameInvalidCharsError:
 		return "Rule name can only contain letters, numbers, spaces, hyphens, and dots."
 	default:
