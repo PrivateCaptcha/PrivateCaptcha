@@ -166,7 +166,7 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 	renderCtx := &PropertyRulesRenderContext{
 		propertyDashboardRenderContext: *dashboardCtx,
 		rulesRenderContext: rulesRenderContext{
-			Rules: StubDifficultyRules(),
+			Rules: stubDifficultyRules(),
 		},
 	}
 
@@ -179,7 +179,7 @@ func (s *Server) createOrgRulesCtx(ctx context.Context, baseCtx *portalBaseRende
 	renderCtx := &OrgRulesRenderContext{
 		portalBaseRenderContext: *baseCtx,
 		rulesRenderContext: rulesRenderContext{
-			Rules: StubDifficultyRules(),
+			Rules: stubDifficultyRules(),
 		},
 	}
 
