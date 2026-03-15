@@ -562,11 +562,11 @@ func TestRulesPairPropertyAndOrgCumulative(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Property rule applies first, then org rule applies on top of the property rule result
-	propLevel := expectedDifficultyLevel(50, 30)
-	expected := expectedDifficultyLevel(propLevel, 100)
+	// Org rule applies first, then property rule applies on top of the org rule result
+	orgLevel := expectedDifficultyLevel(50, 100)
+	expected := expectedDifficultyLevel(orgLevel, 30)
 	if result.Level() != expected {
-		t.Errorf("Expected cumulative level %d from property+org rules, got %d", expected, result.Level())
+		t.Errorf("Expected cumulative level %d from org+property rules, got %d", expected, result.Level())
 	}
 }
 
@@ -2105,7 +2105,7 @@ func TestBreakRuleApply(t *testing.T) {
 	}
 }
 
-func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
+func TestOrgRuleRunsBeforePropertyBreakRule(t *testing.T) {
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -2138,12 +2138,13 @@ func TestBreakRuleStopsPropertyToOrgFallback(t *testing.T) {
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Break rule should stop processing: level unchanged, org rule NOT applied
-	if result.Level() != 50 {
-		t.Errorf("Expected break rule to preserve original level 50, got %d", result.Level())
+	// Org rule applies first (+100%), then property break rule fires but nothing follows it
+	expected := expectedDifficultyLevel(50, 100)
+	if result.Level() != expected {
+		t.Errorf("Expected org rule level %d to apply before property break rule, got %d", expected, result.Level())
 	}
 	if result.RuleID() != 1 {
-		t.Errorf("Expected break rule RuleID 1, got %d", result.RuleID())
+		t.Errorf("Expected property break rule RuleID 1, got %d", result.RuleID())
 	}
 }
 
@@ -2502,69 +2503,69 @@ func TestTerminalBlockRequestStopsProcessing(t *testing.T) {
 	}
 }
 
-func TestTerminalPropertyRuleStopsOrgRules(t *testing.T) {
-	propertyRules := []*dbgen.DifficultyRule{
-		{
-			ID:                1,
-			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
-			ConditionOperator: dbgen.RuleConditionOperatorContains,
-			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
-			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
-			ActionValue:       30,
-			Terminal:          true,
-			Position:          1,
-			Enabled:           true,
-		},
-	}
+func TestTerminalOrgRuleStopsPropertyRules(t *testing.T) {
 	orgRules := []*dbgen.DifficultyRule{
 		{
-			ID:                2,
+			ID:                1,
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
 			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       100,
+			Terminal:          true,
+			Position:          1,
+			Enabled:           true,
+		},
+	}
+	propertyRules := []*dbgen.DifficultyRule{
+		{
+			ID:                2,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       30,
 			Position:          1,
 			Enabled:           true,
 		},
 	}
 
-	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	expected := expectedDifficultyLevel(50, 30)
+	expected := expectedDifficultyLevel(50, 100)
 	if result.Level() != expected {
-		t.Errorf("Expected level %d from terminal property rule only, got %d", expected, result.Level())
+		t.Errorf("Expected level %d from terminal org rule only, got %d", expected, result.Level())
 	}
 }
 
-func TestNonTerminalPropertyRuleAllowsOrgRules(t *testing.T) {
-	propertyRules := []*dbgen.DifficultyRule{
+func TestNonTerminalOrgRuleAllowsPropertyRules(t *testing.T) {
+	orgRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
 			ActionValue:       1,
 			Position:          1,
 			Enabled:           true,
 		},
 	}
-	orgRules := []*dbgen.DifficultyRule{
+	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                2,
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyGrowth,
 			ActionValue:       3,
 			Position:          1,
@@ -2572,15 +2573,15 @@ func TestNonTerminalPropertyRuleAllowsOrgRules(t *testing.T) {
 		},
 	}
 
-	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 	prop := difficulty.NewStubProperty(1, true, 1, 1, 50, dbgen.DifficultyGrowthConstant)
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
 	if result.Growth() != dbgen.DifficultyGrowthFast {
-		t.Errorf("Expected growth fast from org rule, got %s", result.Growth())
+		t.Errorf("Expected growth fast from property rule, got %s", result.Growth())
 	}
 }
 
@@ -2820,44 +2821,44 @@ func TestBlockRuleAlwaysTerminalEvenIfNotSetInDB(t *testing.T) {
 	}
 }
 
-func TestBreakRuleAlwaysStopsOrgFallback(t *testing.T) {
+func TestOrgBreakRuleStopsPropertyRules(t *testing.T) {
 	// Break rules always have terminal forced to true by the compiler,
-	// regardless of the Terminal field in the DB. So they always stop org fallback.
-	propertyRules := []*dbgen.DifficultyRule{
+	// regardless of the Terminal field in the DB. So they always stop property rules.
+	orgRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
+			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyBreak,
 			// Terminal not set, defaults to false in Go, but compiler forces it to true
 			Enabled: true,
 		},
 	}
-	orgRules := []*dbgen.DifficultyRule{
+	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                2,
 			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
 			ConditionOperator: dbgen.RuleConditionOperatorContains,
 			ConditionValueStr: pgtype.Text{String: "Bot", Valid: true},
-			OrgID:             pgtype.Int4{Int32: 1, Valid: true},
+			PropertyID:        pgtype.Int4{Int32: 1, Valid: true},
 			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
 			ActionValue:       100,
 			Enabled:           true,
 		},
 	}
 
-	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	compiledOrg := testCompiler.Compile(context.Background(), orgRules)
+	compiledProp := testCompiler.Compile(context.Background(), propertyRules)
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 	prop := newStubProperty()
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
 	result := rp.Apply(ri, prop)
-	// Break rule always stops org fallback (terminal is forced to true by compiler)
+	// Org break rule always stops property rules (terminal is forced to true by compiler)
 	if result.Level() != prop.Level() {
-		t.Errorf("Expected org rule to be skipped when break rule matches, got level %d", result.Level())
+		t.Errorf("Expected property rule to be skipped when org break rule matches, got level %d", result.Level())
 	}
 }
 
@@ -3124,8 +3125,8 @@ func TestBlockRuleStillWorksWithoutTerminalBefore(t *testing.T) {
 	}
 }
 
-func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
-	// A terminal break rule in property rules should prevent org block rules
+func TestOrgBlockNotPreventedByPropertyBreak(t *testing.T) {
+	// An org block rule runs before property rules, so a property break rule cannot prevent it
 	propertyRules := []*dbgen.DifficultyRule{
 		{
 			ID:                1,
@@ -3158,7 +3159,7 @@ func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
 	rp := &RulesPair{PropertyRules: compiledProp, OrgRules: compiledOrg}
 
 	ri := newTestRequestInfo("BadBot/1.0", netip.MustParseAddr("1.2.3.4"))
-	if rp.IsRequestBlocked(ri) {
-		t.Error("Expected terminal property break rule to prevent org block rule")
+	if !rp.IsRequestBlocked(ri) {
+		t.Error("Expected org block rule to fire even when property break rule matches")
 	}
 }
