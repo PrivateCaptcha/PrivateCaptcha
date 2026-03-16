@@ -347,13 +347,16 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	isExplicitTestSitekey := false
 	if sitekey := r.FormValue(common.ParamSiteKey); db.CanBeValidSitekey(sitekey) {
-		propertyID := payload.Puzzle().PropertyID()
+		payloadPuzzle := payload.Puzzle()
+		propertyID := payloadPuzzle.PropertyID()
 		if propertyExternalID := db.UUIDFromSiteKey(sitekey); !bytes.Equal(propertyExternalID.Bytes[:], propertyID[:]) {
 			slog.WarnContext(ctx, "Expected property ID does not match", "expected", sitekey, "actual", hex.EncodeToString(propertyID[:]))
 			common.SendReponse(ctx, w, invalidPropertyRecaptchaResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
 			return
 		}
+		isExplicitTestSitekey = payloadPuzzle.IsZero() && bytes.Equal(propertyID[:], db.TestPropertyUUID.Bytes[:])
 	}
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
@@ -382,7 +385,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	vr2 := &VerifyResponseRecaptchaV2{
-		Success:     result.Success(),
+		Success:     result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
 		ErrorCodes:  result.ErrorsToStrings(),
 		ChallengeTS: common.JSONTime(result.CreatedAt),
 		Hostname:    result.Domain,
@@ -418,13 +421,16 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isExplicitTestSitekey := false
 	if sitekey := r.Header.Get(common.HeaderSitekey); db.CanBeValidSitekey(sitekey) {
-		propertyID := payload.Puzzle().PropertyID()
+		payloadPuzzle := payload.Puzzle()
+		propertyID := payloadPuzzle.PropertyID()
 		if propertyExternalID := db.UUIDFromSiteKey(sitekey); !bytes.Equal(propertyExternalID.Bytes[:], propertyID[:]) {
 			slog.WarnContext(ctx, "Expected property ID does not match", "expected", sitekey, "actual", hex.EncodeToString(propertyID[:]))
 			common.SendReponse(ctx, w, invalidPropertyResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
 			return
 		}
+		isExplicitTestSitekey = payloadPuzzle.IsZero() && bytes.Equal(propertyID[:], db.TestPropertyUUID.Bytes[:])
 	}
 
 	ownerSource := &apiKeyOwnerSource{Store: s.BusinessDB, Auth: s.Auth, scope: dbgen.ApiKeyScopePuzzle}
@@ -453,7 +459,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := &VerificationResponse{
-		Success:   result.Success(),
+		Success:   result.Success() || ((result.Error == puzzle.TestPropertyError) && isExplicitTestSitekey),
 		Code:      result.Error,
 		Origin:    result.Domain,
 		Timestamp: common.JSONTime(result.CreatedAt),

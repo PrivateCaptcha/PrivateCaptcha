@@ -84,7 +84,7 @@ func (sl *SubscriptionLimitsImpl) CheckOrgMembersLimit(ctx context.Context, orgI
 		return false, 0, err
 	}
 
-	members, err := sl.store.Impl().RetrieveOrganizationUsers(ctx, orgID)
+	members, err := sl.store.Impl().RetrieveOrganizationUsersWithEmailInvites(ctx, orgID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org users", common.ErrAttr(err))
 		return false, 0, err

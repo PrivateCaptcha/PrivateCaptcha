@@ -29,8 +29,7 @@ func (vr *VerifyResult) Valid() bool {
 
 func (vr *VerifyResult) Success() bool {
 	return (vr.Error == VerifyNoError) ||
-		(vr.Error == MaintenanceModeError) ||
-		(vr.Error == TestPropertyError)
+		(vr.Error == MaintenanceModeError)
 }
 
 func (vr *VerifyResult) SetError(verr VerifyError) {

@@ -113,7 +113,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		ReplyTo:   pm.ReplyToEmail.Value(),
 	}
 
-	clog := slog.With("email", email, "code", data.Code)
+	clog := slog.With("email", email)
 
 	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
 		level := slog.LevelError
@@ -123,7 +123,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 			err = nil
 		}
 
-		clog.Log(ctx, level, "Failed to send two factor code", common.ErrAttr(err))
+		clog.Log(ctx, level, "Failed to send two factor code", "code", data.Code, common.ErrAttr(err))
 
 		return err
 	}

@@ -57,6 +57,7 @@ var (
 	}
 	PrivateCacheControl1m  = []string{"private, max-age=60"}
 	PrivateCacheControl15s = []string{"private, max-age=15"}
+	ErrURLParam            = errors.New("failed to decrypt URL parameter")
 )
 
 func NoopMiddleware(next http.Handler) http.Handler {
@@ -180,10 +181,11 @@ func IntPathArg(r *http.Request, name string, hasher IdentifierHasher) (int32, s
 
 	if hasher != nil {
 		i, err := hasher.Decrypt(value)
-		if (err == nil) && (i >= 0) && (i < math.MaxInt32) {
+		if (err == nil) && (i >= 0) && (i <= math.MaxInt32) {
 			return int32(i), value, nil
 		}
 		slog.ErrorContext(r.Context(), "Failed to decrypt hashed int param", "value", value, ErrAttr(err))
+		return 0, value, ErrURLParam
 	}
 
 	i, err := strconv.ParseInt(value, 10, 32)

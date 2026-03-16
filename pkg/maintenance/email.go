@@ -70,11 +70,11 @@ func (j *UserEmailNotificationsJob) Timeout() time.Duration {
 }
 
 func (j *UserEmailNotificationsJob) Interval() time.Duration {
-	return 20 * time.Minute
+	return 15 * time.Minute
 }
 
 func (j *UserEmailNotificationsJob) Jitter() time.Duration {
-	return 10 * time.Minute
+	return 5 * time.Minute
 }
 
 func (j *UserEmailNotificationsJob) Trigger() <-chan struct{} {
