@@ -2,6 +2,7 @@ package leakybucket
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/maypok86/otter/v2"
@@ -16,6 +17,7 @@ type BucketCallback[TKey comparable] func(context.Context, LeakyBucket[TKey])
 
 type Manager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]] struct {
 	buckets      *otter.Cache[TKey, TBucket]
+	mu           sync.RWMutex
 	capacity     TLevel
 	leakInterval time.Duration
 }
@@ -46,12 +48,17 @@ func NewManager[TKey comparable, T any, TBucket BucketConstraint[TKey, T]](maxBu
 }
 
 func (m *Manager[TKey, T, TBucket]) SetGlobalLimits(capacity TLevel, leakInterval time.Duration) {
+	m.mu.Lock()
 	m.capacity = capacity
 	m.leakInterval = leakInterval
+	m.mu.Unlock()
 }
 
 func (m *Manager[TKey, T, TBucket]) LeakInterval() time.Duration {
-	return m.leakInterval
+	m.mu.RLock()
+	v := m.leakInterval
+	m.mu.RUnlock()
+	return v
 }
 
 func (m *Manager[TKey, T, TBucket]) Level(key TKey, tnow time.Time) (TLevel, bool) {
@@ -63,13 +70,23 @@ func (m *Manager[TKey, T, TBucket]) Level(key TKey, tnow time.Time) (TLevel, boo
 	return bucket.Level(tnow), true
 }
 
-func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterval time.Duration) bool {
-	if existing, ok := m.buckets.GetIfPresent(key); ok {
-		existing.Update(capacity, leakInterval)
-		return true
+func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterval time.Duration, tnow time.Time) bool {
+	found := false
+	_, _ = m.buckets.Compute(key, func(existing TBucket, exists bool) (TBucket, otter.ComputeOp) {
+		if !exists {
+			return existing, otter.CancelOp
+		}
+		found = true
+		// Settle the bucket to tnow using the old leak rate before changing the rate,
+		// so the new rate is not applied retroactively to elapsed time.
+		existing.Add(tnow, 0)
+		existing.Update(capacity, leakInterval, tnow)
+		return existing, otter.WriteOp
+	})
+	if found {
+		m.buckets.SetExpiresAfter(key, time.Duration(capacity)*leakInterval)
 	}
-
-	return false
+	return found
 }
 
 type bucketUpdater[TKey comparable, T any, TBucket BucketConstraint[TKey, T]] struct {
@@ -116,15 +133,23 @@ func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddR
 		return AddResult{}
 	}
 
+	m.mu.RLock()
+	capacity := m.capacity
+	leakInterval := m.leakInterval
+	m.mu.RUnlock()
+
 	bu := &bucketUpdater[TKey, T, TBucket]{
 		key:          key,
-		capacity:     m.capacity,
-		leakInterval: m.leakInterval,
+		capacity:     capacity,
+		leakInterval: leakInterval,
 		tnow:         tnow,
 		n:            n,
 	}
 
 	_, _ = m.buckets.Compute(key, bu.ComputeFunc)
+	if !bu.result.Found {
+		m.buckets.SetExpiresAfter(key, time.Duration(bu.capacity)*bu.leakInterval)
+	}
 
 	return bu.result
 }

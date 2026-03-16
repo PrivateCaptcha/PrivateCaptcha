@@ -122,7 +122,7 @@ func (l *httpRateLimiter[TKey]) UpdateRequestLimits(r *http.Request, capacity le
 		key = l.keyFunc(r)
 	}
 
-	l.buckets.Update(key, capacity, leakInterval)
+	l.buckets.Update(key, capacity, leakInterval, time.Now())
 }
 
 func (l *httpRateLimiter[TKey]) setRateLimitHeaders(w http.ResponseWriter, addResult leakybucket.AddResult) {
