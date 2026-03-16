@@ -198,3 +198,10 @@ func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 	}
 	return result
 }
+
+// AlwaysMatcher matches every request unconditionally.
+type AlwaysMatcher struct{}
+
+func (am *AlwaysMatcher) Matches(_ *RequestInfo) bool {
+	return true
+}

@@ -82,6 +82,7 @@ type RenderConstants struct {
 	ConditionPropertyCountryCode    string
 	ConditionPropertyDomain         string
 	ConditionPropertyHTTPHeaderName string
+	ConditionPropertyAlways         string
 	OperatorEquals                  string
 	OperatorContains                string
 	OperatorEmpty                   string
@@ -180,6 +181,7 @@ func NewRenderConstants() *RenderConstants {
 		ConditionPropertyCountryCode:    string(dbgen.RuleConditionPropertyCountryCode),
 		ConditionPropertyDomain:         string(dbgen.RuleConditionPropertyDomain),
 		ConditionPropertyHTTPHeaderName: string(dbgen.RuleConditionPropertyHTTPHeaderName),
+		ConditionPropertyAlways:         string(dbgen.RuleConditionPropertyAlways),
 		GrowthTypeConstant:              string(dbgen.DifficultyGrowthConstant),
 		GrowthTypeSlow:                  string(dbgen.DifficultyGrowthSlow),
 		GrowthTypeMedium:                string(dbgen.DifficultyGrowthMedium),

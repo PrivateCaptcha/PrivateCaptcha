@@ -81,6 +81,14 @@ function ruleFormData() {
                 { value: '{{ .Const.OperatorIn }}', label: 'Any Header Exists' },
                 { value: '{{ .Const.OperatorIn }}_negated', label: 'No Header Exists' }
             ]
+        },
+        '{{ .Const.ConditionPropertyAlways }}': {
+            stateField: 'conditionValueAlways',
+            emptyValue: '',
+            initialValue: '',
+            getFormattedValue: () => '',
+            showOperator: false,
+            operators: []
         }
     };
 

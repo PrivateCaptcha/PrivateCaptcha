@@ -44,6 +44,7 @@
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
                     {{ if .Params.Property }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
                     {{ with .Const.ConditionPropertyHTTPHeaderName }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>HTTP Header Name</option>{{ end }}
+                    {{ with .Const.ConditionPropertyAlways }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Always</option>{{ end }}
                     {{ block "rule-condition-property-extension" . }}{{ end }}
                 </select>
             </div>
@@ -136,6 +137,8 @@
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyCountryCode }}'" />
             </div>
         </div>
+
+        <input type="hidden" name="{{ .Const.ConditionOperator }}" value="{{ .Const.OperatorEquals }}" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyAlways }}'" />
 
         {{ block "rule-condition-value-extension" . }}{{ end }}
     </div>

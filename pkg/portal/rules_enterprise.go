@@ -326,6 +326,10 @@ func httpHeaderNameConditionParser(conditionOperator, conditionValue, _ string) 
 	return conditionValue, separator, common.StatusOK
 }
 
+func alwaysConditionParser(_, _, _ string) (string, string, common.StatusCode) {
+	return "", "", common.StatusOK
+}
+
 func NewRuleRegistry() *RuleRegistry {
 	return &RuleRegistry{
 		conditions: map[string]ConditionRegistration{
@@ -334,6 +338,7 @@ func NewRuleRegistry() *RuleRegistry {
 			string(dbgen.RuleConditionPropertyCountryCode):    ConditionRegistration{Parser: countryCodeConditionParser, DisplayName: "Country Code"},
 			string(dbgen.RuleConditionPropertyDomain):         ConditionRegistration{Parser: domainConditionParser, DisplayName: "Domain"},
 			string(dbgen.RuleConditionPropertyHTTPHeaderName): ConditionRegistration{Parser: httpHeaderNameConditionParser, DisplayName: "HTTP Header Name"},
+			string(dbgen.RuleConditionPropertyAlways):         ConditionRegistration{Parser: alwaysConditionParser, DisplayName: "Always"},
 		},
 		actions: map[string]ActionFormParser{
 			string(dbgen.RuleActionPropertyDifficultyLevelPercent): difficultyActionParser,
@@ -624,6 +629,11 @@ func (s *Server) parseRuleForm(ctx context.Context, r *http.Request, renderCtx *
 
 	renderCtx.ConditionOperator = r.FormValue(common.ParamConditionOperator)
 	renderCtx.ConditionValue = strings.TrimSpace(r.FormValue(common.ParamConditionValue))
+
+	// For the 'always' condition, no operator or value is needed; use a default operator.
+	if renderCtx.ConditionProperty == string(dbgen.RuleConditionPropertyAlways) && renderCtx.ConditionOperator == "" {
+		renderCtx.ConditionOperator = string(dbgen.RuleConditionOperatorEquals)
+	}
 
 	if strings.HasSuffix(renderCtx.ConditionOperator, "_negated") {
 		renderCtx.ConditionNegated = true
