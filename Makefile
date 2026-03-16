@@ -154,7 +154,7 @@ clean-docker:
 	@$(DOCKER) compose -f docker/docker-compose.base.yml down -v --remove-orphans
 
 find-docker-2fa:
-	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | jq -r 'select(.msg=="Generated two-factor code") | .code' | tail -n 1
+	@$(DOCKER) compose -f docker/docker-compose.base.yml logs server --no-log-prefix 2>/dev/null | jq -r 'select(.msg=="Failed to send two factor code") | .code' | tail -n 1
 
 sqlc:
 	# https://github.com/sqlc-dev/sqlc/issues/3571

@@ -155,7 +155,6 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	code := twoFactorCode(ctx)
-	slog.Log(ctx, common.LevelTrace, "Generated two-factor code", "code", code)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
 	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location); err != nil {
