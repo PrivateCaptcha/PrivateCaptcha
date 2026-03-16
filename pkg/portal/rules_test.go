@@ -4122,6 +4122,15 @@ func TestAttackerCannotDeleteVictimOrgRule(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect on unauthorized delete, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page, got: %v", location)
+	}
+
 	// Verify victim's rule was not deleted
 	if _, err := store.Impl().RetrieveDifficultyRule(ctx, victimRule.ID); err != nil {
 		t.Error("IDOR vulnerability: attacker deleted victim's org rule")
@@ -4165,11 +4174,12 @@ func TestAttackerCannotUpdateVictimOrgRule(t *testing.T) {
 		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
 		"100")
 
-	if resp.StatusCode == http.StatusSeeOther {
-		location, _ := resp.Location()
-		if location != nil && !strings.Contains(location.String(), "error") {
-			t.Error("IDOR vulnerability: attacker successfully updated victim's org rule")
-		}
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect on unauthorized update, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatal("IDOR vulnerability: attacker successfully updated victim's org rule")
 	}
 
 	// Verify victim's rule name was not changed
