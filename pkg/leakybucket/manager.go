@@ -83,6 +83,9 @@ func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterv
 		existing.Update(capacity, leakInterval)
 		return existing, otter.WriteOp
 	})
+	if found {
+		m.buckets.SetExpiresAfter(key, time.Duration(capacity)*leakInterval)
+	}
 	return found
 }
 
@@ -144,6 +147,9 @@ func (m *Manager[TKey, T, TBucket]) Add(key TKey, n TLevel, tnow time.Time) AddR
 	}
 
 	_, _ = m.buckets.Compute(key, bu.ComputeFunc)
+	if !bu.result.Found {
+		m.buckets.SetExpiresAfter(key, time.Duration(bu.capacity)*bu.leakInterval)
+	}
 
 	return bu.result
 }
