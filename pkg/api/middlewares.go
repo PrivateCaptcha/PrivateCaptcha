@@ -339,7 +339,7 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 			uncachedPropertyIDs[pID] = count
 		}); err == db.ErrCacheMiss {
 			uncachedPropertyIDs[propertyID] = count
-		} else if err != nil {
+		} else if err != db.ErrNegativeCacheHit {
 			slog.ErrorContext(ctx, "Failed to get cached compiled property rules", "propID", propertyID, common.ErrAttr(err))
 		}
 	}
