@@ -91,7 +91,7 @@ func groupNotificationsByTemplate(ctx context.Context, notifications []*dbgen.Ge
 	for _, n := range notifications {
 		un := &n.UserNotification
 		if !un.TemplateID.Valid {
-			slog.ErrorContext(ctx, "Skipping notification template with orphanned hash", "nid", un.ID)
+			slog.ErrorContext(ctx, "Skipping notification template with orphaned hash", "nid", un.ID)
 			continue
 		}
 
@@ -283,7 +283,16 @@ func (j *UserEmailNotificationsJob) updateNotifications(ctx context.Context,
 		processedNotifications[id] = t
 	}
 
-	attemptedNotificationIDs := make([]int32, 0, len(notifications)-len(processedNotifications)+1)
+	// Count how many notifications were attempted but not processed to allocate
+	// a slice with an accurate, non-negative capacity.
+	attemptedCount := 0
+	for _, n := range notifications {
+		if _, ok := processedNotifications[n.UserNotification.ID]; !ok {
+			attemptedCount++
+		}
+	}
+
+	attemptedNotificationIDs := make([]int32, 0, attemptedCount)
 	for _, n := range notifications {
 		if _, ok := processedNotifications[n.UserNotification.ID]; !ok {
 			attemptedNotificationIDs = append(attemptedNotificationIDs, n.UserNotification.ID)
