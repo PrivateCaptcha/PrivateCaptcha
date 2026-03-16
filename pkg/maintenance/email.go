@@ -91,7 +91,7 @@ func groupNotificationsByTemplate(ctx context.Context, notifications []*dbgen.Ge
 	for _, n := range notifications {
 		un := &n.UserNotification
 		if !un.TemplateID.Valid {
-			slog.ErrorContext(ctx, "Skipping notification template with orphanned hash", "nid", un.ID)
+			slog.ErrorContext(ctx, "Skipping notification template with orphaned hash", "nid", un.ID)
 			continue
 		}
 
