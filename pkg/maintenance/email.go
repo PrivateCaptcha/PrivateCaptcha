@@ -171,21 +171,27 @@ func (j *UserEmailNotificationsJob) retrieveTemplate(ctx context.Context,
 	return nt, nil
 }
 
-func (j *UserEmailNotificationsJob) retrievePendingNotifications(ctx context.Context, params *UserEmailNotificationsParams) ([]*dbgen.GetPendingUserNotificationsRow, error) {
+func (j *UserEmailNotificationsJob) retrievePendingNotifications(ctx context.Context, params *UserEmailNotificationsParams) ([]*dbgen.GetPendingUserNotificationsRow, bool, error) {
 	// just for safety, we fetch overlapping segments, but it will be filtered out on the way
 	since := time.Now().UTC().Add(-(params.RunInterval + j.Interval() + j.Jitter()))
-	notifications, err := j.Store.Impl().RetrievePendingUserNotifications(ctx, since, params.ChunkSize, params.MaxAttempts)
+	// fetch one extra to detect whether more notifications exist beyond this chunk
+	notifications, err := j.Store.Impl().RetrievePendingUserNotifications(ctx, since, params.ChunkSize+1, params.MaxAttempts)
 	if err != nil {
-		return nil, err
+		return nil, false, err
+	}
+
+	hasMore := len(notifications) > params.ChunkSize
+	if hasMore {
+		notifications = notifications[:params.ChunkSize]
 	}
 
 	if len(notifications) == 0 {
 		slog.DebugContext(ctx, "No pending notifications", "since", since)
-		return notifications, nil
+		return notifications, false, nil
 	}
 
 	if len(j.UserIDs) == 0 {
-		return notifications, nil
+		return notifications, hasMore, nil
 	}
 
 	filtered := make([]*dbgen.GetPendingUserNotificationsRow, 0, len(notifications))
@@ -202,13 +208,14 @@ func (j *UserEmailNotificationsJob) retrievePendingNotifications(ctx context.Con
 		}
 	}
 
-	return filtered, nil
+	return filtered, hasMore, nil
 }
 
 type UserEmailNotificationsParams struct {
 	RunInterval time.Duration `json:"run_interval"`
 	ChunkSize   int           `json:"chunk_size"`
 	MaxAttempts int           `json:"max_attempts"`
+	MaxRounds   int           `json:"max_rounds"`
 }
 
 func (j *UserEmailNotificationsJob) NewParams() any {
@@ -216,30 +223,15 @@ func (j *UserEmailNotificationsJob) NewParams() any {
 		RunInterval: j.RunInterval,
 		ChunkSize:   j.ChunkSize,
 		MaxAttempts: j.MaxAttempts,
+		MaxRounds:   5,
 	}
 }
 
-// NOTE: we should NOT refactor this into "while we have pending notifications {}" loop because some notifications
-// are unprocessable by design (e.g. "subscribed-only" notifications for users who don't have subscriptions), therefore
-// there are cases when there will always be "pending" notifications.
-// If we are not managing to process all of them, we need to modify ChunkSize and Interval (or Lock Interval) instead
 func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) error {
 	p, ok := params.(*UserEmailNotificationsParams)
 	if !ok || (p == nil) {
 		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
 		p = j.NewParams().(*UserEmailNotificationsParams)
-	}
-
-	// TODO: Monitor pending notifications count in Postgres
-	// so we will know if we have enough processing capacity
-	notifications, err := j.retrievePendingNotifications(ctx, p)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve pending user notifications", common.ErrAttr(err))
-		return err
-	}
-
-	if len(notifications) == 0 {
-		return nil
 	}
 
 	templates := indexTemplates(ctx, j.Templates)
@@ -251,20 +243,40 @@ func (j *UserEmailNotificationsJob) RunOnce(ctx context.Context, params any) err
 		Jitter: true,
 	}
 
-	groups := groupNotificationsByTemplate(ctx, notifications)
-	for tplHash, nn := range groups {
-		if len(nn) == 0 {
-			slog.WarnContext(ctx, "Skipping empty notifications for template", "hash", tplHash)
-			continue
+	// TODO: Monitor pending notifications count in Postgres
+	// so we will know if we have enough processing capacity
+	for round := range p.MaxRounds {
+		notifications, hasMore, err := j.retrievePendingNotifications(ctx, p)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve pending user notifications", common.ErrAttr(err))
+			return err
 		}
 
-		if tpl, err := j.retrieveTemplate(ctx, templates, tplHash); err == nil {
-			processedIDs := j.processNotificationsChunk(ctx, tpl, nn, b)
-			// NOTE: potentially it's not most efficient to update them piece by piece, but it's less error-prone
-			j.updateNotifications(ctx, nn, processedIDs)
-		} else {
-			slog.ErrorContext(ctx, "Failed to get notifications template", common.ErrAttr(err))
+		if len(notifications) == 0 {
+			return nil
 		}
+
+		groups := groupNotificationsByTemplate(ctx, notifications)
+		for tplHash, nn := range groups {
+			if len(nn) == 0 {
+				slog.WarnContext(ctx, "Skipping empty notifications for template", "hash", tplHash)
+				continue
+			}
+
+			if tpl, err := j.retrieveTemplate(ctx, templates, tplHash); err == nil {
+				processedIDs := j.processNotificationsChunk(ctx, tpl, nn, b)
+				// NOTE: potentially it's not most efficient to update them piece by piece, but it's less error-prone
+				j.updateNotifications(ctx, nn, processedIDs)
+			} else {
+				slog.ErrorContext(ctx, "Failed to get notifications template", common.ErrAttr(err))
+			}
+		}
+
+		if !hasMore {
+			return nil
+		}
+
+		slog.DebugContext(ctx, "More notifications pending, continuing", "round", round+1, "maxRounds", p.MaxRounds)
 	}
 
 	return nil
