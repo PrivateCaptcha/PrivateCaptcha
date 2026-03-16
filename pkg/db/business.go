@@ -214,7 +214,7 @@ func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *d
 		for _, user := range members {
 			if user.User.ID == userID {
 				slog.DebugContext(ctx, "Found user as org member", "level", user.Level, "userID", userID, "orgID", property.OrgID)
-				return (user.Level == dbgen.AccessLevelMember) || (level.AccessLevel == dbgen.AccessLevelOwner)
+				return (user.Level == dbgen.AccessLevelMember) || (user.Level == dbgen.AccessLevelOwner)
 			}
 		}
 	}
