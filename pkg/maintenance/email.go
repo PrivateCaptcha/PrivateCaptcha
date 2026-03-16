@@ -372,10 +372,10 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 
 		if un.EmailFrom.Valid && (len(un.EmailFrom.String) > 0) {
 			notifEmailFrom = un.EmailFrom.String
+		}
 
-			if un.ReplyToEmail.Valid {
-				notifReplyTo = un.ReplyToEmail.String
-			}
+		if un.ReplyToEmail.Valid {
+			notifReplyTo = un.ReplyToEmail.String
 		}
 
 		msg := &email.Message{
