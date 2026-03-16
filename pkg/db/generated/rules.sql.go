@@ -107,16 +107,23 @@ const deleteDifficultyRule = `-- name: DeleteDifficultyRule :exec
 DELETE FROM backend.difficulty_rules dr
 WHERE dr.id = $1
 AND (dr.creator_id = $2 OR $2 = $3)
+AND (dr.org_id = $4 OR dr.property_id IN (SELECT p.id FROM backend.properties p WHERE p.org_id = $4))
 `
 
 type DeleteDifficultyRuleParams struct {
 	ID        int32       `db:"id" json:"id"`
 	CreatorID pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	Column3   interface{} `db:"column_3" json:"column_3"`
+	OrgID     pgtype.Int4 `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) error {
-	_, err := q.db.Exec(ctx, deleteDifficultyRule, arg.ID, arg.CreatorID, arg.Column3)
+	_, err := q.db.Exec(ctx, deleteDifficultyRule,
+		arg.ID,
+		arg.CreatorID,
+		arg.Column3,
+		arg.OrgID,
+	)
 	return err
 }
 
@@ -283,9 +290,10 @@ func (q *Queries) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 
 }
 
 const moveDifficultyRule = `-- name: MoveDifficultyRule :one
-UPDATE backend.difficulty_rules
+UPDATE backend.difficulty_rules dr
 SET position = $2, updated_at = NOW()
-WHERE id = $1 AND (creator_id = $3 OR $3 = $4)
+WHERE dr.id = $1 AND (dr.creator_id = $3 OR $3 = $4)
+AND (dr.org_id = $5 OR dr.property_id IN (SELECT p.id FROM backend.properties p WHERE p.org_id = $5))
 RETURNING id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at
 `
 
@@ -294,6 +302,7 @@ type MoveDifficultyRuleParams struct {
 	Position  float64     `db:"position" json:"position"`
 	CreatorID pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	Column4   interface{} `db:"column_4" json:"column_4"`
+	OrgID     pgtype.Int4 `db:"org_id" json:"org_id"`
 }
 
 func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRuleParams) (*DifficultyRule, error) {
@@ -302,6 +311,7 @@ func (q *Queries) MoveDifficultyRule(ctx context.Context, arg *MoveDifficultyRul
 		arg.Position,
 		arg.CreatorID,
 		arg.Column4,
+		arg.OrgID,
 	)
 	var i DifficultyRule
 	err := row.Scan(
@@ -372,7 +382,10 @@ WITH old AS (
     SELECT id, name, property_id, org_id, creator_id, enabled, condition_property, condition_operator, condition_operator_negated, condition_value_str, condition_value_int, condition_value_separator, position, action_property, action_value, terminal, created_at, updated_at FROM backend.difficulty_rules dr
     WHERE dr.id = $1
     AND (dr.creator_id = $13 OR $13 = $14)
-    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $15 OR $15 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $16 OR $16 IS NULL)))
+    AND (
+        (dr.org_id IS NOT NULL AND dr.org_id = $16)
+        OR (dr.property_id IS NOT NULL AND dr.property_id = $15 AND $15 IS NOT NULL)
+    )
     FOR UPDATE
 ),
 upd AS (

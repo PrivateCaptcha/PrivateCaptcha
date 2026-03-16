@@ -4080,3 +4080,114 @@ func TestMemberCannotEditRuleSuite(t *testing.T) {
 		})
 	}
 }
+
+func TestAttackerCannotDeleteVictimOrgRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	victim, victimOrg, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_victim", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create victim account: %v", err)
+	}
+
+	victimRule, err := createOrgRuleUserAgent(ctx, victim, victimOrg.ID, "Victim Org Rule")
+	if err != nil {
+		t.Fatalf("Failed to create victim rule: %v", err)
+	}
+
+	attacker, attackerOrg, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_attacker", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create attacker account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, attacker.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(attacker.ID)))
+
+	// Attacker tries to delete victim's rule using their own org context
+	req := httptest.NewRequest("DELETE",
+		fmt.Sprintf("/org/%s/rules/%s/delete", server.IDHasher.Encrypt(int(attackerOrg.ID)), server.IDHasher.Encrypt(int(victimRule.ID))),
+		nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect on unauthorized delete, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatalf("Expected redirect to error page, got: %v", location)
+	}
+
+	// Verify victim's rule was not deleted
+	if _, err := store.Impl().RetrieveDifficultyRule(ctx, victimRule.ID); err != nil {
+		t.Error("IDOR vulnerability: attacker deleted victim's org rule")
+	}
+}
+
+func TestAttackerCannotUpdateVictimOrgRule(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	victim, victimOrg, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_victim", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create victim account: %v", err)
+	}
+
+	victimRule, err := createOrgRuleUserAgent(ctx, victim, victimOrg.ID, "Victim Org Rule")
+	if err != nil {
+		t.Fatalf("Failed to create victim rule: %v", err)
+	}
+
+	attacker, attackerOrg, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_attacker", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create attacker account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, attacker.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Attacker tries to update victim's rule using their own org context
+	resp := postEditOrgRule(srv, cookie, attacker, attackerOrg, victimRule, "PWNED",
+		string(dbgen.RuleConditionPropertyUserAgent),
+		string(dbgen.RuleConditionOperatorContains),
+		"bot",
+		string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+		"100")
+
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Expected redirect on unauthorized update, got %v", resp.StatusCode)
+	}
+	location, _ := resp.Location()
+	if location == nil || !strings.Contains(location.String(), "error") {
+		t.Fatal("IDOR vulnerability: attacker successfully updated victim's org rule")
+	}
+
+	// Verify victim's rule name was not changed
+	updatedRule, err := store.Impl().RetrieveDifficultyRule(ctx, victimRule.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve victim's rule: %v", err)
+	}
+	if updatedRule.Name != "Victim Org Rule" {
+		t.Errorf("IDOR vulnerability: victim's rule name was changed to %q", updatedRule.Name)
+	}
+}
