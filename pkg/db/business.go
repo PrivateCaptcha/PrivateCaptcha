@@ -18,7 +18,7 @@ var (
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrRecordNotFound     = errors.New("record not found")
 	ErrSoftDeleted        = errors.New("record is marked as deleted")
-	ErrDuplicateAccount   = errors.New("this subscrption already has an account")
+	ErrDuplicateAccount   = errors.New("this subscription already has an account")
 	ErrLocked             = errors.New("lock is already acquired")
 	ErrMaintenance        = errors.New("maintenance mode")
 	ErrTestProperty       = errors.New("test property")
