@@ -11,7 +11,7 @@ type LeakyBucket[TKey comparable] interface {
 	Level(tnow time.Time) TLevel
 	// Adds "usage" of n units. Returns how much was actually added to the bucket and previous bucket level
 	Add(tnow time.Time, n TLevel) (TLevel, TLevel)
-	Update(capacity TLevel, leakInterval time.Duration)
+	Update(capacity TLevel, leakInterval time.Duration, tnow time.Time)
 	Key() TKey
 	LastAccessTime() time.Time
 	LeakInterval() time.Duration
@@ -55,9 +55,13 @@ func (lb *ConstLeakyBucket[TKey]) LastAccessTime() time.Time {
 	return lb.lastAccessTime
 }
 
-func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Duration) {
+func (lb *ConstLeakyBucket[TKey]) Update(capacity TLevel, leakInterval time.Duration, tnow time.Time) {
 	lb.capacity = capacity
 	lb.leakInterval = leakInterval
+	// Rebase lastAccessTime to the actual update instant so that future leak
+	// computations measure elapsed time from tnow, not from the old-interval
+	// boundary that Add(tnow, 0) truncated to.
+	lb.lastAccessTime = tnow
 }
 
 func (lb *ConstLeakyBucket[TKey]) Level(tnow time.Time) TLevel {

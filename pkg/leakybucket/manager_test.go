@@ -156,6 +156,41 @@ func TestManagerUpdateSettlesBucketBeforeRateChange(t *testing.T) {
 	}
 }
 
+func TestManagerUpdateRebasesTimestampOffBoundary(t *testing.T) {
+	const maxBuckets = 8
+	const cap = 1000
+	const key = int32(2)
+
+	oldInterval := 10 * time.Second
+	manager := NewManager[int32, ConstLeakyBucket[int32]](maxBuckets, cap, oldInterval)
+
+	// Start at a 10s boundary, fill to level 20
+	t0 := time.Now().Truncate(oldInterval)
+	for i := 0; i < 20; i++ {
+		manager.Add(key, 1, t0)
+	}
+
+	// Simulate 5 seconds into the next interval (off-boundary for oldInterval=10s)
+	tUpdate := t0.Add(5 * time.Second)
+	newInterval := 1 * time.Second
+
+	// At tUpdate: elapsed = 5s at old 10s/level => 0 levels leaked (not a full interval).
+	// Switch to 1s/level. After update, level stays 20.
+	manager.Update(key, cap, newInterval, tUpdate)
+
+	level, _ := manager.Level(key, tUpdate)
+	if level != 20 {
+		t.Errorf("Expected level 20 right after Update at tUpdate, got %v", level)
+	}
+
+	// 1 second later: should leak exactly 1 level (not 6 = tUpdate - t0.Truncate(oldInterval))
+	tNext := tUpdate.Add(1 * time.Second)
+	level, _ = manager.Level(key, tNext)
+	if level != 19 {
+		t.Errorf("Expected level 19 one second after Update, got %v (timestamp not rebased)", level)
+	}
+}
+
 func TestManagerConcurrentSetGlobalLimits(t *testing.T) {
 	const maxBuckets = 8
 	const key = int32(7)

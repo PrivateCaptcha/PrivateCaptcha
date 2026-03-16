@@ -80,7 +80,7 @@ func (m *Manager[TKey, T, TBucket]) Update(key TKey, capacity TLevel, leakInterv
 		// Settle the bucket to tnow using the old leak rate before changing the rate,
 		// so the new rate is not applied retroactively to elapsed time.
 		existing.Add(tnow, 0)
-		existing.Update(capacity, leakInterval)
+		existing.Update(capacity, leakInterval, tnow)
 		return existing, otter.WriteOp
 	})
 	if found {
