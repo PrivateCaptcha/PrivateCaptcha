@@ -48,7 +48,10 @@ WITH old AS (
     SELECT * FROM backend.difficulty_rules dr
     WHERE dr.id = $1
     AND (dr.creator_id = $13 OR $13 = $14)
-    AND ((dr.property_id IS NOT NULL AND (dr.property_id = $15 OR $15 IS NULL)) OR (dr.org_id IS NOT NULL AND (dr.org_id = $16 OR $16 IS NULL)))
+    AND (
+        (dr.org_id IS NOT NULL AND dr.org_id = $16)
+        OR (dr.property_id IS NOT NULL AND dr.property_id = $15 AND $15 IS NOT NULL)
+    )
     FOR UPDATE
 ),
 upd AS (
@@ -87,12 +90,14 @@ CROSS JOIN old;
 -- name: DeleteDifficultyRule :exec
 DELETE FROM backend.difficulty_rules dr
 WHERE dr.id = $1
-AND (dr.creator_id = $2 OR $2 = $3);
+AND (dr.creator_id = $2 OR $2 = $3)
+AND (dr.org_id = $4 OR dr.property_id IN (SELECT p.id FROM backend.properties p WHERE p.org_id = $4));
 
 -- name: MoveDifficultyRule :one
-UPDATE backend.difficulty_rules
+UPDATE backend.difficulty_rules dr
 SET position = $2, updated_at = NOW()
-WHERE id = $1 AND (creator_id = $3 OR $3 = $4)
+WHERE dr.id = $1 AND (dr.creator_id = $3 OR $3 = $4)
+AND (dr.org_id = $5 OR dr.property_id IN (SELECT p.id FROM backend.properties p WHERE p.org_id = $5))
 RETURNING *;
 
 -- name: GetDifficultyRulePositionNeighbors :one

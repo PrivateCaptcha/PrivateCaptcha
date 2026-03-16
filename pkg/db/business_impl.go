@@ -3354,6 +3354,7 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *db
 		ID:        rule.ID,
 		CreatorID: Int(user.ID),
 		Column3:   org.UserID.Int32,
+		OrgID:     Int(org.ID),
 	}
 
 	if err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
@@ -3487,6 +3488,7 @@ func (impl *BusinessStoreImpl) MoveDifficultyRule(ctx context.Context, org *dbge
 		Position:  newPosition,
 		CreatorID: Int(user.ID),
 		Column4:   org.UserID.Int32,
+		OrgID:     Int(org.ID),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to move difficulty rule", "ruleID", rule.ID, "newPosition", newPosition, common.ErrAttr(err))
