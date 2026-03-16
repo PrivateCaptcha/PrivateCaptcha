@@ -18,7 +18,7 @@ var (
 	ErrInvalidInput       = errors.New("invalid input")
 	ErrRecordNotFound     = errors.New("record not found")
 	ErrSoftDeleted        = errors.New("record is marked as deleted")
-	ErrDuplicateAccount   = errors.New("this subscrption already has an account")
+	ErrDuplicateAccount   = errors.New("this subscription already has an account")
 	ErrLocked             = errors.New("lock is already acquired")
 	ErrMaintenance        = errors.New("maintenance mode")
 	ErrTestProperty       = errors.New("test property")
@@ -214,7 +214,7 @@ func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *d
 		for _, user := range members {
 			if user.User.ID == userID {
 				slog.DebugContext(ctx, "Found user as org member", "level", user.Level, "userID", userID, "orgID", property.OrgID)
-				return (user.Level == dbgen.AccessLevelMember) || (level.AccessLevel == dbgen.AccessLevelOwner)
+				return (user.Level == dbgen.AccessLevelMember) || (user.Level == dbgen.AccessLevelOwner)
 			}
 		}
 	}
