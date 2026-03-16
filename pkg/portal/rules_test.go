@@ -3866,6 +3866,27 @@ func TestParseRuleFormNegativeCases(t *testing.T) {
 			},
 			expectedCode: common.StatusOK,
 		},
+		{
+			name: "always condition succeeds without value",
+			formValues: map[string]string{
+				common.ParamName:              "Always Rule",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyAlways),
+				common.ParamConditionOperator: string(dbgen.RuleConditionOperatorEquals),
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				common.ParamActionValue:       "50",
+			},
+			expectedCode: common.StatusOK,
+		},
+		{
+			name: "always condition succeeds with empty operator",
+			formValues: map[string]string{
+				common.ParamName:              "Always Rule",
+				common.ParamConditionProperty: string(dbgen.RuleConditionPropertyAlways),
+				common.ParamActionProperty:    string(dbgen.RuleActionPropertyDifficultyLevelPercent),
+				common.ParamActionValue:       "50",
+			},
+			expectedCode: common.StatusOK,
+		},
 	}
 
 	for _, tt := range tests {

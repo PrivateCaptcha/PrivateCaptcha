@@ -332,6 +332,7 @@ const (
 	RuleConditionPropertyCountryCode    RuleConditionProperty = "country_code"
 	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
 	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
+	RuleConditionPropertyAlways         RuleConditionProperty = "always"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {

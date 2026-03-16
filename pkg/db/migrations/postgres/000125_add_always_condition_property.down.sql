@@ -1,0 +1,2 @@
+-- PostgreSQL does not support removing values from an enum type.
+-- The 'always' value added to backend.rule_condition_property cannot be rolled back automatically.

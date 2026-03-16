@@ -403,6 +403,10 @@ func BuildHeaderMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	return hm, nil
 }
 
+func buildAlwaysMatcher(_ *dbgen.DifficultyRule) (Matcher, error) {
+	return &AlwaysMatcher{}, nil
+}
+
 // RulesCompiler compiles database rules into executable rule objects.
 type RulesCompiler struct {
 	uaParser  *useragent.Parser
@@ -426,6 +430,7 @@ func (rc *RulesCompiler) registerDefaultFactories() {
 	rc.factories[string(dbgen.RuleConditionPropertyDomain)] = BuildStringMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyIPAddress)] = BuildIPMatcher
 	rc.factories[string(dbgen.RuleConditionPropertyHTTPHeaderName)] = BuildHeaderMatcher
+	rc.factories[string(dbgen.RuleConditionPropertyAlways)] = buildAlwaysMatcher
 }
 
 // RegisterMatcherFactory registers a MatcherFactory for the given condition property,

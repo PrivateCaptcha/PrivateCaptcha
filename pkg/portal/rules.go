@@ -77,31 +77,33 @@ func DifficultyRuleToDisplay(rule *dbgen.DifficultyRule, canEdit bool, hasher co
 	}
 
 	var conditionOperator string
-	switch rule.ConditionOperator {
-	case dbgen.RuleConditionOperatorEmpty:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not empty"
-		} else {
-			conditionOperator = "is empty"
-		}
-	case dbgen.RuleConditionOperatorIn:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not one of"
-		} else {
-			conditionOperator = "is one of"
-		}
-	case dbgen.RuleConditionOperatorBot:
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "is not known bot"
-		} else {
-			conditionOperator = "is known bot"
-		}
-	default:
-		baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
-		if rule.ConditionOperatorNegated {
-			conditionOperator = "not " + baseOperator
-		} else {
-			conditionOperator = baseOperator
+	if rule.ConditionProperty != dbgen.RuleConditionPropertyAlways {
+		switch rule.ConditionOperator {
+		case dbgen.RuleConditionOperatorEmpty:
+			if rule.ConditionOperatorNegated {
+				conditionOperator = "is not empty"
+			} else {
+				conditionOperator = "is empty"
+			}
+		case dbgen.RuleConditionOperatorIn:
+			if rule.ConditionOperatorNegated {
+				conditionOperator = "is not one of"
+			} else {
+				conditionOperator = "is one of"
+			}
+		case dbgen.RuleConditionOperatorBot:
+			if rule.ConditionOperatorNegated {
+				conditionOperator = "is not known bot"
+			} else {
+				conditionOperator = "is known bot"
+			}
+		default:
+			baseOperator := strings.ReplaceAll(string(rule.ConditionOperator), "_", " ")
+			if rule.ConditionOperatorNegated {
+				conditionOperator = "not " + baseOperator
+			} else {
+				conditionOperator = baseOperator
+			}
 		}
 	}
 
