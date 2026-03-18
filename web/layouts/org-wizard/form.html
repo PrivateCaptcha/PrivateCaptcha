@@ -21,15 +21,9 @@
 </div>
 
 <div class="flex items-center justify-end mt-6 space-x-6">
-    <button
-        type="reset"
-        action="action"
-        onclick="window.history.go(-1); return false;"
-        class="pc-internal-form-button pc-internal-form-button-secondary"
-    >
+    <a href="{{ relURL "/" }}" class="pc-internal-form-button pc-internal-form-button-secondary">
         Cancel
-    </button>
-
+    </a>
     <button
         type="submit"
         class="pc-internal-form-button {{if $.Platform.Enterprise}}pc-internal-form-button-primary{{else}}pc-internal-form-button-disabled{{end}}"

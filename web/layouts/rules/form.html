@@ -223,14 +223,11 @@
     {{ end }}
 
     <div class="flex items-center space-x-6">
-        <button
-            type="reset"
-            onclick="window.history.go(-1); return false;"
-            class="pc-internal-form-button pc-internal-form-button-secondary"
-            >
+        <a
+            href="{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}{{ end }}"
+            class="pc-internal-form-button pc-internal-form-button-secondary">
             Cancel
-        </button>
-
+        </a>
         <button
             type="submit"
             class="pc-internal-form-button pc-internal-form-button-primary"
