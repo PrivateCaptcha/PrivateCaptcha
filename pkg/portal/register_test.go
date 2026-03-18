@@ -64,13 +64,24 @@ func TestPostRegister(t *testing.T) {
 		t.Errorf("unexpected post twofactor code: %v", resp.StatusCode)
 	}
 
-	if location, _ := resp.Location(); location.String() != "/" {
-		t.Errorf("unexpected redirect: %v", location)
+	location, err := resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect response but got error: %v", err)
 	}
 
 	user, err := store.Impl().FindUserByEmail(ctx, email)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	orgs, err := store.Impl().RetrieveUserOrganizations(ctx, user.ID)
+	if err != nil || len(orgs) == 0 {
+		t.Fatalf("Expected user to have an organization after registration, err: %v", err)
+	}
+
+	expectedPath := "/org/" + server.IDHasher.Encrypt(int(orgs[0].Organization.ID)) + "/property/new"
+	if path := location.String(); path != expectedPath {
+		t.Errorf("unexpected redirect: %v, expected: %v", path, expectedPath)
 	}
 
 	if user.Email != email {
