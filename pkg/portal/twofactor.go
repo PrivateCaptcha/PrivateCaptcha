@@ -85,12 +85,18 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var newRegistrationRedirectURL string
+	rootRedirectURL := s.RelURL("/")
+
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
-		if user, _, err := s.doRegister(ctx, sess); err == nil {
+		if user, org, err := s.doRegister(ctx, sess); err == nil {
 			_ = sess.Set(ctx, session.KeyUserID, user.ID)
-			// NOTE: we can redirect user to create the first property instead of dashboard, but currently it's fine
-			// redirectURL = s.partsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
+			_, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32)
+			returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
+			if !hasOrgInvite && (!hasReturnURL || (len(returnURL) == 0) || (returnURL == "/") || (returnURL == rootRedirectURL)) {
+				newRegistrationRedirectURL = s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
+			}
 		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
@@ -123,13 +129,15 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "Org invite is not cached, redirecting to root", "inviteID", orgInviteID)
 	}
 
-	if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
+	if len(newRegistrationRedirectURL) > 0 {
+		_ = sess.Delete(ctx, session.KeyReturnURL)
+		common.Redirect(newRegistrationRedirectURL, http.StatusOK, w, r)
+	} else if returnURL, ok := sess.Get(ctx, session.KeyReturnURL).(string); ok && (len(returnURL) > 0) {
 		slog.DebugContext(ctx, "Found return URL in user session", "url", returnURL)
 		_ = sess.Delete(ctx, session.KeyReturnURL)
 		common.Redirect(returnURL, http.StatusOK, w, r)
 	} else {
-		redirectURL := s.RelURL("/")
-		common.Redirect(redirectURL, http.StatusOK, w, r)
+		common.Redirect(rootRedirectURL, http.StatusOK, w, r)
 	}
 }
 
