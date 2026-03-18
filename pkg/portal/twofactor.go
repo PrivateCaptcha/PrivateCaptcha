@@ -86,6 +86,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var newRegistrationRedirectURL string
+	rootRedirectURL := s.RelURL("/")
 
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
@@ -93,7 +94,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 			_ = sess.Set(ctx, session.KeyUserID, user.ID)
 			_, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32)
 			returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
-			if !hasOrgInvite && (!hasReturnURL || len(returnURL) == 0) {
+			if !hasOrgInvite && (!hasReturnURL || (len(returnURL) == 0) || (returnURL == "/") || (returnURL == rootRedirectURL)) {
 				newRegistrationRedirectURL = s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
 			}
 		} else {
@@ -135,8 +136,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		_ = sess.Delete(ctx, session.KeyReturnURL)
 		common.Redirect(returnURL, http.StatusOK, w, r)
 	} else {
-		redirectURL := s.RelURL("/")
-		common.Redirect(redirectURL, http.StatusOK, w, r)
+		common.Redirect(rootRedirectURL, http.StatusOK, w, r)
 	}
 }
 
