@@ -19,7 +19,7 @@ import (
 var (
 	errInvalidSession = errors.New("session contains invalid data")
 	errNoOrgs         = errors.New("user has no organizations")
-	stubUserOrg       = &userOrg{ID: "-1"}
+	stubUserOrg       = &UserOrg{ID: "-1"}
 	propertiesPerPage = 30
 )
 
@@ -45,8 +45,8 @@ const (
 type portalBaseRenderContext struct {
 	CsrfRenderContext
 	systemNotificationContext
-	Orgs       []*userOrg
-	CurrentOrg *userOrg
+	Orgs       []*UserOrg
+	CurrentOrg *UserOrg
 	Tab        int
 	CanEdit    bool
 }
@@ -89,7 +89,7 @@ type orgMemberRenderContext struct {
 	Members []*orgUser
 }
 
-type userOrg struct {
+type UserOrg struct {
 	Name  string
 	ID    string
 	Level string
@@ -148,8 +148,8 @@ func usersWithEmailInvitesToOrgUsers(users []*dbgen.GetOrganizationUsersWithEmai
 	return result
 }
 
-func orgToUserOrg(org *dbgen.Organization, userID int32, hasher common.IdentifierHasher) *userOrg {
-	uo := &userOrg{
+func orgToUserOrg(org *dbgen.Organization, userID int32, hasher common.IdentifierHasher) *UserOrg {
+	uo := &UserOrg{
 		Name: org.Name,
 		ID:   hasher.Encrypt(int(org.ID)),
 	}
@@ -161,10 +161,10 @@ func orgToUserOrg(org *dbgen.Organization, userID int32, hasher common.Identifie
 	return uo
 }
 
-func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow, hasher common.IdentifierHasher) []*userOrg {
-	result := make([]*userOrg, 0, len(orgs))
+func orgsToUserOrgs(orgs []*dbgen.GetUserOrganizationsRow, hasher common.IdentifierHasher) []*UserOrg {
+	result := make([]*UserOrg, 0, len(orgs))
 	for _, org := range orgs {
-		result = append(result, &userOrg{
+		result = append(result, &UserOrg{
 			Name:  org.Organization.Name,
 			ID:    hasher.Encrypt(int(org.Organization.ID)),
 			Level: string(org.Level),

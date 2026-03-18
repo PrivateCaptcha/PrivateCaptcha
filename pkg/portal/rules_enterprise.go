@@ -118,7 +118,7 @@ type RuleWizardRenderContext struct {
 	AlertRenderContext
 	RuleFormData
 	Countries  []CountryOption
-	CurrentOrg *userOrg
+	CurrentOrg *UserOrg
 	Property   *userProperty
 	RuleID     string
 	IsEdit     bool
@@ -394,7 +394,7 @@ func (s *Server) NewRuleWizardRenderContext(user *dbgen.User, org *dbgen.Organiz
 	}
 
 	if org != nil {
-		renderCtx.CurrentOrg = &userOrg{
+		renderCtx.CurrentOrg = &UserOrg{
 			Name:  org.Name,
 			ID:    s.IDHasher.Encrypt(int(org.ID)),
 			Level: "",

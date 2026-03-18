@@ -55,7 +55,7 @@ type propertyWizardRenderContext struct {
 	Domain      string
 	NameError   string
 	DomainError string
-	CurrentOrg  *userOrg
+	CurrentOrg  *UserOrg
 }
 
 type userProperty struct {
@@ -78,7 +78,7 @@ type orgPropertiesRenderContext struct {
 	CsrfRenderContext
 	PaginationRenderContext
 	Properties []*userProperty
-	CurrentOrg *userOrg
+	CurrentOrg *UserOrg
 }
 
 type propertyDashboardRenderContext struct {
@@ -87,7 +87,7 @@ type propertyDashboardRenderContext struct {
 	// scripts.html is shared so captcha context has to be shared too
 	CaptchaRenderContext
 	Property     *userProperty
-	Org          *userOrg
+	Org          *UserOrg
 	NameError    string
 	Tab          int
 	CanEdit      bool
@@ -97,7 +97,7 @@ type propertyDashboardRenderContext struct {
 type propertySettingsRenderContext struct {
 	propertyDashboardRenderContext
 	difficultyLevelsRenderContext
-	Orgs     []*userOrg
+	Orgs     []*UserOrg
 	MinLevel int
 	MaxLevel int
 	CanMove  bool
@@ -257,7 +257,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 
 	data := &propertyWizardRenderContext{
 		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg: &userOrg{
+		CurrentOrg: &UserOrg{
 			Name:  org.Name,
 			ID:    s.IDHasher.Encrypt(int(org.ID)),
 			Level: "",
@@ -601,7 +601,7 @@ func (s *Server) getOrgPropertySettings(w http.ResponseWriter, r *http.Request) 
 	renderCtx := &propertySettingsRenderContext{
 		propertyDashboardRenderContext: *propertyRenderCtx,
 		difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
-		Orgs:                           []*userOrg{},
+		Orgs:                           []*UserOrg{},
 		CanMove:                        false,
 	}
 

@@ -113,7 +113,7 @@ type settingsAPIKeysRenderContext struct {
 	NameError  string
 	OrgError   string
 	Keys       []*userAPIKey
-	Orgs       []*userOrg
+	Orgs       []*UserOrg
 	CreateOpen bool
 }
 

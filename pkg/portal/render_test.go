@@ -26,15 +26,15 @@ func stubProperty(name, orgID string) *userProperty {
 	}
 }
 
-func stubOrgEx(orgID string, level dbgen.AccessLevel) *userOrg {
-	return &userOrg{
+func stubOrgEx(orgID string, level dbgen.AccessLevel) *UserOrg {
+	return &UserOrg{
 		Name:  "My Org " + orgID,
 		ID:    orgID,
 		Level: string(level),
 	}
 }
 
-func stubOrg(orgID string) *userOrg {
+func stubOrg(orgID string) *UserOrg {
 	return stubOrgEx(orgID, dbgen.AccessLevelOwner)
 }
 
@@ -180,7 +180,7 @@ func TestRenderHTML(t *testing.T) {
 			template: portalTemplate,
 			model: &orgDashboardRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
 				},
 				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
@@ -201,7 +201,7 @@ func TestRenderHTML(t *testing.T) {
 			template: portalTemplate,
 			model: &orgDashboardRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelInvited)},
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelInvited)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelInvited),
 				},
 				Properties: []*userProperty{stubProperty("1", "123"), stubProperty("2", "123")},
@@ -299,7 +299,7 @@ func TestRenderHTML(t *testing.T) {
 					CanEdit:           true,
 					NameError:         common.StatusPropertyNameEmptyError.String(),
 				},
-				Orgs:     []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+				Orgs:     []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 				MinLevel: int(common.MinDifficultyLevel),
 				MaxLevel: int(common.MaxDifficultyLevel),
 			},
@@ -358,7 +358,7 @@ func TestRenderHTML(t *testing.T) {
 					Tabs:        CreateTabViewModels(common.APIKeysEndpoint, server.SettingsTabs),
 				},
 				Keys:       []*userAPIKey{stubAPIKey("foo"), stubAPIKey("bar")},
-				Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+				Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 				CreateOpen: false,
 			},
 			selector: "p.apikey-name",
@@ -460,7 +460,7 @@ func TestRenderHTML(t *testing.T) {
 			template: orgRulesTemplate,
 			model: &OrgRulesRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
 					CanEdit:    true,
 				},
@@ -480,7 +480,7 @@ func TestRenderHTML(t *testing.T) {
 			template: orgRulesTemplate,
 			model: &OrgRulesRenderContext{
 				portalBaseRenderContext: portalBaseRenderContext{
-					Orgs:       []*userOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
 					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
 					CanEdit:    true,
 				},
