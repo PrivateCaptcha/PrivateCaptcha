@@ -225,7 +225,7 @@
     <div class="flex items-center space-x-6">
         <button
             type="reset"
-            onclick="window.history.go(-1); return false;"
+            onclick="window.location.href='{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID }}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}{{ end }}'; return false;"
             class="pc-internal-form-button pc-internal-form-button-secondary"
             >
             Cancel

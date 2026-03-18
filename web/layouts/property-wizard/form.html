@@ -50,7 +50,7 @@
     <button
         type="reset"
         action="action"
-        onclick="window.history.go(-1); return false;"
+        onclick="window.location.href='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}'; return false;"
         class="pc-internal-form-button pc-internal-form-button-secondary"
     >
         Cancel
