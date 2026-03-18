@@ -91,7 +91,11 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
 		if user, org, err := s.doRegister(ctx, sess); err == nil {
 			_ = sess.Set(ctx, session.KeyUserID, user.ID)
-			newRegistrationRedirectURL = s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
+			_, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32)
+			returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
+			if !hasOrgInvite && (!hasReturnURL || len(returnURL) == 0) {
+				newRegistrationRedirectURL = s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
+			}
 		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
