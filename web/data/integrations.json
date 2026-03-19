@@ -1,56 +1,62 @@
-[
-    {
-        "name": "Wordpress",
-        "icon": "img/integrations/wordpress.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/wordpress/",
-        "ready": true
-    },
-    {
-        "name": "PHP",
-        "icon": "img/integrations/php.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/php/",
-        "ready": true
-    },
-    {
-        "name": "React",
-        "icon": "img/integrations/reactjs.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/react/",
-        "ready": true
-    },
-    {
-        "name": "Go",
-        "icon": "img/integrations/golang.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/go/",
-        "ready": true
-    },
-    {
-        "name": "Python",
-        "icon": "img/integrations/python.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/python/",
-        "ready": true
-    },
-    {
-        "name": "JavaScript",
-        "icon": "img/integrations/javascript.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/javascript/",
-        "ready": true
-    },
-    {
-        "name": ".NET",
-        "icon": "img/integrations/dotnet.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/dotnet/",
-        "ready": true
-    },
-    {
-        "name": "Ruby",
-        "icon": "img/integrations/ruby.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/ruby/",
-        "ready": true
-    },
-    {
-        "name": "Java",
-        "icon": "img/integrations/java.svg",
-        "link": "https://docs.privatecaptcha.com/docs/integrations/java/",
-        "ready": true
-    }
-]
+{
+    "website": [
+        {
+            "name": "React",
+            "icon": "img/integrations/reactjs.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/react/",
+            "ready": true
+        }
+    ],
+    "server": [
+        {
+            "name": "PHP",
+            "icon": "img/integrations/php.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/php/",
+            "ready": true
+        },
+        {
+            "name": "Go",
+            "icon": "img/integrations/golang.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/go/",
+            "ready": true
+        },
+        {
+            "name": "Python",
+            "icon": "img/integrations/python.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/python/",
+            "ready": true
+        },
+        {
+            "name": "JavaScript",
+            "icon": "img/integrations/javascript.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/javascript/",
+            "ready": true
+        },
+        {
+            "name": ".NET",
+            "icon": "img/integrations/dotnet.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/dotnet/",
+            "ready": true
+        },
+        {
+            "name": "Ruby",
+            "icon": "img/integrations/ruby.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/ruby/",
+            "ready": true
+        },
+        {
+            "name": "Java",
+            "icon": "img/integrations/java.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/java/",
+            "ready": true
+        }
+    ],
+    "other": [
+        {
+            "name": "Wordpress",
+            "icon": "img/integrations/wordpress.svg",
+            "link": "https://docs.privatecaptcha.com/docs/integrations/wordpress/",
+            "ready": true
+        }
+    ]
+}
