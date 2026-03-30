@@ -23,7 +23,7 @@ const (
 	MetricsNamespaceCDN      = "cdn"
 	MetricsNamespacePortal   = "portal"
 	puzzleMetricsSubsystem   = "puzzle"
-	platformMetricsSubsystem = "platform"
+	PlatformMetricsSubsystem = "platform"
 	pgxpoolMetricsSubsystem  = "pgxpool"
 	apiMetricsSubsystem      = "api"
 	userIDLabel              = "user_id"
@@ -143,7 +143,7 @@ func NewService() *Service {
 	eventDropCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespaceServer,
-			Subsystem: platformMetricsSubsystem,
+			Subsystem: PlatformMetricsSubsystem,
 			Name:      "drop_total",
 			Help:      "Total number of events dropped",
 		},
@@ -154,7 +154,7 @@ func NewService() *Service {
 	panicCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: MetricsNamespaceServer,
-			Subsystem: platformMetricsSubsystem,
+			Subsystem: PlatformMetricsSubsystem,
 			Name:      "panic_total",
 			Help:      "Total number of panics",
 		},
@@ -165,7 +165,7 @@ func NewService() *Service {
 	clickhouseHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespaceServer,
-			Subsystem: platformMetricsSubsystem,
+			Subsystem: PlatformMetricsSubsystem,
 			Name:      "health_clickhouse",
 			Help:      "Health status of ClickHouse",
 		},
@@ -176,7 +176,7 @@ func NewService() *Service {
 	postgresHealthGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespaceServer,
-			Subsystem: platformMetricsSubsystem,
+			Subsystem: PlatformMetricsSubsystem,
 			Name:      "health_postgres",
 			Help:      "Health status of Postgres",
 		},
@@ -187,7 +187,7 @@ func NewService() *Service {
 	hitRatioGauge := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Namespace: MetricsNamespaceServer,
-			Subsystem: platformMetricsSubsystem,
+			Subsystem: PlatformMetricsSubsystem,
 			Name:      "cache_hit_ratio",
 			Help:      "In-memory cache hit ratio",
 		},
