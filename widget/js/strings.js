@@ -91,7 +91,7 @@ export const STRINGS = {
         [TESTING]: 'test',
     },
     'uk': {
-        [CLICK_TO_VERIFY]: 'Натисніть, щоб підтвердити',
+        [CLICK_TO_VERIFY]: 'Натисніть для перевірки',
         [VERIFYING]: 'Виконується перевірка',
         [SUCCESS]: 'Підтверджено',
         [UNAVAILABLE]: 'Недоступно',
