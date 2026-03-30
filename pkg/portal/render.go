@@ -247,6 +247,12 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username
 		}
+
+		if reqCtx.LoggedIn {
+			if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
+				reqCtx.FirstSession = true
+			}
+		}
 	}
 
 	out, err := s.RenderResponse(ctx, name, data, reqCtx, s.PlatformCtx)

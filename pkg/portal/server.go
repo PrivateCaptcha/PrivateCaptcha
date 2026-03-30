@@ -74,12 +74,13 @@ type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *commo
 type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAuditLog) error
 
 type RequestContext struct {
-	Path        string
-	LoggedIn    bool
-	CurrentYear int
-	UserName    string
-	UserEmail   string
-	CDN         string
+	Path         string
+	CurrentYear  int
+	UserName     string
+	UserEmail    string
+	CDN          string
+	LoggedIn     bool
+	FirstSession bool
 }
 
 type PaginationRenderContext struct {
