@@ -941,6 +941,8 @@ func TestAPIKeyDaysFromParam(t *testing.T) {
 		{"180", 180},
 		{"365", 365},
 		{"never", apiKeyNeverExpireDays},
+		{"Never", apiKeyNeverExpireDays},
+		{" never ", apiKeyNeverExpireDays},
 		{"invalid", 30},
 		{"", 30},
 		{"0", 30},
