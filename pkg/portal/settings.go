@@ -33,6 +33,7 @@ const (
 
 	// notifications
 	apiKeyExpirationNotificationDays = 14
+	apiKeyNeverExpireDays            = 36500 // ~100 years
 
 	// API key read flags
 	apiKeyReadWriteSuffix = "_read_write"
@@ -103,6 +104,7 @@ type userAPIKey struct {
 	RequestsPerMinute int
 	OrgName           string
 	ExpiresSoon       bool
+	NeverExpires      bool
 	ReadOnly          bool
 	LastUsedAt        string
 }
@@ -139,11 +141,20 @@ func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.Identif
 		lastUsedAt = key.LastUsedAt.Time.Format("02 Jan 2006")
 	}
 
+	neverExpires := isAPIKeyNeverExpires(key.Period)
+	var expiresAt string
+	if neverExpires {
+		expiresAt = "Never"
+	} else {
+		expiresAt = key.ExpiresAt.Time.Format("02 Jan 2006")
+	}
+
 	return &userAPIKey{
 		ID:                hasher.Encrypt(int(key.ID)),
 		Name:              key.Name,
-		ExpiresAt:         key.ExpiresAt.Time.Format("02 Jan 2006"),
-		ExpiresSoon:       key.ExpiresAt.Time.Sub(tnow) <= apiKeyExpirationNotificationDays*24*time.Hour,
+		ExpiresAt:         expiresAt,
+		ExpiresSoon:       !neverExpires && key.ExpiresAt.Time.Sub(tnow) <= apiKeyExpirationNotificationDays*24*time.Hour,
+		NeverExpires:      neverExpires,
 		RequestsPerMinute: int(requestsPerMinute),
 		Scope:             scope,
 		ReadOnly:          key.Readonly,
@@ -493,6 +504,10 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*Vi
 }
 
 func apiKeyDaysFromParam(ctx context.Context, param string) int {
+	if param == "never" {
+		return apiKeyNeverExpireDays
+	}
+
 	i, err := strconv.Atoi(param)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to convert days", "value", param, common.ErrAttr(err))
@@ -505,6 +520,10 @@ func apiKeyDaysFromParam(ctx context.Context, param string) int {
 	default:
 		return 30
 	}
+}
+
+func isAPIKeyNeverExpires(period time.Duration) bool {
+	return period >= time.Duration(apiKeyNeverExpireDays)*24*time.Hour
 }
 
 // NOTE: ReferenceID logic should stay the same forever for correct deduplication in DB
@@ -707,6 +726,10 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 }
 
 func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen.APIKey, userKey *userAPIKey) error {
+	if isAPIKeyNeverExpires(key.Period) {
+		return nil
+	}
+
 	var errs []error
 	minNotificationDate := time.Now().UTC().AddDate(0, 0, apiKeyExpirationNotificationDays)
 	if key.ExpiresAt.Valid && key.ExpiresAt.Time.After(minNotificationDate) {
