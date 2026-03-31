@@ -46,6 +46,7 @@ type RenderConstants struct {
 	UserEndpoint                    string
 	APIKeysEndpoint                 string
 	Days                            string
+	Never                           string
 	HeaderCSRFToken                 string
 	UsageEndpoint                   string
 	NotificationEndpoint            string
@@ -141,6 +142,7 @@ func NewRenderConstants() *RenderConstants {
 		UserEndpoint:                    common.UserEndpoint,
 		APIKeysEndpoint:                 common.APIKeysEndpoint,
 		Days:                            common.ParamDays,
+		Never:                           common.ParamNever,
 		HeaderCSRFToken:                 common.HeaderCSRFToken,
 		UsageEndpoint:                   common.UsageEndpoint,
 		NotificationEndpoint:            common.NotificationEndpoint,

@@ -108,7 +108,7 @@ func TestCreateNeverExpiringAPIKey(t *testing.T) {
 	}
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
-	resp := createAPIKeySuiteWithParam(srv, csrfToken, cookie, "Never Key", "never")
+	resp := createAPIKeySuiteWithParam(srv, csrfToken, cookie, "Never Key", common.ParamNever)
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
 	}
@@ -940,7 +940,7 @@ func TestAPIKeyDaysFromParam(t *testing.T) {
 		{"90", 90},
 		{"180", 180},
 		{"365", 365},
-		{"never", apiKeyNeverExpireDays},
+		{common.ParamNever, apiKeyNeverExpireDays},
 		{"Never", apiKeyNeverExpireDays},
 		{" never ", apiKeyNeverExpireDays},
 		{"invalid", 30},

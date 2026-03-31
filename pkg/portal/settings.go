@@ -505,7 +505,7 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*Vi
 
 func apiKeyDaysFromParam(ctx context.Context, param string) int {
 	param = strings.ToLower(strings.TrimSpace(param))
-	if param == "never" {
+	if param == common.ParamNever {
 		return apiKeyNeverExpireDays
 	}
 
