@@ -5,6 +5,7 @@
 - Add only the most important comments, prefer adding logs where necessary instead of comments
 - If you're not sure how to run something, look for examples in `Makefile`, CI workflow `.github/workflows/ci.yaml` or dockerfiles in `docker/`
 - If you change any external Go packages, run `make vendors`
+- Fix errors before moving on. Never skip failures. Never declare done without a passing test. Go with simplest working solution first. No over-engineering.
 
 ### Databases
 
@@ -59,6 +60,7 @@
 
 ## Testing instructions
 
+- Test after writing. Never leave code untested.
 - To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
 - To run JS widget tests, run `make test-widget-unit`
 - To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
@@ -70,4 +72,14 @@
 - To get integration tests code coverage, after running integration tests, open `coverage_integration/` directory in repository root
 - Integration tests for Portal and API have global variables `store` (Postgres `db.BusinessStore`), `timeSeries` (ClickHouse, `common.TimeSeriesStore`) and `server` (respective server resource) that can be used instead of creating new resources.
 - For exact HTTP routes to endpoints always check how they are setup in `server.go` and `server_enterprise.go`
-- Always make sure all unit and integration tests pass before sending a PR
+- Always make sure all unit **and** integration tests pass before declaring done
+
+## Output
+
+- No sycophantic openers or closing fluff.
+- No em dashes, smart quotes, or Unicode. ASCII only.
+- Be concise. If unsure, say so. Never guess.
+
+## Override Rule
+
+- User instructions always override this file.
