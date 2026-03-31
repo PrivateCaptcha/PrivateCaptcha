@@ -28,6 +28,7 @@ const (
 	ParamGrowth            = "growth"
 	ParamTab               = "tab"
 	ParamNew               = "new"
+	ParamNever             = "never"
 	ParamDays              = "days"
 	ParamOrg               = "org"
 	ParamUser              = "user"

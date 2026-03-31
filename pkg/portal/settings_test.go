@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
@@ -21,11 +22,15 @@ import (
 )
 
 func createAPIKeySuite(srv *http.ServeMux, csrfToken string, cookie *http.Cookie, name string, days int) *http.Response {
+	return createAPIKeySuiteWithParam(srv, csrfToken, cookie, name, strconv.Itoa(days))
+}
+
+func createAPIKeySuiteWithParam(srv *http.ServeMux, csrfToken string, cookie *http.Cookie, name string, daysParam string) *http.Response {
 	// Send POST request to create a new API key
 	form := url.Values{}
 	form.Set(common.ParamCSRFToken, csrfToken)
 	form.Set(common.ParamName, name)
-	form.Set(common.ParamDays, strconv.Itoa(days))
+	form.Set(common.ParamDays, daysParam)
 	form.Set(common.ParamScope, apiKeyScopePuzzle)
 
 	req := httptest.NewRequest("POST", "/settings/tab/apikeys/new", strings.NewReader(form.Encode()))
@@ -80,6 +85,59 @@ func TestCreateAPIKey(t *testing.T) {
 	}
 	if keysLen := len(keys); keysLen != 1 {
 		t.Errorf("Duplicate key was created. Keys count: %v", keysLen)
+	}
+}
+
+func TestCreateNeverExpiringAPIKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	resp := createAPIKeySuiteWithParam(srv, csrfToken, cookie, "Never Key", common.ParamNever)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	keys, err := store.Impl().RetrieveUserAPIKeys(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if keysLen := len(keys); keysLen != 1 {
+		t.Fatalf("Expected 1 API key, got %v", keysLen)
+	}
+
+	key := keys[0]
+	expectedPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	if key.Period != expectedPeriod {
+		t.Errorf("Expected period %v, got %v", expectedPeriod, key.Period)
+	}
+
+	tnow := time.Now().UTC()
+	userKey := apiKeyToUserAPIKey(key, tnow, server.IDHasher)
+	if !userKey.NeverExpires {
+		t.Error("Expected NeverExpires to be true")
+	}
+	if userKey.ExpiresSoon {
+		t.Error("Expected ExpiresSoon to be false for never-expiring key")
+	}
+	if userKey.ExpiresAt != "Never" {
+		t.Errorf("Expected ExpiresAt to be 'Never', got %q", userKey.ExpiresAt)
 	}
 }
 
@@ -882,6 +940,9 @@ func TestAPIKeyDaysFromParam(t *testing.T) {
 		{"90", 90},
 		{"180", 180},
 		{"365", 365},
+		{common.ParamNever, apiKeyNeverExpireDays},
+		{"Never", apiKeyNeverExpireDays},
+		{" never ", apiKeyNeverExpireDays},
 		{"invalid", 30},
 		{"", 30},
 		{"0", 30},
@@ -897,6 +958,94 @@ func TestAPIKeyDaysFromParam(t *testing.T) {
 				t.Errorf("apiKeyDaysFromParam(%q) = %d, want %d", tt.param, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestIsAPIKeyNeverExpires(t *testing.T) {
+	tests := []struct {
+		name     string
+		period   time.Duration
+		expected bool
+	}{
+		{"1 day", 24 * time.Hour, false},
+		{"365 days", 365 * 24 * time.Hour, false},
+		{"never (100 years)", time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour, true},
+		{"more than 100 years", time.Duration(apiKeyNeverExpireDays+1) * 24 * time.Hour, true},
+		{"zero", 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isAPIKeyNeverExpires(tt.period)
+			if result != tt.expected {
+				t.Errorf("isAPIKeyNeverExpires(%v) = %v, want %v", tt.period, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestAPIKeyToUserAPIKeyNeverExpires(t *testing.T) {
+	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test"))
+	tnow := time.Now().UTC()
+
+	neverPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	neverKey := &dbgen.APIKey{
+		ID:                1,
+		Name:              "Never Key",
+		ExpiresAt:         db.Timestampz(tnow.Add(neverPeriod)),
+		Period:            neverPeriod,
+		RequestsPerSecond: 10,
+		RequestsBurst:     50,
+		Scope:             dbgen.ApiKeyScopePuzzle,
+	}
+
+	result := apiKeyToUserAPIKey(neverKey, tnow, hasher)
+	if !result.NeverExpires {
+		t.Error("Expected NeverExpires to be true for 100-year key")
+	}
+	if result.ExpiresSoon {
+		t.Error("Expected ExpiresSoon to be false for never-expiring key")
+	}
+	if result.ExpiresAt != "Never" {
+		t.Errorf("Expected ExpiresAt to be 'Never', got %q", result.ExpiresAt)
+	}
+
+	regularPeriod := 90 * 24 * time.Hour
+	regularKey := &dbgen.APIKey{
+		ID:                2,
+		Name:              "Regular Key",
+		ExpiresAt:         db.Timestampz(tnow.Add(regularPeriod)),
+		Period:            regularPeriod,
+		RequestsPerSecond: 10,
+		RequestsBurst:     50,
+		Scope:             dbgen.ApiKeyScopePuzzle,
+	}
+
+	result = apiKeyToUserAPIKey(regularKey, tnow, hasher)
+	if result.NeverExpires {
+		t.Error("Expected NeverExpires to be false for regular key")
+	}
+	if result.ExpiresSoon {
+		t.Error("Expected ExpiresSoon to be false for key expiring in 90 days")
+	}
+
+	soonPeriod := 7 * 24 * time.Hour
+	soonKey := &dbgen.APIKey{
+		ID:                3,
+		Name:              "Soon Key",
+		ExpiresAt:         db.Timestampz(tnow.Add(soonPeriod)),
+		Period:            soonPeriod,
+		RequestsPerSecond: 10,
+		RequestsBurst:     50,
+		Scope:             dbgen.ApiKeyScopePuzzle,
+	}
+
+	result = apiKeyToUserAPIKey(soonKey, tnow, hasher)
+	if result.NeverExpires {
+		t.Error("Expected NeverExpires to be false for soon-expiring key")
+	}
+	if !result.ExpiresSoon {
+		t.Error("Expected ExpiresSoon to be true for key expiring in 7 days")
 	}
 }
 

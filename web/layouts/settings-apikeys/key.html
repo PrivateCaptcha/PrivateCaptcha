@@ -15,7 +15,9 @@
                 </a>
             </p>
             {{ else }}
-                {{ if .Params.ExpiresSoon }}
+                {{ if .Params.NeverExpires }}
+                <p class="rounded-md whitespace-nowrap mt-0.5 px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset text-yellow-800 bg-yellow-50 ring-yellow-600/20">Never expires</p>
+                {{ else if .Params.ExpiresSoon }}
                 <p class="rounded-md whitespace-nowrap mt-0.5 px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset text-yellow-800 bg-yellow-50 ring-yellow-600/20">Expires soon</p>
                 {{ else }}
                 <p class="rounded-md whitespace-nowrap mt-0.5 px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset text-pclime-700 bg-pclime-50 ring-pclime-600/20">Active</p>
@@ -39,7 +41,11 @@
             {{ if .Params.Secret }}
             <p>Make sure you save it - you won't be able to access it again.</p>
             {{ else }}
+            {{ if .Params.NeverExpires }}
+            <p class="whitespace-nowrap">Never expires<span class="mx-2">/</span>{{.Params.RequestsPerMinute}} requests per minute{{ if .Params.LastUsedAt }}<span class="mx-2">/</span>Last used on {{ .Params.LastUsedAt }}{{ end }}</p>
+            {{ else }}
             <p class="whitespace-nowrap">Expires on <time>{{ .Params.ExpiresAt}}</time><span class="mx-2">/</span>{{.Params.RequestsPerMinute}} requests per minute{{ if .Params.LastUsedAt }}<span class="mx-2">/</span>Last used on {{ .Params.LastUsedAt }}{{ end }}</p>
+            {{ end }}
             {{ end }}
         </div>
     </div>
