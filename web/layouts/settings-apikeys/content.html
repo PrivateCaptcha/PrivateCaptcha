@@ -1,4 +1,4 @@
-<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20" x-data="{createOpen: {{ .Params.CreateOpen }}}">
+<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20" x-data="{createOpen: {{ .Params.CreateOpen }}, selectedScope: '{{ .Const.APIKeyScopePuzzle }}'}">
     <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="createOpen"
         x-transition:enter="ease-out duration-300"
