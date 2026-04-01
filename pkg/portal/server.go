@@ -195,6 +195,12 @@ func (s *Server) createSettingsTabs() []*SettingsTab {
 			TemplatePrefix: settingsUsageTemplatePrefix,
 			ModelHandler:   s.getUsageSettings,
 		},
+		{
+			ID:             common.NotificationsEndpoint,
+			Name:           "Notifications",
+			TemplatePrefix: settingsNotificationsTemplatePrefix,
+			ModelHandler:   s.getNotificationsSettings,
+		},
 	}
 }
 
@@ -360,6 +366,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint, common.EmailEndpoint), privateWrite, s.Handler(s.editEmail))
 	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint), privateWrite, s.Handler(s.putGeneralSettings))
 	rg.Handle(rg.Post(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postAPIKeySettings))
+	rg.Handle(rg.Put(common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint), privateWrite, s.Handler(s.putNotificationsSettings))
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint), privateRead, s.Handler(s.getAuditLogs))
 

@@ -1,0 +1,22 @@
+<main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20">
+    <div class="mx-auto max-w-4xl lg:mx-0">
+        <div class="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-3">
+            <div>
+                <h2 class="text-base font-semibold leading-7 text-gray-900">Email Reports</h2>
+                <p class="mt-1 text-sm leading-6 text-gray-600">Choose which email reports you would like to receive about your captcha usage.</p>
+            </div>
+
+            <form
+                id="notifications-form"
+                hx-put='{{ partsURL .Const.SettingsEndpoint .Const.TabEndpoint .Const.NotificationsEndpoint }}'
+                hx-target="this"
+                hx-swap="innerHTML"
+                hx-indicator="#notifications-form-spinner"
+                hx-disabled-elt="input, button"
+                class="md:col-span-2"
+                >
+                    {{template "form.html" .}}
+            </form>
+        </div>
+    </div>
+</main>

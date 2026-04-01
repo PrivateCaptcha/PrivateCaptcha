@@ -72,6 +72,7 @@ sql:
           backend_rule_condition_property_country_code: RuleConditionPropertyCountryCode
           backend_rule_condition_property_domain: RuleConditionPropertyDomain
           backend_rule_condition_property_http_header_name: RuleConditionPropertyHTTPHeaderName
+          backend_rule_condition_property_always: RuleConditionPropertyAlways
           backend_rule_condition_operator: RuleConditionOperator
           backend_rule_condition_operator_equals: RuleConditionOperatorEquals
           backend_rule_condition_operator_contains: RuleConditionOperatorContains

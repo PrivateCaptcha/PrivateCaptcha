@@ -11,6 +11,8 @@ var (
 		WelcomeEmailTemplate,
 		TwoFactorEmailTemplate,
 		OrgInvitationTemplate,
+		WeeklyReportTemplate,
+		MonthlyReportTemplate,
 	}
 )
 

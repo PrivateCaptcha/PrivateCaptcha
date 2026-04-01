@@ -13,6 +13,7 @@ func TestEmailTemplates(t *testing.T) {
 		OrgInvitationContext
 		APIKeyExpirationContext
 		TwoFactorEmailContext
+		UsageReportContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -41,6 +42,14 @@ func TestEmailTemplates(t *testing.T) {
 			Browser:  "Firefox",
 			OS:       "Ubuntu",
 			Location: "EE",
+		},
+		UsageReportContext: UsageReportContext{
+			Period:          "weekly",
+			TotalRequests:   1234,
+			TotalVerifies:   567,
+			DashboardPath:   "settings?tab=usage",
+			OrgsCount:       2,
+			PropertiesCount: 5,
 		},
 		UserName:    "John Doe",
 		CDNURL:      "https://cdn.privatecaptcha.com",

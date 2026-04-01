@@ -22,14 +22,16 @@ import (
 
 const (
 	// Content-specific template names
-	settingsGeneralTemplatePrefix = "settings-general/"
-	settingsAPIKeysTemplatePrefix = "settings-apikeys/"
-	settingsUsageTemplatePrefix   = "settings-usage/"
+	settingsGeneralTemplatePrefix       = "settings-general/"
+	settingsAPIKeysTemplatePrefix       = "settings-apikeys/"
+	settingsUsageTemplatePrefix         = "settings-usage/"
+	settingsNotificationsTemplatePrefix = "settings-notifications/"
 
 	// Other templates
-	settingsGeneralFormTemplate    = "settings-general/form.html"
-	settingsAPIKeysContentTemplate = "settings-apikeys/content.html"
-	apiKeyRowTemplate              = "settings-apikeys/key.html"
+	settingsGeneralFormTemplate       = "settings-general/form.html"
+	settingsAPIKeysContentTemplate    = "settings-apikeys/content.html"
+	apiKeyRowTemplate                 = "settings-apikeys/key.html"
+	settingsNotificationsFormTemplate = "settings-notifications/form.html"
 
 	// notifications
 	apiKeyExpirationNotificationDays = 14
@@ -117,6 +119,14 @@ type settingsAPIKeysRenderContext struct {
 	Keys       []*userAPIKey
 	Orgs       []*UserOrg
 	CreateOpen bool
+}
+
+type settingsNotificationsRenderContext struct {
+	SettingsCommonRenderContext
+	WeeklyReport  bool
+	MonthlyReport bool
+	ReportEmail   string
+	EmailError    string
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
@@ -1017,4 +1027,87 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 	renderCtx := s.createUsageSettingsModel(ctx, user)
 
 	return &ViewModel{Model: renderCtx}, nil
+}
+
+func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) *settingsNotificationsRenderContext {
+	renderCtx := &settingsNotificationsRenderContext{
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
+	}
+
+	settings, err := s.Store.Impl().RetrieveUserSettings(ctx, user.ID)
+	if err != nil {
+		slog.DebugContext(ctx, "No user settings found, using defaults", "userID", user.ID)
+		return renderCtx
+	}
+
+	renderCtx.WeeklyReport = settings.WeeklyReport
+	renderCtx.MonthlyReport = settings.MonthlyReport
+	renderCtx.ReportEmail = settings.NotificationsEmail
+
+	return renderCtx
+}
+
+func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := s.createNotificationsSettingsModel(ctx, user)
+
+	return &ViewModel{Model: renderCtx}, nil
+}
+
+func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	weeklyReport := r.FormValue("weekly_report") == "on"
+	monthlyReport := r.FormValue("monthly_report") == "on"
+	reportEmail := strings.TrimSpace(r.FormValue("report_email"))
+
+	renderCtx := &settingsNotificationsRenderContext{
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
+		WeeklyReport:                weeklyReport,
+		MonthlyReport:               monthlyReport,
+		ReportEmail:                 reportEmail,
+	}
+
+	if len(reportEmail) > 0 {
+		if err := checkmail.ValidateFormat(reportEmail); err != nil {
+			renderCtx.EmailError = "Invalid email address."
+			return &ViewModel{
+				Model: renderCtx,
+				View:  settingsNotificationsFormTemplate,
+			}, nil
+		}
+	}
+
+	params := &dbgen.UpsertUserSettingsParams{
+		UserID:             user.ID,
+		WeeklyReport:       weeklyReport,
+		MonthlyReport:      monthlyReport,
+		NotificationsEmail: reportEmail,
+	}
+
+	if _, err := s.Store.Impl().UpsertUserSettings(ctx, params); err != nil {
+		slog.ErrorContext(ctx, "Failed to save notification settings", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to save notification settings."
+		return &ViewModel{
+			Model: renderCtx,
+			View:  settingsNotificationsFormTemplate,
+		}, nil
+	}
+
+	renderCtx.SuccessMessage = "Notification settings saved."
+
+	return &ViewModel{
+		Model: renderCtx,
+		View:  settingsNotificationsFormTemplate,
+	}, nil
 }
