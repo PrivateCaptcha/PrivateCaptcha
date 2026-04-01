@@ -33,7 +33,14 @@ SELECT us.user_id, us.notifications_email, u.email
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL
+ORDER BY us.user_id
+LIMIT $1 OFFSET $2
 `
+
+type GetUsersWithMonthlyReportParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
 
 type GetUsersWithMonthlyReportRow struct {
 	UserID             int32  `db:"user_id" json:"user_id"`
@@ -41,8 +48,8 @@ type GetUsersWithMonthlyReportRow struct {
 	Email              string `db:"email" json:"email"`
 }
 
-func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context) ([]*GetUsersWithMonthlyReportRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWithMonthlyReport)
+func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWithMonthlyReportParams) ([]*GetUsersWithMonthlyReportRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWithMonthlyReport, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -66,7 +73,14 @@ SELECT us.user_id, us.notifications_email, u.email
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL
+ORDER BY us.user_id
+LIMIT $1 OFFSET $2
 `
+
+type GetUsersWithWeeklyReportParams struct {
+	Limit  int32 `db:"limit" json:"limit"`
+	Offset int32 `db:"offset" json:"offset"`
+}
 
 type GetUsersWithWeeklyReportRow struct {
 	UserID             int32  `db:"user_id" json:"user_id"`
@@ -74,8 +88,8 @@ type GetUsersWithWeeklyReportRow struct {
 	Email              string `db:"email" json:"email"`
 }
 
-func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context) ([]*GetUsersWithWeeklyReportRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWithWeeklyReport)
+func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWithWeeklyReportParams) ([]*GetUsersWithWeeklyReportRow, error) {
+	rows, err := q.db.Query(ctx, getUsersWithWeeklyReport, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}

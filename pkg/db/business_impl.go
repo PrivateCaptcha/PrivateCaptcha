@@ -3667,51 +3667,40 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 	return settings, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.querier.GetUsersWithWeeklyReport(ctx)
+	users, err := impl.querier.GetUsersWithWeeklyReport(ctx, &dbgen.GetUsersWithWeeklyReportParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve users with weekly report", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with weekly report", "limit", limit, "offset", offset, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with weekly report", "count", len(users))
+	slog.DebugContext(ctx, "Fetched users with weekly report", "count", len(users), "limit", limit, "offset", offset)
 
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.querier.GetUsersWithMonthlyReport(ctx)
+	users, err := impl.querier.GetUsersWithMonthlyReport(ctx, &dbgen.GetUsersWithMonthlyReportParams{
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve users with monthly report", common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with monthly report", "limit", limit, "offset", offset, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with monthly report", "count", len(users))
+	slog.DebugContext(ctx, "Fetched users with monthly report", "count", len(users), "limit", limit, "offset", offset)
 
 	return users, nil
-}
-
-func (impl *BusinessStoreImpl) RetrievePropertyByID(ctx context.Context, propID int32) (*dbgen.Property, error) {
-	if impl.querier == nil {
-		return nil, ErrMaintenance
-	}
-
-	property, err := impl.retrieveOrgProperty(ctx, 0, propID)
-	if err != nil {
-		if errors.Is(err, ErrRecordNotFound) || errors.Is(err, ErrNegativeCacheHit) {
-			return nil, ErrRecordNotFound
-		}
-		slog.ErrorContext(ctx, "Failed to retrieve property by ID", "propID", propID, common.ErrAttr(err))
-		return nil, err
-	}
-
-	return property, nil
 }

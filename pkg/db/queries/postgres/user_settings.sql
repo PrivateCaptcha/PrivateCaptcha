@@ -15,10 +15,14 @@ RETURNING *;
 SELECT us.user_id, us.notifications_email, u.email
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL;
+WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL
+ORDER BY us.user_id
+LIMIT $1 OFFSET $2;
 
 -- name: GetUsersWithMonthlyReport :many
 SELECT us.user_id, us.notifications_email, u.email
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL;
+WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL
+ORDER BY us.user_id
+LIMIT $1 OFFSET $2;

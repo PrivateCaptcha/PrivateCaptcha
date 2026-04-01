@@ -3,20 +3,28 @@ package email
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
 type PropertyStat struct {
-	Name    string
-	Domain  string
-	Count   uint64
-	Percent float64
+	Name       string
+	Domain     string
+	Count      uint64
+	Percent    float64
+	PrevCount  uint64
+	Change     float64
+	ChangeSign string
 }
 
 type UsageReportContext struct {
-	Period          string
-	TotalRequests   uint64
-	TotalVerifies   uint64
-	DashboardPath   string
-	OrgsCount       int
-	PropertiesCount int
-	TopProperties   []PropertyStat
+	Period           string
+	TotalRequests    uint64
+	TotalVerifies    uint64
+	PrevRequests     uint64
+	PrevVerifies     uint64
+	RequestsChange   float64
+	VerifiesChange   float64
+	RequestsSign     string
+	VerifiesSign     string
+	DashboardPath    string
+	VerificationRate float64
+	TopProperties    []PropertyStat
 }
 
 var (
@@ -58,18 +66,16 @@ const (
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Organizations</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.OrgsCount}}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Properties</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.PropertiesCount}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
               </tr>
             </table>
             {{- if .TopProperties}}
@@ -80,6 +86,7 @@ const (
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Change</td>
               </tr>
               {{- range .TopProperties}}
               <tr>
@@ -87,6 +94,7 @@ const (
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>
@@ -112,15 +120,14 @@ const (
 
 Here is your {{.Period}} Private Captcha usage report:
 
-Total Requests: {{.TotalRequests}}
-Total Verifications: {{.TotalVerifies}}
-Organizations: {{.OrgsCount}}
-Properties: {{.PropertiesCount}}
+Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev)
+Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev)
+Verification Rate: {{printf "%.1f" .VerificationRate}}%
 {{- if .TopProperties}}
 
 Top properties by requests:
 {{- range .TopProperties}}
-  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%)
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}% vs prev)
 {{- end}}
 {{- end}}
 
@@ -168,18 +175,16 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Organizations</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.OrgsCount}}</td>
-              </tr>
-              <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Properties</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.PropertiesCount}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
               </tr>
             </table>
             {{- if .TopProperties}}
@@ -190,6 +195,7 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Change</td>
               </tr>
               {{- range .TopProperties}}
               <tr>
@@ -197,6 +203,7 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>
@@ -222,15 +229,14 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
 
 Here is your {{.Period}} Private Captcha usage report:
 
-Total Requests: {{.TotalRequests}}
-Total Verifications: {{.TotalVerifies}}
-Organizations: {{.OrgsCount}}
-Properties: {{.PropertiesCount}}
+Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev)
+Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev)
+Verification Rate: {{printf "%.1f" .VerificationRate}}%
 {{- if .TopProperties}}
 
 Top properties by requests:
 {{- range .TopProperties}}
-  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%)
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}% vs prev)
 {{- end}}
 {{- end}}
 
