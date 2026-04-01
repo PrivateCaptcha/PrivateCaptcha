@@ -42,3 +42,9 @@ type OrgTimeCount struct {
 	Timestamp time.Time
 	Count     uint32
 }
+
+type PropertyRequestCount struct {
+	PropertyID int32
+	OrgID      int32
+	Count      uint64
+}

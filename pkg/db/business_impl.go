@@ -3639,8 +3639,14 @@ func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID 
 
 	settings, err := impl.querier.GetUserSettings(ctx, userID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", userID, common.ErrAttr(err))
 		return nil, err
 	}
+
+	slog.DebugContext(ctx, "Fetched user settings", "userID", userID)
 
 	return settings, nil
 }
@@ -3652,8 +3658,11 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 
 	settings, err := impl.querier.UpsertUserSettings(ctx, params)
 	if err != nil {
+		slog.ErrorContext(ctx, "Failed to upsert user settings", "userID", params.UserID, common.ErrAttr(err))
 		return nil, err
 	}
+
+	slog.DebugContext(ctx, "Upserted user settings", "userID", params.UserID)
 
 	return settings, nil
 }
@@ -3663,7 +3672,15 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 		return nil, ErrMaintenance
 	}
 
-	return impl.querier.GetUsersWithWeeklyReport(ctx)
+	users, err := impl.querier.GetUsersWithWeeklyReport(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve users with weekly report", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched users with weekly report", "count", len(users))
+
+	return users, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
@@ -3671,5 +3688,30 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Contex
 		return nil, ErrMaintenance
 	}
 
-	return impl.querier.GetUsersWithMonthlyReport(ctx)
+	users, err := impl.querier.GetUsersWithMonthlyReport(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve users with monthly report", common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched users with monthly report", "count", len(users))
+
+	return users, nil
+}
+
+func (impl *BusinessStoreImpl) RetrievePropertyByID(ctx context.Context, propID int32) (*dbgen.Property, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	property, err := impl.retrieveOrgProperty(ctx, 0, propID)
+	if err != nil {
+		if errors.Is(err, ErrRecordNotFound) || errors.Is(err, ErrNegativeCacheHit) {
+			return nil, ErrRecordNotFound
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve property by ID", "propID", propID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	return property, nil
 }

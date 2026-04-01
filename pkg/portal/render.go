@@ -106,6 +106,9 @@ type RenderConstants struct {
 	RuleStatsEndpoint               string
 	Terminal                        string
 	NotificationsEndpoint           string
+	WeeklyReport                    string
+	MonthlyReport                   string
+	ReportEmail                     string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -203,6 +206,9 @@ func NewRenderConstants() *RenderConstants {
 		RuleStatsEndpoint:               common.RuleStatsEndpoint,
 		Terminal:                        common.ParamTerminal,
 		NotificationsEndpoint:           common.NotificationsEndpoint,
+		WeeklyReport:                    common.ParamWeeklyReport,
+		MonthlyReport:                   common.ParamMonthlyReport,
+		ReportEmail:                     common.ParamReportEmail,
 	}
 }
 

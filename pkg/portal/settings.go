@@ -123,10 +123,10 @@ type settingsAPIKeysRenderContext struct {
 
 type settingsNotificationsRenderContext struct {
 	SettingsCommonRenderContext
-	WeeklyReport  bool
-	MonthlyReport bool
 	ReportEmail   string
 	EmailError    string
+	WeeklyReport  bool
+	MonthlyReport bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
@@ -1036,7 +1036,9 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 
 	settings, err := s.Store.Impl().RetrieveUserSettings(ctx, user.ID)
 	if err != nil {
-		slog.DebugContext(ctx, "No user settings found, using defaults", "userID", user.ID)
+		if !errors.Is(err, db.ErrRecordNotFound) {
+			slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", user.ID, common.ErrAttr(err))
+		}
 		return renderCtx
 	}
 
@@ -1067,9 +1069,9 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		return nil, err
 	}
 
-	weeklyReport := r.FormValue("weekly_report") == "on"
-	monthlyReport := r.FormValue("monthly_report") == "on"
-	reportEmail := strings.TrimSpace(r.FormValue("report_email"))
+	weeklyReport := len(r.FormValue(common.ParamWeeklyReport)) > 0
+	monthlyReport := len(r.FormValue(common.ParamMonthlyReport)) > 0
+	reportEmail := strings.TrimSpace(r.FormValue(common.ParamReportEmail))
 
 	renderCtx := &settingsNotificationsRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),

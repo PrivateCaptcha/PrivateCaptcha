@@ -50,6 +50,10 @@ func TestEmailTemplates(t *testing.T) {
 			DashboardPath:   "settings?tab=usage",
 			OrgsCount:       2,
 			PropertiesCount: 5,
+			TopProperties: []PropertyStat{
+				{Name: "Main Site", Domain: "example.com", Count: 800, Percent: 64.8},
+				{Name: "Blog", Domain: "blog.example.com", Count: 434, Percent: 35.2},
+			},
 		},
 		UserName:    "John Doe",
 		CDNURL:      "https://cdn.privatecaptcha.com",

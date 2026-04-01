@@ -62,6 +62,9 @@ const (
 	ParamActionValue       = "action_value"
 	ParamTerminal          = "terminal"
 	ParamPosition          = "position"
+	ParamWeeklyReport      = "weekly_report"
+	ParamMonthlyReport     = "monthly_report"
+	ParamReportEmail       = "report_email"
 	All                    = "all"
 )
 

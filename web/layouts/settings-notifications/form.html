@@ -16,19 +16,19 @@
             <div class="mt-4 space-y-4">
                 <div class="relative flex items-start">
                     <div class="flex h-6 items-center">
-                        <input id="weekly_report" name="weekly_report" type="checkbox" {{ if .Params.WeeklyReport }}checked{{ end }} class="h-4 w-4 rounded border-gray-300 text-pcblue-600 focus:ring-pcblue-600" />
+                        <input id="{{ .Const.WeeklyReport }}" name="{{ .Const.WeeklyReport }}" type="checkbox" {{ if .Params.WeeklyReport }}checked{{ end }} class="h-4 w-4 rounded border-gray-300 text-pcblue-600 focus:ring-pcblue-600" />
                     </div>
                     <div class="ml-3 text-sm leading-6">
-                        <label for="weekly_report" class="font-medium text-gray-900">Weekly report</label>
+                        <label for="{{ .Const.WeeklyReport }}" class="font-medium text-gray-900">Weekly report</label>
                         <p class="text-gray-500">Receive a summary of your captcha usage every week.</p>
                     </div>
                 </div>
                 <div class="relative flex items-start">
                     <div class="flex h-6 items-center">
-                        <input id="monthly_report" name="monthly_report" type="checkbox" {{ if .Params.MonthlyReport }}checked{{ end }} class="h-4 w-4 rounded border-gray-300 text-pcblue-600 focus:ring-pcblue-600" />
+                        <input id="{{ .Const.MonthlyReport }}" name="{{ .Const.MonthlyReport }}" type="checkbox" {{ if .Params.MonthlyReport }}checked{{ end }} class="h-4 w-4 rounded border-gray-300 text-pcblue-600 focus:ring-pcblue-600" />
                     </div>
                     <div class="ml-3 text-sm leading-6">
-                        <label for="monthly_report" class="font-medium text-gray-900">Monthly report</label>
+                        <label for="{{ .Const.MonthlyReport }}" class="font-medium text-gray-900">Monthly report</label>
                         <p class="text-gray-500">Receive a summary of your captcha usage every month.</p>
                     </div>
                 </div>
@@ -37,13 +37,13 @@
     </div>
 
     <div class="sm:col-span-full">
-        <label for="report_email" class="pc-internal-form-label" aria-label="Report email">Report email (optional)</label>
+        <label for="{{ .Const.ReportEmail }}" class="pc-internal-form-label" aria-label="Report email">Report email (optional)</label>
         <p class="mt-1 text-sm leading-6 text-gray-600">If empty, reports are sent to your account email.</p>
         <div class="mt-2 relative">
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="report_email" maxlength="255" value="{{ .Params.ReportEmail }}" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
+            <input type="email" name="{{ .Const.ReportEmail }}" maxlength="255" value="{{ .Params.ReportEmail }}" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
         </div>
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>

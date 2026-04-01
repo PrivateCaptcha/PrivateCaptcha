@@ -9,6 +9,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
+	"github.com/jpillora/backoff"
 )
 
 type ScheduleReportsJob struct {
@@ -79,7 +80,21 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	slog.InfoContext(ctx, "Scheduling weekly reports", "users", len(users))
 	year, week := tnow.ISOWeek()
 
+	b := &backoff.Backoff{
+		Min:    50 * time.Millisecond,
+		Max:    1 * time.Second,
+		Factor: 2,
+		Jitter: true,
+	}
+
 	for _, user := range users {
+		select {
+		case <-ctx.Done():
+			slog.WarnContext(ctx, "Job context cancelled while scheduling weekly reports", common.ErrAttr(ctx.Err()))
+			return ctx.Err()
+		case <-time.After(b.Duration()):
+		}
+
 		reportCtx := j.buildReportContext(ctx, user.UserID, "weekly")
 		notif := &common.ScheduledNotification{
 			ReferenceID:  weeklyReportReference(user.UserID, year, week),
@@ -89,7 +104,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 			DateTime:     tnow,
 			TemplateHash: email.WeeklyReportTemplate.Hash(),
 			Persistent:   false,
-			Condition:    common.EmptyNotificationCondition,
+			Condition:    common.NotificationWithSubscription,
 		}
 
 		if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
@@ -108,7 +123,21 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 	slog.InfoContext(ctx, "Scheduling monthly reports", "users", len(users))
 
+	b := &backoff.Backoff{
+		Min:    50 * time.Millisecond,
+		Max:    1 * time.Second,
+		Factor: 2,
+		Jitter: true,
+	}
+
 	for _, user := range users {
+		select {
+		case <-ctx.Done():
+			slog.WarnContext(ctx, "Job context cancelled while scheduling monthly reports", common.ErrAttr(ctx.Err()))
+			return ctx.Err()
+		case <-time.After(b.Duration()):
+		}
+
 		reportCtx := j.buildReportContext(ctx, user.UserID, "monthly")
 		notif := &common.ScheduledNotification{
 			ReferenceID:  monthlyReportReference(user.UserID, tnow.Year(), tnow.Month()),
@@ -118,7 +147,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 			DateTime:     tnow,
 			TemplateHash: email.MonthlyReportTemplate.Hash(),
 			Persistent:   false,
-			Condition:    common.EmptyNotificationCondition,
+			Condition:    common.NotificationWithSubscription,
 		}
 
 		if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
@@ -158,6 +187,33 @@ func (j *ScheduleReportsJob) buildReportContext(ctx context.Context, userID int3
 
 	if count, err := j.Store.Impl().RetrieveUserPropertiesCount(ctx, userID); err == nil {
 		reportCtx.PropertiesCount = int(count)
+	}
+
+	const topPropertiesLimit = 5
+	propertyCounts, err := j.TimeSeries.RetrieveUserPropertyRequestCounts(ctx, userID, from, topPropertiesLimit)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to retrieve property request counts for report", "userID", userID, common.ErrAttr(err))
+		return reportCtx
+	}
+
+	if len(propertyCounts) > 0 && reportCtx.TotalRequests > 0 {
+		topProperties := make([]email.PropertyStat, 0, len(propertyCounts))
+		for _, pc := range propertyCounts {
+			prop, err := j.Store.Impl().RetrievePropertyByID(ctx, pc.PropertyID)
+			if err != nil {
+				slog.DebugContext(ctx, "Skipping property in report", "propID", pc.PropertyID, common.ErrAttr(err))
+				continue
+			}
+
+			percent := float64(pc.Count) / float64(reportCtx.TotalRequests) * 100
+			topProperties = append(topProperties, email.PropertyStat{
+				Name:    prop.Name,
+				Domain:  prop.Domain,
+				Count:   pc.Count,
+				Percent: percent,
+			})
+		}
+		reportCtx.TopProperties = topProperties
 	}
 
 	return reportCtx

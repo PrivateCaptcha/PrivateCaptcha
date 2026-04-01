@@ -2,6 +2,13 @@ package email
 
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
+type PropertyStat struct {
+	Name    string
+	Domain  string
+	Count   uint64
+	Percent float64
+}
+
 type UsageReportContext struct {
 	Period          string
 	TotalRequests   uint64
@@ -9,6 +16,7 @@ type UsageReportContext struct {
 	DashboardPath   string
 	OrgsCount       int
 	PropertiesCount int
+	TopProperties   []PropertyStat
 }
 
 var (
@@ -64,6 +72,25 @@ const (
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.PropertiesCount}}</td>
               </tr>
             </table>
+            {{- if .TopProperties}}
+            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
+              <tr>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Property</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
+              </tr>
+              {{- range .TopProperties}}
+              <tr>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px">{{.Name}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
+              </tr>
+              {{- end}}
+            </table>
+            {{- end}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">View detailed statistics in your <a href="{{.PortalURL}}/{{.DashboardPath}}">dashboard</a>.</p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Warmly,<br />The Private Captcha team
@@ -89,6 +116,13 @@ Total Requests: {{.TotalRequests}}
 Total Verifications: {{.TotalVerifies}}
 Organizations: {{.OrgsCount}}
 Properties: {{.PropertiesCount}}
+{{- if .TopProperties}}
+
+Top properties by requests:
+{{- range .TopProperties}}
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%)
+{{- end}}
+{{- end}}
 
 View detailed statistics in your dashboard ({{.PortalURL}}/{{.DashboardPath}}).
 
@@ -148,6 +182,25 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.PropertiesCount}}</td>
               </tr>
             </table>
+            {{- if .TopProperties}}
+            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
+              <tr>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Property</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
+              </tr>
+              {{- range .TopProperties}}
+              <tr>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px">{{.Name}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
+              </tr>
+              {{- end}}
+            </table>
+            {{- end}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">View detailed statistics in your <a href="{{.PortalURL}}/{{.DashboardPath}}">dashboard</a>.</p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Warmly,<br />The Private Captcha team
@@ -173,6 +226,13 @@ Total Requests: {{.TotalRequests}}
 Total Verifications: {{.TotalVerifies}}
 Organizations: {{.OrgsCount}}
 Properties: {{.PropertiesCount}}
+{{- if .TopProperties}}
+
+Top properties by requests:
+{{- range .TopProperties}}
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%)
+{{- end}}
+{{- end}}
 
 View detailed statistics in your dashboard ({{.PortalURL}}/{{.DashboardPath}}).
 

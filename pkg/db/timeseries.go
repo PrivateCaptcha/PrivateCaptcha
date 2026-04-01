@@ -313,6 +313,46 @@ ORDER BY org_id, ts`
 	return results, nil
 }
 
+func (ts *TimeSeriesDB) RetrieveUserPropertyRequestCounts(ctx context.Context, userID int32, from time.Time, limit int) ([]*common.PropertyRequestCount, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	fromStr := from.Format(time.DateTime)
+
+	query := `SELECT property_id, org_id, sum(count) as total_count
+FROM %s
+WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
+GROUP BY property_id, org_id
+ORDER BY total_count DESC
+LIMIT %d`
+
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1d, limit),
+		clickhouse.Named("user_id", strconv.Itoa(int(userID))),
+		clickhouse.Named("timestamp", fromStr))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute user property request counts query", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.PropertyRequestCount, 0, limit)
+
+	for rows.Next() {
+		pc := &common.PropertyRequestCount{}
+		if err := rows.Scan(&pc.PropertyID, &pc.OrgID, &pc.Count); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from user property request counts query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, pc)
+	}
+
+	slog.InfoContext(ctx, "Fetched user property request counts", "userID", userID, "count", len(results), "from", fromStr)
+
+	return results, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -725,6 +765,43 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 		}
 		return results[i].OrgID < results[j].OrgID
 	})
+
+	return results, nil
+}
+
+func (m *MemoryTimeSeries) RetrieveUserPropertyRequestCounts(ctx context.Context, userID int32, from time.Time, limit int) ([]*common.PropertyRequestCount, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type propKey struct {
+		PropertyID int32
+		OrgID      int32
+	}
+
+	counts := make(map[propKey]uint64)
+	for _, log := range m.accessLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) {
+			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
+			counts[key]++
+		}
+	}
+
+	results := make([]*common.PropertyRequestCount, 0, len(counts))
+	for key, count := range counts {
+		results = append(results, &common.PropertyRequestCount{
+			PropertyID: key.PropertyID,
+			OrgID:      key.OrgID,
+			Count:      count,
+		})
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].Count > results[j].Count
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
 
 	return results, nil
 }
