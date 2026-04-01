@@ -1,4 +1,4 @@
-'use strict;'
+'use strict';
 
 export const CLICK_TO_VERIFY = 'click_to_verify';
 export const VERIFYING = 'verifying';

@@ -122,7 +122,12 @@ type settingsAPIKeysRenderContext struct {
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
 	// in terms of "leaky bucket" logic
 	capacity := float64(key.RequestsBurst)
-	leakInterval := float64(time.Second) / key.RequestsPerSecond
+	requestsPerSecond := key.RequestsPerSecond
+
+	if math.Abs(requestsPerSecond) < 1e-6 {
+		requestsPerSecond = 1.0
+	}
+	leakInterval := float64(time.Second) / requestsPerSecond
 	// {period} during which we can consume (or restore) {capacity}
 	period := capacity * leakInterval
 	periodsPerMinute := float64(time.Minute) / period
