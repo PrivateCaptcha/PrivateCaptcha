@@ -45,4 +45,5 @@ const (
 	AsyncTaskEndpoint     = "asynctask"
 	RulesEndpoint         = "rules"
 	RuleStatsEndpoint     = "rulestats"
+	NotificationsEndpoint = "notifications"
 )

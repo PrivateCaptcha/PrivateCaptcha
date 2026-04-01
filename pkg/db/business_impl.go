@@ -3631,3 +3631,45 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 
 	return updatedRule, auditEvent, nil
 }
+
+func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSetting, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	settings, err := impl.querier.GetUserSettings(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
+func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSetting, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	settings, err := impl.querier.UpsertUserSettings(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	return settings, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetUsersWithWeeklyReport(ctx)
+}
+
+func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	return impl.querier.GetUsersWithMonthlyReport(ctx)
+}

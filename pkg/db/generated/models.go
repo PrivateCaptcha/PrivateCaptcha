@@ -332,7 +332,7 @@ const (
 	RuleConditionPropertyCountryCode    RuleConditionProperty = "country_code"
 	RuleConditionPropertyDomain         RuleConditionProperty = "domain"
 	RuleConditionPropertyHTTPHeaderName RuleConditionProperty = "http_header_name"
-	RuleConditionPropertyAlways         RuleConditionProperty = "always"
+	BackendRuleConditionPropertyAlways  RuleConditionProperty = "always"
 )
 
 func (e *RuleConditionProperty) Scan(src interface{}) error {
@@ -603,4 +603,14 @@ type UserNotification struct {
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
 	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
+}
+
+type UserSetting struct {
+	ID                 int32              `db:"id" json:"id"`
+	UserID             int32              `db:"user_id" json:"user_id"`
+	WeeklyReport       bool               `db:"weekly_report" json:"weekly_report"`
+	MonthlyReport      bool               `db:"monthly_report" json:"monthly_report"`
+	NotificationsEmail string             `db:"notifications_email" json:"notifications_email"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }

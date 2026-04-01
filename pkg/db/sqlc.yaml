@@ -85,6 +85,7 @@ sql:
           backend_rule_action_property_http_request: RuleActionPropertyHTTPRequest
           backend_rule_action_property_difficulty_growth: RuleActionPropertyDifficultyGrowth
           backend_rule_action_property_break: RuleActionPropertyBreak
+          backend_user_setting: UserSetting
         overrides:
           - db_type: "pg_catalog.interval"
             go_type: "time.Duration"
