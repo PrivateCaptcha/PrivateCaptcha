@@ -655,6 +655,14 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
 	}
 
+	daysParam := strings.ToLower(strings.TrimSpace(r.FormValue(common.ParamDays)))
+	if scope != dbgen.ApiKeyScopePuzzle && daysParam == common.ParamNever {
+		slog.ErrorContext(ctx, "Never expiration is not allowed for portal API keys", "scope", scopeStr)
+		renderCtx.WarningMessage = "Never expiration is only allowed for captcha verification keys."
+		renderCtx.CreateOpen = true
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+	}
+
 	apiKeyRequestsPerSecond := 1.0
 	var minAPIKeyRequestsBurst int32 = 5
 	if user.SubscriptionID.Valid {

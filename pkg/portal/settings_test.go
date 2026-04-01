@@ -1253,6 +1253,58 @@ func TestPostAPIKeySettingsScopedKey(t *testing.T) {
 	}
 }
 
+func TestPortalAPIKeyNeverExpirationRejected(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	for _, testScope := range []string{apiKeyScopePortal + apiKeyReadWriteSuffix, apiKeyScopePortal + apiKeyReadOnlySuffix} {
+		form := url.Values{}
+		form.Set(common.ParamCSRFToken, csrfToken)
+		form.Set(common.ParamName, "Portal Never Key "+testScope)
+		form.Set(common.ParamDays, common.ParamNever)
+		form.Set(common.ParamScope, testScope)
+		form.Set(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+		req := httptest.NewRequest("POST", "/settings/tab/apikeys/new", strings.NewReader(form.Encode()))
+		req.AddCookie(cookie)
+		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("Unexpected status code %v for scope %s", resp.StatusCode, testScope)
+		}
+	}
+
+	keys, err := store.Impl().RetrieveUserAPIKeys(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(keys) != 0 {
+		t.Errorf("Expected no API keys to be created, got %d", len(keys))
+	}
+}
+
 func TestGetAccountStatsWithUnknownOrg(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

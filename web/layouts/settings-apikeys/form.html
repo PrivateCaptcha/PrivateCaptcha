@@ -20,7 +20,7 @@
                     <div>
                         <label for="{{ .Const.Scope }}" class="pc-internal-form-label"> Scope </label>
                         <div class="mt-2">
-                            <select name="{{ .Const.Scope }}" class="w-full pc-internal-form-select">
+                            <select name="{{ .Const.Scope }}" x-model="selectedScope" class="w-full pc-internal-form-select">
                                 <option value="{{ .Const.APIKeyScopePuzzle }}" selected="selected">Captcha verification</option>
                                 {{ if $.Platform.Enterprise }}
                                 <option value="{{ .Const.APIKeyScopePortalReadWrite }}">Portal operations (read / write)</option>
@@ -33,13 +33,15 @@
                     <div>
                         <label for="{{ .Const.Days }}" class="pc-internal-form-label"> Expiration </label>
                         <div class="mt-2">
-                            <select name="{{ .Const.Days }}" class="w-full pc-internal-form-select">
+                            <select name="{{ .Const.Days }}" class="w-full pc-internal-form-select"
+                                x-ref="daysSelect"
+                                x-effect="if (selectedScope !== '{{ $.Const.APIKeyScopePuzzle }}' && $el.value === '{{ $.Const.Never }}') $el.value = '365'">
                                 <option value="1">1 day</option>
                                 <option value="30">30 days</option>
                                 <option value="90">90 days</option>
                                 <option value="180">180 days</option>
                                 <option value="365" selected="selected">365 days</option>
-                                <option value="{{ $.Const.Never }}">Never</option>
+                                <option value="{{ $.Const.Never }}" x-show="selectedScope === '{{ $.Const.APIKeyScopePuzzle }}'">Never</option>
                             </select>
                         </div>
                     </div>
