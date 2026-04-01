@@ -1274,12 +1274,12 @@ func TestPortalAPIKeyNeverExpirationRejected(t *testing.T) {
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 
-	for _, scope := range []string{apiKeyScopePortal + apiKeyReadWriteSuffix, apiKeyScopePortal + apiKeyReadOnlySuffix} {
+	for _, testScope := range []string{apiKeyScopePortal + apiKeyReadWriteSuffix, apiKeyScopePortal + apiKeyReadOnlySuffix} {
 		form := url.Values{}
 		form.Set(common.ParamCSRFToken, csrfToken)
-		form.Set(common.ParamName, "Portal Never Key "+scope)
+		form.Set(common.ParamName, "Portal Never Key "+testScope)
 		form.Set(common.ParamDays, common.ParamNever)
-		form.Set(common.ParamScope, scope)
+		form.Set(common.ParamScope, testScope)
 		form.Set(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 
 		req := httptest.NewRequest("POST", "/settings/tab/apikeys/new", strings.NewReader(form.Encode()))
@@ -1291,7 +1291,7 @@ func TestPortalAPIKeyNeverExpirationRejected(t *testing.T) {
 
 		resp := w.Result()
 		if resp.StatusCode != http.StatusOK {
-			t.Errorf("Unexpected status code %v for scope %s", resp.StatusCode, scope)
+			t.Errorf("Unexpected status code %v for scope %s", resp.StatusCode, testScope)
 		}
 	}
 
