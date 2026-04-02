@@ -15,8 +15,8 @@ github.com/ClickHouse/clickhouse-go/v2/lib/driver
 github.com/ClickHouse/clickhouse-go/v2/lib/proto
 github.com/ClickHouse/clickhouse-go/v2/lib/timezone
 github.com/ClickHouse/clickhouse-go/v2/resources
-# github.com/PuerkitoBio/goquery v1.11.0
-## explicit; go 1.24.0
+# github.com/PuerkitoBio/goquery v1.12.0
+## explicit; go 1.25.0
 github.com/PuerkitoBio/goquery
 # github.com/andybalholm/brotli v1.2.0
 ## explicit; go 1.22
@@ -241,10 +241,10 @@ go.yaml.in/yaml/v2
 # go.yaml.in/yaml/v3 v3.0.4
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.org/x/crypto v0.48.0
-## explicit; go 1.24.0
+# golang.org/x/crypto v0.49.0
+## explicit; go 1.25.0
 golang.org/x/crypto/blake2b
-# golang.org/x/net v0.51.0
+# golang.org/x/net v0.52.0
 ## explicit; go 1.25.0
 golang.org/x/net/html
 golang.org/x/net/html/atom
@@ -260,8 +260,8 @@ golang.org/x/net/xsrftoken
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 golang.org/x/sync/singleflight
-# golang.org/x/sys v0.41.0
-## explicit; go 1.24.0
+# golang.org/x/sys v0.42.0
+## explicit; go 1.25.0
 golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
