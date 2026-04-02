@@ -90,7 +90,7 @@ func TestMain(m *testing.M) {
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
 		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
-		Verifier:           NewVerifier(cfg, store),
+		Verifier:           NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
 		Metrics:            metrics,
 		Mailer:             &email.StubMailer{},
 		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),

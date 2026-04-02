@@ -154,7 +154,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	businessDB := db.NewBusiness(pool)
 	timeSeriesDB := db.NewTimeSeries(clickhouse, businessDB.Cache)
 
-	puzzleVerifier := api.NewVerifier(cfg, businessDB)
+	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey))
 
 	metrics.RegisterPgxPoolStats(func() monitoring.PgxPoolStatProvider {
 		return pool.Stat()

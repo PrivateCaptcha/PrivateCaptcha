@@ -27,24 +27,28 @@ var (
 )
 
 type Verifier struct {
-	Salt               *puzzleSalt
-	UserFingerprintKey *userFingerprintKey
-	Store              db.Implementor
-	TestPuzzle         puzzle.Puzzle
-	TestPuzzleData     *puzzle.PuzzlePayload
-	TestSolutions      puzzle.SolutionPayload
+	Salt                 *puzzleSalt
+	UserFingerprintKey   *userFingerprintKey
+	FingerprintHeaderKey common.ConfigItem
+	FingerprintHeader    string
+	Store                db.Implementor
+	TestPuzzle           puzzle.Puzzle
+	TestPuzzleData       *puzzle.PuzzlePayload
+	TestSolutions        puzzle.SolutionPayload
 }
 
 var _ puzzle.Engine = (*Verifier)(nil)
 
-func NewVerifier(cfg common.ConfigStore, store db.Implementor) *Verifier {
+func NewVerifier(cfg common.ConfigStore, store db.Implementor, fingerprintHeaderKey common.ConfigItem) *Verifier {
 	testPuzzle := puzzle.NewComputePuzzle(0 /*puzzle ID*/, db.TestPropertyUUID.Bytes, 0 /*difficulty*/)
 	return &Verifier{
-		Salt:               NewPuzzleSalt(cfg.Get(common.APISaltKey)),
-		UserFingerprintKey: NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
-		Store:              store,
-		TestPuzzle:         testPuzzle,
-		TestSolutions:      puzzle.NewStubPayload(testPuzzle),
+		Salt:                 NewPuzzleSalt(cfg.Get(common.APISaltKey)),
+		UserFingerprintKey:   NewUserFingerprintKey(cfg.Get(common.UserFingerprintIVKey)),
+		FingerprintHeaderKey: fingerprintHeaderKey,
+		FingerprintHeader:    fingerprintHeaderKey.Value(),
+		Store:                store,
+		TestPuzzle:           testPuzzle,
+		TestSolutions:        puzzle.NewStubPayload(testPuzzle),
 	}
 }
 
@@ -65,6 +69,8 @@ func (v *Verifier) Update(ctx context.Context) error {
 		slog.ErrorContext(ctx, "Failed to update user fingerprint key", common.ErrAttr(err))
 		return err
 	}
+
+	v.FingerprintHeader = v.FingerprintHeaderKey.Value()
 
 	return nil
 }
@@ -300,16 +306,20 @@ func (v *Verifier) PuzzleForRequest(r *http.Request, levels *difficulty.Levels, 
 		slog.ErrorContext(ctx, "Failed to create blake2b hmac", common.ErrAttr(err))
 		fingerprint = common.RandomFingerprint()
 	} else {
-		// TODO: Check if we really need to take user agent into account here
-		// or it should be accounted on the anomaly detection side (user-agent is trivial to spoof)
-		// hash.Write([]byte(r.UserAgent()))
-		if ip, ok := contextIP.(netip.Addr); ok {
-			// if IP is not valid (empty), we do want for fingerprint to be the same as this is fishy enough
-			hash.Write(ip.AsSlice())
-		} else {
-			// this stays as "Error" because we shouldn't even end up here
-			slog.ErrorContext(ctx, "Rate limit context key type mismatch", "ip", ip)
-			hash.Write([]byte(r.RemoteAddr))
+		written := false
+		if len(v.FingerprintHeader) > 0 {
+			if headerVal := r.Header.Get(v.FingerprintHeader); len(headerVal) > 0 && len(headerVal) <= 256 {
+				hash.Write([]byte(headerVal))
+				written = true
+			}
+		}
+		if !written {
+			if ip, ok := contextIP.(netip.Addr); ok {
+				hash.Write(ip.AsSlice())
+			} else {
+				slog.ErrorContext(ctx, "Rate limit context key type mismatch", "ip", contextIP)
+				hash.Write([]byte(r.RemoteAddr))
+			}
 		}
 		hmac := hash.Sum(nil)
 		truncatedHmac := hmac[:8]

@@ -47,6 +47,7 @@ const (
 	CommunityLicenseKeyKey
 	ClickHouseOptionalKey
 	MaintenanceJobConcurrencyKey
+	FingerprintHeaderKey
 	// Add new fields _above_
 	COMMON_CONFIG_KEYS_COUNT
 )

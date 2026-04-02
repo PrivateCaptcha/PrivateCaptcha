@@ -79,6 +79,7 @@ func init() {
 	configKeyToEnvName[common.CommunityLicenseKeyKey] = "CE_LICENSE_KEY"
 	configKeyToEnvName[common.ClickHouseOptionalKey] = "PC_CLICKHOUSE_OPTIONAL"
 	configKeyToEnvName[common.MaintenanceJobConcurrencyKey] = "PC_MAINTENANCE_JOB_CONCURRENCY"
+	configKeyToEnvName[common.FingerprintHeaderKey] = "PC_FINGERPRINT_HEADER"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {
