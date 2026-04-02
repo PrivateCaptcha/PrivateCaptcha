@@ -89,14 +89,14 @@ func TestBuildWeeklyReportWithData(t *testing.T) {
 	if result.RequestsSign != "+" {
 		t.Errorf("expected RequestsSign='+', got %q", result.RequestsSign)
 	}
-	if result.RequestsColor != colorGreen {
-		t.Errorf("expected RequestsColor=%q, got %q", colorGreen, result.RequestsColor)
+	if result.RequestsColor != email.ColorGreen {
+		t.Errorf("expected RequestsColor=%q, got %q", email.ColorGreen, result.RequestsColor)
 	}
 	if result.VerifiesSign != "+" {
 		t.Errorf("expected VerifiesSign='+', got %q", result.VerifiesSign)
 	}
-	if result.VerifiesColor != colorGreen {
-		t.Errorf("expected VerifiesColor=%q, got %q", colorGreen, result.VerifiesColor)
+	if result.VerifiesColor != email.ColorGreen {
+		t.Errorf("expected VerifiesColor=%q, got %q", email.ColorGreen, result.VerifiesColor)
 	}
 	if result.VerificationRate == 0 {
 		t.Error("expected non-zero VerificationRate")
@@ -225,8 +225,8 @@ func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 	if result.RequestsSign != "+" {
 		t.Errorf("expected RequestsSign='+', got %q", result.RequestsSign)
 	}
-	if result.RequestsColor != colorGreen {
-		t.Errorf("expected RequestsColor=%q, got %q", colorGreen, result.RequestsColor)
+	if result.RequestsColor != email.ColorGreen {
+		t.Errorf("expected RequestsColor=%q, got %q", email.ColorGreen, result.RequestsColor)
 	}
 }
 
@@ -278,11 +278,11 @@ func TestBuildWeeklyReportDecreaseShowsRed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if result.RequestsColor != colorRed {
-		t.Errorf("expected RequestsColor=%q for decrease, got %q", colorRed, result.RequestsColor)
+	if result.RequestsColor != email.ColorRed {
+		t.Errorf("expected RequestsColor=%q for decrease, got %q", email.ColorRed, result.RequestsColor)
 	}
-	if result.VerifiesColor != colorRed {
-		t.Errorf("expected VerifiesColor=%q for decrease, got %q", colorRed, result.VerifiesColor)
+	if result.VerifiesColor != email.ColorRed {
+		t.Errorf("expected VerifiesColor=%q for decrease, got %q", email.ColorRed, result.VerifiesColor)
 	}
 	if result.RequestsSign != "-" {
 		t.Errorf("expected RequestsSign='-' for decrease, got %q", result.RequestsSign)
@@ -310,8 +310,8 @@ func TestBuildWeeklyReportNoChangeShowsNeutral(t *testing.T) {
 	if result.RequestsChange != 0 {
 		t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
 	}
-	if result.RequestsColor != colorNeutral {
-		t.Errorf("expected RequestsColor=%q for no change, got %q", colorNeutral, result.RequestsColor)
+	if result.RequestsColor != email.ColorNeutral {
+		t.Errorf("expected RequestsColor=%q for no change, got %q", email.ColorNeutral, result.RequestsColor)
 	}
 }
 
@@ -448,19 +448,19 @@ func TestChangeSign(t *testing.T) {
 }
 
 func TestChangeColor(t *testing.T) {
-	if changeColor(10) != colorGreen {
+	if changeColor(10) != email.ColorGreen {
 		t.Error("expected green for positive")
 	}
-	if changeColor(-5) != colorRed {
+	if changeColor(-5) != email.ColorRed {
 		t.Error("expected red for negative")
 	}
-	if changeColor(0) != colorNeutral {
+	if changeColor(0) != email.ColorNeutral {
 		t.Error("expected neutral for zero")
 	}
-	if changeColor(0.00001) != colorNeutral {
+	if changeColor(0.00001) != email.ColorNeutral {
 		t.Error("expected neutral for near-zero positive")
 	}
-	if changeColor(-0.00001) != colorNeutral {
+	if changeColor(-0.00001) != email.ColorNeutral {
 		t.Error("expected neutral for near-zero negative")
 	}
 }
@@ -508,10 +508,10 @@ func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
 		t.Fatal("expected both properties")
 	}
 
-	if upProp.ChangeColor != colorGreen {
+	if upProp.ChangeColor != email.ColorGreen {
 		t.Errorf("expected green for increasing property, got %q", upProp.ChangeColor)
 	}
-	if downProp.ChangeColor != colorRed {
+	if downProp.ChangeColor != email.ColorRed {
 		t.Errorf("expected red for decreasing property, got %q", downProp.ChangeColor)
 	}
 	if downProp.ChangeSign != "-" {
@@ -519,63 +519,12 @@ func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
 	}
 }
 
-func TestScheduleReportsJobProcessedMap(t *testing.T) {
-	job := NewScheduleReportsJob(nil, nil, nil, 50)
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
-
-	if job.isProcessed(1, "weekly", now) {
-		t.Error("expected user 1 NOT processed for weekly")
+func TestReferenceSuffix(t *testing.T) {
+	if got := weeklyReferenceSuffix(2025, 11); got != "2025/11" {
+		t.Errorf("weeklyReferenceSuffix(2025, 11) = %q, want %q", got, "2025/11")
 	}
-
-	job.markProcessed(1, "weekly", now)
-
-	if !job.isProcessed(1, "weekly", now) {
-		t.Error("expected user 1 processed for weekly")
-	}
-
-	if job.isProcessed(1, "monthly", now) {
-		t.Error("expected user 1 NOT processed for monthly (different report type)")
-	}
-
-	expired := now.Add(25 * time.Hour)
-	if job.isProcessed(1, "weekly", expired) {
-		t.Error("expected user 1 NOT processed after TTL expiry")
-	}
-
-	if job.isProcessed(2, "weekly", now) {
-		t.Error("expected user 2 NOT processed")
-	}
-}
-
-func TestScheduleReportsJobGCProcessed(t *testing.T) {
-	job := NewScheduleReportsJob(nil, nil, nil, 50)
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
-
-	job.markProcessed(1, "weekly", now)
-	job.markProcessed(2, "weekly", now.Add(-25*time.Hour))
-
-	job.gcProcessed(now)
-
-	if !job.isProcessed(1, "weekly", now) {
-		t.Error("expected user 1 still processed after GC")
-	}
-	if job.isProcessed(2, "weekly", now) {
-		t.Error("expected user 2 removed by GC")
-	}
-}
-
-func TestScheduleReportsJobGCCapacityOverflow(t *testing.T) {
-	job := NewScheduleReportsJob(nil, nil, nil, 50)
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
-
-	for i := int32(0); i < 1100; i++ {
-		job.markProcessed(i, "weekly", now)
-	}
-
-	job.gcProcessed(now)
-
-	if len(job.processed) > processedMapCapacity {
-		t.Errorf("expected map size <= %d after GC, got %d", processedMapCapacity, len(job.processed))
+	if got := monthlyReferenceSuffix(2025, time.March); got != "2025/3" {
+		t.Errorf("monthlyReferenceSuffix(2025, March) = %q, want %q", got, "2025/3")
 	}
 }
 

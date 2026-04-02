@@ -36,13 +36,20 @@ FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM backend.user_notifications un
+    WHERE un.user_id = us.user_id
+      AND un.reference_id = 'report/monthly/' || us.user_id::TEXT || '/' || $3::TEXT
+      AND un.processed_at IS NULL
+  )
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2
 `
 
 type GetUsersWithMonthlyReportParams struct {
-	Limit  int32 `db:"limit" json:"limit"`
-	Offset int32 `db:"offset" json:"offset"`
+	Limit           int32  `db:"limit" json:"limit"`
+	Offset          int32  `db:"offset" json:"offset"`
+	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
 
 type GetUsersWithMonthlyReportRow struct {
@@ -53,7 +60,7 @@ type GetUsersWithMonthlyReportRow struct {
 }
 
 func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWithMonthlyReportParams) ([]*GetUsersWithMonthlyReportRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWithMonthlyReport, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getUsersWithMonthlyReport, arg.Limit, arg.Offset, arg.ReferenceSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -82,14 +89,21 @@ SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as su
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE us.weekly_report = TRUE AND us.monthly_report = FALSE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM backend.user_notifications un
+    WHERE un.user_id = us.user_id
+      AND un.reference_id = 'report/weekly/' || us.user_id::TEXT || '/' || $3::TEXT
+      AND un.processed_at IS NULL
+  )
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2
 `
 
 type GetUsersWithWeeklyReportParams struct {
-	Limit  int32 `db:"limit" json:"limit"`
-	Offset int32 `db:"offset" json:"offset"`
+	Limit           int32  `db:"limit" json:"limit"`
+	Offset          int32  `db:"offset" json:"offset"`
+	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
 
 type GetUsersWithWeeklyReportRow struct {
@@ -100,7 +114,7 @@ type GetUsersWithWeeklyReportRow struct {
 }
 
 func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWithWeeklyReportParams) ([]*GetUsersWithWeeklyReportRow, error) {
-	rows, err := q.db.Query(ctx, getUsersWithWeeklyReport, arg.Limit, arg.Offset)
+	rows, err := q.db.Query(ctx, getUsersWithWeeklyReport, arg.Limit, arg.Offset, arg.ReferenceSuffix)
 	if err != nil {
 		return nil, err
 	}

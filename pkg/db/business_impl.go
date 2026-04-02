@@ -3664,8 +3664,8 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 	return settings, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
-	if limit <= 0 || offset < 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context, limit, offset int32, referenceSuffix string) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
+	if limit <= 0 || offset < 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3674,8 +3674,9 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 	}
 
 	users, err := impl.querier.GetUsersWithWeeklyReport(ctx, &dbgen.GetUsersWithWeeklyReportParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:           limit,
+		Offset:          offset,
+		ReferenceSuffix: referenceSuffix,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -3690,8 +3691,8 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
-	if limit <= 0 || offset < 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context, limit, offset int32, referenceSuffix string) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
+	if limit <= 0 || offset < 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3700,8 +3701,9 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Contex
 	}
 
 	users, err := impl.querier.GetUsersWithMonthlyReport(ctx, &dbgen.GetUsersWithMonthlyReportParams{
-		Limit:  limit,
-		Offset: offset,
+		Limit:           limit,
+		Offset:          offset,
+		ReferenceSuffix: referenceSuffix,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

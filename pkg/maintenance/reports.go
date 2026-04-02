@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -20,27 +19,14 @@ import (
 const (
 	maxPaginationIterations = 100
 	topPropertiesLimit      = 5
-	colorGreen              = "#22883e"
-	colorRed                = "#c53030"
-	colorNeutral            = "#888888"
 	floatEpsilon            = 1e-4
-	processedMapCapacity    = 1000
 )
-
-type processedKey struct {
-	userID     int32
-	reportType string
-}
 
 type ScheduleReportsJob struct {
 	Store       db.Implementor
 	TimeSeries  common.TimeSeriesStore
 	PlanService billing.PlanService
 	UsersLimit  int32
-	TTL         time.Duration
-
-	mu        sync.Mutex
-	processed map[processedKey]time.Time
 }
 
 type ScheduleReportsParams struct {
@@ -55,8 +41,6 @@ func NewScheduleReportsJob(store db.Implementor, ts common.TimeSeriesStore, plan
 		TimeSeries:  ts,
 		PlanService: planService,
 		UsersLimit:  usersLimit,
-		TTL:         24 * time.Hour,
-		processed:   make(map[processedKey]time.Time, processedMapCapacity),
 	}
 }
 
@@ -90,49 +74,6 @@ func (j *ScheduleReportsJob) NewParams() any {
 	}
 }
 
-func (j *ScheduleReportsJob) isProcessed(userID int32, reportType string, tnow time.Time) bool {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	key := processedKey{userID: userID, reportType: reportType}
-	t, ok := j.processed[key]
-	if !ok {
-		return false
-	}
-
-	return tnow.Sub(t) < j.TTL
-}
-
-func (j *ScheduleReportsJob) markProcessed(userID int32, reportType string, tnow time.Time) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	j.processed[processedKey{userID: userID, reportType: reportType}] = tnow
-}
-
-func (j *ScheduleReportsJob) gcProcessed(tnow time.Time) {
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	for key, t := range j.processed {
-		if tnow.Sub(t) >= j.TTL {
-			delete(j.processed, key)
-		}
-	}
-
-	if len(j.processed) > processedMapCapacity {
-		toDelete := len(j.processed) * 30 / 100
-		deleted := 0
-		for key := range j.processed {
-			if deleted >= toDelete {
-				break
-			}
-			delete(j.processed, key)
-			deleted++
-		}
-	}
-}
-
 func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
@@ -141,8 +82,6 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	}
 
 	tnow := time.Now().UTC()
-
-	j.gcProcessed(tnow)
 
 	if tnow.Weekday() == time.Monday {
 		if err := j.scheduleWeeklyReports(ctx, tnow, p.UsersLimit); err != nil {
@@ -163,8 +102,16 @@ func weeklyReportReference(userID int32, year int, week int) string {
 	return fmt.Sprintf("report/weekly/%d/%d/%d", userID, year, week)
 }
 
+func weeklyReferenceSuffix(year int, week int) string {
+	return fmt.Sprintf("%d/%d", year, week)
+}
+
 func monthlyReportReference(userID int32, year int, month time.Month) string {
 	return fmt.Sprintf("report/monthly/%d/%d/%d", userID, year, month)
+}
+
+func monthlyReferenceSuffix(year int, month time.Month) string {
+	return fmt.Sprintf("%d/%d", year, month)
 }
 
 func truncateDay(t time.Time) time.Time {
@@ -174,6 +121,7 @@ func truncateDay(t time.Time) time.Time {
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	year, week := tnow.ISOWeek()
 	fetchLimit := usersLimit + 1
+	refSuffix := weeklyReferenceSuffix(year, week)
 
 	b := &backoff.Backoff{
 		Min:    50 * time.Millisecond,
@@ -184,7 +132,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 
 	var offset int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithWeeklyReport(ctx, fetchLimit, offset)
+		users, err := j.Store.Impl().RetrieveUsersWithWeeklyReport(ctx, fetchLimit, offset, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -206,11 +154,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 
 			if !j.PlanService.IsSubscriptionActive(user.SubscriptionStatus) {
 				slog.DebugContext(ctx, "Skipping weekly report for user with inactive subscription", "userID", user.UserID, "status", user.SubscriptionStatus)
-				continue
-			}
-
-			if j.isProcessed(user.UserID, "weekly", tnow) {
-				slog.DebugContext(ctx, "Skipping already processed user for weekly report", "userID", user.UserID)
 				continue
 			}
 
@@ -250,19 +193,16 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
-		if errors.Is(err, db.ErrAlreadyExists) {
-			j.markProcessed(userID, "weekly", tnow)
-			return
+		if !errors.Is(err, db.ErrAlreadyExists) {
+			slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
 		}
-		slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
 		return
 	}
-
-	j.markProcessed(userID, "weekly", tnow)
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	fetchLimit := usersLimit + 1
+	refSuffix := monthlyReferenceSuffix(tnow.Year(), tnow.Month())
 
 	b := &backoff.Backoff{
 		Min:    50 * time.Millisecond,
@@ -273,7 +213,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 	var offset int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithMonthlyReport(ctx, fetchLimit, offset)
+		users, err := j.Store.Impl().RetrieveUsersWithMonthlyReport(ctx, fetchLimit, offset, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -295,11 +235,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 			if !j.PlanService.IsSubscriptionActive(user.SubscriptionStatus) {
 				slog.DebugContext(ctx, "Skipping monthly report for user with inactive subscription", "userID", user.UserID, "status", user.SubscriptionStatus)
-				continue
-			}
-
-			if j.isProcessed(user.UserID, "monthly", tnow) {
-				slog.DebugContext(ctx, "Skipping already processed user for monthly report", "userID", user.UserID)
 				continue
 			}
 
@@ -339,15 +274,11 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
-		if errors.Is(err, db.ErrAlreadyExists) {
-			j.markProcessed(userID, "monthly", tnow)
-			return
+		if !errors.Is(err, db.ErrAlreadyExists) {
+			slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
 		}
-		slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
 		return
 	}
-
-	j.markProcessed(userID, "monthly", tnow)
 }
 
 // BuildWeeklyReport builds a complete weekly usage report for a user.
@@ -422,12 +353,12 @@ func changeSign(change float64) string {
 
 func changeColor(change float64) string {
 	if change > floatEpsilon {
-		return colorGreen
+		return email.ColorGreen
 	}
 	if change < -floatEpsilon {
-		return colorRed
+		return email.ColorRed
 	}
-	return colorNeutral
+	return email.ColorNeutral
 }
 
 func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {

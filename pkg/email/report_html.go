@@ -2,6 +2,12 @@ package email
 
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
+const (
+	ColorGreen   = "#22883e"
+	ColorRed     = "#c53030"
+	ColorNeutral = "#888888"
+)
+
 type PropertyStat struct {
 	Name        string
 	Domain      string
