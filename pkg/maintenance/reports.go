@@ -2,9 +2,11 @@ package maintenance
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -15,11 +17,22 @@ import (
 	"github.com/jpillora/backoff"
 )
 
+const (
+	maxPaginationIterations = 100
+	topPropertiesLimit      = 5
+	colorGreen              = "#16a34a"
+	colorRed                = "#dc2626"
+	colorNeutral            = "#888888"
+)
+
 type ScheduleReportsJob struct {
 	Store       db.Implementor
 	TimeSeries  common.TimeSeriesStore
 	PlanService billing.PlanService
 	UsersLimit  int32
+
+	mu        sync.Mutex
+	processed map[int32]time.Time
 }
 
 type ScheduleReportsParams struct {
@@ -58,6 +71,33 @@ func (j *ScheduleReportsJob) NewParams() any {
 	}
 }
 
+func (j *ScheduleReportsJob) isProcessedToday(userID int32, today time.Time) bool {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if j.processed == nil {
+		j.processed = make(map[int32]time.Time)
+	}
+
+	t, ok := j.processed[userID]
+	if !ok {
+		return false
+	}
+
+	return t.Year() == today.Year() && t.YearDay() == today.YearDay()
+}
+
+func (j *ScheduleReportsJob) markProcessed(userID int32, today time.Time) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	if j.processed == nil {
+		j.processed = make(map[int32]time.Time)
+	}
+
+	j.processed[userID] = today
+}
+
 func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
@@ -67,14 +107,12 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 
 	tnow := time.Now().UTC()
 
-	// Weekly reports: schedule on Mondays
 	if tnow.Weekday() == time.Monday {
 		if err := j.scheduleWeeklyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule weekly reports", common.ErrAttr(err))
 		}
 	}
 
-	// Monthly reports: schedule on the 1st of each month
 	if tnow.Day() == 1 {
 		if err := j.scheduleMonthlyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule monthly reports", common.ErrAttr(err))
@@ -104,7 +142,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	}
 
 	var offset int32
-	for {
+	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
 		users, err := j.Store.Impl().RetrieveUsersWithWeeklyReport(ctx, fetchLimit, offset)
 		if err != nil {
 			return err
@@ -130,6 +168,11 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
+			if j.isProcessedToday(user.UserID, tnow) {
+				slog.DebugContext(ctx, "Skipping already processed user for weekly report", "userID", user.UserID)
+				continue
+			}
+
 			j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week)
 		}
 
@@ -143,8 +186,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 }
 
 func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) {
-	builder := newUsageReportBuilder(ctx, j.Store, j.TimeSeries, userID, "weekly", tnow.AddDate(0, 0, -14), tnow.AddDate(0, 0, -7), tnow)
-	reportCtx := builder.fetchStats().computeTotals().computeChanges().buildTopProperties().build()
+	reportCtx := BuildUsageReport(ctx, j.Store, j.TimeSeries, userID, false, tnow.AddDate(0, 0, -14), tnow.AddDate(0, 0, -7), tnow)
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
@@ -157,9 +199,17 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		Condition:    common.NotificationWithSubscription,
 	}
 
-	if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
+	_, err := j.Store.Impl().CreateUserNotification(ctx, notif)
+	if err != nil {
+		if errors.Is(err, db.ErrAlreadyExists) {
+			j.markProcessed(userID, tnow)
+			return
+		}
 		slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
+		return
 	}
+
+	j.markProcessed(userID, tnow)
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
@@ -173,7 +223,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 	}
 
 	var offset int32
-	for {
+	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
 		users, err := j.Store.Impl().RetrieveUsersWithMonthlyReport(ctx, fetchLimit, offset)
 		if err != nil {
 			return err
@@ -199,6 +249,11 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
+			if j.isProcessedToday(user.UserID, tnow) {
+				slog.DebugContext(ctx, "Skipping already processed user for monthly report", "userID", user.UserID)
+				continue
+			}
+
 			j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow)
 		}
 
@@ -212,8 +267,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) {
-	builder := newUsageReportBuilder(ctx, j.Store, j.TimeSeries, userID, "monthly", tnow.AddDate(0, -2, 0), tnow.AddDate(0, -1, 0), tnow)
-	reportCtx := builder.fetchStats().computeTotals().computeChanges().buildTopProperties().build()
+	reportCtx := BuildUsageReport(ctx, j.Store, j.TimeSeries, userID, true, tnow.AddDate(0, -2, 0), tnow.AddDate(0, -1, 0), tnow)
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),
@@ -226,18 +280,26 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Condition:    common.NotificationWithSubscription,
 	}
 
-	if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
+	_, err := j.Store.Impl().CreateUserNotification(ctx, notif)
+	if err != nil {
+		if errors.Is(err, db.ErrAlreadyExists) {
+			j.markProcessed(userID, tnow)
+			return
+		}
 		slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
+		return
 	}
+
+	j.markProcessed(userID, tnow)
 }
 
-// usageReportBuilder constructs a UsageReportContext step by step.
-type usageReportBuilder struct {
+// UsageReportBuilder constructs a UsageReportContext step by step.
+type UsageReportBuilder struct {
 	ctx        context.Context
 	store      db.Implementor
 	timeSeries common.TimeSeriesStore
 	userID     int32
-	period     string
+	monthly    bool
 	from       time.Time
 	mid        time.Time
 	to         time.Time
@@ -245,15 +307,17 @@ type usageReportBuilder struct {
 	reportCtx  *email.UsageReportContext
 }
 
-const topPropertiesLimit = 5
-
-func newUsageReportBuilder(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, period string, from, mid, to time.Time) *usageReportBuilder {
-	return &usageReportBuilder{
+func NewUsageReportBuilder(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, monthly bool, from, mid, to time.Time) *UsageReportBuilder {
+	period := "weekly"
+	if monthly {
+		period = "monthly"
+	}
+	return &UsageReportBuilder{
 		ctx:        ctx,
 		store:      store,
 		timeSeries: ts,
 		userID:     userID,
-		period:     period,
+		monthly:    monthly,
 		from:       from,
 		mid:        mid,
 		to:         to,
@@ -264,20 +328,28 @@ func newUsageReportBuilder(ctx context.Context, store db.Implementor, ts common.
 	}
 }
 
-func (b *usageReportBuilder) fetchStats() *usageReportBuilder {
-	monthly := b.period == "monthly"
-	stats, err := b.timeSeries.RetrieveUserReportStats(b.ctx, b.userID, b.from, b.mid, b.to, monthly)
-	if err != nil {
-		slog.WarnContext(b.ctx, "Failed to retrieve report stats", "userID", b.userID, "period", b.period, common.ErrAttr(err))
-		return b
-	}
-	b.stats = stats
-	return b
+// BuildUsageReport is a convenience function that runs the full builder pipeline.
+func BuildUsageReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, monthly bool, from, mid, to time.Time) *email.UsageReportContext {
+	b := NewUsageReportBuilder(ctx, store, ts, userID, monthly, from, mid, to)
+	b.FetchStats()
+	b.ComputeTotals()
+	b.ComputeChanges()
+	b.BuildTopProperties()
+	return b.Build()
 }
 
-func (b *usageReportBuilder) computeTotals() *usageReportBuilder {
+func (b *UsageReportBuilder) FetchStats() {
+	stats, err := b.timeSeries.RetrieveUserReportStats(b.ctx, b.userID, b.from, b.mid, b.to, b.monthly)
+	if err != nil {
+		slog.WarnContext(b.ctx, "Failed to retrieve report stats", "userID", b.userID, "monthly", b.monthly, common.ErrAttr(err))
+		return
+	}
+	b.stats = stats
+}
+
+func (b *UsageReportBuilder) ComputeTotals() {
 	if b.stats == nil {
-		return b
+		return
 	}
 	b.reportCtx.TotalRequests = b.stats.TotalCurrentRequests
 	b.reportCtx.PrevRequests = b.stats.TotalPrevRequests
@@ -286,7 +358,6 @@ func (b *usageReportBuilder) computeTotals() *usageReportBuilder {
 	if b.reportCtx.TotalRequests > 0 {
 		b.reportCtx.VerificationRate = float64(b.reportCtx.TotalVerifies) / float64(b.reportCtx.TotalRequests) * 100
 	}
-	return b
 }
 
 func percentChange(current, previous uint64) float64 {
@@ -306,23 +377,34 @@ func changeSign(change float64) string {
 	return ""
 }
 
-func (b *usageReportBuilder) computeChanges() *usageReportBuilder {
+func changeColor(change float64) string {
+	if change > 0 {
+		return colorGreen
+	}
+	if change < 0 {
+		return colorRed
+	}
+	return colorNeutral
+}
+
+func (b *UsageReportBuilder) ComputeChanges() {
 	if b.stats == nil {
-		return b
+		return
 	}
 	reqChange := percentChange(b.reportCtx.TotalRequests, b.reportCtx.PrevRequests)
 	b.reportCtx.RequestsChange = math.Abs(reqChange)
 	b.reportCtx.RequestsSign = changeSign(reqChange)
+	b.reportCtx.RequestsColor = changeColor(reqChange)
 
 	verChange := percentChange(b.reportCtx.TotalVerifies, b.reportCtx.PrevVerifies)
 	b.reportCtx.VerifiesChange = math.Abs(verChange)
 	b.reportCtx.VerifiesSign = changeSign(verChange)
-	return b
+	b.reportCtx.VerifiesColor = changeColor(verChange)
 }
 
-func (b *usageReportBuilder) buildTopProperties() *usageReportBuilder {
+func (b *UsageReportBuilder) BuildTopProperties() {
 	if b.stats == nil || len(b.stats.Properties) == 0 || b.reportCtx.TotalRequests == 0 {
-		return b
+		return
 	}
 
 	props := b.stats.Properties
@@ -338,7 +420,7 @@ func (b *usageReportBuilder) buildTopProperties() *usageReportBuilder {
 	properties, err := b.store.Impl().RetrievePropertiesByID(b.ctx, batch)
 	if err != nil {
 		slog.WarnContext(b.ctx, "Failed to batch-retrieve properties for report", "userID", b.userID, common.ErrAttr(err))
-		return b
+		return
 	}
 
 	propMap := make(map[int32]*dbgen.Property, len(properties))
@@ -358,19 +440,19 @@ func (b *usageReportBuilder) buildTopProperties() *usageReportBuilder {
 		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
 		topProperties = append(topProperties, email.PropertyStat{
-			Name:       prop.Name,
-			Domain:     prop.Domain,
-			Count:      ps.CurrentRequests,
-			Percent:    percent,
-			PrevCount:  ps.PrevRequests,
-			Change:     math.Abs(change),
-			ChangeSign: changeSign(change),
+			Name:        prop.Name,
+			Domain:      prop.Domain,
+			Count:       ps.CurrentRequests,
+			Percent:     percent,
+			PrevCount:   ps.PrevRequests,
+			Change:      math.Abs(change),
+			ChangeSign:  changeSign(change),
+			ChangeColor: changeColor(change),
 		})
 	}
 	b.reportCtx.TopProperties = topProperties
-	return b
 }
 
-func (b *usageReportBuilder) build() *email.UsageReportContext {
+func (b *UsageReportBuilder) Build() *email.UsageReportContext {
 	return b.reportCtx
 }

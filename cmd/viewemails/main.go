@@ -65,6 +65,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		email.OrgInvitationContext
 		email.APIKeyExpirationContext
 		email.TwoFactorEmailContext
+		email.UsageReportContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -92,6 +93,28 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			Browser:  fmt.Sprintf("%s %s", agent.Browser().String(), agent.BrowserVersion()),
 			OS:       agent.OS().String(),
 			Location: "EE",
+		},
+		UsageReportContext: email.UsageReportContext{
+			Period:           "weekly",
+			TotalRequests:    12450,
+			TotalVerifies:    8320,
+			PrevRequests:     11200,
+			PrevVerifies:     9100,
+			RequestsChange:   11.2,
+			VerifiesChange:   8.6,
+			RequestsSign:     "+",
+			VerifiesSign:     "",
+			RequestsColor:    "#16a34a",
+			VerifiesColor:    "#dc2626",
+			DashboardPath:    "settings?tab=usage",
+			VerificationRate: 66.8,
+			TopProperties: []email.PropertyStat{
+				{Name: "Main Site", Domain: "example.com", Count: 5200, Percent: 41.8, PrevCount: 4800, Change: 8.3, ChangeSign: "+", ChangeColor: "#16a34a"},
+				{Name: "Blog", Domain: "blog.example.com", Count: 3100, Percent: 24.9, PrevCount: 2900, Change: 6.9, ChangeSign: "+", ChangeColor: "#16a34a"},
+				{Name: "Shop", Domain: "shop.example.com", Count: 2050, Percent: 16.5, PrevCount: 2300, Change: 10.9, ChangeSign: "", ChangeColor: "#dc2626"},
+				{Name: "Forum", Domain: "forum.example.com", Count: 1300, Percent: 10.4, PrevCount: 800, Change: 62.5, ChangeSign: "+", ChangeColor: "#16a34a"},
+				{Name: "Docs", Domain: "docs.example.com", Count: 800, Percent: 6.4, PrevCount: 400, Change: 100.0, ChangeSign: "+", ChangeColor: "#16a34a"},
+			},
 		},
 		UserName:    "John Doe",
 		CDNURL:      "https://cdn.privatecaptcha.com",

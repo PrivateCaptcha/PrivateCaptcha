@@ -1071,7 +1071,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 
 	weeklyReport := len(r.FormValue(common.ParamWeeklyReport)) > 0
 	monthlyReport := len(r.FormValue(common.ParamMonthlyReport)) > 0
-	reportEmail := strings.TrimSpace(r.FormValue(common.ParamReportEmail))
+	reportEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 
 	renderCtx := &settingsNotificationsRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),

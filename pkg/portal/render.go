@@ -108,7 +108,6 @@ type RenderConstants struct {
 	NotificationsEndpoint           string
 	WeeklyReport                    string
 	MonthlyReport                   string
-	ReportEmail                     string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -208,7 +207,6 @@ func NewRenderConstants() *RenderConstants {
 		NotificationsEndpoint:           common.NotificationsEndpoint,
 		WeeklyReport:                    common.ParamWeeklyReport,
 		MonthlyReport:                   common.ParamMonthlyReport,
-		ReportEmail:                     common.ParamReportEmail,
 	}
 }
 

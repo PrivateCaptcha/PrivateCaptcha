@@ -3633,22 +3633,17 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 }
 
 func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSetting, error) {
-	if impl.querier == nil {
-		return nil, ErrMaintenance
+	reader := &StoreOneReader[int32, dbgen.UserSetting]{
+		CacheKey: UserSettingsCacheKey(userID),
+		Cache:    impl.cache,
 	}
 
-	settings, err := impl.querier.GetUserSettings(ctx, userID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		}
-		slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", userID, common.ErrAttr(err))
-		return nil, err
+	if impl.querier != nil {
+		reader.QueryKeyFunc = QueryKeyInt
+		reader.QueryFunc = impl.querier.GetUserSettings
 	}
 
-	slog.DebugContext(ctx, "Fetched user settings", "userID", userID)
-
-	return settings, nil
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSetting, error) {
@@ -3661,6 +3656,8 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 		slog.ErrorContext(ctx, "Failed to upsert user settings", "userID", params.UserID, common.ErrAttr(err))
 		return nil, err
 	}
+
+	_ = impl.cache.Set(ctx, UserSettingsCacheKey(params.UserID), settings)
 
 	slog.DebugContext(ctx, "Upserted user settings", "userID", params.UserID)
 

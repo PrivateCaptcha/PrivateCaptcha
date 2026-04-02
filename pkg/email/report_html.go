@@ -3,13 +3,14 @@ package email
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
 type PropertyStat struct {
-	Name       string
-	Domain     string
-	Count      uint64
-	Percent    float64
-	PrevCount  uint64
-	Change     float64
-	ChangeSign string
+	Name        string
+	Domain      string
+	Count       uint64
+	Percent     float64
+	PrevCount   uint64
+	Change      float64
+	ChangeSign  string
+	ChangeColor string
 }
 
 type UsageReportContext struct {
@@ -22,6 +23,8 @@ type UsageReportContext struct {
 	VerifiesChange   float64
 	RequestsSign     string
 	VerifiesSign     string
+	RequestsColor    string
+	VerifiesColor    string
 	DashboardPath    string
 	VerificationRate float64
 	TopProperties    []PropertyStat
@@ -66,12 +69,12 @@ const (
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
@@ -94,7 +97,7 @@ const (
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>
@@ -175,12 +178,12 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:#888">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
@@ -203,7 +206,7 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>
