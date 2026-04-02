@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
@@ -1044,7 +1045,9 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 
 	renderCtx.WeeklyReport = settings.WeeklyReport
 	renderCtx.MonthlyReport = settings.MonthlyReport
-	renderCtx.ReportEmail = settings.NotificationsEmail
+	if settings.NotificationsEmail.Valid {
+		renderCtx.ReportEmail = settings.NotificationsEmail.String
+	}
 
 	return renderCtx
 }
@@ -1094,7 +1097,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		UserID:             user.ID,
 		WeeklyReport:       weeklyReport,
 		MonthlyReport:      monthlyReport,
-		NotificationsEmail: reportEmail,
+		NotificationsEmail: pgtype.Text{String: reportEmail, Valid: len(reportEmail) > 0},
 	}
 
 	if _, err := s.Store.Impl().UpsertUserSettings(ctx, params); err != nil {

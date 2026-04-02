@@ -69,12 +69,12 @@ const (
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
@@ -123,14 +123,14 @@ const (
 
 Here is your {{.Period}} Private Captcha usage report:
 
-Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev)
-Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev)
+Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%)
+Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%)
 Verification Rate: {{printf "%.1f" .VerificationRate}}%
 {{- if .TopProperties}}
 
 Top properties by requests:
 {{- range .TopProperties}}
-  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}% vs prev)
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}%)
 {{- end}}
 {{- end}}
 
@@ -178,12 +178,12 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev</td>
+                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
               </tr>
               <tr>
                 <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
@@ -232,14 +232,14 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
 
 Here is your {{.Period}} Private Captcha usage report:
 
-Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}% vs prev)
-Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}% vs prev)
+Total Requests: {{.TotalRequests}} ({{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%)
+Total Verifications: {{.TotalVerifies}} ({{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%)
 Verification Rate: {{printf "%.1f" .VerificationRate}}%
 {{- if .TopProperties}}
 
 Top properties by requests:
 {{- range .TopProperties}}
-  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}% vs prev)
+  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{.ChangeSign}}{{printf "%.1f" .Change}}%)
 {{- end}}
 {{- end}}
 

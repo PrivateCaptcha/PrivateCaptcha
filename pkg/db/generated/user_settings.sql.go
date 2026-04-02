@@ -7,15 +7,17 @@ package generated
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getUserSettings = `-- name: GetUserSettings :one
 SELECT id, user_id, weekly_report, monthly_report, notifications_email, created_at, updated_at FROM backend.user_settings WHERE user_id = $1
 `
 
-func (q *Queries) GetUserSettings(ctx context.Context, userID int32) (*UserSetting, error) {
+func (q *Queries) GetUserSettings(ctx context.Context, userID int32) (*UserSettings, error) {
 	row := q.db.QueryRow(ctx, getUserSettings, userID)
-	var i UserSetting
+	var i UserSettings
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
@@ -44,10 +46,10 @@ type GetUsersWithMonthlyReportParams struct {
 }
 
 type GetUsersWithMonthlyReportRow struct {
-	UserID             int32  `db:"user_id" json:"user_id"`
-	NotificationsEmail string `db:"notifications_email" json:"notifications_email"`
-	Email              string `db:"email" json:"email"`
-	SubscriptionStatus string `db:"subscription_status" json:"subscription_status"`
+	UserID             int32       `db:"user_id" json:"user_id"`
+	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
+	Email              string      `db:"email" json:"email"`
+	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
 }
 
 func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWithMonthlyReportParams) ([]*GetUsersWithMonthlyReportRow, error) {
@@ -91,10 +93,10 @@ type GetUsersWithWeeklyReportParams struct {
 }
 
 type GetUsersWithWeeklyReportRow struct {
-	UserID             int32  `db:"user_id" json:"user_id"`
-	NotificationsEmail string `db:"notifications_email" json:"notifications_email"`
-	Email              string `db:"email" json:"email"`
-	SubscriptionStatus string `db:"subscription_status" json:"subscription_status"`
+	UserID             int32       `db:"user_id" json:"user_id"`
+	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
+	Email              string      `db:"email" json:"email"`
+	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
 }
 
 func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWithWeeklyReportParams) ([]*GetUsersWithWeeklyReportRow, error) {
@@ -134,20 +136,20 @@ RETURNING id, user_id, weekly_report, monthly_report, notifications_email, creat
 `
 
 type UpsertUserSettingsParams struct {
-	UserID             int32  `db:"user_id" json:"user_id"`
-	WeeklyReport       bool   `db:"weekly_report" json:"weekly_report"`
-	MonthlyReport      bool   `db:"monthly_report" json:"monthly_report"`
-	NotificationsEmail string `db:"notifications_email" json:"notifications_email"`
+	UserID             int32       `db:"user_id" json:"user_id"`
+	WeeklyReport       bool        `db:"weekly_report" json:"weekly_report"`
+	MonthlyReport      bool        `db:"monthly_report" json:"monthly_report"`
+	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
 }
 
-func (q *Queries) UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSetting, error) {
+func (q *Queries) UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSettings, error) {
 	row := q.db.QueryRow(ctx, upsertUserSettings,
 		arg.UserID,
 		arg.WeeklyReport,
 		arg.MonthlyReport,
 		arg.NotificationsEmail,
 	)
-	var i UserSetting
+	var i UserSettings
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,

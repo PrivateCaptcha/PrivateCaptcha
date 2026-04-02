@@ -23,6 +23,8 @@ const (
 	colorGreen              = "#16a34a"
 	colorRed                = "#dc2626"
 	colorNeutral            = "#888888"
+	floatEpsilon            = 1e-4
+	processedMapCapacity    = 1000
 )
 
 type ScheduleReportsJob struct {
@@ -30,6 +32,7 @@ type ScheduleReportsJob struct {
 	TimeSeries  common.TimeSeriesStore
 	PlanService billing.PlanService
 	UsersLimit  int32
+	TTL         time.Duration
 
 	mu        sync.Mutex
 	processed map[int32]time.Time
@@ -40,6 +43,17 @@ type ScheduleReportsParams struct {
 }
 
 var _ common.PeriodicJob = (*ScheduleReportsJob)(nil)
+
+func NewScheduleReportsJob(store db.Implementor, ts common.TimeSeriesStore, planService billing.PlanService, usersLimit int32) *ScheduleReportsJob {
+	return &ScheduleReportsJob{
+		Store:       store,
+		TimeSeries:  ts,
+		PlanService: planService,
+		UsersLimit:  usersLimit,
+		TTL:         24 * time.Hour,
+		processed:   make(map[int32]time.Time, processedMapCapacity),
+	}
+}
 
 func (j *ScheduleReportsJob) Name() string {
 	return "schedule_reports_job"
@@ -71,31 +85,46 @@ func (j *ScheduleReportsJob) NewParams() any {
 	}
 }
 
-func (j *ScheduleReportsJob) isProcessedToday(userID int32, today time.Time) bool {
+func (j *ScheduleReportsJob) isProcessed(userID int32, tnow time.Time) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
-
-	if j.processed == nil {
-		j.processed = make(map[int32]time.Time)
-	}
 
 	t, ok := j.processed[userID]
 	if !ok {
 		return false
 	}
 
-	return t.Year() == today.Year() && t.YearDay() == today.YearDay()
+	return tnow.Sub(t) < j.TTL
 }
 
-func (j *ScheduleReportsJob) markProcessed(userID int32, today time.Time) {
+func (j *ScheduleReportsJob) markProcessed(userID int32, tnow time.Time) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	if j.processed == nil {
-		j.processed = make(map[int32]time.Time)
+	j.processed[userID] = tnow
+}
+
+func (j *ScheduleReportsJob) gcProcessed(tnow time.Time) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+
+	for id, t := range j.processed {
+		if tnow.Sub(t) >= j.TTL {
+			delete(j.processed, id)
+		}
 	}
 
-	j.processed[userID] = today
+	if len(j.processed) > processedMapCapacity {
+		toDelete := len(j.processed) * 30 / 100
+		deleted := 0
+		for id := range j.processed {
+			if deleted >= toDelete {
+				break
+			}
+			delete(j.processed, id)
+			deleted++
+		}
+	}
 }
 
 func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
@@ -106,6 +135,8 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	}
 
 	tnow := time.Now().UTC()
+
+	j.gcProcessed(tnow)
 
 	if tnow.Weekday() == time.Monday {
 		if err := j.scheduleWeeklyReports(ctx, tnow, p.UsersLimit); err != nil {
@@ -128,6 +159,10 @@ func weeklyReportReference(userID int32, year int, week int) string {
 
 func monthlyReportReference(userID int32, year int, month time.Month) string {
 	return fmt.Sprintf("report/monthly/%d/%d/%d", userID, year, month)
+}
+
+func truncateDay(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
@@ -168,7 +203,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
-			if j.isProcessedToday(user.UserID, tnow) {
+			if j.isProcessed(user.UserID, tnow) {
 				slog.DebugContext(ctx, "Skipping already processed user for weekly report", "userID", user.UserID)
 				continue
 			}
@@ -186,7 +221,11 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 }
 
 func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) {
-	reportCtx := BuildUsageReport(ctx, j.Store, j.TimeSeries, userID, false, tnow.AddDate(0, 0, -14), tnow.AddDate(0, 0, -7), tnow)
+	today := truncateDay(tnow)
+	from := today.AddDate(0, 0, -14)
+	mid := today.AddDate(0, 0, -7)
+
+	reportCtx := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
@@ -249,7 +288,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
-			if j.isProcessedToday(user.UserID, tnow) {
+			if j.isProcessed(user.UserID, tnow) {
 				slog.DebugContext(ctx, "Skipping already processed user for monthly report", "userID", user.UserID)
 				continue
 			}
@@ -267,7 +306,11 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) {
-	reportCtx := BuildUsageReport(ctx, j.Store, j.TimeSeries, userID, true, tnow.AddDate(0, -2, 0), tnow.AddDate(0, -1, 0), tnow)
+	today := truncateDay(tnow)
+	from := today.AddDate(0, -2, 0)
+	mid := today.AddDate(0, -1, 0)
+
+	reportCtx := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),
@@ -293,70 +336,53 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	j.markProcessed(userID, tnow)
 }
 
-// UsageReportBuilder constructs a UsageReportContext step by step.
-type UsageReportBuilder struct {
-	ctx        context.Context
-	store      db.Implementor
-	timeSeries common.TimeSeriesStore
-	userID     int32
-	monthly    bool
-	from       time.Time
-	mid        time.Time
-	to         time.Time
-	stats      *common.UserReportStats
-	reportCtx  *email.UsageReportContext
-}
-
-func NewUsageReportBuilder(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, monthly bool, from, mid, to time.Time) *UsageReportBuilder {
-	period := "weekly"
-	if monthly {
-		period = "monthly"
+// BuildWeeklyReport builds a complete weekly usage report for a user.
+func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) *email.UsageReportContext {
+	report := &email.UsageReportContext{
+		Period:        "weekly",
+		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
-	return &UsageReportBuilder{
-		ctx:        ctx,
-		store:      store,
-		timeSeries: ts,
-		userID:     userID,
-		monthly:    monthly,
-		from:       from,
-		mid:        mid,
-		to:         to,
-		reportCtx: &email.UsageReportContext{
-			Period:        period,
-			DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
-		},
-	}
-}
 
-// BuildUsageReport is a convenience function that runs the full builder pipeline.
-func BuildUsageReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, monthly bool, from, mid, to time.Time) *email.UsageReportContext {
-	b := NewUsageReportBuilder(ctx, store, ts, userID, monthly, from, mid, to)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-	b.BuildTopProperties()
-	return b.Build()
-}
-
-func (b *UsageReportBuilder) FetchStats() {
-	stats, err := b.timeSeries.RetrieveUserReportStats(b.ctx, b.userID, b.from, b.mid, b.to, b.monthly)
+	stats, err := ts.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
-		slog.WarnContext(b.ctx, "Failed to retrieve report stats", "userID", b.userID, "monthly", b.monthly, common.ErrAttr(err))
-		return
+		slog.WarnContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
+		return report
 	}
-	b.stats = stats
+
+	fillTotals(report, stats)
+	fillChanges(report, stats)
+	fillTopProperties(ctx, store, report, stats)
+
+	return report
 }
 
-func (b *UsageReportBuilder) ComputeTotals() {
-	if b.stats == nil {
-		return
+// BuildMonthlyReport builds a complete monthly usage report for a user.
+func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) *email.UsageReportContext {
+	report := &email.UsageReportContext{
+		Period:        "monthly",
+		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
-	b.reportCtx.TotalRequests = b.stats.TotalCurrentRequests
-	b.reportCtx.PrevRequests = b.stats.TotalPrevRequests
-	b.reportCtx.TotalVerifies = b.stats.TotalCurrentVerifies
-	b.reportCtx.PrevVerifies = b.stats.TotalPrevVerifies
-	if b.reportCtx.TotalRequests > 0 {
-		b.reportCtx.VerificationRate = float64(b.reportCtx.TotalVerifies) / float64(b.reportCtx.TotalRequests) * 100
+
+	stats, err := ts.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
+		return report
+	}
+
+	fillTotals(report, stats)
+	fillChanges(report, stats)
+	fillTopProperties(ctx, store, report, stats)
+
+	return report
+}
+
+func fillTotals(report *email.UsageReportContext, stats *common.UserReportStats) {
+	report.TotalRequests = stats.TotalCurrentRequests
+	report.PrevRequests = stats.TotalPrevRequests
+	report.TotalVerifies = stats.TotalCurrentVerifies
+	report.PrevVerifies = stats.TotalPrevVerifies
+	if report.TotalRequests > 0 {
+		report.VerificationRate = float64(report.TotalVerifies) / float64(report.TotalRequests) * 100
 	}
 }
 
@@ -371,43 +397,43 @@ func percentChange(current, previous uint64) float64 {
 }
 
 func changeSign(change float64) string {
-	if change > 0 {
+	if change > floatEpsilon {
 		return "+"
+	}
+	if change < -floatEpsilon {
+		return "-"
 	}
 	return ""
 }
 
 func changeColor(change float64) string {
-	if change > 0 {
+	if change > floatEpsilon {
 		return colorGreen
 	}
-	if change < 0 {
+	if change < -floatEpsilon {
 		return colorRed
 	}
 	return colorNeutral
 }
 
-func (b *UsageReportBuilder) ComputeChanges() {
-	if b.stats == nil {
-		return
-	}
-	reqChange := percentChange(b.reportCtx.TotalRequests, b.reportCtx.PrevRequests)
-	b.reportCtx.RequestsChange = math.Abs(reqChange)
-	b.reportCtx.RequestsSign = changeSign(reqChange)
-	b.reportCtx.RequestsColor = changeColor(reqChange)
+func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
+	reqChange := percentChange(report.TotalRequests, report.PrevRequests)
+	report.RequestsChange = math.Abs(reqChange)
+	report.RequestsSign = changeSign(reqChange)
+	report.RequestsColor = changeColor(reqChange)
 
-	verChange := percentChange(b.reportCtx.TotalVerifies, b.reportCtx.PrevVerifies)
-	b.reportCtx.VerifiesChange = math.Abs(verChange)
-	b.reportCtx.VerifiesSign = changeSign(verChange)
-	b.reportCtx.VerifiesColor = changeColor(verChange)
+	verChange := percentChange(report.TotalVerifies, report.PrevVerifies)
+	report.VerifiesChange = math.Abs(verChange)
+	report.VerifiesSign = changeSign(verChange)
+	report.VerifiesColor = changeColor(verChange)
 }
 
-func (b *UsageReportBuilder) BuildTopProperties() {
-	if b.stats == nil || len(b.stats.Properties) == 0 || b.reportCtx.TotalRequests == 0 {
+func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats) {
+	if len(stats.Properties) == 0 || report.TotalRequests == 0 {
 		return
 	}
 
-	props := b.stats.Properties
+	props := stats.Properties
 	if len(props) > topPropertiesLimit {
 		props = props[:topPropertiesLimit]
 	}
@@ -417,9 +443,9 @@ func (b *UsageReportBuilder) BuildTopProperties() {
 		batch[ps.PropertyID] = 0
 	}
 
-	properties, err := b.store.Impl().RetrievePropertiesByID(b.ctx, batch)
+	properties, err := store.Impl().RetrievePropertiesByID(ctx, batch)
 	if err != nil {
-		slog.WarnContext(b.ctx, "Failed to batch-retrieve properties for report", "userID", b.userID, common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to batch-retrieve properties for report", common.ErrAttr(err))
 		return
 	}
 
@@ -432,11 +458,11 @@ func (b *UsageReportBuilder) BuildTopProperties() {
 	for _, ps := range props {
 		prop, ok := propMap[ps.PropertyID]
 		if !ok {
-			slog.DebugContext(b.ctx, "Skipping unknown property in report", "propID", ps.PropertyID)
+			slog.DebugContext(ctx, "Skipping unknown property in report", "propID", ps.PropertyID)
 			continue
 		}
 
-		percent := float64(ps.CurrentRequests) / float64(b.reportCtx.TotalRequests) * 100
+		percent := float64(ps.CurrentRequests) / float64(report.TotalRequests) * 100
 		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
 		topProperties = append(topProperties, email.PropertyStat{
@@ -450,9 +476,5 @@ func (b *UsageReportBuilder) BuildTopProperties() {
 			ChangeColor: changeColor(change),
 		})
 	}
-	b.reportCtx.TopProperties = topProperties
-}
-
-func (b *UsageReportBuilder) Build() *email.UsageReportContext {
-	return b.reportCtx
+	report.TopProperties = topProperties
 }

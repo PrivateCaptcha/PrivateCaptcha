@@ -3632,8 +3632,8 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 	return updatedRule, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSetting, error) {
-	reader := &StoreOneReader[int32, dbgen.UserSetting]{
+func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSettings, error) {
+	reader := &StoreOneReader[int32, dbgen.UserSettings]{
 		CacheKey: UserSettingsCacheKey(userID),
 		Cache:    impl.cache,
 	}
@@ -3646,7 +3646,7 @@ func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID 
 	return reader.Read(ctx)
 }
 
-func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSetting, error) {
+func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}

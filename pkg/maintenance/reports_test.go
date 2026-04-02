@@ -51,30 +51,22 @@ func createTestStore(t *testing.T) db.Implementor {
 	return db.NewBusiness(nil)
 }
 
-func TestUsageReportBuilderWeeklyWithData(t *testing.T) {
+func TestBuildWeeklyReportWithData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(1)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC) // Monday
-	mid := now.AddDate(0, 0, -7)                         // previous Monday
-	from := now.AddDate(0, 0, -14)                       // two weeks ago
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC) // Monday truncated
+	mid := now.AddDate(0, 0, -7)
+	from := now.AddDate(0, 0, -14)
 
-	// Current week data: 100 requests, 50 verifies for prop 1
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 50)
-
-	// Previous week data: 80 requests, 40 verifies for prop 1
 	seedTimeSeries(t, ts, userID, 10, 1, from, 80)
 	seedVerifyLogs(t, ts, userID, 10, 1, from, 40)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.Period != "weekly" {
 		t.Errorf("expected period 'weekly', got %q", result.Period)
@@ -108,28 +100,22 @@ func TestUsageReportBuilderWeeklyWithData(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderMonthlyWithData(t *testing.T) {
+func TestBuildMonthlyReportWithData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(2)
 
-	now := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, -1, 0)
 	from := now.AddDate(0, -2, 0)
 
 	seedTimeSeries(t, ts, userID, 20, 2, mid, 200)
 	seedVerifyLogs(t, ts, userID, 20, 2, mid, 100)
-
 	seedTimeSeries(t, ts, userID, 20, 2, from, 150)
 	seedVerifyLogs(t, ts, userID, 20, 2, from, 80)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, true, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-
-	result := b.Build()
+	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.Period != "monthly" {
 		t.Errorf("expected period 'monthly', got %q", result.Period)
@@ -142,23 +128,17 @@ func TestUsageReportBuilderMonthlyWithData(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderNoData(t *testing.T) {
+func TestBuildWeeklyReportNoData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(3)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-	b.BuildTopProperties()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.TotalRequests != 0 {
 		t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
@@ -183,26 +163,40 @@ func TestUsageReportBuilderNoData(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderNoPreviousPeriod(t *testing.T) {
+func TestBuildMonthlyReportNoData(t *testing.T) {
+	ctx := t.Context()
+	ts := db.NewMemoryTimeSeries()
+	store := createTestStore(t)
+	userID := int32(30)
+
+	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+	mid := now.AddDate(0, -1, 0)
+	from := now.AddDate(0, -2, 0)
+
+	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+
+	if result.TotalRequests != 0 {
+		t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
+	}
+	if result.Period != "monthly" {
+		t.Errorf("expected period 'monthly', got %q", result.Period)
+	}
+}
+
+func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(4)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// Only current period data
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 50)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 30)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.TotalRequests != 50 {
 		t.Errorf("expected TotalRequests=50, got %d", result.TotalRequests)
@@ -210,7 +204,6 @@ func TestUsageReportBuilderNoPreviousPeriod(t *testing.T) {
 	if result.PrevRequests != 0 {
 		t.Errorf("expected PrevRequests=0, got %d", result.PrevRequests)
 	}
-	// With no previous data, change should be 100%
 	if result.RequestsChange != 100 {
 		t.Errorf("expected RequestsChange=100, got %f", result.RequestsChange)
 	}
@@ -222,30 +215,47 @@ func TestUsageReportBuilderNoPreviousPeriod(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderDecreaseShowsRed(t *testing.T) {
+func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
+	ctx := t.Context()
+	ts := db.NewMemoryTimeSeries()
+	store := createTestStore(t)
+	userID := int32(40)
+
+	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
+	mid := now.AddDate(0, -1, 0)
+	from := now.AddDate(0, -2, 0)
+
+	seedTimeSeries(t, ts, userID, 20, 2, mid, 70)
+
+	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+
+	if result.TotalRequests != 70 {
+		t.Errorf("expected TotalRequests=70, got %d", result.TotalRequests)
+	}
+	if result.PrevRequests != 0 {
+		t.Errorf("expected PrevRequests=0, got %d", result.PrevRequests)
+	}
+	if result.RequestsChange != 100 {
+		t.Errorf("expected RequestsChange=100, got %f", result.RequestsChange)
+	}
+}
+
+func TestBuildWeeklyReportDecreaseShowsRed(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(5)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// Current period: fewer requests than previous
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 30)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 20)
-
-	// Previous period: more requests
 	seedTimeSeries(t, ts, userID, 10, 1, from, 60)
 	seedVerifyLogs(t, ts, userID, 10, 1, from, 40)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.RequestsColor != colorRed {
 		t.Errorf("expected RequestsColor=%q for decrease, got %q", colorRed, result.RequestsColor)
@@ -253,32 +263,25 @@ func TestUsageReportBuilderDecreaseShowsRed(t *testing.T) {
 	if result.VerifiesColor != colorRed {
 		t.Errorf("expected VerifiesColor=%q for decrease, got %q", colorRed, result.VerifiesColor)
 	}
-	// Sign should be empty (negative)
-	if result.RequestsSign != "" {
-		t.Errorf("expected empty RequestsSign for decrease, got %q", result.RequestsSign)
+	if result.RequestsSign != "-" {
+		t.Errorf("expected RequestsSign='-' for decrease, got %q", result.RequestsSign)
 	}
 }
 
-func TestUsageReportBuilderNoChangeShowsNeutral(t *testing.T) {
+func TestBuildWeeklyReportNoChangeShowsNeutral(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(6)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// Same data both periods
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 50)
 	seedTimeSeries(t, ts, userID, 10, 1, from, 50)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if result.RequestsChange != 0 {
 		t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
@@ -288,39 +291,30 @@ func TestUsageReportBuilderNoChangeShowsNeutral(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderTopPropertiesWithCache(t *testing.T) {
+func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(7)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// Multiple properties
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
 	seedTimeSeries(t, ts, userID, 20, 1, mid, 50)
 
-	// Pre-populate cache with property data
 	prop1 := &dbgen.Property{ID: 10, Name: "Main Site", Domain: "example.com"}
 	prop2 := &dbgen.Property{ID: 20, Name: "Blog", Domain: "blog.example.com"}
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-	b.BuildTopProperties()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if len(result.TopProperties) != 2 {
 		t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))
 	}
 
-	// Properties should be ordered by current requests desc
 	if result.TopProperties[0].Name != "Main Site" {
 		t.Errorf("expected first property 'Main Site', got %q", result.TopProperties[0].Name)
 	}
@@ -332,76 +326,43 @@ func TestUsageReportBuilderTopPropertiesWithCache(t *testing.T) {
 	}
 }
 
-func TestUsageReportBuilderTopPropertiesLimitedTo5(t *testing.T) {
+func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(8)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// 7 properties
 	for i := int32(1); i <= 7; i++ {
 		seedTimeSeries(t, ts, userID, i*10, 1, mid, int(100-i*10))
 		prop := &dbgen.Property{ID: i * 10, Name: "Prop", Domain: "example.com"}
 		_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(i*10), prop)
 	}
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-	b.BuildTopProperties()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if len(result.TopProperties) > topPropertiesLimit {
 		t.Errorf("expected at most %d TopProperties, got %d", topPropertiesLimit, len(result.TopProperties))
 	}
 }
 
-func TestUsageReportBuilderBuildConvenienceFunction(t *testing.T) {
-	ctx := t.Context()
-	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
-	userID := int32(9)
-
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
-	mid := now.AddDate(0, 0, -7)
-	from := now.AddDate(0, 0, -14)
-
-	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
-
-	result := BuildUsageReport(ctx, store, ts, userID, false, from, mid, now)
-
-	if result.Period != "weekly" {
-		t.Errorf("expected period 'weekly', got %q", result.Period)
-	}
-	if result.TotalRequests != 100 {
-		t.Errorf("expected TotalRequests=100, got %d", result.TotalRequests)
-	}
-}
-
-func TestUsageReportBuilderVerificationRate(t *testing.T) {
+func TestBuildWeeklyReportVerificationRate(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(10)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 50)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	expectedRate := 50.0
 	if result.VerificationRate != expectedRate {
@@ -442,8 +403,14 @@ func TestChangeSign(t *testing.T) {
 	if changeSign(0) != "" {
 		t.Error("expected '' for zero")
 	}
-	if changeSign(-5) != "" {
-		t.Error("expected '' for negative")
+	if changeSign(-5) != "-" {
+		t.Error("expected '-' for negative")
+	}
+	if changeSign(0.00001) != "" {
+		t.Error("expected '' for near-zero positive")
+	}
+	if changeSign(-0.00001) != "" {
+		t.Error("expected '' for near-zero negative")
 	}
 }
 
@@ -457,23 +424,26 @@ func TestChangeColor(t *testing.T) {
 	if changeColor(0) != colorNeutral {
 		t.Error("expected neutral for zero")
 	}
+	if changeColor(0.00001) != colorNeutral {
+		t.Error("expected neutral for near-zero positive")
+	}
+	if changeColor(-0.00001) != colorNeutral {
+		t.Error("expected neutral for near-zero negative")
+	}
 }
 
-func TestUsageReportBuilderPropertyChangeColors(t *testing.T) {
+func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
 	userID := int32(11)
 
-	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	// Prop 10: increase (current > previous)
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
 	seedTimeSeries(t, ts, userID, 10, 1, from, 50)
-
-	// Prop 20: decrease (current < previous)
 	seedTimeSeries(t, ts, userID, 20, 1, mid, 30)
 	seedTimeSeries(t, ts, userID, 20, 1, from, 60)
 
@@ -482,13 +452,7 @@ func TestUsageReportBuilderPropertyChangeColors(t *testing.T) {
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
-	b := NewUsageReportBuilder(ctx, store, ts, userID, false, from, mid, now)
-	b.FetchStats()
-	b.ComputeTotals()
-	b.ComputeChanges()
-	b.BuildTopProperties()
-
-	result := b.Build()
+	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 
 	if len(result.TopProperties) != 2 {
 		t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))
@@ -514,30 +478,71 @@ func TestUsageReportBuilderPropertyChangeColors(t *testing.T) {
 	if downProp.ChangeColor != colorRed {
 		t.Errorf("expected red for decreasing property, got %q", downProp.ChangeColor)
 	}
+	if downProp.ChangeSign != "-" {
+		t.Errorf("expected '-' for decreasing property, got %q", downProp.ChangeSign)
+	}
 }
 
-func TestScheduleReportsJobDeduplication(t *testing.T) {
-	job := &ScheduleReportsJob{}
+func TestScheduleReportsJobProcessedMap(t *testing.T) {
+	job := NewScheduleReportsJob(nil, nil, nil, 50)
 	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
 
-	if job.isProcessedToday(1, now) {
+	if job.isProcessed(1, now) {
 		t.Error("expected user 1 NOT processed")
 	}
 
 	job.markProcessed(1, now)
 
-	if !job.isProcessedToday(1, now) {
+	if !job.isProcessed(1, now) {
 		t.Error("expected user 1 processed")
 	}
 
-	// Different day should not be processed
-	tomorrow := now.AddDate(0, 0, 1)
-	if job.isProcessedToday(1, tomorrow) {
-		t.Error("expected user 1 NOT processed tomorrow")
+	expired := now.Add(25 * time.Hour)
+	if job.isProcessed(1, expired) {
+		t.Error("expected user 1 NOT processed after TTL expiry")
 	}
 
-	// Different user should not be processed
-	if job.isProcessedToday(2, now) {
+	if job.isProcessed(2, now) {
 		t.Error("expected user 2 NOT processed")
+	}
+}
+
+func TestScheduleReportsJobGCProcessed(t *testing.T) {
+	job := NewScheduleReportsJob(nil, nil, nil, 50)
+	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+
+	job.markProcessed(1, now)
+	job.markProcessed(2, now.Add(-25*time.Hour))
+
+	job.gcProcessed(now)
+
+	if !job.isProcessed(1, now) {
+		t.Error("expected user 1 still processed after GC")
+	}
+	if job.isProcessed(2, now) {
+		t.Error("expected user 2 removed by GC")
+	}
+}
+
+func TestScheduleReportsJobGCCapacityOverflow(t *testing.T) {
+	job := NewScheduleReportsJob(nil, nil, nil, 50)
+	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+
+	for i := int32(0); i < 1100; i++ {
+		job.markProcessed(i, now)
+	}
+
+	job.gcProcessed(now)
+
+	if len(job.processed) > processedMapCapacity {
+		t.Errorf("expected map size <= %d after GC, got %d", processedMapCapacity, len(job.processed))
+	}
+}
+
+func TestTruncateDay(t *testing.T) {
+	input := time.Date(2025, 3, 17, 14, 30, 45, 123, time.UTC)
+	expected := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
+	if got := truncateDay(input); !got.Equal(expected) {
+		t.Errorf("truncateDay(%v) = %v, want %v", input, got, expected)
 	}
 }

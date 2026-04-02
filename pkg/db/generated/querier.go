@@ -78,7 +78,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id int32) (*User, error)
 	GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error)
 	GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error)
-	GetUserSettings(ctx context.Context, userID int32) (*UserSetting, error)
+	GetUserSettings(ctx context.Context, userID int32) (*UserSettings, error)
 	GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWithMonthlyReportParams) ([]*GetUsersWithMonthlyReportRow, error)
 	GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWithWeeklyReportParams) ([]*GetUsersWithWeeklyReportRow, error)
 	GetUsersWithoutSubscription(ctx context.Context, dollar_1 []int32) ([]*User, error)
@@ -114,7 +114,7 @@ type Querier interface {
 	UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*UpdatePropertyRow, error)
 	UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error)
 	UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error)
-	UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSetting, error)
+	UpsertUserSettings(ctx context.Context, arg *UpsertUserSettingsParams) (*UserSettings, error)
 }
 
 var _ Querier = (*Queries)(nil)

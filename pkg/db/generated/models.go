@@ -605,12 +605,12 @@ type UserNotification struct {
 	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
 }
 
-type UserSetting struct {
+type UserSettings struct {
 	ID                 int32              `db:"id" json:"id"`
 	UserID             int32              `db:"user_id" json:"user_id"`
 	WeeklyReport       bool               `db:"weekly_report" json:"weekly_report"`
 	MonthlyReport      bool               `db:"monthly_report" json:"monthly_report"`
-	NotificationsEmail string             `db:"notifications_email" json:"notifications_email"`
+	NotificationsEmail pgtype.Text        `db:"notifications_email" json:"notifications_email"`
 	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
