@@ -29,10 +29,11 @@ func (q *Queries) GetUserSettings(ctx context.Context, userID int32) (*UserSetti
 }
 
 const getUsersWithMonthlyReport = `-- name: GetUsersWithMonthlyReport :many
-SELECT us.user_id, us.notifications_email, u.email
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2
 `
@@ -46,6 +47,7 @@ type GetUsersWithMonthlyReportRow struct {
 	UserID             int32  `db:"user_id" json:"user_id"`
 	NotificationsEmail string `db:"notifications_email" json:"notifications_email"`
 	Email              string `db:"email" json:"email"`
+	SubscriptionStatus string `db:"subscription_status" json:"subscription_status"`
 }
 
 func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWithMonthlyReportParams) ([]*GetUsersWithMonthlyReportRow, error) {
@@ -57,7 +59,12 @@ func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWi
 	var items []*GetUsersWithMonthlyReportRow
 	for rows.Next() {
 		var i GetUsersWithMonthlyReportRow
-		if err := rows.Scan(&i.UserID, &i.NotificationsEmail, &i.Email); err != nil {
+		if err := rows.Scan(
+			&i.UserID,
+			&i.NotificationsEmail,
+			&i.Email,
+			&i.SubscriptionStatus,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)
@@ -69,10 +76,11 @@ func (q *Queries) GetUsersWithMonthlyReport(ctx context.Context, arg *GetUsersWi
 }
 
 const getUsersWithWeeklyReport = `-- name: GetUsersWithWeeklyReport :many
-SELECT us.user_id, us.notifications_email, u.email
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2
 `
@@ -86,6 +94,7 @@ type GetUsersWithWeeklyReportRow struct {
 	UserID             int32  `db:"user_id" json:"user_id"`
 	NotificationsEmail string `db:"notifications_email" json:"notifications_email"`
 	Email              string `db:"email" json:"email"`
+	SubscriptionStatus string `db:"subscription_status" json:"subscription_status"`
 }
 
 func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWithWeeklyReportParams) ([]*GetUsersWithWeeklyReportRow, error) {
@@ -97,7 +106,12 @@ func (q *Queries) GetUsersWithWeeklyReport(ctx context.Context, arg *GetUsersWit
 	var items []*GetUsersWithWeeklyReportRow
 	for rows.Next() {
 		var i GetUsersWithWeeklyReportRow
-		if err := rows.Scan(&i.UserID, &i.NotificationsEmail, &i.Email); err != nil {
+		if err := rows.Scan(
+			&i.UserID,
+			&i.NotificationsEmail,
+			&i.Email,
+			&i.SubscriptionStatus,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, &i)

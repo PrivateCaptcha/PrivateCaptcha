@@ -12,17 +12,19 @@ ON CONFLICT (user_id) DO UPDATE SET
 RETURNING *;
 
 -- name: GetUsersWithWeeklyReport :many
-SELECT us.user_id, us.notifications_email, u.email
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2;
 
 -- name: GetUsersWithMonthlyReport :many
-SELECT us.user_id, us.notifications_email, u.email
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
-WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL
+LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
+WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2;

@@ -48,3 +48,20 @@ type PropertyRequestCount struct {
 	OrgID      int32
 	Count      uint64
 }
+
+type UserReportPropertyStat struct {
+	PropertyID      int32
+	OrgID           int32
+	CurrentRequests uint64
+	PrevRequests    uint64
+	CurrentVerifies uint64
+	PrevVerifies    uint64
+}
+
+type UserReportStats struct {
+	Properties           []*UserReportPropertyStat
+	TotalCurrentRequests uint64
+	TotalPrevRequests    uint64
+	TotalCurrentVerifies uint64
+	TotalPrevVerifies    uint64
+}

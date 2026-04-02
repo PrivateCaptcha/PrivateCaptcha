@@ -321,7 +321,7 @@ func (ts *TimeSeriesDB) RetrieveUserPropertyRequestCounts(ctx context.Context, u
 	fromStr := from.Format(time.DateTime)
 
 	query := `SELECT property_id, org_id, sum(count) as total_count
-FROM %s
+FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {timestamp:DateTime}
 GROUP BY property_id, org_id
 ORDER BY total_count DESC
@@ -362,7 +362,7 @@ func (ts *TimeSeriesDB) RetrieveUserPropertyStatsBetween(ctx context.Context, us
 	toStr := to.Format(time.DateTime)
 
 	query := `SELECT property_id, org_id, sum(count) as total_count
-FROM %s
+FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
 GROUP BY property_id, org_id
 ORDER BY total_count DESC
@@ -404,7 +404,7 @@ func (ts *TimeSeriesDB) RetrieveUserVerifyCountBetween(ctx context.Context, user
 	toStr := to.Format(time.DateTime)
 
 	query := `SELECT sum(success_count + failure_count) as total
-FROM %s
+FROM %s FINAL
 WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}`
 
 	row := ts.Clickhouse.QueryRow(fmt.Sprintf(query, VerifyLogTable1d),
@@ -421,6 +421,91 @@ WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timesta
 	slog.DebugContext(ctx, "Fetched user verify count between", "userID", userID, "total", total, "from", fromStr, "to", toStr)
 
 	return total, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveUserReportStats(ctx context.Context, userID int32, from, mid, to time.Time, monthly bool) (*common.UserReportStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	fromStr := from.Format(time.DateTime)
+	midStr := mid.Format(time.DateTime)
+	toStr := to.Format(time.DateTime)
+	userIDStr := strconv.Itoa(int(userID))
+
+	// Combined query: per-property request + verify stats for double period, split by mid
+	query := `SELECT property_id, org_id,
+    sumIf(req_count, timestamp >= {mid_ts:DateTime}) as current_requests,
+    sumIf(req_count, timestamp < {mid_ts:DateTime}) as prev_requests,
+    sumIf(ver_count, timestamp >= {mid_ts:DateTime}) as current_verifies,
+    sumIf(ver_count, timestamp < {mid_ts:DateTime}) as prev_verifies
+FROM (
+    SELECT property_id, org_id, count as req_count, 0 as ver_count, timestamp
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
+    UNION ALL
+    SELECT property_id, org_id, 0 as req_count, (success_count + failure_count) as ver_count, timestamp
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
+)
+GROUP BY property_id, org_id
+ORDER BY current_requests DESC`
+
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, AccessLogTableName1d, VerifyLogTable1d),
+		clickhouse.Named("user_id", userIDStr),
+		clickhouse.Named("from_ts", fromStr),
+		clickhouse.Named("mid_ts", midStr),
+		clickhouse.Named("to_ts", toStr))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute user report stats query", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	stats := &common.UserReportStats{}
+
+	for rows.Next() {
+		ps := &common.UserReportPropertyStat{}
+		if err := rows.Scan(&ps.PropertyID, &ps.OrgID, &ps.CurrentRequests, &ps.PrevRequests, &ps.CurrentVerifies, &ps.PrevVerifies); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from user report stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		stats.Properties = append(stats.Properties, ps)
+		stats.TotalCurrentRequests += ps.CurrentRequests
+		stats.TotalPrevRequests += ps.PrevRequests
+		stats.TotalCurrentVerifies += ps.CurrentVerifies
+		stats.TotalPrevVerifies += ps.PrevVerifies
+	}
+
+	// For monthly reports, override total request counts from request_logs_1mo (pre-aggregated)
+	if monthly {
+		totalQuery := `SELECT
+    sumIf(count, timestamp >= {mid_ts:DateTime}) as current_total,
+    sumIf(count, timestamp < {mid_ts:DateTime}) as prev_total
+FROM %s FINAL
+WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}`
+
+		row := ts.Clickhouse.QueryRow(fmt.Sprintf(totalQuery, AccessLogTableName1mo),
+			clickhouse.Named("user_id", userIDStr),
+			clickhouse.Named("from_ts", fromStr),
+			clickhouse.Named("mid_ts", midStr),
+			clickhouse.Named("to_ts", toStr))
+
+		var currentTotal, prevTotal uint64
+		if err := row.Scan(&currentTotal, &prevTotal); err != nil {
+			slog.WarnContext(ctx, "Failed to query monthly total requests, using per-property sum", "userID", userID, common.ErrAttr(err))
+		} else {
+			stats.TotalCurrentRequests = currentTotal
+			stats.TotalPrevRequests = prevTotal
+		}
+	}
+
+	slog.InfoContext(ctx, "Fetched user report stats", "userID", userID, "properties", len(stats.Properties),
+		"currentReq", stats.TotalCurrentRequests, "prevReq", stats.TotalPrevRequests,
+		"currentVer", stats.TotalCurrentVerifies, "prevVer", stats.TotalPrevVerifies, "monthly", monthly)
+
+	return stats, nil
 }
 
 func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
@@ -925,6 +1010,75 @@ func (m *MemoryTimeSeries) RetrieveUserVerifyCountBetween(ctx context.Context, u
 	}
 
 	return total, nil
+}
+
+func (m *MemoryTimeSeries) RetrieveUserReportStats(ctx context.Context, userID int32, from, mid, to time.Time, monthly bool) (*common.UserReportStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type propKey struct {
+		PropertyID int32
+		OrgID      int32
+	}
+
+	type propCounts struct {
+		CurrentRequests uint64
+		PrevRequests    uint64
+		CurrentVerifies uint64
+		PrevVerifies    uint64
+	}
+
+	counts := make(map[propKey]*propCounts)
+
+	for _, log := range m.accessLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
+			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
+			if counts[key] == nil {
+				counts[key] = &propCounts{}
+			}
+			if !log.Timestamp.Before(mid) {
+				counts[key].CurrentRequests++
+			} else {
+				counts[key].PrevRequests++
+			}
+		}
+	}
+
+	for _, log := range m.verifyLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
+			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
+			if counts[key] == nil {
+				counts[key] = &propCounts{}
+			}
+			if !log.Timestamp.Before(mid) {
+				counts[key].CurrentVerifies++
+			} else {
+				counts[key].PrevVerifies++
+			}
+		}
+	}
+
+	stats := &common.UserReportStats{}
+	for key, c := range counts {
+		stats.Properties = append(stats.Properties, &common.UserReportPropertyStat{
+			PropertyID:      key.PropertyID,
+			OrgID:           key.OrgID,
+			CurrentRequests: c.CurrentRequests,
+			PrevRequests:    c.PrevRequests,
+			CurrentVerifies: c.CurrentVerifies,
+			PrevVerifies:    c.PrevVerifies,
+		})
+		stats.TotalCurrentRequests += c.CurrentRequests
+		stats.TotalPrevRequests += c.PrevRequests
+		stats.TotalCurrentVerifies += c.CurrentVerifies
+		stats.TotalPrevVerifies += c.PrevVerifies
+	}
+
+	sort.Slice(stats.Properties, func(i, j int) bool {
+		return stats.Properties[i].CurrentRequests > stats.Properties[j].CurrentRequests
+	})
+
+	return stats, nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {

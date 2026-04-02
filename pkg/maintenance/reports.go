@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -15,9 +16,10 @@ import (
 )
 
 type ScheduleReportsJob struct {
-	Store      db.Implementor
-	TimeSeries common.TimeSeriesStore
-	UsersLimit int32
+	Store       db.Implementor
+	TimeSeries  common.TimeSeriesStore
+	PlanService billing.PlanService
+	UsersLimit  int32
 }
 
 type ScheduleReportsParams struct {
@@ -123,6 +125,11 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 			case <-time.After(b.Duration()):
 			}
 
+			if !j.PlanService.IsSubscriptionActive(user.SubscriptionStatus) {
+				slog.DebugContext(ctx, "Skipping weekly report for user with inactive subscription", "userID", user.UserID, "status", user.SubscriptionStatus)
+				continue
+			}
+
 			j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week)
 		}
 
@@ -136,9 +143,8 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 }
 
 func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) {
-	currentFrom := tnow.AddDate(0, 0, -7)
-	prevFrom := tnow.AddDate(0, 0, -14)
-	reportCtx := j.buildReportContext(ctx, userID, "weekly", prevFrom, currentFrom, tnow)
+	builder := newUsageReportBuilder(ctx, j.Store, j.TimeSeries, userID, "weekly", tnow.AddDate(0, 0, -14), tnow.AddDate(0, 0, -7), tnow)
+	reportCtx := builder.fetchStats().computeTotals().computeChanges().buildTopProperties().build()
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
@@ -188,6 +194,11 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 			case <-time.After(b.Duration()):
 			}
 
+			if !j.PlanService.IsSubscriptionActive(user.SubscriptionStatus) {
+				slog.DebugContext(ctx, "Skipping monthly report for user with inactive subscription", "userID", user.UserID, "status", user.SubscriptionStatus)
+				continue
+			}
+
 			j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow)
 		}
 
@@ -201,9 +212,8 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) {
-	currentFrom := tnow.AddDate(0, -1, 0)
-	prevFrom := tnow.AddDate(0, -2, 0)
-	reportCtx := j.buildReportContext(ctx, userID, "monthly", prevFrom, currentFrom, tnow)
+	builder := newUsageReportBuilder(ctx, j.Store, j.TimeSeries, userID, "monthly", tnow.AddDate(0, -2, 0), tnow.AddDate(0, -1, 0), tnow)
+	reportCtx := builder.fetchStats().computeTotals().computeChanges().buildTopProperties().build()
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),
@@ -219,6 +229,64 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
 		slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
 	}
+}
+
+// usageReportBuilder constructs a UsageReportContext step by step.
+type usageReportBuilder struct {
+	ctx        context.Context
+	store      db.Implementor
+	timeSeries common.TimeSeriesStore
+	userID     int32
+	period     string
+	from       time.Time
+	mid        time.Time
+	to         time.Time
+	stats      *common.UserReportStats
+	reportCtx  *email.UsageReportContext
+}
+
+const topPropertiesLimit = 5
+
+func newUsageReportBuilder(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, period string, from, mid, to time.Time) *usageReportBuilder {
+	return &usageReportBuilder{
+		ctx:        ctx,
+		store:      store,
+		timeSeries: ts,
+		userID:     userID,
+		period:     period,
+		from:       from,
+		mid:        mid,
+		to:         to,
+		reportCtx: &email.UsageReportContext{
+			Period:        period,
+			DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
+		},
+	}
+}
+
+func (b *usageReportBuilder) fetchStats() *usageReportBuilder {
+	monthly := b.period == "monthly"
+	stats, err := b.timeSeries.RetrieveUserReportStats(b.ctx, b.userID, b.from, b.mid, b.to, monthly)
+	if err != nil {
+		slog.WarnContext(b.ctx, "Failed to retrieve report stats", "userID", b.userID, "period", b.period, common.ErrAttr(err))
+		return b
+	}
+	b.stats = stats
+	return b
+}
+
+func (b *usageReportBuilder) computeTotals() *usageReportBuilder {
+	if b.stats == nil {
+		return b
+	}
+	b.reportCtx.TotalRequests = b.stats.TotalCurrentRequests
+	b.reportCtx.PrevRequests = b.stats.TotalPrevRequests
+	b.reportCtx.TotalVerifies = b.stats.TotalCurrentVerifies
+	b.reportCtx.PrevVerifies = b.stats.TotalPrevVerifies
+	if b.reportCtx.TotalRequests > 0 {
+		b.reportCtx.VerificationRate = float64(b.reportCtx.TotalVerifies) / float64(b.reportCtx.TotalRequests) * 100
+	}
+	return b
 }
 
 func percentChange(current, previous uint64) float64 {
@@ -238,105 +306,71 @@ func changeSign(change float64) string {
 	return ""
 }
 
-const topPropertiesLimit = 5
+func (b *usageReportBuilder) computeChanges() *usageReportBuilder {
+	if b.stats == nil {
+		return b
+	}
+	reqChange := percentChange(b.reportCtx.TotalRequests, b.reportCtx.PrevRequests)
+	b.reportCtx.RequestsChange = math.Abs(reqChange)
+	b.reportCtx.RequestsSign = changeSign(reqChange)
 
-func (j *ScheduleReportsJob) buildReportContext(ctx context.Context, userID int32, period string, prevFrom, currentFrom, to time.Time) *email.UsageReportContext {
-	reportCtx := &email.UsageReportContext{
-		Period:        period,
-		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
+	verChange := percentChange(b.reportCtx.TotalVerifies, b.reportCtx.PrevVerifies)
+	b.reportCtx.VerifiesChange = math.Abs(verChange)
+	b.reportCtx.VerifiesSign = changeSign(verChange)
+	return b
+}
+
+func (b *usageReportBuilder) buildTopProperties() *usageReportBuilder {
+	if b.stats == nil || len(b.stats.Properties) == 0 || b.reportCtx.TotalRequests == 0 {
+		return b
 	}
 
-	// Query current period property stats from ClickHouse
-	currentStats, err := j.TimeSeries.RetrieveUserPropertyStatsBetween(ctx, userID, currentFrom, to, topPropertiesLimit)
+	props := b.stats.Properties
+	if len(props) > topPropertiesLimit {
+		props = props[:topPropertiesLimit]
+	}
+
+	batch := make(map[int32]uint, len(props))
+	for _, ps := range props {
+		batch[ps.PropertyID] = 0
+	}
+
+	properties, err := b.store.Impl().RetrievePropertiesByID(b.ctx, batch)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve current period stats for report", "userID", userID, common.ErrAttr(err))
-		return reportCtx
+		slog.WarnContext(b.ctx, "Failed to batch-retrieve properties for report", "userID", b.userID, common.ErrAttr(err))
+		return b
 	}
 
-	// Query previous period property stats from ClickHouse
-	prevStats, err := j.TimeSeries.RetrieveUserPropertyStatsBetween(ctx, userID, prevFrom, currentFrom, topPropertiesLimit)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve previous period stats for report", "userID", userID, common.ErrAttr(err))
+	propMap := make(map[int32]*dbgen.Property, len(properties))
+	for _, p := range properties {
+		propMap[p.ID] = p
 	}
 
-	// Sum current totals from per-property stats
-	for _, s := range currentStats {
-		reportCtx.TotalRequests += s.Count
-	}
-
-	// Query verify counts for current and previous periods
-	currentVerifies, err := j.TimeSeries.RetrieveUserVerifyCountBetween(ctx, userID, currentFrom, to)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve current verify count for report", "userID", userID, common.ErrAttr(err))
-	}
-	reportCtx.TotalVerifies = currentVerifies
-
-	prevVerifies, err := j.TimeSeries.RetrieveUserVerifyCountBetween(ctx, userID, prevFrom, currentFrom)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve previous verify count for report", "userID", userID, common.ErrAttr(err))
-	}
-	reportCtx.PrevVerifies = prevVerifies
-
-	// Sum previous request totals
-	prevRequestsMap := make(map[int32]uint64, len(prevStats))
-	for _, s := range prevStats {
-		reportCtx.PrevRequests += s.Count
-		prevRequestsMap[s.PropertyID] = s.Count
-	}
-
-	// Compute period-over-period changes
-	reportCtx.RequestsChange = math.Abs(percentChange(reportCtx.TotalRequests, reportCtx.PrevRequests))
-	reportCtx.RequestsSign = changeSign(percentChange(reportCtx.TotalRequests, reportCtx.PrevRequests))
-	reportCtx.VerifiesChange = math.Abs(percentChange(reportCtx.TotalVerifies, reportCtx.PrevVerifies))
-	reportCtx.VerifiesSign = changeSign(percentChange(reportCtx.TotalVerifies, reportCtx.PrevVerifies))
-
-	// Verification rate
-	if reportCtx.TotalRequests > 0 {
-		reportCtx.VerificationRate = float64(reportCtx.TotalVerifies) / float64(reportCtx.TotalRequests) * 100
-	}
-
-	// Build top properties with batch property lookup
-	if len(currentStats) > 0 && reportCtx.TotalRequests > 0 {
-		batch := make(map[int32]uint, len(currentStats))
-		for _, pc := range currentStats {
-			batch[pc.PropertyID] = 0
+	topProperties := make([]email.PropertyStat, 0, len(props))
+	for _, ps := range props {
+		prop, ok := propMap[ps.PropertyID]
+		if !ok {
+			slog.DebugContext(b.ctx, "Skipping unknown property in report", "propID", ps.PropertyID)
+			continue
 		}
 
-		properties, err := j.Store.Impl().RetrievePropertiesByID(ctx, batch)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to batch-retrieve properties for report", "userID", userID, common.ErrAttr(err))
-			return reportCtx
-		}
+		percent := float64(ps.CurrentRequests) / float64(b.reportCtx.TotalRequests) * 100
+		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
-		propMap := make(map[int32]*dbgen.Property, len(properties))
-		for _, p := range properties {
-			propMap[p.ID] = p
-		}
-
-		topProperties := make([]email.PropertyStat, 0, len(currentStats))
-		for _, pc := range currentStats {
-			prop, ok := propMap[pc.PropertyID]
-			if !ok {
-				slog.DebugContext(ctx, "Skipping unknown property in report", "propID", pc.PropertyID)
-				continue
-			}
-
-			percent := float64(pc.Count) / float64(reportCtx.TotalRequests) * 100
-			prevCount := prevRequestsMap[pc.PropertyID]
-			change := percentChange(pc.Count, prevCount)
-
-			topProperties = append(topProperties, email.PropertyStat{
-				Name:       prop.Name,
-				Domain:     prop.Domain,
-				Count:      pc.Count,
-				Percent:    percent,
-				PrevCount:  prevCount,
-				Change:     math.Abs(change),
-				ChangeSign: changeSign(change),
-			})
-		}
-		reportCtx.TopProperties = topProperties
+		topProperties = append(topProperties, email.PropertyStat{
+			Name:       prop.Name,
+			Domain:     prop.Domain,
+			Count:      ps.CurrentRequests,
+			Percent:    percent,
+			PrevCount:  ps.PrevRequests,
+			Change:     math.Abs(change),
+			ChangeSign: changeSign(change),
+		})
 	}
+	b.reportCtx.TopProperties = topProperties
+	return b
+}
 
-	return reportCtx
+func (b *usageReportBuilder) build() *email.UsageReportContext {
+	return b.reportCtx
 }

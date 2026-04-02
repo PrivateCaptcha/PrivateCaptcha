@@ -50,6 +50,7 @@ type TimeSeriesStore interface {
 	RetrieveUserPropertyRequestCounts(ctx context.Context, userID int32, from time.Time, limit int) ([]*PropertyRequestCount, error)
 	RetrieveUserPropertyStatsBetween(ctx context.Context, userID int32, from, to time.Time, limit int) ([]*PropertyRequestCount, error)
 	RetrieveUserVerifyCountBetween(ctx context.Context, userID int32, from, to time.Time) (uint64, error)
+	RetrieveUserReportStats(ctx context.Context, userID int32, from, mid, to time.Time, monthly bool) (*UserReportStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
 	RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period TimePeriod) ([]*TimeCount, error)
 	RetrieveRecentTopProperties(ctx context.Context, limit int) (map[int32]uint, error)
