@@ -66,7 +66,10 @@ func TestBuildWeeklyReportWithData(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 10, 1, from, 80)
 	seedVerifyLogs(t, ts, userID, 10, 1, from, 40)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.Period != "weekly" {
 		t.Errorf("expected period 'weekly', got %q", result.Period)
@@ -115,7 +118,10 @@ func TestBuildMonthlyReportWithData(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 20, 2, from, 150)
 	seedVerifyLogs(t, ts, userID, 20, 2, from, 80)
 
-	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.Period != "monthly" {
 		t.Errorf("expected period 'monthly', got %q", result.Period)
@@ -138,7 +144,10 @@ func TestBuildWeeklyReportNoData(t *testing.T) {
 	mid := now.AddDate(0, 0, -7)
 	from := now.AddDate(0, 0, -14)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.TotalRequests != 0 {
 		t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
@@ -173,7 +182,10 @@ func TestBuildMonthlyReportNoData(t *testing.T) {
 	mid := now.AddDate(0, -1, 0)
 	from := now.AddDate(0, -2, 0)
 
-	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.TotalRequests != 0 {
 		t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
@@ -196,7 +208,10 @@ func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 50)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 30)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.TotalRequests != 50 {
 		t.Errorf("expected TotalRequests=50, got %d", result.TotalRequests)
@@ -227,7 +242,10 @@ func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
 
 	seedTimeSeries(t, ts, userID, 20, 2, mid, 70)
 
-	result := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildMonthlyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.TotalRequests != 70 {
 		t.Errorf("expected TotalRequests=70, got %d", result.TotalRequests)
@@ -255,7 +273,10 @@ func TestBuildWeeklyReportDecreaseShowsRed(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 10, 1, from, 60)
 	seedVerifyLogs(t, ts, userID, 10, 1, from, 40)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.RequestsColor != colorRed {
 		t.Errorf("expected RequestsColor=%q for decrease, got %q", colorRed, result.RequestsColor)
@@ -281,7 +302,10 @@ func TestBuildWeeklyReportNoChangeShowsNeutral(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 50)
 	seedTimeSeries(t, ts, userID, 10, 1, from, 50)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if result.RequestsChange != 0 {
 		t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
@@ -309,7 +333,10 @@ func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(result.TopProperties) != 2 {
 		t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))
@@ -342,7 +369,10 @@ func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
 		_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(i*10), prop)
 	}
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(result.TopProperties) > topPropertiesLimit {
 		t.Errorf("expected at most %d TopProperties, got %d", topPropertiesLimit, len(result.TopProperties))
@@ -362,7 +392,10 @@ func TestBuildWeeklyReportVerificationRate(t *testing.T) {
 	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
 	seedVerifyLogs(t, ts, userID, 10, 1, mid, 50)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	expectedRate := 50.0
 	if result.VerificationRate != expectedRate {
@@ -452,7 +485,10 @@ func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
 	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
-	result := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if len(result.TopProperties) != 2 {
 		t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))

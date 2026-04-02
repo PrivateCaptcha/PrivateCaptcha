@@ -225,7 +225,11 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
 
-	reportCtx := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	reportCtx, err := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
+		return
+	}
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
@@ -238,7 +242,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		Condition:    common.NotificationWithSubscription,
 	}
 
-	_, err := j.Store.Impl().CreateUserNotification(ctx, notif)
+	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if errors.Is(err, db.ErrAlreadyExists) {
 			j.markProcessed(userID, tnow)
@@ -310,7 +314,11 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
 
-	reportCtx := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	reportCtx, err := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
+		return
+	}
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),
@@ -323,7 +331,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Condition:    common.NotificationWithSubscription,
 	}
 
-	_, err := j.Store.Impl().CreateUserNotification(ctx, notif)
+	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if errors.Is(err, db.ErrAlreadyExists) {
 			j.markProcessed(userID, tnow)
@@ -337,7 +345,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 }
 
 // BuildWeeklyReport builds a complete weekly usage report for a user.
-func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) *email.UsageReportContext {
+func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "weekly",
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
@@ -345,19 +353,19 @@ func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.Time
 
 	stats, err := ts.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
-		return report
+		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
 	}
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
 	fillTopProperties(ctx, store, report, stats)
 
-	return report
+	return report, nil
 }
 
 // BuildMonthlyReport builds a complete monthly usage report for a user.
-func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) *email.UsageReportContext {
+func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
@@ -365,15 +373,15 @@ func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.Tim
 
 	stats, err := ts.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
-		return report
+		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
 	}
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
 	fillTopProperties(ctx, store, report, stats)
 
-	return report
+	return report, nil
 }
 
 func fillTotals(report *email.UsageReportContext, stats *common.UserReportStats) {
