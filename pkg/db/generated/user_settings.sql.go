@@ -82,7 +82,7 @@ SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as su
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
-WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+WHERE us.weekly_report = TRUE AND us.monthly_report = FALSE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
 ORDER BY us.user_id
 LIMIT $1 OFFSET $2
 `

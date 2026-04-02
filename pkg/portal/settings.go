@@ -1100,7 +1100,8 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		NotificationsEmail: pgtype.Text{String: reportEmail, Valid: len(reportEmail) > 0},
 	}
 
-	if _, err := s.Store.Impl().UpsertUserSettings(ctx, params); err != nil {
+	settings, err := s.Store.Impl().UpsertUserSettings(ctx, params)
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to save notification settings", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to save notification settings."
 		return &ViewModel{
@@ -1108,6 +1109,15 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 			View:  settingsNotificationsFormTemplate,
 		}, nil
 	}
+
+	s.Store.AuditLog().RecordEvent(ctx, &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(settings.ID),
+		TableName: db.TableNameUserSettings,
+		NewValue:  settings,
+		Timestamp: time.Now().UTC(),
+	}, common.AuditLogSourcePortal)
 
 	renderCtx.SuccessMessage = "Notification settings saved."
 

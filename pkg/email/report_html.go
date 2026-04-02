@@ -67,37 +67,37 @@ const (
             </p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse">
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Total Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center">{{.TotalRequests}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;color:{{.RequestsColor}};text-align:center">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center;background-color:#f9f9f9">Total Verifications</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center;background-color:#f9f9f9">{{.TotalVerifies}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;color:{{.VerifiesColor}};text-align:center;background-color:#f9f9f9">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Verification Rate</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
               </tr>
             </table>
             {{- if .TopProperties}}
             <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Property</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Change</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Property</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Domain</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Change</td>
               </tr>
               {{- range .TopProperties}}
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px">{{.Name}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Name}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">{{.Domain}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Count}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{printf "%.1f" .Percent}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>
@@ -176,37 +176,37 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
             </p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse">
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Requests</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalRequests}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.RequestsColor}}">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Total Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center">{{.TotalRequests}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;color:{{.RequestsColor}};text-align:center">{{.RequestsSign}}{{printf "%.1f" .RequestsChange}}%</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Total Verifications</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold">{{.TotalVerifies}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:13px;color:{{.VerifiesColor}}">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center;background-color:#f9f9f9">Total Verifications</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center;background-color:#f9f9f9">{{.TotalVerifies}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;color:{{.VerifiesColor}};text-align:center;background-color:#f9f9f9">{{.VerifiesSign}}{{printf "%.1f" .VerifiesChange}}%</td>
               </tr>
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">Verification Rate</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;font-weight:bold" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Verification Rate</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
               </tr>
             </table>
             {{- if .TopProperties}}
             <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Property</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold">Domain</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Requests</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:12px;color:#666;font-weight:bold;text-align:right">Change</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Property</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Domain</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Change</td>
               </tr>
               {{- range .TopProperties}}
               <tr>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px">{{.Name}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;color:#666">{{.Domain}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{.Count}}</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:8px 16px;border:1px solid #eaeaea;font-size:14px;text-align:right;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Name}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">{{.Domain}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Count}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{printf "%.1f" .Percent}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center;color:{{.ChangeColor}}">{{.ChangeSign}}{{printf "%.1f" .Change}}%</td>
               </tr>
               {{- end}}
             </table>

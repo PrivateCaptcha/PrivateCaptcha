@@ -3665,6 +3665,10 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 }
 
 func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
+	if limit <= 0 || offset < 0 {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -3674,6 +3678,9 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 		Offset: offset,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*dbgen.GetUsersWithWeeklyReportRow{}, nil
+		}
 		slog.ErrorContext(ctx, "Failed to retrieve users with weekly report", "limit", limit, "offset", offset, common.ErrAttr(err))
 		return nil, err
 	}
@@ -3684,6 +3691,10 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 }
 
 func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context, limit, offset int32) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
+	if limit <= 0 || offset < 0 {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -3693,6 +3704,9 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Contex
 		Offset: offset,
 	})
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*dbgen.GetUsersWithMonthlyReportRow{}, nil
+		}
 		slog.ErrorContext(ctx, "Failed to retrieve users with monthly report", "limit", limit, "offset", offset, common.ErrAttr(err))
 		return nil, err
 	}

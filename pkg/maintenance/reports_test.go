@@ -523,22 +523,26 @@ func TestScheduleReportsJobProcessedMap(t *testing.T) {
 	job := NewScheduleReportsJob(nil, nil, nil, 50)
 	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
 
-	if job.isProcessed(1, now) {
-		t.Error("expected user 1 NOT processed")
+	if job.isProcessed(1, "weekly", now) {
+		t.Error("expected user 1 NOT processed for weekly")
 	}
 
-	job.markProcessed(1, now)
+	job.markProcessed(1, "weekly", now)
 
-	if !job.isProcessed(1, now) {
-		t.Error("expected user 1 processed")
+	if !job.isProcessed(1, "weekly", now) {
+		t.Error("expected user 1 processed for weekly")
+	}
+
+	if job.isProcessed(1, "monthly", now) {
+		t.Error("expected user 1 NOT processed for monthly (different report type)")
 	}
 
 	expired := now.Add(25 * time.Hour)
-	if job.isProcessed(1, expired) {
+	if job.isProcessed(1, "weekly", expired) {
 		t.Error("expected user 1 NOT processed after TTL expiry")
 	}
 
-	if job.isProcessed(2, now) {
+	if job.isProcessed(2, "weekly", now) {
 		t.Error("expected user 2 NOT processed")
 	}
 }
@@ -547,15 +551,15 @@ func TestScheduleReportsJobGCProcessed(t *testing.T) {
 	job := NewScheduleReportsJob(nil, nil, nil, 50)
 	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
 
-	job.markProcessed(1, now)
-	job.markProcessed(2, now.Add(-25*time.Hour))
+	job.markProcessed(1, "weekly", now)
+	job.markProcessed(2, "weekly", now.Add(-25*time.Hour))
 
 	job.gcProcessed(now)
 
-	if !job.isProcessed(1, now) {
+	if !job.isProcessed(1, "weekly", now) {
 		t.Error("expected user 1 still processed after GC")
 	}
-	if job.isProcessed(2, now) {
+	if job.isProcessed(2, "weekly", now) {
 		t.Error("expected user 2 removed by GC")
 	}
 }
@@ -565,7 +569,7 @@ func TestScheduleReportsJobGCCapacityOverflow(t *testing.T) {
 	now := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
 
 	for i := int32(0); i < 1100; i++ {
-		job.markProcessed(i, now)
+		job.markProcessed(i, "weekly", now)
 	}
 
 	job.gcProcessed(now)

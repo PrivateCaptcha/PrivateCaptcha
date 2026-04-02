@@ -43,12 +43,6 @@ type OrgTimeCount struct {
 	Count     uint32
 }
 
-type PropertyRequestCount struct {
-	PropertyID int32
-	OrgID      int32
-	Count      uint64
-}
-
 type UserReportPropertyStat struct {
 	PropertyID      int32
 	OrgID           int32

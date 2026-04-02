@@ -47,7 +47,6 @@ type TimeSeriesStore interface {
 	WriteVerifyLogBatch(ctx context.Context, records []*VerifyRecord) error
 	RetrievePropertyStatsSince(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
 	RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*OrgTimeCount, error)
-	RetrieveUserPropertyRequestCounts(ctx context.Context, userID int32, from time.Time, limit int) ([]*PropertyRequestCount, error)
 	RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
 	RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)

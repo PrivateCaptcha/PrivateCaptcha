@@ -9,4 +9,5 @@ const (
 	TableNameAPIKeys         = "apikeys"
 	TableNameAuditLogs       = "audit_logs"
 	TableNameDifficultyRules = "difficulty_rules"
+	TableNameUserSettings    = "user_settings"
 )

@@ -20,12 +20,17 @@ import (
 const (
 	maxPaginationIterations = 100
 	topPropertiesLimit      = 5
-	colorGreen              = "#16a34a"
-	colorRed                = "#dc2626"
+	colorGreen              = "#22883e"
+	colorRed                = "#c53030"
 	colorNeutral            = "#888888"
 	floatEpsilon            = 1e-4
 	processedMapCapacity    = 1000
 )
+
+type processedKey struct {
+	userID     int32
+	reportType string
+}
 
 type ScheduleReportsJob struct {
 	Store       db.Implementor
@@ -35,7 +40,7 @@ type ScheduleReportsJob struct {
 	TTL         time.Duration
 
 	mu        sync.Mutex
-	processed map[int32]time.Time
+	processed map[processedKey]time.Time
 }
 
 type ScheduleReportsParams struct {
@@ -51,7 +56,7 @@ func NewScheduleReportsJob(store db.Implementor, ts common.TimeSeriesStore, plan
 		PlanService: planService,
 		UsersLimit:  usersLimit,
 		TTL:         24 * time.Hour,
-		processed:   make(map[int32]time.Time, processedMapCapacity),
+		processed:   make(map[processedKey]time.Time, processedMapCapacity),
 	}
 }
 
@@ -85,11 +90,12 @@ func (j *ScheduleReportsJob) NewParams() any {
 	}
 }
 
-func (j *ScheduleReportsJob) isProcessed(userID int32, tnow time.Time) bool {
+func (j *ScheduleReportsJob) isProcessed(userID int32, reportType string, tnow time.Time) bool {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	t, ok := j.processed[userID]
+	key := processedKey{userID: userID, reportType: reportType}
+	t, ok := j.processed[key]
 	if !ok {
 		return false
 	}
@@ -97,31 +103,31 @@ func (j *ScheduleReportsJob) isProcessed(userID int32, tnow time.Time) bool {
 	return tnow.Sub(t) < j.TTL
 }
 
-func (j *ScheduleReportsJob) markProcessed(userID int32, tnow time.Time) {
+func (j *ScheduleReportsJob) markProcessed(userID int32, reportType string, tnow time.Time) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	j.processed[userID] = tnow
+	j.processed[processedKey{userID: userID, reportType: reportType}] = tnow
 }
 
 func (j *ScheduleReportsJob) gcProcessed(tnow time.Time) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
 
-	for id, t := range j.processed {
+	for key, t := range j.processed {
 		if tnow.Sub(t) >= j.TTL {
-			delete(j.processed, id)
+			delete(j.processed, key)
 		}
 	}
 
 	if len(j.processed) > processedMapCapacity {
 		toDelete := len(j.processed) * 30 / 100
 		deleted := 0
-		for id := range j.processed {
+		for key := range j.processed {
 			if deleted >= toDelete {
 				break
 			}
-			delete(j.processed, id)
+			delete(j.processed, key)
 			deleted++
 		}
 	}
@@ -203,7 +209,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
-			if j.isProcessed(user.UserID, tnow) {
+			if j.isProcessed(user.UserID, "weekly", tnow) {
 				slog.DebugContext(ctx, "Skipping already processed user for weekly report", "userID", user.UserID)
 				continue
 			}
@@ -245,14 +251,14 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if errors.Is(err, db.ErrAlreadyExists) {
-			j.markProcessed(userID, tnow)
+			j.markProcessed(userID, "weekly", tnow)
 			return
 		}
 		slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
 		return
 	}
 
-	j.markProcessed(userID, tnow)
+	j.markProcessed(userID, "weekly", tnow)
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
@@ -292,7 +298,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
-			if j.isProcessed(user.UserID, tnow) {
+			if j.isProcessed(user.UserID, "monthly", tnow) {
 				slog.DebugContext(ctx, "Skipping already processed user for monthly report", "userID", user.UserID)
 				continue
 			}
@@ -334,14 +340,14 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if errors.Is(err, db.ErrAlreadyExists) {
-			j.markProcessed(userID, tnow)
+			j.markProcessed(userID, "monthly", tnow)
 			return
 		}
 		slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
 		return
 	}
 
-	j.markProcessed(userID, tnow)
+	j.markProcessed(userID, "monthly", tnow)
 }
 
 // BuildWeeklyReport builds a complete weekly usage report for a user.
