@@ -71,6 +71,9 @@ func (v *Verifier) Update(ctx context.Context) error {
 	}
 
 	v.FingerprintHeader = v.FingerprintHeaderKey.Value()
+	if len(v.FingerprintHeader) > 0 {
+		slog.DebugContext(ctx, "Using fingerprint header", "header", v.FingerprintHeader)
+	}
 
 	return nil
 }
