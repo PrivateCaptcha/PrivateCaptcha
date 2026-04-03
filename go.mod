@@ -14,7 +14,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/jpillora/backoff v1.0.0
 	github.com/justinas/alice v1.2.0
-	github.com/mailru/easyjson v0.9.1
+	github.com/mailru/easyjson v0.9.2
 	github.com/maypok86/otter/v2 v2.3.0
 	github.com/medama-io/go-useragent v1.2.3
 	github.com/prometheus/client_golang v1.23.2
