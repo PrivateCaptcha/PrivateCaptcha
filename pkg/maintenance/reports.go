@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -20,6 +19,9 @@ const (
 	maxPaginationIterations = 100
 	topPropertiesLimit      = 5
 	floatEpsilon            = 1e-4
+
+	WeeklyReferencePrefix  = "report/weekly/"
+	MonthlyReferencePrefix = "report/monthly/"
 )
 
 type ScheduleReportsJob struct {
@@ -99,7 +101,7 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 }
 
 func weeklyReportReference(userID int32, year int, week int) string {
-	return fmt.Sprintf("report/weekly/%d/%d/%d", userID, year, week)
+	return fmt.Sprintf("%s%d/%d/%d", WeeklyReferencePrefix, userID, year, week)
 }
 
 func weeklyReferenceSuffix(year int, week int) string {
@@ -107,7 +109,7 @@ func weeklyReferenceSuffix(year int, week int) string {
 }
 
 func monthlyReportReference(userID int32, year int, month time.Month) string {
-	return fmt.Sprintf("report/monthly/%d/%d/%d", userID, year, month)
+	return fmt.Sprintf("%s%d/%d/%d", MonthlyReferencePrefix, userID, year, month)
 }
 
 func monthlyReferenceSuffix(year int, month time.Month) string {
@@ -132,7 +134,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 
 	var offset int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithWeeklyReport(ctx, fetchLimit, offset, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, offset, WeeklyReferencePrefix, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -213,7 +215,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 	var offset int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithMonthlyReport(ctx, fetchLimit, offset, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, offset, MonthlyReferencePrefix, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -341,36 +343,9 @@ func percentChange(current, previous uint64) float64 {
 	return (float64(current) - float64(previous)) / float64(previous) * 100
 }
 
-func changeSign(change float64) string {
-	if change > floatEpsilon {
-		return "+"
-	}
-	if change < -floatEpsilon {
-		return "-"
-	}
-	return ""
-}
-
-func changeColor(change float64) string {
-	if change > floatEpsilon {
-		return email.ColorGreen
-	}
-	if change < -floatEpsilon {
-		return email.ColorRed
-	}
-	return email.ColorNeutral
-}
-
 func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
-	reqChange := percentChange(report.TotalRequests, report.PrevRequests)
-	report.RequestsChange = math.Abs(reqChange)
-	report.RequestsSign = changeSign(reqChange)
-	report.RequestsColor = changeColor(reqChange)
-
-	verChange := percentChange(report.TotalVerifies, report.PrevVerifies)
-	report.VerifiesChange = math.Abs(verChange)
-	report.VerifiesSign = changeSign(verChange)
-	report.VerifiesColor = changeColor(verChange)
+	report.RequestsChange = percentChange(report.TotalRequests, report.PrevRequests)
+	report.VerifiesChange = percentChange(report.TotalVerifies, report.PrevVerifies)
 }
 
 func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats) {
@@ -411,14 +386,11 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
 		topProperties = append(topProperties, email.PropertyStat{
-			Name:        prop.Name,
-			Domain:      prop.Domain,
-			Count:       ps.CurrentRequests,
-			Percent:     percent,
-			PrevCount:   ps.PrevRequests,
-			Change:      math.Abs(change),
-			ChangeSign:  changeSign(change),
-			ChangeColor: changeColor(change),
+			Name:    prop.Name,
+			Domain:  prop.Domain,
+			Count:   ps.CurrentRequests,
+			Percent: percent,
+			Change:  change,
 		})
 	}
 	report.TopProperties = topProperties

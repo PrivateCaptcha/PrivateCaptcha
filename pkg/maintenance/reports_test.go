@@ -86,17 +86,11 @@ func TestBuildWeeklyReportWithData(t *testing.T) {
 	if result.PrevVerifies != 40 {
 		t.Errorf("expected PrevVerifies=40, got %d", result.PrevVerifies)
 	}
-	if result.RequestsSign != "+" {
-		t.Errorf("expected RequestsSign='+', got %q", result.RequestsSign)
+	if result.RequestsChange <= 0 {
+		t.Errorf("expected positive RequestsChange, got %f", result.RequestsChange)
 	}
-	if result.RequestsColor != email.ColorGreen {
-		t.Errorf("expected RequestsColor=%q, got %q", email.ColorGreen, result.RequestsColor)
-	}
-	if result.VerifiesSign != "+" {
-		t.Errorf("expected VerifiesSign='+', got %q", result.VerifiesSign)
-	}
-	if result.VerifiesColor != email.ColorGreen {
-		t.Errorf("expected VerifiesColor=%q, got %q", email.ColorGreen, result.VerifiesColor)
+	if result.VerifiesChange <= 0 {
+		t.Errorf("expected positive VerifiesChange, got %f", result.VerifiesChange)
 	}
 	if result.VerificationRate == 0 {
 		t.Error("expected non-zero VerificationRate")
@@ -222,12 +216,6 @@ func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 	if result.RequestsChange != 100 {
 		t.Errorf("expected RequestsChange=100, got %f", result.RequestsChange)
 	}
-	if result.RequestsSign != "+" {
-		t.Errorf("expected RequestsSign='+', got %q", result.RequestsSign)
-	}
-	if result.RequestsColor != email.ColorGreen {
-		t.Errorf("expected RequestsColor=%q, got %q", email.ColorGreen, result.RequestsColor)
-	}
 }
 
 func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
@@ -258,7 +246,7 @@ func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
 	}
 }
 
-func TestBuildWeeklyReportDecreaseShowsRed(t *testing.T) {
+func TestBuildWeeklyReportDecreaseShowsNegativeChange(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
@@ -278,18 +266,15 @@ func TestBuildWeeklyReportDecreaseShowsRed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if result.RequestsColor != email.ColorRed {
-		t.Errorf("expected RequestsColor=%q for decrease, got %q", email.ColorRed, result.RequestsColor)
+	if result.RequestsChange >= 0 {
+		t.Errorf("expected negative RequestsChange for decrease, got %f", result.RequestsChange)
 	}
-	if result.VerifiesColor != email.ColorRed {
-		t.Errorf("expected VerifiesColor=%q for decrease, got %q", email.ColorRed, result.VerifiesColor)
-	}
-	if result.RequestsSign != "-" {
-		t.Errorf("expected RequestsSign='-' for decrease, got %q", result.RequestsSign)
+	if result.VerifiesChange >= 0 {
+		t.Errorf("expected negative VerifiesChange for decrease, got %f", result.VerifiesChange)
 	}
 }
 
-func TestBuildWeeklyReportNoChangeShowsNeutral(t *testing.T) {
+func TestBuildWeeklyReportNoChangeShowsZero(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
@@ -309,9 +294,6 @@ func TestBuildWeeklyReportNoChangeShowsNeutral(t *testing.T) {
 
 	if result.RequestsChange != 0 {
 		t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
-	}
-	if result.RequestsColor != email.ColorNeutral {
-		t.Errorf("expected RequestsColor=%q for no change, got %q", email.ColorNeutral, result.RequestsColor)
 	}
 }
 
@@ -429,43 +411,7 @@ func TestPercentChange(t *testing.T) {
 	}
 }
 
-func TestChangeSign(t *testing.T) {
-	if changeSign(10) != "+" {
-		t.Error("expected '+' for positive")
-	}
-	if changeSign(0) != "" {
-		t.Error("expected '' for zero")
-	}
-	if changeSign(-5) != "-" {
-		t.Error("expected '-' for negative")
-	}
-	if changeSign(0.00001) != "" {
-		t.Error("expected '' for near-zero positive")
-	}
-	if changeSign(-0.00001) != "" {
-		t.Error("expected '' for near-zero negative")
-	}
-}
-
-func TestChangeColor(t *testing.T) {
-	if changeColor(10) != email.ColorGreen {
-		t.Error("expected green for positive")
-	}
-	if changeColor(-5) != email.ColorRed {
-		t.Error("expected red for negative")
-	}
-	if changeColor(0) != email.ColorNeutral {
-		t.Error("expected neutral for zero")
-	}
-	if changeColor(0.00001) != email.ColorNeutral {
-		t.Error("expected neutral for near-zero positive")
-	}
-	if changeColor(-0.00001) != email.ColorNeutral {
-		t.Error("expected neutral for near-zero negative")
-	}
-}
-
-func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
+func TestBuildWeeklyReportPropertyChangeDirection(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
 	store := createTestStore(t)
@@ -508,14 +454,11 @@ func TestBuildWeeklyReportPropertyChangeColors(t *testing.T) {
 		t.Fatal("expected both properties")
 	}
 
-	if upProp.ChangeColor != email.ColorGreen {
-		t.Errorf("expected green for increasing property, got %q", upProp.ChangeColor)
+	if upProp.Change <= 0 {
+		t.Errorf("expected positive Change for increasing property, got %f", upProp.Change)
 	}
-	if downProp.ChangeColor != email.ColorRed {
-		t.Errorf("expected red for decreasing property, got %q", downProp.ChangeColor)
-	}
-	if downProp.ChangeSign != "-" {
-		t.Errorf("expected '-' for decreasing property, got %q", downProp.ChangeSign)
+	if downProp.Change >= 0 {
+		t.Errorf("expected negative Change for decreasing property, got %f", downProp.Change)
 	}
 }
 

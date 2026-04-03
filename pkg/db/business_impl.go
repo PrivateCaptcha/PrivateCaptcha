@@ -3646,26 +3646,35 @@ func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID 
 	return reader.Read(ctx)
 }
 
-func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, error) {
+func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, *common.AuditLogEvent, error) {
 	if impl.querier == nil {
-		return nil, ErrMaintenance
+		return nil, nil, ErrMaintenance
 	}
 
 	settings, err := impl.querier.UpsertUserSettings(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to upsert user settings", "userID", params.UserID, common.ErrAttr(err))
-		return nil, err
+		return nil, nil, err
 	}
 
 	_ = impl.cache.Set(ctx, UserSettingsCacheKey(params.UserID), settings)
 
 	slog.DebugContext(ctx, "Upserted user settings", "userID", params.UserID)
 
-	return settings, nil
+	auditEvent := &common.AuditLogEvent{
+		UserID:    params.UserID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(settings.ID),
+		TableName: TableNameUserSettings,
+		NewValue:  settings,
+		Timestamp: time.Now().UTC(),
+	}
+
+	return settings, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context, limit, offset int32, referenceSuffix string) ([]*dbgen.GetUsersWithWeeklyReportRow, error) {
-	if limit <= 0 || offset < 0 || len(referenceSuffix) == 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, offset int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
+	if limit <= 0 || offset < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3673,26 +3682,27 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithWeeklyReport(ctx context.Context
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.querier.GetUsersWithWeeklyReport(ctx, &dbgen.GetUsersWithWeeklyReportParams{
+	users, err := impl.querier.GetUsersWithPendingWeeklyReport(ctx, &dbgen.GetUsersWithPendingWeeklyReportParams{
 		Limit:           limit,
 		Offset:          offset,
+		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return []*dbgen.GetUsersWithWeeklyReportRow{}, nil
+			return []*dbgen.GetUsersWithPendingWeeklyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with weekly report", "limit", limit, "offset", offset, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending weekly report", "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with weekly report", "count", len(users), "limit", limit, "offset", offset)
+	slog.DebugContext(ctx, "Fetched users with pending weekly report", "count", len(users), "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix)
 
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Context, limit, offset int32, referenceSuffix string) ([]*dbgen.GetUsersWithMonthlyReportRow, error) {
-	if limit <= 0 || offset < 0 || len(referenceSuffix) == 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, offset int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
+	if limit <= 0 || offset < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3700,20 +3710,21 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithMonthlyReport(ctx context.Contex
 		return nil, ErrMaintenance
 	}
 
-	users, err := impl.querier.GetUsersWithMonthlyReport(ctx, &dbgen.GetUsersWithMonthlyReportParams{
+	users, err := impl.querier.GetUsersWithPendingMonthlyReport(ctx, &dbgen.GetUsersWithPendingMonthlyReportParams{
 		Limit:           limit,
 		Offset:          offset,
+		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return []*dbgen.GetUsersWithMonthlyReportRow{}, nil
+			return []*dbgen.GetUsersWithPendingMonthlyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with monthly report", "limit", limit, "offset", offset, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending monthly report", "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with monthly report", "count", len(users), "limit", limit, "offset", offset)
+	slog.DebugContext(ctx, "Fetched users with pending monthly report", "count", len(users), "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix)
 
 	return users, nil
 }

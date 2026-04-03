@@ -1084,7 +1084,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 	}
 
 	if len(reportEmail) > 0 {
-		if err := checkmail.ValidateFormat(reportEmail); err != nil {
+		if err := s.EmailVerifier.VerifyEmail(ctx, reportEmail); err != nil {
 			renderCtx.EmailError = "Invalid email address."
 			return &ViewModel{
 				Model: renderCtx,
@@ -1100,7 +1100,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		NotificationsEmail: pgtype.Text{String: reportEmail, Valid: len(reportEmail) > 0},
 	}
 
-	settings, err := s.Store.Impl().UpsertUserSettings(ctx, params)
+	_, auditEvent, err := s.Store.Impl().UpsertUserSettings(ctx, params)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to save notification settings", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to save notification settings."
@@ -1110,19 +1110,11 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		}, nil
 	}
 
-	s.Store.AuditLog().RecordEvent(ctx, &common.AuditLogEvent{
-		UserID:    user.ID,
-		Action:    common.AuditLogActionUpdate,
-		EntityID:  int64(settings.ID),
-		TableName: db.TableNameUserSettings,
-		NewValue:  settings,
-		Timestamp: time.Now().UTC(),
-	}, common.AuditLogSourcePortal)
-
 	renderCtx.SuccessMessage = "Notification settings saved."
 
 	return &ViewModel{
-		Model: renderCtx,
-		View:  settingsNotificationsFormTemplate,
+		Model:      renderCtx,
+		View:       settingsNotificationsFormTemplate,
+		AuditEvent: auditEvent,
 	}, nil
 }
