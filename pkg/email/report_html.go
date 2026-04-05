@@ -7,7 +7,6 @@ type PropertyStat struct {
 	Domain    string
 	Count     uint64
 	Percent   float64
-	PrevCount uint64
 	Change    float64
 	Alternate bool
 }
@@ -64,12 +63,12 @@ const (
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse">
               <tr>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests | humanize}}</span></td>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</span></td>
               </tr>
               <tr>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Verifications</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies | humanize}}</span></td>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</span></td>
               </tr>
               <tr>
@@ -92,7 +91,7 @@ const (
               <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">{{truncate .Name 24}}</td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count}}</span></td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
               </tr>

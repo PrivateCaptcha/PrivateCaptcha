@@ -97,7 +97,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		UsageReportContext: email.UsageReportContext{
 			Period:                 "weekly",
 			PeriodDate:             time.Now().Format("02 Jan 2006"),
-			TotalRequests:          12450,
+			TotalRequests:          1245000,
 			TotalVerifies:          8320,
 			PrevRequests:           11200,
 			PrevVerifies:           9100,
