@@ -125,6 +125,7 @@ type settingsAPIKeysRenderContext struct {
 type settingsNotificationsRenderContext struct {
 	SettingsCommonRenderContext
 	ReportEmail   string
+	UserEmail     string
 	EmailError    string
 	WeeklyReport  bool
 	MonthlyReport bool
@@ -1033,11 +1034,12 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) *settingsNotificationsRenderContext {
 	renderCtx := &settingsNotificationsRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
+		UserEmail:                   user.Email,
 	}
 
 	settings, err := s.Store.Impl().RetrieveUserSettings(ctx, user.ID)
 	if err != nil {
-		if !errors.Is(err, db.ErrRecordNotFound) {
+		if !errors.Is(err, db.ErrRecordNotFound) && !errors.Is(err, db.ErrNegativeCacheHit) {
 			slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", user.ID, common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Could not load notification settings. Please try again."
 		}
@@ -1046,6 +1048,7 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 
 	renderCtx.WeeklyReport = settings.WeeklyReport
 	renderCtx.MonthlyReport = settings.MonthlyReport
+
 	if settings.NotificationsEmail.Valid {
 		renderCtx.ReportEmail = settings.NotificationsEmail.String
 	}
@@ -1078,8 +1081,8 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		return nil, ErrInvalidRequestArg
 	}
 
-	weeklyReport := len(r.FormValue(common.ParamWeeklyReport)) > 0
-	monthlyReport := len(r.FormValue(common.ParamMonthlyReport)) > 0
+	_, weeklyReport := r.Form[common.ParamWeeklyReport]
+	_, monthlyReport := r.Form[common.ParamMonthlyReport]
 	reportEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 
 	renderCtx := &settingsNotificationsRenderContext{
@@ -1087,6 +1090,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		WeeklyReport:                weeklyReport,
 		MonthlyReport:               monthlyReport,
 		ReportEmail:                 reportEmail,
+		UserEmail:                   user.Email,
 	}
 
 	if len(reportEmail) > 0 {

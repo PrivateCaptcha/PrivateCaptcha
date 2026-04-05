@@ -22,6 +22,11 @@
     @apply font-sans;
 }
 
+.pc-form-secondary-text {
+    @apply text-sm;
+    @apply text-gray-500;
+}
+
 .pc-form-text-error {
     @apply text-red-500;
 }
@@ -129,7 +134,7 @@
     @apply block;
     @apply px-4;
     @apply py-4;
-    @apply placeholder-gray-600;
+    @apply placeholder-gray-500;
     @apply bg-white;
     @apply border;
     @apply rounded-xl;
@@ -140,7 +145,7 @@
     @apply block;
     @apply px-4;
     @apply py-2.5;
-    @apply placeholder-gray-600;
+    @apply placeholder-gray-500;
     @apply border;
     @apply rounded-md;
     @apply focus:outline-none;
