@@ -15,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
@@ -503,5 +504,48 @@ func TestPostLoginDisabledUser(t *testing.T) {
 	body := rr.Body.String()
 	if !strings.Contains(body, "disabled") {
 		t.Errorf("Expected error message about disabled account, got: %s", body)
+	}
+}
+
+func TestPostLoginInvalidCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Temporarily make the puzzle engine return a failed verify result
+	originalResult := server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result
+	server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result = &puzzle.VerifyResult{Error: puzzle.InvalidSolutionError}
+	defer func() {
+		server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result = originalResult
+	}()
+
+	// Get the CSRF token
+	req := httptest.NewRequest("GET", "/"+common.LoginEndpoint, nil)
+	rr := httptest.NewRecorder()
+	server.Handler(server.getLogin).ServeHTTP(rr, req)
+	csrfToken, err := parseCsrfToken(rr.Body.String())
+	if err != nil {
+		t.Fatalf("failed to parse CSRF token: %v", err)
+	}
+
+	// Prepare the form data with invalid captcha solution
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, csrfToken)
+	form.Add(common.ParamEmail, "test@example.com")
+	form.Add(common.ParamPortalSolution, "invalid-captcha-solution")
+
+	// Send the POST request
+	req = httptest.NewRequest("POST", "/"+common.LoginEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	rr = httptest.NewRecorder()
+	server.postLogin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, captchaVerificationFailed) {
+		t.Errorf("Expected captcha verification failed error message, got: %s", body)
 	}
 }
