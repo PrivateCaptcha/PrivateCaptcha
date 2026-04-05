@@ -226,6 +226,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
+	emailVerifier := &portal.PortalEmailVerifier{}
 	sessionStore := db.NewSessionStore(businessDB, session.KeyPersistent, metrics)
 	xsrfKey := cfg.Get(common.XSRFKeyKey)
 	portalServer := &portal.Server{
@@ -252,7 +253,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		UserLimiter:        userLimiter,
 		SubscriptionLimits: subscriptionLimits,
-		EmailVerifier:      &portal.PortalEmailVerifier{},
+		EmailVerifier:      emailVerifier,
 		TwoFactorDuration:  10*time.Minute + 5*time.Minute,
 		LicenseService:     checkLicenseJob,
 	}
@@ -382,17 +383,18 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Store:     businessDB,
 	})
 	jobs.AddLocked(30*time.Minute, &maintenance.UserEmailNotificationsJob{
-		RunInterval:  3 * time.Hour, // overlap few locked intervals to cover for possible unprocessed notifications
-		Store:        businessDB,
-		Templates:    email.Templates(),
-		Sender:       sender,
-		ChunkSize:    50,
-		MaxAttempts:  5,
-		EmailFrom:    cfg.Get(common.EmailFromKey),
-		ReplyToEmail: cfg.Get(common.ReplyToEmailKey),
-		PlanService:  planService,
-		CDNURL:       mailer.CDNURL,
-		PortalURL:    mailer.PortalURL,
+		RunInterval:   3 * time.Hour, // overlap few locked intervals to cover for possible unprocessed notifications
+		Store:         businessDB,
+		Templates:     email.Templates(),
+		Sender:        sender,
+		ChunkSize:     50,
+		MaxAttempts:   5,
+		EmailFrom:     cfg.Get(common.EmailFromKey),
+		ReplyToEmail:  cfg.Get(common.ReplyToEmailKey),
+		PlanService:   planService,
+		EmailVerifier: emailVerifier,
+		CDNURL:        mailer.CDNURL,
+		PortalURL:     mailer.PortalURL,
 	})
 	jobs.AddLocked(24*time.Hour, &maintenance.CleanupUserNotificationsJob{
 		Store:              businessDB,

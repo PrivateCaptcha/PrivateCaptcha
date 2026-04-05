@@ -245,7 +245,7 @@ func (q *Queries) GetNotificationTemplateByHash(ctx context.Context, externalID 
 }
 
 const getPendingUserNotifications = `-- name: GetPendingUserNotifications :many
-SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, un.email_to, COALESCE(un.email_to, u.email)::text AS email, u.subscription_id, s.status
+SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, un.email_to, un.email_to as notification_email, u.email AS user_email, u.subscription_id, s.status
 FROM backend.user_notifications un
 JOIN backend.users u ON un.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -266,10 +266,11 @@ type GetPendingUserNotificationsParams struct {
 }
 
 type GetPendingUserNotificationsRow struct {
-	UserNotification UserNotification `db:"user_notification" json:"user_notification"`
-	Email            string           `db:"email" json:"email"`
-	SubscriptionID   pgtype.Int4      `db:"subscription_id" json:"subscription_id"`
-	Status           pgtype.Text      `db:"status" json:"status"`
+	UserNotification  UserNotification `db:"user_notification" json:"user_notification"`
+	NotificationEmail pgtype.Text      `db:"notification_email" json:"notification_email"`
+	UserEmail         string           `db:"user_email" json:"user_email"`
+	SubscriptionID    pgtype.Int4      `db:"subscription_id" json:"subscription_id"`
+	Status            pgtype.Text      `db:"status" json:"status"`
 }
 
 func (q *Queries) GetPendingUserNotifications(ctx context.Context, arg *GetPendingUserNotificationsParams) ([]*GetPendingUserNotificationsRow, error) {
@@ -298,7 +299,8 @@ func (q *Queries) GetPendingUserNotifications(ctx context.Context, arg *GetPendi
 			&i.UserNotification.EmailFrom,
 			&i.UserNotification.ReplyToEmail,
 			&i.UserNotification.EmailTo,
-			&i.Email,
+			&i.NotificationEmail,
+			&i.UserEmail,
 			&i.SubscriptionID,
 			&i.Status,
 		); err != nil {

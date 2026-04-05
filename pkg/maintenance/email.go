@@ -49,18 +49,19 @@ func (j *RegisterEmailTemplatesJob) RunOnce(ctx context.Context, params any) err
 
 type UserEmailNotificationsJob struct {
 	// this is the "actual" interval since we will be running as a DB-locked distributed job
-	RunInterval  time.Duration
-	Store        db.Implementor
-	Templates    []*common.EmailTemplate
-	Sender       email.Sender
-	ChunkSize    int
-	MaxAttempts  int
-	EmailFrom    common.ConfigItem
-	ReplyToEmail common.ConfigItem
-	PlanService  billing.PlanService
-	CDNURL       string
-	PortalURL    string
-	UserIDs      map[int32]struct{}
+	RunInterval   time.Duration
+	Store         db.Implementor
+	Templates     []*common.EmailTemplate
+	Sender        email.Sender
+	ChunkSize     int
+	MaxAttempts   int
+	EmailFrom     common.ConfigItem
+	ReplyToEmail  common.ConfigItem
+	PlanService   billing.PlanService
+	EmailVerifier common.EmailVerifier
+	CDNURL        string
+	PortalURL     string
+	UserIDs       map[int32]struct{}
 }
 
 var _ common.PeriodicJob = (*UserEmailNotificationsJob)(nil)
@@ -389,12 +390,23 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 
 		msg := &email.Message{
 			Subject:   un.Subject,
-			EmailTo:   n.Email,
 			EmailFrom: notifEmailFrom,
 			NameFrom:  common.PrivateCaptchaTeam,
 			ReplyTo:   notifReplyTo,
 			HTMLBody:  htmlBodyTpl.String(),
 			TextBody:  textBodyTpl.String(),
+		}
+
+		if n.NotificationEmail.Valid && (len(n.NotificationEmail.String) > 0) && (j.EmailVerifier != nil) {
+			if err := j.EmailVerifier.VerifyEmail(ctx, n.NotificationEmail.String); err == nil {
+				msg.EmailTo = n.NotificationEmail.String
+			} else {
+				nlog.WarnContext(ctx, "Skipping invalid notification email", "email", n.NotificationEmail.String, common.ErrAttr(err))
+			}
+		}
+
+		if len(msg.EmailTo) == 0 {
+			msg.EmailTo = n.UserEmail
 		}
 
 		if err := j.Sender.SendEmail(ctx, msg); err != nil {
