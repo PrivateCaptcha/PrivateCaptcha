@@ -333,6 +333,12 @@ func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 	if result.TopProperties[1].Name != "Blog" {
 		t.Errorf("expected second property 'Blog', got %q", result.TopProperties[1].Name)
 	}
+	if result.TopProperties[0].Alternate {
+		t.Error("expected first property row to be unstriped")
+	}
+	if !result.TopProperties[1].Alternate {
+		t.Error("expected second property row to be striped")
+	}
 }
 
 func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
@@ -382,6 +388,37 @@ func TestBuildWeeklyReportVerificationRate(t *testing.T) {
 	expectedRate := 50.0
 	if result.VerificationRate != expectedRate {
 		t.Errorf("expected VerificationRate=%f, got %f", expectedRate, result.VerificationRate)
+	}
+	if result.VerificationRateChange != 100 {
+		t.Errorf("expected VerificationRateChange=100, got %f", result.VerificationRateChange)
+	}
+}
+
+func TestBuildWeeklyReportVerificationRateChange(t *testing.T) {
+	ctx := t.Context()
+	ts := db.NewMemoryTimeSeries()
+	store := createTestStore(t)
+	userID := int32(12)
+
+	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
+	mid := now.AddDate(0, 0, -7)
+	from := now.AddDate(0, 0, -14)
+
+	seedTimeSeries(t, ts, userID, 10, 1, mid, 100)
+	seedVerifyLogs(t, ts, userID, 10, 1, mid, 40)
+	seedTimeSeries(t, ts, userID, 10, 1, from, 100)
+	seedVerifyLogs(t, ts, userID, 10, 1, from, 50)
+
+	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.VerificationRate != 40 {
+		t.Errorf("expected VerificationRate=40, got %f", result.VerificationRate)
+	}
+	if result.VerificationRateChange >= 0 {
+		t.Errorf("expected negative VerificationRateChange, got %f", result.VerificationRateChange)
 	}
 }
 

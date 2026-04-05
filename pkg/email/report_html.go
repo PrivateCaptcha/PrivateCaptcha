@@ -9,19 +9,21 @@ type PropertyStat struct {
 	Percent   float64
 	PrevCount uint64
 	Change    float64
+	Alternate bool
 }
 
 type UsageReportContext struct {
-	Period           string
-	TotalRequests    uint64
-	TotalVerifies    uint64
-	PrevRequests     uint64
-	PrevVerifies     uint64
-	RequestsChange   float64
-	VerifiesChange   float64
-	DashboardPath    string
-	VerificationRate float64
-	TopProperties    []PropertyStat
+	Period                 string
+	TotalRequests          uint64
+	TotalVerifies          uint64
+	PrevRequests           uint64
+	PrevVerifies           uint64
+	RequestsChange         float64
+	VerifiesChange         float64
+	VerificationRateChange float64
+	DashboardPath          string
+	VerificationRate       float64
+	TopProperties          []PropertyStat
 }
 
 var (
@@ -61,37 +63,38 @@ const (
             </p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Total Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center">{{.TotalRequests}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:center;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center;background-color:#f9f9f9">Total Verifications</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center;background-color:#f9f9f9">{{.TotalVerifies}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:center;background-color:#f9f9f9;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Verifications</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Verification Rate</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Verification Rate</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .VerificationRate}}%</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerificationRateChange 0.0}}color:#22883e{{else if lt .VerificationRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%</span></td>
               </tr>
             </table>
             {{- if .TopProperties}}
-            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top {{len .TopProperties}} properties by requests:</strong></p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Property</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Domain</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">%</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Change</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:left">Property</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:left">Domain</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">Change</td>
               </tr>
               {{- range .TopProperties}}
-              <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Name}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">{{.Domain}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Count}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</td>
+              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:left">{{.Name}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:left">{{.Domain}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
               </tr>
               {{- end}}
             </table>
@@ -119,10 +122,10 @@ Here is your {{.Period}} Private Captcha usage report:
 
 Total Requests: {{.TotalRequests}} ({{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%)
 Total Verifications: {{.TotalVerifies}} ({{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%)
-Verification Rate: {{printf "%.1f" .VerificationRate}}%
+Verification Rate: {{printf "%.1f" .VerificationRate}}% ({{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%)
 {{- if .TopProperties}}
 
-Top properties by requests:
+Top {{len .TopProperties}} properties by requests:
 {{- range .TopProperties}}
   - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
 {{- end}}
@@ -170,37 +173,38 @@ PrivateCaptcha (c) {{.CurrentYear}} Intmaker OU`
             </p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Total Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center">{{.TotalRequests}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:center;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalRequests}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .RequestsChange 0.0}}color:#22883e{{else if lt .RequestsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center;background-color:#f9f9f9">Total Verifications</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center;background-color:#f9f9f9">{{.TotalVerifies}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:center;background-color:#f9f9f9;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Verifications</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalVerifies}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerifiesChange 0.0}}color:#22883e{{else if lt .VerifiesChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%</span></td>
               </tr>
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">Verification Rate</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;font-weight:bold;text-align:center" colspan="2">{{printf "%.1f" .VerificationRate}}%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Verification Rate</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .VerificationRate}}%</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerificationRateChange 0.0}}color:#22883e{{else if lt .VerificationRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%</span></td>
               </tr>
             </table>
             {{- if .TopProperties}}
-            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top properties by requests:</strong></p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0"><strong>Top {{len .TopProperties}} properties by requests:</strong></p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0;border-collapse:collapse;width:100%">
               <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Property</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Domain</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Requests</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">%</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#666;font-weight:bold;text-align:center">Change</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:left">Property</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:left">Domain</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">Requests</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">%</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:12px;color:#000000;font-weight:bold;text-align:right">Change</td>
               </tr>
               {{- range .TopProperties}}
-              <tr>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Name}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:center">{{.Domain}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{.Count}}</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center">{{printf "%.1f" .Percent}}%</td>
-                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:center;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}">{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</td>
+              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:left">{{.Name}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#666;text-align:left">{{.Domain}}</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
               </tr>
               {{- end}}
             </table>
@@ -228,10 +232,10 @@ Here is your {{.Period}} Private Captcha usage report:
 
 Total Requests: {{.TotalRequests}} ({{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%)
 Total Verifications: {{.TotalVerifies}} ({{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%)
-Verification Rate: {{printf "%.1f" .VerificationRate}}%
+Verification Rate: {{printf "%.1f" .VerificationRate}}% ({{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%)
 {{- if .TopProperties}}
 
-Top properties by requests:
+Top {{len .TopProperties}} properties by requests:
 {{- range .TopProperties}}
   - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
 {{- end}}

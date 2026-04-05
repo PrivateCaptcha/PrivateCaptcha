@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -358,9 +359,7 @@ func fillTotals(report *email.UsageReportContext, stats *common.UserReportStats)
 	report.PrevRequests = stats.TotalPrevRequests
 	report.TotalVerifies = stats.TotalCurrentVerifies
 	report.PrevVerifies = stats.TotalPrevVerifies
-	if report.TotalRequests > 0 {
-		report.VerificationRate = float64(report.TotalVerifies) / float64(report.TotalRequests) * 100
-	}
+	report.VerificationRate = verificationRate(report.TotalRequests, report.TotalVerifies)
 }
 
 func percentChange(current, previous uint64) float64 {
@@ -373,9 +372,30 @@ func percentChange(current, previous uint64) float64 {
 	return (float64(current) - float64(previous)) / float64(previous) * 100
 }
 
+func percentChangeFloat(current, previous float64) float64 {
+	if math.Abs(previous) < floatEpsilon {
+		if math.Abs(current) < floatEpsilon {
+			return 0
+		}
+		return 100
+	}
+	return (current - previous) / previous * 100
+}
+
+func verificationRate(totalRequests, totalVerifies uint64) float64 {
+	if totalRequests == 0 {
+		return 0
+	}
+	return float64(totalVerifies) / float64(totalRequests) * 100
+}
+
 func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
 	report.RequestsChange = percentChange(report.TotalRequests, report.PrevRequests)
 	report.VerifiesChange = percentChange(report.TotalVerifies, report.PrevVerifies)
+	report.VerificationRateChange = percentChangeFloat(
+		report.VerificationRate,
+		verificationRate(report.PrevRequests, report.PrevVerifies),
+	)
 }
 
 func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats) {
@@ -416,11 +436,12 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
 		topProperties = append(topProperties, email.PropertyStat{
-			Name:    prop.Name,
-			Domain:  prop.Domain,
-			Count:   ps.CurrentRequests,
-			Percent: percent,
-			Change:  change,
+			Name:      prop.Name,
+			Domain:    prop.Domain,
+			Count:     ps.CurrentRequests,
+			Percent:   percent,
+			Change:    change,
+			Alternate: len(topProperties)%2 == 1,
 		})
 	}
 	report.TopProperties = topProperties
