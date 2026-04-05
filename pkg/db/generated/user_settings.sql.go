@@ -36,6 +36,7 @@ FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND us.user_id > $2
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
@@ -43,12 +44,12 @@ WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
-LIMIT $1 OFFSET $2
+LIMIT $1
 `
 
 type GetUsersWithPendingMonthlyReportParams struct {
 	Limit           int32  `db:"limit" json:"limit"`
-	Offset          int32  `db:"offset" json:"offset"`
+	UserID          int32  `db:"user_id" json:"user_id"`
 	ReferencePrefix string `db:"reference_prefix" json:"reference_prefix"`
 	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
@@ -63,7 +64,7 @@ type GetUsersWithPendingMonthlyReportRow struct {
 func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *GetUsersWithPendingMonthlyReportParams) ([]*GetUsersWithPendingMonthlyReportRow, error) {
 	rows, err := q.db.Query(ctx, getUsersWithPendingMonthlyReport,
 		arg.Limit,
-		arg.Offset,
+		arg.UserID,
 		arg.ReferencePrefix,
 		arg.ReferenceSuffix,
 	)
@@ -96,6 +97,7 @@ FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND us.user_id > $2
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
@@ -103,12 +105,12 @@ WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS 
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
-LIMIT $1 OFFSET $2
+LIMIT $1
 `
 
 type GetUsersWithPendingWeeklyReportParams struct {
 	Limit           int32  `db:"limit" json:"limit"`
-	Offset          int32  `db:"offset" json:"offset"`
+	UserID          int32  `db:"user_id" json:"user_id"`
 	ReferencePrefix string `db:"reference_prefix" json:"reference_prefix"`
 	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
@@ -123,7 +125,7 @@ type GetUsersWithPendingWeeklyReportRow struct {
 func (q *Queries) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetUsersWithPendingWeeklyReportParams) ([]*GetUsersWithPendingWeeklyReportRow, error) {
 	rows, err := q.db.Query(ctx, getUsersWithPendingWeeklyReport,
 		arg.Limit,
-		arg.Offset,
+		arg.UserID,
 		arg.ReferencePrefix,
 		arg.ReferenceSuffix,
 	)

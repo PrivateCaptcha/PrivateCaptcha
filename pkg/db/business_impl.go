@@ -3684,7 +3684,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 
 	users, err := impl.querier.GetUsersWithPendingWeeklyReport(ctx, &dbgen.GetUsersWithPendingWeeklyReportParams{
 		Limit:           limit,
-		Offset:          lastSeenUserID,
+		UserID:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})
@@ -3712,7 +3712,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 
 	users, err := impl.querier.GetUsersWithPendingMonthlyReport(ctx, &dbgen.GetUsersWithPendingMonthlyReportParams{
 		Limit:           limit,
-		Offset:          lastSeenUserID,
+		UserID:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})

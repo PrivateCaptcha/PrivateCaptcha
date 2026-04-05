@@ -157,7 +157,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	}
 
 	var lastSeenUserID int32
-	var errs []error
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
 		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix)
 		if err != nil {
@@ -184,9 +183,9 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
-			if err := j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week); err != nil {
-				errs = append(errs, err)
-			}
+			// single user report failure shouldn't abort this
+			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week)
+
 			lastSeenUserID = user.UserID
 		}
 
@@ -195,9 +194,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 		}
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
 	return nil
 }
 
@@ -208,7 +204,8 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 
 	reportCtx, err := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 	if err != nil {
-		return fmt.Errorf("failed to build weekly report for user %d: %w", userID, err)
+		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
+		return err
 	}
 
 	notif := &common.ScheduledNotification{
@@ -225,7 +222,8 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if !errors.Is(err, db.ErrAlreadyExists) {
-			return fmt.Errorf("failed to create weekly report notification for user %d: %w", userID, err)
+			slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
+			return err
 		}
 	}
 	return nil
@@ -243,7 +241,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 	}
 
 	var lastSeenUserID int32
-	var errs []error
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
 		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix)
 		if err != nil {
@@ -270,9 +267,9 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
-			if err := j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow); err != nil {
-				errs = append(errs, err)
-			}
+			// single user report failure shouldn't abort this
+			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow)
+
 			lastSeenUserID = user.UserID
 		}
 
@@ -281,9 +278,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 		}
 	}
 
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
 	return nil
 }
 
@@ -294,7 +288,8 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 
 	reportCtx, err := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 	if err != nil {
-		return fmt.Errorf("failed to build monthly report for user %d: %w", userID, err)
+		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
+		return err
 	}
 
 	notif := &common.ScheduledNotification{
@@ -311,7 +306,8 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if !errors.Is(err, db.ErrAlreadyExists) {
-			return fmt.Errorf("failed to create monthly report notification for user %d: %w", userID, err)
+			slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
+			return err
 		}
 	}
 	return nil

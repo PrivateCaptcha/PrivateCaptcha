@@ -1030,7 +1030,7 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 	return &ViewModel{Model: renderCtx}, nil
 }
 
-func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) (*settingsNotificationsRenderContext, error) {
+func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) *settingsNotificationsRenderContext {
 	renderCtx := &settingsNotificationsRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
 	}
@@ -1039,10 +1039,9 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 	if err != nil {
 		if !errors.Is(err, db.ErrRecordNotFound) {
 			slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", user.ID, common.ErrAttr(err))
-			return nil, fmt.Errorf("failed to retrieve user settings for user %d: %w", user.ID, err)
+			renderCtx.ErrorMessage = "Could not load notification settings. Please try again."
 		}
-		// If not found, return empty settings (default values)
-		return renderCtx, nil
+		return renderCtx
 	}
 
 	renderCtx.WeeklyReport = settings.WeeklyReport
@@ -1051,7 +1050,7 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 		renderCtx.ReportEmail = settings.NotificationsEmail.String
 	}
 
-	return renderCtx, nil
+	return renderCtx
 }
 
 func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -1062,10 +1061,7 @@ func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request
 		return nil, err
 	}
 
-	renderCtx, err := s.createNotificationsSettingsModel(ctx, user)
-	if err != nil {
-		return nil, err
-	}
+	renderCtx := s.createNotificationsSettingsModel(ctx, user)
 
 	return &ViewModel{Model: renderCtx}, nil
 }

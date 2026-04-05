@@ -206,63 +206,25 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 func (ul *UserAuditLog) initFromUserSettings(oldValue, newValue *db.AuditLogUserSettings) error {
 	ul.Resource = "Notification Settings"
 
-	// Format report settings for old and new values
-	formatReports := func(settings *db.AuditLogUserSettings) string {
-		if settings == nil {
-			return "none"
-		}
+	if newValue != nil {
 		var parts []string
-		if settings.WeeklyReport {
+		if newValue.WeeklyReport {
 			parts = append(parts, "Weekly")
 		}
-		if settings.MonthlyReport {
+		if newValue.MonthlyReport {
 			parts = append(parts, "Monthly")
 		}
-		if len(parts) == 0 {
-			return "none"
+		if len(parts) > 0 {
+			ul.Property = "Reports"
+			ul.Value = strings.Join(parts, ", ")
 		}
-		return strings.Join(parts, ", ")
-	}
-
-	// Format email for old and new values
-	formatEmail := func(settings *db.AuditLogUserSettings) string {
-		if settings == nil || settings.NotificationsEmail == nil {
-			return "<empty>"
-		}
-		email := *settings.NotificationsEmail
-		if len(email) == 0 {
-			return "<empty>"
-		}
-		return common.MaskEmail(email, '*')
-	}
-
-	oldReports := formatReports(oldValue)
-	newReports := formatReports(newValue)
-	oldEmail := formatEmail(oldValue)
-	newEmail := formatEmail(newValue)
-
-	// Check if reports changed
-	reportsChanged := oldReports != newReports
-	// Check if email changed
-	emailChanged := oldEmail != newEmail
-
-	// Build Property and Value based on what changed
-	if reportsChanged && emailChanged {
-		ul.Property = "Reports, Email"
-		ul.Value = fmt.Sprintf("Reports: %s -> %s, Email: %s -> %s", oldReports, newReports, oldEmail, newEmail)
-	} else if reportsChanged {
-		ul.Property = "Reports"
-		ul.Value = fmt.Sprintf("%s -> %s", oldReports, newReports)
-	} else if emailChanged {
-		ul.Property = "Email"
-		ul.Value = fmt.Sprintf("%s -> %s", oldEmail, newEmail)
-	} else {
-		// No change detected, but still record something
-		ul.Property = "Reports"
-		ul.Value = newReports
-		if newEmail != "<empty>" {
-			ul.Property += ", Email"
-			ul.Value += ", " + newEmail
+		if newValue.NotificationsEmail != nil && len(*newValue.NotificationsEmail) > 0 {
+			if ul.Property == "" {
+				ul.Property = "Email"
+			} else {
+				ul.Property += ", Email"
+			}
+			ul.Value += " " + common.MaskEmail(*newValue.NotificationsEmail, '*')
 		}
 	}
 
