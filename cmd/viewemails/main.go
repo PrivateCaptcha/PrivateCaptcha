@@ -106,6 +106,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			VerificationRateChange: -17.8,
 			DashboardPath:          "settings?tab=usage",
 			VerificationRate:       66.8,
+			AccountLimit:           1000000,
 			TopProperties: []*email.PropertyStat{
 				{Name: "Main Site with extremely long name", Domain: "*.example.com", Count: 5200, Percent: 41.8, Change: 8.3},
 				{Name: "Blog", Domain: "blog.example.com", Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},

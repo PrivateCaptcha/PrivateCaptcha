@@ -89,16 +89,14 @@ func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow tim
 	if p.UserID > 0 {
 		slog.DebugContext(ctx, "Processing reports for a single user", "userID", p.UserID, "weekly", p.Weekly, "monthly", p.Monthly)
 
-		accountLimit := j.lookupAccountLimit(ctx, p.UserID)
-
 		var errs []error
 		if p.Weekly {
-			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, accountLimit); err != nil {
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if p.Monthly {
-			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, accountLimit); err != nil {
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -146,36 +144,6 @@ func truncateDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
-func (j *ScheduleReportsJob) findPlan(productID, priceID string) (billing.Plan, error) {
-	if productID == "" || priceID == "" {
-		return nil, billing.ErrInvalidArgument
-	}
-	plan, err := j.PlanService.FindPlan(productID, priceID, j.Stage, true)
-	if err != nil {
-		plan, err = j.PlanService.FindPlan(productID, priceID, j.Stage, false)
-	}
-	return plan, err
-}
-
-func (j *ScheduleReportsJob) lookupAccountLimit(ctx context.Context, userID int32) uint64 {
-	user, err := j.Store.Impl().RetrieveUser(ctx, userID)
-	if err != nil || !user.SubscriptionID.Valid {
-		return 0
-	}
-	subscr, err := j.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
-	if err != nil {
-		return 0
-	}
-	plan, err := j.findPlan(subscr.ExternalProductID, subscr.ExternalPriceID)
-	if err != nil {
-		return 0
-	}
-	if plan.RequestsLimit() > 0 {
-		return uint64(plan.RequestsLimit())
-	}
-	return 0
-}
-
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	year, week := tnow.ISOWeek()
 	fetchLimit := usersLimit + 1
@@ -221,8 +189,12 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 			}
 
 			var accountLimit uint64
-			if plan, err := j.findPlan(user.ExternalProductID, user.ExternalPriceID); err == nil {
-				if plan.RequestsLimit() > 0 {
+			if user.ExternalProductID != "" && user.ExternalPriceID != "" {
+				plan, err := j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, true)
+				if err != nil {
+					plan, err = j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, false)
+				}
+				if err == nil && plan.RequestsLimit() > 0 {
 					accountLimit = uint64(plan.RequestsLimit())
 				}
 			}
@@ -325,8 +297,12 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 			}
 
 			var accountLimit uint64
-			if plan, err := j.findPlan(user.ExternalProductID, user.ExternalPriceID); err == nil {
-				if plan.RequestsLimit() > 0 {
+			if user.ExternalProductID != "" && user.ExternalPriceID != "" {
+				plan, err := j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, true)
+				if err != nil {
+					plan, err = j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, false)
+				}
+				if err == nil && plan.RequestsLimit() > 0 {
 					accountLimit = uint64(plan.RequestsLimit())
 				}
 			}
