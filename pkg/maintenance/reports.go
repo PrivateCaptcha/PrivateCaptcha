@@ -33,6 +33,9 @@ type ScheduleReportsJob struct {
 
 type ScheduleReportsParams struct {
 	UsersLimit int32 `json:"users_limit"`
+	UserID     int32 `json:"user_id,omitempty"`
+	Weekly     bool  `json:"weekly"`
+	Monthly    bool  `json:"monthly"`
 }
 
 var _ common.PeriodicJob = (*ScheduleReportsJob)(nil)
@@ -73,6 +76,8 @@ func (j *ScheduleReportsJob) NewParams() any {
 	}
 	return &ScheduleReportsParams{
 		UsersLimit: limit,
+		Weekly:     true,
+		Monthly:    true,
 	}
 }
 
@@ -85,13 +90,24 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 
 	tnow := time.Now().UTC()
 
-	if tnow.Weekday() == time.Monday {
+	if p.UserID > 0 {
+		if p.Weekly {
+			year, week := tnow.ISOWeek()
+			j.scheduleWeeklyReportForUser(ctx, p.UserID, tnow, year, week)
+		}
+		if p.Monthly {
+			j.scheduleMonthlyReportForUser(ctx, p.UserID, tnow)
+		}
+		return nil
+	}
+
+	if p.Weekly && tnow.Weekday() == time.Monday {
 		if err := j.scheduleWeeklyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule weekly reports", common.ErrAttr(err))
 		}
 	}
 
-	if tnow.Day() == 1 {
+	if p.Monthly && tnow.Day() == 1 {
 		if err := j.scheduleMonthlyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule monthly reports", common.ErrAttr(err))
 		}
@@ -101,19 +117,19 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 }
 
 func weeklyReportReference(userID int32, year int, week int) string {
-	return fmt.Sprintf("%s%d/%d/%d", WeeklyReferencePrefix, userID, year, week)
+	return fmt.Sprintf("%s%d%s", WeeklyReferencePrefix, userID, weeklyReferenceSuffix(year, week))
 }
 
 func weeklyReferenceSuffix(year int, week int) string {
-	return fmt.Sprintf("%d/%d", year, week)
+	return fmt.Sprintf("/%d/%d", year, week)
 }
 
 func monthlyReportReference(userID int32, year int, month time.Month) string {
-	return fmt.Sprintf("%s%d/%d/%d", MonthlyReferencePrefix, userID, year, month)
+	return fmt.Sprintf("%s%d%s", MonthlyReferencePrefix, userID, monthlyReferenceSuffix(year, month))
 }
 
 func monthlyReferenceSuffix(year int, month time.Month) string {
-	return fmt.Sprintf("%d/%d", year, month)
+	return fmt.Sprintf("/%d/%d", year, month)
 }
 
 func truncateDay(t time.Time) time.Time {

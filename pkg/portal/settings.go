@@ -1085,6 +1085,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 
 	if len(reportEmail) > 0 {
 		if err := s.EmailVerifier.VerifyEmail(ctx, reportEmail); err != nil {
+			slog.WarnContext(ctx, "Email verification failed for notification settings", "email", reportEmail, common.ErrAttr(err))
 			renderCtx.EmailError = "Invalid email address."
 			return &ViewModel{
 				Model: renderCtx,

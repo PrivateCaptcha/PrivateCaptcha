@@ -463,11 +463,11 @@ func TestBuildWeeklyReportPropertyChangeDirection(t *testing.T) {
 }
 
 func TestReferenceSuffix(t *testing.T) {
-	if got := weeklyReferenceSuffix(2025, 11); got != "2025/11" {
-		t.Errorf("weeklyReferenceSuffix(2025, 11) = %q, want %q", got, "2025/11")
+	if got := weeklyReferenceSuffix(2025, 11); got != "/2025/11" {
+		t.Errorf("weeklyReferenceSuffix(2025, 11) = %q, want %q", got, "/2025/11")
 	}
-	if got := monthlyReferenceSuffix(2025, time.March); got != "2025/3" {
-		t.Errorf("monthlyReferenceSuffix(2025, March) = %q, want %q", got, "2025/3")
+	if got := monthlyReferenceSuffix(2025, time.March); got != "/2025/3" {
+		t.Errorf("monthlyReferenceSuffix(2025, March) = %q, want %q", got, "/2025/3")
 	}
 }
 

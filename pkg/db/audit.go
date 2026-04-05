@@ -615,6 +615,12 @@ type AuditLogAccess struct {
 	EntityName string `json:"name,omitempty"`
 }
 
+type AuditLogUserSettings struct {
+	WeeklyReport       bool    `json:"weekly_report"`
+	MonthlyReport      bool    `json:"monthly_report"`
+	NotificationsEmail *string `json:"notifications_email,omitempty"`
+}
+
 type AuditLogDifficultyRule struct {
 	Name                     string  `json:"name,omitempty"`
 	PropertyID               int32   `json:"property_id,omitempty"`

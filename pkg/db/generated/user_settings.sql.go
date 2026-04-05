@@ -39,7 +39,7 @@ WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
-      AND un.reference_id = $3::TEXT || us.user_id::TEXT || '/' || $4::TEXT
+      AND un.reference_id = $3::TEXT || us.user_id::TEXT || $4::TEXT
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
@@ -99,7 +99,7 @@ WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS 
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
-      AND un.reference_id = $3::TEXT || us.user_id::TEXT || '/' || $4::TEXT
+      AND un.reference_id = $3::TEXT || us.user_id::TEXT || $4::TEXT
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
