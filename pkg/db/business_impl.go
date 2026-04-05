@@ -3673,7 +3673,7 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 	return settings, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string, expiredStatus string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
 	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
@@ -3687,6 +3687,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 		UserID:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
+		ExpiredStatus:   expiredStatus,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -3701,7 +3702,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string, expiredStatus string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
 	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
@@ -3715,6 +3716,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 		UserID:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
+		ExpiredStatus:   expiredStatus,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

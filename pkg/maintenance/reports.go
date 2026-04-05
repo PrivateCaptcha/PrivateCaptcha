@@ -144,6 +144,30 @@ func truncateDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID, priceID string, status string) uint64 {
+	if (len(productID) == 0) || (len(priceID) == 0) {
+		return 0
+	}
+
+	if status == j.PlanService.ActiveTrialStatus() {
+		if trialPlan := j.PlanService.GetInternalTrialPlan(); trialPlan.Equals(productID, priceID) {
+			return uint64(trialPlan.RequestsLimit())
+		}
+
+		return 0
+	}
+
+	var accountLimit uint64 = 0
+
+	if plan, err := j.PlanService.FindPlan(productID, priceID, j.Stage, false /*internal*/); err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", productID, "priceID", priceID, common.ErrAttr(err))
+	} else {
+		accountLimit = uint64(plan.RequestsLimit())
+	}
+
+	return accountLimit
+}
+
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	year, week := tnow.ISOWeek()
 	fetchLimit := usersLimit + 1
@@ -158,7 +182,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 
 	var lastSeenUserID int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix, j.PlanService.ExpiredTrialStatus())
 		if err != nil {
 			return err
 		}
@@ -188,16 +212,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				emailTo = &user.NotificationsEmail.String
 			}
 
-			var accountLimit uint64
-			if user.ExternalProductID != "" && user.ExternalPriceID != "" {
-				plan, err := j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, true)
-				if err != nil {
-					plan, err = j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, false)
-				}
-				if err == nil && plan.RequestsLimit() > 0 {
-					accountLimit = uint64(plan.RequestsLimit())
-				}
-			}
+			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
 
 			// single user report failure shouldn't abort this
 			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
@@ -266,7 +281,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 	var lastSeenUserID int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix, j.PlanService.ExpiredTrialStatus())
 		if err != nil {
 			return err
 		}
@@ -296,16 +311,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				emailTo = &user.NotificationsEmail.String
 			}
 
-			var accountLimit uint64
-			if user.ExternalProductID != "" && user.ExternalPriceID != "" {
-				plan, err := j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, true)
-				if err != nil {
-					plan, err = j.PlanService.FindPlan(user.ExternalProductID, user.ExternalPriceID, j.Stage, false)
-				}
-				if err == nil && plan.RequestsLimit() > 0 {
-					accountLimit = uint64(plan.RequestsLimit())
-				}
-			}
+			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
 
 			// single user report failure shouldn't abort this
 			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
