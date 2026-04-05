@@ -27,8 +27,8 @@ RETURNING *;
 SELECT * FROM backend.notification_templates WHERE external_id = $1;
 
 -- name: CreateUserNotification :one
-INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email, email_to)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (user_id, reference_id) WHERE (persistent = true) OR (processed_at IS NULL)
 DO NOTHING
 RETURNING *;
@@ -50,7 +50,7 @@ UPDATE backend.user_notifications SET
 WHERE id = ANY($1::INT[]);
 
 -- name: GetPendingUserNotifications :many
-SELECT sqlc.embed(un), u.email, u.subscription_id, s.status
+SELECT sqlc.embed(un), COALESCE(un.email_to, u.email)::text AS email, u.subscription_id, s.status
 FROM backend.user_notifications un
 JOIN backend.users u ON un.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id

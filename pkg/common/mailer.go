@@ -37,6 +37,7 @@ type ScheduledNotification struct {
 	Condition    NotificationCondition
 	EmailFrom    *string
 	ReplyToEmail *string
+	EmailTo      *string
 }
 
 func NewEmailTemplate(name, contentHTML, contentText string) *EmailTemplate {

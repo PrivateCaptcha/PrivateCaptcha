@@ -78,11 +78,11 @@ func (q *Queries) CreateSystemNotification(ctx context.Context, arg *CreateSyste
 }
 
 const createUserNotification = `-- name: CreateUserNotification :one
-INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email, email_to)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT (user_id, reference_id) WHERE (persistent = true) OR (processed_at IS NULL)
 DO NOTHING
-RETURNING id, user_id, template_id, payload, subject, reference_id, processing_attempts, persistent, requires_subscription, created_at, updated_at, scheduled_at, processed_at, email_from, reply_to_email
+RETURNING id, user_id, template_id, payload, subject, reference_id, processing_attempts, persistent, requires_subscription, created_at, updated_at, scheduled_at, processed_at, email_from, reply_to_email, email_to
 `
 
 type CreateUserNotificationParams struct {
@@ -96,6 +96,7 @@ type CreateUserNotificationParams struct {
 	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
+	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
 }
 
 func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNotificationParams) (*UserNotification, error) {
@@ -110,6 +111,7 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 		arg.RequiresSubscription,
 		arg.EmailFrom,
 		arg.ReplyToEmail,
+		arg.EmailTo,
 	)
 	var i UserNotification
 	err := row.Scan(
@@ -128,6 +130,7 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 		&i.ProcessedAt,
 		&i.EmailFrom,
 		&i.ReplyToEmail,
+		&i.EmailTo,
 	)
 	return &i, err
 }
@@ -242,7 +245,7 @@ func (q *Queries) GetNotificationTemplateByHash(ctx context.Context, externalID 
 }
 
 const getPendingUserNotifications = `-- name: GetPendingUserNotifications :many
-SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, u.email, u.subscription_id, s.status
+SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, un.email_to, COALESCE(un.email_to, u.email)::text AS email, u.subscription_id, s.status
 FROM backend.user_notifications un
 JOIN backend.users u ON un.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -294,6 +297,7 @@ func (q *Queries) GetPendingUserNotifications(ctx context.Context, arg *GetPendi
 			&i.UserNotification.ProcessedAt,
 			&i.UserNotification.EmailFrom,
 			&i.UserNotification.ReplyToEmail,
+			&i.UserNotification.EmailTo,
 			&i.Email,
 			&i.SubscriptionID,
 			&i.Status,

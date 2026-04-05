@@ -602,4 +602,5 @@ type UserNotification struct {
 	ProcessedAt          pgtype.Timestamptz `db:"processed_at" json:"processed_at"`
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
+	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
 }
