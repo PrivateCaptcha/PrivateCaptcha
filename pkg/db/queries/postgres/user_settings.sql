@@ -17,6 +17,7 @@ FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND us.user_id > $2
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
@@ -24,7 +25,7 @@ WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS 
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
-LIMIT $1 OFFSET $2;
+LIMIT $1;
 
 -- name: GetUsersWithPendingMonthlyReport :many
 SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
@@ -32,6 +33,7 @@ FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
+  AND us.user_id > $2
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
@@ -39,4 +41,4 @@ WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
-LIMIT $1 OFFSET $2;
+LIMIT $1;

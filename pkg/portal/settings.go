@@ -1030,7 +1030,7 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 	return &ViewModel{Model: renderCtx}, nil
 }
 
-func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) *settingsNotificationsRenderContext {
+func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) (*settingsNotificationsRenderContext, error) {
 	renderCtx := &settingsNotificationsRenderContext{
 		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
 	}
@@ -1039,8 +1039,10 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 	if err != nil {
 		if !errors.Is(err, db.ErrRecordNotFound) {
 			slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", user.ID, common.ErrAttr(err))
+			return nil, fmt.Errorf("failed to retrieve user settings for user %d: %w", user.ID, err)
 		}
-		return renderCtx
+		// If not found, return empty settings (default values)
+		return renderCtx, nil
 	}
 
 	renderCtx.WeeklyReport = settings.WeeklyReport
@@ -1049,7 +1051,7 @@ func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbg
 		renderCtx.ReportEmail = settings.NotificationsEmail.String
 	}
 
-	return renderCtx
+	return renderCtx, nil
 }
 
 func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -1060,7 +1062,10 @@ func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request
 		return nil, err
 	}
 
-	renderCtx := s.createNotificationsSettingsModel(ctx, user)
+	renderCtx, err := s.createNotificationsSettingsModel(ctx, user)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ViewModel{Model: renderCtx}, nil
 }
@@ -1070,6 +1075,11 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
 		return nil, err
+	}
+
+	if err := r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form data", common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
 	}
 
 	weeklyReport := len(r.FormValue(common.ParamWeeklyReport)) > 0
@@ -1085,7 +1095,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 
 	if len(reportEmail) > 0 {
 		if err := s.EmailVerifier.VerifyEmail(ctx, reportEmail); err != nil {
-			slog.WarnContext(ctx, "Email verification failed for notification settings", "email", reportEmail, common.ErrAttr(err))
+			slog.WarnContext(ctx, "Email verification failed for notification settings", "userID", user.ID, common.ErrAttr(err))
 			renderCtx.EmailError = "Invalid email address."
 			return &ViewModel{
 				Model: renderCtx,

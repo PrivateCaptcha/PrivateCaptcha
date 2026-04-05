@@ -3673,8 +3673,8 @@ func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *d
 	return settings, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, offset int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
-	if limit <= 0 || offset < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
+	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3684,7 +3684,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 
 	users, err := impl.querier.GetUsersWithPendingWeeklyReport(ctx, &dbgen.GetUsersWithPendingWeeklyReportParams{
 		Limit:           limit,
-		Offset:          offset,
+		Offset:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})
@@ -3692,17 +3692,17 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.GetUsersWithPendingWeeklyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with pending weekly report", "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending weekly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with pending weekly report", "count", len(users), "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix)
+	slog.DebugContext(ctx, "Fetched users with pending weekly report", "count", len(users), "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix)
 
 	return users, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, offset int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
-	if limit <= 0 || offset < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
+	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
 		return nil, ErrInvalidInput
 	}
 
@@ -3712,7 +3712,7 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 
 	users, err := impl.querier.GetUsersWithPendingMonthlyReport(ctx, &dbgen.GetUsersWithPendingMonthlyReportParams{
 		Limit:           limit,
-		Offset:          offset,
+		Offset:          lastSeenUserID,
 		ReferencePrefix: referencePrefix,
 		ReferenceSuffix: referenceSuffix,
 	})
@@ -3720,11 +3720,11 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []*dbgen.GetUsersWithPendingMonthlyReportRow{}, nil
 		}
-		slog.ErrorContext(ctx, "Failed to retrieve users with pending monthly report", "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending monthly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
 		return nil, err
 	}
 
-	slog.DebugContext(ctx, "Fetched users with pending monthly report", "count", len(users), "limit", limit, "offset", offset, "prefix", referencePrefix, "suffix", referenceSuffix)
+	slog.DebugContext(ctx, "Fetched users with pending monthly report", "count", len(users), "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix)
 
 	return users, nil
 }

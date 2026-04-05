@@ -91,12 +91,20 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	tnow := time.Now().UTC()
 
 	if p.UserID > 0 {
+		var errs []error
 		if p.Weekly {
 			year, week := tnow.ISOWeek()
-			j.scheduleWeeklyReportForUser(ctx, p.UserID, tnow, year, week)
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, tnow, year, week); err != nil {
+				errs = append(errs, err)
+			}
 		}
 		if p.Monthly {
-			j.scheduleMonthlyReportForUser(ctx, p.UserID, tnow)
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, tnow); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if len(errs) > 0 {
+			return errors.Join(errs...)
 		}
 		return nil
 	}
@@ -148,9 +156,10 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 		Jitter: true,
 	}
 
-	var offset int32
+	var lastSeenUserID int32
+	var errs []error
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, offset, WeeklyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -160,7 +169,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 			users = users[:usersLimit]
 		}
 
-		slog.InfoContext(ctx, "Scheduling weekly reports chunk", "count", len(users), "offset", offset)
+		slog.InfoContext(ctx, "Scheduling weekly reports chunk", "count", len(users), "lastSeenUserID", lastSeenUserID)
 
 		for _, user := range users {
 			select {
@@ -175,27 +184,31 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
-			j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week)
+			if err := j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week); err != nil {
+				errs = append(errs, err)
+			}
+			lastSeenUserID = user.UserID
 		}
 
 		if !hasMore {
 			break
 		}
-		offset += usersLimit
 	}
 
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) {
+func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
 
 	reportCtx, err := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
-		return
+		return fmt.Errorf("failed to build weekly report for user %d: %w", userID, err)
 	}
 
 	notif := &common.ScheduledNotification{
@@ -212,10 +225,10 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if !errors.Is(err, db.ErrAlreadyExists) {
-			slog.WarnContext(ctx, "Failed to create weekly report notification", "userID", userID, common.ErrAttr(err))
+			return fmt.Errorf("failed to create weekly report notification for user %d: %w", userID, err)
 		}
-		return
 	}
+	return nil
 }
 
 func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
@@ -229,9 +242,10 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 		Jitter: true,
 	}
 
-	var offset int32
+	var lastSeenUserID int32
+	var errs []error
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, offset, MonthlyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix)
 		if err != nil {
 			return err
 		}
@@ -241,7 +255,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 			users = users[:usersLimit]
 		}
 
-		slog.InfoContext(ctx, "Scheduling monthly reports chunk", "count", len(users), "offset", offset)
+		slog.InfoContext(ctx, "Scheduling monthly reports chunk", "count", len(users), "lastSeenUserID", lastSeenUserID)
 
 		for _, user := range users {
 			select {
@@ -256,27 +270,31 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
-			j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow)
+			if err := j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow); err != nil {
+				errs = append(errs, err)
+			}
+			lastSeenUserID = user.UserID
 		}
 
 		if !hasMore {
 			break
 		}
-		offset += usersLimit
 	}
 
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) {
+func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
 
 	reportCtx, err := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
-		return
+		return fmt.Errorf("failed to build monthly report for user %d: %w", userID, err)
 	}
 
 	notif := &common.ScheduledNotification{
@@ -293,10 +311,10 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
 	if err != nil {
 		if !errors.Is(err, db.ErrAlreadyExists) {
-			slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
+			return fmt.Errorf("failed to create monthly report notification for user %d: %w", userID, err)
 		}
-		return
 	}
+	return nil
 }
 
 // BuildWeeklyReport builds a complete weekly usage report for a user.

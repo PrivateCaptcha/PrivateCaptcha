@@ -51,10 +51,10 @@
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
             {{- end -}}
-            <input type="email" name="{{ .Const.Email }}" maxlength="255" value="{{ .Params.ReportEmail }}" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" />
+            <input type="email" name="{{ .Const.Email }}" id="{{ .Const.Email }}" maxlength="255" value="{{ .Params.ReportEmail }}" placeholder="{{ .Params.Email }}" class="w-full pc-internal-form-input-base {{ if .Params.EmailError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" {{ if .Params.EmailError }}aria-describedby="{{ printf "%s-error" .Const.Email }}" aria-invalid="true"{{ end }} />
         </div>
         {{- if .Params.EmailError -}}
-        <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
+        <p id="{{ printf "%s-error" .Const.Email }}" class="pc-form-error-text">{{ .Params.EmailError }}</p>
         {{- end -}}
     </div>
 
