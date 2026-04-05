@@ -417,6 +417,53 @@ func TestGetUsageSettings(t *testing.T) {
 	}
 }
 
+func TestGetNotificationsSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", "/settings/tab/notifications", nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.getNotificationsSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsNotificationsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsNotificationsRenderContext, got %T", viewModel.Model)
+	}
+
+	if renderCtx.ActiveTabID != common.NotificationsEndpoint {
+		t.Errorf("Expected ActiveTabID to be %s, got %s", common.NotificationsEndpoint, renderCtx.ActiveTabID)
+	}
+
+	if renderCtx.UserEmail != user.Email {
+		t.Errorf("Expected UserEmail to be %s, got %s", user.Email, renderCtx.UserEmail)
+	}
+}
+
 func TestGetSettingsTab(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -539,6 +586,75 @@ func TestPutGeneralSettings(t *testing.T) {
 
 	if viewModel == nil {
 		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+}
+
+func TestPutNotificationsSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	form.Set(common.ParamWeeklyReport, "on")
+	form.Set(common.ParamMonthlyReport, "on")
+	form.Set(common.ParamEmail, user.Email)
+
+	req := httptest.NewRequest("PUT", "/settings/tab/notifications", strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+
+	viewModel, err := server.putNotificationsSettings(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel to be populated, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*settingsNotificationsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *settingsNotificationsRenderContext, got %T", viewModel.Model)
+	}
+
+	if len(renderCtx.SuccessMessage) == 0 {
+		t.Error("Expected SuccessMessage to be populated")
+	}
+
+	if viewModel.AuditEvent == nil {
+		t.Error("Expected AuditEvent to be populated")
+	}
+
+	settings, err := store.Impl().RetrieveUserSettings(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve user settings: %v", err)
+	}
+
+	if !settings.WeeklyReport {
+		t.Error("Expected WeeklyReport to be true")
+	}
+	if !settings.MonthlyReport {
+		t.Error("Expected MonthlyReport to be true")
+	}
+	if !settings.NotificationsEmail.Valid || settings.NotificationsEmail.String != user.Email {
+		t.Errorf("Expected NotificationsEmail to be %s, got %v", user.Email, settings.NotificationsEmail)
 	}
 }
 
@@ -853,13 +969,15 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 
 	tests := []struct {
 		name     string
+		method   string
 		path     string
 		formBody url.Values
 		checkErr string
 	}{
 		{
-			name: "PostAPIKeyInvalidName",
-			path: "/settings/tab/apikeys/new",
+			name:   "PostAPIKeyInvalidName",
+			method: "POST",
+			path:   "/settings/tab/apikeys/new",
 			formBody: url.Values{
 				common.ParamName:  {"ab"},
 				common.ParamDays:  {"90"},
@@ -868,8 +986,9 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 			checkErr: "too short",
 		},
 		{
-			name: "PostAPIKeyInvalidScope",
-			path: "/settings/tab/apikeys/new",
+			name:   "PostAPIKeyInvalidScope",
+			method: "POST",
+			path:   "/settings/tab/apikeys/new",
 			formBody: url.Values{
 				common.ParamName:  {"ValidName"},
 				common.ParamDays:  {"90"},
@@ -877,13 +996,22 @@ func TestSettingsEndpointsInvalidFormArgs(t *testing.T) {
 			},
 			checkErr: "scope",
 		},
+		{
+			name:   "PutNotificationsInvalidEmail",
+			method: "PUT",
+			path:   "/settings/tab/notifications",
+			formBody: url.Values{
+				common.ParamEmail: {"not-a-valid-email"},
+			},
+			checkErr: "invalid email",
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.formBody.Set(common.ParamCSRFToken, csrfToken)
 
-			req := httptest.NewRequest("POST", tc.path, strings.NewReader(tc.formBody.Encode()))
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.formBody.Encode()))
 			req.AddCookie(cookie)
 			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 
