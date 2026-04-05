@@ -29,6 +29,7 @@ type ScheduleReportsJob struct {
 	Store       db.Implementor
 	TimeSeries  common.TimeSeriesStore
 	PlanService billing.PlanService
+	Stage       string
 	UsersLimit  int32
 }
 
@@ -90,12 +91,12 @@ func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow tim
 
 		var errs []error
 		if p.Weekly {
-			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow); err != nil {
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if p.Monthly {
-			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow); err != nil {
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -143,6 +144,30 @@ func truncateDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
+func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID, priceID string, status string) uint64 {
+	if (len(productID) == 0) || (len(priceID) == 0) {
+		return 0
+	}
+
+	if status == j.PlanService.ActiveTrialStatus() {
+		if trialPlan := j.PlanService.GetInternalTrialPlan(); trialPlan.Equals(productID, priceID) {
+			return uint64(trialPlan.RequestsLimit())
+		}
+
+		return 0
+	}
+
+	var accountLimit uint64 = 0
+
+	if plan, err := j.PlanService.FindPlan(productID, priceID, j.Stage, false /*internal*/); err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", productID, "priceID", priceID, common.ErrAttr(err))
+	} else {
+		accountLimit = uint64(plan.RequestsLimit())
+	}
+
+	return accountLimit
+}
+
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
 	year, week := tnow.ISOWeek()
 	fetchLimit := usersLimit + 1
@@ -157,7 +182,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 
 	var lastSeenUserID int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, fetchLimit, lastSeenUserID, WeeklyReferencePrefix, refSuffix, j.PlanService.ExpiredTrialStatus())
 		if err != nil {
 			return err
 		}
@@ -187,8 +212,10 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				emailTo = &user.NotificationsEmail.String
 			}
 
+			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
+
 			// single user report failure shouldn't abort this
-			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow)
+			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
 
 			lastSeenUserID = user.UserID
 		}
@@ -201,7 +228,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time) error {
+func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
@@ -211,6 +238,8 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
 		return err
 	}
+
+	reportCtx.AccountLimit = accountLimit
 
 	year, week := tnow.ISOWeek()
 
@@ -252,7 +281,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 
 	var lastSeenUserID int32
 	for iteration := 0; iteration < maxPaginationIterations; iteration++ {
-		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix)
+		users, err := j.Store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, fetchLimit, lastSeenUserID, MonthlyReferencePrefix, refSuffix, j.PlanService.ExpiredTrialStatus())
 		if err != nil {
 			return err
 		}
@@ -282,8 +311,10 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				emailTo = &user.NotificationsEmail.String
 			}
 
+			accountLimit := j.retrieveRequestLimit(ctx, user.ExternalProductID, user.ExternalPriceID, user.SubscriptionStatus)
+
 			// single user report failure shouldn't abort this
-			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow)
+			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow, accountLimit)
 
 			lastSeenUserID = user.UserID
 		}
@@ -296,7 +327,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time) error {
+func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time, accountLimit uint64) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
@@ -306,6 +337,8 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
 		return err
 	}
+
+	reportCtx.AccountLimit = accountLimit
 
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),

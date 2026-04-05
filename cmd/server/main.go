@@ -419,6 +419,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Store:       businessDB,
 		TimeSeries:  timeSeriesDB,
 		PlanService: planService,
+		Stage:       stage,
 		UsersLimit:  50,
 	})
 	jobs.AddLocked(10*time.Minute, asyncTasksJob)

@@ -39,6 +39,7 @@ func TestScheduleWeeklyReport(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -102,6 +103,7 @@ func TestScheduleMonthlyReport(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -164,6 +166,7 @@ func TestWeeklyReportDedup(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -173,7 +176,7 @@ func TestWeeklyReportDedup(t *testing.T) {
 	refSuffix := fmt.Sprintf("/%d/%d", year, week)
 
 	// before running the job, user should be in the pending list
-	pendingBefore, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix)
+	pendingBefore, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix, job.PlanService.ExpiredTrialStatus())
 	if err != nil {
 		t.Fatalf("RetrieveUsersWithPendingWeeklyReport failed: %v", err)
 	}
@@ -200,7 +203,7 @@ func TestWeeklyReportDedup(t *testing.T) {
 	}
 
 	// after running the job, user should be absent from the pending list
-	pendingAfter, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix)
+	pendingAfter, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix, job.PlanService.ExpiredTrialStatus())
 	if err != nil {
 		t.Fatalf("RetrieveUsersWithPendingWeeklyReport failed: %v", err)
 	}
@@ -237,6 +240,7 @@ func TestMonthlyReportDedup(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -245,7 +249,7 @@ func TestMonthlyReportDedup(t *testing.T) {
 	refSuffix := fmt.Sprintf("/%d/%d", tnow.Year(), int(tnow.Month()))
 
 	// before running the job, user should be in the pending list
-	pendingBefore, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix)
+	pendingBefore, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix, job.PlanService.ExpiredTrialStatus())
 	if err != nil {
 		t.Fatalf("RetrieveUsersWithPendingMonthlyReport failed: %v", err)
 	}
@@ -272,7 +276,7 @@ func TestMonthlyReportDedup(t *testing.T) {
 	}
 
 	// after running the job, user should be absent from the pending list
-	pendingAfter, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix)
+	pendingAfter, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix, job.PlanService.ExpiredTrialStatus())
 	if err != nil {
 		t.Fatalf("RetrieveUsersWithPendingMonthlyReport failed: %v", err)
 	}

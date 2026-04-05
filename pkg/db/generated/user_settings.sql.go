@@ -31,16 +31,19 @@ func (q *Queries) GetUserSettings(ctx context.Context, userID int32) (*UserSetti
 }
 
 const getUsersWithPendingMonthlyReport = `-- name: GetUsersWithPendingMonthlyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
   AND us.user_id > $2
+  AND s.status != $3
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
-      AND un.reference_id = $3::TEXT || us.user_id::TEXT || $4::TEXT
+      AND un.reference_id = $4::TEXT || us.user_id::TEXT || $5::TEXT
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
@@ -50,6 +53,7 @@ LIMIT $1
 type GetUsersWithPendingMonthlyReportParams struct {
 	Limit           int32  `db:"limit" json:"limit"`
 	UserID          int32  `db:"user_id" json:"user_id"`
+	ExpiredStatus   string `db:"expired_status" json:"expired_status"`
 	ReferencePrefix string `db:"reference_prefix" json:"reference_prefix"`
 	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
@@ -57,14 +61,16 @@ type GetUsersWithPendingMonthlyReportParams struct {
 type GetUsersWithPendingMonthlyReportRow struct {
 	UserID             int32       `db:"user_id" json:"user_id"`
 	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
-	Email              string      `db:"email" json:"email"`
 	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
+	ExternalProductID  string      `db:"external_product_id" json:"external_product_id"`
+	ExternalPriceID    string      `db:"external_price_id" json:"external_price_id"`
 }
 
 func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *GetUsersWithPendingMonthlyReportParams) ([]*GetUsersWithPendingMonthlyReportRow, error) {
 	rows, err := q.db.Query(ctx, getUsersWithPendingMonthlyReport,
 		arg.Limit,
 		arg.UserID,
+		arg.ExpiredStatus,
 		arg.ReferencePrefix,
 		arg.ReferenceSuffix,
 	)
@@ -78,8 +84,9 @@ func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *Get
 		if err := rows.Scan(
 			&i.UserID,
 			&i.NotificationsEmail,
-			&i.Email,
 			&i.SubscriptionStatus,
+			&i.ExternalProductID,
+			&i.ExternalPriceID,
 		); err != nil {
 			return nil, err
 		}
@@ -92,16 +99,19 @@ func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *Get
 }
 
 const getUsersWithPendingWeeklyReport = `-- name: GetUsersWithPendingWeeklyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
 WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS NOT NULL
   AND us.user_id > $2
+  AND s.status != $3
   AND NOT EXISTS (
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
-      AND un.reference_id = $3::TEXT || us.user_id::TEXT || $4::TEXT
+      AND un.reference_id = $4::TEXT || us.user_id::TEXT || $5::TEXT
       AND un.processed_at IS NULL
   )
 ORDER BY us.user_id
@@ -111,6 +121,7 @@ LIMIT $1
 type GetUsersWithPendingWeeklyReportParams struct {
 	Limit           int32  `db:"limit" json:"limit"`
 	UserID          int32  `db:"user_id" json:"user_id"`
+	ExpiredStatus   string `db:"expired_status" json:"expired_status"`
 	ReferencePrefix string `db:"reference_prefix" json:"reference_prefix"`
 	ReferenceSuffix string `db:"reference_suffix" json:"reference_suffix"`
 }
@@ -118,14 +129,16 @@ type GetUsersWithPendingWeeklyReportParams struct {
 type GetUsersWithPendingWeeklyReportRow struct {
 	UserID             int32       `db:"user_id" json:"user_id"`
 	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
-	Email              string      `db:"email" json:"email"`
 	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
+	ExternalProductID  string      `db:"external_product_id" json:"external_product_id"`
+	ExternalPriceID    string      `db:"external_price_id" json:"external_price_id"`
 }
 
 func (q *Queries) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetUsersWithPendingWeeklyReportParams) ([]*GetUsersWithPendingWeeklyReportRow, error) {
 	rows, err := q.db.Query(ctx, getUsersWithPendingWeeklyReport,
 		arg.Limit,
 		arg.UserID,
+		arg.ExpiredStatus,
 		arg.ReferencePrefix,
 		arg.ReferenceSuffix,
 	)
@@ -139,8 +152,9 @@ func (q *Queries) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetU
 		if err := rows.Scan(
 			&i.UserID,
 			&i.NotificationsEmail,
-			&i.Email,
 			&i.SubscriptionStatus,
+			&i.ExternalProductID,
+			&i.ExternalPriceID,
 		); err != nil {
 			return nil, err
 		}
