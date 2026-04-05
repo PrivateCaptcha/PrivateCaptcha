@@ -50,7 +50,7 @@ UPDATE backend.user_notifications SET
 WHERE id = ANY($1::INT[]);
 
 -- name: GetPendingUserNotifications :many
-SELECT sqlc.embed(un), COALESCE(un.email_to, u.email)::text AS email, u.subscription_id, s.status
+SELECT sqlc.embed(un), un.email_to as notification_email, u.email AS user_email, u.subscription_id, s.status
 FROM backend.user_notifications un
 JOIN backend.users u ON un.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
