@@ -75,13 +75,15 @@ func (j *ScheduleReportsJob) NewParams() any {
 }
 
 func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
+	return j.RunOnceAt(ctx, params, time.Now().UTC())
+}
+
+func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow time.Time) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
 		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
 		p = j.NewParams().(*ScheduleReportsParams)
 	}
-
-	tnow := time.Now().UTC()
 
 	if p.UserID > 0 {
 		slog.DebugContext(ctx, "Processing reports for a single user", "userID", p.UserID, "weekly", p.Weekly, "monthly", p.Monthly)

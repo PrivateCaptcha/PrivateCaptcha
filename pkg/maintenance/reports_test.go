@@ -46,15 +46,10 @@ func seedVerifyLogs(t *testing.T, ts *db.MemoryTimeSeries, userID int32, propID,
 	}
 }
 
-func createTestStore(t *testing.T) db.Implementor {
-	t.Helper()
-	return db.NewBusiness(nil)
-}
-
 func TestBuildWeeklyReportWithData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(1)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC) // Monday truncated
@@ -100,7 +95,7 @@ func TestBuildWeeklyReportWithData(t *testing.T) {
 func TestBuildMonthlyReportWithData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(2)
 
 	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
@@ -131,7 +126,7 @@ func TestBuildMonthlyReportWithData(t *testing.T) {
 func TestBuildWeeklyReportNoData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(3)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -169,7 +164,7 @@ func TestBuildWeeklyReportNoData(t *testing.T) {
 func TestBuildMonthlyReportNoData(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(30)
 
 	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
@@ -192,7 +187,7 @@ func TestBuildMonthlyReportNoData(t *testing.T) {
 func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(4)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -221,7 +216,7 @@ func TestBuildWeeklyReportNoPreviousPeriod(t *testing.T) {
 func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(40)
 
 	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
@@ -249,7 +244,7 @@ func TestBuildMonthlyReportNoPreviousPeriod(t *testing.T) {
 func TestBuildWeeklyReportDecreaseShowsNegativeChange(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(5)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -277,7 +272,7 @@ func TestBuildWeeklyReportDecreaseShowsNegativeChange(t *testing.T) {
 func TestBuildWeeklyReportNoChangeShowsZero(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(6)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -300,7 +295,7 @@ func TestBuildWeeklyReportNoChangeShowsZero(t *testing.T) {
 func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(7)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -312,8 +307,8 @@ func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 
 	prop1 := &dbgen.Property{ID: 10, Name: "Main Site", Domain: "example.com"}
 	prop2 := &dbgen.Property{ID: 20, Name: "Blog", Domain: "blog.example.com"}
-	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
-	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
+	_ = store.Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
+	_ = store.Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
 	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 	if err != nil {
@@ -344,7 +339,7 @@ func TestBuildWeeklyReportTopPropertiesWithCache(t *testing.T) {
 func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(8)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -354,7 +349,7 @@ func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
 	for i := int32(1); i <= 7; i++ {
 		seedTimeSeries(t, ts, userID, i*10, 1, mid, int(100-i*10))
 		prop := &dbgen.Property{ID: i * 10, Name: "Prop", Domain: "example.com"}
-		_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(i*10), prop)
+		_ = store.Cache.Set(ctx, db.PropertyByIDCacheKey(i*10), prop)
 	}
 
 	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
@@ -370,7 +365,7 @@ func TestBuildWeeklyReportTopPropertiesLimitedTo5(t *testing.T) {
 func TestBuildWeeklyReportVerificationRate(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(10)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -397,7 +392,7 @@ func TestBuildWeeklyReportVerificationRate(t *testing.T) {
 func TestBuildWeeklyReportVerificationRateChange(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(12)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -451,7 +446,7 @@ func TestPercentChange(t *testing.T) {
 func TestBuildWeeklyReportPropertyChangeDirection(t *testing.T) {
 	ctx := t.Context()
 	ts := db.NewMemoryTimeSeries()
-	store := createTestStore(t)
+	store := db.NewBusiness(nil)
 	userID := int32(11)
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
@@ -465,8 +460,8 @@ func TestBuildWeeklyReportPropertyChangeDirection(t *testing.T) {
 
 	prop1 := &dbgen.Property{ID: 10, Name: "Up", Domain: "up.com"}
 	prop2 := &dbgen.Property{ID: 20, Name: "Down", Domain: "down.com"}
-	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
-	_ = store.(*db.BusinessStore).Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
+	_ = store.Cache.Set(ctx, db.PropertyByIDCacheKey(10), prop1)
+	_ = store.Cache.Set(ctx, db.PropertyByIDCacheKey(20), prop2)
 
 	result, err := BuildWeeklyReport(ctx, store, ts, userID, from, mid, now)
 	if err != nil {
