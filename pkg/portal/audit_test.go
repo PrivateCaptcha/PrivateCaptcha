@@ -1059,10 +1059,22 @@ func TestExportAuditLogsCSV(t *testing.T) {
 	}
 
 	// Verify CSV has data rows (not just header)
-	lines := strings.Split(body, "\n")
-	// Should have at least header + some audit log rows + possible empty final line
-	if len(lines) < 2 {
-		t.Error("Expected CSV to have at least header + data rows")
+	lines := strings.Split(strings.TrimSpace(body), "\n")
+	// Header + at least 3 data rows (2 property creations + auth events)
+	if len(lines) < 4 {
+		t.Errorf("Expected CSV to have at least 4 lines (header + 3 data rows), got %d", len(lines))
+	}
+
+	// Verify at least one data row contains "create" action from property creation
+	hasCreateAction := false
+	for _, line := range lines[1:] {
+		if strings.Contains(line, "create") {
+			hasCreateAction = true
+			break
+		}
+	}
+	if !hasCreateAction {
+		t.Error("Expected at least one CSV row to contain 'create' action")
 	}
 }
 
