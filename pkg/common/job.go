@@ -158,7 +158,7 @@ func RunPeriodicJobOnce(ctx context.Context, j PeriodicJob, params any) error {
 			defer cancel()
 		}
 
-		return j.RunOnce(runCtx, j.NewParams())
+		return j.RunOnce(runCtx, params)
 	}()
 	if err != nil {
 		slog.ErrorContext(ctx, "Periodic job failed", ErrAttr(err))

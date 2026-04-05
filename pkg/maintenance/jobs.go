@@ -147,6 +147,8 @@ func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {
 						slog.ErrorContext(ctx, "Failed to decode params", "job", jobName, common.ErrAttr(err))
 						http.Error(w, err.Error(), http.StatusBadRequest)
 						return
+					} else {
+						slog.DebugContext(ctx, "Read job parameters from request", "size", len(buf))
 					}
 				}
 			}
