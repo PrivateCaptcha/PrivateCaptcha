@@ -89,14 +89,16 @@ func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow tim
 	if p.UserID > 0 {
 		slog.DebugContext(ctx, "Processing reports for a single user", "userID", p.UserID, "weekly", p.Weekly, "monthly", p.Monthly)
 
+		accountLimit := j.lookupAccountLimit(ctx, p.UserID)
+
 		var errs []error
 		if p.Weekly {
-			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, accountLimit); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if p.Monthly {
-			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, 0); err != nil {
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow, accountLimit); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -153,6 +155,25 @@ func (j *ScheduleReportsJob) findPlan(productID, priceID string) (billing.Plan, 
 		plan, err = j.PlanService.FindPlan(productID, priceID, j.Stage, false)
 	}
 	return plan, err
+}
+
+func (j *ScheduleReportsJob) lookupAccountLimit(ctx context.Context, userID int32) uint64 {
+	user, err := j.Store.Impl().RetrieveUser(ctx, userID)
+	if err != nil || !user.SubscriptionID.Valid {
+		return 0
+	}
+	subscr, err := j.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	if err != nil {
+		return 0
+	}
+	plan, err := j.findPlan(subscr.ExternalProductID, subscr.ExternalPriceID)
+	if err != nil {
+		return 0
+	}
+	if plan.RequestsLimit() > 0 {
+		return uint64(plan.RequestsLimit())
+	}
+	return 0
 }
 
 func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow time.Time, usersLimit int32) error {
