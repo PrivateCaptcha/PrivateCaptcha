@@ -18,7 +18,7 @@
 
 <div class="grid sm:max-w-lg grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
     <div class="sm:col-span-full">
-        <label for="{{ .Const.Email}}" class="pc-internal-form-label">Notification email</label>
+        <label for="{{ .Const.Email}}" class="pc-internal-form-label">Email</label>
         <div class="mt-2 relative">
             {{- if .Params.EmailError -}}
             {{template "info-icon-red.html" .}}
@@ -28,7 +28,7 @@
         {{- if .Params.EmailError -}}
         <p class="pc-form-error-text">{{ .Params.EmailError }}</p>
         {{- else -}}
-        {{ if not .Params.ReportEmail }}<p class="pc-form-secondary-text">If empty, reports are sent to your account email.</p>{{end}}
+        <p class="pc-form-secondary-text">If empty, reports are sent to your account email.</p>
         {{- end -}}
     </div>
 
