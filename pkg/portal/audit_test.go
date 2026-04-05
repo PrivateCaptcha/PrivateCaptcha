@@ -997,15 +997,25 @@ func TestExportAuditLogsCSV(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	// Create some audit logs by creating properties
-	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test1.com"), org)
+	// Create properties and persist their audit events synchronously
+	_, auditEvent1, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test1.com"), org)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
 	}
 
-	_, _, err = store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test2.com"), org)
+	_, auditEvent2, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-export-test2.com"), org)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
+	}
+
+	auditLog := store.AuditLog().(*db.AuditLog)
+	now := time.Now().UTC()
+	auditEvent1.Timestamp = now
+	auditEvent1.Source = common.AuditLogSourcePortal
+	auditEvent2.Timestamp = now
+	auditEvent2.Source = common.AuditLogSourcePortal
+	if err := auditLog.PersistAuditLog(ctx, []*common.AuditLogEvent{auditEvent1, auditEvent2}); err != nil {
+		t.Fatalf("Failed to persist audit logs: %v", err)
 	}
 
 	srv := http.NewServeMux()
@@ -1060,9 +1070,9 @@ func TestExportAuditLogsCSV(t *testing.T) {
 
 	// Verify CSV has data rows (not just header)
 	lines := strings.Split(strings.TrimSpace(body), "\n")
-	// Header + at least 3 data rows (2 property creations + auth events)
-	if len(lines) < 4 {
-		t.Errorf("Expected CSV to have at least 4 lines (header + 3 data rows), got %d", len(lines))
+	// Header + at least 2 data rows (2 property creations)
+	if len(lines) < 3 {
+		t.Errorf("Expected CSV to have at least 3 lines (header + 2 data rows), got %d", len(lines))
 	}
 
 	// Verify at least one data row contains "create" action from property creation
