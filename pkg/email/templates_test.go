@@ -8,6 +8,32 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
+func TestTruncate(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		n        int
+		expected string
+	}{
+		{"shorter than n", "hi", 10, "hi"},
+		{"equal to n", "hello", 5, "hello"},
+		{"longer than n", "hello world", 8, "hello..."},
+		{"n lte 3 short string fits", "ab", 3, "ab"},
+		{"n lte 3 long string", "abcdef", 3, "..."},
+		{"empty string", "", 5, ""},
+		{"n zero empty string", "", 0, ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := truncate(tc.input, tc.n)
+			if got != tc.expected {
+				t.Errorf("truncate(%q, %d) = %q, want %q", tc.input, tc.n, got, tc.expected)
+			}
+		})
+	}
+}
+
 func TestEmailTemplates(t *testing.T) {
 	data := struct {
 		OrgInvitationContext

@@ -3162,3 +3162,43 @@ func TestTerminalPropertyBreakPreventsOrgBlock(t *testing.T) {
 		t.Error("Expected terminal property break rule to prevent org block rule")
 	}
 }
+
+func TestLooksLikeBotIOSIPod(t *testing.T) {
+	bm := &BotMatcher{UAParser: useragent.NewParser()}
+
+	tests := []struct {
+		name    string
+		ua      string
+		wantBot bool
+	}{
+		{
+			"normal iOS user agent",
+			"Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+			false,
+		},
+		{
+			"iPod user agent",
+			"Mozilla/5.0 (iPod touch; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.0 Mobile/15E148 Safari/604.1",
+			true,
+		},
+		{
+			"empty UA",
+			"",
+			true,
+		},
+		{
+			"known bot UA",
+			"Googlebot/2.1",
+			true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := bm.looksLikeBot(tc.ua)
+			if got != tc.wantBot {
+				t.Errorf("looksLikeBot(%q) = %v, want %v", tc.ua, got, tc.wantBot)
+			}
+		})
+	}
+}

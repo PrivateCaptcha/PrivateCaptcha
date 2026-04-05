@@ -18,18 +18,7 @@ var (
 	}
 	emailFuncs = template.FuncMap{
 		"truncate": func(s string, n int) string {
-			if n <= 3 {
-				if len(s) <= n {
-					return s
-				}
-				return "..."
-			}
-
-			if len(s) <= n {
-				return s
-			}
-
-			return s[:n-3] + "..."
+			return truncate(s, n)
 		},
 		"humanize": func(input any) string {
 			var v float64
@@ -73,4 +62,19 @@ func Templates() []*common.EmailTemplate {
 
 func Functions() template.FuncMap {
 	return emailFuncs
+}
+
+func truncate(s string, n int) string {
+	if n <= 3 {
+		if len(s) <= n {
+			return s
+		}
+		return "..."
+	}
+
+	if len(s) <= n {
+		return s
+	}
+
+	return s[:n-3] + "..."
 }
