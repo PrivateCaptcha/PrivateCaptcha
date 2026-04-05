@@ -2258,6 +2258,9 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 	if n.ReplyToEmail != nil {
 		params.ReplyToEmail = Text(*n.ReplyToEmail)
 	}
+	if (n.EmailTo != nil) && (len(*n.EmailTo) > 0) {
+		params.EmailTo = Text(*n.EmailTo)
+	}
 
 	switch n.Condition {
 	case common.EmptyNotificationCondition:
