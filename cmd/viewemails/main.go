@@ -52,7 +52,7 @@ func homepage(w http.ResponseWriter, r *http.Request) {
 }
 
 func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) error {
-	tpl, err := template.New("HtmlBody").Parse(templateBody)
+	tpl, err := template.New("HtmlBody").Funcs(email.Functions()).Parse(templateBody)
 	if err != nil {
 		log.Printf("Failed to parse template: %v", err)
 		return err
@@ -96,6 +96,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		},
 		UsageReportContext: email.UsageReportContext{
 			Period:                 "weekly",
+			PeriodDate:             time.Now().Format("02 Jan 2006"),
 			TotalRequests:          12450,
 			TotalVerifies:          8320,
 			PrevRequests:           11200,
@@ -105,11 +106,11 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			VerificationRateChange: -17.8,
 			DashboardPath:          "settings?tab=usage",
 			VerificationRate:       66.8,
-			TopProperties: []email.PropertyStat{
-				{Name: "Main Site", Domain: "example.com", Count: 5200, Percent: 41.8, Change: 8.3},
+			TopProperties: []*email.PropertyStat{
+				{Name: "Main Site with extremely long name", Domain: "*.example.com", Count: 5200, Percent: 41.8, Change: 8.3},
 				{Name: "Blog", Domain: "blog.example.com", Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},
 				{Name: "Shop", Domain: "shop.example.com", Count: 2050, Percent: 16.5, Change: -10.9},
-				{Name: "Forum", Domain: "forum.example.com", Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
+				{Name: "Forum", Domain: "suddomain.app.forum.example.com", Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
 				{Name: "Docs", Domain: "docs.example.com", Count: 800, Percent: 6.4, Change: 100.0},
 			},
 		},

@@ -480,10 +480,10 @@ func TestBuildWeeklyReportPropertyChangeDirection(t *testing.T) {
 	var upProp, downProp *email.PropertyStat
 	for i := range result.TopProperties {
 		if result.TopProperties[i].Name == "Up" {
-			upProp = &result.TopProperties[i]
+			upProp = result.TopProperties[i]
 		}
 		if result.TopProperties[i].Name == "Down" {
-			downProp = &result.TopProperties[i]
+			downProp = result.TopProperties[i]
 		}
 	}
 

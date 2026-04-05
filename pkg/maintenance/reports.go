@@ -215,7 +215,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		Subject:      "[Private Captcha] Your weekly usage report",
 		Data:         reportCtx,
 		DateTime:     tnow,
-		TemplateHash: email.WeeklyReportTemplate.Hash(),
+		TemplateHash: email.UsageReportTemplate.Hash(),
 		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 	}
@@ -299,7 +299,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Subject:      "[Private Captcha] Your monthly usage report",
 		Data:         reportCtx,
 		DateTime:     tnow,
-		TemplateHash: email.MonthlyReportTemplate.Hash(),
+		TemplateHash: email.UsageReportTemplate.Hash(),
 		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 	}
@@ -318,6 +318,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "weekly",
+		PeriodDate:    to.Format("02 Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
@@ -338,6 +339,7 @@ func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.Time
 func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
+		PeriodDate:    to.Format("Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
@@ -424,7 +426,7 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		propMap[p.ID] = p
 	}
 
-	topProperties := make([]email.PropertyStat, 0, len(props))
+	topProperties := make([]*email.PropertyStat, 0, len(props))
 	for _, ps := range props {
 		prop, ok := propMap[ps.PropertyID]
 		if !ok {
@@ -435,14 +437,19 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		percent := float64(ps.CurrentRequests) / float64(report.TotalRequests) * 100
 		change := percentChange(ps.CurrentRequests, ps.PrevRequests)
 
-		topProperties = append(topProperties, email.PropertyStat{
+		pStat := &email.PropertyStat{
 			Name:      prop.Name,
 			Domain:    prop.Domain,
 			Count:     ps.CurrentRequests,
 			Percent:   percent,
 			Change:    change,
 			Alternate: len(topProperties)%2 == 1,
-		})
+		}
+		if prop.AllowSubdomains {
+			pStat.Domain = "*." + prop.Domain
+		}
+
+		topProperties = append(topProperties, pStat)
 	}
 	report.TopProperties = topProperties
 }
