@@ -23,6 +23,7 @@ type UsageReportContext struct {
 	VerificationRateChange float64
 	DashboardPath          string
 	VerificationRate       float64
+	AccountLimit           uint64
 	TopProperties          []*PropertyStat
 }
 
@@ -76,6 +77,13 @@ const (
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .VerificationRate}}%</span></td>
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .VerificationRateChange 0.0}}color:#22883e{{else if lt .VerificationRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%</span></td>
               </tr>
+              {{- if .AccountLimit}}{{if or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)}}
+              <tr>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#c53030;text-align:left">Account Limit</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;color:#c53030'>{{.AccountLimit | humanize}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right"></td>
+              </tr>
+              {{- end}}{{end}}
             </table>
             {{- if .TopProperties}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">Top {{len .TopProperties}} properties by requests:</p>
@@ -122,6 +130,9 @@ Here is your {{.Period}} Private Captcha usage report:
 Total Requests: {{.TotalRequests}} ({{if gt .RequestsChange 0.0}}+{{end}}{{printf "%.1f" .RequestsChange}}%)
 Total Verifications: {{.TotalVerifies}} ({{if gt .VerifiesChange 0.0}}+{{end}}{{printf "%.1f" .VerifiesChange}}%)
 Verification Rate: {{printf "%.1f" .VerificationRate}}% ({{if gt .VerificationRateChange 0.0}}+{{end}}{{printf "%.1f" .VerificationRateChange}}%)
+{{- if .AccountLimit}}{{if or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)}}
+Account Limit: {{.AccountLimit}}
+{{- end}}{{end}}
 {{- if .TopProperties}}
 
 Top {{len .TopProperties}} properties by requests:

@@ -31,7 +31,9 @@ func (q *Queries) GetUserSettings(ctx context.Context, userID int32) (*UserSetti
 }
 
 const getUsersWithPendingMonthlyReport = `-- name: GetUsersWithPendingMonthlyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -59,6 +61,8 @@ type GetUsersWithPendingMonthlyReportRow struct {
 	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
 	Email              string      `db:"email" json:"email"`
 	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
+	ExternalProductID  string      `db:"external_product_id" json:"external_product_id"`
+	ExternalPriceID    string      `db:"external_price_id" json:"external_price_id"`
 }
 
 func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *GetUsersWithPendingMonthlyReportParams) ([]*GetUsersWithPendingMonthlyReportRow, error) {
@@ -80,6 +84,8 @@ func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *Get
 			&i.NotificationsEmail,
 			&i.Email,
 			&i.SubscriptionStatus,
+			&i.ExternalProductID,
+			&i.ExternalPriceID,
 		); err != nil {
 			return nil, err
 		}
@@ -92,7 +98,9 @@ func (q *Queries) GetUsersWithPendingMonthlyReport(ctx context.Context, arg *Get
 }
 
 const getUsersWithPendingWeeklyReport = `-- name: GetUsersWithPendingWeeklyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -120,6 +128,8 @@ type GetUsersWithPendingWeeklyReportRow struct {
 	NotificationsEmail pgtype.Text `db:"notifications_email" json:"notifications_email"`
 	Email              string      `db:"email" json:"email"`
 	SubscriptionStatus string      `db:"subscription_status" json:"subscription_status"`
+	ExternalProductID  string      `db:"external_product_id" json:"external_product_id"`
+	ExternalPriceID    string      `db:"external_price_id" json:"external_price_id"`
 }
 
 func (q *Queries) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetUsersWithPendingWeeklyReportParams) ([]*GetUsersWithPendingWeeklyReportRow, error) {
@@ -141,6 +151,8 @@ func (q *Queries) GetUsersWithPendingWeeklyReport(ctx context.Context, arg *GetU
 			&i.NotificationsEmail,
 			&i.Email,
 			&i.SubscriptionStatus,
+			&i.ExternalProductID,
+			&i.ExternalPriceID,
 		); err != nil {
 			return nil, err
 		}

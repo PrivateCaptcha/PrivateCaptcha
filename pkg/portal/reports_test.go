@@ -39,6 +39,7 @@ func TestScheduleWeeklyReport(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -102,6 +103,7 @@ func TestScheduleMonthlyReport(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -164,6 +166,7 @@ func TestWeeklyReportDedup(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 
@@ -237,6 +240,7 @@ func TestMonthlyReportDedup(t *testing.T) {
 		Store:       store,
 		TimeSeries:  timeSeries,
 		PlanService: server.PlanService,
+		Stage:       common.StageTest,
 		UsersLimit:  50,
 	}
 

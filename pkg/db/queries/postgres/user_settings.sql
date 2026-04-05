@@ -12,7 +12,9 @@ ON CONFLICT (user_id) DO UPDATE SET
 RETURNING *;
 
 -- name: GetUsersWithPendingWeeklyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -28,7 +30,9 @@ ORDER BY us.user_id
 LIMIT $1;
 
 -- name: GetUsersWithPendingMonthlyReport :many
-SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status
+SELECT us.user_id, us.notifications_email, u.email, COALESCE(s.status, '') as subscription_status,
+       COALESCE(s.external_product_id, '') as external_product_id,
+       COALESCE(s.external_price_id, '') as external_price_id
 FROM backend.user_settings us
 JOIN backend.users u ON us.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
