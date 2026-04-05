@@ -227,6 +227,62 @@ func TestGetPuzzle(t *testing.T) {
 	}
 }
 
+func TestGetPuzzleWithFingerprintHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	original := server.Verifier.FingerprintHeader
+	server.Verifier.FingerprintHeader = "X-Fingerprint"
+	defer func() { server.Verifier.FingerprintHeader = original }()
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Origin", common_test.PrependProtocol(property.Domain))
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+	req.Header.Set("X-Fingerprint", "test-fingerprint-value-12345")
+
+	q := req.URL.Query()
+	q.Add(common.ParamSiteKey, sitekey)
+	req.URL.RawQuery = q.Encode()
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	p, _, err := parsePuzzle(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p.IsZero() {
+		t.Error("Response puzzle is zero")
+	}
+}
+
 func TestGetTestPuzzle(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
