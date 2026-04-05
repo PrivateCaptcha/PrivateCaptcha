@@ -138,6 +138,151 @@ func TestScheduleMonthlyReport(t *testing.T) {
 	}
 }
 
+func TestWeeklyReportDedup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
+		UserID:       user.ID,
+		WeeklyReport: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to upsert user settings: %v", err)
+	}
+
+	job := &maintenance.ScheduleReportsJob{
+		Store:       store,
+		TimeSeries:  timeSeries,
+		PlanService: server.PlanService,
+		UsersLimit:  50,
+	}
+
+	// Monday so weekly reports trigger
+	tnow := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	year, week := tnow.ISOWeek()
+	refSuffix := fmt.Sprintf("/%d/%d", year, week)
+
+	// before running the job, user should be in the pending list
+	pendingBefore, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix)
+	if err != nil {
+		t.Fatalf("RetrieveUsersWithPendingWeeklyReport failed: %v", err)
+	}
+	var foundBefore bool
+	for _, u := range pendingBefore {
+		if u.UserID == user.ID {
+			foundBefore = true
+			break
+		}
+	}
+	if !foundBefore {
+		t.Fatalf("expected user %d in pending weekly report list before job run", user.ID)
+	}
+
+	params := &maintenance.ScheduleReportsParams{
+		UsersLimit: 50,
+		UserID:     user.ID,
+		Weekly:     true,
+		Monthly:    false,
+	}
+
+	if err := job.RunOnceAt(ctx, params, tnow); err != nil {
+		t.Fatalf("RunOnceAt failed: %v", err)
+	}
+
+	// after running the job, user should be absent from the pending list
+	pendingAfter, err := store.Impl().RetrieveUsersWithPendingWeeklyReport(ctx, 100, 0, maintenance.WeeklyReferencePrefix, refSuffix)
+	if err != nil {
+		t.Fatalf("RetrieveUsersWithPendingWeeklyReport failed: %v", err)
+	}
+	for _, u := range pendingAfter {
+		if u.UserID == user.ID {
+			t.Errorf("user %d should not be in pending weekly report list after job run", user.ID)
+		}
+	}
+}
+
+func TestMonthlyReportDedup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
+		UserID:        user.ID,
+		MonthlyReport: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to upsert user settings: %v", err)
+	}
+
+	job := &maintenance.ScheduleReportsJob{
+		Store:       store,
+		TimeSeries:  timeSeries,
+		PlanService: server.PlanService,
+		UsersLimit:  50,
+	}
+
+	// 1st of month so monthly reports trigger
+	tnow := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
+	refSuffix := fmt.Sprintf("/%d/%d", tnow.Year(), int(tnow.Month()))
+
+	// before running the job, user should be in the pending list
+	pendingBefore, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix)
+	if err != nil {
+		t.Fatalf("RetrieveUsersWithPendingMonthlyReport failed: %v", err)
+	}
+	var foundBefore bool
+	for _, u := range pendingBefore {
+		if u.UserID == user.ID {
+			foundBefore = true
+			break
+		}
+	}
+	if !foundBefore {
+		t.Fatalf("expected user %d in pending monthly report list before job run", user.ID)
+	}
+
+	params := &maintenance.ScheduleReportsParams{
+		UsersLimit: 50,
+		UserID:     user.ID,
+		Weekly:     false,
+		Monthly:    true,
+	}
+
+	if err := job.RunOnceAt(ctx, params, tnow); err != nil {
+		t.Fatalf("RunOnceAt failed: %v", err)
+	}
+
+	// after running the job, user should be absent from the pending list
+	pendingAfter, err := store.Impl().RetrieveUsersWithPendingMonthlyReport(ctx, 100, 0, maintenance.MonthlyReferencePrefix, refSuffix)
+	if err != nil {
+		t.Fatalf("RetrieveUsersWithPendingMonthlyReport failed: %v", err)
+	}
+	for _, u := range pendingAfter {
+		if u.UserID == user.ID {
+			t.Errorf("user %d should not be in pending monthly report list after job run", user.ID)
+		}
+	}
+}
+
 func seedTimeSeries(t *testing.T, ts *db.MemoryTimeSeries, userID int32, propID, orgID int32, timestamp time.Time, count int) {
 	t.Helper()
 	ctx := context.Background()
