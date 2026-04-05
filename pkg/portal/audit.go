@@ -203,6 +203,34 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 	return nil
 }
 
+func (ul *UserAuditLog) initFromUserSettings(oldValue, newValue *db.AuditLogUserSettings) error {
+	ul.Resource = "Notification Settings"
+
+	if newValue != nil {
+		var parts []string
+		if newValue.WeeklyReport {
+			parts = append(parts, "Weekly")
+		}
+		if newValue.MonthlyReport {
+			parts = append(parts, "Monthly")
+		}
+		if len(parts) > 0 {
+			ul.Property = "Reports"
+			ul.Value = strings.Join(parts, ", ")
+		}
+		if newValue.NotificationsEmail != nil && len(*newValue.NotificationsEmail) > 0 {
+			if ul.Property == "" {
+				ul.Property = "Email"
+			} else {
+				ul.Property += ", Email"
+			}
+			ul.Value += " " + common.MaskEmail(*newValue.NotificationsEmail, '*')
+		}
+	}
+
+	return nil
+}
+
 func (ul *UserAuditLog) initFromAPIKey(oldValue, newValue *db.AuditLogAPIKey) error {
 	ul.Resource = "API key"
 
@@ -327,6 +355,11 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 			var oldOrgUser, newOrgUser *db.AuditLogOrgUser
 			if oldOrgUser, newOrgUser, err = db.ParseAuditLogPayloads[db.AuditLogOrgUser](ctx, log); err == nil {
 				err = ul.initFromOrgUser(oldOrgUser, newOrgUser)
+			}
+		case db.TableNameUserSettings:
+			var oldSettings, newSettings *db.AuditLogUserSettings
+			if oldSettings, newSettings, err = db.ParseAuditLogPayloads[db.AuditLogUserSettings](ctx, log); err == nil {
+				err = ul.initFromUserSettings(oldSettings, newSettings)
 			}
 		default:
 			// Allow extensions to handle custom audit log types

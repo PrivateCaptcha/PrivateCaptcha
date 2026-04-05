@@ -150,7 +150,7 @@ func (j *UserEmailNotificationsJob) retrieveTemplate(ctx context.Context,
 	nt := &preparedNotificationTemplate{name: name}
 
 	if len(contentHTML) > 0 {
-		if tplHTML, err := htmltpl.New("NotificationHTML").Parse(contentHTML); err != nil {
+		if tplHTML, err := htmltpl.New("NotificationHTML").Funcs(email.Functions()).Parse(contentHTML); err != nil {
 			hlog.ErrorContext(ctx, "Failed to parse HTML template", "name", name, common.ErrAttr(err))
 			return nil, err
 		} else {

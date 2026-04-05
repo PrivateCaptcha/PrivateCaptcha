@@ -13,6 +13,7 @@ func TestEmailTemplates(t *testing.T) {
 		OrgInvitationContext
 		APIKeyExpirationContext
 		TwoFactorEmailContext
+		UsageReportContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -41,6 +42,23 @@ func TestEmailTemplates(t *testing.T) {
 			Browser:  "Firefox",
 			OS:       "Ubuntu",
 			Location: "EE",
+		},
+		UsageReportContext: UsageReportContext{
+			Period:                 "weekly",
+			PeriodDate:             time.Now().Format("02 Jan 2006"),
+			TotalRequests:          1234,
+			TotalVerifies:          567,
+			PrevRequests:           1100,
+			PrevVerifies:           500,
+			RequestsChange:         12.2,
+			VerifiesChange:         13.4,
+			VerificationRateChange: 1.0,
+			DashboardPath:          "settings?tab=usage",
+			VerificationRate:       45.9,
+			TopProperties: []*PropertyStat{
+				{Name: "Main Site", Domain: "example.com", Count: 800, Percent: 64.8, Change: 14.3},
+				{Name: "Blog", Domain: "blog.example.com", Count: 434, Percent: 35.2, Change: 8.5, Alternate: true},
+			},
 		},
 		UserName:    "John Doe",
 		CDNURL:      "https://cdn.privatecaptcha.com",

@@ -18,18 +18,21 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/badoux/checkmail"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
 	// Content-specific template names
-	settingsGeneralTemplatePrefix = "settings-general/"
-	settingsAPIKeysTemplatePrefix = "settings-apikeys/"
-	settingsUsageTemplatePrefix   = "settings-usage/"
+	settingsGeneralTemplatePrefix       = "settings-general/"
+	settingsAPIKeysTemplatePrefix       = "settings-apikeys/"
+	settingsUsageTemplatePrefix         = "settings-usage/"
+	settingsNotificationsTemplatePrefix = "settings-notifications/"
 
 	// Other templates
-	settingsGeneralFormTemplate    = "settings-general/form.html"
-	settingsAPIKeysContentTemplate = "settings-apikeys/content.html"
-	apiKeyRowTemplate              = "settings-apikeys/key.html"
+	settingsGeneralFormTemplate       = "settings-general/form.html"
+	settingsAPIKeysContentTemplate    = "settings-apikeys/content.html"
+	apiKeyRowTemplate                 = "settings-apikeys/key.html"
+	settingsNotificationsFormTemplate = "settings-notifications/form.html"
 
 	// notifications
 	apiKeyExpirationNotificationDays = 14
@@ -117,6 +120,15 @@ type settingsAPIKeysRenderContext struct {
 	Keys       []*userAPIKey
 	Orgs       []*UserOrg
 	CreateOpen bool
+}
+
+type settingsNotificationsRenderContext struct {
+	SettingsCommonRenderContext
+	ReportEmail   string
+	UserEmail     string
+	EmailError    string
+	WeeklyReport  bool
+	MonthlyReport bool
 }
 
 func apiKeyToUserAPIKey(key *dbgen.APIKey, tnow time.Time, hasher common.IdentifierHasher) *userAPIKey {
@@ -1017,4 +1029,103 @@ func (s *Server) getUsageSettings(w http.ResponseWriter, r *http.Request) (*View
 	renderCtx := s.createUsageSettingsModel(ctx, user)
 
 	return &ViewModel{Model: renderCtx}, nil
+}
+
+func (s *Server) createNotificationsSettingsModel(ctx context.Context, user *dbgen.User) *settingsNotificationsRenderContext {
+	renderCtx := &settingsNotificationsRenderContext{
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
+		UserEmail:                   user.Email,
+	}
+
+	settings, err := s.Store.Impl().RetrieveUserSettings(ctx, user.ID)
+	if err != nil {
+		if !errors.Is(err, db.ErrRecordNotFound) && !errors.Is(err, db.ErrNegativeCacheHit) {
+			slog.ErrorContext(ctx, "Failed to retrieve user settings", "userID", user.ID, common.ErrAttr(err))
+			renderCtx.ErrorMessage = "Could not load notification settings. Please try again."
+		}
+		return renderCtx
+	}
+
+	renderCtx.WeeklyReport = settings.WeeklyReport
+	renderCtx.MonthlyReport = settings.MonthlyReport
+
+	if settings.NotificationsEmail.Valid {
+		renderCtx.ReportEmail = settings.NotificationsEmail.String
+	}
+
+	return renderCtx
+}
+
+func (s *Server) getNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := s.createNotificationsSettingsModel(ctx, user)
+
+	return &ViewModel{Model: renderCtx}, nil
+}
+
+func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form data", common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	_, weeklyReport := r.Form[common.ParamWeeklyReport]
+	_, monthlyReport := r.Form[common.ParamMonthlyReport]
+	reportEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
+
+	renderCtx := &settingsNotificationsRenderContext{
+		SettingsCommonRenderContext: s.CreateSettingsCommonRenderContext(common.NotificationsEndpoint, user),
+		WeeklyReport:                weeklyReport,
+		MonthlyReport:               monthlyReport,
+		ReportEmail:                 reportEmail,
+		UserEmail:                   user.Email,
+	}
+
+	if len(reportEmail) > 0 {
+		if err := s.EmailVerifier.VerifyEmail(ctx, reportEmail); err != nil {
+			slog.WarnContext(ctx, "Email verification failed for notification settings", "userID", user.ID, common.ErrAttr(err))
+			renderCtx.EmailError = "Invalid email address."
+			return &ViewModel{
+				Model: renderCtx,
+				View:  settingsNotificationsFormTemplate,
+			}, nil
+		}
+	}
+
+	params := &dbgen.UpsertUserSettingsParams{
+		UserID:             user.ID,
+		WeeklyReport:       weeklyReport,
+		MonthlyReport:      monthlyReport,
+		NotificationsEmail: pgtype.Text{String: reportEmail, Valid: len(reportEmail) > 0},
+	}
+
+	_, auditEvent, err := s.Store.Impl().UpsertUserSettings(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to save notification settings", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to save notification settings."
+		return &ViewModel{
+			Model: renderCtx,
+			View:  settingsNotificationsFormTemplate,
+		}, nil
+	}
+
+	renderCtx.SuccessMessage = "Notification settings saved."
+
+	return &ViewModel{
+		Model:      renderCtx,
+		View:       settingsNotificationsFormTemplate,
+		AuditEvent: auditEvent,
+	}, nil
 }

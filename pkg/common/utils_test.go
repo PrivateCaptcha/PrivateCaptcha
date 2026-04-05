@@ -392,3 +392,50 @@ func TestChunkedCleanup(t *testing.T) {
 		t.Errorf("Expected deleter to be called at least twice, got %d calls", calls)
 	}
 }
+
+func TestFormatMagnitude(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    float64
+		expected string
+	}{
+		// Base cases (under 1,000)
+		{"Zero", 0, "0"},
+		{"Positive under thousand", 42, "42"},
+		{"Upper boundary under thousand", 999, "999"},
+
+		// Thousands (K)
+		{"Exactly one thousand", 1_000, "1K"},
+		{"Thousands with decimal", 1_500, "1.5K"},
+		{"Thousands trimming decimal", 2_000, "2K"},
+		{"Upper boundary thousands", 999_999, "1000K"}, // 999.999K rounds up to 1000.0K -> 1000K due to %.1f
+
+		// Millions (M)
+		{"Exactly one million", 1_000_000, "1M"},
+		{"Millions with decimal", 2_540_000, "2.5M"},
+		{"Millions trimming decimal", 5_000_000, "5M"},
+
+		// Billions (B)
+		{"Exactly one billion", 1_000_000_000, "1B"},
+		{"Billions with decimal", 1_900_000_000, "1.9B"},
+
+		// Trillions (T)
+		{"Exactly one trillion", 1_000_000_000_000, "1T"},
+		{"Trillions with decimal", 4_200_000_000_000, "4.2T"},
+
+		// Negative numbers
+		{"Negative under thousand", -42, "-42"},
+		{"Negative thousands", -1_500, "-1.5K"},
+		{"Negative millions", -3_500_000, "-3.5M"},
+		{"Negative billions", -1_900_000_000, "-1.9B"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := FormatMagnitude(tc.input)
+			if got != tc.expected {
+				t.Errorf("FormatMagnitude(%f) = %q; want %q", tc.input, got, tc.expected)
+			}
+		})
+	}
+}

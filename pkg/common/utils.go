@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -367,4 +369,30 @@ func (e RetriableError) Unwrap() error {
 
 func SafeString(s string, maxLen int) string {
 	return s[:min(len(s), maxLen)]
+}
+
+// formatSuffix formats the number to one decimal place and appends the suffix.
+func formatSuffix(val float64, suffix string) string {
+	str := fmt.Sprintf("%.1f", val)
+	str = strings.TrimSuffix(str, ".0")
+	return str + suffix
+}
+
+// FormatMagnitude converts a number into a string with K, M, B, or T suffixes.
+func FormatMagnitude(value float64) string {
+	absVal := math.Abs(value)
+
+	switch {
+	case absVal >= 1_000_000_000_000:
+		return formatSuffix(value/1_000_000_000_000, "T")
+	case absVal >= 1_000_000_000:
+		return formatSuffix(value/1_000_000_000, "B")
+	case absVal >= 1_000_000:
+		return formatSuffix(value/1_000_000, "M")
+	case absVal >= 1_000:
+		return formatSuffix(value/1_000, "K")
+	default:
+		// For numbers less than 1000, return the exact number without decimals
+		return fmt.Sprintf("%.0f", value)
+	}
 }

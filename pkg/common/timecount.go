@@ -42,3 +42,20 @@ type OrgTimeCount struct {
 	Timestamp time.Time
 	Count     uint32
 }
+
+type UserReportPropertyStat struct {
+	PropertyID      int32
+	OrgID           int32
+	CurrentRequests uint64
+	PrevRequests    uint64
+	CurrentVerifies uint64
+	PrevVerifies    uint64
+}
+
+type UserReportStats struct {
+	Properties           []*UserReportPropertyStat
+	TotalCurrentRequests uint64
+	TotalPrevRequests    uint64
+	TotalCurrentVerifies uint64
+	TotalPrevVerifies    uint64
+}

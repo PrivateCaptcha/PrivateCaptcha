@@ -388,6 +388,23 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint},
+			template: settingsNotificationsTemplatePrefix + "page.html",
+			model: &settingsNotificationsRenderContext{
+				SettingsCommonRenderContext: SettingsCommonRenderContext{
+					CsrfRenderContext: stubToken(),
+					Email:             "foo@bar.com",
+					ActiveTabID:       common.NotificationsEndpoint,
+					Tabs:              CreateTabViewModels(common.NotificationsEndpoint, server.SettingsTabs),
+				},
+				WeeklyReport:  true,
+				MonthlyReport: false,
+				ReportEmail:   "reports@example.com",
+			},
+			selector: "",
+			matches:  []string{},
+		},
+		{
 			path:     []string{common.AuditLogsEndpoint},
 			template: auditLogsTemplate,
 			model: &MainAuditLogsRenderContext{

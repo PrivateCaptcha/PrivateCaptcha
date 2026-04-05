@@ -313,6 +313,95 @@ ORDER BY org_id, ts`
 	return results, nil
 }
 
+func (ts *TimeSeriesDB) retrieveReportStats(ctx context.Context, userID int32, from, mid, to time.Time, accessTable, verifyTable string) (*common.UserReportStats, error) {
+	fromStr := from.Format(time.DateTime)
+	midStr := mid.Format(time.DateTime)
+	toStr := to.Format(time.DateTime)
+	userIDStr := strconv.Itoa(int(userID))
+
+	query := `SELECT property_id, org_id,
+    sumIf(req_count, timestamp >= {mid_ts:DateTime}) as current_requests,
+    sumIf(req_count, timestamp < {mid_ts:DateTime}) as prev_requests,
+    sumIf(ver_count, timestamp >= {mid_ts:DateTime}) as current_verifies,
+    sumIf(ver_count, timestamp < {mid_ts:DateTime}) as prev_verifies
+FROM (
+    SELECT property_id, org_id, sum(count) as req_count, 0 as ver_count, toStartOfDay(timestamp) as timestamp
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
+    GROUP BY property_id, org_id, timestamp
+    UNION ALL
+    SELECT property_id, org_id, 0 as req_count, sum(success_count + failure_count) as ver_count, toStartOfDay(timestamp) as timestamp
+    FROM %s FINAL
+    WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
+    GROUP BY property_id, org_id, timestamp
+)
+GROUP BY property_id, org_id
+ORDER BY current_requests DESC`
+
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, accessTable, verifyTable),
+		clickhouse.Named("user_id", userIDStr),
+		clickhouse.Named("from_ts", fromStr),
+		clickhouse.Named("mid_ts", midStr),
+		clickhouse.Named("to_ts", toStr))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute report stats query", "userID", userID, "accessTable", accessTable, common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	stats := &common.UserReportStats{}
+
+	for rows.Next() {
+		ps := &common.UserReportPropertyStat{}
+		if err := rows.Scan(&ps.PropertyID, &ps.OrgID, &ps.CurrentRequests, &ps.PrevRequests, &ps.CurrentVerifies, &ps.PrevVerifies); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from report stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		stats.Properties = append(stats.Properties, ps)
+		stats.TotalCurrentRequests += ps.CurrentRequests
+		stats.TotalPrevRequests += ps.PrevRequests
+		stats.TotalCurrentVerifies += ps.CurrentVerifies
+		stats.TotalPrevVerifies += ps.PrevVerifies
+	}
+
+	return stats, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched weekly report stats", "userID", userID, "properties", len(stats.Properties),
+		"currentReq", stats.TotalCurrentRequests, "prevReq", stats.TotalPrevRequests,
+		"currentVer", stats.TotalCurrentVerifies, "prevVer", stats.TotalPrevVerifies)
+
+	return stats, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	stats, err := ts.retrieveReportStats(ctx, userID, from, mid, to, AccessLogTableName1d, VerifyLogTable1d)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched monthly report stats", "userID", userID, "properties", len(stats.Properties),
+		"currentReq", stats.TotalCurrentRequests, "prevReq", stats.TotalPrevRequests,
+		"currentVer", stats.TotalCurrentVerifies, "prevVer", stats.TotalPrevVerifies)
+
+	return stats, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -727,6 +816,84 @@ func (m *MemoryTimeSeries) RetrieveAccountStats(ctx context.Context, userID int3
 	})
 
 	return results, nil
+}
+
+func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Time) *common.UserReportStats {
+	type propKey struct {
+		PropertyID int32
+		OrgID      int32
+	}
+
+	type propCounts struct {
+		CurrentRequests uint64
+		PrevRequests    uint64
+		CurrentVerifies uint64
+		PrevVerifies    uint64
+	}
+
+	counts := make(map[propKey]*propCounts)
+
+	for _, log := range m.accessLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
+			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
+			if counts[key] == nil {
+				counts[key] = &propCounts{}
+			}
+			if !log.Timestamp.Before(mid) {
+				counts[key].CurrentRequests++
+			} else {
+				counts[key].PrevRequests++
+			}
+		}
+	}
+
+	for _, log := range m.verifyLogs {
+		if log.UserID == userID && !log.Timestamp.Before(from) && log.Timestamp.Before(to) {
+			key := propKey{PropertyID: log.PropertyID, OrgID: log.OrgID}
+			if counts[key] == nil {
+				counts[key] = &propCounts{}
+			}
+			if !log.Timestamp.Before(mid) {
+				counts[key].CurrentVerifies++
+			} else {
+				counts[key].PrevVerifies++
+			}
+		}
+	}
+
+	stats := &common.UserReportStats{}
+	for key, c := range counts {
+		stats.Properties = append(stats.Properties, &common.UserReportPropertyStat{
+			PropertyID:      key.PropertyID,
+			OrgID:           key.OrgID,
+			CurrentRequests: c.CurrentRequests,
+			PrevRequests:    c.PrevRequests,
+			CurrentVerifies: c.CurrentVerifies,
+			PrevVerifies:    c.PrevVerifies,
+		})
+		stats.TotalCurrentRequests += c.CurrentRequests
+		stats.TotalPrevRequests += c.PrevRequests
+		stats.TotalCurrentVerifies += c.CurrentVerifies
+		stats.TotalPrevVerifies += c.PrevVerifies
+	}
+
+	sort.Slice(stats.Properties, func(i, j int) bool {
+		return stats.Properties[i].CurrentRequests > stats.Properties[j].CurrentRequests
+	})
+
+	return stats
+}
+
+func (m *MemoryTimeSeries) RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryReportStats(userID, from, mid, to), nil
+}
+
+func (m *MemoryTimeSeries) RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryReportStats(userID, from, mid, to), nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {

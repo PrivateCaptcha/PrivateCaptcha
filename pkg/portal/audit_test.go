@@ -1330,3 +1330,112 @@ func TestCreateAuditLogsContextWithAuditLogs(t *testing.T) {
 		t.Error("Expected AuditLogs to have entries")
 	}
 }
+
+func TestUserAuditLogInitFromUserSettings(t *testing.T) {
+	email := "test@example.com"
+	tests := []struct {
+		name         string
+		oldValue     *db.AuditLogUserSettings
+		newValue     *db.AuditLogUserSettings
+		wantErr      bool
+		wantResource string
+		wantProperty string
+	}{
+		{
+			name:         "nil values",
+			oldValue:     nil,
+			newValue:     nil,
+			wantErr:      false,
+			wantResource: "Notification Settings",
+		},
+		{
+			name: "weekly report enabled",
+			newValue: &db.AuditLogUserSettings{
+				WeeklyReport: true,
+			},
+			wantErr:      false,
+			wantResource: "Notification Settings",
+			wantProperty: "Reports",
+		},
+		{
+			name: "both reports enabled",
+			newValue: &db.AuditLogUserSettings{
+				WeeklyReport:  true,
+				MonthlyReport: true,
+			},
+			wantErr:      false,
+			wantResource: "Notification Settings",
+			wantProperty: "Reports",
+		},
+		{
+			name: "email set",
+			newValue: &db.AuditLogUserSettings{
+				NotificationsEmail: &email,
+			},
+			wantErr:      false,
+			wantResource: "Notification Settings",
+			wantProperty: "Email",
+		},
+		{
+			name: "reports and email set",
+			newValue: &db.AuditLogUserSettings{
+				WeeklyReport:       true,
+				NotificationsEmail: &email,
+			},
+			wantErr:      false,
+			wantResource: "Notification Settings",
+			wantProperty: "Reports, Email",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ul := &UserAuditLog{}
+			err := ul.initFromUserSettings(tt.oldValue, tt.newValue)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("initFromUserSettings() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if ul.Resource != tt.wantResource {
+				t.Errorf("initFromUserSettings() Resource = %v, want %v", ul.Resource, tt.wantResource)
+			}
+			if tt.wantProperty != "" && ul.Property != tt.wantProperty {
+				t.Errorf("initFromUserSettings() Property = %v, want %v", ul.Property, tt.wantProperty)
+			}
+		})
+	}
+}
+
+func TestNewUserAuditLogUserSettings(t *testing.T) {
+	ctx := context.Background()
+	planService := billing.NewPlanService(nil)
+
+	server := &Server{
+		PlanService: planService,
+		Stage:       "production",
+	}
+
+	email := "user@example.com"
+	log := &dbgen.AuditLog{
+		ID:          100,
+		UserID:      db.Int(1),
+		Action:      dbgen.AuditLogActionUpdate,
+		EntityTable: db.TableNameUserSettings,
+		CreatedAt:   db.Timestampz(time.Now()),
+		Source:      dbgen.AuditLogSourcePortal,
+		NewValue:    mustMarshalJSON(&db.AuditLogUserSettings{WeeklyReport: true, MonthlyReport: false, NotificationsEmail: &email}),
+	}
+
+	ul, err := server.newUserAuditLog(ctx, log)
+	if err != nil {
+		t.Fatalf("newUserAuditLog() error = %v", err)
+	}
+	if ul == nil {
+		t.Fatal("newUserAuditLog() returned nil")
+	}
+	if ul.Resource != "Notification Settings" {
+		t.Errorf("Resource = %v, want 'Notification Settings'", ul.Resource)
+	}
+	if ul.TableName != db.TableNameUserSettings {
+		t.Errorf("TableName = %v, want %v", ul.TableName, db.TableNameUserSettings)
+	}
+}

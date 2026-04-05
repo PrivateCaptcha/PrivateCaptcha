@@ -3631,3 +3631,100 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 
 	return updatedRule, auditEvent, nil
 }
+
+func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSettings, error) {
+	reader := &StoreOneReader[int32, dbgen.UserSettings]{
+		CacheKey: UserSettingsCacheKey(userID),
+		Cache:    impl.cache,
+	}
+
+	if impl.querier != nil {
+		reader.QueryKeyFunc = QueryKeyInt
+		reader.QueryFunc = impl.querier.GetUserSettings
+	}
+
+	return reader.Read(ctx)
+}
+
+func (impl *BusinessStoreImpl) UpsertUserSettings(ctx context.Context, params *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, *common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	settings, err := impl.querier.UpsertUserSettings(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to upsert user settings", "userID", params.UserID, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	_ = impl.cache.Set(ctx, UserSettingsCacheKey(params.UserID), settings)
+
+	slog.DebugContext(ctx, "Upserted user settings", "userID", params.UserID)
+
+	auditEvent := &common.AuditLogEvent{
+		UserID:    params.UserID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(settings.ID),
+		TableName: TableNameUserSettings,
+		NewValue:  settings,
+		Timestamp: time.Now().UTC(),
+	}
+
+	return settings, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingWeeklyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingWeeklyReportRow, error) {
+	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	users, err := impl.querier.GetUsersWithPendingWeeklyReport(ctx, &dbgen.GetUsersWithPendingWeeklyReportParams{
+		Limit:           limit,
+		UserID:          lastSeenUserID,
+		ReferencePrefix: referencePrefix,
+		ReferenceSuffix: referenceSuffix,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*dbgen.GetUsersWithPendingWeeklyReportRow{}, nil
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending weekly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched users with pending weekly report", "count", len(users), "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix)
+
+	return users, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context.Context, limit, lastSeenUserID int32, referencePrefix, referenceSuffix string) ([]*dbgen.GetUsersWithPendingMonthlyReportRow, error) {
+	if limit <= 0 || lastSeenUserID < 0 || len(referencePrefix) == 0 || len(referenceSuffix) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	users, err := impl.querier.GetUsersWithPendingMonthlyReport(ctx, &dbgen.GetUsersWithPendingMonthlyReportParams{
+		Limit:           limit,
+		UserID:          lastSeenUserID,
+		ReferencePrefix: referencePrefix,
+		ReferenceSuffix: referenceSuffix,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []*dbgen.GetUsersWithPendingMonthlyReportRow{}, nil
+		}
+		slog.ErrorContext(ctx, "Failed to retrieve users with pending monthly report", "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched users with pending monthly report", "count", len(users), "limit", limit, "lastSeenUserID", lastSeenUserID, "prefix", referencePrefix, "suffix", referenceSuffix)
+
+	return users, nil
+}
