@@ -140,6 +140,71 @@ func TestScheduleMonthlyReport(t *testing.T) {
 	}
 }
 
+func TestScheduleReportsJob(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
+		UserID:        user.ID,
+		WeeklyReport:  true,
+		MonthlyReport: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to upsert user settings: %v", err)
+	}
+
+	job := &maintenance.ScheduleReportsJob{
+		Store:       store,
+		TimeSeries:  timeSeries,
+		PlanService: server.PlanService,
+		Stage:       common.StageTest,
+		UsersLimit:  5,
+	}
+
+	// 2025-09-01 is a Monday and the 1st of the month, so both weekly and monthly trigger
+	tnow := time.Date(2025, 9, 1, 10, 0, 0, 0, time.UTC)
+
+	if err := job.RunOnceAt(ctx, nil, tnow); err != nil {
+		t.Fatalf("RunOnceAt failed: %v", err)
+	}
+
+	notifications, err := store.Impl().RetrievePendingUserNotifications(ctx, tnow.Add(-1*time.Minute), 100, 5)
+	if err != nil {
+		t.Fatalf("failed to retrieve pending notifications: %v", err)
+	}
+
+	year, week := tnow.ISOWeek()
+	expectedWeeklyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, user.ID, year, week)
+	expectedMonthlyRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, user.ID, tnow.Year(), int(tnow.Month()))
+
+	var foundWeekly, foundMonthly bool
+	for _, n := range notifications {
+		if n.UserNotification.UserID.Int32 != user.ID {
+			continue
+		}
+		if n.UserNotification.ReferenceID == expectedWeeklyRef {
+			foundWeekly = true
+		}
+		if n.UserNotification.ReferenceID == expectedMonthlyRef {
+			foundMonthly = true
+		}
+	}
+	if !foundWeekly {
+		t.Errorf("weekly report notification not found for user %d with reference %q", user.ID, expectedWeeklyRef)
+	}
+	if !foundMonthly {
+		t.Errorf("monthly report notification not found for user %d with reference %q", user.ID, expectedMonthlyRef)
+	}
+}
+
 func TestWeeklyReportDedup(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
