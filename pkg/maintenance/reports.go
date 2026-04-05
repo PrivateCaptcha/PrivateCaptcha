@@ -33,22 +33,14 @@ type ScheduleReportsJob struct {
 }
 
 type ScheduleReportsParams struct {
-	UsersLimit int32 `json:"users_limit,omitempty"`
-	UserID     int32 `json:"user_id,omitempty"`
-	Weekly     bool  `json:"weekly,omitempty"`
-	Monthly    bool  `json:"monthly,omitempty"`
+	UsersLimit int32  `json:"users_limit,omitempty"`
+	UserID     int32  `json:"user_id,omitempty"`
+	UserEmail  string `json:"user_email,omitempty"`
+	Weekly     bool   `json:"weekly,omitempty"`
+	Monthly    bool   `json:"monthly,omitempty"`
 }
 
 var _ common.PeriodicJob = (*ScheduleReportsJob)(nil)
-
-func NewScheduleReportsJob(store db.Implementor, ts common.TimeSeriesStore, planService billing.PlanService, usersLimit int32) *ScheduleReportsJob {
-	return &ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  ts,
-		PlanService: planService,
-		UsersLimit:  usersLimit,
-	}
-}
 
 func (j *ScheduleReportsJob) Name() string {
 	return "schedule_reports_job"
@@ -96,13 +88,12 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 
 		var errs []error
 		if p.Weekly {
-			year, week := tnow.ISOWeek()
-			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, tnow, year, week); err != nil {
+			if err := j.scheduleWeeklyReportForUser(ctx, p.UserID, &p.UserEmail, tnow); err != nil {
 				errs = append(errs, err)
 			}
 		}
 		if p.Monthly {
-			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, tnow); err != nil {
+			if err := j.scheduleMonthlyReportForUser(ctx, p.UserID, &p.UserEmail, tnow); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -189,8 +180,13 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 				continue
 			}
 
+			var emailTo *string
+			if user.NotificationsEmail.Valid {
+				emailTo = &user.NotificationsEmail.String
+			}
+
 			// single user report failure shouldn't abort this
-			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, tnow, year, week)
+			_ = j.scheduleWeeklyReportForUser(ctx, user.UserID, emailTo, tnow)
 
 			lastSeenUserID = user.UserID
 		}
@@ -203,7 +199,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReports(ctx context.Context, tnow tim
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, tnow time.Time, year, week int) error {
+func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
@@ -214,6 +210,8 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		return err
 	}
 
+	year, week := tnow.ISOWeek()
+
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
 		UserID:       userID,
@@ -223,6 +221,10 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		TemplateHash: email.UsageReportTemplate.Hash(),
 		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
+	}
+
+	if (emailTo != nil) && (len(*emailTo) > 0) {
+		notif.EmailTo = emailTo
 	}
 
 	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
@@ -273,8 +275,13 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 				continue
 			}
 
+			var emailTo *string
+			if user.NotificationsEmail.Valid {
+				emailTo = &user.NotificationsEmail.String
+			}
+
 			// single user report failure shouldn't abort this
-			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, tnow)
+			_ = j.scheduleMonthlyReportForUser(ctx, user.UserID, emailTo, tnow)
 
 			lastSeenUserID = user.UserID
 		}
@@ -287,7 +294,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReports(ctx context.Context, tnow ti
 	return nil
 }
 
-func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, tnow time.Time) error {
+func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, userID int32, emailTo *string, tnow time.Time) error {
 	today := truncateDay(tnow)
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
@@ -309,13 +316,17 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Condition:    common.NotificationWithSubscription,
 	}
 
-	_, err = j.Store.Impl().CreateUserNotification(ctx, notif)
-	if err != nil {
+	if (emailTo != nil) && (len(*emailTo) > 0) {
+		notif.EmailTo = emailTo
+	}
+
+	if _, err := j.Store.Impl().CreateUserNotification(ctx, notif); err != nil {
 		if !errors.Is(err, db.ErrAlreadyExists) {
 			slog.WarnContext(ctx, "Failed to create monthly report notification", "userID", userID, common.ErrAttr(err))
 			return err
 		}
 	}
+
 	return nil
 }
 

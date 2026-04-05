@@ -413,7 +413,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		PastInterval: 30 * 24 * time.Hour,
 		BusinessDB:   businessDB,
 	})
-	jobs.AddLocked(6*time.Hour, maintenance.NewScheduleReportsJob(businessDB, timeSeriesDB, planService, 50))
+	jobs.AddLocked(6*time.Hour, &maintenance.ScheduleReportsJob{
+		Store:       businessDB,
+		TimeSeries:  timeSeriesDB,
+		PlanService: planService,
+		UsersLimit:  50,
+	})
 	jobs.AddLocked(10*time.Minute, asyncTasksJob)
 
 	jobs.RunAll()
