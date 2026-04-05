@@ -411,3 +411,28 @@ func TestRequireSubscription(t *testing.T) {
 		t.Errorf("Unexpected number of sent emails: %v", sender.Count)
 	}
 }
+
+func TestRetrieveNotificationTemplates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	for _, tpl := range email.Templates() {
+		t.Run(tpl.Name(), func(t *testing.T) {
+			dbTpl, err := store.Impl().RetrieveNotificationTemplate(ctx, tpl.Hash())
+			if err != nil {
+				t.Fatalf("Failed to retrieve template %s: %v", tpl.Name(), err)
+			}
+
+			if dbTpl == nil {
+				t.Fatalf("Template %s not found", tpl.Name())
+			}
+
+			if dbTpl.Name != tpl.Name() {
+				t.Errorf("Expected template name %s, got %s", tpl.Name(), dbTpl.Name)
+			}
+		})
+	}
+}
