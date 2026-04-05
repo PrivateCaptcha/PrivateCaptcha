@@ -357,6 +357,131 @@ func TestGetPuzzleInvalidSitekeyLength(t *testing.T) {
 	}
 }
 
+func TestOptionsPuzzleInvalidSitekeyTooShort(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	validSitekey := db.UUIDToSiteKey(*randomUUID())
+	truncatedSitekey := validSitekey[:len(validSitekey)-1]
+
+	resp, err := puzzleSuiteEx(ctx, http.MethodOptions, truncatedSitekey, testPropertyDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for too-short sitekey, got %d", resp.StatusCode)
+	}
+}
+
+func TestOptionsPuzzleInvalidSitekeyTooLong(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	validSitekey := db.UUIDToSiteKey(*randomUUID())
+	extendedSitekey := validSitekey + "a"
+
+	resp, err := puzzleSuiteEx(ctx, http.MethodOptions, extendedSitekey, testPropertyDomain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest for too-long sitekey, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetPuzzleEmptyOriginWithReferer(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set(common.HeaderReferer, common_test.PrependProtocol(property.Domain))
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	q := req.URL.Query()
+	q.Add(common.ParamSiteKey, sitekey)
+	req.URL.RawQuery = q.Encode()
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Expected status OK when Referer is set, got %d", resp.StatusCode)
+	}
+}
+
+func TestGetPuzzleBothOriginAndRefererEmpty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	q := req.URL.Query()
+	q.Add(common.ParamSiteKey, sitekey)
+	req.URL.RawQuery = q.Encode()
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("Expected status BadRequest when both Origin and Referer are empty, got %d", resp.StatusCode)
+	}
+}
+
 func TestGetPuzzleDisabledProperty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
