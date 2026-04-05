@@ -191,7 +191,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create property 1: %v", err)
 	}
-	prop2Params := db_tests.CreateNewPropertyParams(user.ID, "blog."+t.Name()+".org")
+	prop2Params := db_tests.CreateNewPropertyParams(user.ID, "blog.reports-test.org")
 	prop2, _, err := store.Impl().CreateNewProperty(ctx, prop2Params, org)
 	if err != nil {
 		t.Fatalf("failed to create property 2: %v", err)
