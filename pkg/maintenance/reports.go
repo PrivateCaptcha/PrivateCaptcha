@@ -33,10 +33,10 @@ type ScheduleReportsJob struct {
 }
 
 type ScheduleReportsParams struct {
-	UsersLimit int32 `json:"users_limit"`
+	UsersLimit int32 `json:"users_limit,omitempty"`
 	UserID     int32 `json:"user_id,omitempty"`
-	Weekly     bool  `json:"weekly"`
-	Monthly    bool  `json:"monthly"`
+	Weekly     bool  `json:"weekly,omitempty"`
+	Monthly    bool  `json:"monthly,omitempty"`
 }
 
 var _ common.PeriodicJob = (*ScheduleReportsJob)(nil)
@@ -92,6 +92,8 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 	tnow := time.Now().UTC()
 
 	if p.UserID > 0 {
+		slog.DebugContext(ctx, "Processing reports for a single user", "userID", p.UserID, "weekly", p.Weekly, "monthly", p.Monthly)
+
 		var errs []error
 		if p.Weekly {
 			year, week := tnow.ISOWeek()
@@ -110,13 +112,16 @@ func (j *ScheduleReportsJob) RunOnce(ctx context.Context, params any) error {
 		return nil
 	}
 
-	if p.Weekly && tnow.Weekday() == time.Monday {
+	slog.DebugContext(ctx, "Processing reports for users", "limit", p.UsersLimit, "weekly", p.Weekly, "monthly", p.Monthly,
+		"weekday", tnow.Weekday(), "dayOfTheMonth", tnow.Day())
+
+	if p.Weekly && (tnow.Weekday() == time.Monday) {
 		if err := j.scheduleWeeklyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule weekly reports", common.ErrAttr(err))
 		}
 	}
 
-	if p.Monthly && tnow.Day() == 1 {
+	if p.Monthly && (tnow.Day() == 1) {
 		if err := j.scheduleMonthlyReports(ctx, tnow, p.UsersLimit); err != nil {
 			slog.ErrorContext(ctx, "Failed to schedule monthly reports", common.ErrAttr(err))
 		}
