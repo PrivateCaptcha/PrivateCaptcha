@@ -64,6 +64,27 @@ func randomUUID() *pgtype.UUID {
 	return eid
 }
 
+func buildPuzzleRequest(t *testing.T, sitekey string) (*http.Request, *httptest.ResponseRecorder, *http.ServeMux) {
+	t.Helper()
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	q := req.URL.Query()
+	q.Add(common.ParamSiteKey, sitekey)
+	req.URL.RawQuery = q.Encode()
+
+	w := httptest.NewRecorder()
+	return req, w, srv
+}
+
 func puzzleSuiteWithBackfillWait(t *testing.T, ctx context.Context, sitekey, domain string, waiter func()) {
 	t.Helper()
 
@@ -250,22 +271,10 @@ func TestGetPuzzleWithFingerprintHeader(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	srv := http.NewServeMux()
-	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
-
-	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	req, w, srv := buildPuzzleRequest(t, sitekey)
 	req.Header.Set("Origin", common_test.PrependProtocol(property.Domain))
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
 	req.Header.Set("X-Fingerprint", "test-fingerprint-value-12345")
 
-	q := req.URL.Query()
-	q.Add(common.ParamSiteKey, sitekey)
-	req.URL.RawQuery = q.Encode()
-
-	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
@@ -470,22 +479,9 @@ func TestGetPuzzleEmptyOriginWithReferer(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	srv := http.NewServeMux()
-	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
-
-	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	req, w, srv := buildPuzzleRequest(t, sitekey)
 	req.Header.Set(common.HeaderReferer, common_test.PrependProtocol(property.Domain))
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
 
-	q := req.URL.Query()
-	q.Add(common.ParamSiteKey, sitekey)
-	req.URL.RawQuery = q.Encode()
-
-	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
@@ -514,21 +510,8 @@ func TestGetPuzzleBothOriginAndRefererEmpty(t *testing.T) {
 
 	sitekey := db.UUIDToSiteKey(property.ExternalID)
 
-	srv := http.NewServeMux()
-	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+	req, w, srv := buildPuzzleRequest(t, sitekey)
 
-	req, err := http.NewRequest(http.MethodGet, "/"+common.PuzzleEndpoint, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
-
-	q := req.URL.Query()
-	q.Add(common.ParamSiteKey, sitekey)
-	req.URL.RawQuery = q.Encode()
-
-	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()

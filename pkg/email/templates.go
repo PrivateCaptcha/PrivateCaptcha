@@ -65,16 +65,18 @@ func Functions() template.FuncMap {
 }
 
 func truncate(s string, n int) string {
+	r := []rune(s)
+
 	if n <= 3 {
-		if len(s) <= n {
+		if len(r) <= n {
 			return s
 		}
 		return "..."
 	}
 
-	if len(s) <= n {
+	if len(r) <= n {
 		return s
 	}
 
-	return s[:n-3] + "..."
+	return string(r[:n-3]) + "..."
 }

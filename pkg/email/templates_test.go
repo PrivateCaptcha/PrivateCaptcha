@@ -22,6 +22,7 @@ func TestTruncate(t *testing.T) {
 		{"n lte 3 long string", "abcdef", 3, "..."},
 		{"empty string", "", 5, ""},
 		{"n zero empty string", "", 0, ""},
+		{"unicode runes not split", "\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9\u00e9", 6, "\u00e9\u00e9\u00e9..."},
 	}
 
 	for _, tc := range tests {
