@@ -2658,3 +2658,38 @@ func TestGetPortalAllTabs(t *testing.T) {
 		})
 	}
 }
+
+func TestOrgIDValid(t *testing.T) {
+	const testOrgID = 42
+	encrypted := server.IDHasher.Encrypt(testOrgID)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.SetPathValue(common.ParamOrg, encrypted)
+
+	orgID, err := server.OrgID(req)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if orgID != int32(testOrgID) {
+		t.Errorf("Expected org ID %d, got %d", testOrgID, orgID)
+	}
+}
+
+func TestOrgIDInvalid(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.SetPathValue(common.ParamOrg, "not-a-valid-id")
+
+	_, err := server.OrgID(req)
+	if err == nil {
+		t.Fatal("Expected error for invalid org ID, got nil")
+	}
+}
+
+func TestOrgIDEmpty(t *testing.T) {
+	req := httptest.NewRequest("GET", "/", nil)
+
+	_, err := server.OrgID(req)
+	if err == nil {
+		t.Fatal("Expected error for empty org ID, got nil")
+	}
+}

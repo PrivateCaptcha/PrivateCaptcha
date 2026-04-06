@@ -86,6 +86,7 @@ func TestMain(m *testing.M) {
 			PlatformCtx:        platformCtx,
 			SubscriptionLimits: &db.StubSubscriptionLimits{},
 			EmailVerifier:      &PortalEmailVerifier{},
+			IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
 		}
 
 		ctx := context.TODO()

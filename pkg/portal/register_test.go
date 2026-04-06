@@ -12,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
 
 func registerSuite(srv *http.ServeMux, name, email, token string) *http.Response {
@@ -404,5 +405,42 @@ func TestPostRegisterDisabled(t *testing.T) {
 	// Should be redirected to an error page when registration is disabled
 	if w.Code != http.StatusSeeOther {
 		t.Errorf("Expected redirect status when registration disabled, got %v", w.Code)
+	}
+}
+
+func TestPostRegisterInvalidCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Temporarily make the puzzle engine return a failed verify result
+	originalResult := server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result
+	server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result = &puzzle.VerifyResult{Error: puzzle.InvalidSolutionError}
+	defer func() {
+		server.PuzzleEngine.(*portal_tests.StubPuzzleEngine).Result = originalResult
+	}()
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	form := url.Values{}
+	form.Add(common.ParamCSRFToken, server.XSRF.Token(""))
+	form.Add(common.ParamEmail, t.Name()+"@privatecaptcha.com")
+	form.Add(common.ParamName, "Test User")
+	form.Add(common.ParamTerms, "true")
+	form.Add(common.ParamPortalSolution, "invalid-captcha-solution")
+
+	req := httptest.NewRequest("POST", "/"+common.RegisterEndpoint, bytes.NewBufferString(form.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200, got %v", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, captchaVerificationFailed) {
+		t.Errorf("Expected captcha verification failed error message, got: %s", body)
 	}
 }

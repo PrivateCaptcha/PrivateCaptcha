@@ -1468,6 +1468,13 @@ func TestApiPostPropertiesValidationErrors(t *testing.T) {
 			},
 			wantCode: common.StatusPropertyNameDuplicateError,
 		},
+		{
+			name: "Non-ASCII Invalid Symbols",
+			input: []*apiCreatePropertyInput{
+				{apiPropertySettings: apiPropertySettings{Name: "Test@Property"}, Domain: "nonascii.com"},
+			},
+			wantCode: common.StatusPropertyNameInvalidSymbolsError,
+		},
 	}
 
 	for _, tt := range tests {

@@ -2202,10 +2202,16 @@ func TestCircularMoveOrgRulesLastPosition(t *testing.T) {
 	testCircularMoveOrgRulesSuite(t, true)
 }
 
-func TestRebalancingPropertyRules(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping integration test")
-	}
+type rebalancingTestConfig struct {
+	createRules      func(ctx context.Context, user *dbgen.User, org *dbgen.Organization) ([]*dbgen.DifficultyRule, error)
+	corruptPositions func(ctx context.Context) error
+	moveURL          func(orgID int32, ruleID int32) string
+	setPathValues    func(req *http.Request, orgID int32, ruleID int32)
+	retrieveRules    func(ctx context.Context) ([]*dbgen.DifficultyRule, error)
+}
+
+func testRebalancingSuite(t *testing.T, cfg rebalancingTestConfig) {
+	t.Helper()
 
 	ctx := t.Context()
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
@@ -2213,28 +2219,15 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	// Create property
-	property, _, err := server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
+	rules, err := cfg.createRules(ctx, user, org)
 	if err != nil {
-		t.Fatalf("Failed to create property: %v", err)
+		t.Fatalf("Failed to create rules: %v", err)
 	}
 
-	// Create multiple rules
-	rules := make([]*dbgen.DifficultyRule, 5)
-	for i := 0; i < 5; i++ {
-		rule, err := createRuleForMove(ctx, user, nil, &property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
-		if err != nil {
-			t.Fatalf("Failed to create rule %d: %v", i, err)
-		}
-		rules[i] = rule
-	}
-
-	// Corrupt positions to force rebalancing
-	if err := db_tests.CorruptDifficultyRulePositionsForTest(ctx, store, &property.ID, nil); err != nil {
+	if err := cfg.corruptPositions(ctx); err != nil {
 		t.Fatalf("Failed to corrupt positions: %v", err)
 	}
 
-	// Set up HTTP server and authentication
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
@@ -2243,52 +2236,129 @@ func TestRebalancingPropertyRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Try to move a rule - this should trigger rebalancing
 	form := url.Values{}
 	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	form.Add(common.ParamPosition, "1")
 
-	req := httptest.NewRequest("POST", fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
-		server.IDHasher.Encrypt(int(org.ID)),
-		server.IDHasher.Encrypt(int(property.ID)),
-		server.IDHasher.Encrypt(int(rules[2].ID))), strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", cfg.moveURL(org.ID, rules[2].ID), strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookie)
-	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
-	req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
-	req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(rules[2].ID)))
+	cfg.setPathValues(req, org.ID, rules[2].ID)
 
 	w := httptest.NewRecorder()
-
-	// Call through HTTP server
 	srv.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("Move handler returned unexpected status: %d: %s", w.Code, w.Body.String())
 	}
 
-	// Verify rules are now properly spaced
-	allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
+	resultRules, err := cfg.retrieveRules(ctx)
 	if err != nil {
 		t.Fatalf("Failed to retrieve rules: %v", err)
 	}
-	propertyRules := allRules[property.ID]
-	if len(propertyRules) != 5 {
-		t.Fatalf("Expected 5 rules, got %d", len(propertyRules))
+	if len(resultRules) != 5 {
+		t.Fatalf("Expected 5 rules, got %d", len(resultRules))
 	}
 
-	// Verify positions are properly spaced (at least 50.0 apart after rebalancing with step=100)
-	for i := 1; i < len(propertyRules); i++ {
-		delta := propertyRules[i].Position - propertyRules[i-1].Position
+	for i := 1; i < len(resultRules); i++ {
+		delta := resultRules[i].Position - resultRules[i-1].Position
 		if delta < db.RulePositionStep/2 {
 			t.Errorf("Rules %d and %d are too close: delta = %f", i-1, i, delta)
 		}
 	}
 
-	// Verify the moved rule is at position 1
-	if propertyRules[1].ID != rules[2].ID {
-		t.Errorf("Expected rule at index 1 to be rule 2, got rule %d", propertyRules[1].ID)
+	if resultRules[1].ID != rules[2].ID {
+		t.Errorf("Expected rule at index 1 to be rule 2, got rule %d", resultRules[1].ID)
 	}
+}
+
+func TestRebalancingPropertyRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	var property *dbgen.Property
+
+	testRebalancingSuite(t, rebalancingTestConfig{
+		createRules: func(ctx context.Context, user *dbgen.User, org *dbgen.Organization) ([]*dbgen.DifficultyRule, error) {
+			var err error
+			property, _, err = server.Store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "test.com"), org)
+			if err != nil {
+				return nil, err
+			}
+			rules := make([]*dbgen.DifficultyRule, 5)
+			for i := 0; i < 5; i++ {
+				rules[i], err = createRuleForMove(ctx, user, nil, &property.ID, fmt.Sprintf("Test Rule %d", i), int32(10+i))
+				if err != nil {
+					return nil, err
+				}
+			}
+			return rules, nil
+		},
+		corruptPositions: func(ctx context.Context) error {
+			return db_tests.CorruptDifficultyRulePositionsForTest(ctx, store, &property.ID, nil)
+		},
+		moveURL: func(orgID int32, ruleID int32) string {
+			return fmt.Sprintf("/org/%s/property/%s/rules/%s/move",
+				server.IDHasher.Encrypt(int(orgID)),
+				server.IDHasher.Encrypt(int(property.ID)),
+				server.IDHasher.Encrypt(int(ruleID)))
+		},
+		setPathValues: func(req *http.Request, orgID int32, ruleID int32) {
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(orgID)))
+			req.SetPathValue(common.ParamProperty, server.IDHasher.Encrypt(int(property.ID)))
+			req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(ruleID)))
+		},
+		retrieveRules: func(ctx context.Context) ([]*dbgen.DifficultyRule, error) {
+			allRules, err := server.Store.Impl().RetrieveDifficultyRulesByPropertyIDs(ctx, map[int32]uint{property.ID: 0})
+			if err != nil {
+				return nil, err
+			}
+			return allRules[property.ID], nil
+		},
+	})
+}
+
+func TestRebalancingOrgRules(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	var orgID int32
+
+	testRebalancingSuite(t, rebalancingTestConfig{
+		createRules: func(ctx context.Context, user *dbgen.User, org *dbgen.Organization) ([]*dbgen.DifficultyRule, error) {
+			orgID = org.ID
+			rules := make([]*dbgen.DifficultyRule, 5)
+			var err error
+			for i := 0; i < 5; i++ {
+				rules[i], err = createRuleForMove(ctx, user, &org.ID, nil, fmt.Sprintf("Test Rule %d", i), int32(10+i))
+				if err != nil {
+					return nil, err
+				}
+			}
+			return rules, nil
+		},
+		corruptPositions: func(ctx context.Context) error {
+			return db_tests.CorruptDifficultyRulePositionsForTest(ctx, store, nil, &orgID)
+		},
+		moveURL: func(orgIDParam int32, ruleID int32) string {
+			return fmt.Sprintf("/org/%s/rules/%s/move",
+				server.IDHasher.Encrypt(int(orgIDParam)),
+				server.IDHasher.Encrypt(int(ruleID)))
+		},
+		setPathValues: func(req *http.Request, orgIDParam int32, ruleID int32) {
+			req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(orgIDParam)))
+			req.SetPathValue(common.ParamRule, server.IDHasher.Encrypt(int(ruleID)))
+		},
+		retrieveRules: func(ctx context.Context) ([]*dbgen.DifficultyRule, error) {
+			allRules, err := server.Store.Impl().RetrieveDifficultyRulesByOrgIDs(ctx, map[int32]uint{orgID: 0})
+			if err != nil {
+				return nil, err
+			}
+			return allRules[orgID], nil
+		},
+	})
 }
 
 func TestTrialPlanOrgRulesLimit(t *testing.T) {

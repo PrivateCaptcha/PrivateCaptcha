@@ -8,9 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
-	"strings"
 	"time"
-	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -2714,22 +2712,9 @@ func (impl *BusinessStoreImpl) ValidateOrgName(ctx context.Context, name string,
 		}
 	}
 
-	const allowedPunctuation = "'-_&.:()[]"
-
-	for i, r := range name {
-		switch {
-		case unicode.IsLetter(r):
-			continue
-		case unicode.IsDigit(r):
-			continue
-		case unicode.IsSpace(r):
-			continue
-		case strings.ContainsRune(allowedPunctuation, r):
-			continue
-		default:
-			slog.WarnContext(ctx, "Name contains invalid characters", "position", i, "rune", r)
-			return common.StatusOrgNameInvalidSymbolsError
-		}
+	if pos, r := containsInvalidNameChars(name, "'-_&.:()[]"); pos >= 0 {
+		slog.WarnContext(ctx, "Name contains invalid characters", "position", pos, "rune", r)
+		return common.StatusOrgNameInvalidSymbolsError
 	}
 
 	if _, err := impl.FindOrg(ctx, name, user); err != ErrRecordNotFound {
@@ -2752,22 +2737,9 @@ func (impl *BusinessStoreImpl) ValidatePropertyName(ctx context.Context, name st
 		}
 	}
 
-	const allowedPunctuation = "'-_.:()[]"
-
-	for i, r := range name {
-		switch {
-		case unicode.IsLetter(r):
-			continue
-		case unicode.IsDigit(r):
-			continue
-		case unicode.IsSpace(r):
-			continue
-		case strings.ContainsRune(allowedPunctuation, r):
-			continue
-		default:
-			slog.WarnContext(ctx, "Name contains invalid characters", "position", i, "rune", r)
-			return common.StatusPropertyNameInvalidSymbolsError
-		}
+	if pos, r := containsInvalidNameChars(name, "'-_.:()[]"); pos >= 0 {
+		slog.WarnContext(ctx, "Name contains invalid characters", "position", pos, "rune", r)
+		return common.StatusPropertyNameInvalidSymbolsError
 	}
 
 	if org != nil {

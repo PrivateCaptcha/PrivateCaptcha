@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -538,4 +539,24 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 	}
 
 	return cached, items, nil
+}
+
+// containsInvalidNameChars checks if name contains characters that are not letters, digits, spaces, or allowed punctuation.
+// Returns the position and rune of the first invalid character, or -1 if all valid.
+func containsInvalidNameChars(name string, allowedPunctuation string) (int, rune) {
+	for i, r := range name {
+		switch {
+		case unicode.IsLetter(r):
+			continue
+		case unicode.IsDigit(r):
+			continue
+		case unicode.IsSpace(r):
+			continue
+		case strings.ContainsRune(allowedPunctuation, r):
+			continue
+		default:
+			return i, r
+		}
+	}
+	return -1, 0
 }
