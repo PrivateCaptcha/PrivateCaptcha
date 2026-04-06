@@ -105,6 +105,9 @@ publish-widget-library:
 build-view-emails:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewemails cmd/viewemails/*.go
 
+build-view-portal:
+	env GOFLAGS="-mod=vendor" go build -tags enterprise -o bin/viewportal cmd/viewportal/*.go
+
 build-view-widget:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
 
