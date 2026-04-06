@@ -133,5 +133,5 @@ func main() {
 	}
 
 	log.Println("Listening at http://localhost:8083/")
-	_ = http.ListenAndServe(":8083", nil)
+	log.Fatal(http.ListenAndServe(":8083", nil))
 }
