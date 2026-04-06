@@ -184,6 +184,14 @@ view-emails: build-view-emails
 run-view-emails:
 	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'
 
+view-portal: build-js copy-static-js build-view-portal
+	bin/viewportal
+
+run-view-portal:
+	reflex -r '^(pkg\/portal|web|cmd\/viewportal)/' \
+		-R '^(web/static/js|web/node_modules)' \
+		-s -- sh -c 'make view-portal'
+
 view-widget: build-js build-widget-script build-view-widget
 	bin/viewwidget
 

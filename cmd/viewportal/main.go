@@ -52,6 +52,14 @@ func alertFromQuery(r *http.Request) portal.AlertRenderContext {
 	}
 }
 
+func enterpriseFromQuery(r *http.Request) bool {
+	v := r.URL.Query().Get("enterprise")
+	if v == "" {
+		return true
+	}
+	return v != "false" && v != "0"
+}
+
 func homepage(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(rootTemplateStart))
@@ -77,7 +85,7 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 
 		platformCtx := &portal.PlatformRenderContext{
 			GitCommit:  "viewportal",
-			Enterprise: true,
+			Enterprise: enterpriseFromQuery(r),
 		}
 
 		out, err := srv.RenderResponse(ctx, p.Template, model, reqCtx, platformCtx)
@@ -118,9 +126,11 @@ func main() {
 		log.Fatalf("Failed to init portal server: %v", err)
 	}
 
-	pages = portal.BuildViewPortalPages(srv.SettingsTabs)
+	pages = srv.BuildViewPortalPages()
 
-	http.HandleFunc("/", homepage)
+	router := http.NewServeMux()
+	router.HandleFunc("/", homepage)
+	router.Handle("/portal/", http.StripPrefix("/portal/", web.Static("")))
 
 	sorted := make([]portal.ViewPortalPage, len(pages))
 	copy(sorted, pages)
@@ -129,9 +139,9 @@ func main() {
 	})
 
 	for _, p := range sorted {
-		http.HandleFunc(p.Path, servePage(p))
+		router.HandleFunc(p.Path, servePage(p))
 	}
 
 	log.Println("Listening at http://localhost:8083/")
-	log.Fatal(http.ListenAndServe(":8083", nil))
+	log.Fatal(http.ListenAndServe(":8083", router))
 }
