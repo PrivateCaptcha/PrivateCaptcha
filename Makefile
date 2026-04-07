@@ -105,6 +105,9 @@ publish-widget-library:
 build-view-emails:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewemails cmd/viewemails/*.go
 
+build-view-portal:
+	env GOFLAGS="-mod=vendor" go build -tags "enterprise viewportal" -o bin/viewportal cmd/viewportal/*.go
+
 build-view-widget:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
 
@@ -180,6 +183,14 @@ view-emails: build-view-emails
 
 run-view-emails:
 	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'
+
+view-portal: build-js build-widget-script copy-static-js build-view-portal
+	bin/viewportal
+
+run-view-portal:
+	reflex -r '^(pkg\/portal|web|cmd\/viewportal)/' \
+		-R '^(web/static/js|web/node_modules)' \
+		-s -- sh -c 'make view-portal'
 
 view-widget: build-js build-widget-script build-view-widget
 	bin/viewwidget
