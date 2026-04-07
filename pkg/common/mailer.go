@@ -33,7 +33,7 @@ type ScheduledNotification struct {
 	Data         interface{}
 	DateTime     time.Time
 	TemplateHash string
-	Persistent   bool
+	PersistUntil *time.Time
 	Condition    NotificationCondition
 	EmailFrom    *string
 	ReplyToEmail *string

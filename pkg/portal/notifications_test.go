@@ -61,7 +61,6 @@ func TestUserNotificationsJob(t *testing.T) {
 		Subject:      "subject",
 		Data:         map[string]int{},
 		DateTime:     tnow.Add(-10 * time.Minute),
-		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 		EmailFrom:    &customFrom,
 		ReplyToEmail: &customReplyTo,

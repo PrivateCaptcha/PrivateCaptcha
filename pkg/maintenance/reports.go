@@ -250,7 +250,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		Data:         reportCtx,
 		DateTime:     tnow,
 		TemplateHash: email.UsageReportTemplate.Hash(),
-		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 	}
 
@@ -347,7 +346,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Data:         reportCtx,
 		DateTime:     tnow,
 		TemplateHash: email.UsageReportTemplate.Hash(),
-		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 	}
 

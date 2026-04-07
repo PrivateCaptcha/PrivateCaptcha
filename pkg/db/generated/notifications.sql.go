@@ -78,11 +78,11 @@ func (q *Queries) CreateSystemNotification(ctx context.Context, arg *CreateSyste
 }
 
 const createUserNotification = `-- name: CreateUserNotification :one
-INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email, email_to)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-ON CONFLICT (user_id, reference_id) WHERE (persistent = true) OR (processed_at IS NULL)
+INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, persist_until, requires_subscription, email_from, reply_to_email, email_to)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+ON CONFLICT (user_id, reference_id) WHERE (persist_until IS NOT NULL) OR (processed_at IS NULL)
 DO NOTHING
-RETURNING id, user_id, template_id, payload, subject, reference_id, processing_attempts, persistent, requires_subscription, created_at, updated_at, scheduled_at, processed_at, email_from, reply_to_email, email_to
+RETURNING id, user_id, template_id, payload, subject, reference_id, processing_attempts, persistent, requires_subscription, created_at, updated_at, scheduled_at, processed_at, email_from, reply_to_email, email_to, persist_until
 `
 
 type CreateUserNotificationParams struct {
@@ -93,6 +93,7 @@ type CreateUserNotificationParams struct {
 	Payload              []byte             `db:"payload" json:"payload"`
 	ScheduledAt          pgtype.Timestamptz `db:"scheduled_at" json:"scheduled_at"`
 	Persistent           bool               `db:"persistent" json:"persistent"`
+	PersistUntil         pgtype.Timestamptz `db:"persist_until" json:"persist_until"`
 	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
@@ -108,6 +109,7 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 		arg.Payload,
 		arg.ScheduledAt,
 		arg.Persistent,
+		arg.PersistUntil,
 		arg.RequiresSubscription,
 		arg.EmailFrom,
 		arg.ReplyToEmail,
@@ -131,8 +133,20 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 		&i.EmailFrom,
 		&i.ReplyToEmail,
 		&i.EmailTo,
+		&i.PersistUntil,
 	)
 	return &i, err
+}
+
+const deleteExpiredPersistentUserNotifications = `-- name: DeleteExpiredPersistentUserNotifications :exec
+DELETE FROM backend.user_notifications
+WHERE persist_until IS NOT NULL
+AND persist_until < $1
+`
+
+func (q *Queries) DeleteExpiredPersistentUserNotifications(ctx context.Context, persistUntil pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, deleteExpiredPersistentUserNotifications, persistUntil)
+	return err
 }
 
 const deletePendingUserNotification = `-- name: DeletePendingUserNotification :exec
@@ -152,7 +166,7 @@ func (q *Queries) DeletePendingUserNotification(ctx context.Context, arg *Delete
 const deleteProcessedUserNotifications = `-- name: DeleteProcessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
-AND persistent = false
+AND persist_until IS NULL
 AND processed_at < $1
 `
 
@@ -164,7 +178,7 @@ func (q *Queries) DeleteProcessedUserNotifications(ctx context.Context, processe
 const deleteUnprocessedUserNotifications = `-- name: DeleteUnprocessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
-AND persistent = false
+AND persist_until IS NULL
 AND scheduled_at < $1
 `
 
@@ -245,7 +259,7 @@ func (q *Queries) GetNotificationTemplateByHash(ctx context.Context, externalID 
 }
 
 const getPendingUserNotifications = `-- name: GetPendingUserNotifications :many
-SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, un.email_to, un.email_to as notification_email, u.email AS user_email, u.subscription_id, s.status
+SELECT un.id, un.user_id, un.template_id, un.payload, un.subject, un.reference_id, un.processing_attempts, un.persistent, un.requires_subscription, un.created_at, un.updated_at, un.scheduled_at, un.processed_at, un.email_from, un.reply_to_email, un.email_to, un.persist_until, un.email_to as notification_email, u.email AS user_email, u.subscription_id, s.status
 FROM backend.user_notifications un
 JOIN backend.users u ON un.user_id = u.id
 LEFT JOIN backend.subscriptions s ON u.subscription_id = s.id
@@ -299,6 +313,7 @@ func (q *Queries) GetPendingUserNotifications(ctx context.Context, arg *GetPendi
 			&i.UserNotification.EmailFrom,
 			&i.UserNotification.ReplyToEmail,
 			&i.UserNotification.EmailTo,
+			&i.UserNotification.PersistUntil,
 			&i.NotificationEmail,
 			&i.UserEmail,
 			&i.SubscriptionID,

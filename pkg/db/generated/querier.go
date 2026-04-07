@@ -29,6 +29,7 @@ type Querier interface {
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
 	DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) error
 	DeleteExpiredCache(ctx context.Context) error
+	DeleteExpiredPersistentUserNotifications(ctx context.Context, persistUntil pgtype.Timestamptz) error
 	DeleteLock(ctx context.Context, name string) error
 	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error
 	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) error

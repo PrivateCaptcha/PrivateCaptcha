@@ -27,9 +27,9 @@ RETURNING *;
 SELECT * FROM backend.notification_templates WHERE external_id = $1;
 
 -- name: CreateUserNotification :one
-INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, requires_subscription, email_from, reply_to_email, email_to)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-ON CONFLICT (user_id, reference_id) WHERE (persistent = true) OR (processed_at IS NULL)
+INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, persist_until, requires_subscription, email_from, reply_to_email, email_to)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+ON CONFLICT (user_id, reference_id) WHERE (persist_until IS NOT NULL) OR (processed_at IS NULL)
 DO NOTHING
 RETURNING *;
 
@@ -76,11 +76,16 @@ WHERE nt.id IN (
 -- name: DeleteProcessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
-AND persistent = false
+AND persist_until IS NULL
 AND processed_at < $1;
 
 -- name: DeleteUnprocessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
-AND persistent = false
+AND persist_until IS NULL
 AND scheduled_at < $1;
+
+-- name: DeleteExpiredPersistentUserNotifications :exec
+DELETE FROM backend.user_notifications
+WHERE persist_until IS NOT NULL
+AND persist_until < $1;

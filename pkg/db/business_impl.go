@@ -2247,7 +2247,11 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 		Subject:     n.Subject,
 		Payload:     payload,
 		ScheduledAt: Timestampz(n.DateTime),
-		Persistent:  n.Persistent,
+		Persistent:  n.PersistUntil != nil,
+	}
+
+	if n.PersistUntil != nil {
+		params.PersistUntil = Timestampz(*n.PersistUntil)
 	}
 
 	if (n.EmailFrom != nil) && (len(*n.EmailFrom) > 0) {
@@ -2410,6 +2414,25 @@ func (impl *BusinessStoreImpl) DeleteUnsentUserNotifications(ctx context.Context
 	}
 
 	slog.InfoContext(ctx, "Deleted UNsent user notifications", "before", before)
+
+	return nil
+}
+
+func (impl *BusinessStoreImpl) DeleteExpiredPersistentUserNotifications(ctx context.Context, before time.Time) error {
+	if before.IsZero() {
+		return ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	if err := impl.querier.DeleteExpiredPersistentUserNotifications(ctx, Timestampz(before)); err != nil {
+		slog.ErrorContext(ctx, "Failed to delete expired persistent user notifications", common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Deleted expired persistent user notifications", "before", before)
 
 	return nil
 }
