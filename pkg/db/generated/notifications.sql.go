@@ -138,17 +138,6 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 	return &i, err
 }
 
-const deleteExpiredPersistentUserNotifications = `-- name: DeleteExpiredPersistentUserNotifications :exec
-DELETE FROM backend.user_notifications
-WHERE persist_until IS NOT NULL
-AND persist_until < $1
-`
-
-func (q *Queries) DeleteExpiredPersistentUserNotifications(ctx context.Context, persistUntil pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteExpiredPersistentUserNotifications, persistUntil)
-	return err
-}
-
 const deletePendingUserNotification = `-- name: DeletePendingUserNotification :exec
 DELETE FROM backend.user_notifications WHERE processed_at IS NULL AND user_id = $1 AND reference_id = $2
 `
@@ -166,7 +155,7 @@ func (q *Queries) DeletePendingUserNotification(ctx context.Context, arg *Delete
 const deleteProcessedUserNotifications = `-- name: DeleteProcessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
-AND persist_until IS NULL
+AND (persist_until IS NULL OR persist_until < NOW())
 AND processed_at < $1
 `
 
@@ -178,7 +167,7 @@ func (q *Queries) DeleteProcessedUserNotifications(ctx context.Context, processe
 const deleteUnprocessedUserNotifications = `-- name: DeleteUnprocessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
-AND persist_until IS NULL
+AND (persist_until IS NULL OR persist_until < NOW())
 AND scheduled_at < $1
 `
 

@@ -76,16 +76,11 @@ WHERE nt.id IN (
 -- name: DeleteProcessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
-AND persist_until IS NULL
+AND (persist_until IS NULL OR persist_until < NOW())
 AND processed_at < $1;
 
 -- name: DeleteUnprocessedUserNotifications :exec
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
-AND persist_until IS NULL
+AND (persist_until IS NULL OR persist_until < NOW())
 AND scheduled_at < $1;
-
--- name: DeleteExpiredPersistentUserNotifications :exec
-DELETE FROM backend.user_notifications
-WHERE persist_until IS NOT NULL
-AND persist_until < $1;

@@ -25,7 +25,7 @@ WHERE us.weekly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS 
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
       AND un.reference_id = sqlc.arg(reference_prefix)::TEXT || us.user_id::TEXT || sqlc.arg(reference_suffix)::TEXT
-      AND un.processed_at IS NULL
+      AND (un.processed_at IS NULL OR un.persist_until > NOW())
   )
 ORDER BY us.user_id
 LIMIT $1;
@@ -44,7 +44,7 @@ WHERE us.monthly_report = TRUE AND u.deleted_at IS NULL AND u.subscription_id IS
     SELECT 1 FROM backend.user_notifications un
     WHERE un.user_id = us.user_id
       AND un.reference_id = sqlc.arg(reference_prefix)::TEXT || us.user_id::TEXT || sqlc.arg(reference_suffix)::TEXT
-      AND un.processed_at IS NULL
+      AND (un.processed_at IS NULL OR un.persist_until > NOW())
   )
 ORDER BY us.user_id
 LIMIT $1;

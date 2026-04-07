@@ -2418,25 +2418,6 @@ func (impl *BusinessStoreImpl) DeleteUnsentUserNotifications(ctx context.Context
 	return nil
 }
 
-func (impl *BusinessStoreImpl) DeleteExpiredPersistentUserNotifications(ctx context.Context, before time.Time) error {
-	if before.IsZero() {
-		return ErrInvalidInput
-	}
-
-	if impl.querier == nil {
-		return ErrMaintenance
-	}
-
-	if err := impl.querier.DeleteExpiredPersistentUserNotifications(ctx, Timestampz(before)); err != nil {
-		slog.ErrorContext(ctx, "Failed to delete expired persistent user notifications", common.ErrAttr(err))
-		return err
-	}
-
-	slog.InfoContext(ctx, "Deleted expired persistent user notifications", "before", before)
-
-	return nil
-}
-
 func (impl *BusinessStoreImpl) DeletePendingUserNotification(ctx context.Context, user *dbgen.User, referenceID string) error {
 	if impl.querier == nil {
 		return ErrMaintenance

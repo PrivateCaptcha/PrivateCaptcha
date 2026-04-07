@@ -463,11 +463,6 @@ func (j *CleanupUserNotificationsJob) RunOnce(ctx context.Context, params any) e
 		anyError = err
 	}
 
-	if err := j.Store.Impl().DeleteExpiredPersistentUserNotifications(ctx, tnow); err != nil {
-		slog.ErrorContext(ctx, "Failed to delete expired persistent user notifications", common.ErrAttr(err))
-		anyError = err
-	}
-
 	// we delete notification templates only if there're no dangling references in
 	// user_notifications table so the date should be smaller than the other two
 	templateUpdatedBefore := tnow.AddDate(0, -p.TemplateMonths, 0)
