@@ -256,7 +256,7 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usage := []*propertyRuleStatsPoint{}
+	usage := []*PropertyRuleStatsPoint{}
 
 	if stats, err := s.TimeSeries.RetrievePropertyRuleStatsByPeriod(ctx, property.OrgOwnerID.Int32, org.ID, property.ID, period); err == nil {
 		anyNonZero := false
@@ -264,19 +264,19 @@ func (s *Server) getPropertyRuleStats(w http.ResponseWriter, r *http.Request) {
 			if st.Count > 0 {
 				anyNonZero = true
 			}
-			usage = append(usage, &propertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.Count)})
+			usage = append(usage, &PropertyRuleStatsPoint{Date: st.Timestamp.Unix(), Value: int(st.Count)})
 		}
 
 		// we want to show "No data available" on the client
 		if !anyNonZero {
 			slog.DebugContext(ctx, "Property rule stats returned all zero counts", "propID", property.ID, "period", period)
-			usage = []*propertyRuleStatsPoint{}
+			usage = []*PropertyRuleStatsPoint{}
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve property rule stats", common.ErrAttr(err))
 	}
 
-	response := propertyRuleStatsResponse{
+	response := PropertyRuleStatsResponse{
 		Usage: usage,
 	}
 

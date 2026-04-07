@@ -1,50 +1,50 @@
 package portal
 
 //easyjson:json
-type propertyStatsPoint struct {
+type PropertyStatsPoint struct {
 	Date  int64 `json:"x"`
 	Value int   `json:"y"`
 }
 
 //easyjson:json
-type propertyStatsResponse struct {
-	Requested []*propertyStatsPoint `json:"requested"`
-	Verified  []*propertyStatsPoint `json:"verified"`
+type PropertyStatsResponse struct {
+	Requested []*PropertyStatsPoint `json:"requested"`
+	Verified  []*PropertyStatsPoint `json:"verified"`
 }
 
 //easyjson:json
-type accountStatsPoint struct {
+type AccountStatsPoint struct {
 	Date   int64 `json:"x"`
 	Value  int   `json:"y"`
 	Series int   `json:"s"`
 }
 
 //easyjson:json
-type accountStatsRawPoint struct {
+type AccountStatsRawPoint struct {
 	OrgID int32
 	Date  int64
 	Value int
 }
 
 //easyjson:json
-type accountStatsSeries struct {
+type AccountStatsSeries struct {
 	Name  string `json:"name"`
 	Index int    `json:"index"`
 }
 
 //easyjson:json
-type accountStatsResponse struct {
-	Series []*accountStatsSeries `json:"series"`
-	Data   []*accountStatsPoint  `json:"data"`
+type AccountStatsResponse struct {
+	Series []*AccountStatsSeries `json:"series"`
+	Data   []*AccountStatsPoint  `json:"data"`
 }
 
 //easyjson:json
-type propertyRuleStatsPoint struct {
+type PropertyRuleStatsPoint struct {
 	Date  int64 `json:"x"`
 	Value int   `json:"y"`
 }
 
 //easyjson:json
-type propertyRuleStatsResponse struct {
-	Usage []*propertyRuleStatsPoint `json:"usage"`
+type PropertyRuleStatsResponse struct {
+	Usage []*PropertyRuleStatsPoint `json:"usage"`
 }

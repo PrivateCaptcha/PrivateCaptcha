@@ -881,22 +881,22 @@ func (s *Server) getAccountStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if response == nil {
-		response = &accountStatsResponse{
-			Series: []*accountStatsSeries{},
-			Data:   []*accountStatsPoint{},
+		response = &AccountStatsResponse{
+			Series: []*AccountStatsSeries{},
+			Data:   []*AccountStatsPoint{},
 		}
 	}
 
 	common.SendJSONResponse(ctx, w, response, common.NoCacheHeaders)
 }
 
-func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*accountStatsResponse, error) {
+func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, timeFrom time.Time) (*AccountStatsResponse, error) {
 	stats, err := s.TimeSeries.RetrieveAccountStats(ctx, userID, timeFrom)
 	if err != nil {
 		return nil, err
 	}
 
-	dataRaw := make([]*accountStatsRawPoint, 0, len(stats))
+	dataRaw := make([]*AccountStatsRawPoint, 0, len(stats))
 	orgIDs := make(map[int32]struct{}, len(stats))
 
 	anyNonZero := false
@@ -904,12 +904,12 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 		if st.Count > 0 {
 			anyNonZero = true
 		}
-		dataRaw = append(dataRaw, &accountStatsRawPoint{OrgID: st.OrgID, Date: st.Timestamp.Unix(), Value: int(st.Count)})
+		dataRaw = append(dataRaw, &AccountStatsRawPoint{OrgID: st.OrgID, Date: st.Timestamp.Unix(), Value: int(st.Count)})
 		orgIDs[st.OrgID] = struct{}{}
 	}
 
 	seriesIndex := make(map[int32]int, len(orgIDs))
-	seriesList := make([]*accountStatsSeries, 0, len(orgIDs))
+	seriesList := make([]*AccountStatsSeries, 0, len(orgIDs))
 
 	var orgNames map[int32]string
 	if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, userID); err == nil {
@@ -921,7 +921,7 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 			if _, ok := orgIDs[orgID]; ok {
 				index := len(seriesList)
 				seriesIndex[orgID] = index
-				seriesList = append(seriesList, &accountStatsSeries{Name: orgName, Index: index})
+				seriesList = append(seriesList, &AccountStatsSeries{Name: orgName, Index: index})
 			} else {
 				slog.WarnContext(ctx, "Organization found in user data but missing from usage statistics", "orgID", orgID)
 			}
@@ -942,13 +942,13 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 		}
 		index := len(seriesList)
 		seriesIndex[orgID] = index
-		seriesList = append(seriesList, &accountStatsSeries{Name: name, Index: index})
+		seriesList = append(seriesList, &AccountStatsSeries{Name: name, Index: index})
 	}
 
-	data := make([]*accountStatsPoint, 0, len(dataRaw))
+	data := make([]*AccountStatsPoint, 0, len(dataRaw))
 	for _, pt := range dataRaw {
 		if index, ok := seriesIndex[pt.OrgID]; ok {
-			data = append(data, &accountStatsPoint{Date: pt.Date, Value: pt.Value, Series: index})
+			data = append(data, &AccountStatsPoint{Date: pt.Date, Value: pt.Value, Series: index})
 		} else {
 			slog.WarnContext(ctx, "Skipping account stats point without series mapping", "orgID", pt.OrgID, "date", pt.Date, "value", pt.Value)
 		}
@@ -956,11 +956,11 @@ func (s *Server) buildAccountStatsResponse(ctx context.Context, userID int32, ti
 
 	// we want to show "No data available" on the client
 	if !anyNonZero {
-		data = []*accountStatsPoint{}
-		seriesList = []*accountStatsSeries{}
+		data = []*AccountStatsPoint{}
+		seriesList = []*AccountStatsSeries{}
 	}
 
-	return &accountStatsResponse{
+	return &AccountStatsResponse{
 		Series: seriesList,
 		Data:   data,
 	}, nil

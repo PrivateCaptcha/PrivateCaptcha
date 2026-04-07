@@ -396,7 +396,7 @@ func TestGetPropertyStats(t *testing.T) {
 				t.Fatalf("Unexpected status code %v for period %s", resp.StatusCode, p.endpoint)
 			}
 
-			var stats propertyStatsResponse
+			var stats PropertyStatsResponse
 			if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 				t.Fatalf("Failed to decode response for period %s: %v", p.endpoint, err)
 			}
@@ -513,7 +513,7 @@ func TestGetPropertyRuleStats(t *testing.T) {
 				t.Fatalf("Unexpected status code %v for period %s", resp.StatusCode, p.endpoint)
 			}
 
-			var stats propertyRuleStatsResponse
+			var stats PropertyRuleStatsResponse
 			if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 				t.Fatalf("Failed to decode response for period %s: %v", p.endpoint, err)
 			}

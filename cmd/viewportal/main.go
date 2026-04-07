@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -104,67 +103,62 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 	}
 }
 
-func stubPropertyStatsHandler(w http.ResponseWriter, _ *http.Request) {
+func stubPropertyStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
-	requested := make([]map[string]interface{}, 0, 24)
+	requested := make([]*portal.PropertyStatsPoint, 0, 24)
 	for i := 23; i >= 0; i-- {
 		t := now.Add(-time.Duration(i) * time.Hour)
-		requested = append(requested, map[string]interface{}{
-			"x": t.Unix(),
-			"y": (24 - i) * 5,
+		requested = append(requested, &portal.PropertyStatsPoint{
+			Date:  t.Unix(),
+			Value: (24 - i) * 5,
 		})
 	}
 
-	verified := make([]map[string]interface{}, 0, len(requested))
+	verified := make([]*portal.PropertyStatsPoint, 0, len(requested))
 	for _, pt := range requested {
-		verified = append(verified, map[string]interface{}{
-			"x": pt["x"],
-			"y": pt["y"].(int) * 80 / 100,
+		verified = append(verified, &portal.PropertyStatsPoint{
+			Date:  pt.Date,
+			Value: pt.Value * 80 / 100,
 		})
 	}
 
-	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"requested": requested,
-		"verified":  verified,
+	common.SendJSONResponse(r.Context(), w, &portal.PropertyStatsResponse{
+		Requested: requested,
+		Verified:  verified,
 	})
 }
 
-func stubRuleStatsHandler(w http.ResponseWriter, _ *http.Request) {
+func stubRuleStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
-	usage := make([]map[string]interface{}, 0, 7)
+	usage := make([]*portal.PropertyRuleStatsPoint, 0, 7)
 	for i := 6; i >= 0; i-- {
 		t := now.AddDate(0, 0, -i)
-		usage = append(usage, map[string]interface{}{
-			"x": t.Unix(),
-			"y": (7 - i) * 3,
+		usage = append(usage, &portal.PropertyRuleStatsPoint{
+			Date:  t.Unix(),
+			Value: (7 - i) * 3,
 		})
 	}
 
-	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"usage": usage,
+	common.SendJSONResponse(r.Context(), w, &portal.PropertyRuleStatsResponse{
+		Usage: usage,
 	})
 }
 
-func stubAccountStatsHandler(w http.ResponseWriter, _ *http.Request) {
+func stubAccountStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
-	data := make([]map[string]interface{}, 0, 12)
+	data := make([]*portal.AccountStatsPoint, 0, 12)
 	for i := 11; i >= 0; i-- {
 		t := now.AddDate(0, -i, 0)
-		data = append(data, map[string]interface{}{
-			"x": t.Unix(),
-			"y": (12 - i) * 100,
-			"s": 0,
+		data = append(data, &portal.AccountStatsPoint{
+			Date:   t.Unix(),
+			Value:  (12 - i) * 100,
+			Series: 0,
 		})
 	}
 
-	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"series": []map[string]interface{}{
-			{"name": "Acme Corp", "index": 0},
-		},
-		"data": data,
+	common.SendJSONResponse(r.Context(), w, &portal.AccountStatsResponse{
+		Series: []*portal.AccountStatsSeries{&portal.AccountStatsSeries{Name: "Acme Corp", Index: 0}},
+		Data:   data,
 	})
 }
 

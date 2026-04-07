@@ -814,7 +814,7 @@ func TestGetAccountStats(t *testing.T) {
 		t.Fatalf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	var stats accountStatsResponse
+	var stats AccountStatsResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)
@@ -1507,7 +1507,7 @@ func TestGetAccountStatsWithUnknownOrg(t *testing.T) {
 		t.Fatalf("Unexpected status code %v", resp.StatusCode)
 	}
 
-	var stats accountStatsResponse
+	var stats AccountStatsResponse
 
 	if err := json.NewDecoder(resp.Body).Decode(&stats); err != nil {
 		t.Fatalf("Failed to decode response: %v", err)

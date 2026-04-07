@@ -520,8 +520,8 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requested := []*propertyStatsPoint{}
-	verified := []*propertyStatsPoint{}
+	requested := []*PropertyStatsPoint{}
+	verified := []*PropertyStatsPoint{}
 
 	if stats, err := s.TimeSeries.RetrievePropertyStatsByPeriod(ctx, org.ID, property.ID, period); err == nil {
 		anyNonZero := false
@@ -529,20 +529,20 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 			if (st.RequestsCount > 0) || (st.VerifiesCount > 0) {
 				anyNonZero = true
 			}
-			requested = append(requested, &propertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
-			verified = append(verified, &propertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
+			requested = append(requested, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.RequestsCount})
+			verified = append(verified, &PropertyStatsPoint{Date: st.Timestamp.Unix(), Value: st.VerifiesCount})
 		}
 
 		// we want to show "No data available" on the client
 		if !anyNonZero {
-			requested = []*propertyStatsPoint{}
-			verified = []*propertyStatsPoint{}
+			requested = []*PropertyStatsPoint{}
+			verified = []*PropertyStatsPoint{}
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve property stats", common.ErrAttr(err))
 	}
 
-	response := propertyStatsResponse{
+	response := PropertyStatsResponse{
 		Requested: requested,
 		Verified:  verified,
 	}

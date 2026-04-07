@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -21,7 +22,7 @@ func viewStubOrg(id string) *UserOrg {
 func viewStubProperty(name, orgID string) *userProperty {
 	return &userProperty{
 		ID: "prop1", OrgID: orgID, Name: name, Domain: "example.com",
-		Sitekey: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", Level: int(common.DifficultyLevelMedium),
+		Sitekey: db.TestPropertySitekey, Level: int(common.DifficultyLevelMedium),
 		Growth: 2, ValidityInterval: 60, MaxReplayCount: 3,
 		AllowSubdomains: true, AllowReplay: true, Enabled: true,
 	}
@@ -194,7 +195,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		{
 			Path:     p(common.SettingsEndpoint, common.TabEndpoint, common.GeneralEndpoint),
-			Template: settingsGeneralTemplatePrefix + "page.html",
+			Template: settingsGeneralTemplatePrefix + "tab.html",
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsGeneralRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.GeneralEndpoint, a), Name: "Jane Doe",
@@ -203,7 +204,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		{
 			Path:     p(common.SettingsEndpoint, common.TabEndpoint, common.APIKeysEndpoint),
-			Template: settingsAPIKeysTemplatePrefix + "page.html",
+			Template: settingsAPIKeysTemplatePrefix + "tab.html",
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsAPIKeysRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.APIKeysEndpoint, a),
@@ -214,7 +215,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		{
 			Path:     p(common.SettingsEndpoint, common.TabEndpoint, common.UsageEndpoint),
-			Template: settingsUsageTemplatePrefix + "page.html",
+			Template: settingsUsageTemplatePrefix + "tab.html",
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsUsageRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.UsageEndpoint, a),
@@ -225,7 +226,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		{
 			Path:     p(common.SettingsEndpoint, common.TabEndpoint, common.NotificationsEndpoint),
-			Template: settingsNotificationsTemplatePrefix + "page.html",
+			Template: settingsNotificationsTemplatePrefix + "tab.html",
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsNotificationsRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.NotificationsEndpoint, a),
