@@ -1,5 +1,5 @@
 <main class="px-4 py-16 sm:px-6 lg:flex-auto lg:px-0 lg:py-20">
-    <div class="mx-auto max-w-4xl lg:mx-0">
+    <div class="mx-auto max-w-4xl lg:mx-0 {{ if not $.Platform.Enterprise }} relative p-4{{ end }}">
         <div class="grid grid-cols-1 gap-x-8 gap-y-10 md:grid-cols-3">
             <div>
                 <h2 class="text-base font-semibold leading-7 text-gray-900">Notifications</h2>
@@ -18,5 +18,11 @@
                     {{template "form.html" .}}
             </form>
         </div>
+        {{ if not $.Platform.Enterprise }}
+        <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-lg" aria-hidden="true"></div>
+        <div class="absolute inset-0 z-10">
+            {{ template "enterprise.html" "Usage report notifications are only available in the enterprise edition of Private Captcha." }}
+        </div>
+        {{ end }}
     </div>
 </main>
