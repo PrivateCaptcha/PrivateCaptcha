@@ -2247,6 +2247,7 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 		Subject:     n.Subject,
 		Payload:     payload,
 		ScheduledAt: Timestampz(n.DateTime),
+		Persistent:  n.PersistUntil != nil,
 	}
 
 	if n.PersistUntil != nil {
