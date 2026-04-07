@@ -243,8 +243,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 
 	year, week := tnow.ISOWeek()
 
-	persistUntil := tnow.AddDate(0, 1, 0)
-
 	notif := &common.ScheduledNotification{
 		ReferenceID:  weeklyReportReference(userID, year, week),
 		UserID:       userID,
@@ -252,7 +250,6 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 		Data:         reportCtx,
 		DateTime:     tnow,
 		TemplateHash: email.UsageReportTemplate.Hash(),
-		PersistUntil: &persistUntil,
 		Condition:    common.NotificationWithSubscription,
 	}
 
@@ -342,8 +339,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 
 	reportCtx.AccountLimit = accountLimit
 
-	persistUntil := tnow.AddDate(0, 1, 0)
-
 	notif := &common.ScheduledNotification{
 		ReferenceID:  monthlyReportReference(userID, tnow.Year(), tnow.Month()),
 		UserID:       userID,
@@ -351,7 +346,6 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 		Data:         reportCtx,
 		DateTime:     tnow,
 		TemplateHash: email.UsageReportTemplate.Hash(),
-		PersistUntil: &persistUntil,
 		Condition:    common.NotificationWithSubscription,
 	}
 
