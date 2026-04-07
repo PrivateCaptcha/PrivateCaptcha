@@ -594,7 +594,6 @@ type UserNotification struct {
 	Subject              string             `db:"subject" json:"subject"`
 	ReferenceID          string             `db:"reference_id" json:"reference_id"`
 	ProcessingAttempts   int32              `db:"processing_attempts" json:"processing_attempts"`
-	Persistent           bool               `db:"persistent" json:"persistent"`
 	RequiresSubscription pgtype.Bool        `db:"requires_subscription" json:"requires_subscription"`
 	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
