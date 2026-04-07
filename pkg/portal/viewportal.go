@@ -1,4 +1,4 @@
-//go:build enterprise
+//go:build viewportal
 
 package portal
 
@@ -9,13 +9,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
-
-// ViewPortalPage describes a single renderable portal page for the viewportal tool.
-type ViewPortalPage struct {
-	Path      string
-	Template  string
-	ModelFunc func(alert AlertRenderContext) interface{}
-}
 
 func arg(s string) string {
 	return fmt.Sprintf("{%s}", s)
@@ -28,7 +21,7 @@ func viewStubOrg(id string) *UserOrg {
 func viewStubProperty(name, orgID string) *userProperty {
 	return &userProperty{
 		ID: "prop1", OrgID: orgID, Name: name, Domain: "example.com",
-		Sitekey: "sk_test_abc123", Level: int(common.DifficultyLevelMedium),
+		Sitekey: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", Level: int(common.DifficultyLevelMedium),
 		Growth: 2, ValidityInterval: 60, MaxReplayCount: 3,
 		AllowSubdomains: true, AllowReplay: true, Enabled: true,
 	}
@@ -108,7 +101,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 
 	captchaCtx := CaptchaRenderContext{
 		CaptchaEndpoint: "/api/puzzle", CaptchaSolutionField: "portal-solution",
-		CaptchaSitekey: "sk_test_abc123", CaptchaDebug: true,
+		CaptchaSitekey: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", CaptchaDebug: true,
 	}
 
 	propDash := func(tab int, alert AlertRenderContext) propertyDashboardRenderContext {
@@ -309,7 +302,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint), Template: portalTemplate,
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint), Template: orgDashboardTemplate,
+			ParentTemplate: portalTemplate,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
@@ -318,7 +312,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint), Template: portalTemplate,
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint), Template: orgMembersTemplate,
+			ParentTemplate: portalTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgMemberRenderContext{
 					portalBaseRenderContext: baseCtx(portalMembersTabIndex), AlertRenderContext: a, Members: members,
@@ -326,7 +321,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint), Template: portalTemplate,
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint), Template: orgSettingsTemplate,
+			ParentTemplate: portalTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgSettingsRenderContext{
 					portalBaseRenderContext: baseCtx(portalSettingsTabIndex), AlertRenderContext: a,
@@ -335,7 +331,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint), Template: portalTemplate,
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint), Template: orgAuditLogsTemplate,
+			ParentTemplate: portalTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgAuditLogsRenderContext{
 					portalBaseRenderContext: baseCtx(portalEventsTabIndex), AlertRenderContext: a,
@@ -344,7 +341,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint), Template: portalTemplate,
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint), Template: orgRulesTemplate,
+			ParentTemplate: portalTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &OrgRulesRenderContext{
 					portalBaseRenderContext: baseCtx(portalRulesTabIndex), AlertRenderContext: a,
@@ -403,16 +401,18 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.ReportsEndpoint),
-			Template: propertyDashboardTemplate,
+			Path:           p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.ReportsEndpoint),
+			Template:       propertyDashboardReportsTemplate,
+			ParentTemplate: propertyDashboardTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				c := propDash(propertyReportsTabIndex, a)
 				return &c
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.SettingsEndpoint),
-			Template: propertyDashboardTemplate,
+			Path:           p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.SettingsEndpoint),
+			Template:       propertyDashboardSettingsTemplate,
+			ParentTemplate: propertyDashboardTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &propertySettingsRenderContext{
 					propertyDashboardRenderContext: propDash(propertySettingsTabIndex, a),
@@ -423,18 +423,20 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.IntegrationsEndpoint),
-			Template: propertyDashboardTemplate,
+			Path:           p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.IntegrationsEndpoint),
+			Template:       propertyDashboardIntegrationsTemplate,
+			ParentTemplate: propertyDashboardTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &propertyIntegrationsRenderContext{
 					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
-					Sitekey:                        "sk_test_abc123",
+					Sitekey:                        "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
 				}
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.EventsEndpoint),
-			Template: propertyDashboardTemplate,
+			Path:           p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.EventsEndpoint),
+			Template:       propertyDashboardAuditLogsTemplate,
+			ParentTemplate: propertyDashboardTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &propertyAuditLogsRenderContext{
 					propertyDashboardRenderContext: propDash(propertyAuditLogsTabIndex, a),
@@ -443,8 +445,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.RulesEndpoint),
-			Template: propertyDashboardTemplate,
+			Path:           p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.RulesEndpoint),
+			Template:       propertyDashboardRulesTemplate,
+			ParentTemplate: propertyDashboardTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &PropertyRulesRenderContext{
 					propertyDashboardRenderContext: propDash(propertyRulesTabIndex, a),

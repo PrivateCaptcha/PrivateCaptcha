@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,12 +16,12 @@ import (
 )
 
 const (
-	rootTemplateStart = `<html>
+	listTemplateStart = `<html>
 <body>
 <strong>Portal Pages:</strong>
 <ul>
 `
-	rootTemplateEnd = `</ul>
+	listTemplateEnd = `</ul>
 </body>
 </html>`
 )
@@ -60,13 +61,13 @@ func enterpriseFromQuery(r *http.Request) bool {
 	return v != "false" && v != "0"
 }
 
-func homepage(w http.ResponseWriter, _ *http.Request) {
+func listPages(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(rootTemplateStart))
+	_, _ = w.Write([]byte(listTemplateStart))
 	for _, p := range pages {
 		_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", p.Path, p.Path)
 	}
-	_, _ = w.Write([]byte(rootTemplateEnd))
+	_, _ = w.Write([]byte(listTemplateEnd))
 }
 
 func servePage(p portal.ViewPortalPage) http.HandlerFunc {
@@ -88,9 +89,14 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			Enterprise: enterpriseFromQuery(r),
 		}
 
-		out, err := srv.RenderResponse(ctx, p.Template, model, reqCtx, platformCtx)
+		tmpl := p.Template
+		if p.ParentTemplate != "" {
+			tmpl = p.ParentTemplate
+		}
+
+		out, err := srv.RenderResponse(ctx, tmpl, model, reqCtx, platformCtx)
 		if err != nil {
-			log.Printf("Failed to render %s: %v", p.Template, err)
+			log.Printf("Failed to render %s: %v", tmpl, err)
 			http.Error(w, fmt.Sprintf("Render error: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -98,6 +104,70 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = out.WriteTo(w)
 	}
+}
+
+func stubPropertyStatsHandler(w http.ResponseWriter, _ *http.Request) {
+	now := time.Now().UTC()
+	requested := make([]map[string]interface{}, 0, 24)
+	for i := 23; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		requested = append(requested, map[string]interface{}{
+			"x": t.Unix(),
+			"y": (24 - i) * 5,
+		})
+	}
+
+	verified := make([]map[string]interface{}, 0, len(requested))
+	for _, pt := range requested {
+		verified = append(verified, map[string]interface{}{
+			"x": pt["x"],
+			"y": pt["y"].(int) * 80 / 100,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"requested": requested,
+		"verified":  verified,
+	})
+}
+
+func stubRuleStatsHandler(w http.ResponseWriter, _ *http.Request) {
+	now := time.Now().UTC()
+	usage := make([]map[string]interface{}, 0, 7)
+	for i := 6; i >= 0; i-- {
+		t := now.AddDate(0, 0, -i)
+		usage = append(usage, map[string]interface{}{
+			"x": t.Unix(),
+			"y": (7 - i) * 3,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"usage": usage,
+	})
+}
+
+func stubAccountStatsHandler(w http.ResponseWriter, _ *http.Request) {
+	now := time.Now().UTC()
+	data := make([]map[string]interface{}, 0, 12)
+	for i := 11; i >= 0; i-- {
+		t := now.AddDate(0, -i, 0)
+		data = append(data, map[string]interface{}{
+			"x": t.Unix(),
+			"y": (12 - i) * 100,
+			"s": 0,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"series": []map[string]interface{}{
+			{"name": "Acme Corp", "index": 0},
+		},
+		"data": data,
+	})
 }
 
 func main() {
@@ -133,13 +203,41 @@ func main() {
 	})
 
 	router := http.NewServeMux()
-	router.HandleFunc("/", homepage)
 	router.Handle("/portal/", http.StripPrefix("/portal/", web.Static("")))
 
 	for _, p := range pages {
 		router.HandleFunc(p.Path, servePage(p))
 	}
 
+	// mock JSON endpoints for property stats, rule stats, and account stats
+	statsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}/%s/{%s}",
+		common.OrgEndpoint, common.ParamOrg,
+		common.PropertyEndpoint, common.ParamProperty,
+		common.StatsEndpoint, common.ParamPeriod)
+	router.HandleFunc(statsPattern, stubPropertyStatsHandler)
+
+	ruleStatsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}/%s/{%s}",
+		common.OrgEndpoint, common.ParamOrg,
+		common.PropertyEndpoint, common.ParamProperty,
+		common.RuleStatsEndpoint, common.ParamPeriod)
+	router.HandleFunc(ruleStatsPattern, stubRuleStatsHandler)
+
+	accountStatsPattern := fmt.Sprintf("/portal/%s/%s",
+		common.UserEndpoint, common.StatsEndpoint)
+	router.HandleFunc(accountStatsPattern, stubAccountStatsHandler)
+
+	// root URL and /portal/ both redirect to default org (same as real portal)
+	defaultOrgPath := srv.PartsURL(common.OrgEndpoint, "org1")
+	portalRoot := func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, defaultOrgPath, http.StatusFound)
+	}
+	router.HandleFunc("/{$}", portalRoot)
+	router.HandleFunc("GET /portal/{$}", portalRoot)
+
+	// page list available at /list
+	router.HandleFunc("/list", listPages)
+
 	log.Println("Listening at http://localhost:8083/")
+	log.Println("Page list at http://localhost:8083/list")
 	log.Fatal(http.ListenAndServe(":8083", router))
 }
