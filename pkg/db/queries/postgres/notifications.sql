@@ -30,15 +30,7 @@ SELECT * FROM backend.notification_templates WHERE external_id = $1;
 INSERT INTO backend.user_notifications (user_id, reference_id, template_id, subject, payload, scheduled_at, persistent, persist_until, requires_subscription, email_from, reply_to_email, email_to)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 ON CONFLICT (user_id, reference_id) WHERE (persist_until IS NOT NULL) OR (processed_at IS NULL)
-DO UPDATE SET
-  template_id = EXCLUDED.template_id, subject = EXCLUDED.subject,
-  payload = EXCLUDED.payload, scheduled_at = EXCLUDED.scheduled_at,
-  persistent = EXCLUDED.persistent, persist_until = EXCLUDED.persist_until,
-  requires_subscription = EXCLUDED.requires_subscription, email_from = EXCLUDED.email_from,
-  reply_to_email = EXCLUDED.reply_to_email, email_to = EXCLUDED.email_to,
-  processed_at = NULL, processing_attempts = 0, updated_at = NOW()
-WHERE backend.user_notifications.processed_at IS NOT NULL
-  AND backend.user_notifications.persist_until < NOW()
+DO NOTHING
 RETURNING *;
 
 -- name: DeletePendingUserNotification :exec
