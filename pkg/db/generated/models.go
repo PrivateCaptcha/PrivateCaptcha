@@ -603,6 +603,7 @@ type UserNotification struct {
 	EmailFrom            pgtype.Text        `db:"email_from" json:"email_from"`
 	ReplyToEmail         pgtype.Text        `db:"reply_to_email" json:"reply_to_email"`
 	EmailTo              pgtype.Text        `db:"email_to" json:"email_to"`
+	PersistUntil         pgtype.Timestamptz `db:"persist_until" json:"persist_until"`
 }
 
 type UserSettings struct {

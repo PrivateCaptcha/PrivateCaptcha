@@ -2229,6 +2229,10 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 		return nil, ErrInvalidInput
 	}
 
+	if (n.PersistUntil != nil) && n.PersistUntil.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
@@ -2247,7 +2251,11 @@ func (impl *BusinessStoreImpl) CreateUserNotification(ctx context.Context, n *co
 		Subject:     n.Subject,
 		Payload:     payload,
 		ScheduledAt: Timestampz(n.DateTime),
-		Persistent:  n.Persistent,
+		Persistent:  n.PersistUntil != nil,
+	}
+
+	if n.PersistUntil != nil {
+		params.PersistUntil = Timestampz(*n.PersistUntil)
 	}
 
 	if (n.EmailFrom != nil) && (len(*n.EmailFrom) > 0) {

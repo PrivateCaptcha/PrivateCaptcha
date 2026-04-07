@@ -61,7 +61,6 @@ func TestUserNotificationsJob(t *testing.T) {
 		Subject:      "subject",
 		Data:         map[string]int{},
 		DateTime:     tnow.Add(-10 * time.Minute),
-		Persistent:   false,
 		Condition:    common.NotificationWithSubscription,
 		EmailFrom:    &customFrom,
 		ReplyToEmail: &customReplyTo,
@@ -201,6 +200,113 @@ func TestDeleteScheduledNotification(t *testing.T) {
 	// should be able to create again (unlike before)
 	if _, err := store.Impl().CreateUserNotification(ctx, sn); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOverrideExpiredPersistentNotification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	tnow := time.Now().UTC()
+
+	// create a persistent notification with persist_until in the past
+	expiredPersistUntil := tnow.Add(-1 * time.Hour)
+	sn := &common.ScheduledNotification{
+		ReferenceID:  "persistent-ref",
+		UserID:       user.ID,
+		Subject:      "original subject",
+		Data:         map[string]int{},
+		DateTime:     tnow.Add(-2 * time.Hour),
+		TemplateHash: email.TwoFactorEmailTemplate.Hash(),
+		PersistUntil: &expiredPersistUntil,
+	}
+
+	notif, err := store.Impl().CreateUserNotification(ctx, sn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// mark it as processed so only persist_until keeps uniqueness
+	if err := store.Impl().MarkUserNotificationsProcessed(ctx, []int32{notif.ID}, tnow.Add(-90*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	// since persist_until is in the past, a new notification with the same reference should succeed
+	sn2 := &common.ScheduledNotification{
+		ReferenceID:  "persistent-ref",
+		UserID:       user.ID,
+		Subject:      "new subject",
+		Data:         map[string]int{},
+		DateTime:     tnow.Add(-10 * time.Minute),
+		TemplateHash: email.TwoFactorEmailTemplate.Hash(),
+	}
+
+	overridden, err := store.Impl().CreateUserNotification(ctx, sn2)
+	if err != nil {
+		t.Fatalf("expected to override expired persistent notification, got: %v", err)
+	}
+	if overridden.ProcessedAt.Valid {
+		t.Fatal("expected overridden notification to be pending again")
+	}
+	if overridden.PersistUntil.Valid {
+		t.Fatal("expected override to clear persist_until")
+	}
+	if overridden.Subject != sn2.Subject {
+		t.Fatalf("expected subject %q, got %q", sn2.Subject, overridden.Subject)
+	}
+}
+
+func TestCannotOverrideActivePersistentNotification(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	tnow := time.Now().UTC()
+
+	// create a persistent notification with persist_until in the future
+	activePersistUntil := tnow.Add(24 * time.Hour)
+	sn := &common.ScheduledNotification{
+		ReferenceID:  "active-persistent-ref",
+		UserID:       user.ID,
+		Subject:      "original subject",
+		Data:         map[string]int{},
+		DateTime:     tnow.Add(-2 * time.Hour),
+		TemplateHash: email.TwoFactorEmailTemplate.Hash(),
+		PersistUntil: &activePersistUntil,
+	}
+
+	notif, err := store.Impl().CreateUserNotification(ctx, sn)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// mark it as processed
+	if err := store.Impl().MarkUserNotificationsProcessed(ctx, []int32{notif.ID}, tnow.Add(-90*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+
+	// persist_until is still in the future, so a duplicate should be rejected
+	if _, err := store.Impl().CreateUserNotification(ctx, sn); !errors.Is(err, db.ErrAlreadyExists) {
+		t.Fatalf("expected ErrAlreadyExists for active persistent notification, got: %v", err)
 	}
 }
 
