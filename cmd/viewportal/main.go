@@ -62,9 +62,12 @@ func enterpriseFromQuery(r *http.Request) bool {
 }
 
 func listPages(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 	_, _ = w.Write([]byte(listTemplateStart))
 	for _, p := range pages {
+		if !p.ShowInList {
+			continue
+		}
 		_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", p.Path, p.Path)
 	}
 	_, _ = w.Write([]byte(listTemplateEnd))
@@ -89,19 +92,14 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			Enterprise: enterpriseFromQuery(r),
 		}
 
-		tmpl := p.Template
-		if p.ParentTemplate != "" {
-			tmpl = p.ParentTemplate
-		}
-
-		out, err := srv.RenderResponse(ctx, tmpl, model, reqCtx, platformCtx)
+		out, err := srv.RenderResponse(ctx, p.Template, model, reqCtx, platformCtx)
 		if err != nil {
-			log.Printf("Failed to render %s: %v", tmpl, err)
+			log.Printf("Failed to render %s: %v", p.Template, err)
 			http.Error(w, fmt.Sprintf("Render error: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 		_, _ = out.WriteTo(w)
 	}
 }
@@ -125,7 +123,7 @@ func stubPropertyStatsHandler(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"requested": requested,
 		"verified":  verified,
@@ -143,7 +141,7 @@ func stubRuleStatsHandler(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"usage": usage,
 	})
@@ -161,7 +159,7 @@ func stubAccountStatsHandler(w http.ResponseWriter, _ *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(common.HeaderContentType, common.ContentTypeJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"series": []map[string]interface{}{
 			{"name": "Acme Corp", "index": 0},
