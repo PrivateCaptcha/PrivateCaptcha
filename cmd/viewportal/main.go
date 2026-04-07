@@ -128,17 +128,15 @@ func main() {
 
 	pages = srv.BuildViewPortalPages()
 
+	sort.Slice(pages, func(i, j int) bool {
+		return pages[i].Path < pages[j].Path
+	})
+
 	router := http.NewServeMux()
 	router.HandleFunc("/", homepage)
 	router.Handle("/portal/", http.StripPrefix("/portal/", web.Static("")))
 
-	sorted := make([]portal.ViewPortalPage, len(pages))
-	copy(sorted, pages)
-	sort.Slice(sorted, func(i, j int) bool {
-		return len(sorted[i].Path) > len(sorted[j].Path)
-	})
-
-	for _, p := range sorted {
+	for _, p := range pages {
 		router.HandleFunc(p.Path, servePage(p))
 	}
 

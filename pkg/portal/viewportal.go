@@ -4,7 +4,6 @@ package portal
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -144,9 +143,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		{Code: "US", Name: "United States"}, {Code: "DE", Name: "Germany"}, {Code: "JP", Name: "Japan"},
 	}
 
-	// path helpers matching setupWithPrefix patterns
+	// path helper using server prefix, matching setupWithPrefix patterns
 	p := func(parts ...string) string {
-		return "/" + strings.Join(parts, "/")
+		return s.PartsURL(parts...)
 	}
 
 	orgArg := arg(common.ParamOrg)
@@ -154,6 +153,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	ruleArg := arg(common.ParamRule)
 
 	return []ViewPortalPage{
+		// --- Public pages ---
 		{
 			Path: p(common.LoginEndpoint), Template: loginTemplate,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
@@ -190,140 +190,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				}
 			},
 		},
-		{
-			Path: p(common.OrgEndpoint, common.NewEndpoint), Template: orgWizardTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &orgWizardRenderContext{CsrfRenderContext: token, AlertRenderContext: a}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg), Template: portalTemplate,
-			ModelFunc: func(_ AlertRenderContext) interface{} {
-				return &orgDashboardRenderContext{
-					portalBaseRenderContext: baseCtx(0), PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint), Template: orgDashboardTemplate,
-			ModelFunc: func(_ AlertRenderContext) interface{} {
-				return &orgDashboardRenderContext{
-					portalBaseRenderContext: baseCtx(0), PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint), Template: orgMembersTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &orgMemberRenderContext{
-					portalBaseRenderContext: baseCtx(portalMembersTabIndex), AlertRenderContext: a, Members: members,
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint), Template: orgSettingsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &orgSettingsRenderContext{
-					portalBaseRenderContext: baseCtx(portalSettingsTabIndex), AlertRenderContext: a,
-					Members: members[:2], CanTransfer: true,
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint), Template: orgAuditLogsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &orgAuditLogsRenderContext{
-					portalBaseRenderContext: baseCtx(portalEventsTabIndex), AlertRenderContext: a,
-					AuditLogsRenderContext: auditLogsCtx, CanView: true,
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint), Template: orgRulesTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &OrgRulesRenderContext{
-					portalBaseRenderContext: baseCtx(portalRulesTabIndex), AlertRenderContext: a,
-					rulesRenderContext: rulesRenderContext{Rules: rules, CanAddNew: true},
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertiesEndpoint), Template: orgPropertiesTemplate,
-			ModelFunc: func(_ AlertRenderContext) interface{} {
-				return &orgPropertiesRenderContext{
-					CsrfRenderContext: token, PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
-					CurrentOrg: org,
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, common.NewEndpoint), Template: propertyWizardTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertyWizardRenderContext{
-					CsrfRenderContext: token, AlertRenderContext: a, CurrentOrg: org,
-				}
-			},
-		},
-		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg), Template: propertyDashboardTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				c := propDash(propertyReportsTabIndex, a)
-				return &c
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.ReportsEndpoint),
-			Template: propertyDashboardReportsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				c := propDash(propertyReportsTabIndex, a)
-				return &c
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.SettingsEndpoint),
-			Template: propertyDashboardSettingsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertySettingsRenderContext{
-					propertyDashboardRenderContext: propDash(propertySettingsTabIndex, a),
-					difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
-					Orgs:                           orgs, MinLevel: int(common.MinDifficultyLevel), MaxLevel: int(common.MaxDifficultyLevel),
-					CanMove: true,
-				}
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.IntegrationsEndpoint),
-			Template: propertyDashboardIntegrationsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertyIntegrationsRenderContext{
-					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
-					Sitekey:                        "sk_test_abc123",
-				}
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.EventsEndpoint),
-			Template: propertyDashboardAuditLogsTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertyAuditLogsRenderContext{
-					propertyDashboardRenderContext: propDash(propertyAuditLogsTabIndex, a),
-					AuditLogsRenderContext:         auditLogsCtx, CanView: true,
-				}
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.RulesEndpoint),
-			Template: propertyDashboardRulesTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &PropertyRulesRenderContext{
-					propertyDashboardRenderContext: propDash(propertyRulesTabIndex, a),
-					rulesRenderContext:             rulesRenderContext{Rules: rules, CanAddNew: true},
-				}
-			},
-		},
+		// --- Settings pages ---
 		{
 			Path: p(common.SettingsEndpoint), Template: settingsGeneralTemplatePrefix + "page.html",
 			ModelFunc: func(a AlertRenderContext) interface{} {
@@ -373,6 +240,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				}
 			},
 		},
+		// --- Audit logs ---
 		{
 			Path: p(common.AuditLogsEndpoint), Template: auditLogsTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
@@ -383,9 +251,34 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				}
 			},
 		},
+		// --- Org pages ---
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.RulesEndpoint, common.NewEndpoint),
-			Template: ruleTemplate,
+			Path: p(common.OrgEndpoint, common.NewEndpoint), Template: orgWizardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &orgWizardRenderContext{CsrfRenderContext: token, AlertRenderContext: a}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg), Template: portalTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &orgDashboardRenderContext{
+					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
+					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.PropertiesEndpoint), Template: orgPropertiesTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &orgPropertiesRenderContext{
+					CsrfRenderContext: token, PaginationRenderContext: pagination,
+					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					CurrentOrg: org,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.RulesEndpoint, common.NewEndpoint), Template: ruleTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &RuleWizardRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -397,6 +290,82 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					},
 					Countries: countries, CurrentOrg: org,
 				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.RulesEndpoint, ruleArg, common.EditEndpoint), Template: ruleTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &RuleWizardRenderContext{
+					CsrfRenderContext: token, AlertRenderContext: a,
+					RuleFormData: RuleFormData{
+						Name:              "Block suspicious countries",
+						ConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
+						ConditionOperator: string(dbgen.RuleConditionOperatorIn),
+						ConditionValue:    "AB, CD", ActionProperty: string(dbgen.RuleActionPropertyHTTPRequest),
+						ActionValue: "0", Enabled: true,
+					},
+					Countries: countries, CurrentOrg: org, RuleID: "r1", IsEdit: true,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint), Template: portalTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &orgDashboardRenderContext{
+					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
+					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint), Template: portalTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &orgMemberRenderContext{
+					portalBaseRenderContext: baseCtx(portalMembersTabIndex), AlertRenderContext: a, Members: members,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint), Template: portalTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &orgSettingsRenderContext{
+					portalBaseRenderContext: baseCtx(portalSettingsTabIndex), AlertRenderContext: a,
+					Members: members[:2], CanTransfer: true,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint), Template: portalTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &orgAuditLogsRenderContext{
+					portalBaseRenderContext: baseCtx(portalEventsTabIndex), AlertRenderContext: a,
+					AuditLogsRenderContext: auditLogsCtx, CanView: true,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint), Template: portalTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &OrgRulesRenderContext{
+					portalBaseRenderContext: baseCtx(portalRulesTabIndex), AlertRenderContext: a,
+					rulesRenderContext: rulesRenderContext{Rules: rules, CanAddNew: true},
+				}
+			},
+		},
+		// --- Property pages ---
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, common.NewEndpoint), Template: propertyWizardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertyWizardRenderContext{
+					CsrfRenderContext: token, AlertRenderContext: a, CurrentOrg: org,
+				}
+			},
+		},
+		{
+			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg), Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				c := propDash(propertyReportsTabIndex, a)
+				return &c
 			},
 		},
 		{
@@ -412,23 +381,6 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 						Enabled:           true,
 					},
 					Countries: countries, CurrentOrg: org, Property: viewStubProperty("Main Site", "org1"),
-				}
-			},
-		},
-		{
-			Path:     p(common.OrgEndpoint, orgArg, common.RulesEndpoint, ruleArg, common.EditEndpoint),
-			Template: ruleTemplate,
-			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &RuleWizardRenderContext{
-					CsrfRenderContext: token, AlertRenderContext: a,
-					RuleFormData: RuleFormData{
-						Name:              "Block suspicious countries",
-						ConditionProperty: string(dbgen.RuleConditionPropertyCountryCode),
-						ConditionOperator: string(dbgen.RuleConditionOperatorIn),
-						ConditionValue:    "AB, CD", ActionProperty: string(dbgen.RuleActionPropertyHTTPRequest),
-						ActionValue: "0", Enabled: true,
-					},
-					Countries: countries, CurrentOrg: org, RuleID: "r1", IsEdit: true,
 				}
 			},
 		},
@@ -450,6 +402,57 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				}
 			},
 		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.ReportsEndpoint),
+			Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				c := propDash(propertyReportsTabIndex, a)
+				return &c
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.SettingsEndpoint),
+			Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertySettingsRenderContext{
+					propertyDashboardRenderContext: propDash(propertySettingsTabIndex, a),
+					difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
+					Orgs:                           orgs, MinLevel: int(common.MinDifficultyLevel), MaxLevel: int(common.MaxDifficultyLevel),
+					CanMove: true,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.IntegrationsEndpoint),
+			Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertyIntegrationsRenderContext{
+					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
+					Sitekey:                        "sk_test_abc123",
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.EventsEndpoint),
+			Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertyAuditLogsRenderContext{
+					propertyDashboardRenderContext: propDash(propertyAuditLogsTabIndex, a),
+					AuditLogsRenderContext:         auditLogsCtx, CanView: true,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.RulesEndpoint),
+			Template: propertyDashboardTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &PropertyRulesRenderContext{
+					propertyDashboardRenderContext: propDash(propertyRulesTabIndex, a),
+					rulesRenderContext:             rulesRenderContext{Rules: rules, CanAddNew: true},
+				}
+			},
+		},
+		// --- Org invite ---
 		{
 			Path:     p(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint),
 			Template: loginTemplate,
