@@ -4,14 +4,18 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/PrivateCaptcha/PrivateCaptcha/web"
+	"github.com/PrivateCaptcha/PrivateCaptcha/widget"
 )
 
 const (
@@ -144,6 +148,35 @@ func stubRuleStatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func stubPuzzleHandler(salt *puzzle.Salt) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		level := int(common.DifficultyLevelMedium)
+		if levelStr := r.PathValue("level"); len(levelStr) > 0 {
+			if value, err := strconv.Atoi(levelStr); err == nil && (value > 0) && (value < int(common.MaxDifficultyLevel)) {
+				level = value
+			}
+		}
+
+		p := puzzle.NewComputePuzzle(0, [16]byte{}, uint8(level))
+		if err := p.Init(puzzle.DefaultValidityPeriod); err != nil {
+			slog.ErrorContext(ctx, "Failed to create puzzle", common.ErrAttr(err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		payload, err := p.Serialize(ctx, salt, nil)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to serialize puzzle", common.ErrAttr(err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set(common.HeaderContentType, common.ContentTypePlain)
+		payload.Write(w)
+	}
+}
+
 func stubAccountStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	data := make([]*portal.AccountStatsPoint, 0, 12)
@@ -196,6 +229,13 @@ func main() {
 
 	router := http.NewServeMux()
 	router.Handle("/portal/", http.StripPrefix("/portal/", web.Static("")))
+	router.Handle("GET /widget/", http.StripPrefix("/widget/", widget.Static("")))
+
+	puzzleSalt := puzzle.NewSalt([]byte("viewportal-salt"))
+	puzzleHandler := stubPuzzleHandler(puzzleSalt)
+	router.HandleFunc("/"+common.PuzzleEndpoint, puzzleHandler)
+	router.HandleFunc("/"+common.PuzzleEndpoint+"/{level}", puzzleHandler)
+	router.HandleFunc("/portal/"+common.EchoPuzzleEndpoint+"/{level}", puzzleHandler)
 
 	for _, p := range pages {
 		router.HandleFunc(p.Path, servePage(p))

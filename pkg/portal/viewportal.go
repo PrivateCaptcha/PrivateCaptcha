@@ -88,7 +88,7 @@ func viewStubAPIKey(name string) *userAPIKey {
 // Paths are constructed using the same patterns as setupWithPrefix.
 func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	org := viewStubOrg("org1")
-	orgs := []*UserOrg{org, {Name: "Other Org", ID: "org2", Level: string(dbgen.AccessLevelMember)}}
+	orgs := []*UserOrg{org, {Name: "Other Org", ID: "org2", Level: string(dbgen.AccessLevelOwner)}}
 	prop := viewStubProperty("Main Site", "org1")
 	token := CsrfRenderContext{Token: "stub-csrf-token"}
 	rules := viewStubRules()
@@ -101,14 +101,18 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	}
 
 	captchaCtx := CaptchaRenderContext{
-		CaptchaEndpoint: "/api/puzzle", CaptchaSolutionField: "portal-solution",
-		CaptchaSitekey: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", CaptchaDebug: true,
+		CaptchaEndpoint: "/" + common.PuzzleEndpoint, CaptchaSolutionField: "portal-solution",
+		CaptchaSitekey: db.TestPropertySitekey, CaptchaDebug: true,
 	}
 
 	propDash := func(tab int, alert AlertRenderContext) propertyDashboardRenderContext {
+		propCaptchaCtx := CaptchaRenderContext{
+			CaptchaEndpoint: s.RelURL(common.EchoPuzzleEndpoint), CaptchaSolutionField: "portal-solution",
+			CaptchaSitekey: db.TestPropertySitekey, CaptchaDebug: true,
+		}
 		return propertyDashboardRenderContext{
 			AlertRenderContext: alert, CsrfRenderContext: token,
-			CaptchaRenderContext: captchaCtx, Property: prop, Org: org,
+			CaptchaRenderContext: propCaptchaCtx, Property: prop, Org: org,
 			Tab: tab, CanEdit: true, IncludeRules: true,
 		}
 	}
@@ -130,8 +134,14 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	members := []*orgUser{
 		{Name: "Jane Doe", Email: "jane@example.com", ID: "u1", Level: string(dbgen.AccessLevelOwner), CreatedAt: "01 Jan 2025"},
 		{Name: "John Smith", Email: "john@example.com", ID: "u2", Level: string(dbgen.AccessLevelMember), CreatedAt: "15 Mar 2025"},
-		{Name: "invite@example.com", Email: "invite@example.com", ID: "u3", Level: string(dbgen.AccessLevelInvited), CreatedAt: "01 Apr 2025", IsEmailInvite: true},
+		{Name: "Alice Johnson", Email: "alice@example.com", ID: "u3", Level: string(dbgen.AccessLevelMember), CreatedAt: "20 Mar 2025"},
+		{Name: "Bob Williams", Email: "bob@example.com", ID: "u4", Level: string(dbgen.AccessLevelInvited), CreatedAt: "01 Apr 2025"},
+		{Name: "", Email: "invite@example.com", ID: "u5", Level: string(dbgen.AccessLevelInvited), CreatedAt: "05 Apr 2025", IsEmailInvite: true},
+		{Name: "", Email: "pending@company.com", ID: "u6", Level: string(dbgen.AccessLevelInvited), CreatedAt: "06 Apr 2025", IsEmailInvite: true},
 	}
+
+	// accepted non-owner members for org settings transfer dropdown
+	transferMembers := []*orgUser{members[1], members[2]}
 
 	countries := []CountryOption{
 		{Code: "US", Name: "United States"}, {Code: "DE", Name: "Germany"}, {Code: "JP", Name: "Japan"},
@@ -230,7 +240,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsNotificationsRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.NotificationsEndpoint, a),
-					WeeklyReport:                true, ReportEmail: "reports@example.com", UserEmail: "jane@example.com",
+					WeeklyReport:                true, MonthlyReport: true, ReportEmail: "reports@example.com", UserEmail: "jane@example.com",
 				}
 			},
 		},
@@ -324,7 +334,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgSettingsRenderContext{
 					portalBaseRenderContext: baseCtx(portalSettingsTabIndex), AlertRenderContext: a,
-					Members: members[:2], CanTransfer: true,
+					Members: transferMembers, CanTransfer: true,
 				}
 			},
 		},
@@ -422,7 +432,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &propertyIntegrationsRenderContext{
 					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
-					Sitekey:                        "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+					Sitekey:                        db.TestPropertySitekey,
 				}
 			},
 		},

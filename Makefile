@@ -184,7 +184,7 @@ view-emails: build-view-emails
 run-view-emails:
 	reflex -r '^(pkg\/email|cmd\/viewemails)/' -s -- sh -c 'make view-emails'
 
-view-portal: build-js copy-static-js build-view-portal
+view-portal: build-js build-widget-script copy-static-js build-view-portal
 	bin/viewportal
 
 run-view-portal:
