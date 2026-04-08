@@ -247,9 +247,9 @@ func TestGetPuzzle(t *testing.T) {
 		t.Errorf("Response puzzle is zero")
 	}
 
-	noticeHeader := resp.Header.Get(common.HeaderWidgetNotice)
-	if noticeHeader != "" {
-		t.Errorf("Expected empty notice header, got %q", noticeHeader)
+	noticeHeader := resp.Header.Values(common.HeaderWidgetNotice)
+	if len(noticeHeader) > 0 {
+		t.Errorf("Expected no notice header, got %q", noticeHeader)
 	}
 }
 
@@ -692,8 +692,9 @@ func TestGetPuzzleWithNoticeHeader(t *testing.T) {
 	}
 
 	// Temporarily set the notice provider to return a test message
+	prev := server.NoticeProvider
 	server.NoticeProvider = &common_test.StubNoticeProvider{Value: "test notice message"}
-	defer func() { server.NoticeProvider = nil }()
+	defer func() { server.NoticeProvider = prev }()
 
 	resp, err := puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
 	if err != nil {

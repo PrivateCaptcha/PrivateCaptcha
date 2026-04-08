@@ -10,6 +10,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
@@ -99,6 +100,7 @@ func TestMain(m *testing.M) {
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
 		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
+		NoticeProvider:     &common_test.StubNoticeProvider{},
 	}
 	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
 		panic(err)

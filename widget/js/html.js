@@ -260,7 +260,7 @@ export class CaptchaElement extends SafeHTMLElement {
                 const text = errorDescription(this._error, strings);
                 activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
             } else if (this._notice) {
-                activeArea.appendChild(debugSpan('notice', true, this._notice));
+                activeArea.appendChild(debugSpan(strings[i18n.NOTICE], true, this._notice));
             } else {
                 activeArea.appendChild(debugSpan(`[${state}]`, false, null));
             }
