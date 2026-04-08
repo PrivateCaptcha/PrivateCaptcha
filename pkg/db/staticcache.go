@@ -3,15 +3,14 @@ package db
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 type StaticCache[TKey comparable, TValue comparable] struct {
-	cache        map[TKey]TValue
-	mux          sync.RWMutex
+	cache        *xsync.Map[TKey, TValue]
 	upperBound   int
 	lowerBound   int
 	missingValue TValue
@@ -21,7 +20,7 @@ var _ common.Cache[int, any] = (*StaticCache[int, any])(nil)
 
 func NewStaticCache[TKey comparable, TValue comparable](capacity int, missingValue TValue) *StaticCache[TKey, TValue] {
 	return &StaticCache[TKey, TValue]{
-		cache:        make(map[TKey]TValue),
+		cache:        xsync.NewMap[TKey, TValue](xsync.WithPresize(capacity)),
 		upperBound:   capacity,
 		lowerBound:   capacity/2 + capacity/4,
 		missingValue: missingValue,
@@ -38,33 +37,9 @@ func (c *StaticCache[TKey, TValue]) Missing() TValue {
 }
 
 func (c *StaticCache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, error) {
-	c.mux.RLock()
-	defer c.mux.RUnlock()
-
-	if item, ok := c.cache[key]; ok {
-		if item == c.missingValue {
-			return c.missingValue, ErrNegativeCacheHit
-		}
-
-		return item, nil
-	} else {
-		return c.missingValue, ErrCacheMiss
-	}
-}
-
-func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader common.CacheLoader[TKey, TValue]) (TValue, error) {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	var err error
-	item, ok := c.cache[key]
+	item, ok := c.cache.Load(key)
 	if !ok {
-		if item, err = loader.Load(ctx, key); err == nil {
-			c.cache[key] = item
-		} else {
-			slog.ErrorContext(ctx, "Failed to load the value", "key", key, common.ErrAttr(err))
-			return c.missingValue, ErrCacheMiss
-		}
+		return c.missingValue, ErrCacheMiss
 	}
 
 	if item == c.missingValue {
@@ -74,33 +49,63 @@ func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader 
 	return item, nil
 }
 
-func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
-	c.mux.Lock()
-	defer c.mux.Unlock()
+func (c *StaticCache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader common.CacheLoader[TKey, TValue]) (TValue, error) {
+	var loadErr error
+	actual, ok := c.cache.Compute(key, func(oldValue TValue, loaded bool) (TValue, xsync.ComputeOp) {
+		if loaded {
+			return oldValue, xsync.CancelOp
+		}
+		val, err := loader.Load(ctx, key)
+		if err != nil {
+			loadErr = err
+			var zero TValue
+			return zero, xsync.CancelOp
+		}
+		return val, xsync.UpdateOp
+	})
 
-	c.cache[key] = c.missingValue
+	if loadErr != nil {
+		slog.ErrorContext(ctx, "Failed to load the value", "key", key, common.ErrAttr(loadErr))
+		return c.missingValue, ErrCacheMiss
+	}
+
+	if !ok {
+		return c.missingValue, ErrCacheMiss
+	}
+
+	if actual == c.missingValue {
+		return c.missingValue, ErrNegativeCacheHit
+	}
+
+	return actual, nil
+}
+
+func (c *StaticCache[TKey, TValue]) SetMissing(ctx context.Context, key TKey) error {
+	c.cache.Store(key, c.missingValue)
 	return nil
 }
 
-func (c *StaticCache[TKey, TValue]) compressUnsafe() {
-	for k := range c.cache {
-		if len(c.cache) <= c.lowerBound {
-			break
-		}
-
-		delete(c.cache, k)
+func (c *StaticCache[TKey, TValue]) compress() {
+	toDelete := c.cache.Size() - c.lowerBound
+	if toDelete <= 0 {
+		return
 	}
+	deleted := 0
+	c.cache.DeleteMatching(func(_ TKey, _ TValue) (del, stop bool) {
+		if deleted >= toDelete {
+			return false, true
+		}
+		deleted++
+		return true, false
+	})
 }
 
 func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	if len(c.cache) >= c.upperBound {
-		c.compressUnsafe()
+	if c.cache.Size() >= c.upperBound {
+		c.compress()
 	}
 
-	c.cache[key] = t
+	c.cache.Store(key, t)
 	return nil
 }
 
@@ -115,11 +120,6 @@ func (c *StaticCache[TKey, TValue]) SetTTL(ctx context.Context, key TKey, _ time
 }
 
 func (c *StaticCache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
-	c.mux.Lock()
-	defer c.mux.Unlock()
-
-	_, found := c.cache[key]
-	delete(c.cache, key)
-
+	_, found := c.cache.LoadAndDelete(key)
 	return found
 }
