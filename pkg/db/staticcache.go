@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -11,6 +12,7 @@ import (
 
 type StaticCache[TKey comparable, TValue comparable] struct {
 	cache        *xsync.Map[TKey, TValue]
+	compressMux  sync.Mutex
 	upperBound   int
 	lowerBound   int
 	missingValue TValue
@@ -90,19 +92,23 @@ func (c *StaticCache[TKey, TValue]) compress() {
 	if toDelete <= 0 {
 		return
 	}
-	deleted := 0
-	c.cache.DeleteMatching(func(_ TKey, _ TValue) (del, stop bool) {
-		if deleted >= toDelete {
-			return false, true
-		}
-		deleted++
-		return true, false
+	keys := make([]TKey, 0, toDelete)
+	c.cache.Range(func(key TKey, _ TValue) bool {
+		keys = append(keys, key)
+		return len(keys) < toDelete
 	})
+	for _, key := range keys {
+		c.cache.Delete(key)
+	}
 }
 
 func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
 	if c.cache.Size() >= c.upperBound {
-		c.compress()
+		c.compressMux.Lock()
+		if c.cache.Size() >= c.upperBound {
+			c.compress()
+		}
+		c.compressMux.Unlock()
 	}
 
 	c.cache.Store(key, t)
