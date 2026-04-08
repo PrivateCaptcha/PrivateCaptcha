@@ -319,6 +319,7 @@ export class CaptchaWidget {
         this._solution = null;
         this._errorCode = errors.ERROR_NO_ERROR;
         this._internalError = null;
+        this._notice = null;
         this.setOptions(options);
         this.setState(STATE_EMPTY);
         const pcElement = this._element.querySelector('private-captcha');

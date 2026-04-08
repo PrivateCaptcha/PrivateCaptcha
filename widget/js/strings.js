@@ -18,7 +18,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'incomplete',
         [ERROR]: 'error',
         [TESTING]: 'testing',
-        [NOTICE]: 'attention',
+        [NOTICE]: 'notice',
     },
     'de': {
         [CLICK_TO_VERIFY]: 'Zum Bestätigen klicken',
@@ -28,7 +28,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'unvollständig',
         [ERROR]: 'fehler',
         [TESTING]: 'testmodus',
-        [NOTICE]: 'achtung',
+        [NOTICE]: 'hinweis',
     },
     'es': {
         [CLICK_TO_VERIFY]: 'Haz clic para verificar',
@@ -78,7 +78,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'ofullständig',
         [ERROR]: 'fel',
         [TESTING]: 'test',
-        [NOTICE]: 'observera',
+        [NOTICE]: 'notis',
     },
     'no': {
         [CLICK_TO_VERIFY]: 'Klikk for å bekrefte',
@@ -88,7 +88,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'ufullstendig',
         [ERROR]: 'feil',
         [TESTING]: 'test',
-        [NOTICE]: 'merknad',
+        [NOTICE]: 'varsel',
     },
     'pl': {
         [CLICK_TO_VERIFY]: 'Kliknij, aby zweryfikować',
@@ -108,7 +108,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'неповний',
         [ERROR]: 'помилка',
         [TESTING]: 'тестування',
-        [NOTICE]: 'увага',
+        [NOTICE]: 'повідомлення',
     },
     'tr': {
         [CLICK_TO_VERIFY]: 'Doğrulamak için tıklayın',
@@ -118,7 +118,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'eksik',
         [ERROR]: 'hata',
         [TESTING]: 'test',
-        [NOTICE]: 'dikkat',
+        [NOTICE]: 'bildirim',
     },
     'fi': {
         [CLICK_TO_VERIFY]: 'Napsauta vahvistaaksesi',
@@ -128,7 +128,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'epätäydellinen',
         [ERROR]: 'virhe',
         [TESTING]: 'testi',
-        [NOTICE]: 'huomio',
+        [NOTICE]: 'ilmoitus',
     },
     'et': {
         [CLICK_TO_VERIFY]: 'Klõpsa kinnitamiseks',
@@ -138,6 +138,6 @@ export const STRINGS = {
         [INCOMPLETE]: 'puudulik',
         [ERROR]: 'viga',
         [TESTING]: 'test',
-        [NOTICE]: 'tahelepanu',
+        [NOTICE]: 'teade',
     }
 };

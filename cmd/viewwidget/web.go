@@ -45,14 +45,12 @@ func staticHandler() http.Handler {
 				Level  string
 				Mode   string
 				Compat string
-				Notice string
 			}{
 				Echo:   r.URL.Query().Get("echo") == "true",
 				Debug:  r.URL.Query().Get("debug") == "true",
 				Mode:   r.URL.Query().Get("mode"),
 				Compat: r.URL.Query().Get("compat"),
 				Level:  r.URL.Query().Get("level"),
-				Notice: r.URL.Query().Get("notice"),
 			}
 
 			err = tmpl.Execute(w, &data)

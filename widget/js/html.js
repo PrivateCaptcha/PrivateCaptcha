@@ -26,6 +26,7 @@ const CHECKBOX_ID = 'pc-checkbox';
 const PROGRESS_ID = 'pc-progress';
 const DEBUG_ID = 'pc-debug';
 const DEBUG_ERROR_CLASS = 'warn';
+const DEBUG_NOTICE_CLASS = 'notice';
 const DEBUG_TOOLTIP_CLASS = 'tooltip';
 
 const privateCaptchaSVG = `<svg viewBox="0 0 39.4 41.99" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" class="pc-logo" preserveAspectRatio="xMidYMid meet">
@@ -260,7 +261,9 @@ export class CaptchaElement extends SafeHTMLElement {
                 const text = errorDescription(this._error, strings);
                 activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
             } else if (this._notice) {
-                activeArea.appendChild(debugSpan(strings[i18n.NOTICE], true, this._notice));
+                const noticeSpan = debugSpan(strings[i18n.NOTICE], false, this._notice);
+                noticeSpan.classList.add(DEBUG_NOTICE_CLASS);
+                activeArea.appendChild(noticeSpan);
             } else {
                 activeArea.appendChild(debugSpan(`[${state}]`, false, null));
             }

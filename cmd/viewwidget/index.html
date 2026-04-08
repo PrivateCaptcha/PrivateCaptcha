@@ -53,7 +53,7 @@
                             </div>
                             <div class="private-captcha g-recaptcha mt-8"
                                 data-sitekey="your-sitekey"
-                                data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle{{if .Level}}/{{.Level}}{{end}}{{if .Notice}}?notice={{.Notice}}{{end}}"
+                                data-puzzle-endpoint="/{{if .Echo}}echo{{end}}puzzle{{if .Level}}/{{.Level}}{{end}}"
                                 data-started-callback="onCaptchaStarted" 
                                 data-finished-callback="onCaptchaSolved"
                                 data-errored-callback="onCaptchaErrored"
