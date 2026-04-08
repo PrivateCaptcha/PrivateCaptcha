@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log/slog"
 	"net"
@@ -15,10 +16,8 @@ import (
 )
 
 func main() {
-	notice := ""
-	if len(os.Args) > 1 {
-		notice = os.Args[1]
-	}
+	noticeFlag := flag.String("notice", "", "notice text to return in widget puzzle responses")
+	flag.Parse()
 
 	opts := &slog.HandlerOptions{
 		Level: slog.LevelDebug,
@@ -26,7 +25,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	srv := &server{salt: puzzle.NewSalt([]byte("salt")), notice: notice}
+	srv := &server{salt: puzzle.NewSalt([]byte("salt")), notice: *noticeFlag}
 	router := http.NewServeMux()
 
 	corsDefault := cors.Default()
