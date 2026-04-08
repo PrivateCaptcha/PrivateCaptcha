@@ -21,12 +21,7 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, opts))
 	slog.SetDefault(logger)
 
-	var notice string
-	if len(os.Args) > 1 {
-		notice = os.Args[1]
-	}
-
-	srv := &server{salt: puzzle.NewSalt([]byte("salt")), notice: notice}
+	srv := &server{salt: puzzle.NewSalt([]byte("salt"))}
 	router := http.NewServeMux()
 
 	corsDefault := cors.Default()

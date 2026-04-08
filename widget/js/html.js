@@ -255,11 +255,15 @@ export class CaptchaElement extends SafeHTMLElement {
                 break;
         }
 
-        if (this._notice) {
-            activeArea.appendChild(debugSpan('notice', true, this._notice));
-        } else if (this._debug || this._error) {
-            const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
-            activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
+        if (this._debug || this._error || this._notice) {
+            if (this._error) {
+                const text = errorDescription(this._error, strings);
+                activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
+            } else if (this._notice) {
+                activeArea.appendChild(debugSpan('notice', true, this._notice));
+            } else {
+                activeArea.appendChild(debugSpan(`[${state}]`, false, null));
+            }
         }
 
         this._syncHostClass(showPopupIfNeeded);
@@ -342,17 +346,12 @@ export class CaptchaElement extends SafeHTMLElement {
     /**
      * @param {number} value
      * @param {string} internalError
+     * @param {string|null} notice
      */
-    setError(value, internalError) {
+    setError(value, internalError, notice) {
         this._error = value;
         this._internalError = internalError;
-    }
-
-    /**
-     * @param {string|null} value
-     */
-    setNotice(value) {
-        this._notice = value;
+        this._notice = notice || null;
     }
 
     /**

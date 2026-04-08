@@ -51,7 +51,7 @@
 
       <div class="private-captcha"
           data-sitekey="your-sitekey"
-          data-puzzle-endpoint="/puzzle"
+          data-puzzle-endpoint="/puzzle{{if .Notice}}?notice={{.Notice}}{{end}}"
           data-started-callback="onCaptchaStarted" 
           data-finished-callback="onCaptchaSolved"
           data-errored-callback="onCaptchaErrored"

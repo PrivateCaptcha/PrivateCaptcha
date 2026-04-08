@@ -544,8 +544,7 @@ export class CaptchaWidget {
             (this._apiTriggered && (DISPLAY_POPUP === this._options.displayMode));
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
-            pcElement.setError(this._errorCode, this._internalError);
-            pcElement.setNotice(this._notice);
+            pcElement.setError(this._errorCode, this._internalError, this._notice);
             const changed = pcElement.setState(state, canShow);
             if (!changed && forceRefresh) {
                 pcElement.render(state, canShow);

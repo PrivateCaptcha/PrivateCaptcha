@@ -315,7 +315,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	if property != nil {
 		userID = property.OrgOwnerID.Int32
 		extraSalt = property.Salt
-		if property.Notice.Valid {
+		if property.Notice.Valid && len(property.Notice.String) > 0 {
 			w.Header().Set(common.HeaderWidgetNotice, property.Notice.String)
 		}
 	}
