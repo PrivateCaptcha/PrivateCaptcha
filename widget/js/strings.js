@@ -7,6 +7,7 @@ export const UNAVAILABLE = 'unavailable';
 export const INCOMPLETE = 'incomplete';
 export const ERROR = 'error';
 export const TESTING = 'testing';
+export const NOTICE = 'notice';
 
 export const STRINGS = {
     'en': {
@@ -17,6 +18,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'incomplete',
         [ERROR]: 'error',
         [TESTING]: 'testing',
+        [NOTICE]: 'notice',
     },
     'de': {
         [CLICK_TO_VERIFY]: 'Zum Bestätigen klicken',
@@ -26,6 +28,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'unvollständig',
         [ERROR]: 'fehler',
         [TESTING]: 'testmodus',
+        [NOTICE]: 'hinweis',
     },
     'es': {
         [CLICK_TO_VERIFY]: 'Haz clic para verificar',
@@ -35,6 +38,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'incompleto',
         [ERROR]: 'error',
         [TESTING]: 'prueba',
+        [NOTICE]: 'aviso',
     },
     'fr': {
         [CLICK_TO_VERIFY]: 'Cliquez pour vérifier',
@@ -44,6 +48,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'incomplet',
         [ERROR]: 'erreur',
         [TESTING]: 'test',
+        [NOTICE]: 'avis',
     },
     'it': {
         [CLICK_TO_VERIFY]: 'Clicca per verificare',
@@ -53,6 +58,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'incompleto',
         [ERROR]: 'errore',
         [TESTING]: 'test',
+        [NOTICE]: 'avviso',
     },
     'nl': {
         [CLICK_TO_VERIFY]: 'Klik om te verifiëren',
@@ -62,6 +68,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'onvolledig',
         [ERROR]: 'fout',
         [TESTING]: 'testen',
+        [NOTICE]: 'melding',
     },
     'sv': {
         [CLICK_TO_VERIFY]: 'Klicka för att verifiera',
@@ -71,6 +78,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'ofullständig',
         [ERROR]: 'fel',
         [TESTING]: 'test',
+        [NOTICE]: 'notis',
     },
     'no': {
         [CLICK_TO_VERIFY]: 'Klikk for å bekrefte',
@@ -80,6 +88,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'ufullstendig',
         [ERROR]: 'feil',
         [TESTING]: 'test',
+        [NOTICE]: 'varsel',
     },
     'pl': {
         [CLICK_TO_VERIFY]: 'Kliknij, aby zweryfikować',
@@ -89,6 +98,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'niekompletne',
         [ERROR]: 'błąd',
         [TESTING]: 'test',
+        [NOTICE]: 'uwaga',
     },
     'uk': {
         [CLICK_TO_VERIFY]: 'Натисніть для перевірки',
@@ -98,6 +108,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'неповний',
         [ERROR]: 'помилка',
         [TESTING]: 'тестування',
+        [NOTICE]: 'увага',
     },
     'tr': {
         [CLICK_TO_VERIFY]: 'Doğrulamak için tıklayın',
@@ -107,6 +118,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'eksik',
         [ERROR]: 'hata',
         [TESTING]: 'test',
+        [NOTICE]: 'bildirim',
     },
     'fi': {
         [CLICK_TO_VERIFY]: 'Napsauta vahvistaaksesi',
@@ -116,6 +128,7 @@ export const STRINGS = {
         [INCOMPLETE]: 'epätäydellinen',
         [ERROR]: 'virhe',
         [TESTING]: 'testi',
+        [NOTICE]: 'ilmoitus',
     },
     'et': {
         [CLICK_TO_VERIFY]: 'Klõpsa kinnitamiseks',
@@ -125,5 +138,6 @@ export const STRINGS = {
         [INCOMPLETE]: 'puudulik',
         [ERROR]: 'viga',
         [TESTING]: 'test',
+        [NOTICE]: 'teade',
     }
 };

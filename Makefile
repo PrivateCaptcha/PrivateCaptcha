@@ -192,8 +192,9 @@ run-view-portal:
 		-R '^(web/static/js|web/node_modules)' \
 		-s -- sh -c 'make view-portal'
 
+view-widget: NOTICE =
 view-widget: build-js build-widget-script build-view-widget
-	bin/viewwidget
+	bin/viewwidget $(if $(NOTICE),-notice "$(NOTICE)")
 
 run-view-widget:
 	reflex -r '^(widget|web|cmd\/viewwidget)/' \
