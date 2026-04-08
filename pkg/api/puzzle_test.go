@@ -691,16 +691,11 @@ func TestGetPuzzleWithNoticeHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	// Temporarily set the notice provider to return a test message
+	server.NoticeProvider = &common_test.StubNoticeProvider{Value: "test notice message"}
+	defer func() { server.NoticeProvider = nil }()
 
-	// Force-update the cached property with a notice value
-	property.Notice = pgtype.Text{String: "test notice message", Valid: true}
-	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
-	if err := cache.Set(ctx, cacheKey, property); err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := puzzleSuite(ctx, sitekey, property.Domain)
+	resp, err := puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
 	if err != nil {
 		t.Fatal(err)
 	}
