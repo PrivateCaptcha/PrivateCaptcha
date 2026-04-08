@@ -4,6 +4,9 @@ import (
 	"fmt"
 	randv2 "math/rand/v2"
 	"strings"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 func GenerateRandomIPv4() string {
@@ -22,4 +25,14 @@ func PrependProtocol(domain string) string {
 		return "https://" + domain
 	}
 	return domain
+}
+
+type StubNoticeProvider struct {
+	Value string
+}
+
+var _ common.PropertyNoticeProvider = (*StubNoticeProvider)(nil)
+
+func (s *StubNoticeProvider) Notice(_ *dbgen.Property) string {
+	return s.Value
 }

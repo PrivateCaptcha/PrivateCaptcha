@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"time"
+
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 type IdentifierHasher interface {
@@ -110,4 +112,8 @@ type EmailVerifier interface {
 
 type LicenseService interface {
 	IsRegistered() bool
+}
+
+type PropertyNoticeProvider interface {
+	Notice(property *dbgen.Property) string
 }

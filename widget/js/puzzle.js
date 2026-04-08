@@ -21,7 +21,8 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
 
         if (response.ok) {
             const data = await response.text();
-            return data;
+            const notice = response.headers.get('X-PC-Widget-Notice');
+            return { data, notice };
         } else {
             let json = await response.json();
             if (json && json.error) {

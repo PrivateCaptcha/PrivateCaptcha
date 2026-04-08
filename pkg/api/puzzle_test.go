@@ -246,6 +246,11 @@ func TestGetPuzzle(t *testing.T) {
 	if p.IsZero() {
 		t.Errorf("Response puzzle is zero")
 	}
+
+	noticeHeader := resp.Header.Values(common.HeaderWidgetNotice)
+	if len(noticeHeader) > 0 {
+		t.Errorf("Expected no notice header, got %q", noticeHeader)
+	}
 }
 
 func TestGetPuzzleWithFingerprintHeader(t *testing.T) {
@@ -666,5 +671,42 @@ func TestPCVerifyHandlerInvalidFormData(t *testing.T) {
 				t.Errorf("Expected status %d, got %d", tt.wantStatus, w.Code)
 			}
 		})
+	}
+}
+
+func TestGetPuzzleWithNoticeHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Temporarily set the notice provider to return a test message
+	prev := server.NoticeProvider
+	server.NoticeProvider = &common_test.StubNoticeProvider{Value: "test notice message"}
+	defer func() { server.NoticeProvider = prev }()
+
+	resp, err := puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	noticeHeader := resp.Header.Get(common.HeaderWidgetNotice)
+	if noticeHeader != "test notice message" {
+		t.Errorf("Expected notice header %q, got %q", "test notice message", noticeHeader)
 	}
 }

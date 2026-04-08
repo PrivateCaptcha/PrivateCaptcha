@@ -29,6 +29,7 @@ type server struct {
 	prefix string
 	count  int32
 	salt   *puzzle.Salt
+	notice string
 }
 
 func (s *server) Setup(router *http.ServeMux) {
@@ -91,6 +92,10 @@ func (s *server) puzzle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.DebugContext(ctx, "Serving puzzle", "level", level)
+
+	if len(s.notice) > 0 {
+		w.Header().Set(common.HeaderWidgetNotice, s.notice)
+	}
 
 	s.writePuzzle(ctx, p, propertySalt, w)
 }

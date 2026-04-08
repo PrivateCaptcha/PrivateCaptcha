@@ -278,3 +278,7 @@ svg.verified circle {
 #pc-debug.warn {
     color: var(--warn-color);
 }
+
+#pc-debug.notice {
+    color: #CC7700;
+}
