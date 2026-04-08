@@ -182,6 +182,6 @@ type StubNoticeProvider struct {
 
 var _ db.PropertyNoticeProvider = (*StubNoticeProvider)(nil)
 
-func (s *StubNoticeProvider) Notice(_ *dbgen.Property) string {
+func (s *StubNoticeProvider) Notice(_ context.Context, _ *dbgen.Property) string {
 	return s.Value
 }

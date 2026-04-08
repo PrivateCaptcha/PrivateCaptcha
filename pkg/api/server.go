@@ -316,7 +316,7 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	if property != nil {
 		userID = property.OrgOwnerID.Int32
 		extraSalt = property.Salt
-		if notice := s.NoticeProvider.Notice(property); len(notice) > 0 {
+		if notice := s.NoticeProvider.Notice(ctx, property); len(notice) > 0 {
 			w.Header().Set(common.HeaderWidgetNotice, notice)
 		}
 	}
