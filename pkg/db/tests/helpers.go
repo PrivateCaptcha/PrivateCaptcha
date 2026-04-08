@@ -175,3 +175,13 @@ func CorruptDifficultyRulePositionsForTest(ctx context.Context, store *db.Busine
 	_, err := store.Pool.Exec(ctx, query, args...)
 	return err
 }
+
+type StubNoticeProvider struct {
+	Value string
+}
+
+var _ db.PropertyNoticeProvider = (*StubNoticeProvider)(nil)
+
+func (s *StubNoticeProvider) Notice(_ *dbgen.Property) string {
+	return s.Value
+}

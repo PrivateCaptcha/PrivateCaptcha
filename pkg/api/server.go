@@ -91,7 +91,7 @@ type Server struct {
 	IDHasher           common.IdentifierHasher
 	AsyncTasks         db.AsyncTasks
 	CountryCodeHeader  common.ConfigItem
-	NoticeProvider     common.PropertyNoticeProvider
+	NoticeProvider     db.PropertyNoticeProvider
 }
 
 type apiKeyOwnerSource struct {

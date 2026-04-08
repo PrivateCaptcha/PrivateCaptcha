@@ -693,7 +693,7 @@ func TestGetPuzzleWithNoticeHeader(t *testing.T) {
 
 	// Temporarily set the notice provider to return a test message
 	prev := server.NoticeProvider
-	server.NoticeProvider = &common_test.StubNoticeProvider{Value: "test notice message"}
+	server.NoticeProvider = &db_tests.StubNoticeProvider{Value: "test notice message"}
 	defer func() { server.NoticeProvider = prev }()
 
 	resp, err := puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
