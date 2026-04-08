@@ -668,3 +668,76 @@ func TestPCVerifyHandlerInvalidFormData(t *testing.T) {
 		})
 	}
 }
+
+func TestGetPuzzleWithNoticeHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+
+	// Force-update the cached property with a notice value
+	property.Notice = pgtype.Text{String: "test notice message", Valid: true}
+	cacheKey := db.PropertyBySitekeyCacheKey(sitekey)
+	if err := cache.Set(ctx, cacheKey, property); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := puzzleSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	noticeHeader := resp.Header.Get(common.HeaderWidgetNotice)
+	if noticeHeader != "test notice message" {
+		t.Errorf("Expected notice header %q, got %q", "test notice message", noticeHeader)
+	}
+}
+
+func TestGetPuzzleWithoutNoticeHeader(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	property, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, testPropertyDomain), org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	noticeHeader := resp.Header.Get(common.HeaderWidgetNotice)
+	if noticeHeader != "" {
+		t.Errorf("Expected empty notice header, got %q", noticeHeader)
+	}
+}

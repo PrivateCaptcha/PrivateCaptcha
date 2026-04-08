@@ -15,7 +15,7 @@ import (
 const createProperty = `-- name: CreateProperty :one
 INSERT INTO backend.properties (name, org_id, creator_id, org_owner_id, domain, level, growth, validity_interval, allow_subdomains, allow_localhost, max_replay_count)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice
 `
 
 type CreatePropertyParams struct {
@@ -66,6 +66,7 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
@@ -80,7 +81,7 @@ func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error 
 }
 
 const getOrgProperties = `-- name: GetOrgProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice
 FROM backend.properties
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 ORDER BY created_at
@@ -122,6 +123,7 @@ func (q *Queries) GetOrgProperties(ctx context.Context, arg *GetOrgPropertiesPar
 			&i.AllowLocalhost,
 			&i.MaxReplayCount,
 			&i.Enabled,
+			&i.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -145,7 +147,7 @@ func (q *Queries) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.Int4) 
 }
 
 const getOrgPropertyByName = `-- name: GetOrgPropertyByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgPropertyByNameParams struct {
@@ -175,12 +177,13 @@ func (q *Queries) GetOrgPropertyByName(ctx context.Context, arg *GetOrgPropertyB
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
 
 const getProperties = `-- name: GetProperties :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled FROM backend.properties LIMIT $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice FROM backend.properties LIMIT $1
 `
 
 func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, error) {
@@ -211,6 +214,7 @@ func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, 
 			&i.AllowLocalhost,
 			&i.MaxReplayCount,
 			&i.Enabled,
+			&i.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -223,7 +227,7 @@ func (q *Queries) GetProperties(ctx context.Context, limit int32) ([]*Property, 
 }
 
 const getPropertiesByExternalID = `-- name: GetPropertiesByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled from backend.properties WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice from backend.properties WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error) {
@@ -254,6 +258,7 @@ func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgty
 			&i.AllowLocalhost,
 			&i.MaxReplayCount,
 			&i.Enabled,
+			&i.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -266,7 +271,7 @@ func (q *Queries) GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgty
 }
 
 const getPropertiesByID = `-- name: GetPropertiesByID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled from backend.properties WHERE id = ANY($1::INT[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice from backend.properties WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*Property, error) {
@@ -297,6 +302,7 @@ func (q *Queries) GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*P
 			&i.AllowLocalhost,
 			&i.MaxReplayCount,
 			&i.Enabled,
+			&i.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -309,7 +315,7 @@ func (q *Queries) GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*P
 }
 
 const getPropertyByExternalID = `-- name: GetPropertyByExternalID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled from backend.properties WHERE external_id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice from backend.properties WHERE external_id = $1
 `
 
 func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error) {
@@ -334,12 +340,13 @@ func (q *Queries) GetPropertyByExternalID(ctx context.Context, externalID pgtype
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
 
 const getPropertyByID = `-- name: GetPropertyByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled from backend.properties WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice from backend.properties WHERE id = $1
 `
 
 func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, error) {
@@ -364,12 +371,13 @@ func (q *Queries) GetPropertyByID(ctx context.Context, id int32) (*Property, err
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
 
 const getSoftDeletedProperties = `-- name: GetSoftDeletedProperties :many
-SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.salt, p.growth, p.created_at, p.updated_at, p.deleted_at, p.validity_interval, p.allow_subdomains, p.allow_localhost, p.max_replay_count, p.enabled
+SELECT p.id, p.name, p.external_id, p.org_id, p.creator_id, p.org_owner_id, p.domain, p.level, p.salt, p.growth, p.created_at, p.updated_at, p.deleted_at, p.validity_interval, p.allow_subdomains, p.allow_localhost, p.max_replay_count, p.enabled, p.notice
 FROM backend.properties p
 JOIN backend.organizations o ON p.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
@@ -417,6 +425,7 @@ func (q *Queries) GetSoftDeletedProperties(ctx context.Context, arg *GetSoftDele
 			&i.Property.AllowLocalhost,
 			&i.Property.MaxReplayCount,
 			&i.Property.Enabled,
+			&i.Property.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -442,7 +451,7 @@ func (q *Queries) GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.
 const moveProperty = `-- name: MoveProperty :one
 UPDATE backend.properties SET org_id = $2, org_owner_id = $3, updated_at = NOW()
 WHERE id = $1
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice
 `
 
 type MovePropertyParams struct {
@@ -473,12 +482,13 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
 
 const softDeleteProperties = `-- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL AND enabled = TRUE RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL AND enabled = TRUE RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice
 `
 
 type SoftDeletePropertiesParams struct {
@@ -515,6 +525,7 @@ func (q *Queries) SoftDeleteProperties(ctx context.Context, arg *SoftDeletePrope
 			&i.AllowLocalhost,
 			&i.MaxReplayCount,
 			&i.Enabled,
+			&i.Notice,
 		); err != nil {
 			return nil, err
 		}
@@ -527,7 +538,7 @@ func (q *Queries) SoftDeleteProperties(ctx context.Context, arg *SoftDeletePrope
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled
+UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice
 `
 
 func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {
@@ -552,6 +563,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 	)
 	return &i, err
 }
@@ -573,7 +585,7 @@ func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPro
 
 const updateProperty = `-- name: UpdateProperty :one
 WITH old AS (
-    SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled FROM backend.properties p
+    SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice FROM backend.properties p
     WHERE p.id = $1 AND (p.creator_id = $9 OR p.org_owner_id = $9) AND (p.org_id = $10 OR $10 IS NULL) AND p.enabled = TRUE
     FOR UPDATE
 ),
@@ -588,10 +600,10 @@ upd AS (
         max_replay_count = $8,
         updated_at = NOW()
     WHERE p.id = (SELECT id FROM old)
-    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled -- This ensures the final SELECT only returns data if the update actually happened
+    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, notice -- This ensures the final SELECT only returns data if the update actually happened
 )
 SELECT
-    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.domain, upd.level, upd.salt, upd.growth, upd.created_at, upd.updated_at, upd.deleted_at, upd.validity_interval, upd.allow_subdomains, upd.allow_localhost, upd.max_replay_count, upd.enabled,
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.domain, upd.level, upd.salt, upd.growth, upd.created_at, upd.updated_at, upd.deleted_at, upd.validity_interval, upd.allow_subdomains, upd.allow_localhost, upd.max_replay_count, upd.enabled, upd.notice,
     old.name AS old_name,
     old.level AS old_level,
     old.growth AS old_growth,
@@ -635,6 +647,7 @@ type UpdatePropertyRow struct {
 	AllowLocalhost      bool               `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount      int32              `db:"max_replay_count" json:"max_replay_count"`
 	Enabled             bool               `db:"enabled" json:"enabled"`
+	Notice              pgtype.Text        `db:"notice" json:"notice"`
 	OldName             string             `db:"old_name" json:"old_name"`
 	OldLevel            pgtype.Int2        `db:"old_level" json:"old_level"`
 	OldGrowth           DifficultyGrowth   `db:"old_growth" json:"old_growth"`
@@ -677,6 +690,7 @@ func (q *Queries) UpdateProperty(ctx context.Context, arg *UpdatePropertyParams)
 		&i.AllowLocalhost,
 		&i.MaxReplayCount,
 		&i.Enabled,
+		&i.Notice,
 		&i.OldName,
 		&i.OldLevel,
 		&i.OldGrowth,

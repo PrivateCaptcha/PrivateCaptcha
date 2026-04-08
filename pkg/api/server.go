@@ -183,6 +183,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
 		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
+		ExposedHeaders:             []string{common.HeaderWidgetNotice},
 		AllowedMethods:             []string{http.MethodGet},
 		AllowPrivateNetwork:        true,
 		OptionsPassthrough:         true,
@@ -314,6 +315,9 @@ func (s *Server) puzzleHandler(w http.ResponseWriter, r *http.Request) {
 	if property != nil {
 		userID = property.OrgOwnerID.Int32
 		extraSalt = property.Salt
+		if property.Notice.Valid {
+			w.Header().Set(common.HeaderWidgetNotice, property.Notice.String)
+		}
 	}
 
 	if err := s.Verifier.Write(ctx, puzzle, extraSalt, w); err != nil {

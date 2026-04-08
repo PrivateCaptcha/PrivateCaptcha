@@ -153,6 +153,7 @@ export class CaptchaWidget {
         this._solution = null;
         this._errorCode = errors.ERROR_NO_ERROR;
         this._internalError = null;
+        this._notice = null;
 
         const sitekey = this.checkConfigured();
         if (!sitekey) { return; }
@@ -173,8 +174,9 @@ export class CaptchaWidget {
             this.setState(STATE_LOADING);
             this.setProgressState(STATE_LOADING);
             this.trace(`fetching puzzle. sitekey=${sitekey}`);
-            const puzzleData = await getPuzzle(this._options.puzzleEndpoint, sitekey);
-            this._puzzle = new Puzzle(puzzleData);
+            const puzzleResult = await getPuzzle(this._options.puzzleEndpoint, sitekey);
+            this._notice = puzzleResult.notice;
+            this._puzzle = new Puzzle(puzzleResult.data);
             if (this._puzzle && this._puzzle.isZero()) { this._errorCode = errors.ERROR_ZERO_PUZZLE; }
             const expirationMillis = this._puzzle.expirationMillis();
             this.trace(`parsed puzzle buffer. isZero=${this._puzzle.isZero()} ttl=${expirationMillis / 1000}`);
@@ -543,6 +545,7 @@ export class CaptchaWidget {
         const pcElement = this._element.querySelector('private-captcha');
         if (pcElement) {
             pcElement.setError(this._errorCode, this._internalError);
+            pcElement.setNotice(this._notice);
             const changed = pcElement.setState(state, canShow);
             if (!changed && forceRefresh) {
                 pcElement.render(state, canShow);

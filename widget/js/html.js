@@ -144,6 +144,7 @@ export class CaptchaElement extends SafeHTMLElement {
         this._debug = false;
         this._error = null;
         this._internalError = null;
+        this._notice = null;
         this._displayMode = DISPLAY_HIDDEN;
         this._lang = 'en';
 
@@ -254,7 +255,9 @@ export class CaptchaElement extends SafeHTMLElement {
                 break;
         }
 
-        if (this._debug || this._error) {
+        if (this._notice) {
+            activeArea.appendChild(debugSpan('notice', true, this._notice));
+        } else if (this._debug || this._error) {
             const text = this._error ? errorDescription(this._error, strings) : `[${state}]`;
             activeArea.appendChild(debugSpan(text, this._error, (this._debug && this._error) ? this._internalError : null));
         }
@@ -343,6 +346,13 @@ export class CaptchaElement extends SafeHTMLElement {
     setError(value, internalError) {
         this._error = value;
         this._internalError = internalError;
+    }
+
+    /**
+     * @param {string|null} value
+     */
+    setNotice(value) {
+        this._notice = value;
     }
 
     /**
