@@ -1,6 +1,6 @@
 module github.com/PrivateCaptcha/PrivateCaptcha
 
-go 1.26.1
+go 1.26.2
 
 require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.43.0

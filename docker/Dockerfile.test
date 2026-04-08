@@ -1,4 +1,4 @@
-FROM golang:1.26.1 AS tests-builder
+FROM golang:1.26.2 AS tests-builder
 
 COPY . /app/
 
