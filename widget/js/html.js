@@ -346,7 +346,7 @@ export class CaptchaElement extends SafeHTMLElement {
     /**
      * @param {number} value
      * @param {string} internalError
-     * @param {string|null} notice
+     * @param {string|null} [notice]
      */
     setError(value, internalError, notice) {
         this._error = value;
