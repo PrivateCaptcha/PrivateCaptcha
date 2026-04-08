@@ -105,10 +105,10 @@ func (c *StaticCache[TKey, TValue]) compress() {
 func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) error {
 	if c.cache.Size() >= c.upperBound {
 		c.compressMux.Lock()
+		defer c.compressMux.Unlock()
 		if c.cache.Size() >= c.upperBound {
 			c.compress()
 		}
-		c.compressMux.Unlock()
 	}
 
 	c.cache.Store(key, t)
