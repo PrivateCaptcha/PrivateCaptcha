@@ -238,7 +238,7 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 
 	renderCtx := &portalBaseRenderContext{
 		CsrfRenderContext:         s.CreateCsrfContext(user),
-		SystemNotificationContext: s.NotificationFunc(ctx, sess),
+		SystemNotificationContext: s.createSystemNotificationContext(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs, s.IDHasher),
 		CurrentOrg:                stubUserOrg,
 		Tab:                       tab,

@@ -35,6 +35,7 @@ const (
 	KeyTwoFactorCodeTimestamp
 	KeyOrgInviteID
 	KeyFirstSession
+	KeyAdhocNotification
 	// Add new fields _above_
 	SESSION_KEYS_COUNT
 )

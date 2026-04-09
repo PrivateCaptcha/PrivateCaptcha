@@ -17,6 +17,9 @@ func (s *Server) createSystemNotificationContext(ctx context.Context, sess *sess
 			renderCtx.Notification = notification.Message
 			renderCtx.NotificationID = s.IDHasher.Encrypt(int(notification.ID))
 		}
+	} else if message, ok := sess.Get(ctx, session.KeyAdhocNotification).(string); ok && len(message) > 0 {
+		renderCtx.Notification = message
+		renderCtx.NotificationID = s.IDHasher.Encrypt(0)
 	}
 
 	return renderCtx
@@ -32,6 +35,7 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 
 	id, value, err := common.IntPathArg(r, common.ParamID, s.IDHasher)
 	if err == nil {
+		slog.DebugContext(ctx, "About to dismiss system notification", "id", id)
 		if id != 0 {
 			if notificationID, ok := sess.Get(ctx, session.KeyNotificationID).(int32); ok {
 				if notificationID != int32(id) {
@@ -44,8 +48,10 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 				slog.InfoContext(ctx, "Dismissed notification", "id", id)
 			}
 		} else {
-			slog.DebugContext(ctx, "Skipping dismissing stub system notification")
+			slog.Log(ctx, common.LevelTrace, "Dismissing ad-hoc system notification")
+			_ = sess.Delete(ctx, session.KeyAdhocNotification)
 		}
+
 		w.WriteHeader(http.StatusOK)
 	} else {
 		logID := value
