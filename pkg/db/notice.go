@@ -11,23 +11,23 @@ type PropertyNoticeProvider interface {
 	Notice(ctx context.Context, property *dbgen.Property) string
 }
 
-type noticeProvider struct {
+type NoticeProvider struct {
 	notice common.ConfigItem
 	value  string
 }
 
-var _ PropertyNoticeProvider = (*noticeProvider)(nil)
+var _ PropertyNoticeProvider = (*NoticeProvider)(nil)
 
-func (d *noticeProvider) Notice(_ context.Context, _ *dbgen.Property) string {
+func (d *NoticeProvider) Notice(_ context.Context, _ *dbgen.Property) string {
 	return d.value
 }
 
-func (d *noticeProvider) Update() {
+func (d *NoticeProvider) Update() {
 	if d.notice != nil {
 		d.value = d.notice.Value()
 	}
 }
 
-func NewNoticeProvider(ci common.ConfigItem) *noticeProvider {
-	return &noticeProvider{notice: ci}
+func NewNoticeProvider(ci common.ConfigItem) *NoticeProvider {
+	return &NoticeProvider{notice: ci}
 }
