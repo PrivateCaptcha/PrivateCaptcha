@@ -177,6 +177,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	asyncTasksJob := maintenance.NewAsyncTasksJob(businessDB)
 
 	rulesCompiler := rules.NewRulesCompiler(uaParser)
+	noticeProvider := db.NewNoticeProvider(cfg.Get(common.WidgetNoticeKey))
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiServer := &api.Server{
@@ -196,7 +197,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		IDHasher:           idHasher,
 		AsyncTasks:         asyncTasksJob,
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
-		NoticeProvider:     db.NewNoticeProvider(),
+		NoticeProvider:     noticeProvider,
 	}
 	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
 		return err
@@ -281,6 +282,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		jobs.UpdateConfig(cfg)
 		verboseLogs := config.AsBool(cfg.Get(common.VerboseKey))
 		common.SetLogLevel(logLevel, verboseLogs)
+		noticeProvider.Update()
 	}
 	updateConfigFunc(ctx)
 

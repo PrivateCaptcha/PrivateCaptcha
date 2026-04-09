@@ -80,6 +80,7 @@ func init() {
 	configKeyToEnvName[common.ClickHouseOptionalKey] = "PC_CLICKHOUSE_OPTIONAL"
 	configKeyToEnvName[common.MaintenanceJobConcurrencyKey] = "PC_MAINTENANCE_JOB_CONCURRENCY"
 	configKeyToEnvName[common.FingerprintHeaderKey] = "PC_FINGERPRINT_HEADER"
+	configKeyToEnvName[common.WidgetNoticeKey] = "PC_WIDGET_NOTICE"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {
