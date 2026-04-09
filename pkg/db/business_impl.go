@@ -151,14 +151,17 @@ func (impl *BusinessStoreImpl) StoreInCache(ctx context.Context, key string, dat
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.CreateCache(ctx, &dbgen.CreateCacheParams{
+	affected, err := impl.querier.CreateCache(ctx, &dbgen.CreateCacheParams{
 		Key:     key,
 		Value:   data,
 		Column3: ttl,
-	}); err != nil {
+	})
+	if err != nil {
 		slog.ErrorContext(ctx, "Failed to write to cache", "key", key, common.ErrAttr(err))
 		return err
 	}
+
+	slog.Log(ctx, common.LevelTrace, "Wrote to cache", "key", key, "affected", affected)
 
 	return nil
 }
@@ -181,7 +184,15 @@ func (impl *BusinessStoreImpl) DeleteExpiredCache(ctx context.Context) error {
 		return ErrMaintenance
 	}
 
-	return impl.querier.DeleteExpiredCache(ctx)
+	affected, err := impl.querier.DeleteExpiredCache(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete expired cache", common.ErrAttr(err))
+		return err
+	}
+
+	slog.Log(ctx, common.LevelTrace, "Deleted expired cache", "affected", affected)
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) CreateNewSubscription(ctx context.Context, params *dbgen.CreateSubscriptionParams) (*dbgen.Subscription, error) {
@@ -297,18 +308,18 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 		slog.InfoContext(ctx, "Soft-deleted user", "userID", user.ID)
 	}
 
-	if err := impl.querier.SoftDeleteUserOrganizations(ctx, Int(user.ID)); err != nil {
+	if affected, err := impl.querier.SoftDeleteUserOrganizations(ctx, Int(user.ID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user organizations", "userID", user.ID, common.ErrAttr(err))
 		return nil, err
 	} else {
-		slog.InfoContext(ctx, "Soft-deleted user organizations", "userID", user.ID)
+		slog.InfoContext(ctx, "Soft-deleted user organizations", "userID", user.ID, "affected", affected)
 	}
 
-	if err := impl.querier.DeleteUserAPIKeys(ctx, Int(user.ID)); err != nil {
+	if affected, err := impl.querier.DeleteUserAPIKeys(ctx, Int(user.ID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete user API keys", "userID", user.ID, common.ErrAttr(err))
 		return nil, err
 	} else {
-		slog.InfoContext(ctx, "Deleted user API keys", "userID", user.ID)
+		slog.InfoContext(ctx, "Deleted user API keys", "userID", user.ID, "affected", affected)
 	}
 
 	// TODO: Delete user API keys from cache
@@ -368,9 +379,11 @@ func (impl *BusinessStoreImpl) DeleteUserSession(ctx context.Context, sid string
 	}
 
 	sessionID, _ := sessionIDFunc(sid)
-	err := impl.querier.DeleteCachedByKey(ctx, sessionID)
+	affected, err := impl.querier.DeleteCachedByKey(ctx, sessionID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete cached session from DB", common.ErrAttr(err))
+	} else {
+		slog.Log(ctx, common.LevelTrace, "Deleted cached session from DB", "affected", affected)
 	}
 
 	return err
@@ -464,7 +477,7 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		return ErrMaintenance
 	}
 
-	err = impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
+	affected, err := impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
 		Keys:      keys,
 		Values:    values,
 		Intervals: intervals,
@@ -474,7 +487,7 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		slog.ErrorContext(ctx, "Failed to cache sessions", "count", len(keys), common.ErrAttr(err))
 	}
 
-	slog.DebugContext(ctx, "Saved persisted sessions to DB", "count", len(keys))
+	slog.DebugContext(ctx, "Saved persisted sessions to DB", "count", len(keys), "affected", affected)
 
 	return err
 }
@@ -1143,15 +1156,15 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 		return nil, ErrMaintenance
 	}
 
-	if err := impl.querier.SoftDeleteUserOrganization(ctx, &dbgen.SoftDeleteUserOrganizationParams{
+	if affected, err := impl.querier.SoftDeleteUserOrganization(ctx, &dbgen.SoftDeleteUserOrganizationParams{
 		ID:     org.ID,
 		UserID: Int(user.ID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to mark organization as deleted in DB", "orgID", org.ID, common.ErrAttr(err))
 		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Soft-deleted organization", "orgID", org.ID, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Soft-deleted organization", "orgID", org.ID)
 
 	// update caches
 	_ = impl.cache.SetMissing(ctx, orgCacheKey(org.ID))
@@ -1275,7 +1288,7 @@ func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *d
 		return nil, ErrMaintenance
 	}
 
-	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+	affected, err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  Int(user.ID),
 		Level:   dbgen.AccessLevelMember,
@@ -1287,7 +1300,7 @@ func (impl *BusinessStoreImpl) JoinOrg(ctx context.Context, orgID int32, user *d
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Accepted org invite", "orgID", orgID, "userID", user.ID)
+	slog.InfoContext(ctx, "Accepted org invite", "orgID", orgID, "userID", user.ID, "affected", affected)
 
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
@@ -1308,7 +1321,7 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 		return nil, ErrMaintenance
 	}
 
-	err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
+	affected, err := impl.querier.UpdateOrgMembershipLevel(ctx, &dbgen.UpdateOrgMembershipLevelParams{
 		OrgID:   orgID,
 		UserID:  Int(user.ID),
 		Level:   dbgen.AccessLevelInvited,
@@ -1320,7 +1333,7 @@ func (impl *BusinessStoreImpl) LeaveOrg(ctx context.Context, orgID int32, user *
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Left organization", "orgID", orgID, "userID", user.ID)
+	slog.InfoContext(ctx, "Left organization", "orgID", orgID, "userID", user.ID, "affected", affected)
 
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
@@ -1350,7 +1363,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 		return nil, err
 	}
 
-	err := impl.querier.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
+	affected, err := impl.querier.RemoveUserFromOrg(ctx, &dbgen.RemoveUserFromOrgParams{
 		OrgID:  org.ID,
 		UserID: Int(userID),
 	})
@@ -1360,7 +1373,7 @@ func (impl *BusinessStoreImpl) RemoveUserFromOrg(ctx context.Context, user *dbge
 		return nil, err
 	}
 
-	slog.InfoContext(ctx, "Removed user from org", "orgID", org.ID, "userID", userID)
+	slog.InfoContext(ctx, "Removed user from org", "orgID", org.ID, "userID", userID, "affected", affected)
 
 	// invalidate relevant caches
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(userID))
@@ -1665,13 +1678,13 @@ func (impl *BusinessStoreImpl) UpdateAPIKeysLastUsedAt(ctx context.Context, apiK
 		return ErrMaintenance
 	}
 
-	err := impl.querier.UpdateAPIKeysLastUsedAt(ctx, apiKeyIDs)
+	affected, err := impl.querier.UpdateAPIKeysLastUsedAt(ctx, apiKeyIDs)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update API keys last used at", "count", len(apiKeyIDs), common.ErrAttr(err))
 		return err
 	}
 
-	slog.DebugContext(ctx, "Updated API keys last used at", "count", len(apiKeyIDs))
+	slog.DebugContext(ctx, "Updated API keys last used at", "count", len(apiKeyIDs), "affected", affected)
 
 	return nil
 }
@@ -1757,12 +1770,12 @@ func (impl *BusinessStoreImpl) ReleaseLock(ctx context.Context, name string) err
 	if impl.querier == nil {
 		return ErrMaintenance
 	}
-	err := impl.querier.DeleteLock(ctx, name)
+	affected, err := impl.querier.DeleteLock(ctx, name)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to release a lock", "name", name, common.ErrAttr(err))
 	}
 
-	slog.DebugContext(ctx, "Released a lock", "name", name)
+	slog.DebugContext(ctx, "Released a lock", "name", name, "affected", affected)
 
 	return err
 }
@@ -1776,12 +1789,15 @@ func (impl *BusinessStoreImpl) DeleteDeletedRecords(ctx context.Context, before 
 		return ErrMaintenance
 	}
 
-	err := impl.querier.DeleteDeletedRecords(ctx, Timestampz(before))
+	affected, err := impl.querier.DeleteDeletedRecords(ctx, Timestampz(before))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to cleanup deleted records", "before", before, common.ErrAttr(err))
+		return err
 	}
 
-	return err
+	slog.InfoContext(ctx, "Cleaned up deleted records", "before", before, "affected", affected)
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedProperties(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
@@ -1818,13 +1834,16 @@ func (impl *BusinessStoreImpl) DeleteProperties(ctx context.Context, ids []int32
 		return ErrMaintenance
 	}
 
-	err := impl.querier.DeleteProperties(ctx, ids)
+	affected, err := impl.querier.DeleteProperties(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete properties", "count", len(ids), common.ErrAttr(err))
+		return err
 	}
 
-	return err
+	slog.InfoContext(ctx, "Deleted properties", "count", len(ids), "affected", affected)
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
@@ -1861,13 +1880,16 @@ func (impl *BusinessStoreImpl) DeleteOrganizations(ctx context.Context, ids []in
 		return ErrMaintenance
 	}
 
-	err := impl.querier.DeleteOrganizations(ctx, ids)
+	affected, err := impl.querier.DeleteOrganizations(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete organizations", "count", len(ids), common.ErrAttr(err))
+		return err
 	}
 
-	return err
+	slog.InfoContext(ctx, "Deleted organizations", "count", len(ids), "affected", affected)
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedUsers(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedUsersRow, error) {
@@ -1904,13 +1926,16 @@ func (impl *BusinessStoreImpl) DeleteUsers(ctx context.Context, ids []int32) err
 		return ErrMaintenance
 	}
 
-	err := impl.querier.DeleteUsers(ctx, ids)
+	affected, err := impl.querier.DeleteUsers(ctx, ids)
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to delete users", "count", len(ids), common.ErrAttr(err))
+		return err
 	}
 
-	return err
+	slog.InfoContext(ctx, "Deleted users", "count", len(ids), "affected", affected)
+
+	return nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveSystemNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
@@ -2333,12 +2358,12 @@ func (impl *BusinessStoreImpl) MarkUserNotificationsAttempted(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.UpdateAttemptedUserNotifications(ctx, ids); err != nil {
+	if affected, err := impl.querier.UpdateAttemptedUserNotifications(ctx, ids); err != nil {
 		slog.ErrorContext(ctx, "Failed to update attempted user notifications", "count", len(ids), common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Updated attempted user notifications", "count", len(ids), "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Updated attempted user notifications", "count", len(ids))
 
 	return nil
 }
@@ -2352,15 +2377,15 @@ func (impl *BusinessStoreImpl) MarkUserNotificationsProcessed(ctx context.Contex
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.UpdateProcessedUserNotifications(ctx, &dbgen.UpdateProcessedUserNotificationsParams{
+	if affected, err := impl.querier.UpdateProcessedUserNotifications(ctx, &dbgen.UpdateProcessedUserNotificationsParams{
 		ProcessedAt: Timestampz(t),
 		Column2:     ids,
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to update processed user notifications", "count", len(ids), common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Updated processed user notifications", "count", len(ids), "affected", affected, "processed_at", t)
 	}
-
-	slog.InfoContext(ctx, "Updated processed user notifications", "count", len(ids), "processed_at", t)
 
 	return nil
 }
@@ -2370,15 +2395,15 @@ func (impl *BusinessStoreImpl) DeleteUnusedNotificationTemplates(ctx context.Con
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteUnusedNotificationTemplates(ctx, &dbgen.DeleteUnusedNotificationTemplatesParams{
+	if affected, err := impl.querier.DeleteUnusedNotificationTemplates(ctx, &dbgen.DeleteUnusedNotificationTemplatesParams{
 		ProcessedAt: Timestampz(processedBefore),
 		UpdatedAt:   Timestampz(updatedBefore),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete unused notification templates", common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted unused notification templates", "delivered_before", processedBefore, "updated_before", updatedBefore, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted unused notification templates", "delivered_before", processedBefore, "updated_before", updatedBefore)
 
 	return nil
 }
@@ -2392,12 +2417,12 @@ func (impl *BusinessStoreImpl) DeleteSentUserNotifications(ctx context.Context, 
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteProcessedUserNotifications(ctx, Timestampz(before)); err != nil {
+	if affected, err := impl.querier.DeleteProcessedUserNotifications(ctx, Timestampz(before)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete sent user notifications", common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted sent user notifications", "before", before, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted sent user notifications", "before", before)
 
 	return nil
 }
@@ -2411,12 +2436,12 @@ func (impl *BusinessStoreImpl) DeleteUnsentUserNotifications(ctx context.Context
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteUnprocessedUserNotifications(ctx, Timestampz(before)); err != nil {
+	if affected, err := impl.querier.DeleteUnprocessedUserNotifications(ctx, Timestampz(before)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete UNsent user notifications", common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted UNsent user notifications", "before", before, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted UNsent user notifications", "before", before)
 
 	return nil
 }
@@ -2426,15 +2451,15 @@ func (impl *BusinessStoreImpl) DeletePendingUserNotification(ctx context.Context
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeletePendingUserNotification(ctx, &dbgen.DeletePendingUserNotificationParams{
+	if affected, err := impl.querier.DeletePendingUserNotification(ctx, &dbgen.DeletePendingUserNotificationParams{
 		UserID:      Int(user.ID),
 		ReferenceID: referenceID,
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete pending user notification", "userID", user.ID, "refID", referenceID, common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted pending user notification", "userID", user.ID, "refID", referenceID, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted pending user notification", "userID", user.ID, "refID", referenceID)
 
 	return nil
 }
@@ -2444,7 +2469,7 @@ func (impl *BusinessStoreImpl) ExpireInternalTrials(ctx context.Context, from, t
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.UpdateInternalSubscriptions(ctx, &dbgen.UpdateInternalSubscriptionsParams{
+	if affected, err := impl.querier.UpdateInternalSubscriptions(ctx, &dbgen.UpdateInternalSubscriptionsParams{
 		TrialEndsAt:   Timestampz(from),
 		TrialEndsAt_2: Timestampz(to),
 		Status:        expiredStatus,
@@ -2452,11 +2477,9 @@ func (impl *BusinessStoreImpl) ExpireInternalTrials(ctx context.Context, from, t
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to expire internal trials", "from", from, "to", to, common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Expired internal trials", "from", from, "to", to, "affected", affected)
 	}
-
-	// NOTE: we don't update caches in this case
-
-	slog.InfoContext(ctx, "Expired internal trials", "from", from, "to", to)
 
 	return nil
 }
@@ -2514,37 +2537,41 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	}
 
 	// Transfer organization ownership
-	if err := impl.querier.TransferOrganization(ctx, &dbgen.TransferOrganizationParams{
+	if affected, err := impl.querier.TransferOrganization(ctx, &dbgen.TransferOrganizationParams{
 		ID:       org.ID,
 		UserID:   Int(newOwner.ID),
 		UserID_2: Int(user.ID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to transfer organization ownership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Transferred organization ownership", "orgID", org.ID, "affected", affected)
 	}
 
 	// Transfer all property ownerships in this organization
-	if err := impl.querier.TransferOrgProperties(ctx, &dbgen.TransferOrgPropertiesParams{
+	if affected, err := impl.querier.TransferOrgProperties(ctx, &dbgen.TransferOrgPropertiesParams{
 		OrgID:        Int(org.ID),
 		OrgOwnerID:   Int(newOwner.ID),
 		OrgOwnerID_2: Int(user.ID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to transfer property ownerships", "orgID", org.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Transferred property ownerships", "orgID", org.ID, "affected", affected)
 	}
 
 	// Swap organization membership: remove new owner's membership (they are owner now),
 	// add old owner as a confirmed member
-	if err := impl.querier.SwapOrgOwnership(ctx, &dbgen.SwapOrgOwnershipParams{
+	if affected, err := impl.querier.SwapOrgOwnership(ctx, &dbgen.SwapOrgOwnershipParams{
 		OrgID:    org.ID,
 		UserID:   Int(newOwner.ID),
 		UserID_2: Int(user.ID),
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to swap organization membership", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
 		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Swapped organization membership", "orgID", org.ID, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Transferred organization", "orgID", org.ID, "oldUserID", user.ID, "newUserID", newOwner.ID)
 
 	// Invalidate caches for both old and new users
 	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(user.ID))
@@ -2572,12 +2599,12 @@ func (impl *BusinessStoreImpl) DeleteOldAuditLogs(ctx context.Context, before ti
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteOldAuditLogs(ctx, Timestampz(before)); err != nil {
+	if affected, err := impl.querier.DeleteOldAuditLogs(ctx, Timestampz(before)); err != nil {
 		slog.ErrorContext(ctx, "Failed to deleted old audit logs", common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted old audit logs", "before", before, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted old audit logs", "before", before)
 
 	return nil
 }
@@ -2880,9 +2907,11 @@ func (impl *BusinessStoreImpl) DeleteOldAsyncTasks(ctx context.Context, before t
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.DeleteOldAsyncTasks(ctx, Timestampz(before)); err != nil {
+	if affected, err := impl.querier.DeleteOldAsyncTasks(ctx, Timestampz(before)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete old async request", common.ErrAttr(err))
 		return err
+	} else {
+		slog.InfoContext(ctx, "Deleted old async tasks", "before", before, "affected", affected)
 	}
 
 	return nil
@@ -2897,13 +2926,15 @@ func (impl *BusinessStoreImpl) UpdateAsyncTask(ctx context.Context, uuid pgtype.
 		return ErrMaintenance
 	}
 
-	if err := impl.querier.UpdateAsyncTask(ctx, &dbgen.UpdateAsyncTaskParams{
+	if affected, err := impl.querier.UpdateAsyncTask(ctx, &dbgen.UpdateAsyncTaskParams{
 		ID:          uuid,
 		Output:      output,
 		ProcessedAt: Timestampz(processedAt), // if processedAt.IsZero(), we set to NULL
 	}); err != nil {
 		slog.ErrorContext(ctx, "Failed to update async task", "id", UUIDToString(uuid), common.ErrAttr(err))
 		return err
+	} else {
+		slog.DebugContext(ctx, "Updated async task", "id", UUIDToString(uuid), "affected", affected)
 	}
 
 	cacheKey := asyncTaskCacheKey(UUIDToString(uuid))
@@ -3339,12 +3370,12 @@ func (impl *BusinessStoreImpl) DeleteDifficultyRule(ctx context.Context, org *db
 		OrgID:     Int(org.ID),
 	}
 
-	if err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
+	if affected, err := impl.querier.DeleteDifficultyRule(ctx, params); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete difficulty rule in DB", "ruleID", rule.ID, common.ErrAttr(err))
 		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Deleted difficulty rule", "ruleID", rule.ID, "affected", affected)
 	}
-
-	slog.InfoContext(ctx, "Deleted difficulty rule", "ruleID", rule.ID)
 
 	// Clear caches
 	if rule.PropertyID.Valid {

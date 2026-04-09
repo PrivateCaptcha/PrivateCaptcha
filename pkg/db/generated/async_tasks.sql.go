@@ -38,13 +38,16 @@ func (q *Queries) CreateAsyncTask(ctx context.Context, arg *CreateAsyncTaskParam
 	return id, err
 }
 
-const deleteOldAsyncTasks = `-- name: DeleteOldAsyncTasks :exec
+const deleteOldAsyncTasks = `-- name: DeleteOldAsyncTasks :execrows
 DELETE FROM backend.async_tasks WHERE created_at < $1
 `
 
-func (q *Queries) DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteOldAsyncTasks, createdAt)
-	return err
+func (q *Queries) DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldAsyncTasks, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getAsyncTask = `-- name: GetAsyncTask :one
@@ -125,7 +128,7 @@ func (q *Queries) GetPendingAsyncTasks(ctx context.Context, arg *GetPendingAsync
 	return items, nil
 }
 
-const updateAsyncTask = `-- name: UpdateAsyncTask :exec
+const updateAsyncTask = `-- name: UpdateAsyncTask :execrows
 UPDATE backend.async_tasks SET
   processed_at = $2,
   processing_attempts = processing_attempts + 1,
@@ -139,7 +142,10 @@ type UpdateAsyncTaskParams struct {
 	Output      []byte             `db:"output" json:"output"`
 }
 
-func (q *Queries) UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error {
-	_, err := q.db.Exec(ctx, updateAsyncTask, arg.ID, arg.ProcessedAt, arg.Output)
-	return err
+func (q *Queries) UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAsyncTask, arg.ID, arg.ProcessedAt, arg.Output)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

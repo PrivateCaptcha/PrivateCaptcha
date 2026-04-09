@@ -26,10 +26,10 @@ FROM backend.organizations o
 JOIN backend.organization_users ou ON o.id = ou.org_id
 WHERE ou.user_id = $1 AND o.deleted_at IS NULL;
 
--- name: SoftDeleteUserOrganization :exec
+-- name: SoftDeleteUserOrganization :execrows
 UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 AND user_id = $2;
 
--- name: SoftDeleteUserOrganizations :exec
+-- name: SoftDeleteUserOrganizations :execrows
 UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE user_id = $1;
 
 -- name: GetSoftDeletedOrganizations :many
@@ -41,8 +41,8 @@ WHERE o.deleted_at IS NOT NULL
   AND u.deleted_at IS NULL
 LIMIT $2;
 
--- name: DeleteOrganizations :exec
+-- name: DeleteOrganizations :execrows
 DELETE FROM backend.organizations WHERE id = ANY($1::INT[]);
 
--- name: TransferOrganization :exec
+-- name: TransferOrganization :execrows
 UPDATE backend.organizations SET user_id = $2, updated_at = NOW() WHERE id = $1 AND user_id = $3;

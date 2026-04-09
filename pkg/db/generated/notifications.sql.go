@@ -149,7 +149,7 @@ func (q *Queries) CreateUserNotification(ctx context.Context, arg *CreateUserNot
 	return &i, err
 }
 
-const deletePendingUserNotification = `-- name: DeletePendingUserNotification :exec
+const deletePendingUserNotification = `-- name: DeletePendingUserNotification :execrows
 DELETE FROM backend.user_notifications WHERE processed_at IS NULL AND user_id = $1 AND reference_id = $2
 `
 
@@ -158,36 +158,45 @@ type DeletePendingUserNotificationParams struct {
 	ReferenceID string      `db:"reference_id" json:"reference_id"`
 }
 
-func (q *Queries) DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) error {
-	_, err := q.db.Exec(ctx, deletePendingUserNotification, arg.UserID, arg.ReferenceID)
-	return err
+func (q *Queries) DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePendingUserNotification, arg.UserID, arg.ReferenceID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteProcessedUserNotifications = `-- name: DeleteProcessedUserNotifications :exec
+const deleteProcessedUserNotifications = `-- name: DeleteProcessedUserNotifications :execrows
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
 AND (persist_until IS NULL OR persist_until < NOW())
 AND processed_at < $1
 `
 
-func (q *Queries) DeleteProcessedUserNotifications(ctx context.Context, processedAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteProcessedUserNotifications, processedAt)
-	return err
+func (q *Queries) DeleteProcessedUserNotifications(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteProcessedUserNotifications, processedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteUnprocessedUserNotifications = `-- name: DeleteUnprocessedUserNotifications :exec
+const deleteUnprocessedUserNotifications = `-- name: DeleteUnprocessedUserNotifications :execrows
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
 AND (persist_until IS NULL OR persist_until < NOW())
 AND scheduled_at < $1
 `
 
-func (q *Queries) DeleteUnprocessedUserNotifications(ctx context.Context, scheduledAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteUnprocessedUserNotifications, scheduledAt)
-	return err
+func (q *Queries) DeleteUnprocessedUserNotifications(ctx context.Context, scheduledAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnprocessedUserNotifications, scheduledAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const deleteUnusedNotificationTemplates = `-- name: DeleteUnusedNotificationTemplates :exec
+const deleteUnusedNotificationTemplates = `-- name: DeleteUnusedNotificationTemplates :execrows
 DELETE FROM backend.notification_templates nt
 WHERE nt.id IN (
     SELECT nt2.id
@@ -203,9 +212,12 @@ type DeleteUnusedNotificationTemplatesParams struct {
 	UpdatedAt   pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 }
 
-func (q *Queries) DeleteUnusedNotificationTemplates(ctx context.Context, arg *DeleteUnusedNotificationTemplatesParams) error {
-	_, err := q.db.Exec(ctx, deleteUnusedNotificationTemplates, arg.ProcessedAt, arg.UpdatedAt)
-	return err
+func (q *Queries) DeleteUnusedNotificationTemplates(ctx context.Context, arg *DeleteUnusedNotificationTemplatesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUnusedNotificationTemplates, arg.ProcessedAt, arg.UpdatedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getLastActiveSystemNotification = `-- name: GetLastActiveSystemNotification :one
@@ -346,19 +358,22 @@ func (q *Queries) GetSystemNotificationById(ctx context.Context, id int32) (*Sys
 	return &i, err
 }
 
-const updateAttemptedUserNotifications = `-- name: UpdateAttemptedUserNotifications :exec
+const updateAttemptedUserNotifications = `-- name: UpdateAttemptedUserNotifications :execrows
 UPDATE backend.user_notifications SET
   processing_attempts = processing_attempts + 1,
   updated_at = NOW()
 WHERE id = ANY($1::INT[])
 `
 
-func (q *Queries) UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error {
-	_, err := q.db.Exec(ctx, updateAttemptedUserNotifications, dollar_1)
-	return err
+func (q *Queries) UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAttemptedUserNotifications, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const updateProcessedUserNotifications = `-- name: UpdateProcessedUserNotifications :exec
+const updateProcessedUserNotifications = `-- name: UpdateProcessedUserNotifications :execrows
 UPDATE backend.user_notifications SET
   processed_at = $1,
   processing_attempts = processing_attempts + 1,
@@ -371,7 +386,10 @@ type UpdateProcessedUserNotificationsParams struct {
 	Column2     []int32            `db:"column_2" json:"column_2"`
 }
 
-func (q *Queries) UpdateProcessedUserNotifications(ctx context.Context, arg *UpdateProcessedUserNotificationsParams) error {
-	_, err := q.db.Exec(ctx, updateProcessedUserNotifications, arg.ProcessedAt, arg.Column2)
-	return err
+func (q *Queries) UpdateProcessedUserNotifications(ctx context.Context, arg *UpdateProcessedUserNotificationsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateProcessedUserNotifications, arg.ProcessedAt, arg.Column2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

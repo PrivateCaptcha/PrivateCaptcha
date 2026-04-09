@@ -103,7 +103,7 @@ func (q *Queries) CreateDifficultyRule(ctx context.Context, arg *CreateDifficult
 	return &i, err
 }
 
-const deleteDifficultyRule = `-- name: DeleteDifficultyRule :exec
+const deleteDifficultyRule = `-- name: DeleteDifficultyRule :execrows
 DELETE FROM backend.difficulty_rules dr
 WHERE dr.id = $1
 AND (dr.creator_id = $2 OR $2 = $3)
@@ -117,14 +117,17 @@ type DeleteDifficultyRuleParams struct {
 	OrgID     pgtype.Int4 `db:"org_id" json:"org_id"`
 }
 
-func (q *Queries) DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) error {
-	_, err := q.db.Exec(ctx, deleteDifficultyRule,
+func (q *Queries) DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDifficultyRule,
 		arg.ID,
 		arg.CreatorID,
 		arg.Column3,
 		arg.OrgID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getDifficultyRuleByID = `-- name: GetDifficultyRuleByID :one

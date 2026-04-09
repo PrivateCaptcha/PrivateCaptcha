@@ -34,13 +34,16 @@ func (q *Queries) CreateOrganization(ctx context.Context, arg *CreateOrganizatio
 	return &i, err
 }
 
-const deleteOrganizations = `-- name: DeleteOrganizations :exec
+const deleteOrganizations = `-- name: DeleteOrganizations :execrows
 DELETE FROM backend.organizations WHERE id = ANY($1::INT[])
 `
 
-func (q *Queries) DeleteOrganizations(ctx context.Context, dollar_1 []int32) error {
-	_, err := q.db.Exec(ctx, deleteOrganizations, dollar_1)
-	return err
+func (q *Queries) DeleteOrganizations(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOrganizations, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const findUserOrgByName = `-- name: FindUserOrgByName :one
@@ -189,7 +192,7 @@ func (q *Queries) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) 
 	return items, nil
 }
 
-const softDeleteUserOrganization = `-- name: SoftDeleteUserOrganization :exec
+const softDeleteUserOrganization = `-- name: SoftDeleteUserOrganization :execrows
 UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 AND user_id = $2
 `
 
@@ -198,21 +201,27 @@ type SoftDeleteUserOrganizationParams struct {
 	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
-func (q *Queries) SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error {
-	_, err := q.db.Exec(ctx, softDeleteUserOrganization, arg.ID, arg.UserID)
-	return err
+func (q *Queries) SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteUserOrganization, arg.ID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const softDeleteUserOrganizations = `-- name: SoftDeleteUserOrganizations :exec
+const softDeleteUserOrganizations = `-- name: SoftDeleteUserOrganizations :execrows
 UPDATE backend.organizations SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE user_id = $1
 `
 
-func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error {
-	_, err := q.db.Exec(ctx, softDeleteUserOrganizations, userID)
-	return err
+func (q *Queries) SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteUserOrganizations, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const transferOrganization = `-- name: TransferOrganization :exec
+const transferOrganization = `-- name: TransferOrganization :execrows
 UPDATE backend.organizations SET user_id = $2, updated_at = NOW() WHERE id = $1 AND user_id = $3
 `
 
@@ -222,9 +231,12 @@ type TransferOrganizationParams struct {
 	UserID_2 pgtype.Int4 `db:"user_id_2" json:"user_id_2"`
 }
 
-func (q *Queries) TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) error {
-	_, err := q.db.Exec(ctx, transferOrganization, arg.ID, arg.UserID, arg.UserID_2)
-	return err
+func (q *Queries) TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, transferOrganization, arg.ID, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateOrganization = `-- name: UpdateOrganization :one

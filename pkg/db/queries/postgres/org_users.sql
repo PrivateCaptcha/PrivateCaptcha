@@ -22,16 +22,16 @@ SET user_id = $1, email = NULL, updated_at = NOW()
 WHERE id = $2 AND user_id IS NULL
 RETURNING *;
 
--- name: UpdateOrgMembershipLevel :exec
+-- name: UpdateOrgMembershipLevel :execrows
 UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4;
 
--- name: RemoveUserFromOrg :exec
+-- name: RemoveUserFromOrg :execrows
 DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2;
 
 -- name: RemoveUnlinkedOrgInviteByID :one
 DELETE FROM backend.organization_users WHERE id = $1 AND user_id IS NULL RETURNING email;
 
--- name: SwapOrgOwnership :exec
+-- name: SwapOrgOwnership :execrows
 WITH delete_new_owner AS (
     DELETE FROM backend.organization_users ou WHERE ou.org_id = $1 AND ou.user_id = $2
 ),

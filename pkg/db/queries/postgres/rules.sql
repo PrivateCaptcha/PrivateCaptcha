@@ -87,7 +87,7 @@ SELECT
 FROM upd
 CROSS JOIN old;
 
--- name: DeleteDifficultyRule :exec
+-- name: DeleteDifficultyRule :execrows
 DELETE FROM backend.difficulty_rules dr
 WHERE dr.id = $1
 AND (dr.creator_id = $2 OR $2 = $3)

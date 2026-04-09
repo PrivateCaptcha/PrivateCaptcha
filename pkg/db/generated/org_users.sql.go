@@ -184,7 +184,7 @@ func (q *Queries) RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pg
 	return email, err
 }
 
-const removeUserFromOrg = `-- name: RemoveUserFromOrg :exec
+const removeUserFromOrg = `-- name: RemoveUserFromOrg :execrows
 DELETE FROM backend.organization_users WHERE org_id = $1 AND user_id = $2
 `
 
@@ -193,12 +193,15 @@ type RemoveUserFromOrgParams struct {
 	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
 }
 
-func (q *Queries) RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error {
-	_, err := q.db.Exec(ctx, removeUserFromOrg, arg.OrgID, arg.UserID)
-	return err
+func (q *Queries) RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeUserFromOrg, arg.OrgID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const swapOrgOwnership = `-- name: SwapOrgOwnership :exec
+const swapOrgOwnership = `-- name: SwapOrgOwnership :execrows
 WITH delete_new_owner AS (
     DELETE FROM backend.organization_users ou WHERE ou.org_id = $1 AND ou.user_id = $2
 ),
@@ -222,12 +225,15 @@ type SwapOrgOwnershipParams struct {
 	UserID_2 pgtype.Int4 `db:"user_id_2" json:"user_id_2"`
 }
 
-func (q *Queries) SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) error {
-	_, err := q.db.Exec(ctx, swapOrgOwnership, arg.OrgID, arg.UserID, arg.UserID_2)
-	return err
+func (q *Queries) SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, swapOrgOwnership, arg.OrgID, arg.UserID, arg.UserID_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const updateOrgMembershipLevel = `-- name: UpdateOrgMembershipLevel :exec
+const updateOrgMembershipLevel = `-- name: UpdateOrgMembershipLevel :execrows
 UPDATE backend.organization_users SET level = $1, updated_at = NOW() WHERE org_id = $2 AND user_id = $3 AND level = $4
 `
 
@@ -238,12 +244,15 @@ type UpdateOrgMembershipLevelParams struct {
 	Level_2 AccessLevel `db:"level_2" json:"level_2"`
 }
 
-func (q *Queries) UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) error {
-	_, err := q.db.Exec(ctx, updateOrgMembershipLevel,
+func (q *Queries) UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateOrgMembershipLevel,
 		arg.Level,
 		arg.OrgID,
 		arg.UserID,
 		arg.Level_2,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

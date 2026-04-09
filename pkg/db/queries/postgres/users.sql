@@ -23,7 +23,7 @@ WHERE u.deleted_at IS NOT NULL
   AND u.deleted_at < $1
 LIMIT $2;
 
--- name: DeleteUsers :exec
+-- name: DeleteUsers :execrows
 DELETE FROM backend.users WHERE id = ANY($1::INT[]);
 
 -- name: GetUsersWithoutSubscription :many

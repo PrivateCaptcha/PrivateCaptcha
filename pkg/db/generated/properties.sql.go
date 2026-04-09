@@ -70,13 +70,16 @@ func (q *Queries) CreateProperty(ctx context.Context, arg *CreatePropertyParams)
 	return &i, err
 }
 
-const deleteProperties = `-- name: DeleteProperties :exec
+const deleteProperties = `-- name: DeleteProperties :execrows
 DELETE FROM backend.properties WHERE id = ANY($1::INT[])
 `
 
-func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) error {
-	_, err := q.db.Exec(ctx, deleteProperties, dollar_1)
-	return err
+func (q *Queries) DeleteProperties(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteProperties, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getOrgProperties = `-- name: GetOrgProperties :many
@@ -556,7 +559,7 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 	return &i, err
 }
 
-const transferOrgProperties = `-- name: TransferOrgProperties :exec
+const transferOrgProperties = `-- name: TransferOrgProperties :execrows
 UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3
 `
 
@@ -566,9 +569,12 @@ type TransferOrgPropertiesParams struct {
 	OrgOwnerID_2 pgtype.Int4 `db:"org_owner_id_2" json:"org_owner_id_2"`
 }
 
-func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) error {
-	_, err := q.db.Exec(ctx, transferOrgProperties, arg.OrgID, arg.OrgOwnerID, arg.OrgOwnerID_2)
-	return err
+func (q *Queries) TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, transferOrgProperties, arg.OrgID, arg.OrgOwnerID, arg.OrgOwnerID_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateProperty = `-- name: UpdateProperty :one

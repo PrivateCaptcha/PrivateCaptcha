@@ -25,13 +25,16 @@ type CreateAuditLogsParams struct {
 	IpAddress   *netip.Addr        `db:"ip_address" json:"ip_address"`
 }
 
-const deleteOldAuditLogs = `-- name: DeleteOldAuditLogs :exec
+const deleteOldAuditLogs = `-- name: DeleteOldAuditLogs :execrows
 DELETE FROM backend.audit_logs WHERE created_at < $1
 `
 
-func (q *Queries) DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteOldAuditLogs, createdAt)
-	return err
+func (q *Queries) DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldAuditLogs, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getOrgAuditLogs = `-- name: GetOrgAuditLogs :many
