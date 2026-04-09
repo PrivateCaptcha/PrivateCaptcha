@@ -79,7 +79,7 @@ WHERE p.deleted_at IS NOT NULL
   AND u.deleted_at IS NULL
 LIMIT $2;
 
--- name: DeleteProperties :exec
+-- name: DeleteProperties :execrows
 DELETE FROM backend.properties WHERE id = ANY($1::INT[]);
 
 -- name: GetProperties :many
@@ -91,5 +91,5 @@ SELECT COUNT(*) as count FROM backend.properties WHERE org_owner_id = $1 AND del
 -- name: GetOrgPropertiesCount :one
 SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_at IS NULL;
 
--- name: TransferOrgProperties :exec
+-- name: TransferOrgProperties :execrows
 UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3;

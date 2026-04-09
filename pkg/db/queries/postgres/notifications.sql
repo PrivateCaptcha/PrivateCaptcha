@@ -47,17 +47,17 @@ WHERE backend.user_notifications.processed_at IS NOT NULL
   AND backend.user_notifications.persist_until < NOW()
 RETURNING *;
 
--- name: DeletePendingUserNotification :exec
+-- name: DeletePendingUserNotification :execrows
 DELETE FROM backend.user_notifications WHERE processed_at IS NULL AND user_id = $1 AND reference_id = $2;
 
--- name: UpdateProcessedUserNotifications :exec
+-- name: UpdateProcessedUserNotifications :execrows
 UPDATE backend.user_notifications SET
   processed_at = $1,
   processing_attempts = processing_attempts + 1,
   updated_at = NOW()
 WHERE id = ANY($2::INT[]);
 
--- name: UpdateAttemptedUserNotifications :exec
+-- name: UpdateAttemptedUserNotifications :execrows
 UPDATE backend.user_notifications SET
   processing_attempts = processing_attempts + 1,
   updated_at = NOW()
@@ -77,7 +77,7 @@ WHERE un.processed_at IS NULL
 ORDER BY un.scheduled_at ASC
 LIMIT $3;
 
--- name: DeleteUnusedNotificationTemplates :exec
+-- name: DeleteUnusedNotificationTemplates :execrows
 DELETE FROM backend.notification_templates nt
 WHERE nt.id IN (
     SELECT nt2.id
@@ -87,13 +87,13 @@ WHERE nt.id IN (
     AND (nt2.updated_at < $2)
 );
 
--- name: DeleteProcessedUserNotifications :exec
+-- name: DeleteProcessedUserNotifications :execrows
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NOT NULL
 AND (persist_until IS NULL OR persist_until < NOW())
 AND processed_at < $1;
 
--- name: DeleteUnprocessedUserNotifications :exec
+-- name: DeleteUnprocessedUserNotifications :execrows
 DELETE FROM backend.user_notifications
 WHERE processed_at IS NULL
 AND (persist_until IS NULL OR persist_until < NOW())

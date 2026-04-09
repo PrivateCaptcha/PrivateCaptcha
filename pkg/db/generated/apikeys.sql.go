@@ -95,13 +95,16 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*A
 	return &i, err
 }
 
-const deleteUserAPIKeys = `-- name: DeleteUserAPIKeys :exec
+const deleteUserAPIKeys = `-- name: DeleteUserAPIKeys :execrows
 DELETE FROM backend.apikeys WHERE user_id = $1
 `
 
-func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) error {
-	_, err := q.db.Exec(ctx, deleteUserAPIKeys, userID)
-	return err
+func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserAPIKeys, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one
@@ -273,11 +276,14 @@ func (q *Queries) UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*A
 	return &i, err
 }
 
-const updateAPIKeysLastUsedAt = `-- name: UpdateAPIKeysLastUsedAt :exec
+const updateAPIKeysLastUsedAt = `-- name: UpdateAPIKeysLastUsedAt :execrows
 UPDATE backend.apikeys SET last_used_at = NOW() WHERE id = ANY($1::int[])
 `
 
-func (q *Queries) UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) error {
-	_, err := q.db.Exec(ctx, updateAPIKeysLastUsedAt, dollar_1)
-	return err
+func (q *Queries) UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, updateAPIKeysLastUsedAt, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

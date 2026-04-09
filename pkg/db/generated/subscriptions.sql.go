@@ -83,7 +83,7 @@ func (q *Queries) GetSubscriptionByID(ctx context.Context, id int32) (*Subscript
 	return &i, err
 }
 
-const updateInternalSubscriptions = `-- name: UpdateInternalSubscriptions :exec
+const updateInternalSubscriptions = `-- name: UpdateInternalSubscriptions :execrows
 UPDATE backend.subscriptions
 SET status = $1, updated_at = NOW()
 WHERE
@@ -101,12 +101,15 @@ type UpdateInternalSubscriptionsParams struct {
 	Status_2      string             `db:"status_2" json:"status_2"`
 }
 
-func (q *Queries) UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) error {
-	_, err := q.db.Exec(ctx, updateInternalSubscriptions,
+func (q *Queries) UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateInternalSubscriptions,
 		arg.Status,
 		arg.TrialEndsAt,
 		arg.TrialEndsAt_2,
 		arg.Status_2,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

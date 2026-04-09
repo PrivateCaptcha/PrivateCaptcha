@@ -37,13 +37,16 @@ func (q *Queries) CreateUser(ctx context.Context, arg *CreateUserParams) (*User,
 	return &i, err
 }
 
-const deleteUsers = `-- name: DeleteUsers :exec
+const deleteUsers = `-- name: DeleteUsers :execrows
 DELETE FROM backend.users WHERE id = ANY($1::INT[])
 `
 
-func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) error {
-	_, err := q.db.Exec(ctx, deleteUsers, dollar_1)
-	return err
+func (q *Queries) DeleteUsers(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUsers, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getSoftDeletedUsers = `-- name: GetSoftDeletedUsers :many

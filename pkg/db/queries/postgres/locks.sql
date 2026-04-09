@@ -6,7 +6,7 @@ SET expires_at = EXCLUDED.expires_at
 WHERE locks.expires_at <= NOW()
 RETURNING *;
 
--- name: DeleteLock :exec
+-- name: DeleteLock :execrows
 DELETE FROM backend.locks WHERE name = $1;
 
 -- name: GetLock :one

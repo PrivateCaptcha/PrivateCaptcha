@@ -20,12 +20,12 @@ ORDER BY
     random()
 LIMIT $3;
 
--- name: UpdateAsyncTask :exec
+-- name: UpdateAsyncTask :execrows
 UPDATE backend.async_tasks SET
   processed_at = $2,
   processing_attempts = processing_attempts + 1,
   output = $3
 WHERE id = $1;
 
--- name: DeleteOldAsyncTasks :exec
+-- name: DeleteOldAsyncTasks :execrows
 DELETE FROM backend.async_tasks WHERE created_at < $1;

@@ -14,8 +14,8 @@ type Querier interface {
 	CreateAPIKey(ctx context.Context, arg *CreateAPIKeyParams) (*APIKey, error)
 	CreateAsyncTask(ctx context.Context, arg *CreateAsyncTaskParams) (pgtype.UUID, error)
 	CreateAuditLogs(ctx context.Context, arg []*CreateAuditLogsParams) (int64, error)
-	CreateCache(ctx context.Context, arg *CreateCacheParams) error
-	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) error
+	CreateCache(ctx context.Context, arg *CreateCacheParams) (int64, error)
+	CreateCacheMany(ctx context.Context, arg *CreateCacheManyParams) (int64, error)
 	CreateDifficultyRule(ctx context.Context, arg *CreateDifficultyRuleParams) (*DifficultyRule, error)
 	CreateNotificationTemplate(ctx context.Context, arg *CreateNotificationTemplateParams) (*NotificationTemplate, error)
 	CreateOrganization(ctx context.Context, arg *CreateOrganizationParams) (*Organization, error)
@@ -25,21 +25,21 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
 	CreateUserNotification(ctx context.Context, arg *CreateUserNotificationParams) (*UserNotification, error)
 	DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*APIKey, error)
-	DeleteCachedByKey(ctx context.Context, key string) error
-	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error
-	DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) error
-	DeleteExpiredCache(ctx context.Context) error
-	DeleteLock(ctx context.Context, name string) error
-	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) error
-	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) error
-	DeleteOrganizations(ctx context.Context, dollar_1 []int32) error
-	DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) error
-	DeleteProcessedUserNotifications(ctx context.Context, processedAt pgtype.Timestamptz) error
-	DeleteProperties(ctx context.Context, dollar_1 []int32) error
-	DeleteUnprocessedUserNotifications(ctx context.Context, scheduledAt pgtype.Timestamptz) error
-	DeleteUnusedNotificationTemplates(ctx context.Context, arg *DeleteUnusedNotificationTemplatesParams) error
-	DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) error
-	DeleteUsers(ctx context.Context, dollar_1 []int32) error
+	DeleteCachedByKey(ctx context.Context, key string) (int64, error)
+	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error)
+	DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) (int64, error)
+	DeleteExpiredCache(ctx context.Context) (int64, error)
+	DeleteLock(ctx context.Context, name string) (int64, error)
+	DeleteOldAsyncTasks(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
+	DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Timestamptz) (int64, error)
+	DeleteOrganizations(ctx context.Context, dollar_1 []int32) (int64, error)
+	DeletePendingUserNotification(ctx context.Context, arg *DeletePendingUserNotificationParams) (int64, error)
+	DeleteProcessedUserNotifications(ctx context.Context, processedAt pgtype.Timestamptz) (int64, error)
+	DeleteProperties(ctx context.Context, dollar_1 []int32) (int64, error)
+	DeleteUnprocessedUserNotifications(ctx context.Context, scheduledAt pgtype.Timestamptz) (int64, error)
+	DeleteUnusedNotificationTemplates(ctx context.Context, arg *DeleteUnusedNotificationTemplatesParams) (int64, error)
+	DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) (int64, error)
+	DeleteUsers(ctx context.Context, dollar_1 []int32) (int64, error)
 	FindUserOrgByName(ctx context.Context, arg *FindUserOrgByNameParams) (*Organization, error)
 	GetAPIKeyByExternalID(ctx context.Context, externalID pgtype.UUID) (*APIKey, error)
 	GetAsyncTask(ctx context.Context, id pgtype.UUID) (*AsyncTask, error)
@@ -91,26 +91,26 @@ type Querier interface {
 	Ping(ctx context.Context) (int32, error)
 	RebalanceDifficultyRules(ctx context.Context, arg *RebalanceDifficultyRulesParams) ([]int32, error)
 	RemoveUnlinkedOrgInviteByID(ctx context.Context, id int32) (pgtype.Text, error)
-	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) error
+	RemoveUserFromOrg(ctx context.Context, arg *RemoveUserFromOrgParams) (int64, error)
 	RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error)
 	SoftDeleteProperties(ctx context.Context, arg *SoftDeletePropertiesParams) ([]*Property, error)
 	SoftDeleteProperty(ctx context.Context, id int32) (*Property, error)
 	SoftDeleteUser(ctx context.Context, id int32) (*User, error)
-	SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) error
-	SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) error
-	SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) error
-	TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) error
-	TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) error
+	SoftDeleteUserOrganization(ctx context.Context, arg *SoftDeleteUserOrganizationParams) (int64, error)
+	SoftDeleteUserOrganizations(ctx context.Context, userID pgtype.Int4) (int64, error)
+	SwapOrgOwnership(ctx context.Context, arg *SwapOrgOwnershipParams) (int64, error)
+	TransferOrgProperties(ctx context.Context, arg *TransferOrgPropertiesParams) (int64, error)
+	TransferOrganization(ctx context.Context, arg *TransferOrganizationParams) (int64, error)
 	UpdateAPIKey(ctx context.Context, arg *UpdateAPIKeyParams) (*APIKey, error)
-	UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) error
-	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) error
-	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) error
-	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) error
+	UpdateAPIKeysLastUsedAt(ctx context.Context, dollar_1 []int32) (int64, error)
+	UpdateAsyncTask(ctx context.Context, arg *UpdateAsyncTaskParams) (int64, error)
+	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) (int64, error)
+	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) (int64, error)
 	UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficultyRuleParams) (*UpdateDifficultyRuleRow, error)
-	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) error
-	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) error
+	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) (int64, error)
+	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) (int64, error)
 	UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error)
-	UpdateProcessedUserNotifications(ctx context.Context, arg *UpdateProcessedUserNotificationsParams) error
+	UpdateProcessedUserNotifications(ctx context.Context, arg *UpdateProcessedUserNotificationsParams) (int64, error)
 	UpdateProperty(ctx context.Context, arg *UpdatePropertyParams) (*UpdatePropertyRow, error)
 	UpdateUserData(ctx context.Context, arg *UpdateUserDataParams) (*User, error)
 	UpdateUserSubscription(ctx context.Context, arg *UpdateUserSubscriptionParams) (*User, error)

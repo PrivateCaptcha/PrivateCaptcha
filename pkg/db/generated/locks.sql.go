@@ -11,13 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteLock = `-- name: DeleteLock :exec
+const deleteLock = `-- name: DeleteLock :execrows
 DELETE FROM backend.locks WHERE name = $1
 `
 
-func (q *Queries) DeleteLock(ctx context.Context, name string) error {
-	_, err := q.db.Exec(ctx, deleteLock, name)
-	return err
+func (q *Queries) DeleteLock(ctx context.Context, name string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteLock, name)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getLock = `-- name: GetLock :one

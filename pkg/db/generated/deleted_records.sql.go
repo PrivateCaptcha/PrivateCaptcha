@@ -11,11 +11,14 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const deleteDeletedRecords = `-- name: DeleteDeletedRecords :exec
+const deleteDeletedRecords = `-- name: DeleteDeletedRecords :execrows
 DELETE FROM backend.deleted_records WHERE deleted_at < $1
 `
 
-func (q *Queries) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) error {
-	_, err := q.db.Exec(ctx, deleteDeletedRecords, deletedAt)
-	return err
+func (q *Queries) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteDeletedRecords, deletedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

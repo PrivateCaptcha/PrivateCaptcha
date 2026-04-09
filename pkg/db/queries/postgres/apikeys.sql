@@ -16,11 +16,11 @@ UPDATE backend.apikeys SET expires_at = $1, enabled = $2, updated_at = NOW() WHE
 -- name: RotateAPIKey :one
 UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING *;
 
--- name: DeleteUserAPIKeys :exec
+-- name: DeleteUserAPIKeys :execrows
 DELETE FROM backend.apikeys WHERE user_id = $1;
 
 -- name: DeleteAPIKey :one
 DELETE FROM backend.apikeys WHERE id=$1 AND user_id = $2 RETURNING *;
 
--- name: UpdateAPIKeysLastUsedAt :exec
+-- name: UpdateAPIKeysLastUsedAt :execrows
 UPDATE backend.apikeys SET last_used_at = NOW() WHERE id = ANY($1::int[]);

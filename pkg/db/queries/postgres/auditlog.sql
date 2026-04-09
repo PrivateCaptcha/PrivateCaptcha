@@ -2,7 +2,7 @@
 INSERT INTO backend.audit_logs (user_id, action, source, entity_id, entity_table, session_id, old_value, new_value, created_at, ip_address)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 
--- name: DeleteOldAuditLogs :exec
+-- name: DeleteOldAuditLogs :execrows
 DELETE FROM backend.audit_logs WHERE created_at < $1;
 
 -- name: GetUserAuditLogs :many
