@@ -44,7 +44,7 @@ const (
 
 type portalBaseRenderContext struct {
 	CsrfRenderContext
-	systemNotificationContext
+	SystemNotificationContext
 	Orgs       []*UserOrg
 	CurrentOrg *UserOrg
 	Tab        int
@@ -197,7 +197,7 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 func (s *Server) createPortalTabBaseContext(org *dbgen.Organization, user *dbgen.User, tab int) *portalBaseRenderContext {
 	return &portalBaseRenderContext{
 		CsrfRenderContext:         s.CreateCsrfContext(user),
-		systemNotificationContext: systemNotificationContext{},
+		SystemNotificationContext: SystemNotificationContext{},
 		CurrentOrg:                orgToUserOrg(org, user.ID, s.IDHasher),
 		Tab:                       tab,
 		CanEdit:                   org.UserID.Int32 == user.ID,
@@ -238,7 +238,7 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 
 	renderCtx := &portalBaseRenderContext{
 		CsrfRenderContext:         s.CreateCsrfContext(user),
-		systemNotificationContext: s.createSystemNotificationContext(ctx, sess),
+		SystemNotificationContext: s.NotificationFunc(ctx, sess),
 		Orgs:                      orgsToUserOrgs(orgs, s.IDHasher),
 		CurrentOrg:                stubUserOrg,
 		Tab:                       tab,

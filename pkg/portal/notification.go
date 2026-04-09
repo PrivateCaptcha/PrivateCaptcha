@@ -9,8 +9,8 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
-func (s *Server) createSystemNotificationContext(ctx context.Context, sess *session.Session) systemNotificationContext {
-	renderCtx := systemNotificationContext{}
+func (s *Server) createSystemNotificationContext(ctx context.Context, sess *session.Session) SystemNotificationContext {
+	renderCtx := SystemNotificationContext{}
 
 	if notificationID, ok := sess.Get(ctx, session.KeyNotificationID).(int32); ok {
 		if notification, err := s.Store.Impl().RetrieveSystemNotification(ctx, notificationID); err == nil {

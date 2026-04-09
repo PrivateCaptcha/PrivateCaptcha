@@ -65,6 +65,7 @@ type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, erro
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
 type PropertyRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
 type OrgRulesConstructor func(http.ResponseWriter, *http.Request) (Model, *common.AuditLogEvent, error)
+type SystemNotificationConstructor func(context.Context, *session.Session) SystemNotificationContext
 
 // AuditLogParser is a function type for parsing custom audit log types.
 // It receives the context, the raw audit log, and a pointer to the UserAuditLog to populate.
@@ -95,7 +96,7 @@ type CsrfRenderContext struct {
 	Token string
 }
 
-type systemNotificationContext struct {
+type SystemNotificationContext struct {
 	Notification   string
 	NotificationID string
 }
@@ -173,6 +174,7 @@ type Server struct {
 	TwoFactorDuration  time.Duration
 	LicenseService     common.LicenseService
 	Rules              *RuleRegistry
+	NotificationFunc   SystemNotificationConstructor
 }
 
 func (s *Server) createSettingsTabs() []*SettingsTab {
@@ -228,6 +230,7 @@ func (s *Server) Init(ctx context.Context, templateBuilder *TemplatesBuilder, gi
 		return s.CreateOrgRulesContext(w, r)
 	}
 	s.Rules = NewRuleRegistry()
+	s.NotificationFunc = s.createSystemNotificationContext
 
 	platformCtx := &PlatformRenderContext{
 		GitCommit:      gitCommit,
