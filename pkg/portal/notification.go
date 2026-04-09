@@ -32,15 +32,19 @@ func (s *Server) dismissNotification(w http.ResponseWriter, r *http.Request) {
 
 	id, value, err := common.IntPathArg(r, common.ParamID, s.IDHasher)
 	if err == nil {
-		if notificationID, ok := sess.Get(ctx, session.KeyNotificationID).(int32); ok {
-			if notificationID != int32(id) {
-				slog.ErrorContext(ctx, "Mismatch between notification ID in session", "session", notificationID, "param", id)
+		if id != 0 {
+			if notificationID, ok := sess.Get(ctx, session.KeyNotificationID).(int32); ok {
+				if notificationID != int32(id) {
+					slog.ErrorContext(ctx, "Mismatch between notification ID in session", "session", notificationID, "param", id)
+				}
 			}
-		}
-		if derr := sess.Delete(ctx, session.KeyNotificationID); derr != nil {
-			slog.ErrorContext(ctx, "Failed to dismiss notification", "id", id, common.ErrAttr(derr))
+			if derr := sess.Delete(ctx, session.KeyNotificationID); derr != nil {
+				slog.ErrorContext(ctx, "Failed to dismiss notification", "id", id, common.ErrAttr(derr))
+			} else {
+				slog.InfoContext(ctx, "Dismissed notification", "id", id)
+			}
 		} else {
-			slog.InfoContext(ctx, "Dismissed notification", "id", id)
+			slog.DebugContext(ctx, "Skipping dismissing stub system notification")
 		}
 		w.WriteHeader(http.StatusOK)
 	} else {
