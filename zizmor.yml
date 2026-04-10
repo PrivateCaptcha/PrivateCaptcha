@@ -3,3 +3,4 @@ rules:
     ignore:
       - ci.yaml
       - docker.yaml
+      - cla.yml
