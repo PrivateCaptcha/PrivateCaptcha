@@ -548,6 +548,7 @@ type Property struct {
 	AllowLocalhost   bool               `db:"allow_localhost" json:"allow_localhost"`
 	MaxReplayCount   int32              `db:"max_replay_count" json:"max_replay_count"`
 	Enabled          bool               `db:"enabled" json:"enabled"`
+	ShowNotice       bool               `db:"show_notice" json:"show_notice"`
 }
 
 type Subscription struct {

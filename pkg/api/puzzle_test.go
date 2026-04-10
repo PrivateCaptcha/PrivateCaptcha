@@ -705,8 +705,22 @@ func TestGetPuzzleWithNoticeHeader(t *testing.T) {
 		t.Errorf("Unexpected status code %d", resp.StatusCode)
 	}
 
-	noticeHeader := resp.Header.Get(common.HeaderWidgetNotice)
-	if noticeHeader != "test notice message" {
+	if noticeHeader := resp.Header.Get(common.HeaderWidgetNotice); len(noticeHeader) > 0 {
+		t.Errorf("Expected empty notice header without property flag, got %q", noticeHeader)
+	}
+
+	property.ShowNotice = true
+
+	resp, err = puzzleSuite(ctx, db.UUIDToSiteKey(property.ExternalID), property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("Unexpected status code %d", resp.StatusCode)
+	}
+
+	if noticeHeader := resp.Header.Get(common.HeaderWidgetNotice); noticeHeader != "test notice message" {
 		t.Errorf("Expected notice header %q, got %q", "test notice message", noticeHeader)
 	}
 }

@@ -1,0 +1,1 @@
+ALTER TABLE backend.properties ADD COLUMN show_notice BOOL NOT NULL DEFAULT FALSE;
