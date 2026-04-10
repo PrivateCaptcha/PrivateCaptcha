@@ -163,6 +163,8 @@ sqlc:
 	# https://github.com/sqlc-dev/sqlc/issues/3571
 	echo "CREATE SCHEMA backend;" > $(SQLC_MIGRATION_FIX)
 	cd pkg/db && sqlc generate --no-remote
+	go run cmd/clumpbools/main.go -w pkg/db/generated/models.go
+	gofmt -w pkg/db/generated/models.go
 	rm -v $(SQLC_MIGRATION_FIX)
 
 vet-sqlc:

@@ -427,8 +427,8 @@ type APIKey struct {
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	Period            time.Duration      `db:"period" json:"period"`
 	Scope             ApiKeyScope        `db:"scope" json:"scope"`
-	Readonly          bool               `db:"readonly" json:"readonly"`
 	LastUsedAt        pgtype.Timestamptz `db:"last_used_at" json:"last_used_at"`
+	Readonly          bool               `db:"readonly" json:"readonly"`
 }
 
 type AsyncTask struct {
@@ -479,19 +479,19 @@ type DifficultyRule struct {
 	PropertyID               pgtype.Int4           `db:"property_id" json:"property_id"`
 	OrgID                    pgtype.Int4           `db:"org_id" json:"org_id"`
 	CreatorID                pgtype.Int4           `db:"creator_id" json:"creator_id"`
-	Enabled                  bool                  `db:"enabled" json:"enabled"`
 	ConditionProperty        RuleConditionProperty `db:"condition_property" json:"condition_property"`
 	ConditionOperator        RuleConditionOperator `db:"condition_operator" json:"condition_operator"`
-	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
 	ConditionValueStr        pgtype.Text           `db:"condition_value_str" json:"condition_value_str"`
 	ConditionValueInt        pgtype.Int4           `db:"condition_value_int" json:"condition_value_int"`
 	ConditionValueSeparator  pgtype.Text           `db:"condition_value_separator" json:"condition_value_separator"`
 	Position                 float64               `db:"position" json:"position"`
 	ActionProperty           RuleActionProperty    `db:"action_property" json:"action_property"`
 	ActionValue              int32                 `db:"action_value" json:"action_value"`
-	Terminal                 bool                  `db:"terminal" json:"terminal"`
 	CreatedAt                pgtype.Timestamptz    `db:"created_at" json:"created_at"`
 	UpdatedAt                pgtype.Timestamptz    `db:"updated_at" json:"updated_at"`
+	Enabled                  bool                  `db:"enabled" json:"enabled"`
+	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
+	Terminal                 bool                  `db:"terminal" json:"terminal"`
 }
 
 type Lock struct {
@@ -544,9 +544,9 @@ type Property struct {
 	UpdatedAt        pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	ValidityInterval time.Duration      `db:"validity_interval" json:"validity_interval"`
+	MaxReplayCount   int32              `db:"max_replay_count" json:"max_replay_count"`
 	AllowSubdomains  bool               `db:"allow_subdomains" json:"allow_subdomains"`
 	AllowLocalhost   bool               `db:"allow_localhost" json:"allow_localhost"`
-	MaxReplayCount   int32              `db:"max_replay_count" json:"max_replay_count"`
 	Enabled          bool               `db:"enabled" json:"enabled"`
 	ShowNotice       bool               `db:"show_notice" json:"show_notice"`
 }
@@ -609,9 +609,9 @@ type UserNotification struct {
 type UserSettings struct {
 	ID                 int32              `db:"id" json:"id"`
 	UserID             int32              `db:"user_id" json:"user_id"`
-	WeeklyReport       bool               `db:"weekly_report" json:"weekly_report"`
-	MonthlyReport      bool               `db:"monthly_report" json:"monthly_report"`
 	NotificationsEmail pgtype.Text        `db:"notifications_email" json:"notifications_email"`
 	CreatedAt          pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt          pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	WeeklyReport       bool               `db:"weekly_report" json:"weekly_report"`
+	MonthlyReport      bool               `db:"monthly_report" json:"monthly_report"`
 }
