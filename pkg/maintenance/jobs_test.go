@@ -10,7 +10,7 @@ import (
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
+	"github.com/justinas/alice"
 )
 
 type stubOneOffJob struct {
@@ -81,7 +81,7 @@ func (j *stubPeriodicJob) wasExecuted() bool {
 }
 
 func TestOneOffJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubOneOffJob{}
@@ -98,7 +98,7 @@ func TestOneOffJobExecution(t *testing.T) {
 }
 
 func TestPeriodicJobExecution(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{
@@ -116,23 +116,8 @@ func TestPeriodicJobExecution(t *testing.T) {
 	}
 }
 
-func TestJobsSetup(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
-	defer jobsManager.Shutdown()
-
-	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-
-	jobsManager.Setup(mux, cfg)
-
-	if jobsManager.apiKey != "test-api-key" {
-		t.Errorf("Expected apiKey to be 'test-api-key', got '%s'", jobsManager.apiKey)
-	}
-}
-
 func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{
@@ -141,9 +126,7 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 	jobsManager.Add(stubJob)
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
 	req.Header.Set(common.HeaderAPIKey, "test-api-key")
@@ -160,13 +143,11 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
 	w := httptest.NewRecorder()
@@ -178,13 +159,11 @@ func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/stubPeriodicJob", nil)
 	req.Header.Set(common.HeaderAPIKey, "wrong-key")
@@ -197,13 +176,11 @@ func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 }
 
 func TestHandlePeriodicJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/nonexistent", nil)
 	req.Header.Set(common.HeaderAPIKey, "test-api-key")
@@ -216,7 +193,7 @@ func TestHandlePeriodicJobNotFound(t *testing.T) {
 }
 
 func TestHandleOneOffJobWithAPIKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubOneOffJob{}
@@ -225,7 +202,7 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 	mux := http.NewServeMux()
 	cfg := config.NewBaseConfig(nil)
 	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New())
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/oneoff/stubOneOffJob", nil)
 	req.Header.Set(common.HeaderAPIKey, "test-api-key")
@@ -242,13 +219,11 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 }
 
 func TestHandleOneOffJobNotFound(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "test-api-key"))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/oneoff/nonexistent", nil)
 	req.Header.Set(common.HeaderAPIKey, "test-api-key")
@@ -261,13 +236,11 @@ func TestHandleOneOffJobNotFound(t *testing.T) {
 }
 
 func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	mux := http.NewServeMux()
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, ""))
-	jobsManager.Setup(mux, cfg)
+	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("")))
 
 	req := httptest.NewRequest(http.MethodPost, "/maintenance/periodic/test", nil)
 	req.Header.Set(common.HeaderAPIKey, "any-key")
@@ -279,22 +252,8 @@ func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 	}
 }
 
-func TestJobsUpdateConfig(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
-	defer jobsManager.Shutdown()
-
-	cfg := config.NewBaseConfig(nil)
-	cfg.Add(config.NewStaticValue(common.LocalAPIKeyKey, "updated-key"))
-
-	jobsManager.UpdateConfig(cfg)
-
-	if jobsManager.apiKey != "updated-key" {
-		t.Errorf("Expected apiKey to be 'updated-key', got '%s'", jobsManager.apiKey)
-	}
-}
-
 func TestJobsSpawn(t *testing.T) {
-	jobsManager := NewJobs(nil, 2, monitoring.NewStub())
+	jobsManager := NewJobs(nil, 2)
 	defer jobsManager.Shutdown()
 
 	stubJob := &stubPeriodicJob{

@@ -12,9 +12,11 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/justinas/alice"
 )
 
-func NewJobs(store db.Implementor, concurrency int, metrics common.BaseMetrics) *jobs {
+func NewJobs(store db.Implementor, concurrency int) *jobs {
 	if concurrency < 1 {
 		concurrency = 1
 	}
@@ -23,7 +25,6 @@ func NewJobs(store db.Implementor, concurrency int, metrics common.BaseMetrics) 
 		periodicJobs: make([]common.PeriodicJob, 0),
 		oneOffJobs:   make([]common.OneOffJob, 0),
 		sem:          semaphore.NewWeighted(int64(concurrency)),
-		metrics:      metrics,
 	}
 
 	j.maintenanceCtx, j.maintenanceCancel = context.WithCancel(
@@ -34,12 +35,10 @@ func NewJobs(store db.Implementor, concurrency int, metrics common.BaseMetrics) 
 
 type jobs struct {
 	store             db.Implementor
-	metrics           common.BaseMetrics
 	periodicJobs      []common.PeriodicJob
 	oneOffJobs        []common.OneOffJob
 	maintenanceCancel context.CancelFunc
 	maintenanceCtx    context.Context
-	apiKey            string
 	sem               *semaphore.Weighted
 }
 
@@ -85,46 +84,10 @@ func (j *jobs) RunAll() {
 	}
 }
 
-func (j *jobs) UpdateConfig(cfg common.ConfigStore) {
-	j.apiKey = cfg.Get(common.LocalAPIKeyKey).Value()
-}
-
-func (j *jobs) Setup(mux *http.ServeMux, cfg common.ConfigStore) {
-	j.apiKey = cfg.Get(common.LocalAPIKeyKey).Value()
-
-	svc := common.ServiceMiddleware("local")
-	recovered := common.Recovered(j.metrics)
-
+func (j *jobs) Setup(mux *http.ServeMux, middleware alice.Chain) {
 	const maxBytes = 256 * 1024
-	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", svc(recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handlePeriodicJob)), maxBytes))))
-	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", svc(recovered(http.MaxBytesHandler(j.security(http.HandlerFunc(j.handleOneoffJob)), maxBytes))))
-}
-
-func (j *jobs) security(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		if len(j.apiKey) == 0 {
-			slog.WarnContext(ctx, "Endpoint is not allowed without a configured API key")
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-
-		secret := r.Header.Get(common.HeaderAPIKey)
-		if len(secret) == 0 {
-			slog.WarnContext(ctx, "Request API key is empty")
-			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
-			return
-		}
-
-		if secret != j.apiKey {
-			slog.WarnContext(ctx, "Request API key does not match", "value", secret)
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+	mux.Handle(http.MethodPost+" /maintenance/periodic/{job}", middleware.Then(http.MaxBytesHandler(http.HandlerFunc(j.handlePeriodicJob), maxBytes)))
+	mux.Handle(http.MethodPost+" /maintenance/oneoff/{job}", middleware.Then(http.MaxBytesHandler(http.HandlerFunc(j.handleOneoffJob), maxBytes)))
 }
 
 func (j *jobs) handlePeriodicJob(w http.ResponseWriter, r *http.Request) {

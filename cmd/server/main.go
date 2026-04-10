@@ -62,6 +62,9 @@ const (
 	// catch call defaults are even lower
 	catchAllLeakyBucketCap = 2
 	catchAllLeakInterval   = 30 * time.Second
+	// local mode: stricter defaults
+	localLeakyBucketCap = 8
+	localLeakInterval   = 1 * time.Second
 )
 
 var (
@@ -270,7 +273,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
-	jobs := maintenance.NewJobs(businessDB, jobConcurrency, metrics)
+	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
 
 	updateConfigFunc := func(ctx context.Context) {
 		cfg.Update(ctx)
@@ -279,7 +282,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		businessDB.UpdateConfig(maintenanceMode)
 		timeSeriesDB.UpdateConfig(maintenanceMode)
 		portalServer.UpdateConfig(ctx, cfg)
-		jobs.UpdateConfig(cfg)
 		verboseLogs := config.AsBool(cfg.Get(common.VerboseKey))
 		common.SetLogLevel(logLevel, verboseLogs)
 		noticeProvider.Update()
@@ -433,7 +435,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	if localAddress := cfg.Get(common.LocalAddressKey).Value(); len(localAddress) > 0 {
 		localRouter := http.NewServeMux()
 		metrics.Setup(localRouter)
-		jobs.Setup(localRouter, cfg)
+		localAPIKey := cfg.Get(common.LocalAPIKeyKey).Value()
+		localRateLimiter := ipRateLimiter.RateLimitExFunc(localLeakyBucketCap, localLeakInterval)
+		localMiddleware := alice.New(common.ServiceMiddleware("local"), recovered, localRateLimiter, common.APIKeyMiddleware(localAPIKey), monitoring.Logged)
+		jobs.Setup(localRouter, localMiddleware)
 		localRouter.Handle(http.MethodGet+" /"+common.LiveEndpoint, recovered(http.HandlerFunc(healthCheck.LiveHandler)))
 		localRouter.Handle(http.MethodGet+" /"+common.ReadyEndpoint, recovered(http.HandlerFunc(healthCheck.ReadyHandler)))
 		localServer = &http.Server{
