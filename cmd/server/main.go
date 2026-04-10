@@ -272,9 +272,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		return err
 	}
 
-	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
-	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
-
 	updateConfigFunc := func(ctx context.Context) {
 		cfg.Update(ctx)
 		updateIPBuckets(cfg, ipRateLimiter)
@@ -362,6 +359,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}()
 
 	businessDB.Start(ctx, _auditLogInterval)
+
+	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
+	jobs := maintenance.NewJobs(businessDB, jobConcurrency)
 
 	jobs.Spawn(healthCheck)
 	// start maintenance jobs
