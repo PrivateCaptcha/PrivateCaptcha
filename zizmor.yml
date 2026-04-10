@@ -1,0 +1,5 @@
+rules:
+  secrets-outside-env:
+    ignore:
+      - ci.yaml
+      - docker.yaml
