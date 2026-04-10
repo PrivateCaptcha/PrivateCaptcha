@@ -49,13 +49,13 @@ jobs:
           - 5432:5432
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
     ###############
     ## Build web ##
     ###############
     - name: Use Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
       with:
         node-version: '24.x'
 
@@ -86,7 +86,7 @@ jobs:
     ## Build Go ##
     ##############
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
       with:
         go-version-file: go.mod
 
@@ -97,7 +97,7 @@ jobs:
       run: make test-unit-cover
 
     - name: Cache unit coverage report
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       with:
         path: coverage_unit.cov
         key: unit-coverage-${{ github.run_id }}
@@ -129,7 +129,7 @@ jobs:
       run: ./bin/server -mode migrate -migrate-hash $GITHUB_SHA
 
     - name: Set up sqlc
-      uses: sqlc-dev/setup-sqlc@v4
+      uses: sqlc-dev/setup-sqlc@c0209b9199cd1cce6a14fc27cabcec491b651761 # v4.0.0
       with:
         sqlc-version: '1.30.0'
 
@@ -152,7 +152,7 @@ jobs:
       run: ./docker/run-tests.sh
 
     - name: Cache integration coverage report
-      uses: actions/cache/save@v4
+      uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
       if: success() # Only cache if tests succeeded and file is presumably complete
       with:
         path: coverage_reports
@@ -172,7 +172,7 @@ jobs:
       run: |
         sha256sum bin/server > bin/server.sha256sum
 
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: privatecaptcha
         path: |
@@ -186,26 +186,26 @@ jobs:
     needs: tests
     if: success()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Restore unit coverage report
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: coverage_unit.cov
           key: unit-coverage-${{ github.run_id }}
           fail-on-cache-miss: true
 
       - name: Restore integration coverage report
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: coverage_reports
           key: integration-coverage-${{ github.run_id }}
           fail-on-cache-miss: true
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602 # v6.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
@@ -218,21 +218,21 @@ jobs:
       contents: read
       actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
           go-version-file: go.mod
       - name: Restore unit coverage report
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: coverage_unit.cov
           key: unit-coverage-${{ github.run_id }}
           fail-on-cache-miss: true
 
       - name: Restore integration coverage report
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: coverage_reports
           key: integration-coverage-${{ github.run_id }}
@@ -242,7 +242,7 @@ jobs:
         run: ./docker/generate-coverage-html.sh coverage_html
 
       - name: Upload coverage HTML artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: coverage-html
           path: coverage_html/coverage.html
