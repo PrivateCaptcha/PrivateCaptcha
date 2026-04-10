@@ -9,6 +9,15 @@
   "prConcurrentLimit": 5,
   "packageRules": [
     {
+      "matchDepTypes": ["action"],
+      "pinDigests": true
+    },
+    {
+      "extends": ["helpers:pinGitHubActionDigests"],
+      "extractVersion": "^(?<version>v?\\d+\\.\\d+\\.\\d+)$",
+      "versioning": "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+)\\.(?<patch>\\d+))?$"
+    },
+    {
       "matchUpdateTypes": ["patch"],
       "automerge": true,
       "automergeType": "branch"
