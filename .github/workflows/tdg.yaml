@@ -22,7 +22,7 @@ jobs:
     steps:
     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
     - name: Run tdg github action
-      uses: ribtoks/tdg-github-action@master
+      uses: ribtoks/tdg-github-action@7cc4b6643e790dde39ac8bf2cfc8c08c660afbb2 # v0.4.17-beta
       with:
         TOKEN: ${{ secrets.TDG_TOKEN }}
         REPO: ${{ github.repository }}

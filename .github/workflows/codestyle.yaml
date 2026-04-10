@@ -28,7 +28,7 @@ jobs:
         git checkout -b $branch_name
         echo "BRANCH_NAME=$branch_name" >> $GITHUB_ENV
 
-    - uses: sobolevn/misspell-fixer-action@master
+    - uses: sobolevn/misspell-fixer-action@06ff0b508d4f4c0ba70d15f9a628232c0aade536 # 0.1.0
       with:
         options: '-rnRVD ./pkg/ ./cmd/ ./web/ ./widget/'
 
