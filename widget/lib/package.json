@@ -4,7 +4,7 @@
     "type": "git",
     "url": "git+https://github.com/PrivateCaptcha/PrivateCaptcha.git"
   },
-  "version": "0.0.23",
+  "version": "0.0.24",
   "main": "index.js",
   "type": "module",
   "private": false,
