@@ -58,8 +58,9 @@ func NewTxCache() *TxCache {
 
 var _ common.Cache[CacheKey, any] = (*TxCache)(nil)
 
-func (c *TxCache) HitRatio() float64 { return 0.0 }
-func (c *TxCache) Missing() any      { return nil }
+func (c *TxCache) HitRatio() float64            { return 0.0 }
+func (c *TxCache) Missing() any                 { return nil }
+func (c *TxCache) NeedsRefresh(_ CacheKey) bool { return false }
 func (c *TxCache) Get(ctx context.Context, key CacheKey) (any, error) {
 	return nil, errTransactionCache
 }
@@ -3219,15 +3220,21 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 	return rule, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
-	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
-		Key:          propertyID,
-		Cache:        impl.cache,
-		RefreshFunc:  refreshFunc,
-		CacheKeyFunc: CompiledPropertyRulesCacheKey,
+func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, bool, error) {
+	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
+
+	data, err := impl.cache.Get(ctx, cacheKey)
+	if err != nil {
+		return nil, false, err
 	}
 
-	return reader.Read(ctx)
+	needsRefresh := impl.cache.NeedsRefresh(cacheKey)
+
+	if t, ok := data.(*rules.CompiledRules); ok {
+		return t, needsRefresh, nil
+	}
+
+	return nil, false, errInvalidCacheType
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
@@ -3239,15 +3246,21 @@ func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, p
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
 }
 
-func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32, refreshFunc func(context.Context, int32)) (*rules.CompiledRules, error) {
-	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
-		Key:          orgID,
-		Cache:        impl.cache,
-		RefreshFunc:  refreshFunc,
-		CacheKeyFunc: CompiledOrgRulesCacheKey,
+func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, bool, error) {
+	cacheKey := CompiledOrgRulesCacheKey(orgID)
+
+	data, err := impl.cache.Get(ctx, cacheKey)
+	if err != nil {
+		return nil, false, err
 	}
 
-	return reader.Read(ctx)
+	needsRefresh := impl.cache.NeedsRefresh(cacheKey)
+
+	if t, ok := data.(*rules.CompiledRules); ok {
+		return t, needsRefresh, nil
+	}
+
+	return nil, false, errInvalidCacheType
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID int32, compiled *rules.CompiledRules) {

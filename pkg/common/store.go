@@ -22,6 +22,9 @@ type CacheLoader[K comparable, V any] interface {
 type Cache[TKey comparable, TValue any] interface {
 	Get(ctx context.Context, key TKey) (TValue, error)
 	GetEx(ctx context.Context, key TKey, loader CacheLoader[TKey, TValue]) (TValue, error)
+	// NeedsRefresh returns true if the entry exists in the cache but is stale and should be reloaded.
+	// Returns false if the entry does not exist, or the cache does not support refresh.
+	NeedsRefresh(key TKey) bool
 	SetMissing(ctx context.Context, key TKey) error
 	Set(ctx context.Context, key TKey, t TValue) error
 	SetWithTTL(ctx context.Context, key TKey, t TValue, ttl time.Duration) error

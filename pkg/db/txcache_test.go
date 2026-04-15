@@ -228,8 +228,9 @@ func newMockCache() *mockCache {
 	}
 }
 
-func (m *mockCache) HitRatio() float64 { return 0.0 }
-func (m *mockCache) Missing() any      { return nil }
+func (m *mockCache) HitRatio() float64            { return 0.0 }
+func (m *mockCache) Missing() any                 { return nil }
+func (m *mockCache) NeedsRefresh(_ CacheKey) bool { return false }
 func (m *mockCache) Get(ctx context.Context, key CacheKey) (any, error) {
 	return nil, nil
 }

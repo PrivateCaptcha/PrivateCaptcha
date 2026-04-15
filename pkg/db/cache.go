@@ -97,6 +97,14 @@ func (c *memcache[TKey, TValue]) HitRatio() float64 {
 	return c.counter.Snapshot().HitRatio()
 }
 
+func (c *memcache[TKey, TValue]) NeedsRefresh(key TKey) bool {
+	entry, ok := c.store.GetEntryQuietly(key)
+	if !ok {
+		return false
+	}
+	return time.Now().UnixNano() >= entry.RefreshableAtNano
+}
+
 func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, error) {
 	data, found := c.store.GetIfPresent(key)
 	if !found {

@@ -38,6 +38,10 @@ func (c *StaticCache[TKey, TValue]) Missing() TValue {
 	return c.missingValue
 }
 
+func (c *StaticCache[TKey, TValue]) NeedsRefresh(_ TKey) bool {
+	return false
+}
+
 func (c *StaticCache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, error) {
 	item, ok := c.cache.Load(key)
 	if !ok {
