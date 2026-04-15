@@ -22,6 +22,7 @@ type CacheLoader[K comparable, V any] interface {
 type Cache[TKey comparable, TValue any] interface {
 	Get(ctx context.Context, key TKey) (TValue, error)
 	GetEx(ctx context.Context, key TKey, loader CacheLoader[TKey, TValue]) (TValue, error)
+	GetWithRefresh(ctx context.Context, key TKey) (TValue, bool, error)
 	SetMissing(ctx context.Context, key TKey) error
 	Set(ctx context.Context, key TKey, t TValue) error
 	SetWithTTL(ctx context.Context, key TKey, t TValue, ttl time.Duration) error

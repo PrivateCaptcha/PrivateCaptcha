@@ -335,11 +335,10 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 	for propertyID, count := range batch {
 		// because we have 2-layered cache (raw rules -> compiled rules) so when we detect that we would have wanted to
 		// reread our compiled rules ("refresh" in otter's terminology), we _actually_ want to recompile originals
-		if _, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID, func(ctx context.Context, pID int32) {
-			uncachedPropertyIDs[pID] = count
-		}); err == db.ErrCacheMiss {
+		_, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, propertyID)
+		if (err == db.ErrCacheMiss) || needsRefresh {
 			uncachedPropertyIDs[propertyID] = count
-		} else if err != db.ErrNegativeCacheHit {
+		} else if err != nil && err != db.ErrNegativeCacheHit {
 			slog.ErrorContext(ctx, "Failed to get cached compiled property rules", "propID", propertyID, common.ErrAttr(err))
 		}
 	}
@@ -363,12 +362,12 @@ func (am *AuthMiddleware) backfillRulesImpl(ctx context.Context, batch map[int32
 		if p.OrgID.Valid {
 			if _, seen := uncachedOrgIDs[p.OrgID.Int32]; !seen {
 				// see comment for reading compiled property rules above
-				if _, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32, func(ctx context.Context, oID int32) {
-					uncachedOrgIDs[oID] = 1
-				}); err == db.ErrCacheMiss {
+				_, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, p.OrgID.Int32)
+				if (err == db.ErrCacheMiss) || needsRefresh {
 					uncachedOrgIDs[p.OrgID.Int32] = 1
-				} else {
-					// uncached org ids also acts as a temp cache (cleared below)
+				} else if err != nil && err != db.ErrNegativeCacheHit {
+					slog.ErrorContext(ctx, "Failed to get cached compiled org rules", "orgID", p.OrgID.Int32, common.ErrAttr(err))
+				} else if err == nil {
 					uncachedOrgIDs[p.OrgID.Int32] = 0
 				}
 			}
@@ -494,7 +493,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		// we verify sitekey in the underlying DB call
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
-		property, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, am.refreshPropertyBySitekey)
+		property, needsRefresh, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 		if err != nil {
 			switch err {
 			// this will happen when the user does not have such property or it was deleted
@@ -514,6 +513,8 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
+		} else if needsRefresh {
+			am.refreshPropertyBySitekey(ctx, sitekey)
 		}
 
 		if property != nil {

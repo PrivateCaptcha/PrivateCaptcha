@@ -97,6 +97,27 @@ func (c *memcache[TKey, TValue]) HitRatio() float64 {
 	return c.counter.Snapshot().HitRatio()
 }
 
+func (c *memcache[TKey, TValue]) GetWithRefresh(ctx context.Context, key TKey) (TValue, bool, error) {
+	entry, ok := c.store.GetEntry(key)
+	if !ok {
+		slog.Log(ctx, common.LevelTrace, "Item not found in memory cache", "cache", c.name, "key", key)
+		var zero TValue
+		return zero, false, ErrCacheMiss
+	}
+
+	if entry.Value == c.missingValue {
+		slog.Log(ctx, common.LevelTrace, "Item set as missing in memory cache", "cache", c.name, "key", key)
+		var zero TValue
+		return zero, false, ErrNegativeCacheHit
+	}
+
+	needsRefresh := entry.RefreshableAfter() <= 0
+
+	slog.Log(ctx, common.LevelTrace, "Found item in memory cache", "cache", c.name, "key", key, "needsRefresh", needsRefresh)
+
+	return entry.Value, needsRefresh, nil
+}
+
 func (c *memcache[TKey, TValue]) Get(ctx context.Context, key TKey) (TValue, error) {
 	data, found := c.store.GetIfPresent(key)
 	if !found {

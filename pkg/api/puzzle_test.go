@@ -124,7 +124,7 @@ func TestGetPuzzleWithoutAccount(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			time.Sleep(authBackfillDelay)
 
-			if _, err := store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, nil); err != db.ErrCacheMiss {
+			if _, _, err := store.Impl().GetCachedPropertyBySitekey(ctx, sitekey); err != db.ErrCacheMiss {
 				break
 			} else {
 				slog.DebugContext(ctx, "Waiting for property to be cached", "attempt", i, common.ErrAttr(err))

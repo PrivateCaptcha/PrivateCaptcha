@@ -462,9 +462,12 @@ func TestVerifyPuzzleAllowReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	property, err := store.Impl().GetCachedPropertyBySitekey(t.Context(), sitekey, nil)
+	property, needsRefresh, err := store.Impl().GetCachedPropertyBySitekey(t.Context(), sitekey)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if needsRefresh {
+		t.Fatal("expected fresh cached property for replay mutation test")
 	}
 	const maxReplayCount = 3
 	// this should be still cached so we don't need to actually update DB

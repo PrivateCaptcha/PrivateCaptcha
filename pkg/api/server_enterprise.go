@@ -202,13 +202,12 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 	impl := s.BusinessDB.Impl()
 	needsBackfill := false
 
-	refreshFunc := func(context.Context, int32) {
-		needsBackfill = true
-	}
-
 	var propertyRules *rules.CompiledRules
-	if cached, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID, refreshFunc); err == nil {
+	if cached, needsRefresh, err := impl.GetCachedCompiledPropertyRules(ctx, property.ID); err == nil {
 		propertyRules = cached
+		if needsRefresh {
+			needsBackfill = true
+		}
 	} else if err == db.ErrCacheMiss {
 		needsBackfill = true
 	} else if err != db.ErrNegativeCacheHit {
@@ -217,8 +216,11 @@ func (s *Server) retrievePropertyRules(ctx context.Context, property *dbgen.Prop
 
 	var orgRules *rules.CompiledRules
 	if property.OrgID.Valid {
-		if cached, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32, refreshFunc); err == nil {
+		if cached, needsRefresh, err := impl.GetCachedCompiledOrgRules(ctx, property.OrgID.Int32); err == nil {
 			orgRules = cached
+			if needsRefresh {
+				needsBackfill = true
+			}
 		} else if err == db.ErrCacheMiss {
 			needsBackfill = true
 		} else if err != db.ErrNegativeCacheHit {
