@@ -485,7 +485,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 
 		// we verify sitekey in the underlying DB call
 		sitekey := r.URL.Query().Get(common.ParamSiteKey)
-		property, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, am.refreshPropertyBySitekey)
+		property, needsRefresh, err := am.Store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 		if err != nil {
 			switch err {
 			// this will happen when the user does not have such property or it was deleted
@@ -505,6 +505,8 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 				return
 			}
+		} else if needsRefresh {
+			am.refreshPropertyBySitekey(ctx, sitekey)
 		}
 
 		if property != nil {

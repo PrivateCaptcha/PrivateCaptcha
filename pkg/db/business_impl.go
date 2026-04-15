@@ -58,9 +58,11 @@ func NewTxCache() *TxCache {
 
 var _ common.Cache[CacheKey, any] = (*TxCache)(nil)
 
-func (c *TxCache) HitRatio() float64            { return 0.0 }
-func (c *TxCache) Missing() any                 { return nil }
-func (c *TxCache) NeedsRefresh(_ CacheKey) bool { return false }
+func (c *TxCache) HitRatio() float64 { return 0.0 }
+func (c *TxCache) Missing() any      { return nil }
+func (c *TxCache) GetWithRefresh(_ context.Context, _ CacheKey) (any, bool, error) {
+	return nil, false, errTransactionCache
+}
 func (c *TxCache) Get(ctx context.Context, key CacheKey) (any, error) {
 	return nil, errTransactionCache
 }
@@ -2063,20 +2065,19 @@ func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, 
 	return count, nil
 }
 
-func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string, refreshFunc func(context.Context, string)) (*dbgen.Property, error) {
+func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, bool, error) {
 	if sitekey == TestPropertySitekey {
-		return nil, ErrTestProperty
+		return nil, false, ErrTestProperty
 	}
 
 	// this check is important to keep as we depend on it at least in Sitekey() middleware
 	if !CanBeValidSitekey(sitekey) {
-		return nil, ErrInvalidInput
+		return nil, false, ErrInvalidInput
 	}
 
 	reader := &CachedRefreshReader[string, dbgen.Property]{
 		Key:          sitekey,
 		Cache:        impl.cache,
-		RefreshFunc:  refreshFunc,
 		CacheKeyFunc: PropertyBySitekeyCacheKey,
 	}
 
@@ -3221,20 +3222,13 @@ func (impl *BusinessStoreImpl) CreateDifficultyRule(ctx context.Context, user *d
 }
 
 func (impl *BusinessStoreImpl) GetCachedCompiledPropertyRules(ctx context.Context, propertyID int32) (*rules.CompiledRules, bool, error) {
-	cacheKey := CompiledPropertyRulesCacheKey(propertyID)
-
-	data, err := impl.cache.Get(ctx, cacheKey)
-	if err != nil {
-		return nil, false, err
+	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
+		Key:          propertyID,
+		Cache:        impl.cache,
+		CacheKeyFunc: CompiledPropertyRulesCacheKey,
 	}
 
-	needsRefresh := impl.cache.NeedsRefresh(cacheKey)
-
-	if t, ok := data.(*rules.CompiledRules); ok {
-		return t, needsRefresh, nil
-	}
-
-	return nil, false, errInvalidCacheType
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, propertyID int32, compiled *rules.CompiledRules) {
@@ -3247,20 +3241,13 @@ func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, p
 }
 
 func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, bool, error) {
-	cacheKey := CompiledOrgRulesCacheKey(orgID)
-
-	data, err := impl.cache.Get(ctx, cacheKey)
-	if err != nil {
-		return nil, false, err
+	reader := &CachedRefreshReader[int32, rules.CompiledRules]{
+		Key:          orgID,
+		Cache:        impl.cache,
+		CacheKeyFunc: CompiledOrgRulesCacheKey,
 	}
 
-	needsRefresh := impl.cache.NeedsRefresh(cacheKey)
-
-	if t, ok := data.(*rules.CompiledRules); ok {
-		return t, needsRefresh, nil
-	}
-
-	return nil, false, errInvalidCacheType
+	return reader.Read(ctx)
 }
 
 func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID int32, compiled *rules.CompiledRules) {

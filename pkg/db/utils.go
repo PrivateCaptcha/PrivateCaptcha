@@ -403,51 +403,27 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 	return nil, errInvalidCacheType
 }
 
-// this struct exists only to check if otter attempted loading OR refreshing the value
 type CachedRefreshReader[TKey any, T any] struct {
 	Key          TKey
 	Cache        common.Cache[CacheKey, any]
-	RefreshFunc  func(context.Context, TKey)
 	CacheKeyFunc func(TKey) CacheKey
-	refreshed    atomic.Bool
 }
 
-// refreshing means that value is cached, however it has to be reloaded (which is what we are trying to detect)
-func (sf *CachedRefreshReader[TKey, T]) Reload(ctx context.Context, _ CacheKey, old any) (any, error) {
-	sf.refreshed.Store(true)
-
-	if sf.RefreshFunc != nil {
-		sf.RefreshFunc(ctx, sf.Key)
-	}
-
-	// we keep old value, but (hopefully) trigger a reload using refreshFunc
-	return old, nil
-}
-
-// loading means value was not in cache - so we return otter.ErrNotFound anyways
-func (sf *CachedRefreshReader[TKey, T]) Load(ctx context.Context, _ CacheKey) (any, error) {
-	return nil, otter.ErrNotFound
-}
-
-func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, error) {
+func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, bool, error) {
 	cacheKey := sf.CacheKeyFunc(sf.Key)
 
-	data, err := sf.Cache.GetEx(ctx, cacheKey, sf)
+	data, needsRefresh, err := sf.Cache.GetWithRefresh(ctx, cacheKey)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if t, ok := data.(*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", cacheKey)
 
-		return t, nil
+		return t, needsRefresh, nil
 	}
 
-	return nil, errInvalidCacheType
-}
-
-func (sf *CachedRefreshReader[TKey, T]) Refreshed() bool {
-	return sf.refreshed.Load()
+	return nil, false, errInvalidCacheType
 }
 
 // TODO: Refactor this to use otter.Cache BulkGet() API
@@ -478,12 +454,11 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 		reader := &CachedRefreshReader[TArg, T]{
 			Key:          arg,
 			Cache:        br.Cache,
-			RefreshFunc:  nil,
 			CacheKeyFunc: br.CacheKeyFunc,
 		}
 
-		if t, err := reader.Read(ctx); err == nil {
-			if (br.QueryFunc == nil) || !reader.Refreshed() {
+		if t, needsRefresh, err := reader.Read(ctx); err == nil {
+			if (br.QueryFunc == nil) || !needsRefresh {
 				cached = append(cached, t)
 				continue
 			}

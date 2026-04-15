@@ -386,7 +386,7 @@ func TestRetrieveOrgPropertyNotCached(t *testing.T) {
 	}
 
 	// Verify property is NOT cached using GetCachedPropertyBySitekey
-	_, err = store.Impl().GetCachedPropertyBySitekey(ctx, sitekey, nil)
+	_, _, err = store.Impl().GetCachedPropertyBySitekey(ctx, sitekey)
 	if err != db.ErrCacheMiss {
 		t.Fatalf("Expected ErrCacheMiss for uncached property, got: %v", err)
 	}
@@ -554,7 +554,7 @@ func TestWarmupPortalAuthJob(t *testing.T) {
 
 	// If portal properties exist, check if they're cached
 	loginSitekey := db.PortalLoginSitekey
-	if _, err = store.Impl().GetCachedPropertyBySitekey(ctx, loginSitekey, nil); err != nil {
+	if _, _, err = store.Impl().GetCachedPropertyBySitekey(ctx, loginSitekey); err != nil {
 		t.Error(err)
 	}
 }
