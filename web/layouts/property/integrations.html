@@ -48,8 +48,10 @@
     </div>
 </div>
 
-<div class="mt-12 px-4 sm:px-6 lg:px-8" x-data="{showAllWebsiteIntegrations: false, showAllServerIntegrations: false}">
-    <div>
+<div x-data="{showAllWebsiteIntegrations: false, showAllServerIntegrations: false}">
+    {{ template "integrations-header.html" . }}
+
+    <div class="mt-10">
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
                 <h3 class="mt-2 ml-2 text-base font-semibold text-gray-900">On the website</h3>
