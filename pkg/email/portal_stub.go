@@ -15,12 +15,12 @@ type StubMailer struct {
 
 var _ common.Mailer = (*StubMailer)(nil)
 
-func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int, ua string, location string) error {
+func (sm *StubMailer) SendTwoFactor(ctx context.Context, email string, code int, ua string, location string, isRegistration bool) error {
 	sm.LastCode = code
 	sm.LastEmail = email
 
 	if sm.Mailer != nil {
-		return sm.Mailer.SendTwoFactor(ctx, email, code, ua, location)
+		return sm.Mailer.SendTwoFactor(ctx, email, code, ua, location, isRegistration)
 	}
 
 	slog.InfoContext(ctx, "Sent two factor code via email", "code", code, "email", email)

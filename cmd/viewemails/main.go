@@ -88,11 +88,12 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			OrgURL:        "https://portal.privatecaptcha.com/org/5",
 		},
 		TwoFactorEmailContext: email.TwoFactorEmailContext{
-			Code:     "123456",
-			Date:     time.Now().Format("02 Jan 2006 15:04:05 MST"),
-			Browser:  fmt.Sprintf("%s %s", agent.Browser().String(), agent.BrowserVersion()),
-			OS:       agent.OS().String(),
-			Location: "EE",
+			Code:        "123456",
+			Date:        time.Now().Format("02 Jan 2006 15:04:05 MST"),
+			Browser:     fmt.Sprintf("%s %s", agent.Browser().String(), agent.BrowserVersion()),
+			OS:          agent.OS().String(),
+			Location:    "EE",
+			ShowDetails: true,
 		},
 		UsageReportContext: email.UsageReportContext{
 			Period:                 "weekly",

@@ -11,6 +11,7 @@ type TwoFactorEmailContext struct {
 	Browser     string
 	OS          string
 	Location    string
+	ShowDetails bool
 }
 
 var (
@@ -71,7 +72,7 @@ const (
                                 </tr>
                               </tbody>
                             </table>
-                            <p style="font-size:14px;line-height:24px;margin:24px 0;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin-bottom:14px">
+                            {{if .ShowDetails}}<p style="font-size:14px;line-height:24px;margin:24px 0;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin-bottom:14px">
                                 Please review the sign-in activity details below:
                             </p>
                             <table width="100%" style="margin-top: 10px; background-color: #f3f4f6; padding: 10px; font-size:14px;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;">
@@ -82,7 +83,7 @@ const (
                             </table>
                             <p style="font-size:14px;line-height:24px;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;margin-bottom:14px">
                                 If this wasn't you, please let us know by replying to this email.
-                            </p>
+                            </p>{{end}}
                           </td>
                         </tr>
                       </tbody>
@@ -110,13 +111,14 @@ We want to make sure it's really you. Please enter the following verification co
 
 (This code is valid for 10 minutes)
 
-Please review the sign-in activity details below:
+{{if .ShowDetails}}Please review the sign-in activity details below:
 Date: {{.Date}}
 Browser: {{.Browser}}
 Operating system: {{.OS}}
 {{if .Location}}Location: {{.Location}}{{end}}
 
 If this wasn't you, please let us know by replying to this email.
+{{end}}
 
 ---
 
