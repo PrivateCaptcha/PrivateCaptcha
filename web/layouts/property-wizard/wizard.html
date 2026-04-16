@@ -52,7 +52,7 @@
         </div>
         <div class="mt-2 md:flex md:items-center md:justify-between">
             <div class="min-w-0 flex-1">
-                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">Create New Property</h2>
+                <h2 class="text-2xl font-bold leading-7 text-white sm:truncate sm:text-3xl sm:tracking-tight">Property Wizard</h2>
             </div>
         </div>
     </div>
@@ -62,18 +62,8 @@
 {{define "main"}}
 <main class='-mt-32 flex flex-1'>
     <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
-        <div class="rounded-lg bg-white px-6 py-8 shadow sm:px-6 flex flex-1 items-center justify-center">
-            <div class="max-w-md flex-1">
-                <form
-                    hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Const.NewEndpoint }}'
-                    hx-target="this"
-                    hx-swap="innerHTML"
-                    hx-indicator="#spinner"
-                    hx-disabled-elt="input, button"
-                    class="mt-6">
-                    {{template "form.html" .}}
-                </form>
-            </div>
+        <div id="property-wizard" class="rounded-lg bg-white p-6 shadow flex flex-1 flex-col">
+            {{ template "new.html" . }}
         </div>
     </div>
 </main>

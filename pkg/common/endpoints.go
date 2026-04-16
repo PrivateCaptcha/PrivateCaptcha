@@ -46,4 +46,6 @@ const (
 	RulesEndpoint         = "rules"
 	RuleStatsEndpoint     = "rulestats"
 	NotificationsEndpoint = "notifications"
+	ClientSetupEndpoint   = "clientsetup"
+	ServerSetupEndpoint   = "serversetup"
 )
