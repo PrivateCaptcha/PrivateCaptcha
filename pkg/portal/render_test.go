@@ -283,6 +283,34 @@ func TestRenderHTML(t *testing.T) {
 				Sitekey: "qwerty",
 			},
 		},
+		// same as above, but client setup wizard step
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.ClientSetupEndpoint},
+			template: propertyWizardClientSetupTemplate,
+			model: &propertyIntegrationsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				Sitekey: "qwerty",
+			},
+		},
+		// same as above, but server setup wizard step
+		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.ServerSetupEndpoint},
+			template: propertyWizardServerSetupTemplate,
+			model: &propertyIntegrationsRenderContext{
+				propertyDashboardRenderContext: propertyDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Property:          stubProperty("Foo", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				Sitekey: "qwerty",
+			},
+		},
 		// same as above, but property settings _template_
 		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},

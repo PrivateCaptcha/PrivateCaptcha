@@ -172,18 +172,8 @@ func TestPostNewOrgProperty(t *testing.T) {
 	srv.ServeHTTP(w, req)
 
 	resp := w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Unexpected status code %v", resp.StatusCode)
-	}
-
-	location, err := resp.Location()
-	if err != nil {
-		t.Fatalf("Expected redirect response but got error: %v", err)
-	}
-
-	expectedPrefix := fmt.Sprintf("/org/%s/property/", server.IDHasher.Encrypt(int(org.ID)))
-	if path := location.String(); !strings.HasPrefix(path, expectedPrefix) {
-		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
 	}
 
 	pp, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
@@ -1566,18 +1556,8 @@ func runOrgMemberPropertyCreationPortalTest(t *testing.T, memberSubscrParams *db
 	srv.ServeHTTP(w, req)
 
 	resp = w.Result()
-	if resp.StatusCode != http.StatusSeeOther {
-		t.Fatalf("Expected redirect status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
-	}
-
-	location, err = resp.Location()
-	if err != nil {
-		t.Fatalf("Expected redirect response but got error: %v", err)
-	}
-
-	expectedPrefix := fmt.Sprintf("/org/%s/property/", orgID)
-	if path := location.String(); !strings.HasPrefix(path, expectedPrefix) {
-		t.Errorf("Unexpected redirect path: %s, expected prefix: %s", path, expectedPrefix)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Expected OK status code, got %v. Body: %s", resp.StatusCode, w.Body.String())
 	}
 
 	// Step 6: Verify properties were created by the member

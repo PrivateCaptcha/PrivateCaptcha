@@ -1,0 +1,15 @@
+{{ define "integration-item" }}
+<li class="overflow-hidden rounded-xl border border-gray-200">
+    <div class="flex items-center gap-x-4 border-b border-gray-900/5 bg-gray-50 p-6">
+        <img src="{{$.cdn}}/portal/{{.icon}}" alt="{{.name}} icon" class="h-10 w-10 p-1 flex-none rounded-lg bg-white object-contain ring-1 ring-gray-900/10">
+        <div class="text-sm font-medium leading-6 text-gray-900">{{.name}}</div>
+        <div class="ml-auto">
+            {{ if .ready }}
+            <a class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50" href="{{.link}}" target="_blank">Setup</a>
+            {{ else }}
+            <span class="inline-flex items-center rounded-md bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming soon</span>
+            {{ end }}
+        </div>
+    </div>
+</li>
+{{ end }}

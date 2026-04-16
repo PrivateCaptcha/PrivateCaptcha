@@ -159,7 +159,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	return []ViewPortalPage{
 		// --- Public pages ---
 		{
-			Path: p(common.LoginEndpoint), Template: loginTemplate, ShowInList: true,
+			Path:       p(common.LoginEndpoint),
+			Template:   loginTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &loginRenderContext{
 					CsrfRenderContext: token, CaptchaRenderContext: captchaCtx,
@@ -168,7 +170,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.RegisterEndpoint), Template: loginTemplate, ShowInList: true,
+			Path:       p(common.RegisterEndpoint),
+			Template:   loginTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &loginRenderContext{
 					CsrfRenderContext: token, CaptchaRenderContext: captchaCtx,
@@ -177,7 +181,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.ErrorEndpoint, arg(common.ParamCode)), Template: errorTemplate, ShowInList: true,
+			Path:       p(common.ErrorEndpoint, arg(common.ParamCode)),
+			Template:   errorTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &errorRenderContext{
 					CsrfRenderContext: token, ErrorCode: 404,
@@ -186,7 +192,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.ExpiredEndpoint), Template: errorTemplate, ShowInList: true,
+			Path:       p(common.ExpiredEndpoint),
+			Template:   errorTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &errorRenderContext{
 					CsrfRenderContext: token, ErrorCode: 403,
@@ -196,7 +204,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Settings pages ---
 		{
-			Path: p(common.SettingsEndpoint), Template: settingsGeneralTemplatePrefix + "page.html", ShowInList: true,
+			Path:       p(common.SettingsEndpoint),
+			Template:   settingsGeneralTemplatePrefix + "page.html",
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsGeneralRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.GeneralEndpoint, a), Name: "Jane Doe",
@@ -246,7 +256,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Audit logs ---
 		{
-			Path: p(common.AuditLogsEndpoint), Template: auditLogsTemplate, ShowInList: true,
+			Path:       p(common.AuditLogsEndpoint),
+			Template:   auditLogsTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &MainAuditLogsRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -257,13 +269,17 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Org pages ---
 		{
-			Path: p(common.OrgEndpoint, common.NewEndpoint), Template: orgWizardTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, common.NewEndpoint),
+			Template:   orgWizardTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgWizardRenderContext{CsrfRenderContext: token, AlertRenderContext: a}
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg), Template: portalTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg),
+			Template:   portalTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
@@ -272,7 +288,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertiesEndpoint), Template: orgPropertiesTemplate, ShowInList: false,
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertiesEndpoint),
+			Template: orgPropertiesTemplate,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgPropertiesRenderContext{
 					CsrfRenderContext: token, PaginationRenderContext: pagination,
@@ -282,7 +299,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.RulesEndpoint, common.NewEndpoint), Template: ruleTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg, common.RulesEndpoint, common.NewEndpoint),
+			Template:   ruleTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &RuleWizardRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -297,7 +316,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.RulesEndpoint, ruleArg, common.EditEndpoint), Template: ruleTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg, common.RulesEndpoint, ruleArg, common.EditEndpoint),
+			Template:   ruleTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &RuleWizardRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -313,7 +334,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint), Template: orgDashboardTemplate,
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.DashboardEndpoint),
+			Template: orgDashboardTemplate,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgDashboardRenderContext{
 					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
@@ -322,7 +344,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint), Template: orgMembersTemplate,
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.MembersEndpoint),
+			Template: orgMembersTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgMemberRenderContext{
 					portalBaseRenderContext: baseCtx(portalMembersTabIndex), AlertRenderContext: a, Members: members,
@@ -330,7 +353,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint), Template: orgSettingsTemplate,
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.SettingsEndpoint),
+			Template: orgSettingsTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgSettingsRenderContext{
 					portalBaseRenderContext: baseCtx(portalSettingsTabIndex), AlertRenderContext: a,
@@ -339,7 +363,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint), Template: orgAuditLogsTemplate,
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.EventsEndpoint),
+			Template: orgAuditLogsTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &orgAuditLogsRenderContext{
 					portalBaseRenderContext: baseCtx(portalEventsTabIndex), AlertRenderContext: a,
@@ -348,7 +373,8 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint), Template: orgRulesTemplate,
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.RulesEndpoint),
+			Template: orgRulesTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &OrgRulesRenderContext{
 					portalBaseRenderContext: baseCtx(portalRulesTabIndex), AlertRenderContext: a,
@@ -358,23 +384,56 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Property pages ---
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, common.NewEndpoint), Template: propertyWizardTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, common.NewEndpoint),
+			Template:   propertyWizardTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertyWizardRenderContext{
-					CsrfRenderContext: token, AlertRenderContext: a, CurrentOrg: org,
+				return struct {
+					propertyWizardRenderContext
+					Property *userProperty
+					Sitekey  string
+				}{
+					propertyWizardRenderContext: propertyWizardRenderContext{
+						CsrfRenderContext: token, AlertRenderContext: a, CurrentOrg: org,
+					},
+					Property: prop,
+					Sitekey:  db.TestPropertySitekey,
 				}
 			},
 		},
 		{
-			Path: p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg), Template: propertyDashboardTemplate, ShowInList: true,
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.ClientSetupEndpoint),
+			Template: propertyWizardClientSetupTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertyIntegrationsRenderContext{
+					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
+					Sitekey:                        db.TestPropertySitekey,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.ServerSetupEndpoint),
+			Template: propertyWizardServerSetupTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &propertyIntegrationsRenderContext{
+					propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
+					Sitekey:                        db.TestPropertySitekey,
+				}
+			},
+		},
+		{
+			Path:       p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg),
+			Template:   propertyDashboardTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				c := propDash(propertyReportsTabIndex, a)
 				return &c
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.RulesEndpoint, common.NewEndpoint),
-			Template: ruleTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.RulesEndpoint, common.NewEndpoint),
+			Template:   ruleTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &RuleWizardRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -389,8 +448,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
-			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.RulesEndpoint, ruleArg, common.EditEndpoint),
-			Template: ruleTemplate, ShowInList: true,
+			Path:       p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.RulesEndpoint, ruleArg, common.EditEndpoint),
+			Template:   ruleTemplate,
+			ShowInList: true,
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &RuleWizardRenderContext{
 					CsrfRenderContext: token, AlertRenderContext: a,
@@ -458,8 +518,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		// --- Org invite ---
 		{
-			Path:     p(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint),
-			Template: loginTemplate, ShowInList: true,
+			Path:       p(common.OrgInviteEndpoint, arg(common.ParamID), common.RegisterEndpoint),
+			Template:   loginTemplate,
+			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &loginRenderContext{
 					CsrfRenderContext: token, CaptchaRenderContext: captchaCtx,

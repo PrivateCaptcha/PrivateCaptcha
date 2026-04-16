@@ -121,7 +121,7 @@
         <div class="mx-auto max-w-2xl lg:mx-0 lg:max-w-none">
             <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
                 <h3 class="mt-2 ml-2 text-base font-semibold text-gray-900">On the server</h3>
-                <p class="mt-1 ml-2 truncate text-sm text-gray-500"><a class="underline hover:text-pclime-600" href="{{ relURL .Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{ $.Const.APIKeysEndpoint }}">create an API key</a></p>
+                <p class="mt-1 ml-2 truncate text-sm text-gray-500"><a target="_blank" class="underline hover:text-pclime-600" href="{{ relURL .Const.SettingsEndpoint }}?{{ $.Const.Tab }}={{ $.Const.APIKeysEndpoint }}">create an API key</a></p>
             </div>
             <ul class="mt-6 grid grid-cols-1 gap-x-6 gap-y-8 lg:grid-cols-3 xl:gap-x-8">
                 {{ range $i, $item := $.Data.integrations.server }}

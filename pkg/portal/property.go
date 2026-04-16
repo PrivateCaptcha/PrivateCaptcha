@@ -2,7 +2,6 @@ package portal
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,7 +17,7 @@ import (
 )
 
 const (
-	createPropertyFormTemplate            = "property-wizard/form.html"
+	createPropertyTemplate                = "property-wizard/new.html"
 	createOrgFormTemplate                 = "org-wizard/form.html"
 	propertyDashboardTemplate             = "property/dashboard.html"
 	propertyDashboardReportsTemplate      = "property/reports.html"
@@ -27,6 +26,8 @@ const (
 	propertyDashboardAuditLogsTemplate    = "property/auditlogs.html"
 	propertyDashboardRulesTemplate        = "property/rules.html"
 	propertyWizardTemplate                = "property-wizard/wizard.html"
+	propertyWizardClientSetupTemplate     = "property-wizard/client-setup.html"
+	propertyWizardServerSetupTemplate     = "property-wizard/server-setup.html"
 	propertySettingsPropertyID            = "371d58d2-f8b9-44e2-ac2e-e61253274bae"
 	// Property tab indices
 	propertyReportsTabIndex            = 0
@@ -387,33 +388,28 @@ func (s *Server) echoPuzzle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// This one cannot be "MVC" function because it redirects in case of success
-func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
+func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
 	if err != nil {
-		s.RedirectError(http.StatusUnauthorized, w, r)
-		return
+		return nil, err
 	}
 
 	err = r.ParseForm()
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
-		s.RedirectError(http.StatusBadRequest, w, r)
-		return
+		return nil, db.ErrInvalidInput
 	}
 
 	org, level, err := s.Org(user, r)
 	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
+		return nil, err
 	}
 
 	// Invited users cannot create properties - must join the org first
 	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
 		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
-		s.RedirectError(http.StatusForbidden, w, r)
-		return
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx := &propertyWizardRenderContext{
@@ -425,8 +421,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
 	if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, renderCtx.Name, org); !nameStatus.Success() {
 		renderCtx.NameError = nameStatus.String()
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
 	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
@@ -434,21 +429,18 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
 		renderCtx.DomainError = common.StatusPropertyDomainFormatError.String()
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
 	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
 	property, auditEvent, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
@@ -465,15 +457,41 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the property. Please try again later."
-		s.render(w, r, createPropertyFormTemplate, renderCtx)
-		return
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
-	dashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(property.ID)))
-	dashboardURL += fmt.Sprintf("?%s=%s", common.ParamTab, common.IntegrationsEndpoint)
-	common.Redirect(dashboardURL, http.StatusOK, w, r)
+	integrationsCtx := &propertyIntegrationsRenderContext{
+		propertyDashboardRenderContext: propertyDashboardRenderContext{
+			CsrfRenderContext:    s.CreateCsrfContext(user),
+			CaptchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
+			Property:             propertyToUserProperty(property, s.IDHasher),
+			Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
+			CanEdit:              true,
+			IncludeRules:         false,
+		},
+		Sitekey: db.UUIDToSiteKey(property.ExternalID),
+	}
+	integrationsCtx.Tab = -1
 
-	s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	return &ViewModel{Model: integrationsCtx, View: propertyWizardClientSetupTemplate, AuditEvent: auditEvent}, nil
+}
+
+func (s *Server) getPropertyWizardClientStep(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx, err := s.getPropertyIntegrations(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: ctx, View: propertyWizardClientSetupTemplate}, nil
+}
+
+func (s *Server) getPropertyWizardServerStep(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx, err := s.getPropertyIntegrations(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: ctx, View: propertyWizardServerSetupTemplate}, nil
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
