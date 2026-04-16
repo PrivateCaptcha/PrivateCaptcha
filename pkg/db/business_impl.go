@@ -26,6 +26,8 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
+	// ~100 years, matches the SQL constraint in RotateAPIKey query
+	apiKeyNeverExpirePeriod = time.Duration(36500) * 24 * time.Hour
 )
 
 var (
@@ -1598,6 +1600,10 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 	if keys, err := FetchCachedArray[dbgen.APIKey](ctx, impl.cache, userKeysCacheKey); err == nil {
 		if index := slices.IndexFunc(keys, func(key *dbgen.APIKey) bool { return key.ID == keyID }); index != -1 {
 			oldKey = keys[index]
+			if oldKey.Period >= apiKeyNeverExpirePeriod {
+				slog.WarnContext(ctx, "Cannot rotate a never-expiring API key", "keyID", keyID, "userID", user.ID)
+				return nil, nil, ErrInvalidInput
+			}
 			secret := UUIDToSecret(oldKey.ExternalID)
 			cacheKey := APIKeyCacheKey(secret)
 			_ = impl.cache.Delete(ctx, cacheKey)

@@ -242,6 +242,58 @@ func TestRotateAPIKey(t *testing.T) {
 	}
 }
 
+func TestRotateNeverExpiringAPIKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	neverPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	tnow := time.Now().UTC()
+	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams("Never Key", tnow.Add(neverPeriod), neverPeriod, 10.0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	secretOld := db.UUIDToSecret(key.ExternalID)
+
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+	req := httptest.NewRequest("POST", fmt.Sprintf("/apikeys/%v", server.IDHasher.Encrypt(int(key.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, csrfToken)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Errorf("Expected redirect status %v, got %v", http.StatusSeeOther, resp.StatusCode)
+	}
+
+	keys, err := store.Impl().RetrieveUserAPIKeys(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if keysLen := len(keys); keysLen != 1 {
+		t.Fatalf("Expected 1 API key, got %v", keysLen)
+	}
+	if secret := db.UUIDToSecret(keys[0].ExternalID); secret != secretOld {
+		t.Error("Never-expiring key should not have been rotated")
+	}
+}
+
 func TestGetSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

@@ -50,7 +50,7 @@
         </div>
     </div>
     <div class="flex flex-none items-center gap-x-4">
-        {{ if not .Params.Secret }}
+        {{ if and (not .Params.Secret) (not .Params.NeverExpires) }}
         <a href="#"
             hx-confirm="Are you sure you want to rotate this API key?" 
             hx-post='{{ partsURL .Const.APIKeysEndpoint .Params.ID }}'
