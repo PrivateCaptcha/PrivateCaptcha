@@ -44,6 +44,7 @@ type UserAuditLog struct {
 	TableName string
 	Time      string
 	Source    string
+	SessionID string
 }
 
 var (
@@ -310,6 +311,7 @@ func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 		Time:      log.CreatedAt.Time.Format(auditLogTimeFormat),
 		Action:    string(log.Action),
 		TableName: log.EntityTable,
+		SessionID: log.SessionID,
 	}
 	var err error
 
