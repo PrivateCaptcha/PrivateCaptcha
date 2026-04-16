@@ -488,7 +488,7 @@ func TestNewUserAuditLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ul, err := server.newUserAuditLog(ctx, tt.log)
+			ul, err := server.NewUserAuditLog(ctx, tt.log)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newUserAuditLog() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -539,7 +539,7 @@ func TestAuditLogParserExtension(t *testing.T) {
 		Source:      dbgen.AuditLogSourcePortal,
 	}
 
-	ul, err := serverWithParser.newUserAuditLog(ctx, customLog)
+	ul, err := serverWithParser.NewUserAuditLog(ctx, customLog)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -564,7 +564,7 @@ func TestAuditLogParserExtension(t *testing.T) {
 		NewValue:    mustMarshalJSON(&db.AuditLogUser{Name: "Test User", Email: "test@example.com"}),
 	}
 
-	ul2, err := serverWithParser.newUserAuditLog(ctx, standardLog)
+	ul2, err := serverWithParser.NewUserAuditLog(ctx, standardLog)
 	if err != nil {
 		t.Fatalf("Expected no error for standard table, got: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestAuditLogParserExtension(t *testing.T) {
 		Stage:       "production",
 	}
 
-	ul3, err := serverWithoutParser.newUserAuditLog(ctx, customLog)
+	ul3, err := serverWithoutParser.NewUserAuditLog(ctx, customLog)
 	if err != nil {
 		t.Fatalf("Expected no error without parser, got: %v", err)
 	}
@@ -1174,7 +1174,7 @@ func TestNewUserAuditLogForSubscriptionsTable(t *testing.T) {
 		NewValue:    mustMarshalJSON(&db.AuditLogSubscription{Source: "internal", Status: "active"}),
 	}
 
-	ul, err := server.newUserAuditLog(ctx, log)
+	ul, err := server.NewUserAuditLog(ctx, log)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -1207,7 +1207,7 @@ func TestNewUserAuditLogForOrgUsersTable(t *testing.T) {
 		NewValue:    mustMarshalJSON(&db.AuditLogOrgUser{OrgName: "Test Org", UserID: 1, Email: "test@example.com", Level: "member"}),
 	}
 
-	ul, err := server.newUserAuditLog(ctx, log)
+	ul, err := server.NewUserAuditLog(ctx, log)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -1447,7 +1447,7 @@ func TestNewUserAuditLogUserSettings(t *testing.T) {
 		NewValue:    mustMarshalJSON(&db.AuditLogUserSettings{WeeklyReport: true, MonthlyReport: false, NotificationsEmail: &email}),
 	}
 
-	ul, err := server.newUserAuditLog(ctx, log)
+	ul, err := server.NewUserAuditLog(ctx, log)
 	if err != nil {
 		t.Fatalf("newUserAuditLog() error = %v", err)
 	}

@@ -306,7 +306,7 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}, nil
 }
 
-func (s *Server) newUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*UserAuditLog, error) {
+func (s *Server) NewUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*UserAuditLog, error) {
 	ul := &UserAuditLog{
 		Time:      log.CreatedAt.Time.Format(auditLogTimeFormat),
 		Action:    string(log.Action),
@@ -382,7 +382,7 @@ func (s *Server) newUserAuditLogs(ctx context.Context, logs []*dbgen.GetUserAudi
 	result := make([]*UserAuditLog, 0, len(logs))
 
 	for _, log := range logs {
-		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {
+		if ul, err := s.NewUserAuditLog(ctx, &log.AuditLog); err == nil {
 			if log.Name.Valid && log.Email.Valid {
 				ul.UserName = log.Name.String
 				ul.UserEmail = common.MaskEmail(log.Email.String, '*')

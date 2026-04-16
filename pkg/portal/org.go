@@ -605,7 +605,7 @@ func (s *Server) newOrganizationAuditLogs(ctx context.Context, user *dbgen.User,
 	result := make([]*UserAuditLog, 0, len(logs))
 
 	for _, log := range logs {
-		if ul, err := s.newUserAuditLog(ctx, &log.AuditLog); err == nil {
+		if ul, err := s.NewUserAuditLog(ctx, &log.AuditLog); err == nil {
 			if log.Name.Valid && log.Email.Valid {
 				ul.UserName = log.Name.String
 				ul.UserEmail = common.MaskEmail(log.Email.String, '*')
