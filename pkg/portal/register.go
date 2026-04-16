@@ -164,7 +164,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location); err != nil {
+	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		data.EmailError = "Failed to send a confirmation email. Please try again."
 		s.render(w, r, registerContentsTemplate, data)

@@ -325,7 +325,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 	code := twoFactorCode(ctx)
 	location := r.Header.Get(s.CountryCodeHeader.Value())
 
-	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location); err != nil {
+	if err := s.Mailer.SendTwoFactor(ctx, user.Email, code, r.UserAgent(), location, false); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to send verification code. Please try again."
 	} else {

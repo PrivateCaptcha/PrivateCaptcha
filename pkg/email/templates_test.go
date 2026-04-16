@@ -64,11 +64,12 @@ func TestEmailTemplates(t *testing.T) {
 			RequiresRegister: false,
 		},
 		TwoFactorEmailContext: TwoFactorEmailContext{
-			Code:     "123456",
-			Date:     time.Now().Format("02 Jan 2006 15:04:05 MST"),
-			Browser:  "Firefox",
-			OS:       "Ubuntu",
-			Location: "EE",
+			Code:        "123456",
+			Date:        time.Now().Format("02 Jan 2006 15:04:05 MST"),
+			Browser:     "Firefox",
+			OS:          "Ubuntu",
+			Location:    "EE",
+			ShowDetails: true,
 		},
 		UsageReportContext: UsageReportContext{
 			Period:                 "weekly",

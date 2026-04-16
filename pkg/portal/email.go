@@ -74,7 +74,7 @@ func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg commo
 
 var _ common.Mailer = (*PortalMailer)(nil)
 
-func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code int, userAgent string, location string) error {
+func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code int, userAgent string, location string, isRegistration bool) error {
 	if len(email) == 0 {
 		return errInvalidEmail
 	}
@@ -91,6 +91,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		Browser:     fmt.Sprintf("%s %s", agent.Browser().String(), agent.BrowserVersion()),
 		OS:          agent.OS().String(),
 		Location:    location,
+		ShowDetails: !isRegistration,
 	}
 
 	htmlBody, err := pm.TwofactorTemplate.RenderHTML(ctx, data)
