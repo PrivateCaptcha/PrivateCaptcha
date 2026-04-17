@@ -210,7 +210,11 @@ func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*AP
 }
 
 const rotateAPIKey = `-- name: RotateAPIKey :one
-UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND period < $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
+UPDATE backend.apikeys SET
+  external_id = CASE WHEN period < $3 THEN gen_random_uuid() ELSE external_id END,
+  expires_at = CASE WHEN period < $3 THEN NOW() + period ELSE expires_at END,
+  updated_at = CASE WHEN period < $3 THEN NOW() ELSE updated_at END
+WHERE id = $1 AND user_id = $2 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type RotateAPIKeyParams struct {

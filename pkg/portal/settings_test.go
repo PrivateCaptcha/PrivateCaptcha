@@ -123,7 +123,7 @@ func TestCreateNeverExpiringAPIKey(t *testing.T) {
 	}
 
 	key := keys[0]
-	expectedPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	expectedPeriod := db.APIKeyNeverExpirePeriod
 	if key.Period != expectedPeriod {
 		t.Errorf("Expected period %v, got %v", expectedPeriod, key.Period)
 	}
@@ -261,13 +261,16 @@ func TestRotateNeverExpiringAPIKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	neverPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	neverPeriod := db.APIKeyNeverExpirePeriod
 	tnow := time.Now().UTC()
 	key, _, err := store.Impl().CreateAPIKey(ctx, user, tests.CreateNewPuzzleAPIKeyParams("Never Key", tnow.Add(neverPeriod), neverPeriod, 10.0))
 	if err != nil {
 		t.Fatal(err)
 	}
 	secretOld := db.UUIDToSecret(key.ExternalID)
+
+	// evict the user API key cache so GetCachedUserAPIKey misses and the SQL safety check is exercised
+	store.Impl().CleanupUserCache(ctx, user.ID)
 
 	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
 	req := httptest.NewRequest("POST", fmt.Sprintf("/apikeys/%v", server.IDHasher.Encrypt(int(key.ID))), nil)
@@ -1120,9 +1123,9 @@ func TestAPIKeyDaysFromParam(t *testing.T) {
 		{"90", 90},
 		{"180", 180},
 		{"365", 365},
-		{common.ParamNever, apiKeyNeverExpireDays},
-		{"Never", apiKeyNeverExpireDays},
-		{" never ", apiKeyNeverExpireDays},
+		{common.ParamNever, int(db.APIKeyNeverExpirePeriod / (24 * time.Hour))},
+		{"Never", int(db.APIKeyNeverExpirePeriod / (24 * time.Hour))},
+		{" never ", int(db.APIKeyNeverExpirePeriod / (24 * time.Hour))},
 		{"invalid", 30},
 		{"", 30},
 		{"0", 30},
@@ -1149,8 +1152,8 @@ func TestIsAPIKeyNeverExpires(t *testing.T) {
 	}{
 		{"1 day", 24 * time.Hour, false},
 		{"365 days", 365 * 24 * time.Hour, false},
-		{"never (100 years)", time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour, true},
-		{"more than 100 years", time.Duration(apiKeyNeverExpireDays+1) * 24 * time.Hour, true},
+		{"never (100 years)", db.APIKeyNeverExpirePeriod, true},
+		{"more than 100 years", db.APIKeyNeverExpirePeriod + 24*time.Hour, true},
 		{"zero", 0, false},
 	}
 
@@ -1168,7 +1171,7 @@ func TestAPIKeyToUserAPIKeyNeverExpires(t *testing.T) {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test"))
 	tnow := time.Now().UTC()
 
-	neverPeriod := time.Duration(apiKeyNeverExpireDays) * 24 * time.Hour
+	neverPeriod := db.APIKeyNeverExpirePeriod
 	neverKey := &dbgen.APIKey{
 		ID:                1,
 		Name:              "Never Key",

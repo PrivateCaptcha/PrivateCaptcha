@@ -26,8 +26,8 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
-	// ~100 years, the threshold for "never expiring" API keys
-	apiKeyNeverExpirePeriod = time.Duration(36500) * 24 * time.Hour
+	// APIKeyNeverExpirePeriod is the threshold for "never expiring" API keys (~100 years)
+	APIKeyNeverExpirePeriod = time.Duration(36500) * 24 * time.Hour
 )
 
 var (
@@ -1611,7 +1611,7 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 	// which means to show them the keys we should put them all in cache first when reading
 	if cachedKey, err := impl.GetCachedUserAPIKey(ctx, user.ID, keyID); err == nil {
 		oldKey = cachedKey
-		if oldKey.Period >= apiKeyNeverExpirePeriod {
+		if oldKey.Period >= APIKeyNeverExpirePeriod {
 			slog.WarnContext(ctx, "Cannot rotate a never-expiring API key", "keyID", keyID, "userID", user.ID)
 			return nil, nil, ErrInvalidInput
 		}
@@ -1624,7 +1624,7 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 	key, err := impl.querier.RotateAPIKey(ctx, &dbgen.RotateAPIKeyParams{
 		ID:     keyID,
 		UserID: Int(user.ID),
-		Period: apiKeyNeverExpirePeriod,
+		Period: APIKeyNeverExpirePeriod,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1634,6 +1634,12 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 
 		slog.ErrorContext(ctx, "Failed to rotate API key", "keyID", keyID, "userID", user.ID, common.ErrAttr(err))
 		return nil, nil, err
+	}
+
+	// SQL uses CASE to skip updates when period >= threshold, so check the returned key
+	if key.Period >= APIKeyNeverExpirePeriod {
+		slog.WarnContext(ctx, "Cannot rotate a never-expiring API key", "keyID", keyID, "userID", user.ID)
+		return nil, nil, ErrInvalidInput
 	}
 
 	slog.InfoContext(ctx, "Rotated API Key", "keyID", keyID, "userID", user.ID)

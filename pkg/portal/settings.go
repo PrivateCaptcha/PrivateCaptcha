@@ -36,7 +36,6 @@ const (
 
 	// notifications
 	apiKeyExpirationNotificationDays = 14
-	apiKeyNeverExpireDays            = 36500 // ~100 years
 
 	// API key read flags
 	apiKeyReadWriteSuffix = "_read_write"
@@ -523,7 +522,7 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*Vi
 func apiKeyDaysFromParam(ctx context.Context, param string) int {
 	param = strings.ToLower(strings.TrimSpace(param))
 	if param == common.ParamNever {
-		return apiKeyNeverExpireDays
+		return int(db.APIKeyNeverExpirePeriod / (24 * time.Hour))
 	}
 
 	i, err := strconv.Atoi(param)
@@ -541,7 +540,7 @@ func apiKeyDaysFromParam(ctx context.Context, param string) int {
 }
 
 func isAPIKeyNeverExpires(period time.Duration) bool {
-	return period >= time.Duration(apiKeyNeverExpireDays)*24*time.Hour
+	return period >= db.APIKeyNeverExpirePeriod
 }
 
 // NOTE: ReferenceID logic should stay the same forever for correct deduplication in DB
