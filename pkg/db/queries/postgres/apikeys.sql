@@ -14,7 +14,7 @@ INSERT INTO backend.apikeys (name, user_id, expires_at, requests_per_second, req
 UPDATE backend.apikeys SET expires_at = $1, enabled = $2, updated_at = NOW() WHERE external_id = $3 RETURNING *;
 
 -- name: RotateAPIKey :one
-UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND period < interval '36500 days' RETURNING *;
+UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND period < $3 RETURNING *;
 
 -- name: DeleteUserAPIKeys :execrows
 DELETE FROM backend.apikeys WHERE user_id = $1;

@@ -210,16 +210,17 @@ func (q *Queries) GetUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]*AP
 }
 
 const rotateAPIKey = `-- name: RotateAPIKey :one
-UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND period < interval '36500 days' RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
+UPDATE backend.apikeys SET external_id = gen_random_uuid(), expires_at = NOW() + period, updated_at = NOW() WHERE id = $1 AND user_id = $2 AND period < $3 RETURNING id, name, external_id, user_id, enabled, requests_per_second, requests_burst, created_at, expires_at, notes, org_id, updated_at, period, scope, readonly, last_used_at
 `
 
 type RotateAPIKeyParams struct {
-	ID     int32       `db:"id" json:"id"`
-	UserID pgtype.Int4 `db:"user_id" json:"user_id"`
+	ID     int32         `db:"id" json:"id"`
+	UserID pgtype.Int4   `db:"user_id" json:"user_id"`
+	Period time.Duration `db:"period" json:"period"`
 }
 
 func (q *Queries) RotateAPIKey(ctx context.Context, arg *RotateAPIKeyParams) (*APIKey, error) {
-	row := q.db.QueryRow(ctx, rotateAPIKey, arg.ID, arg.UserID)
+	row := q.db.QueryRow(ctx, rotateAPIKey, arg.ID, arg.UserID, arg.Period)
 	var i APIKey
 	err := row.Scan(
 		&i.ID,

@@ -26,7 +26,7 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
-	// ~100 years, matches the SQL constraint in RotateAPIKey query
+	// ~100 years, the threshold for "never expiring" API keys
 	apiKeyNeverExpirePeriod = time.Duration(36500) * 24 * time.Hour
 )
 
@@ -579,6 +579,19 @@ func (impl *BusinessStoreImpl) GetCachedAPIKey(ctx context.Context, secret strin
 	} else {
 		return nil, err
 	}
+}
+
+func (impl *BusinessStoreImpl) GetCachedUserAPIKey(ctx context.Context, userID int32, keyID int32) (*dbgen.APIKey, error) {
+	keys, err := FetchCachedArray[dbgen.APIKey](ctx, impl.cache, UserAPIKeysCacheKey(userID))
+	if err != nil {
+		return nil, err
+	}
+
+	if index := slices.IndexFunc(keys, func(key *dbgen.APIKey) bool { return key.ID == keyID }); index != -1 {
+		return keys[index], nil
+	}
+
+	return nil, ErrRecordNotFound
 }
 
 func (impl *BusinessStoreImpl) FindUserAPIKeyByName(ctx context.Context, user *dbgen.User, name string) (*dbgen.APIKey, error) {
@@ -1593,28 +1606,25 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 
 	var oldKey *dbgen.APIKey
 
-	// to rotate we would want to drop old key from cache immediately (if we don't, not a big deal actually)
+	// check cached user keys for early return on never-expiring keys and to drop old key from cache
 	// the reason we ONLY check in cache is because rotation is only available from when user opens settings
 	// which means to show them the keys we should put them all in cache first when reading
-	userKeysCacheKey := UserAPIKeysCacheKey(user.ID)
-	if keys, err := FetchCachedArray[dbgen.APIKey](ctx, impl.cache, userKeysCacheKey); err == nil {
-		if index := slices.IndexFunc(keys, func(key *dbgen.APIKey) bool { return key.ID == keyID }); index != -1 {
-			oldKey = keys[index]
-			if oldKey.Period >= apiKeyNeverExpirePeriod {
-				slog.WarnContext(ctx, "Cannot rotate a never-expiring API key", "keyID", keyID, "userID", user.ID)
-				return nil, nil, ErrInvalidInput
-			}
-			secret := UUIDToSecret(oldKey.ExternalID)
-			cacheKey := APIKeyCacheKey(secret)
-			_ = impl.cache.Delete(ctx, cacheKey)
-		} else {
-			slog.WarnContext(ctx, "Old key not found in cached user keys", "userID", user.ID, "keyID", keyID)
+	if cachedKey, err := impl.GetCachedUserAPIKey(ctx, user.ID, keyID); err == nil {
+		oldKey = cachedKey
+		if oldKey.Period >= apiKeyNeverExpirePeriod {
+			slog.WarnContext(ctx, "Cannot rotate a never-expiring API key", "keyID", keyID, "userID", user.ID)
+			return nil, nil, ErrInvalidInput
 		}
+		secret := UUIDToSecret(oldKey.ExternalID)
+		_ = impl.cache.Delete(ctx, APIKeyCacheKey(secret))
 	}
+
+	userKeysCacheKey := UserAPIKeysCacheKey(user.ID)
 
 	key, err := impl.querier.RotateAPIKey(ctx, &dbgen.RotateAPIKeyParams{
 		ID:     keyID,
 		UserID: Int(user.ID),
+		Period: apiKeyNeverExpirePeriod,
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
