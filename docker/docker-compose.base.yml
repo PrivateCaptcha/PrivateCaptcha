@@ -95,7 +95,7 @@ services:
       - postgres_data_volume:/var/lib/postgresql/18/main
 
   clickhouse:
-    image: clickhouse/clickhouse-server:26.3.2-alpine
+    image: clickhouse/clickhouse-server:26.3.3-alpine
     pull_policy: if_not_present
     environment:
       CLICKHOUSE_DB: privatecaptcha
