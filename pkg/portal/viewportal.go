@@ -402,6 +402,25 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			},
 		},
 		{
+			Path:       p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, common.NewEndpoint, "setup"),
+			Template:   propertyWizardTemplate,
+			ShowInList: true,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return struct {
+					propertyIntegrationsRenderContext
+					CurrentOrg *UserOrg
+					Step       int
+				}{
+					propertyIntegrationsRenderContext: propertyIntegrationsRenderContext{
+						propertyDashboardRenderContext: propDash(propertyIntegrationsTabIndex, a),
+						Sitekey:                        db.TestPropertySitekey,
+					},
+					CurrentOrg: org,
+					Step:       1,
+				}
+			},
+		},
+		{
 			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.ClientSetupEndpoint),
 			Template: propertyWizardClientSetupTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {

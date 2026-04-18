@@ -57,6 +57,7 @@ type propertyWizardRenderContext struct {
 	NameError   string
 	DomainError string
 	CurrentOrg  *UserOrg
+	Step        int
 }
 
 type userProperty struct {

@@ -50,46 +50,52 @@
 </nav>
 
 <div class="mx-auto w-full max-w-3xl py-10">
-    <div class="mt-6 divide-y divide-gray-200 overflow-hidden rounded-lg bg-gray-50 shadow">
-        <div class="px-4 py-5 sm:px-6">
-            <div class="-ml-4 -mt-4 flex flex-wrap items-center justify-between sm:flex-nowrap">
-                <div class="ml-4 mt-4">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <img class="h-12 w-12" src="{{$.Ctx.CDN}}/portal/img/html5.svg" alt="">
-                        </div>
-                        <div class="ml-4">
-                            <h3 class="text-base font-semibold leading-6 text-gray-900">HTML/JS Snippet</h3>
-                            <p class="text-sm text-gray-500">
-                            Client-side part of the integration
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex ml-4 mt-4 items-center">
-                    <a href="https://docs.privatecaptcha.com/docs/integrations/client-side/" target="_blank" class="text-sm/6 font-semibold text-gray-900 hover:text-pclime-600">Docs <span aria-hidden="true">&rarr;</span></a>
-                </div>
-            </div>
-        </div>
-        <div class="bg-gray-200 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
-            <div class="grow">
-                <code class="block rounded-md bg-gray-200 text-gray-800">
-                    <textarea id="snippet" class="h-40 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this inside the <head> of your website -->` }}
-{{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
-
-{{ `<!-- Add this inside your form -->` }}
-{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</textarea>
-                </code>
-            </div>
-            <div class="mt-4 sm:ml-6 sm:mt-0 sm:flex-shrink-0">
-                <button type="button" class="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                    onclick="var textarea = document.getElementById('snippet'); textarea.focus(); textarea.select(); document.execCommand('copy');">
-                    Copy
-                </button>
-            </div>
-        </div>
-    </div>
-
+    <div class="pb-10">{{template "info-link-message.html" (dict "Text" "See detailed website integration guide in the documentation." "Link" "https://docs.privatecaptcha.com/docs/integrations/client-side/" "LinkText" "Docs")}}</div>
+    <nav aria-label="Progress">
+        <ol role="list" class="overflow-hidden">
+            <li class="relative pb-10">
+                <div aria-hidden="true" class="absolute left-4 top-4 -ml-px mt-0.5 h-full w-0.5 bg-gray-300"></div>
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">1</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Add Private Captcha script <i>inside</i> site <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<head>`}}</code>:</span>
+                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<script defer src="https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}</code></span>
+                    </span>
+                </span>
+            </li>
+             <li class="relative pb-10">
+                <div aria-hidden="true" class="absolute left-4 top-4 -ml-px mt-0.5 h-full w-0.5 bg-gray-300"></div>
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">2</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Add captcha widget <i>inside</i> your <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<form>`}}</code>:</span>
+                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</code></span>
+                    </span>
+                </span>
+            </li>
+             <li class="relative pb-10">
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">3</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Restrict form submission until captcha is solved</span>
+                        <span class="text-sm text-gray-500">For example, disable submit button by default (add attribute <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">disabled</code>) and enable it only inside <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">data-finished-callback</code> <i>or</i> after <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">privatecaptcha:finish</code> event.</span>
+                    </span>
+                </span>
+            </li>
+        </ol>
+    </nav>
     <div class="mt-10">
         <div class="-mt-2 -ml-2 flex flex-wrap items-baseline">
             <h3 class="mt-2 ml-2 text-base font-semibold text-gray-900">Other</h3>
