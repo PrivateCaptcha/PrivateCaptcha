@@ -84,21 +84,17 @@ test('CaptchaWidget execute() fires finished event and callback', async (t) => {
         debug: true
     });
 
-    // Set up event listener
     let eventFired = false;
-    element.addEventListener('privatecaptcha:finish', (event) => {
-        eventFired = true;
-        assert.ok(event.detail.widget, 'Event should include widget in detail');
-        assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
-    });
-
     const finishedEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
 
-        element.addEventListener('privatecaptcha:finish', () => {
+        element.addEventListener('privatecaptcha:finish', (event) => {
             clearTimeout(timeout);
+            eventFired = true;
+            assert.ok(event.detail.widget, 'Event should include widget in detail');
+            assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
             resolve();
         }, { once: true });
     });
@@ -142,21 +138,17 @@ test('CaptchaWidget init() fires init event and callback', async (t) => {
         debug: true
     });
 
-    // Set up event listener
     let eventFired = false;
-    element.addEventListener('privatecaptcha:init', (event) => {
-        eventFired = true;
-        assert.ok(event.detail.widget, 'Event should include widget in detail');
-        assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
-    });
-
     const initEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
 
-        element.addEventListener('privatecaptcha:init', () => {
+        element.addEventListener('privatecaptcha:init', (event) => {
             clearTimeout(timeout);
+            eventFired = true;
+            assert.ok(event.detail.widget, 'Event should include widget in detail');
+            assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
             resolve();
         }, { once: true });
     });
@@ -195,21 +187,17 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
         debug: true
     });
 
-    // Set up event listener
     let eventFired = false;
-    element.addEventListener('privatecaptcha:start', (event) => {
-        eventFired = true;
-        assert.ok(event.detail.widget, 'Event should include widget in detail');
-        assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
-    });
-
     const startedEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
 
-        element.addEventListener('privatecaptcha:start', () => {
+        element.addEventListener('privatecaptcha:start', (event) => {
             clearTimeout(timeout);
+            eventFired = true;
+            assert.ok(event.detail.widget, 'Event should include widget in detail');
+            assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
             resolve();
         }, { once: true });
     });
@@ -248,21 +236,17 @@ test('CaptchaWidget reset() fires reset event and callback', async (t) => {
         debug: true
     });
 
-    // Set up event listener
     let eventFired = false;
-    element.addEventListener('privatecaptcha:reset', (event) => {
-        eventFired = true;
-        assert.ok(event.detail.widget, 'Event should include widget in detail');
-        assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
-    });
-
     const resetEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
 
-        element.addEventListener('privatecaptcha:reset', () => {
+        element.addEventListener('privatecaptcha:reset', (event) => {
             clearTimeout(timeout);
+            eventFired = true;
+            assert.ok(event.detail.widget, 'Event should include widget in detail');
+            assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
             resolve();
         }, { once: true });
     });
