@@ -701,10 +701,12 @@ func TestDeleteAdminAccount(t *testing.T) {
 	}
 
 	ctx := common.TraceContext(t.Context(), t.Name())
-	adminEmail := cfg.Get(common.AdminEmailKey).Value()
-	if len(adminEmail) == 0 {
-		t.Fatal("admin email is not configured")
-	}
+	prevAdminEmail := server.AdminEmail
+	server.AdminEmail = config.NewStaticValue(common.AdminEmailKey, "admin@test.com")
+	defer func() {
+		server.AdminEmail = prevAdminEmail
+	}()
+	adminEmail := server.AdminEmail.Value()
 
 	user, err := store.Impl().FindUserByEmail(ctx, adminEmail)
 	if err != nil {
