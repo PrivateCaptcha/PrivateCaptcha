@@ -13,6 +13,7 @@ services:
       STAGE: test
       PC_PORT: 8080
       PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@postgres:5432/privatecaptcha?sslmode=disable&search_path=backend
+      PC_ADMIN_EMAIL: admin@privatecaptcha.local
       PC_USER_FINGERPRINT_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
       PC_RATE_LIMIT_HEADER: X-REAL-IP
       PC_REGISTRATION_ALLOWED: 1
@@ -35,6 +36,7 @@ services:
       /app/bin/server -mode migrate -migrate-hash $GIT_COMMIT
     environment:
       PC_POSTGRES: postgres://postgres:postgres@postgres:5432/privatecaptcha?search_path=public
+      PC_ADMIN_EMAIL: admin@privatecaptcha.local
       PC_VERBOSE: true
       PC_CLICKHOUSE_OPTIONAL: "true"
     depends_on:
