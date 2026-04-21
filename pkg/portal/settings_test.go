@@ -701,36 +701,18 @@ func TestDeleteAdminAccount(t *testing.T) {
 	}
 
 	ctx := common.TraceContext(t.Context(), t.Name())
-	prevAdminEmail := server.AdminEmail
-	server.AdminEmail = config.NewStaticValue(common.AdminEmailKey, "admin@test.com")
-	defer func() {
-		server.AdminEmail = prevAdminEmail
-	}()
-	adminEmail := server.AdminEmail.Value()
-
-	user, err := store.Impl().FindUserByEmail(ctx, adminEmail)
-	if err != nil {
-		_, txErr := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
-			var auditEvents []*common.AuditLogEvent
-			var createErr error
-			user, _, auditEvents, createErr = impl.CreateNewAccount(ctx, db_tests.CreateNewSubscriptionParams(testPlan),
-				adminEmail, "Admin User", "admin-delete-account", -1 /*expectedUserID*/)
-			if createErr != nil {
-				return nil, createErr
-			}
-			return auditEvents, nil
-		})
-		if txErr != nil {
-			t.Fatalf("Failed to create admin account: %v", txErr)
-		}
-	}
-
 	srv := http.NewServeMux()
 	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
 
-	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	adminEmail := server.AdminEmail.Value()
+	cookie, err := portal_tests.AuthenticateSuite(ctx, adminEmail, srv, server.XSRF, server.Sessions)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	user, err := store.Impl().FindUserByEmail(ctx, adminEmail)
+	if err != nil {
+		t.Fatalf("Failed to retrieve admin user: %v", err)
 	}
 
 	req := httptest.NewRequest("DELETE", "/user", nil)
