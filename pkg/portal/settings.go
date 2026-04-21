@@ -436,7 +436,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (s.AdminEmail != nil) && (s.AdminEmail.Value() == user.Email) {
+	if s.AdminEmail != nil && s.AdminEmail.Value() == user.Email {
 		slog.WarnContext(ctx, "Cannot delete admin user", "userID", user.ID, "email", user.Email)
 		s.RedirectError(http.StatusForbidden, w, r)
 		return
