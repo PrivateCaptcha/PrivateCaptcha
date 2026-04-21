@@ -239,56 +239,37 @@ export class CaptchaWidget {
         this._element.dispatchEvent(event);
     }
 
-    signalInit() {
-        this.dispatchEvent("init");
+    signalEvent(event, callbackName) {
+        this.dispatchEvent(event);
 
-        const callback = this._element.dataset['initCallback'];
+        const callback = this._element.dataset[callbackName];
         if (callback) {
             try {
                 window[callback](this);
             } catch (e) {
-                console.error('[privatecaptcha] Error in init callback:', e);
+                console.error('[privatecaptcha] Error in callback', event, e);
             }
         }
+    }
+
+    signalInit() {
+        this.signalEvent('init', 'initCallback');
     }
 
     signalStarted() {
-        this.dispatchEvent("start");
-
-        const callback = this._element.dataset['startedCallback'];
-        if (callback) {
-            try {
-                window[callback](this);
-            } catch (e) {
-                console.error('[privatecaptcha] Error in started callback:', e);
-            }
-        }
+        this.signalEvent('start', 'startedCallback');
     }
 
     signalFinished() {
-        this.dispatchEvent("finish");
-
-        const callback = this._element.dataset['finishedCallback'];
-        if (callback) {
-            try {
-                window[callback](this);
-            } catch (e) {
-                console.error('[privatecaptcha] Error in finished callback:', e);
-            }
-        }
+        this.signalEvent('finish', 'finishedCallback');
     }
 
     signalErrored() {
-        this.dispatchEvent("error");
+        this.dispatchEvent('error', "erroredCallback");
+    }
 
-        const callback = this._element.dataset['erroredCallback'];
-        if (callback) {
-            try {
-                window[callback](this);
-            } catch (e) {
-                console.error('[privatecaptcha] Error in errored callback:', e);
-            }
-        }
+    signalReset() {
+        this.signalEvent('reset', 'resetCallback');
     }
 
     ensureNoSolutionField() {
@@ -332,6 +313,8 @@ export class CaptchaWidget {
         this.ensureNoSolutionField();
         this._userStarted = false;
         this._apiTriggered = false;
+
+        this.signalReset();
     }
 
     updateStyles() {

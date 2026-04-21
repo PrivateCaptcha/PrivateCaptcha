@@ -500,7 +500,7 @@ test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
     const port = server.address().port;
 
     const originalFetch = globalThis.fetch;
-    
+
     globalThis.fetch = async (url, options = {}) => {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
@@ -522,14 +522,14 @@ test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
                     });
                 });
             });
-            
+
             if (options.signal) {
                 options.signal.addEventListener('abort', () => {
                     req.destroy();
                     reject(new Error('Aborted'));
                 });
             }
-            
+
             req.on('error', reject);
             req.end();
         });
@@ -540,15 +540,15 @@ test('getPuzzle per-call timeout triggers with 1 attempt', async (t) => {
         await assert.rejects(
             async () => {
                 // 1 attempt, per-call timeout 100ms, global timeout 5000ms
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { 
-                    attempts: 1, 
-                    timeout: 100, 
-                    globalTimeout: 5000 
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+                    attempts: 1,
+                    timeout: 100,
+                    globalTimeout: 5000
                 });
             },
             (err) => {
                 // With 1 attempt and per-call timeout, it should fail after max retry attempts
-                assert.ok(err.message.includes('maximum retry attempts') || err.message.includes('timed out'), 
+                assert.ok(err.message.includes('maximum retry attempts') || err.message.includes('timed out'),
                     `Error message should indicate retry failure or timeout, got: ${err.message}`);
                 return true;
             }
@@ -583,15 +583,15 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
             async () => {
                 // 2 attempts, per-call timeout 5000ms, global timeout 200ms
                 // Global timeout should trigger during wait between attempts
-                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, { 
-                    attempts: 2, 
-                    timeout: 5000, 
-                    globalTimeout: 200 
+                await getPuzzle(`http://127.0.0.1:${port}/puzzle`, testSitekey, {
+                    attempts: 2,
+                    timeout: 5000,
+                    globalTimeout: 200
                 });
             },
             (err) => {
                 // Global timeout should abort with timeout error
-                assert.ok(err.message.includes('timed out') || err.message.includes('Fetch timed out'), 
+                assert.ok(err.message.includes('timed out') || err.message.includes('Fetch timed out'),
                     `Error message should indicate timeout, got: ${err.message}`);
                 return true;
             }
