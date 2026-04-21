@@ -132,6 +132,7 @@ jobs:
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
+        PC_ADMIN_EMAIL: admin@privatecaptcha.local
         PC_VERBOSE: 1
       run: ./bin/server -mode migrate -migrate-hash $GITHUB_SHA
 
