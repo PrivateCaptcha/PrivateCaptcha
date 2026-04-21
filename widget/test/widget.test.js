@@ -218,6 +218,59 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
     console.log('✓ Widget started test passed');
 });
 
+test('CaptchaWidget reset() fires reset event and callback', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha"
+                 data-reset-callback="testResetCallback">
+            </div>
+        </form>
+    `;
+
+    let callbackCalled = false;
+    global.window.testResetCallback = (widget) => {
+        callbackCalled = true;
+    };
+
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    assert.ok(element, 'Should find captcha element');
+
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    // Set up event listener
+    let eventFired = false;
+    element.addEventListener('privatecaptcha:reset', (event) => {
+        eventFired = true;
+        assert.ok(event.detail.widget, 'Event should include widget in detail');
+        assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
+    });
+
+    const resetEvent = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Event timeout after 5000ms'));
+        }, 5000);
+
+        element.addEventListener('privatecaptcha:reset', () => {
+            clearTimeout(timeout);
+            resolve();
+        }, { once: true });
+    });
+
+    widget.reset();
+
+    await resetEvent;
+
+    assert.strictEqual(eventFired, true, 'privatecaptcha:reset event should be fired');
+    assert.strictEqual(callbackCalled, true, 'Reset callback should be called');
+
+    console.log('✓ Widget reset event test passed');
+});
+
 test('CaptchaWidget checkConfigured() shows invalid state without sitekey', async (t) => {
     document.body.innerHTML = `
         <form>
