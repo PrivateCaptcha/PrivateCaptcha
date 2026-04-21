@@ -341,6 +341,13 @@ export class CaptchaWidget {
     }
 
     /**
+     * @returns {HTMLElement} underlying element where captcha is rendered
+     */
+    element() {
+        return this._element;
+    }
+
+    /**
      * @returns {string} value of the puzzle solution that needs to be sent for verification
      */
     solution() {
