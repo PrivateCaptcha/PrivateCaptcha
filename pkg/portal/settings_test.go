@@ -710,14 +710,18 @@ func TestDeleteAdminAccount(t *testing.T) {
 
 	user, err := store.Impl().FindUserByEmail(ctx, adminEmail)
 	if err != nil {
-		createErr := error(nil)
-		if _, err = store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		_, txErr := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 			var auditEvents []*common.AuditLogEvent
+			var createErr error
 			user, _, auditEvents, createErr = impl.CreateNewAccount(ctx, db_tests.CreateNewSubscriptionParams(testPlan),
 				adminEmail, "Admin User", "admin-delete-account", -1 /*expectedUserID*/)
-			return auditEvents, createErr
-		}); err != nil {
-			t.Fatalf("Failed to create admin account: %v", err)
+			if createErr != nil {
+				return nil, createErr
+			}
+			return auditEvents, nil
+		})
+		if txErr != nil {
+			t.Fatalf("Failed to create admin account: %v", txErr)
 		}
 	}
 
