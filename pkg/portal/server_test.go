@@ -87,6 +87,7 @@ func TestMain(m *testing.M) {
 			SubscriptionLimits: &db.StubSubscriptionLimits{},
 			EmailVerifier:      &PortalEmailVerifier{},
 			IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
+			AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
 		}
 
 		ctx := context.TODO()
@@ -152,6 +153,7 @@ func TestMain(m *testing.M) {
 		DataCtx:            dataCtx,
 		PlatformCtx:        platformCtx,
 		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
+		AdminEmail:         cfg.Get(common.AdminEmailKey),
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		UserLimiter:        api.NewUserLimiter(store),
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),

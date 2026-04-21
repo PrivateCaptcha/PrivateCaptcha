@@ -695,6 +695,51 @@ func TestDeleteAccount(t *testing.T) {
 	}
 }
 
+func TestDeleteAdminAccount(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	adminEmail := server.AdminEmail.Value()
+	cookie, err := portal_tests.AuthenticateSuite(ctx, adminEmail, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	user, err := store.Impl().FindUserByEmail(ctx, adminEmail)
+	if err != nil {
+		t.Fatalf("Failed to retrieve admin user: %v", err)
+	}
+
+	req := httptest.NewRequest("DELETE", "/user", nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	location, err := resp.Location()
+	if err != nil {
+		t.Fatalf("Failed to read redirect location: %v", err)
+	}
+	if location.String() != "/error/403" {
+		t.Fatalf("Unexpected redirect location %v", location)
+	}
+
+	if _, err := store.Impl().RetrieveUser(ctx, user.ID); err != nil {
+		t.Fatalf("Expected admin user to remain active, got: %v", err)
+	}
+}
+
 type accountStatsSuiteResult struct {
 	user   *dbgen.User
 	srv    *http.ServeMux
