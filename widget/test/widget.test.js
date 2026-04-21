@@ -92,9 +92,7 @@ test('CaptchaWidget execute() fires finished event and callback', async (t) => {
         assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
     });
 
-    widget.execute();
-
-    await new Promise((resolve, reject) => {
+    const finishedEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
@@ -104,6 +102,10 @@ test('CaptchaWidget execute() fires finished event and callback', async (t) => {
             resolve();
         }, { once: true });
     });
+
+    widget.execute();
+
+    await finishedEvent;
 
     assert.strictEqual(eventFired, true, 'privatecaptcha:finish event should be fired');
     assert.strictEqual(callbackCalled, true, 'Finished callback should be called');
@@ -148,9 +150,7 @@ test('CaptchaWidget init() fires init event and callback', async (t) => {
         assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
     });
 
-    widget.init(false);
-
-    await new Promise((resolve, reject) => {
+    const initEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
@@ -160,6 +160,10 @@ test('CaptchaWidget init() fires init event and callback', async (t) => {
             resolve();
         }, { once: true });
     });
+
+    widget.init(false);
+
+    await initEvent;
 
     assert.strictEqual(eventFired, true, 'privatecaptcha:init event should be fired');
     assert.strictEqual(callbackCalled, true, 'Init callback should be called');
@@ -199,9 +203,7 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
         assert.strictEqual(event.detail.element, element, 'Event should include element in detail');
     });
 
-    widget.execute();
-
-    await new Promise((resolve, reject) => {
+    const startedEvent = new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
             reject(new Error('Event timeout after 5000ms'));
         }, 5000);
@@ -211,6 +213,10 @@ test('CaptchaWidget execute() fires started event and callback', async (t) => {
             resolve();
         }, { once: true });
     });
+
+    widget.execute();
+
+    await startedEvent;
 
     assert.strictEqual(eventFired, true, 'privatecaptcha:start event should be fired');
     assert.strictEqual(callbackCalled, true, 'Started callback should be called');
