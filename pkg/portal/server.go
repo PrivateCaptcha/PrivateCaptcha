@@ -162,6 +162,7 @@ type Server struct {
 	Jobs               Jobs
 	PlatformCtx        interface{}
 	DataCtx            interface{}
+	AdminEmail         common.ConfigItem
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
 	AuditLogsFunc      AuditLogsConstructor

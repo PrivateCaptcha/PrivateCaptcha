@@ -255,6 +255,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		RateLimiter:        ipRateLimiter,
 		DataCtx:            dataCtx,
 		IDHasher:           idHasher,
+		AdminEmail:         cfg.Get(common.AdminEmailKey),
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		UserLimiter:        userLimiter,
 		SubscriptionLimits: subscriptionLimits,
