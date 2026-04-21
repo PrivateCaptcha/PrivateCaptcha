@@ -59,13 +59,18 @@ function getBaseOptions() {
 
 function setupPrivateCaptcha() {
     let options = getBaseOptions();
+    const newWidgets = [];
 
     if (options.render !== RENDER_EXPLICIT) {
         let autoWidget = window.privateCaptcha.autoWidget;
 
         const elements = findCaptchaElements(options.compat);
         for (let htmlElement of elements) {
-            autoWidget = renderCaptchaWidget(htmlElement, options);
+            const widget = renderCaptchaWidget(htmlElement, options);
+            if (widget) {
+                newWidgets.push(widget);
+                autoWidget = widget;
+            }
         }
 
         window.privateCaptcha.autoWidget = autoWidget;
@@ -74,6 +79,8 @@ function setupPrivateCaptcha() {
     if (options.compat === RECAPTCHA_COMPAT) {
         window.grecaptcha = window.privateCaptcha;
     }
+
+    return newWidgets;
 }
 
 /**
