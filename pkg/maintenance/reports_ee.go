@@ -18,6 +18,20 @@ import (
 	"github.com/jpillora/backoff"
 )
 
+type WeeklyReport struct {
+	Store      db.Implementor
+	TimeSeries common.TimeSeriesStore
+	PortalURL  string
+	IDHasher   common.IdentifierHasher
+}
+
+type MonthlyReport struct {
+	Store      db.Implementor
+	TimeSeries common.TimeSeriesStore
+	PortalURL  string
+	IDHasher   common.IdentifierHasher
+}
+
 func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow time.Time) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
@@ -172,7 +186,12 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
 
-	reportCtx, err := buildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today, j.PortalURL, j.IDHasher)
+	reportCtx, err := (&WeeklyReport{
+		Store:      j.Store,
+		TimeSeries: j.TimeSeries,
+		PortalURL:  j.PortalURL,
+		IDHasher:   j.IDHasher,
+	}).Build(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -272,7 +291,12 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
 
-	reportCtx, err := buildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today, j.PortalURL, j.IDHasher)
+	reportCtx, err := (&MonthlyReport{
+		Store:      j.Store,
+		TimeSeries: j.TimeSeries,
+		PortalURL:  j.PortalURL,
+		IDHasher:   j.IDHasher,
+	}).Build(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -307,19 +331,14 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	return nil
 }
 
-// BuildWeeklyReport builds a complete weekly usage report for a user.
-func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
-	return buildWeeklyReport(ctx, store, ts, userID, from, mid, to, "", nil)
-}
-
-func buildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time, portalURL string, hasher common.IdentifierHasher) (*email.UsageReportContext, error) {
+func (r *WeeklyReport) Build(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "weekly",
 		PeriodDate:    to.Format("02 Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := ts.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
+	stats, err := r.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -327,24 +346,19 @@ func buildWeeklyReport(ctx context.Context, store db.Implementor, ts common.Time
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, store, report, stats, portalURL, hasher)
+	fillTopProperties(ctx, r.Store, report, stats, r.PortalURL, r.IDHasher)
 
 	return report, nil
 }
 
-// BuildMonthlyReport builds a complete monthly usage report for a user.
-func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
-	return buildMonthlyReport(ctx, store, ts, userID, from, mid, to, "", nil)
-}
-
-func buildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time, portalURL string, hasher common.IdentifierHasher) (*email.UsageReportContext, error) {
+func (r *MonthlyReport) Build(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
 		PeriodDate:    to.Format("Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := ts.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	stats, err := r.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -352,7 +366,7 @@ func buildMonthlyReport(ctx context.Context, store db.Implementor, ts common.Tim
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, store, report, stats, portalURL, hasher)
+	fillTopProperties(ctx, r.Store, report, stats, r.PortalURL, r.IDHasher)
 
 	return report, nil
 }
@@ -467,7 +481,7 @@ func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.I
 		common.PropertyEndpoint,
 		hasher.Encrypt(int(property.ID)))
 	if err != nil {
-		slog.WarnContext(ctx, "Failed to build property dashboard URL", "propertyID", property.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to build property dashboard URL", "propertyID", property.ID, common.ErrAttr(err))
 		return ""
 	}
 

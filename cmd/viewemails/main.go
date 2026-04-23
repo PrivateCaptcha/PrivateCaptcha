@@ -35,6 +35,8 @@ var (
 	templates = loadTemplates()
 )
 
+const stubPropertyURL = "https://portal.privatecaptcha.com/org/abc/property/123"
+
 func homepage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = w.Write([]byte(rootTemplateStart))
@@ -109,11 +111,11 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			VerificationRate:       66.8,
 			AccountLimit:           1000000,
 			TopProperties: []*email.PropertyStat{
-				{Name: "Main Site with extremely long name", Domain: "*.example.com", Count: 5200, Percent: 41.8, Change: 8.3},
-				{Name: "Blog", Domain: "blog.example.com", Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},
-				{Name: "Shop", Domain: "shop.example.com", Count: 2050, Percent: 16.5, Change: -10.9},
-				{Name: "Forum", Domain: "suddomain.app.forum.example.com", Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
-				{Name: "Docs", Domain: "docs.example.com", Count: 800, Percent: 6.4, Change: 100.0},
+				{Name: "Main Site with extremely long name", Domain: "*.example.com", Link: stubPropertyURL, Count: 5200, Percent: 41.8, Change: 8.3},
+				{Name: "Blog", Domain: "blog.example.com", Link: stubPropertyURL, Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},
+				{Name: "Shop", Domain: "shop.example.com", Link: stubPropertyURL, Count: 2050, Percent: 16.5, Change: -10.9},
+				{Name: "Forum", Domain: "suddomain.app.forum.example.com", Link: stubPropertyURL, Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
+				{Name: "Docs", Domain: "docs.example.com", Link: stubPropertyURL, Count: 800, Percent: 6.4, Change: 100.0},
 			},
 		},
 		UserName:    "John Doe",

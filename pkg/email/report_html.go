@@ -98,16 +98,16 @@ const (
               </tr>
               {{- range .TopProperties}}
               <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">{{truncate .Name 24}}</td>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">
                   {{if .Link}}
                   <a href="{{.Link}}" style="color:#000000;text-decoration:none">
-                    {{truncate .Domain 24}} <span style="font-size:12px">&#8599;</span>
+                    {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
                   </a>
                   {{else}}
-                  {{truncate .Domain 24}}
+                  {{truncate .Name 24}}
                   {{end}}
                 </td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>

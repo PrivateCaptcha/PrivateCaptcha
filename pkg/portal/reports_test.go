@@ -13,6 +13,38 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
+const reportPortalURL = "https://portal.privatecaptcha.test"
+
+func newScheduleReportsJob(usersLimit int32) *maintenance.ScheduleReportsJob {
+	return &maintenance.ScheduleReportsJob{
+		Store:       store,
+		TimeSeries:  timeSeries,
+		PlanService: server.PlanService,
+		PortalURL:   reportPortalURL,
+		IDHasher:    server.IDHasher,
+		Stage:       common.StageTest,
+		UsersLimit:  usersLimit,
+	}
+}
+
+func newWeeklyReport(ts common.TimeSeriesStore) *maintenance.WeeklyReport {
+	return &maintenance.WeeklyReport{
+		Store:      store,
+		TimeSeries: ts,
+		PortalURL:  reportPortalURL,
+		IDHasher:   server.IDHasher,
+	}
+}
+
+func newMonthlyReport(ts common.TimeSeriesStore) *maintenance.MonthlyReport {
+	return &maintenance.MonthlyReport{
+		Store:      store,
+		TimeSeries: ts,
+		PortalURL:  reportPortalURL,
+		IDHasher:   server.IDHasher,
+	}
+}
+
 func TestScheduleWeeklyReport(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -35,13 +67,7 @@ func TestScheduleWeeklyReport(t *testing.T) {
 		t.Fatalf("failed to upsert user settings: %v", err)
 	}
 
-	job := &maintenance.ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  timeSeries,
-		PlanService: server.PlanService,
-		Stage:       common.StageTest,
-		UsersLimit:  50,
-	}
+	job := newScheduleReportsJob(50)
 
 	// Monday so weekly reports trigger
 	tnow := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
@@ -99,13 +125,7 @@ func TestScheduleMonthlyReport(t *testing.T) {
 		t.Fatalf("failed to upsert user settings: %v", err)
 	}
 
-	job := &maintenance.ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  timeSeries,
-		PlanService: server.PlanService,
-		Stage:       common.StageTest,
-		UsersLimit:  50,
-	}
+	job := newScheduleReportsJob(50)
 
 	// 1st of month so monthly reports trigger
 	tnow := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -161,13 +181,7 @@ func TestScheduleReportsJob(t *testing.T) {
 		t.Fatalf("failed to upsert user settings: %v", err)
 	}
 
-	job := &maintenance.ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  timeSeries,
-		PlanService: server.PlanService,
-		Stage:       common.StageTest,
-		UsersLimit:  5,
-	}
+	job := newScheduleReportsJob(5)
 
 	// 2025-09-01 is a Monday and the 1st of the month, so both weekly and monthly trigger
 	tnow := time.Date(2025, 9, 1, 10, 0, 0, 0, time.UTC)
@@ -227,13 +241,7 @@ func TestWeeklyReportDedup(t *testing.T) {
 		t.Fatalf("failed to upsert user settings: %v", err)
 	}
 
-	job := &maintenance.ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  timeSeries,
-		PlanService: server.PlanService,
-		Stage:       common.StageTest,
-		UsersLimit:  50,
-	}
+	job := newScheduleReportsJob(50)
 
 	// Monday so weekly reports trigger
 	tnow := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
@@ -301,13 +309,7 @@ func TestMonthlyReportDedup(t *testing.T) {
 		t.Fatalf("failed to upsert user settings: %v", err)
 	}
 
-	job := &maintenance.ScheduleReportsJob{
-		Store:       store,
-		TimeSeries:  timeSeries,
-		PlanService: server.PlanService,
-		Stage:       common.StageTest,
-		UsersLimit:  50,
-	}
+	job := newScheduleReportsJob(50)
 
 	// 1st of month so monthly reports trigger
 	tnow := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
@@ -423,7 +425,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -457,7 +459,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 	t.Run("NoData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -488,7 +490,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 30)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -512,7 +514,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 60)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -531,7 +533,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 50)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -547,7 +549,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, mid, 50)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -575,7 +577,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, mid, 30)
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, from, 60)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -600,7 +602,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -622,7 +624,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 50)
 
-		result, err := maintenance.BuildWeeklyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -667,7 +669,7 @@ func TestBuildMonthlyReport(t *testing.T) {
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 150)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 
-		result, err := maintenance.BuildMonthlyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -686,7 +688,7 @@ func TestBuildMonthlyReport(t *testing.T) {
 	t.Run("NoData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
 
-		result, err := maintenance.BuildMonthlyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -704,7 +706,7 @@ func TestBuildMonthlyReport(t *testing.T) {
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 70)
 
-		result, err := maintenance.BuildMonthlyReport(ctx, store, ts, user.ID, from, mid, now)
+		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
 		if err != nil {
 			t.Fatal(err)
 		}
