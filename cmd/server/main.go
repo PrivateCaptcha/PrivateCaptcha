@@ -425,6 +425,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Store:       businessDB,
 		TimeSeries:  timeSeriesDB,
 		PlanService: planService,
+		PortalURL:   mailer.PortalURL,
+		IDHasher:    idHasher,
 		Stage:       stage,
 		UsersLimit:  50,
 	})

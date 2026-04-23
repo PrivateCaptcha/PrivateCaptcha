@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
+	"net/url"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -171,7 +172,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
 
-	reportCtx, err := BuildWeeklyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	reportCtx, err := j.BuildWeeklyReport(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -271,7 +272,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
 
-	reportCtx, err := BuildMonthlyReport(ctx, j.Store, j.TimeSeries, userID, from, mid, today)
+	reportCtx, err := j.BuildMonthlyReport(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -306,15 +307,14 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	return nil
 }
 
-// BuildWeeklyReport builds a complete weekly usage report for a user.
-func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "weekly",
 		PeriodDate:    to.Format("02 Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := ts.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -322,20 +322,19 @@ func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.Time
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, store, report, stats)
+	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
 
-// BuildMonthlyReport builds a complete monthly usage report for a user.
-func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
 		PeriodDate:    to.Format("Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := ts.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -343,7 +342,7 @@ func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.Tim
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, store, report, stats)
+	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
@@ -392,7 +391,7 @@ func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats
 	)
 }
 
-func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats) {
+func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats, portalURL string, hasher common.IdentifierHasher) {
 	if len(stats.Properties) == 0 || report.TotalRequests == 0 {
 		return
 	}
@@ -432,6 +431,7 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		pStat := &email.PropertyStat{
 			Name:      prop.Name,
 			Domain:    prop.Domain,
+			Link:      propertyDashboardURL(ctx, portalURL, hasher, prop),
 			Count:     ps.CurrentRequests,
 			Percent:   percent,
 			Change:    change,
@@ -444,4 +444,22 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		topProperties = append(topProperties, pStat)
 	}
 	report.TopProperties = topProperties
+}
+
+func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, property *dbgen.Property) string {
+	if (len(portalURL) == 0) || (hasher == nil) || (property == nil) || (!property.OrgID.Valid) {
+		return ""
+	}
+
+	link, err := url.JoinPath(portalURL,
+		common.OrgEndpoint,
+		hasher.Encrypt(int(property.OrgID.Int32)),
+		common.PropertyEndpoint,
+		hasher.Encrypt(int(property.ID)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build property dashboard URL", "propID", property.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	return link
 }

@@ -5,6 +5,7 @@ import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 type PropertyStat struct {
 	Name      string
 	Domain    string
+	Link      string
 	Count     uint64
 	Percent   float64
 	Change    float64
@@ -97,7 +98,15 @@ const (
               </tr>
               {{- range .TopProperties}}
               <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
-                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">{{truncate .Name 24}}</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">
+                  {{if .Link}}
+                  <a href="{{.Link}}" style="color:#000000;text-decoration:none">
+                    {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
+                  </a>
+                  {{else}}
+                  {{truncate .Name 24}}
+                  {{end}}
+                </td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
