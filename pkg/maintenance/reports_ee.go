@@ -309,7 +309,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 
 // BuildWeeklyReport builds a complete weekly usage report for a user.
 func BuildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
-	return buildWeeklyReport(ctx, store, ts, userID, from, mid, to, "" /* portalURL */, nil /* hasher */)
+	return buildWeeklyReport(ctx, store, ts, userID, from, mid, to, "", nil)
 }
 
 func buildWeeklyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time, portalURL string, hasher common.IdentifierHasher) (*email.UsageReportContext, error) {
@@ -334,7 +334,7 @@ func buildWeeklyReport(ctx context.Context, store db.Implementor, ts common.Time
 
 // BuildMonthlyReport builds a complete monthly usage report for a user.
 func BuildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
-	return buildMonthlyReport(ctx, store, ts, userID, from, mid, to, "" /* portalURL */, nil /* hasher */)
+	return buildMonthlyReport(ctx, store, ts, userID, from, mid, to, "", nil)
 }
 
 func buildMonthlyReport(ctx context.Context, store db.Implementor, ts common.TimeSeriesStore, userID int32, from, mid, to time.Time, portalURL string, hasher common.IdentifierHasher) (*email.UsageReportContext, error) {
