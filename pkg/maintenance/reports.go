@@ -22,6 +22,8 @@ type ScheduleReportsJob struct {
 	Store       db.Implementor
 	TimeSeries  common.TimeSeriesStore
 	PlanService billing.PlanService
+	PortalURL   string
+	IDHasher    common.IdentifierHasher
 	Stage       string
 	UsersLimit  int32
 }
