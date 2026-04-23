@@ -18,20 +18,6 @@ import (
 	"github.com/jpillora/backoff"
 )
 
-type WeeklyReport struct {
-	Store      db.Implementor
-	TimeSeries common.TimeSeriesStore
-	PortalURL  string
-	IDHasher   common.IdentifierHasher
-}
-
-type MonthlyReport struct {
-	Store      db.Implementor
-	TimeSeries common.TimeSeriesStore
-	PortalURL  string
-	IDHasher   common.IdentifierHasher
-}
-
 func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow time.Time) error {
 	p, ok := params.(*ScheduleReportsParams)
 	if !ok || (p == nil) {
@@ -186,12 +172,7 @@ func (j *ScheduleReportsJob) scheduleWeeklyReportForUser(ctx context.Context, us
 	from := today.AddDate(0, 0, -14)
 	mid := today.AddDate(0, 0, -7)
 
-	reportCtx, err := (&WeeklyReport{
-		Store:      j.Store,
-		TimeSeries: j.TimeSeries,
-		PortalURL:  j.PortalURL,
-		IDHasher:   j.IDHasher,
-	}).Build(ctx, userID, from, mid, today)
+	reportCtx, err := j.buildWeeklyReport(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build weekly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -291,12 +272,7 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	from := today.AddDate(0, -2, 0)
 	mid := today.AddDate(0, -1, 0)
 
-	reportCtx, err := (&MonthlyReport{
-		Store:      j.Store,
-		TimeSeries: j.TimeSeries,
-		PortalURL:  j.PortalURL,
-		IDHasher:   j.IDHasher,
-	}).Build(ctx, userID, from, mid, today)
+	reportCtx, err := j.buildMonthlyReport(ctx, userID, from, mid, today)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build monthly report", "userID", userID, common.ErrAttr(err))
 		return err
@@ -331,14 +307,14 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 	return nil
 }
 
-func (r *WeeklyReport) Build(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+func (j *ScheduleReportsJob) buildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "weekly",
 		PeriodDate:    to.Format("02 Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := r.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -346,19 +322,19 @@ func (r *WeeklyReport) Build(ctx context.Context, userID int32, from, mid, to ti
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, r.Store, report, stats, r.PortalURL, r.IDHasher)
+	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
 
-func (r *MonthlyReport) Build(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
 		PeriodDate:    to.Format("Jan 2006"),
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := r.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -366,7 +342,7 @@ func (r *MonthlyReport) Build(ctx context.Context, userID int32, from, mid, to t
 
 	fillTotals(report, stats)
 	fillChanges(report, stats)
-	fillTopProperties(ctx, r.Store, report, stats, r.PortalURL, r.IDHasher)
+	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }

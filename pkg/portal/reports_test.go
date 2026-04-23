@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
@@ -27,22 +29,72 @@ func newScheduleReportsJob(usersLimit int32) *maintenance.ScheduleReportsJob {
 	}
 }
 
-func newWeeklyReport(ts common.TimeSeriesStore) *maintenance.WeeklyReport {
-	return &maintenance.WeeklyReport{
-		Store:      store,
-		TimeSeries: ts,
-		PortalURL:  reportPortalURL,
-		IDHasher:   server.IDHasher,
-	}
+func newScheduleReportsJobWithTimeSeries(usersLimit int32, ts common.TimeSeriesStore) *maintenance.ScheduleReportsJob {
+	job := newScheduleReportsJob(usersLimit)
+	job.TimeSeries = ts
+	return job
 }
 
-func newMonthlyReport(ts common.TimeSeriesStore) *maintenance.MonthlyReport {
-	return &maintenance.MonthlyReport{
-		Store:      store,
-		TimeSeries: ts,
-		PortalURL:  reportPortalURL,
-		IDHasher:   server.IDHasher,
+func retrieveUsageReportNotification(t *testing.T, ctx context.Context, userID int32, referenceID string, tnow time.Time) *email.UsageReportContext {
+	t.Helper()
+
+	notifications, err := store.Impl().RetrievePendingUserNotifications(ctx, tnow.Add(-1*time.Minute), 100, 5)
+	if err != nil {
+		t.Fatalf("failed to retrieve pending notifications: %v", err)
 	}
+
+	for _, n := range notifications {
+		if n.UserNotification.UserID.Int32 != userID || n.UserNotification.ReferenceID != referenceID {
+			continue
+		}
+
+		var report email.UsageReportContext
+		if err := json.Unmarshal(n.UserNotification.Payload, &report); err != nil {
+			t.Fatalf("failed to unmarshal report payload: %v", err)
+		}
+
+		return &report
+	}
+
+	t.Fatalf("usage report notification not found for user %d with reference %q", userID, referenceID)
+	return nil
+}
+
+func runWeeklyReportBuild(t *testing.T, ctx context.Context, userID int32, ts common.TimeSeriesStore, tnow time.Time) *email.UsageReportContext {
+	t.Helper()
+
+	job := newScheduleReportsJobWithTimeSeries(50, ts)
+	params := &maintenance.ScheduleReportsParams{
+		UsersLimit: 50,
+		UserID:     userID,
+		Weekly:     true,
+	}
+
+	if err := job.RunOnceAt(ctx, params, tnow); err != nil {
+		t.Fatalf("RunOnceAt failed: %v", err)
+	}
+
+	year, week := tnow.ISOWeek()
+	referenceID := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, userID, year, week)
+	return retrieveUsageReportNotification(t, ctx, userID, referenceID, tnow)
+}
+
+func runMonthlyReportBuild(t *testing.T, ctx context.Context, userID int32, ts common.TimeSeriesStore, tnow time.Time) *email.UsageReportContext {
+	t.Helper()
+
+	job := newScheduleReportsJobWithTimeSeries(50, ts)
+	params := &maintenance.ScheduleReportsParams{
+		UsersLimit: 50,
+		UserID:     userID,
+		Monthly:    true,
+	}
+
+	if err := job.RunOnceAt(ctx, params, tnow); err != nil {
+		t.Fatalf("RunOnceAt failed: %v", err)
+	}
+
+	referenceID := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, userID, tnow.Year(), int(tnow.Month()))
+	return retrieveUsageReportNotification(t, ctx, userID, referenceID, tnow)
 }
 
 func TestScheduleWeeklyReport(t *testing.T) {
@@ -413,22 +465,20 @@ func TestBuildWeeklyReport(t *testing.T) {
 		t.Fatalf("failed to create property 2: %v", err)
 	}
 
-	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
-	mid := now.AddDate(0, 0, -7)
-	from := now.AddDate(0, 0, -14)
+	baseNow := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 
 	t.Run("WithData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow
+		mid := now.AddDate(0, 0, -7)
+		from := now.AddDate(0, 0, -14)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.Period != "weekly" {
 			t.Errorf("expected period 'weekly', got %q", result.Period)
@@ -454,15 +504,16 @@ func TestBuildWeeklyReport(t *testing.T) {
 		if result.VerificationRate == 0 {
 			t.Error("expected non-zero VerificationRate")
 		}
+		if result.PeriodDate != now.Format("02 Jan 2006") {
+			t.Errorf("expected PeriodDate=%q, got %q", now.Format("02 Jan 2006"), result.PeriodDate)
+		}
 	})
 
 	t.Run("NoData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 7)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.TotalRequests != 0 {
 			t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
@@ -486,14 +537,13 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("NoPreviousPeriod", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 14)
+		mid := now.AddDate(0, 0, -7)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 30)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.TotalRequests != 50 {
 			t.Errorf("expected TotalRequests=50, got %d", result.TotalRequests)
@@ -508,16 +558,16 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("DecreaseShowsNegativeChange", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 21)
+		mid := now.AddDate(0, 0, -7)
+		from := now.AddDate(0, 0, -14)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 30)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 20)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 60)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.RequestsChange >= 0 {
 			t.Errorf("expected negative RequestsChange, got %f", result.RequestsChange)
@@ -529,14 +579,14 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("NoChangeShowsZero", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 28)
+		mid := now.AddDate(0, 0, -7)
+		from := now.AddDate(0, 0, -14)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 50)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.RequestsChange != 0 {
 			t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
@@ -545,14 +595,13 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("TopProperties", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 35)
+		mid := now.AddDate(0, 0, -7)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, mid, 50)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if len(result.TopProperties) != 2 {
 			t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))
@@ -571,16 +620,16 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("PropertyChangeDirection", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 42)
+		mid := now.AddDate(0, 0, -7)
+		from := now.AddDate(0, 0, -14)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 50)
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, mid, 30)
 		seedTimeSeries(t, ts, user.ID, prop2.ID, org.ID, from, 60)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if len(result.TopProperties) != 2 {
 			t.Fatalf("expected 2 TopProperties, got %d", len(result.TopProperties))
@@ -598,14 +647,13 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("VerificationRate", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 49)
+		mid := now.AddDate(0, 0, -7)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		expectedRate := 50.0
 		if result.VerificationRate != expectedRate {
@@ -618,16 +666,16 @@ func TestBuildWeeklyReport(t *testing.T) {
 
 	t.Run("VerificationRateChange", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 0, 56)
+		mid := now.AddDate(0, 0, -7)
+		from := now.AddDate(0, 0, -14)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 40)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 100)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 50)
 
-		result, err := newWeeklyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runWeeklyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.VerificationRate != 40 {
 			t.Errorf("expected VerificationRate=40, got %f", result.VerificationRate)
@@ -657,22 +705,20 @@ func TestBuildMonthlyReport(t *testing.T) {
 		t.Fatalf("failed to create property: %v", err)
 	}
 
-	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
-	mid := now.AddDate(0, -1, 0)
-	from := now.AddDate(0, -2, 0)
+	baseNow := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 
 	t.Run("WithData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow
+		mid := now.AddDate(0, -1, 0)
+		from := now.AddDate(0, -2, 0)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 200)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 150)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 
-		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runMonthlyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.Period != "monthly" {
 			t.Errorf("expected period 'monthly', got %q", result.Period)
@@ -683,15 +729,16 @@ func TestBuildMonthlyReport(t *testing.T) {
 		if result.PrevRequests != 150 {
 			t.Errorf("expected PrevRequests=150, got %d", result.PrevRequests)
 		}
+		if result.PeriodDate != now.Format("Jan 2006") {
+			t.Errorf("expected PeriodDate=%q, got %q", now.Format("Jan 2006"), result.PeriodDate)
+		}
 	})
 
 	t.Run("NoData", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 1, 0)
 
-		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runMonthlyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.TotalRequests != 0 {
 			t.Errorf("expected TotalRequests=0, got %d", result.TotalRequests)
@@ -703,13 +750,12 @@ func TestBuildMonthlyReport(t *testing.T) {
 
 	t.Run("NoPreviousPeriod", func(t *testing.T) {
 		ts := db.NewMemoryTimeSeries()
+		now := baseNow.AddDate(0, 2, 0)
+		mid := now.AddDate(0, -1, 0)
 
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, mid, 70)
 
-		result, err := newMonthlyReport(ts).Build(ctx, user.ID, from, mid, now)
-		if err != nil {
-			t.Fatal(err)
-		}
+		result := runMonthlyReportBuild(t, ctx, user.ID, ts, now)
 
 		if result.TotalRequests != 70 {
 			t.Errorf("expected TotalRequests=70, got %d", result.TotalRequests)
