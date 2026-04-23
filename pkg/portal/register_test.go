@@ -2,6 +2,7 @@ package portal
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -80,7 +81,7 @@ func TestPostRegister(t *testing.T) {
 		t.Fatalf("Expected user to have an organization after registration, err: %v", err)
 	}
 
-	expectedPath := "/org/" + server.IDHasher.Encrypt(int(orgs[0].Organization.ID)) + "/property/new"
+	expectedPath := fmt.Sprintf("/?%s=true", common.ParamOnboarding)
 	if path := location.String(); path != expectedPath {
 		t.Errorf("unexpected redirect: %v, expected: %v", path, expectedPath)
 	}
