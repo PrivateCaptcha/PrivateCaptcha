@@ -146,7 +146,7 @@ Account Limit: {{.AccountLimit}}
 
 Top {{len .TopProperties}} properties by requests:
 {{- range .TopProperties}}
-  - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
+  - {{.Name}}{{if .Link}} ({{.Link}}){{end}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
 {{- end}}
 {{- end}}
 
