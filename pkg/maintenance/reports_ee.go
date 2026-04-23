@@ -457,7 +457,7 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 }
 
 func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, property *dbgen.Property) string {
-	if (portalURL == "") || (hasher == nil) || !property.OrgID.Valid {
+	if portalURL == "" || hasher == nil || !property.OrgID.Valid {
 		return ""
 	}
 
