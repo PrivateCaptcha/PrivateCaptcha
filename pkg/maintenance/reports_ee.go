@@ -327,6 +327,10 @@ func (j *ScheduleReportsJob) buildWeeklyReport(ctx context.Context, userID int32
 	return report, nil
 }
 
+func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	return j.buildWeeklyReport(ctx, userID, from, mid, to)
+}
+
 func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
 	report := &email.UsageReportContext{
 		Period:        "monthly",
@@ -345,6 +349,10 @@ func (j *ScheduleReportsJob) buildMonthlyReport(ctx context.Context, userID int3
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
 	return report, nil
+}
+
+func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	return j.buildMonthlyReport(ctx, userID, from, mid, to)
 }
 
 func fillTotals(report *email.UsageReportContext, stats *common.UserReportStats) {
