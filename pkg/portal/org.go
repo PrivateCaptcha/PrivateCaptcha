@@ -45,10 +45,11 @@ const (
 type portalBaseRenderContext struct {
 	CsrfRenderContext
 	SystemNotificationContext
-	Orgs       []*UserOrg
-	CurrentOrg *UserOrg
-	Tab        int
-	CanEdit    bool
+	Orgs           []*UserOrg
+	CurrentOrg     *UserOrg
+	Tab            int
+	CanEdit        bool
+	ShowOnboarding bool
 }
 
 type orgSettingsRenderContext struct {
@@ -395,6 +396,10 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			slog.ErrorContext(ctx, "Unknown tab requested", "tab", tabParam)
 		}
 		if vm, err := s.createOrgDashboardContext(ctx, baseCtx, org); err == nil {
+			if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
+				onboardingParam := r.URL.Query().Get(common.ParamOnboarding)
+				vm.ShowOnboarding = common.ParseBoolean(onboardingParam)
+			}
 			model = vm
 		} else {
 			derr = err

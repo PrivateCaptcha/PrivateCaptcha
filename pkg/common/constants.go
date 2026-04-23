@@ -64,6 +64,7 @@ const (
 	ParamPosition          = "position"
 	ParamWeeklyReport      = "weekly_report"
 	ParamMonthlyReport     = "monthly_report"
+	ParamOnboarding        = "onboarding"
 	All                    = "all"
 )
 

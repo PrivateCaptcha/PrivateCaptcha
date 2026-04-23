@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -90,13 +91,14 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 
 	if step == loginStepSignUpVerify {
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
-		if user, org, err := s.doRegister(ctx, sess); err == nil {
+		if user, _, err := s.doRegister(ctx, sess); err == nil {
 			_ = sess.Set(ctx, session.KeyUserID, user.ID)
 			_ = sess.Set(ctx, session.KeyFirstSession, true)
 			_, hasOrgInvite := sess.Get(ctx, session.KeyOrgInviteID).(int32)
 			returnURL, hasReturnURL := sess.Get(ctx, session.KeyReturnURL).(string)
 			if !hasOrgInvite && (!hasReturnURL || (len(returnURL) == 0) || (returnURL == "/") || (returnURL == rootRedirectURL)) {
-				newRegistrationRedirectURL = s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)), common.PropertyEndpoint, common.NewEndpoint)
+				// we could redirect to create first widget on non-EE codepath, but non-EE is designed for only 1 user in mind
+				newRegistrationRedirectURL = fmt.Sprintf("%s?%s=true", rootRedirectURL, common.ParamOnboarding)
 			}
 		} else {
 			slog.ErrorContext(ctx, "Failed to complete registration", common.ErrAttr(err))

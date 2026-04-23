@@ -282,8 +282,9 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
 				return &orgDashboardRenderContext{
-					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex), PaginationRenderContext: pagination,
-					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
+					portalBaseRenderContext: baseCtx(portalPropertiesTabIndex),
+					PaginationRenderContext: pagination,
+					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
 				}
 			},
 		},
@@ -544,6 +545,21 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				return &loginRenderContext{
 					CsrfRenderContext: token, CaptchaRenderContext: captchaCtx,
 					Email: "invited@example.com", CanRegister: true, IsRegister: true,
+				}
+			},
+		},
+		// --- Root ---
+		{
+			Path:       s.RelURL("/{$}"),
+			Template:   portalTemplate,
+			ShowInList: true,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				bctx := baseCtx(portalPropertiesTabIndex)
+				bctx.ShowOnboarding = true
+				return &orgDashboardRenderContext{
+					portalBaseRenderContext: bctx,
+					PaginationRenderContext: pagination,
+					Properties:              []*userProperty{prop, viewStubProperty("Blog", "org1")},
 				}
 			},
 		},

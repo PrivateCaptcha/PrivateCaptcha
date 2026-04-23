@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -71,7 +72,7 @@ func listPages(w http.ResponseWriter, _ *http.Request) {
 		if !p.ShowInList {
 			continue
 		}
-		_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", p.Path, p.Path)
+		_, _ = fmt.Fprintf(w, "<li><a href=\"%s\">%s</a></li>\n", strings.TrimSuffix(p.Path, "{$}"), p.Path)
 	}
 	_, _ = w.Write([]byte(listTemplateEnd))
 }
@@ -264,7 +265,6 @@ func main() {
 		http.Redirect(w, r, defaultOrgPath, http.StatusFound)
 	}
 	router.HandleFunc("/{$}", portalRoot)
-	router.HandleFunc("GET /portal/{$}", portalRoot)
 
 	// page list available at /list
 	router.HandleFunc("/list", listPages)
