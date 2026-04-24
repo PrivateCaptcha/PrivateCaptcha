@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"flag"
+	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -109,5 +111,9 @@ func TestMain(m *testing.M) {
 
 	// TODO: seed data
 
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	if err := store.Cache.SaveTo(context.Background(), io.Discard, 100000); err != nil {
+		panic(fmt.Sprintf("Failed to save cache to dev null: %v", err))
+	}
+	os.Exit(exitCode)
 }

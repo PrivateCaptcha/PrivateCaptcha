@@ -14,6 +14,7 @@ services:
       PC_PORT: 8080
       PC_VERBOSE: 1
       PC_HEALTHCHECK_INTERVAL: 60
+      PC_CACHE_DIRECTORY: /var/lib/privatecaptcha/cache
     depends_on:
       migration:
         condition: service_completed_successfully
@@ -33,6 +34,8 @@ services:
       - postgres_network
       - clickhouse_network
       - server_network
+    volumes:
+      - cache_data_volume:/var/lib/privatecaptcha/cache
 
   migration:
     build:
@@ -131,3 +134,4 @@ networks:
 volumes:
   postgres_data_volume:
   clickhouse_data_volume:
+  cache_data_volume:
