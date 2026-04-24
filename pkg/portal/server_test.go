@@ -1,11 +1,11 @@
 package portal
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"testing"
 	"time"
@@ -45,6 +45,26 @@ type stubLicenseService struct{}
 
 func (s *stubLicenseService) IsRegistered() bool {
 	return false
+}
+
+func testCacheRoundtrip(store *db.BusinessStore) int {
+	var buf bytes.Buffer
+	testKey := db.APIKeyCacheKey("test-key-roundtrip")
+	_ = store.Cache.Set(context.Background(), testKey, "test-value-roundtrip")
+	if err := store.Cache.SaveTo(context.Background(), &buf, db.TestCacheMaxEntries); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to save cache to buffer: %v\n", err)
+		return 1
+	}
+	newCache, _ := db.NewMemoryCache[db.CacheKey, any]("test", 100_000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
+	if err := newCache.LoadFrom(context.Background(), &buf); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load cache from buffer: %v\n", err)
+		return 1
+	}
+	if val, err := newCache.Get(context.Background(), testKey); err != nil || val != "test-value-roundtrip" {
+		fmt.Fprintf(os.Stderr, "Cache round-trip failed. val: %v, err: %v\n", val, err)
+		return 1
+	}
+	return 0
 }
 
 func TestMain(m *testing.M) {
@@ -101,8 +121,8 @@ func TestMain(m *testing.M) {
 		}
 
 		exitCode := m.Run()
-		if err := store.Cache.SaveTo(context.Background(), io.Discard, 100000); err != nil {
-			panic(fmt.Sprintf("Failed to save cache to dev null: %v", err))
+		if exitCode == 0 {
+			exitCode = testCacheRoundtrip(store)
 		}
 		os.Exit(exitCode)
 	}
@@ -187,8 +207,8 @@ func TestMain(m *testing.M) {
 	job.RunOnce(ctx, job.NewParams())
 
 	exitCode := m.Run()
-	if err := store.Cache.SaveTo(context.Background(), io.Discard, 100000); err != nil {
-		panic(fmt.Sprintf("Failed to save cache to dev null: %v", err))
+	if exitCode == 0 {
+		exitCode = testCacheRoundtrip(store)
 	}
 	os.Exit(exitCode)
 }

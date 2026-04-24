@@ -121,6 +121,42 @@ func (sd *SessionData) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func (sd *SessionData) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+
+	sd.lock.Lock()
+	defer sd.lock.Unlock()
+
+	if err := encoder.Encode(sd.sid); err != nil {
+		return nil, err
+	}
+	if err := encoder.Encode(sd.values); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (sd *SessionData) GobDecode(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	decoder := gob.NewDecoder(buf)
+
+	var sid string
+	if err := decoder.Decode(&sid); err != nil {
+		return err
+	}
+	var values map[SessionKey]SessionValue
+	if err := decoder.Decode(&values); err != nil {
+		return err
+	}
+
+	sd.sid = sid
+	sd.values = values
+
+	return nil
+}
+
 func (sd *SessionData) Merge(from *SessionData) {
 	// Acquire locks in consistent order to prevent deadlock
 	first, second := sd, from
