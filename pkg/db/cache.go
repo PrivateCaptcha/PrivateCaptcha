@@ -45,8 +45,8 @@ type OtterCacheOption[TKey comparable, TValue comparable] func(*otter.Options[TK
 func NewMemoryCache[TKey comparable, TValue comparable](name string, maxCacheSize int, missingValue TValue, expiryTTL, refreshTTL, missingTTL time.Duration) (*memcache[TKey, TValue], error) {
 	return NewMemoryCacheEx[TKey, TValue](name, maxCacheSize, missingValue, missingTTL,
 		func(o *otter.Options[TKey, TValue]) {
-			o.ExpiryCalculator = otter.ExpiryAccessing[TKey, TValue](10 * time.Minute)
-			o.RefreshCalculator = otter.RefreshWriting[TKey, TValue](5 * time.Minute)
+			o.ExpiryCalculator = otter.ExpiryAccessing[TKey, TValue](expiryTTL)
+			o.RefreshCalculator = otter.RefreshWriting[TKey, TValue](refreshTTL)
 		})
 }
 
