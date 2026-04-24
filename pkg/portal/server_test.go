@@ -48,14 +48,15 @@ func (s *stubLicenseService) IsRegistered() bool {
 }
 
 func testCacheRoundtrip(store *db.BusinessStore) int {
+	const maxEntries = 100_000
 	var buf bytes.Buffer
 	testKey := db.APIKeyCacheKey("test-key-roundtrip")
 	_ = store.Cache.Set(context.Background(), testKey, "test-value-roundtrip")
-	if err := store.Cache.SaveTo(context.Background(), &buf, db.TestCacheMaxEntries); err != nil {
+	if err := store.Cache.SaveTo(context.Background(), &buf, maxEntries); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to save cache to buffer: %v\n", err)
 		return 1
 	}
-	newCache, _ := db.NewMemoryCache[db.CacheKey, any]("test", 100_000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
+	newCache, _ := db.NewMemoryCache[db.CacheKey, any]("test", maxEntries, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
 	if err := newCache.LoadFrom(context.Background(), &buf); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load cache from buffer: %v\n", err)
 		return 1

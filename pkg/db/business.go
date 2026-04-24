@@ -271,6 +271,17 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) {
 	}
 	defer file.Close()
 
+	info, err := file.Stat()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to stat cache file", "file", filePath, common.ErrAttr(err))
+		return
+	}
+
+	if age := time.Since(info.ModTime()); age > defaultCacheTTL {
+		slog.ErrorContext(ctx, "Ignoring too old cache file", "file", filePath, "age", age.String())
+		return
+	}
+
 	if err := s.Cache.LoadFrom(ctx, file); err != nil {
 		slog.ErrorContext(ctx, "Failed to load cache from file", "file", filePath, common.ErrAttr(err))
 	} else {
