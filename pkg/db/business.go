@@ -235,6 +235,10 @@ func (s *BusinessStore) SaveCache(ctx context.Context, dir string, maxItems int)
 			slog.ErrorContext(ctx, "Failed to stat cache directory", "dir", dir, common.ErrAttr(err))
 			return
 		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			slog.ErrorContext(ctx, "Failed to create cache directory", "dir", dir, common.ErrAttr(err))
+			return
+		}
 	}
 
 	filePath := filepath.Join(dir, cachePersistFile)

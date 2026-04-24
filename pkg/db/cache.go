@@ -236,6 +236,8 @@ func (c *memcache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, maxIte
 		}
 
 		if err := ctx.Err(); err != nil {
+			slog.WarnContext(ctx, "Truncated cache due to context cancellation", common.ErrAttr(err))
+			// it's not reported as error because we care only about best-effort here
 			break
 		}
 
