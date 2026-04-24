@@ -8,7 +8,6 @@ import (
 	htmltpl "html/template"
 	"log/slog"
 	"sync"
-	"text/template"
 	texttpl "text/template"
 	"time"
 )
@@ -41,7 +40,7 @@ type ScheduledNotification struct {
 	EmailTo      *string
 }
 
-func NewEmailTemplate(name, contentHTML, contentText string, funcs template.FuncMap) *EmailTemplate {
+func NewEmailTemplate(name, contentHTML, contentText string, funcs htmltpl.FuncMap) *EmailTemplate {
 	return &EmailTemplate{
 		name:        name,
 		contentHTML: contentHTML,
@@ -58,7 +57,7 @@ type EmailTemplate struct {
 	contentText string
 
 	// Parsed templates - lazy initialized
-	funcs      template.FuncMap
+	funcs      htmltpl.FuncMap
 	parsedHTML *htmltpl.Template
 	parsedText *texttpl.Template
 	parseOnce  sync.Once
