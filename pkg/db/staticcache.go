@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"sync"
 	"time"
@@ -133,4 +134,12 @@ func (c *StaticCache[TKey, TValue]) SetTTL(ctx context.Context, key TKey, _ time
 func (c *StaticCache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
 	_, found := c.cache.LoadAndDelete(key)
 	return found
+}
+
+func (c *StaticCache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, max int) error {
+	return nil
+}
+
+func (c *StaticCache[TKey, TValue]) LoadFrom(context.Context, io.Reader) error {
+	return nil
 }

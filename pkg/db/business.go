@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -40,6 +42,7 @@ const (
 	defaultCacheRefresh      = 30 * time.Minute
 	negativeCacheTTL         = 5 * time.Minute
 	auditBatchSize           = 100
+	cachePersistFile         = "cache.db"
 )
 
 type BusinessStore struct {
@@ -220,4 +223,53 @@ func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *d
 	}
 
 	return false
+}
+
+func (s *BusinessStore) SaveCache(ctx context.Context, dir string, maxItems int) {
+	if len(dir) == 0 {
+		return
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			slog.ErrorContext(ctx, "Failed to stat cache directory", "dir", dir, common.ErrAttr(err))
+			return
+		}
+	}
+
+	filePath := filepath.Join(dir, cachePersistFile)
+	file, err := os.Create(filePath)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create cache file", "file", filePath, common.ErrAttr(err))
+		return
+	}
+	defer file.Close()
+
+	if err := s.Cache.SaveTo(ctx, file, maxItems); err != nil {
+		slog.ErrorContext(ctx, "Failed to save cache", "file", filePath, common.ErrAttr(err))
+	} else {
+		slog.InfoContext(ctx, "Saved cache to file successfully", "file", filePath)
+	}
+}
+
+func (s *BusinessStore) LoadCache(ctx context.Context, dir string) {
+	if len(dir) == 0 {
+		return
+	}
+
+	filePath := filepath.Join(dir, cachePersistFile)
+	file, err := os.Open(filePath)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			slog.ErrorContext(ctx, "Failed to open cache file", "file", filePath, common.ErrAttr(err))
+		}
+		return
+	}
+	defer file.Close()
+
+	if err := s.Cache.LoadFrom(ctx, file); err != nil {
+		slog.ErrorContext(ctx, "Failed to load cache from file", "file", filePath, common.ErrAttr(err))
+	} else {
+		slog.InfoContext(ctx, "Loaded cache from file successfully", "file", filePath)
+	}
 }

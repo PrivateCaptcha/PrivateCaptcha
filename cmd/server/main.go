@@ -48,6 +48,7 @@ const (
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
+	cachePeristSize         = 1_000
 )
 
 const (
@@ -359,6 +360,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		}
 	}()
 
+	go businessDB.LoadCache(ctx, cfg.Get(common.CacheDirKey).Value())
+
 	businessDB.Start(ctx, _auditLogInterval)
 
 	jobConcurrency := config.AsInt(cfg.Get(common.MaintenanceJobConcurrencyKey), 2)
@@ -465,12 +468,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		defer wg.Done()
 		<-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
+		go businessDB.SaveCache(shutdownCtx, cfg.Get(common.CacheDirKey).Value(), cachePeristSize)
+		defer cancel()
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()
 		businessDB.Shutdown()
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
-		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
 		serr := httpServer.Shutdown(shutdownCtx)
 		stopOngoingGracefully()
