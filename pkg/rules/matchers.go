@@ -1,6 +1,8 @@
 package rules
 
 import (
+	"bytes"
+	"encoding/gob"
 	"net/netip"
 	"strings"
 
@@ -153,6 +155,21 @@ func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
 type BotMatcher struct {
 	UAParser                 *useragent.Parser
 	ConditionOperatorNegated bool
+}
+
+func (bm *BotMatcher) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(bm.ConditionOperatorNegated); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (bm *BotMatcher) GobDecode(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	return dec.Decode(&bm.ConditionOperatorNegated)
 }
 
 func (bm *BotMatcher) looksLikeBot(ua string) bool {

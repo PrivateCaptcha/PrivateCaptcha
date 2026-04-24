@@ -38,6 +38,8 @@ type memcache[TKey comparable, TValue comparable] struct {
 
 type pcOtterLogger struct{}
 
+const TestCacheMaxEntries = 100_000
+
 func (pcOtterLogger) Warn(ctx context.Context, msg string, err error) {
 	slog.WarnContext(ctx, msg, "source", "otter", common.ErrAttr(err))
 }

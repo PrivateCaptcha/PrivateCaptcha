@@ -170,3 +170,27 @@ func TestSessionDataMarshalling(t *testing.T) {
 		t.Errorf("Expected email test@example.com, got %v", val)
 	}
 }
+
+func TestSessionGobEncoding(t *testing.T) {
+	sd := NewSessionData("test")
+	sd.set(KeyUserID, 123)
+	sd.set(KeyUserEmail, "test@example.com")
+
+	data, err := sd.GobEncode()
+	if err != nil {
+		t.Fatalf("GobEncode failed: %v", err)
+	}
+
+	sd2 := NewSessionData("test2")
+	if err := sd2.GobDecode(data); err != nil {
+		t.Fatalf("GobDecode failed: %v", err)
+	}
+
+	if val, _ := sd2.get(KeyUserID); val != 123 {
+		t.Errorf("Expected UserID 123, got %v", val)
+	}
+
+	if val, _ := sd2.get(KeyUserEmail); val != "test@example.com" {
+		t.Errorf("Expected email test@example.com, got %v", val)
+	}
+}
