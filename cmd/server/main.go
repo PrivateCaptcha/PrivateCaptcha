@@ -48,7 +48,7 @@ const (
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
-	cachePeristSize         = 1_000
+	cachePersistSize        = 1_000
 )
 
 const (
@@ -469,7 +469,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		<-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
-		go businessDB.SaveCache(shutdownCtx, cfg.Get(common.CacheDirKey).Value(), cachePeristSize)
+		go businessDB.SaveCache(shutdownCtx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
 		defer cancel()
 		jobs.Shutdown()
 		sessionStore.Shutdown()
