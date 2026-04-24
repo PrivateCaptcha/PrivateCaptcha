@@ -362,6 +362,9 @@ func init() {
 	gob.Register([]*dbgen.Property{})
 	gob.Register([]*dbgen.APIKey{})
 	gob.Register(struct{}{})
+	gob.Register([]*common.TimeCount{})
+	gob.Register([]*common.OrgTimeCount{})
+	gob.Register([]*common.TimePeriodStat{})
 }
 
 func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {
