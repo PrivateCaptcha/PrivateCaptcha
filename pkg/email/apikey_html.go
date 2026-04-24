@@ -14,8 +14,8 @@ type APIKeyExpirationContext struct {
 }
 
 var (
-	APIKeyExpirationTemplate = common.NewEmailTemplate("apikey-expiration", apiKeyExpirationHTMLTemplate, apiKeyExpirationTextTemplate)
-	APIKeyExpiredTemplate    = common.NewEmailTemplate("apikey-expired", apiKeyExpiredHTMLTemplate, apiKeyExpiredTextTemplate)
+	APIKeyExpirationTemplate = common.NewEmailTemplate("apikey-expiration", apiKeyExpirationHTMLTemplate, apiKeyExpirationTextTemplate, emailFuncs)
+	APIKeyExpiredTemplate    = common.NewEmailTemplate("apikey-expired", apiKeyExpiredHTMLTemplate, apiKeyExpiredTextTemplate, emailFuncs)
 )
 
 const (

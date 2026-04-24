@@ -8,6 +8,7 @@ import (
 	htmltpl "html/template"
 	"log/slog"
 	"sync"
+	"text/template"
 	texttpl "text/template"
 	"time"
 )
@@ -40,11 +41,12 @@ type ScheduledNotification struct {
 	EmailTo      *string
 }
 
-func NewEmailTemplate(name, contentHTML, contentText string) *EmailTemplate {
+func NewEmailTemplate(name, contentHTML, contentText string, funcs template.FuncMap) *EmailTemplate {
 	return &EmailTemplate{
 		name:        name,
 		contentHTML: contentHTML,
 		contentText: contentText,
+		funcs:       funcs,
 	}
 }
 
@@ -56,6 +58,7 @@ type EmailTemplate struct {
 	contentText string
 
 	// Parsed templates - lazy initialized
+	funcs      template.FuncMap
 	parsedHTML *htmltpl.Template
 	parsedText *texttpl.Template
 	parseOnce  sync.Once
@@ -87,14 +90,14 @@ func (et *EmailTemplate) Hash() string {
 func (et *EmailTemplate) ensureParsed(ctx context.Context) {
 	et.parseOnce.Do(func() {
 		if len(et.contentHTML) > 0 {
-			if tpl, err := htmltpl.New("HtmlBody").Parse(et.contentHTML); err != nil {
+			if tpl, err := htmltpl.New("HtmlBody").Funcs(et.funcs).Parse(et.contentHTML); err != nil {
 				slog.ErrorContext(ctx, "Failed to parse HTML template", ErrAttr(err))
 			} else {
 				et.parsedHTML = tpl
 			}
 		}
 		if len(et.contentText) > 0 {
-			if tpl, err := texttpl.New("TextBody").Parse(et.contentText); err != nil {
+			if tpl, err := texttpl.New("TextBody").Funcs(et.funcs).Parse(et.contentText); err != nil {
 				slog.ErrorContext(ctx, "Failed to parse text template", ErrAttr(err))
 			} else {
 				et.parsedText = tpl

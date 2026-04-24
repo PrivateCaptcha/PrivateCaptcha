@@ -29,7 +29,7 @@ type UsageReportContext struct {
 }
 
 var (
-	UsageReportTemplate = common.NewEmailTemplate("usage-report", usageReportHTMLTemplate, usageReportTextTemplate)
+	UsageReportTemplate = common.NewEmailTemplate("usage-report", usageReportHTMLTemplate, usageReportTextTemplate, emailFuncs)
 )
 
 const (

@@ -9,7 +9,7 @@ func TestEmailTemplateRenderHTMLInvalidTemplate(t *testing.T) {
 	t.Parallel()
 
 	// Template with invalid syntax - unclosed action
-	et := NewEmailTemplate("invalid", "Hello {{.Name", "")
+	et := NewEmailTemplate("invalid", "Hello {{.Name", "", nil)
 
 	ctx := context.Background()
 	result, err := et.RenderHTML(ctx, struct{ Name string }{"Test"})
@@ -29,7 +29,7 @@ func TestEmailTemplateRenderHTMLMissingField(t *testing.T) {
 	t.Parallel()
 
 	// Template referencing non-existent field
-	et := NewEmailTemplate("missing_field", "Hello {{.NonExistent.Field}}", "")
+	et := NewEmailTemplate("missing_field", "Hello {{.NonExistent.Field}}", "", nil)
 
 	ctx := context.Background()
 	_, err := et.RenderHTML(ctx, struct{ Name string }{"Test"})
@@ -44,7 +44,7 @@ func TestEmailTemplateRenderTextInvalidTemplate(t *testing.T) {
 	t.Parallel()
 
 	// Template with invalid syntax
-	et := NewEmailTemplate("invalid", "", "Hello {{.Name")
+	et := NewEmailTemplate("invalid", "", "Hello {{.Name", nil)
 
 	ctx := context.Background()
 	result, err := et.RenderText(ctx, struct{ Name string }{"Test"})
@@ -64,7 +64,7 @@ func TestEmailTemplateRenderTextMissingField(t *testing.T) {
 	t.Parallel()
 
 	// Template referencing non-existent field
-	et := NewEmailTemplate("missing_field", "", "Hello {{.NonExistent.Field}}")
+	et := NewEmailTemplate("missing_field", "", "Hello {{.NonExistent.Field}}", nil)
 
 	ctx := context.Background()
 	_, err := et.RenderText(ctx, struct{ Name string }{"Test"})
@@ -78,7 +78,7 @@ func TestEmailTemplateRenderTextMissingField(t *testing.T) {
 func TestEmailTemplateRenderHTMLValid(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("valid", "Hello {{.Name}}!", "")
+	et := NewEmailTemplate("valid", "Hello {{.Name}}!", "", nil)
 
 	ctx := context.Background()
 	result, err := et.RenderHTML(ctx, struct{ Name string }{"World"})
@@ -96,7 +96,7 @@ func TestEmailTemplateRenderHTMLValid(t *testing.T) {
 func TestEmailTemplateRenderTextValid(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("valid", "", "Hello {{.Name}}!")
+	et := NewEmailTemplate("valid", "", "Hello {{.Name}}!", nil)
 
 	ctx := context.Background()
 	result, err := et.RenderText(ctx, struct{ Name string }{"World"})
@@ -114,7 +114,7 @@ func TestEmailTemplateRenderTextValid(t *testing.T) {
 func TestEmailTemplateHash(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("test", "HTML content", "")
+	et := NewEmailTemplate("test", "HTML content", "", nil)
 	hash := et.Hash()
 
 	if hash == "" {
@@ -131,7 +131,7 @@ func TestEmailTemplateHash(t *testing.T) {
 func TestEmailTemplateHashWithTextOnly(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("test", "", "Text content")
+	et := NewEmailTemplate("test", "", "Text content", nil)
 	hash := et.Hash()
 
 	if hash == "" {
@@ -142,7 +142,7 @@ func TestEmailTemplateHashWithTextOnly(t *testing.T) {
 func TestEmailTemplateHashWithNameOnly(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("test-name", "", "")
+	et := NewEmailTemplate("test-name", "", "", nil)
 	hash := et.Hash()
 
 	if hash == "" {
@@ -153,7 +153,7 @@ func TestEmailTemplateHashWithNameOnly(t *testing.T) {
 func TestEmailTemplateEnsureParsedOnlyOnce(t *testing.T) {
 	t.Parallel()
 
-	et := NewEmailTemplate("test", "{{.Name}}", "{{.Name}}")
+	et := NewEmailTemplate("test", "{{.Name}}", "{{.Name}}", nil)
 
 	ctx := context.Background()
 

@@ -3,7 +3,7 @@ package email
 import "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 
 var (
-	WelcomeEmailTemplate = common.NewEmailTemplate("welcome", welcomeHTMLTemplate, welcomeTextTemplate)
+	WelcomeEmailTemplate = common.NewEmailTemplate("welcome", welcomeHTMLTemplate, welcomeTextTemplate, emailFuncs)
 )
 
 const (

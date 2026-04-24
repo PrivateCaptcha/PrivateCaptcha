@@ -12,7 +12,7 @@ type OrgInvitationContext struct {
 }
 
 var (
-	OrgInvitationTemplate = common.NewEmailTemplate("org-invitation", orgInvitationHTMLTemplate, orgInvitationTextTemplate)
+	OrgInvitationTemplate = common.NewEmailTemplate("org-invitation", orgInvitationHTMLTemplate, orgInvitationTextTemplate, emailFuncs)
 )
 
 const (

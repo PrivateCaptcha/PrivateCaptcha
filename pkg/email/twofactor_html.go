@@ -15,7 +15,7 @@ type TwoFactorEmailContext struct {
 }
 
 var (
-	TwoFactorEmailTemplate = common.NewEmailTemplate("twofactor", twoFactorHTMLTemplate, twoFactorTextTemplate)
+	TwoFactorEmailTemplate = common.NewEmailTemplate("twofactor", twoFactorHTMLTemplate, twoFactorTextTemplate, emailFuncs)
 )
 
 const (
