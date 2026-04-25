@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -229,7 +230,15 @@ func newMockCache() *mockCache {
 }
 
 func (m *mockCache) HitRatio() float64 { return 0.0 }
-func (m *mockCache) Missing() any      { return nil }
+func (m *mockCache) SaveTo(ctx context.Context, w io.Writer, max int) error {
+	return nil
+}
+
+func (m *mockCache) LoadFrom(context.Context, io.Reader) error {
+	return nil
+}
+
+func (m *mockCache) Missing() any { return nil }
 func (m *mockCache) GetWithRefresh(ctx context.Context, key CacheKey) (any, bool, error) {
 	val, err := m.Get(ctx, key)
 	return val, false, err

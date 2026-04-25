@@ -49,7 +49,7 @@ func init() {
 	}
 }
 
-func NewCheckLicenseJob(store db.Implementor, config common.ConfigStore, version string, quitFunc func(ctx context.Context)) (*CheckLicenseJob, error) {
+func NewCheckLicenseJob(store db.Implementor, config common.ConfigStore, version string, quitFunc func(ctx context.Context, immediately bool)) (*CheckLicenseJob, error) {
 	keys, err := license.ActivationKeys()
 	if err != nil {
 		if requireActivationKeys() {
@@ -84,7 +84,7 @@ type CheckLicenseJob struct {
 	url          string
 	licenseKey   common.ConfigItem
 	adminEmail   common.ConfigItem
-	quitFunc     func(ctx context.Context)
+	quitFunc     func(ctx context.Context, immediately bool)
 	version      string
 	licenseValid atomic.Bool
 }

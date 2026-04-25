@@ -109,5 +109,9 @@ func TestMain(m *testing.M) {
 
 	// TODO: seed data
 
-	os.Exit(m.Run())
+	exitCode := m.Run()
+	if exitCode == 0 {
+		exitCode = db_tests.TestCacheSerialization(store)
+	}
+	os.Exit(exitCode)
 }

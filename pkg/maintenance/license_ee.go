@@ -21,7 +21,7 @@ func (j *CheckLicenseJob) RunOnce(ctx context.Context, params any) error {
 	if err := j.checkLicense(ctx); err != nil {
 		j.licenseValid.Store(false)
 		if j.quitFunc != nil {
-			go j.quitFunc(common.CopyTraceID(ctx, context.Background()))
+			go j.quitFunc(common.CopyTraceID(ctx, context.Background()), true /*immediately*/)
 		}
 		return err
 	}

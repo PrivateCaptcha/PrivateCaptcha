@@ -1,7 +1,9 @@
 package rules
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -33,12 +35,14 @@ type rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(op *overrideProperty) bool
 	IsTerminal() bool
+	IsStale() bool
 }
 
 type CompiledRules struct {
 	rules            []rule
 	hasBlockRules    bool
 	hasTerminalRules bool
+	isStale          bool
 }
 
 func NewCompiledRules(rules []rule) *CompiledRules {
@@ -52,6 +56,44 @@ func NewCompiledRules(rules []rule) *CompiledRules {
 		}
 	}
 	return cr
+}
+
+func (cr *CompiledRules) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(cr.rules); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(cr.hasBlockRules); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(cr.hasTerminalRules); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (cr *CompiledRules) GobDecode(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	if err := dec.Decode(&cr.rules); err != nil {
+		return err
+	}
+	if err := dec.Decode(&cr.hasBlockRules); err != nil {
+		return err
+	}
+	if err := dec.Decode(&cr.hasTerminalRules); err != nil {
+		return err
+	}
+
+	for _, r := range cr.rules {
+		if r.IsStale() {
+			cr.isStale = true
+			break
+		}
+	}
+
+	return nil
 }
 
 func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal bool) {
@@ -69,6 +111,10 @@ func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal boo
 	}
 
 	return false, false
+}
+
+func (cr *CompiledRules) IsStale() bool {
+	return cr.isStale
 }
 
 func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficulty.Property, bool) {
@@ -194,41 +240,42 @@ func (op *overrideProperty) applyGrowth(growth dbgen.DifficultyGrowth, ruleID in
 
 // ruleBase contains common fields for all rule types
 type ruleBase struct {
-	ruleID   int32
-	matcher  Matcher
-	terminal bool
+	RuleID   int32
+	Matcher  Matcher
+	Terminal bool
 }
 
-func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.matcher.Matches(ri) }
-func (rb *ruleBase) IsTerminal() bool             { return rb.terminal }
+func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.Matcher.Matches(ri) }
+func (rb *ruleBase) IsTerminal() bool             { return rb.Terminal }
+func (rb *ruleBase) IsStale() bool                { return rb.Matcher.IsStale() }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
 	ruleBase
-	percentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
+	PercentDiff int16 // percentage difference (e.g., +20 means +20%, -20 means -20%)
 }
 
 func (r *difficultyLevelRule) Apply(op *overrideProperty) bool {
 	baseLevel := op.Level()
-	adjustedLevel := baseLevel + int16(int32(r.percentDiff)*(common.DifficultyDelta/2)/100)
+	adjustedLevel := baseLevel + int16(int32(r.PercentDiff)*(common.DifficultyDelta/2)/100)
 	if adjustedLevel < int16(common.MinDifficultyLevel) {
 		adjustedLevel = int16(common.MinDifficultyLevel)
 	} else if adjustedLevel > int16(common.MaxDifficultyLevel) {
 		adjustedLevel = int16(common.MaxDifficultyLevel)
 	}
-	op.applyLevel(adjustedLevel, r.ruleID)
-	return r.terminal
+	op.applyLevel(adjustedLevel, r.RuleID)
+	return r.Terminal
 }
 
 // difficultyGrowthRule overrides the difficulty growth for a property
 type difficultyGrowthRule struct {
 	ruleBase
-	growth dbgen.DifficultyGrowth
+	Growth dbgen.DifficultyGrowth
 }
 
 func (r *difficultyGrowthRule) Apply(op *overrideProperty) bool {
-	op.applyGrowth(r.growth, r.ruleID)
-	return r.terminal
+	op.applyGrowth(r.Growth, r.RuleID)
+	return r.Terminal
 }
 
 // blockRequestRule blocks matching requests
@@ -237,8 +284,8 @@ type blockRequestRule struct {
 }
 
 func (r *blockRequestRule) Apply(op *overrideProperty) bool {
-	op.ruleID = r.ruleID
-	return r.terminal
+	op.ruleID = r.RuleID
+	return r.Terminal
 }
 
 // breakRule stops processing following rules
@@ -247,8 +294,8 @@ type breakRule struct {
 }
 
 func (r *breakRule) Apply(op *overrideProperty) bool {
-	op.ruleID = r.ruleID
-	return r.terminal
+	op.ruleID = r.RuleID
+	return r.Terminal
 }
 
 func growthFromInt(value int32) dbgen.DifficultyGrowth {
@@ -310,6 +357,18 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	}
 
 	return sm, nil
+}
+
+func init() {
+	gob.Register(&difficultyLevelRule{})
+	gob.Register(&difficultyGrowthRule{})
+	gob.Register(&blockRequestRule{})
+	gob.Register(&breakRule{})
+	gob.Register(&StringMatcher{})
+	gob.Register(&IPMatcher{})
+	gob.Register(&HeaderMatcher{})
+	gob.Register(&BotMatcher{})
+	gob.Register(&AlwaysMatcher{})
 }
 
 // BuildIPMatcher creates an IPMatcher from a database rule.
@@ -469,27 +528,27 @@ func (rc *RulesCompiler) CompileRule(ctx context.Context, dbRule *dbgen.Difficul
 		return nil, err
 	}
 
-	base := ruleBase{ruleID: dbRule.ID, matcher: matcher, terminal: dbRule.Terminal}
+	base := ruleBase{RuleID: dbRule.ID, Matcher: matcher, Terminal: dbRule.Terminal}
 
 	switch dbRule.ActionProperty {
 	case dbgen.RuleActionPropertyDifficultyLevelPercent:
 		percentDiff := max(-300, min(300, dbRule.ActionValue))
 		return &difficultyLevelRule{
 			ruleBase:    base,
-			percentDiff: int16(percentDiff),
+			PercentDiff: int16(percentDiff),
 		}, nil
 	case dbgen.RuleActionPropertyHTTPRequest:
-		base.terminal = true
+		base.Terminal = true
 		return &blockRequestRule{
 			ruleBase: base,
 		}, nil
 	case dbgen.RuleActionPropertyDifficultyGrowth:
 		return &difficultyGrowthRule{
 			ruleBase: base,
-			growth:   growthFromInt(dbRule.ActionValue),
+			Growth:   growthFromInt(dbRule.ActionValue),
 		}, nil
 	case dbgen.RuleActionPropertyBreak:
-		base.terminal = true
+		base.Terminal = true
 		return &breakRule{
 			ruleBase: base,
 		}, nil

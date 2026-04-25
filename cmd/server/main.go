@@ -48,6 +48,7 @@ const (
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
+	cachePersistSize        = 10_000
 )
 
 const (
@@ -219,11 +220,21 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Metrics:         metrics,
 	}
 	quit := make(chan struct{})
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		slog.DebugContext(ctx, "Server quit triggered")
 		healthCheck.Shutdown(ctx)
+		healthcheckTime := min(_readinessDrainDelay, healthCheck.Interval())
+
+		if !immediately {
+			persistCtx, cancel := context.WithTimeout(context.Background(), healthcheckTime)
+			defer cancel()
+			go common.RunAdHocFunc(persistCtx, func(bctx context.Context) error {
+				return businessDB.SaveCache(bctx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
+			})
+		}
+
 		// Give time for readiness check to propagate
-		time.Sleep(min(_readinessDrainDelay, healthCheck.Interval()))
+		time.Sleep(healthcheckTime)
 		close(quit)
 	}
 	checkLicenseJob, err := maintenance.NewCheckLicenseJob(businessDB, cfg, GitCommit, quitFunc)
@@ -346,7 +357,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 				}
 				updateConfigFunc(ctx)
 			case syscall.SIGINT, syscall.SIGTERM:
-				quitFunc(ctx)
+				quitFunc(ctx, sig == syscall.SIGTERM)
 				return
 			}
 		}
@@ -358,6 +369,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			slog.ErrorContext(ctx, "Error serving", common.ErrAttr(err))
 		}
 	}()
+
+	go common.RunAdHocFunc(ctx, func(ctx context.Context) error {
+		return businessDB.LoadCache(ctx, cfg.Get(common.CacheDirKey).Value())
+	})
 
 	businessDB.Start(ctx, _auditLogInterval)
 

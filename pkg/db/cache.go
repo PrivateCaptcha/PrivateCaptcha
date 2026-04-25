@@ -2,14 +2,19 @@ package db
 
 import (
 	"context"
+	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/maypok86/otter/v2"
 	"github.com/maypok86/otter/v2/stats"
 )
@@ -215,6 +220,44 @@ func (c *memcache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
 	return found
 }
 
+func (c *memcache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, maxItems int) error {
+	enc := gob.NewEncoder(w)
+
+	maximum := c.store.GetMaximum()
+	if err := enc.Encode(maximum); err != nil {
+		return err
+	}
+
+	size := uint64(0)
+	count := 0
+	for entry := range c.store.Hottest() {
+		if (size >= maximum) || (count >= maxItems) {
+			break
+		}
+
+		if err := ctx.Err(); err != nil {
+			slog.WarnContext(ctx, "Truncated cache due to context cancellation", common.ErrAttr(err))
+			// it's not reported as error because we care only about best-effort here
+			break
+		}
+
+		if err := enc.Encode(entry); err != nil {
+			return err
+		}
+
+		size += uint64(entry.Weight)
+		count++
+	}
+
+	slog.DebugContext(ctx, "Persisted cached items", "count", count)
+
+	return nil
+}
+
+func (c *memcache[TKey, TValue]) LoadFrom(_ context.Context, r io.Reader) error {
+	return otter.LoadCacheFrom(c.store, r)
+}
+
 type CacheKeyPrefix byte
 
 const (
@@ -299,6 +342,33 @@ func init() {
 			panic(fmt.Sprintf("found unconfigured cache prefix value for key: %v", i))
 		}
 	}
+
+	gob.Register(CacheKey{})
+	gob.Register(&dbgen.Property{})
+	gob.Register(&dbgen.User{})
+	gob.Register(&dbgen.UserSettings{})
+	gob.Register(&dbgen.Organization{})
+	gob.Register(&dbgen.Subscription{})
+	gob.Register(&dbgen.DifficultyRule{})
+	gob.Register(&session.SessionData{})
+	gob.Register(&dbgen.APIKey{})
+	gob.Register(&dbgen.AsyncTask{})
+	gob.Register(&dbgen.SystemNotification{})
+	gob.Register(&dbgen.OrganizationUser{})
+	gob.Register(&rules.CompiledRules{})
+	gob.Register(&dbgen.NotificationTemplate{})
+	gob.Register([]*dbgen.DifficultyRule{})
+	gob.Register([]*dbgen.GetUserOrganizationsRow{})
+	gob.Register([]*dbgen.GetOrganizationUsersRow{})
+	gob.Register([]*dbgen.GetPropertyAuditLogsRow{})
+	gob.Register([]*dbgen.GetOrgAuditLogsRow{})
+	gob.Register([]*dbgen.GetUserAuditLogsRow{})
+	gob.Register([]*dbgen.Property{})
+	gob.Register([]*dbgen.APIKey{})
+	gob.Register(struct{}{})
+	gob.Register([]*common.TimeCount{})
+	gob.Register([]*common.OrgTimeCount{})
+	gob.Register([]*common.TimePeriodStat{})
 }
 
 func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {

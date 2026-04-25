@@ -130,7 +130,7 @@ func TestCheckLicenseJobValidLicense(t *testing.T) {
 	store := db.NewBusinessEx(pool, cache)
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -220,7 +220,7 @@ func TestCheckLicenseJobExpiredLicense(t *testing.T) {
 	store := db.NewBusinessEx(pool, cache)
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -294,7 +294,7 @@ func TestCheckLicenseJobInvalidSignature(t *testing.T) {
 	store := db.NewBusinessEx(pool, cache)
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -359,7 +359,7 @@ func TestCheckLicenseJobServerError(t *testing.T) {
 	store := db.NewBusinessEx(pool, cache)
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -416,7 +416,7 @@ func TestCheckLicenseJobNoLicenseKey(t *testing.T) {
 	store := db.NewBusinessEx(pool, cache)
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -485,7 +485,7 @@ func TestCheckLicenseJobCachedValidLicense(t *testing.T) {
 	}
 
 	var quitCalled atomic.Bool
-	quitFunc := func(ctx context.Context) {
+	quitFunc := func(ctx context.Context, immediately bool) {
 		quitCalled.Store(true)
 	}
 
@@ -583,7 +583,7 @@ func TestNewCheckLicenseJobEmptyURL(t *testing.T) {
 	LicenseURL = ""
 	defer func() { LicenseURL = originalURL }()
 
-	quitFunc := func(ctx context.Context) {}
+	quitFunc := func(ctx context.Context, immediately bool) {}
 
 	_, err := NewCheckLicenseJob(nil, nil, "test-version", quitFunc)
 	// We expect an error since activation keys are not available in test environment

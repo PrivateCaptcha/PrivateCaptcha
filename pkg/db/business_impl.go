@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"sort"
@@ -57,6 +58,9 @@ func NewTxCache() *TxCache {
 }
 
 var _ common.Cache[CacheKey, any] = (*TxCache)(nil)
+
+func (c *TxCache) LoadFrom(context.Context, io.Reader) error              { return nil }
+func (c *TxCache) SaveTo(ctx context.Context, w io.Writer, max int) error { return nil }
 
 func (c *TxCache) HitRatio() float64 { return 0.0 }
 func (c *TxCache) Missing() any      { return nil }

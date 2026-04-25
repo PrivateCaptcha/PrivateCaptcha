@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -40,6 +42,7 @@ const (
 	defaultCacheRefresh      = 30 * time.Minute
 	negativeCacheTTL         = 5 * time.Minute
 	auditBatchSize           = 100
+	cachePersistFile         = "cache.db"
 )
 
 type BusinessStore struct {
@@ -220,4 +223,96 @@ func (s *BusinessStore) CheckUserPropertyAccess(ctx context.Context, property *d
 	}
 
 	return false
+}
+
+func (s *BusinessStore) SaveCache(ctx context.Context, dir string, maxItems int) error {
+	if len(dir) == 0 {
+		return nil
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			slog.ErrorContext(ctx, "Failed to stat cache directory", "dir", dir, common.ErrAttr(err))
+			return err
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			slog.ErrorContext(ctx, "Failed to create cache directory", "dir", dir, common.ErrAttr(err))
+			return err
+		}
+	}
+
+	filePath := filepath.Join(dir, cachePersistFile)
+	tmp, err := os.CreateTemp(dir, cachePersistFile+".*.tmp")
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create cache tmp file", "dir", dir, common.ErrAttr(err))
+		return err
+	}
+	tmpPath := tmp.Name()
+	// best-effort cleanup if we bail out before rename
+	defer os.Remove(tmpPath)
+
+	if err := s.Cache.SaveTo(ctx, tmp, maxItems); err != nil {
+		slog.ErrorContext(ctx, "Failed to save cache", "file", tmpPath, common.ErrAttr(err))
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		slog.ErrorContext(ctx, "Failed to fsync cache file", "file", tmpPath, common.ErrAttr(err))
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		slog.ErrorContext(ctx, "Failed to close cache tmp file", "file", tmpPath, common.ErrAttr(err))
+		return err
+	}
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		slog.ErrorContext(ctx, "Failed to rename cache file", "file", filePath, common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Saved cache to file successfully", "file", filePath)
+	return nil
+}
+
+func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
+	if len(dir) == 0 {
+		return nil
+	}
+
+	filePath := filepath.Join(dir, cachePersistFile)
+	file, err := os.Open(filePath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		slog.ErrorContext(ctx, "Failed to open cache file", "file", filePath, common.ErrAttr(err))
+		return err
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to stat cache file", "file", filePath, common.ErrAttr(err))
+		return err
+	}
+
+	if age := time.Since(info.ModTime()); age > defaultCacheTTL {
+		slog.WarnContext(ctx, "Ignoring too old cache file", "file", filePath, "age", age.String())
+		return nil
+	}
+
+	if err := s.Cache.LoadFrom(ctx, file); err != nil {
+		slog.ErrorContext(ctx, "Failed to load cache from file", "file", filePath, common.ErrAttr(err))
+		if rmErr := os.Remove(filePath); rmErr != nil {
+			slog.ErrorContext(ctx, "Failed to remove corrupted cache file", "file", filePath, common.ErrAttr(rmErr))
+		} else {
+			slog.DebugContext(ctx, "Removed corrupted cache file", "file", filePath)
+		}
+
+		return err
+	} else {
+		slog.InfoContext(ctx, "Loaded cache from file successfully", "file", filePath)
+	}
+
+	return nil
 }
