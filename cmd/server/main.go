@@ -360,7 +360,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		}
 	}()
 
-	go businessDB.LoadCache(ctx, cfg.Get(common.CacheDirKey).Value())
+	go common.RunAdHocFunc(ctx, func(ctx context.Context) error {
+		return businessDB.LoadCache(ctx, cfg.Get(common.CacheDirKey).Value())
+	})
 
 	businessDB.Start(ctx, _auditLogInterval)
 
@@ -469,7 +471,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		<-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
-		go businessDB.SaveCache(shutdownCtx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
+		go common.RunAdHocFunc(shutdownCtx, func(ctx context.Context) error {
+			return businessDB.SaveCache(ctx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
+		})
 		shutdownStart := time.Now()
 		defer func() {
 			if elapsed := time.Since(shutdownStart); elapsed < 1*time.Second {
