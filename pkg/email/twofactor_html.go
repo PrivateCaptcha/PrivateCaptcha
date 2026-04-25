@@ -93,7 +93,7 @@ const (
               </tbody>
             </table>
             <p style="font-size:12px;margin:24px 0 0 0;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;padding:0 20px">
-              Your are receiving this message because the action you are taking requires a verification.
+              You are receiving this message because the action you are taking requires a verification.
             </p>
             <p style="font-size:12px;color:#072929;font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;padding:0 20px"><a href="https://privatecaptcha.com" style="text-decoration:underline;color:#072929;">PrivateCaptcha</a> © {{.CurrentYear}} Intmaker OÜ</p>
           </td>
@@ -122,7 +122,7 @@ If this wasn't you, please let us know by replying to this email.
 
 ---
 
-Your are receiving this message because the action you are taking requires a verification.
+You are receiving this message because the action you are taking requires a verification.
 
 PrivateCaptcha © {{.CurrentYear}} Intmaker OÜ
 `
