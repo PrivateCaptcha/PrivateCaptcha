@@ -186,6 +186,10 @@ func TestSessionGobEncoding(t *testing.T) {
 		t.Fatalf("GobDecode failed: %v", err)
 	}
 
+	if sd2.ID() != "test" {
+		t.Errorf("Session ID was not serialized. got %v", sd.ID())
+	}
+
 	if val, _ := sd2.get(KeyUserID); val != 123 {
 		t.Errorf("Expected UserID 123, got %v", val)
 	}

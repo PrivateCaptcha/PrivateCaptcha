@@ -1,9 +1,11 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -184,4 +186,29 @@ var _ db.PropertyNoticeProvider = (*StubNoticeProvider)(nil)
 
 func (s *StubNoticeProvider) Notice(_ context.Context, _ *dbgen.Property) string {
 	return s.Value
+}
+
+func TestCacheSerialization(store *db.BusinessStore) int {
+	const maxEntries = 100_000
+	var buf bytes.Buffer
+	testKey := db.APIKeyCacheKey("test-key-roundtrip")
+	_ = store.Cache.Set(context.Background(), testKey, "test-value-roundtrip")
+	if err := store.Cache.SaveTo(context.Background(), &buf, maxEntries); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to save cache to buffer: %v\n", err)
+		return 1
+	}
+	newCache, err := db.NewMemoryCache[db.CacheKey, any]("test", maxEntries, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to create new cache: %v\n", err)
+		return 1
+	}
+	if err := newCache.LoadFrom(context.Background(), &buf); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to load cache from buffer: %v\n", err)
+		return 1
+	}
+	if val, err := newCache.Get(context.Background(), testKey); err != nil || val != "test-value-roundtrip" {
+		fmt.Fprintf(os.Stderr, "Cache round-trip failed. val: %v, err: %v\n", val, err)
+		return 1
+	}
+	return 0
 }

@@ -151,8 +151,10 @@ func (sd *SessionData) GobDecode(data []byte) error {
 		return err
 	}
 
+	sd.lock.Lock()
 	sd.sid = sid
 	sd.values = values
+	sd.lock.Unlock()
 
 	return nil
 }

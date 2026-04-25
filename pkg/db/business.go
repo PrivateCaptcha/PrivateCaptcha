@@ -242,18 +242,34 @@ func (s *BusinessStore) SaveCache(ctx context.Context, dir string, maxItems int)
 	}
 
 	filePath := filepath.Join(dir, cachePersistFile)
-	file, err := os.Create(filePath)
+	tmp, err := os.CreateTemp(dir, cachePersistFile+".*.tmp")
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to create cache file", "file", filePath, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to create cache tmp file", "dir", dir, common.ErrAttr(err))
 		return
 	}
-	defer file.Close()
+	tmpPath := tmp.Name()
+	// best-effort cleanup if we bail out before rename
+	defer os.Remove(tmpPath)
 
-	if err := s.Cache.SaveTo(ctx, file, maxItems); err != nil {
-		slog.ErrorContext(ctx, "Failed to save cache", "file", filePath, common.ErrAttr(err))
-	} else {
-		slog.InfoContext(ctx, "Saved cache to file successfully", "file", filePath)
+	if err := s.Cache.SaveTo(ctx, tmp, maxItems); err != nil {
+		slog.ErrorContext(ctx, "Failed to save cache", "file", tmpPath, common.ErrAttr(err))
+		_ = tmp.Close()
+		return
 	}
+	if err := tmp.Sync(); err != nil {
+		slog.ErrorContext(ctx, "Failed to fsync cache file", "file", tmpPath, common.ErrAttr(err))
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		slog.ErrorContext(ctx, "Failed to close cache tmp file", "file", tmpPath, common.ErrAttr(err))
+		return
+	}
+	if err := os.Rename(tmpPath, filePath); err != nil {
+		slog.ErrorContext(ctx, "Failed to rename cache file", "file", filePath, common.ErrAttr(err))
+		return
+	}
+	slog.InfoContext(ctx, "Saved cache to file successfully", "file", filePath)
 }
 
 func (s *BusinessStore) LoadCache(ctx context.Context, dir string) {
@@ -284,6 +300,12 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) {
 
 	if err := s.Cache.LoadFrom(ctx, file); err != nil {
 		slog.ErrorContext(ctx, "Failed to load cache from file", "file", filePath, common.ErrAttr(err))
+		_ = file.Close()
+		if rmErr := os.Remove(filePath); rmErr != nil {
+			slog.ErrorContext(ctx, "Failed to remove corrupted cache file", "file", filePath, common.ErrAttr(rmErr))
+		} else {
+			slog.DebugContext(ctx, "Removed corrupted cache file", "file", filePath)
+		}
 	} else {
 		slog.InfoContext(ctx, "Loaded cache from file successfully", "file", filePath)
 	}

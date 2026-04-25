@@ -470,7 +470,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		slog.DebugContext(ctx, "Shutting down gracefully")
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
 		go businessDB.SaveCache(shutdownCtx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
-		defer cancel()
+		shutdownStart := time.Now()
+		defer func() {
+			if elapsed := time.Since(shutdownStart); elapsed < 1*time.Second {
+				time.Sleep(1*time.Second - elapsed)
+			}
+			cancel()
+		}()
 		jobs.Shutdown()
 		sessionStore.Shutdown()
 		apiServer.Shutdown()

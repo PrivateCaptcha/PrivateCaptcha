@@ -14,6 +14,7 @@ import (
 // Matcher is the interface that all specialized matchers implement.
 type Matcher interface {
 	Matches(ri *RequestInfo) bool
+	IsStale() bool
 }
 
 // StringMatcher handles string-based matching (UserAgent, CountryCode, Domain).
@@ -24,6 +25,8 @@ type StringMatcher struct {
 	ConditionValueItems      []string // Pre-split items for In operator
 	ConditionOperatorNegated bool
 }
+
+var _ Matcher = (*StringMatcher)(nil)
 
 func (sm *StringMatcher) extract(ri *RequestInfo) string {
 	switch sm.ConditionProperty {
@@ -36,6 +39,10 @@ func (sm *StringMatcher) extract(ri *RequestInfo) string {
 	default:
 		return ""
 	}
+}
+
+func (sm *StringMatcher) IsStale() bool {
+	return false
 }
 
 // Matches performs the actual matching logic
@@ -90,6 +97,12 @@ type IPMatcher struct {
 	ConditionOperatorNegated bool
 }
 
+var _ Matcher = (*IPMatcher)(nil)
+
+func (im *IPMatcher) IsStale() bool {
+	return false
+}
+
 func (im *IPMatcher) Matches(ri *RequestInfo) bool {
 	ip := ri.IPAddr()
 	var result bool
@@ -133,6 +146,12 @@ type HeaderMatcher struct {
 	ConditionOperatorNegated bool
 }
 
+var _ Matcher = (*HeaderMatcher)(nil)
+
+func (hm *HeaderMatcher) IsStale() bool {
+	return false
+}
+
 func (hm *HeaderMatcher) Matches(ri *RequestInfo) bool {
 	var result bool
 
@@ -156,6 +175,8 @@ type BotMatcher struct {
 	UAParser                 *useragent.Parser
 	ConditionOperatorNegated bool
 }
+
+var _ Matcher = (*BotMatcher)(nil)
 
 func (bm *BotMatcher) GobEncode() ([]byte, error) {
 	var buf bytes.Buffer
@@ -207,6 +228,10 @@ func (bm *BotMatcher) looksLikeBot(ua string) bool {
 	return false
 }
 
+func (bm *BotMatcher) IsStale() bool {
+	return bm.UAParser == nil
+}
+
 func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 	result := bm.looksLikeBot(ri.UserAgent())
 
@@ -218,6 +243,12 @@ func (bm *BotMatcher) Matches(ri *RequestInfo) bool {
 
 // AlwaysMatcher matches every request unconditionally.
 type AlwaysMatcher struct{}
+
+var _ Matcher = (*AlwaysMatcher)(nil)
+
+func (am *AlwaysMatcher) IsStale() bool {
+	return false
+}
 
 func (am *AlwaysMatcher) Matches(_ *RequestInfo) bool {
 	return true

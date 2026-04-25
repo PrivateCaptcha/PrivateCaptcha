@@ -1,11 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"flag"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -46,27 +44,6 @@ func testsConfigStore() common.ConfigStore {
 	baseCfg.Add(config.NewStaticValue(common.ClickHouseOptionalKey, "true"))
 	baseCfg.Add(config.NewStaticValue(common.CountryCodeHeaderKey, "CF-IPCountry"))
 	return baseCfg
-}
-
-func testCacheRoundtrip(store *db.BusinessStore) int {
-	const maxEntries = 100_000
-	var buf bytes.Buffer
-	testKey := db.APIKeyCacheKey("test-key-roundtrip")
-	_ = store.Cache.Set(context.Background(), testKey, "test-value-roundtrip")
-	if err := store.Cache.SaveTo(context.Background(), &buf, maxEntries); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to save cache to buffer: %v\n", err)
-		return 1
-	}
-	newCache, _ := db.NewMemoryCache[db.CacheKey, any]("test", maxEntries, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
-	if err := newCache.LoadFrom(context.Background(), &buf); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to load cache from buffer: %v\n", err)
-		return 1
-	}
-	if val, err := newCache.Get(context.Background(), testKey); err != nil || val != "test-value-roundtrip" {
-		fmt.Fprintf(os.Stderr, "Cache round-trip failed. val: %v, err: %v\n", val, err)
-		return 1
-	}
-	return 0
 }
 
 func TestMain(m *testing.M) {
@@ -134,7 +111,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := m.Run()
 	if exitCode == 0 {
-		exitCode = testCacheRoundtrip(store)
+		exitCode = db_tests.TestCacheSerialization(store)
 	}
 	os.Exit(exitCode)
 }

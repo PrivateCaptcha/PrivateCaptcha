@@ -35,12 +35,14 @@ type rule interface {
 	Matches(ri *RequestInfo) bool
 	Apply(op *overrideProperty) bool
 	IsTerminal() bool
+	IsStale() bool
 }
 
 type CompiledRules struct {
 	rules            []rule
 	hasBlockRules    bool
 	hasTerminalRules bool
+	isStale          bool
 }
 
 func NewCompiledRules(rules []rule) *CompiledRules {
@@ -83,6 +85,14 @@ func (cr *CompiledRules) GobDecode(data []byte) error {
 	if err := dec.Decode(&cr.hasTerminalRules); err != nil {
 		return err
 	}
+
+	for _, r := range cr.rules {
+		if r.IsStale() {
+			cr.isStale = true
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -101,6 +111,10 @@ func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal boo
 	}
 
 	return false, false
+}
+
+func (cr *CompiledRules) IsStale() bool {
+	return cr.isStale
 }
 
 func (cr *CompiledRules) Apply(ri *RequestInfo, p difficulty.Property) (difficulty.Property, bool) {
@@ -233,6 +247,7 @@ type ruleBase struct {
 
 func (rb *ruleBase) Matches(ri *RequestInfo) bool { return rb.Matcher.Matches(ri) }
 func (rb *ruleBase) IsTerminal() bool             { return rb.Terminal }
+func (rb *ruleBase) IsStale() bool                { return rb.Matcher.IsStale() }
 
 // difficultyLevelRule adjusts the difficulty level by a percentage for a property
 type difficultyLevelRule struct {
@@ -344,7 +359,6 @@ func BuildStringMatcher(rule *dbgen.DifficultyRule) (Matcher, error) {
 	return sm, nil
 }
 
-// BuildIPMatcher creates an IPMatcher from a database rule.
 func init() {
 	gob.Register(&difficultyLevelRule{})
 	gob.Register(&difficultyGrowthRule{})

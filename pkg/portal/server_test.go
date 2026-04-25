@@ -15,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
@@ -209,7 +210,7 @@ func TestMain(m *testing.M) {
 
 	exitCode := m.Run()
 	if exitCode == 0 {
-		exitCode = testCacheRoundtrip(store)
+		exitCode = db_tests.TestCacheSerialization(store)
 	}
 	os.Exit(exitCode)
 }
