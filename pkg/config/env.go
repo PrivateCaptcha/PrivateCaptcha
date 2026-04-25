@@ -81,7 +81,7 @@ func init() {
 	configKeyToEnvName[common.MaintenanceJobConcurrencyKey] = "PC_MAINTENANCE_JOB_CONCURRENCY"
 	configKeyToEnvName[common.FingerprintHeaderKey] = "PC_FINGERPRINT_HEADER"
 	configKeyToEnvName[common.WidgetNoticeKey] = "PC_WIDGET_NOTICE"
-	configKeyToEnvName[common.CacheDirKey] = "PC_CACHE_DIRECTORY"
+	configKeyToEnvName[common.CacheDirKey] = "CACHE_DIRECTORY"
 
 	for i, v := range configKeyToEnvName {
 		if len(v) == 0 {
