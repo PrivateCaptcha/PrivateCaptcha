@@ -18,7 +18,7 @@ require (
 	github.com/maypok86/otter/v2 v2.3.0
 	github.com/medama-io/go-useragent v1.2.3
 	github.com/prometheus/client_golang v1.23.2
-	github.com/puzpuzpuz/xsync/v4 v4.4.0
+	github.com/puzpuzpuz/xsync/v4 v4.5.0
 	github.com/realclientip/realclientip-go v1.0.0
 	github.com/rs/cors v1.11.1
 	github.com/rs/xid v1.6.0
