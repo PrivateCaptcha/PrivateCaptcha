@@ -3,7 +3,7 @@ module github.com/PrivateCaptcha/PrivateCaptcha
 go 1.26.2
 
 require (
-	github.com/ClickHouse/clickhouse-go/v2 v2.44.0
+	github.com/ClickHouse/clickhouse-go/v2 v2.45.0
 	github.com/PuerkitoBio/goquery v1.12.0
 	github.com/badoux/checkmail v1.2.4
 	github.com/biter777/countries v1.7.5
