@@ -52,3 +52,10 @@ func (srl *StubRateLimiter) UpdateRequestLimits(r *http.Request, capacity leakyb
 func (srl *StubRateLimiter) UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration) {
 	// BUMP
 }
+
+func (srl *StubRateLimiter) Clear() {}
+func (srl *StubRateLimiter) SaveCache(ctx context.Context, dir string) error {
+	return nil
+}
+
+func (srl *StubRateLimiter) LoadCache(ctx context.Context, dir string) error { return nil }

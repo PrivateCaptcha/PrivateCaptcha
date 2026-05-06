@@ -44,6 +44,9 @@ type HTTPRateLimiter interface {
 	RateLimitExFunc(initCapacity leakybucket.TLevel, initLeakInterval time.Duration) func(next http.Handler) http.Handler
 	UpdateRequestLimits(r *http.Request, capacity leakybucket.TLevel, leakInterval time.Duration)
 	UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration)
+	Clear()
+	SaveCache(ctx context.Context, dir string) error
+	LoadCache(ctx context.Context, dir string) error
 }
 
 type httpRateLimiter[TKey comparable] struct {
@@ -147,4 +150,21 @@ func (l *httpRateLimiter[TKey]) setRateLimitHeaders(w http.ResponseWriter, addRe
 		vi := int(math.Max(1.0, seconds+0.5))
 		headers[retryAfterHeader] = []string{strconv.Itoa(vi)}
 	}
+}
+
+func (l *httpRateLimiter[TKey]) Clear() {
+	l.buckets.Clear()
+}
+
+const (
+	ipRateLimiterCacheFilename = "ip_rate_limiter.gob"
+	cachePersistSize           = 1_000
+)
+
+func (l *httpRateLimiter[TKey]) SaveCache(ctx context.Context, dir string) error {
+	return l.buckets.SaveCache(ctx, dir, ipRateLimiterCacheFilename, cachePersistSize, time.Now())
+}
+
+func (l *httpRateLimiter[TKey]) LoadCache(ctx context.Context, dir string) error {
+	return l.buckets.LoadCache(ctx, dir, ipRateLimiterCacheFilename)
 }

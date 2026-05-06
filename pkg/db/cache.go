@@ -15,6 +15,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/rules"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
+
 	"github.com/maypok86/otter/v2"
 	"github.com/maypok86/otter/v2/stats"
 )
@@ -221,41 +222,12 @@ func (c *memcache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
 }
 
 func (c *memcache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, maxItems int) error {
-	enc := gob.NewEncoder(w)
-
-	maximum := c.store.GetMaximum()
-	if err := enc.Encode(maximum); err != nil {
-		return err
-	}
-
-	size := uint64(0)
-	count := 0
-	for entry := range c.store.Hottest() {
-		if (size >= maximum) || (count >= maxItems) {
-			break
-		}
-
-		if err := ctx.Err(); err != nil {
-			slog.WarnContext(ctx, "Truncated cache due to context cancellation", common.ErrAttr(err))
-			// it's not reported as error because we care only about best-effort here
-			break
-		}
-
-		if err := enc.Encode(entry); err != nil {
-			return err
-		}
-
-		size += uint64(entry.Weight)
-		count++
-	}
-
-	slog.DebugContext(ctx, "Persisted cached items", "count", count)
-
-	return nil
+	_, err := common.SaveCacheToWriter(ctx, w, c.store, maxItems, nil)
+	return err
 }
 
-func (c *memcache[TKey, TValue]) LoadFrom(_ context.Context, r io.Reader) error {
-	return otter.LoadCacheFrom(c.store, r)
+func (c *memcache[TKey, TValue]) LoadFrom(ctx context.Context, r io.Reader) error {
+	return common.LoadCacheFromReader(ctx, r, c.store)
 }
 
 type CacheKeyPrefix byte

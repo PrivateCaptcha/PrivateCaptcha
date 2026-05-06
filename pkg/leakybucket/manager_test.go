@@ -1,10 +1,14 @@
 package leakybucket
 
 import (
+	"bytes"
+	"context"
 	"net/netip"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 )
 
 func TestManagerAdd(t *testing.T) {
@@ -237,5 +241,91 @@ func TestManagerIPAddrAddDefault(t *testing.T) {
 	}
 	if result.Added != 0 {
 		t.Errorf("Managed to add to full bucket")
+	}
+}
+
+func TestManagerCacheConstLeakyBucket(t *testing.T) {
+	ctx := context.TODO()
+
+	manager := NewManager[string, ConstLeakyBucket[string], *ConstLeakyBucket[string]](100, 10, 10*time.Millisecond)
+
+	tnow := time.Now()
+	manager.Add("user1", 5, tnow)
+	manager.Add("user3", 10, tnow)
+
+	var buf bytes.Buffer
+
+	filter := func(b *ConstLeakyBucket[string]) bool {
+		return b.Level(tnow) > 0
+	}
+
+	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter)
+	if err != nil {
+		t.Fatalf("SaveCacheToWriter failed: %v", err)
+	}
+
+	manager2 := NewManager[string, ConstLeakyBucket[string], *ConstLeakyBucket[string]](100, 10, 10*time.Millisecond)
+	err = common.LoadCacheFromReader(ctx, &buf, manager2.buckets)
+	if err != nil {
+		t.Fatalf("LoadCacheFromReader failed: %v", err)
+	}
+
+	lvl1, ok1 := manager2.Level("user1", tnow)
+	if !ok1 || lvl1 != 5 {
+		t.Errorf("user1 expected level 5, got %v (ok=%v)", lvl1, ok1)
+	}
+
+	lvl3, ok3 := manager2.Level("user3", tnow)
+	if !ok3 || lvl3 != 10 {
+		t.Errorf("user3 expected level 10, got %v (ok=%v)", lvl3, ok3)
+	}
+
+	lvl1b, _ := manager2.Level("user1", tnow.Add(100*time.Millisecond))
+	if lvl1b != 0 {
+		t.Errorf("expected user1 level to leak to 0, got %v", lvl1b)
+	}
+}
+
+func TestManagerCacheVarLeakyBucket(t *testing.T) {
+	ctx := context.TODO()
+
+	manager := NewManager[int32, VarLeakyBucket[int32], *VarLeakyBucket[int32]](100, 10, 10*time.Millisecond)
+
+	tnow := time.Now()
+	manager.Add(1, 5, tnow)
+	manager.Add(2, 10, tnow)
+
+	var buf bytes.Buffer
+
+	filter := func(b *VarLeakyBucket[int32]) bool {
+		return b.Level(tnow) > 0
+	}
+
+	_, err := common.SaveCacheToWriter(ctx, &buf, manager.buckets, 100, filter)
+	if err != nil {
+		t.Fatalf("SaveCacheToWriter failed: %v", err)
+	}
+
+	manager2 := NewManager[int32, VarLeakyBucket[int32], *VarLeakyBucket[int32]](100, 10, 10*time.Millisecond)
+	err = common.LoadCacheFromReader(ctx, &buf, manager2.buckets)
+	if err != nil {
+		t.Fatalf("LoadCacheFromReader failed: %v", err)
+	}
+
+	lvl1, ok1 := manager2.Level(1, tnow)
+	if !ok1 || lvl1 != 5 {
+		t.Errorf("1 expected level 5, got %v (ok=%v)", lvl1, ok1)
+	}
+
+	lvl2, ok2 := manager2.Level(2, tnow)
+	if !ok2 || lvl2 != 10 {
+		t.Errorf("2 expected level 10, got %v (ok=%v)", lvl2, ok2)
+	}
+
+	// Verify the updated limits persisted
+	// Waiting 100ms should leak levels (since it leaks based on running rate, approx 1 per 10ms initially)
+	lvl2b, _ := manager2.Level(2, tnow.Add(200*time.Millisecond))
+	if lvl2b != 0 {
+		t.Errorf("expected 2 level to leak to 0, got %v", lvl2b)
 	}
 }

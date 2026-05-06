@@ -19,6 +19,7 @@ var (
 )
 
 const (
+	userBucketsCacheFilename   = "user_buckets.gob"
 	defaultBackpressureTimeout = 10 * time.Millisecond
 )
 
@@ -288,4 +289,13 @@ func (l *Levels) backfillDifficulty(ctx context.Context, cacheDuration time.Dura
 	}
 
 	slog.DebugContext(ctx, "Finished backfilling difficulty")
+}
+
+func (l *Levels) SaveCache(ctx context.Context, dir string) error {
+	const cachePersistSize = 1_000
+	return l.userBuckets.SaveCache(ctx, dir, userBucketsCacheFilename, cachePersistSize, time.Now())
+}
+
+func (l *Levels) LoadCache(ctx context.Context, dir string) error {
+	return l.userBuckets.LoadCache(ctx, dir, userBucketsCacheFilename)
 }

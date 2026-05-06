@@ -253,3 +253,76 @@ func TestVarLeakyBucketAverage(t *testing.T) {
 		})
 	}
 }
+
+func TestConstLeakyBucketGob(t *testing.T) {
+	tnow := time.Now()
+	b1 := NewConstBucket("test-key", 100, 10*time.Millisecond, tnow)
+	// Apply some usage to alter state
+	b1.Add(tnow, 50)
+
+	enc, err := b1.GobEncode()
+	if err != nil {
+		t.Fatalf("GobEncode failed: %v", err)
+	}
+
+	b2 := &ConstLeakyBucket[string]{}
+	err = b2.GobDecode(enc)
+	if err != nil {
+		t.Fatalf("GobDecode failed: %v", err)
+	}
+
+	if b1.key != b2.key {
+		t.Errorf("key mismatch: %v != %v", b1.key, b2.key)
+	}
+	if b1.capacity != b2.capacity {
+		t.Errorf("capacity mismatch: %v != %v", b1.capacity, b2.capacity)
+	}
+	if b1.leakInterval != b2.leakInterval {
+		t.Errorf("leakInterval mismatch: %v != %v", b1.leakInterval, b2.leakInterval)
+	}
+	if b1.level != b2.level {
+		t.Errorf("level mismatch: %v != %v", b1.level, b2.level)
+	}
+	if !b1.lastAccessTime.Equal(b2.lastAccessTime) {
+		t.Errorf("lastAccessTime mismatch: %v != %v", b1.lastAccessTime, b2.lastAccessTime)
+	}
+}
+
+func TestVarLeakyBucketGob(t *testing.T) {
+	tnow := time.Now()
+	b1 := NewVarBucket("test-key", 100, 10*time.Millisecond, tnow)
+	// Apply some usage to alter state
+	b1.Add(tnow, 50)
+
+	// Alter internal VarLeakyBucket specific fields to test encoding
+	b1.leakRate = 1.5
+	b1.pendingSum = 10
+	b1.count = 5
+
+	enc, err := b1.GobEncode()
+	if err != nil {
+		t.Fatalf("GobEncode failed: %v", err)
+	}
+
+	b2 := &VarLeakyBucket[string]{}
+	err = b2.GobDecode(enc)
+	if err != nil {
+		t.Fatalf("GobDecode failed: %v", err)
+	}
+
+	// Base fields
+	if b1.key != b2.key || b1.capacity != b2.capacity || b1.leakInterval != b2.leakInterval || b1.level != b2.level || !b1.lastAccessTime.Equal(b2.lastAccessTime) {
+		t.Errorf("Decoded base fields mismatch: got %+v, want %+v", b2, b1)
+	}
+
+	// Var specific fields
+	if b1.leakRate != b2.leakRate {
+		t.Errorf("leakRate mismatch: %v != %v", b1.leakRate, b2.leakRate)
+	}
+	if b1.pendingSum != b2.pendingSum {
+		t.Errorf("pendingSum mismatch: %v != %v", b1.pendingSum, b2.pendingSum)
+	}
+	if b1.count != b2.count {
+		t.Errorf("count mismatch: %v != %v", b1.count, b2.count)
+	}
+}

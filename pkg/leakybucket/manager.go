@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/maypok86/otter/v2"
 )
 
@@ -178,4 +179,19 @@ func (m *Manager[TKey, T, TBucket]) AddEx(key TKey, n TLevel, tnow time.Time, in
 
 func (m *Manager[TKey, T, TBucket]) Clear() {
 	m.buckets.InvalidateAll()
+}
+
+func (m *Manager[TKey, T, TBucket]) SaveCache(ctx context.Context, dir, filename string, maxItems int, tnow time.Time) error {
+	filter := func(b TBucket) bool {
+		// we only save buckets that are not "full" (which means level > 0, so there is some usage)
+		return b.Level(tnow) > 0
+	}
+	return common.SaveCacheToFile(ctx, dir, filename, maxItems, m.buckets, filter)
+}
+
+func (m *Manager[TKey, T, TBucket]) LoadCache(ctx context.Context, dir, filename string) error {
+	m.mu.RLock()
+	ttl := time.Duration(m.capacity) * m.leakInterval
+	m.mu.RUnlock()
+	return common.LoadCacheFromFile(ctx, dir, filename, ttl, m.buckets)
 }

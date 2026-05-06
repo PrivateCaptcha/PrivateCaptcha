@@ -1,6 +1,8 @@
 package leakybucket
 
 import (
+	"bytes"
+	"encoding/gob"
 	"time"
 )
 
@@ -30,6 +32,48 @@ type ConstLeakyBucket[TKey comparable] struct {
 	// each {leakInterval} we loose 1 bucket level
 	// e.g. to have 5 levels/second leak rate use {leakInterval = time.Second / 5}
 	leakInterval time.Duration
+}
+
+func (lb *ConstLeakyBucket[TKey]) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(lb.key); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.lastAccessTime); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.level); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.capacity); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.leakInterval); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (lb *ConstLeakyBucket[TKey]) GobDecode(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	if err := dec.Decode(&lb.key); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.lastAccessTime); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.level); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.capacity); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.leakInterval); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (lb *ConstLeakyBucket[TKey]) Init(key TKey, capacity TLevel, leakInterval time.Duration, tnow time.Time) {
@@ -109,6 +153,42 @@ type VarLeakyBucket[TKey comparable] struct {
 	// total count of items added to the bucket. NOTE: in the unlikely case of uint64 overflow
 	// we just reset all stats and continue as usual
 	count uint64
+}
+
+func (lb *VarLeakyBucket[TKey]) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(&lb.ConstLeakyBucket); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.leakRate); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.pendingSum); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(lb.count); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (lb *VarLeakyBucket[TKey]) GobDecode(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	if err := dec.Decode(&lb.ConstLeakyBucket); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.leakRate); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.pendingSum); err != nil {
+		return err
+	}
+	if err := dec.Decode(&lb.count); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewVarBucket[TKey comparable](key TKey, capacity TLevel, leakInterval time.Duration, t time.Time) *VarLeakyBucket[TKey] {
