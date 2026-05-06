@@ -234,7 +234,7 @@ func (m *mockCache) SaveTo(ctx context.Context, w io.Writer, max int) error {
 	return nil
 }
 
-func (m *mockCache) LoadFrom(context.Context, io.Reader) error {
+func (m *mockCache) LoadFrom(context.Context, io.Reader, time.Duration) error {
 	return nil
 }
 

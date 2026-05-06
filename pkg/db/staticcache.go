@@ -136,10 +136,10 @@ func (c *StaticCache[TKey, TValue]) Delete(ctx context.Context, key TKey) bool {
 	return found
 }
 
-func (c *StaticCache[TKey, TValue]) SaveTo(ctx context.Context, w io.Writer, max int) error {
+func (c *StaticCache[TKey, TValue]) SaveTo(context.Context, io.Writer, int) error {
 	return nil
 }
 
-func (c *StaticCache[TKey, TValue]) LoadFrom(context.Context, io.Reader) error {
+func (c *StaticCache[TKey, TValue]) LoadFrom(context.Context, io.Reader, time.Duration) error {
 	return nil
 }

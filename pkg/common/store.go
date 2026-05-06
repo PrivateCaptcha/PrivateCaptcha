@@ -30,7 +30,7 @@ type Cache[TKey comparable, TValue any] interface {
 	SetTTL(ctx context.Context, key TKey, ttl time.Duration) error
 	Delete(ctx context.Context, key TKey) bool
 	SaveTo(ctx context.Context, w io.Writer, maxItems int) error
-	LoadFrom(ctx context.Context, r io.Reader) error
+	LoadFrom(ctx context.Context, r io.Reader, ttl time.Duration) error
 	Missing() TValue
 	HitRatio() float64
 }

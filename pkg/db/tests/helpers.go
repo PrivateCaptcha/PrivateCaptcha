@@ -206,7 +206,7 @@ func TestCacheSerialization(store *db.BusinessStore) int {
 		fmt.Fprintf(os.Stderr, "Failed to create new cache: %v\n", err)
 		return 1
 	}
-	if err := newCache.LoadFrom(ctx, &buf); err != nil {
+	if err := newCache.LoadFrom(ctx, &buf, 24*time.Hour); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load cache from buffer: %v\n", err)
 		return 1
 	}

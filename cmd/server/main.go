@@ -48,7 +48,6 @@ const (
 	_dbConnectTimeout       = 30 * time.Second
 	_sessionPersistInterval = 10 * time.Second
 	_auditLogInterval       = 10 * time.Second
-	cachePersistSize        = 10_000
 )
 
 const (
@@ -230,7 +229,21 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			persistCtx, cancel := context.WithTimeout(context.Background(), healthCheckTime)
 			defer cancel()
 			go common.RunAdHocFunc(persistCtx, func(bctx context.Context) error {
-				return businessDB.SaveCache(bctx, cfg.Get(common.CacheDirKey).Value(), cachePersistSize)
+				cacheDir := cfg.Get(common.CacheDirKey).Value()
+				var errs []error
+				if err := businessDB.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if err := ipRateLimiter.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if err := apiServer.Levels.SaveCache(bctx, cacheDir); err != nil {
+					errs = append(errs, err)
+				}
+				if len(errs) > 0 {
+					return fmt.Errorf("cache save errors: %v", errs)
+				}
+				return nil
 			})
 		}
 
@@ -372,7 +385,21 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}()
 
 	go common.RunAdHocFunc(ctx, func(ctx context.Context) error {
-		return businessDB.LoadCache(ctx, cfg.Get(common.CacheDirKey).Value())
+		cacheDir := cfg.Get(common.CacheDirKey).Value()
+		var errs []error
+		if err := businessDB.LoadCache(ctx, cacheDir); err != nil {
+			errs = append(errs, err)
+		}
+		if err := ipRateLimiter.LoadCache(ctx, cacheDir); err != nil {
+			errs = append(errs, err)
+		}
+		if err := apiServer.Levels.LoadCache(ctx, cacheDir); err != nil {
+			errs = append(errs, err)
+		}
+		if len(errs) > 0 {
+			return fmt.Errorf("cache load errors: %v", errs)
+		}
+		return nil
 	})
 
 	businessDB.Start(ctx, _auditLogInterval)
