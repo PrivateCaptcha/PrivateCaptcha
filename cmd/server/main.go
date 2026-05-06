@@ -220,7 +220,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	}
 	quit := make(chan struct{})
 	quitFunc := func(ctx context.Context, immediately bool) {
-		slog.DebugContext(ctx, "Server quit triggered")
+		slog.DebugContext(ctx, "Server quit triggered", "immediately", immediately)
 		healthCheck.Shutdown(ctx)
 		healthCheckTime := 1 * time.Second
 

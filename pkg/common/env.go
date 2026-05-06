@@ -26,12 +26,13 @@ func (em *EnvMap) GetEx(key string) (string, bool) {
 	em.lock.Lock()
 	defer em.lock.Unlock()
 
-	if em.envMap == nil {
-		return os.LookupEnv(key)
+	if em.envMap != nil {
+		if v, ok := em.envMap[key]; ok {
+			return v, ok
+		}
 	}
 
-	v, ok := em.envMap[key]
-	return v, ok
+	return os.LookupEnv(key)
 }
 
 func (em *EnvMap) Get(key string) string {
