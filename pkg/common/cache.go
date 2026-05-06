@@ -16,6 +16,12 @@ import (
 
 func SaveCacheToFile[TKey comparable, TValue any](ctx context.Context, dir, filename string, maxItems int, cache *otter.Cache[TKey, TValue], filter func(TValue) bool) error {
 	if len(dir) == 0 {
+		slog.DebugContext(ctx, "Skipping saving cache without cache dir")
+		return nil
+	}
+
+	if cache == nil {
+		slog.WarnContext(ctx, "Cannot persist nil cache", "file", filename)
 		return nil
 	}
 
@@ -103,11 +109,18 @@ func SaveCacheToWriter[TKey comparable, TValue any](ctx context.Context, w io.Wr
 		size += uint64(entry.Weight)
 		count++
 	}
+
 	return count, nil
 }
 
 func LoadCacheFromFile[TKey comparable, TValue any](ctx context.Context, dir, filename string, ttl time.Duration, cache *otter.Cache[TKey, TValue]) error {
 	if len(dir) == 0 {
+		slog.DebugContext(ctx, "Skipping reading cache without cache dir")
+		return nil
+	}
+
+	if cache == nil {
+		slog.WarnContext(ctx, "Cannot load to nil cache", "file", filename)
 		return nil
 	}
 
@@ -115,6 +128,7 @@ func LoadCacheFromFile[TKey comparable, TValue any](ctx context.Context, dir, fi
 	file, err := os.Open(filePath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
+			slog.WarnContext(ctx, "Cache file does not exist", "file", filePath)
 			return nil
 		}
 		slog.ErrorContext(ctx, "Failed to open cache file", "file", filePath, ErrAttr(err))
@@ -132,6 +146,8 @@ func LoadCacheFromFile[TKey comparable, TValue any](ctx context.Context, dir, fi
 		}
 		return err
 	}
+
+	slog.DebugContext(ctx, "Read cache from file", "file", filePath)
 
 	return nil
 }
