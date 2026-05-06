@@ -96,11 +96,11 @@ func (q *Queries) GetSoftDeletedUsers(ctx context.Context, arg *GetSoftDeletedUs
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users WHERE email = $1 AND deleted_at IS NULL
+SELECT id, name, email, subscription_id, created_at, updated_at, deleted_at, enabled FROM backend.users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (*User, error) {
-	row := q.db.QueryRow(ctx, getUserByEmail, email)
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (*User, error) {
+	row := q.db.QueryRow(ctx, getUserByEmail, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,
