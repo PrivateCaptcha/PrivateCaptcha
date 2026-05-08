@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync/atomic"
@@ -189,6 +190,9 @@ func FetchCachedOne[T any](ctx context.Context, cache common.Cache[CacheKey, any
 
 	if t, ok := data.(*T); ok {
 		return t, nil
+	} else {
+		var expected *T
+		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", key, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
 	}
 
 	return nil, errInvalidCacheType
@@ -202,6 +206,9 @@ func FetchCachedArray[T any](ctx context.Context, cache common.Cache[CacheKey, a
 
 	if t, ok := data.([]*T); ok {
 		return t, nil
+	} else {
+		var expected []*T
+		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", key, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
 	}
 
 	return nil, errInvalidCacheType
@@ -332,6 +339,9 @@ func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 		}
 
 		return t, nil
+	} else {
+		var expected *T
+		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", sf.CacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
 	}
 
 	return nil, errInvalidCacheType
@@ -398,6 +408,9 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 		}
 
 		return t, nil
+	} else {
+		var expected []*T
+		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", sf.CacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
 	}
 
 	return nil, errInvalidCacheType
@@ -421,6 +434,9 @@ func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, bool, err
 		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", cacheKey)
 
 		return t, needsRefresh, nil
+	} else {
+		var expected *T
+		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", cacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
 	}
 
 	return nil, false, errInvalidCacheType
