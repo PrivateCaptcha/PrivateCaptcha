@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -268,6 +269,59 @@ func TestApiPostProperties(t *testing.T) {
 		if properties[i].Domain != inputs[i].Domain {
 			t.Errorf("Property domain does not match at %v", i)
 		}
+	}
+}
+
+func TestNewAsyncTaskRequesterIP(t *testing.T) {
+	ip := netip.MustParseAddr("203.0.113.25")
+	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, ip)
+
+	requesterIP := newAsyncTaskRequesterIP(ctx)
+	if requesterIP.RequesterIP != ip.String() {
+		t.Fatalf("unexpected requester IP: %q", requesterIP.RequesterIP)
+	}
+}
+
+func TestNewAsyncTaskRequesterIPMissingValue(t *testing.T) {
+	requesterIP := newAsyncTaskRequesterIP(t.Context())
+	if requesterIP != (asyncTaskRequesterIP{}) {
+		t.Fatalf("expected empty requester IP, got %+v", requesterIP)
+	}
+}
+
+func TestNewAsyncTaskRequesterIPInvalidValue(t *testing.T) {
+	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, netip.Addr{})
+
+	requesterIP := newAsyncTaskRequesterIP(ctx)
+	if requesterIP != (asyncTaskRequesterIP{}) {
+		t.Fatalf("expected empty requester IP, got %+v", requesterIP)
+	}
+}
+
+func TestFillAsyncTaskRequesterIP(t *testing.T) {
+	ctx := fillAsyncTaskRequesterIP(t.Context(), "203.0.113.25")
+
+	ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr)
+	if !ok {
+		t.Fatal("requester IP was not stored in context")
+	}
+	if ip.String() != "203.0.113.25" {
+		t.Fatalf("unexpected requester IP in context: %s", ip)
+	}
+}
+
+func TestFillAsyncTaskRequesterIPEmptyValue(t *testing.T) {
+	ctx := t.Context()
+	if fillAsyncTaskRequesterIP(ctx, "") != ctx {
+		t.Fatal("expected empty requester IP to keep original context")
+	}
+}
+
+func TestFillAsyncTaskRequesterIPInvalidValue(t *testing.T) {
+	ctx := fillAsyncTaskRequesterIP(t.Context(), "not-an-ip")
+
+	if value := ctx.Value(common.RateLimitKeyContextKey); value != nil {
+		t.Fatalf("expected no requester IP in context, got %v", value)
 	}
 }
 

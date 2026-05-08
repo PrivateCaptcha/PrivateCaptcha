@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -31,16 +32,44 @@ const (
 type asyncTaskCreateProperties struct {
 	Properties []*apiCreatePropertyInput `json:"properties"`
 	OrgID      int32                     `json:"org_id"`
+	asyncTaskRequesterIP
 }
 
 type asyncTaskDeleteProperties struct {
 	PropertyIDs  []int32 `json:"property_ids"`
 	AllowedOrgID int32   `json:"allowed_org_id,omitempty"`
+	asyncTaskRequesterIP
 }
 
 type asyncTaskUpdateProperties struct {
 	AllowedOrgID int32                     `json:"allowed_org_id,omitempty"`
 	Properties   []*apiUpdatePropertyInput `json:"properties"`
+	asyncTaskRequesterIP
+}
+
+type asyncTaskRequesterIP struct {
+	RequesterIP string `json:"requester_ip,omitempty"`
+}
+
+func newAsyncTaskRequesterIP(ctx context.Context) asyncTaskRequesterIP {
+	if ip, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok && ip.IsValid() {
+		return asyncTaskRequesterIP{RequesterIP: ip.String()}
+	}
+	return asyncTaskRequesterIP{}
+}
+
+func fillAsyncTaskRequesterIP(ctx context.Context, ipStr string) context.Context {
+	if len(ipStr) == 0 {
+		return ctx
+	}
+
+	ip, err := netip.ParseAddr(ipStr)
+	if err != nil {
+		slog.DebugContext(ctx, "Ignoring invalid requester IP in async task", "ip", ipStr, common.ErrAttr(err))
+		return ctx
+	}
+
+	return context.WithValue(ctx, common.RateLimitKeyContextKey, ip)
 }
 
 func (p *apiPropertySettings) Normalize() {
@@ -224,8 +253,9 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 
 	referenceID := db.UUIDToSecret(apiKey.ExternalID)
 	request := &asyncTaskCreateProperties{
-		Properties: inputs,
-		OrgID:      org.ID,
+		Properties:           inputs,
+		OrgID:                org.ID,
+		asyncTaskRequesterIP: newAsyncTaskRequesterIP(ctx),
 	}
 
 	buffer := 5 * time.Minute
@@ -264,6 +294,7 @@ func (s *Server) handleCreateProperties(ctx context.Context, task *dbgen.AsyncTa
 		tlog.ErrorContext(ctx, "Failed to unmarshal create properties async task input", common.ErrAttr(err))
 		return nil, err
 	}
+	ctx = fillAsyncTaskRequesterIP(ctx, params.RequesterIP)
 
 	user, err := s.BusinessDB.Impl().RetrieveUser(ctx, task.UserID.Int32)
 	if err != nil {
@@ -459,7 +490,8 @@ func (s *Server) deleteProperties(w http.ResponseWriter, r *http.Request) {
 
 	referenceID := db.UUIDToSecret(apiKey.ExternalID)
 	request := &asyncTaskDeleteProperties{
-		PropertyIDs: propertyIDs,
+		PropertyIDs:          propertyIDs,
+		asyncTaskRequesterIP: newAsyncTaskRequesterIP(ctx),
 	}
 
 	if apiKey.OrgID.Valid {
@@ -501,6 +533,7 @@ func (s *Server) handleDeleteProperties(ctx context.Context, task *dbgen.AsyncTa
 		tlog.ErrorContext(ctx, "Failed to unmarshal delete properties async task input", common.ErrAttr(err))
 		return nil, err
 	}
+	ctx = fillAsyncTaskRequesterIP(ctx, params.RequesterIP)
 
 	user, err := s.BusinessDB.Impl().RetrieveUser(ctx, task.UserID.Int32)
 	if err != nil {
@@ -652,7 +685,8 @@ func (s *Server) updateProperties(w http.ResponseWriter, r *http.Request) {
 
 	referenceID := db.UUIDToSecret(apiKey.ExternalID)
 	request := &asyncTaskUpdateProperties{
-		Properties: inputs,
+		Properties:           inputs,
+		asyncTaskRequesterIP: newAsyncTaskRequesterIP(ctx),
 	}
 
 	if apiKey.OrgID.Valid {
@@ -694,6 +728,7 @@ func (s *Server) handleUpdateProperties(ctx context.Context, task *dbgen.AsyncTa
 		tlog.ErrorContext(ctx, "Failed to unmarshal update properties async task input", common.ErrAttr(err))
 		return nil, err
 	}
+	ctx = fillAsyncTaskRequesterIP(ctx, params.RequesterIP)
 
 	user, err := s.BusinessDB.Impl().RetrieveUser(ctx, task.UserID.Int32)
 	if err != nil {
