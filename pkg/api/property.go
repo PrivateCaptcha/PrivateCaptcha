@@ -65,6 +65,7 @@ func fillAsyncTaskRequesterIP(ctx context.Context, ipStr string) context.Context
 
 	ip, err := netip.ParseAddr(ipStr)
 	if err != nil {
+		slog.DebugContext(ctx, "Ignoring invalid requester IP in async task", "ip", ipStr, common.ErrAttr(err))
 		return ctx
 	}
 
