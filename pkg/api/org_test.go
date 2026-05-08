@@ -22,6 +22,10 @@ import (
 )
 
 func apiRequestSuite(ctx context.Context, request interface{}, method, endpoint, apiKey string) (*http.Response, error) {
+	return apiRequestSuiteWithIP(ctx, request, method, endpoint, apiKey, "")
+}
+
+func apiRequestSuiteWithIP(ctx context.Context, request interface{}, method, endpoint, apiKey, requesterIP string) (*http.Response, error) {
 	srv := http.NewServeMux()
 	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
 
@@ -43,7 +47,10 @@ func apiRequestSuite(ctx context.Context, request interface{}, method, endpoint,
 
 	req.Header.Set(common.HeaderContentType, common.ContentTypeJSON)
 	req.Header.Set(common.HeaderAPIKey, apiKey)
-	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+	if len(requesterIP) == 0 {
+		requesterIP = common_test.GenerateRandomIPv4()
+	}
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), requesterIP)
 
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
