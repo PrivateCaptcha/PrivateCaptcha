@@ -27,6 +27,8 @@ var (
 	errEmptyCacheKeyPrefix = errors.New("cache key prefix is empty")
 )
 
+type CacheMissingValue struct{}
+
 type memcache[TKey comparable, TValue comparable] struct {
 	name    string
 	store   *otter.Cache[TKey, TValue]
@@ -337,7 +339,8 @@ func init() {
 	gob.Register([]*dbgen.GetUserAuditLogsRow{})
 	gob.Register([]*dbgen.Property{})
 	gob.Register([]*dbgen.APIKey{})
-	gob.Register(struct{}{})
+	gob.Register(&struct{}{})
+	gob.Register(&CacheMissingValue{})
 	gob.Register([]*common.TimeCount{})
 	gob.Register([]*common.OrgTimeCount{})
 	gob.Register([]*common.TimePeriodStat{})

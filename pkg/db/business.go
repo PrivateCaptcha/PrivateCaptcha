@@ -73,10 +73,10 @@ func NewBusiness(pool *pgxpool.Pool) *BusinessStore {
 	const maxCacheSize = 10_000_000
 	var cache common.Cache[CacheKey, any]
 	var err error
-	cache, err = NewMemoryCache[CacheKey, any]("default", maxCacheSize, &struct{}{}, defaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
+	cache, err = NewMemoryCache[CacheKey, any]("default", maxCacheSize, &CacheMissingValue{}, defaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
 	if err != nil {
 		slog.Error("Failed to create memory cache", common.ErrAttr(err))
-		cache = NewStaticCache[CacheKey, any](maxCacheSize, &struct{}{})
+		cache = NewStaticCache[CacheKey, any](maxCacheSize, &CacheMissingValue{})
 	}
 
 	return NewBusinessEx(pool, cache)

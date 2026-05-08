@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"testing"
 	"time"
@@ -110,5 +111,43 @@ func TestGetWithRefreshStaleEntry(t *testing.T) {
 	}
 	if !needsRefresh {
 		t.Fatal("expected needsRefresh=true for a stale entry")
+	}
+}
+
+func TestBusinessCacheMissingCompiledRulesRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	const maxEntries = 100
+
+	ctx := context.Background()
+	store := NewBusiness(nil)
+	impl := store.Impl()
+
+	impl.CacheCompiledPropertyRules(ctx, 123, nil)
+	impl.CacheCompiledOrgRules(ctx, 456, nil)
+
+	if _, _, err := impl.GetCachedCompiledPropertyRules(ctx, 123); err != ErrNegativeCacheHit {
+		t.Fatalf("expected negative cache hit for property rules before save, got %v", err)
+	}
+	if _, _, err := impl.GetCachedCompiledOrgRules(ctx, 456); err != ErrNegativeCacheHit {
+		t.Fatalf("expected negative cache hit for org rules before save, got %v", err)
+	}
+
+	var buf bytes.Buffer
+	if err := store.Cache.SaveTo(ctx, &buf, maxEntries); err != nil {
+		t.Fatalf("failed to save business cache: %v", err)
+	}
+
+	newStore := NewBusiness(nil)
+	if err := newStore.Cache.LoadFrom(ctx, &buf, 24*time.Hour); err != nil {
+		t.Fatalf("failed to load business cache: %v", err)
+	}
+
+	newImpl := newStore.Impl()
+	if _, _, err := newImpl.GetCachedCompiledPropertyRules(ctx, 123); err != ErrNegativeCacheHit {
+		t.Fatalf("expected negative cache hit for property rules after load, got %v", err)
+	}
+	if _, _, err := newImpl.GetCachedCompiledOrgRules(ctx, 456); err != ErrNegativeCacheHit {
+		t.Fatalf("expected negative cache hit for org rules after load, got %v", err)
 	}
 }
