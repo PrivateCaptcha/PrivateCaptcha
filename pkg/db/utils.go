@@ -285,6 +285,7 @@ type StoreOneReader[TKey any, T any] struct {
 	Cache        common.Cache[CacheKey, any]
 	TTL          time.Duration
 	readFlag     int32
+	DropInvalid  bool
 }
 
 func (sf *StoreOneReader[TKey, T]) Reload(ctx context.Context, key CacheKey, old any) (any, error) {
@@ -342,6 +343,10 @@ func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 	} else if data != nil {
 		var expected *T
 		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", sf.CacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
+
+		if sf.DropInvalid {
+			_ = sf.Cache.Delete(ctx, sf.CacheKey)
+		}
 	}
 
 	return nil, errInvalidCacheType
@@ -354,6 +359,7 @@ type StoreArrayReader[TKey any, T any] struct {
 	Cache        common.Cache[CacheKey, any]
 	TTL          time.Duration
 	readFlag     int32
+	DropInvalid  bool
 }
 
 func (sf *StoreArrayReader[TKey, T]) Reload(ctx context.Context, key CacheKey, old any) (any, error) {
@@ -411,6 +417,10 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 	} else if data != nil {
 		var expected []*T
 		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", sf.CacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
+
+		if sf.DropInvalid {
+			_ = sf.Cache.Delete(ctx, sf.CacheKey)
+		}
 	}
 
 	return nil, errInvalidCacheType
@@ -420,6 +430,7 @@ type CachedRefreshReader[TKey any, T any] struct {
 	Key          TKey
 	Cache        common.Cache[CacheKey, any]
 	CacheKeyFunc func(TKey) CacheKey
+	DropInvalid  bool
 }
 
 func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, bool, error) {
@@ -437,6 +448,10 @@ func (sf *CachedRefreshReader[TKey, T]) Read(ctx context.Context) (*T, bool, err
 	} else if data != nil {
 		var expected *T
 		slog.ErrorContext(ctx, "Cache record type does not match", "cacheKey", cacheKey, "expected", fmt.Sprintf("%T", expected), "actual", fmt.Sprintf("%T", data))
+
+		if sf.DropInvalid {
+			_ = sf.Cache.Delete(ctx, cacheKey)
+		}
 	}
 
 	return nil, false, errInvalidCacheType
@@ -450,6 +465,7 @@ type StoreBulkReader[TArg comparable, TKey any, T any] struct {
 	Cache           common.Cache[CacheKey, any]
 	CacheKeyFunc    func(TArg) CacheKey
 	MinMissingCount uint
+	DropInvalid     bool
 }
 
 // We convert []TArg -> []TKey so that QueryFunc for DB query can return []*T
@@ -471,6 +487,7 @@ func (br *StoreBulkReader[TArg, TKey, T]) Read(ctx context.Context, args map[TAr
 			Key:          arg,
 			Cache:        br.Cache,
 			CacheKeyFunc: br.CacheKeyFunc,
+			DropInvalid:  br.DropInvalid,
 		}
 
 		if t, needsRefresh, err := reader.Read(ctx); err == nil {

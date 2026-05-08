@@ -415,8 +415,9 @@ func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid stri
 	}
 
 	reader := &StoreOneReader[string, session.SessionData]{
-		CacheKey: SessionCacheKey(sid),
-		Cache:    impl.cache,
+		CacheKey:    SessionCacheKey(sid),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -434,6 +435,7 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		CacheKeyFunc: SessionCacheKey,
 		QueryKeyFunc: sessionIDFunc,
 		QueryFunc:    nil, // explicitly set - we are only interested in cache
+		DropInvalid:  true,
 	}
 
 	// NOTE: it does have the side-effect of extending session expiration in our cache once again (which _is_ a "bug"),
@@ -501,8 +503,9 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 
 func (impl *BusinessStoreImpl) RetrievePropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, error) {
 	reader := &StoreOneReader[pgtype.UUID, dbgen.Property]{
-		CacheKey: PropertyBySitekeyCacheKey(sitekey),
-		Cache:    impl.cache,
+		CacheKey:    PropertyBySitekeyCacheKey(sitekey),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -520,6 +523,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesBySitekey(ctx context.Context, 
 		CacheKeyFunc:    PropertyBySitekeyCacheKey,
 		QueryKeyFunc:    stringKeySitekeyUUID,
 		MinMissingCount: minMissingCount,
+		DropInvalid:     true,
 	}
 
 	if impl.querier != nil {
@@ -549,6 +553,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 		Cache:        impl.cache,
 		CacheKeyFunc: propertyByIDCacheKey,
 		QueryKeyFunc: IdentityKeyFunc[int32],
+		DropInvalid:  true,
 	}
 
 	if impl.querier != nil {
@@ -618,8 +623,9 @@ func (impl *BusinessStoreImpl) FindUserAPIKeyByName(ctx context.Context, user *d
 // Fetches API key from DB, backed by cache
 func (impl *BusinessStoreImpl) RetrieveAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	reader := &StoreOneReader[pgtype.UUID, dbgen.APIKey]{
-		CacheKey: APIKeyCacheKey(secret),
-		Cache:    impl.cache,
+		CacheKey:    APIKeyCacheKey(secret),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -632,8 +638,9 @@ func (impl *BusinessStoreImpl) RetrieveAPIKey(ctx context.Context, secret string
 
 func (impl *BusinessStoreImpl) retrieveUser(ctx context.Context, userID int32) (*dbgen.User, error) {
 	reader := &StoreOneReader[int32, dbgen.User]{
-		CacheKey: UserCacheKey(userID),
-		Cache:    impl.cache,
+		CacheKey:    UserCacheKey(userID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -679,8 +686,9 @@ func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string
 
 func (impl *BusinessStoreImpl) RetrieveUserOrganizations(ctx context.Context, userID int32) ([]*dbgen.GetUserOrganizationsRow, error) {
 	reader := &StoreArrayReader[pgtype.Int4, dbgen.GetUserOrganizationsRow]{
-		CacheKey: UserOrgsCacheKey(userID),
-		Cache:    impl.cache,
+		CacheKey:    UserOrgsCacheKey(userID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -850,8 +858,9 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 
 func (impl *BusinessStoreImpl) RetrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
 	reader := &StoreOneReader[int32, dbgen.Subscription]{
-		CacheKey: SubscriptionCacheKey(sID),
-		Cache:    impl.cache,
+		CacheKey:    SubscriptionCacheKey(sID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -1092,8 +1101,9 @@ func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *d
 
 	if offset == 0 {
 		reader := &StoreArrayReader[*dbgen.GetOrgPropertiesParams, dbgen.Property]{
-			CacheKey: OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
-			Cache:    impl.cache,
+			CacheKey:    OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr),
+			Cache:       impl.cache,
+			DropInvalid: true,
 		}
 
 		if impl.querier != nil {
@@ -1188,8 +1198,9 @@ func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *
 // NOTE: by definition this does not include the owner as this relationship is set directly in the 'organizations' table
 func (impl *BusinessStoreImpl) RetrieveOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
 	reader := &StoreArrayReader[int32, dbgen.GetOrganizationUsersRow]{
-		CacheKey: orgUsersCacheKey(orgID),
-		Cache:    impl.cache,
+		CacheKey:    orgUsersCacheKey(orgID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -1486,8 +1497,9 @@ func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, user *dbgen.User,
 
 func (impl *BusinessStoreImpl) RetrieveUserAPIKeys(ctx context.Context, userID int32) ([]*dbgen.APIKey, error) {
 	reader := &StoreArrayReader[pgtype.Int4, dbgen.APIKey]{
-		CacheKey: UserAPIKeysCacheKey(userID),
-		Cache:    impl.cache,
+		CacheKey:    UserAPIKeysCacheKey(userID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -1947,8 +1959,9 @@ func (impl *BusinessStoreImpl) DeleteUsers(ctx context.Context, ids []int32) err
 
 func (impl *BusinessStoreImpl) RetrieveSystemNotification(ctx context.Context, id int32) (*dbgen.SystemNotification, error) {
 	reader := &StoreOneReader[int32, dbgen.SystemNotification]{
-		CacheKey: notificationCacheKey(id),
-		Cache:    impl.cache,
+		CacheKey:    notificationCacheKey(id),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -2243,8 +2256,9 @@ func (impl *BusinessStoreImpl) CreateNotificationTemplate(ctx context.Context, n
 
 func (impl *BusinessStoreImpl) RetrieveNotificationTemplate(ctx context.Context, templateHash string) (*dbgen.NotificationTemplate, error) {
 	reader := &StoreOneReader[string, dbgen.NotificationTemplate]{
-		CacheKey: templateCacheKey(templateHash),
-		Cache:    impl.cache,
+		CacheKey:    templateCacheKey(templateHash),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -2653,9 +2667,10 @@ func (impl *BusinessStoreImpl) RetrieveUserAuditLogs(ctx context.Context, user *
 	}
 
 	reader := &StoreArrayReader[*dbgen.GetUserAuditLogsParams, dbgen.GetUserAuditLogsRow]{
-		CacheKey: userAuditLogsCacheKey(user.ID, after.Format(time.DateOnly)),
-		Cache:    impl.cache,
-		TTL:      5 * time.Minute,
+		CacheKey:    userAuditLogsCacheKey(user.ID, after.Format(time.DateOnly)),
+		Cache:       impl.cache,
+		TTL:         5 * time.Minute,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -2679,9 +2694,10 @@ func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, pr
 	}
 
 	reader := &StoreArrayReader[*dbgen.GetPropertyAuditLogsParams, dbgen.GetPropertyAuditLogsRow]{
-		CacheKey: propertyAuditLogsCacheKey(property.ID),
-		Cache:    impl.cache,
-		TTL:      5 * time.Minute,
+		CacheKey:    propertyAuditLogsCacheKey(property.ID),
+		Cache:       impl.cache,
+		TTL:         5 * time.Minute,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -2712,9 +2728,10 @@ func (impl *BusinessStoreImpl) RetrieveOrganizationAuditLogs(ctx context.Context
 	}
 
 	reader := &StoreArrayReader[*dbgen.GetOrgAuditLogsParams, dbgen.GetOrgAuditLogsRow]{
-		CacheKey: orgAuditLogsCacheKey(org.ID),
-		Cache:    impl.cache,
-		TTL:      5 * time.Minute,
+		CacheKey:    orgAuditLogsCacheKey(org.ID),
+		Cache:       impl.cache,
+		TTL:         5 * time.Minute,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -2854,8 +2871,9 @@ func (impl *BusinessStoreImpl) CreateNewAsyncTask(ctx context.Context, data inte
 
 func (impl *BusinessStoreImpl) RetrieveAsyncTask(ctx context.Context, uuid pgtype.UUID, user *dbgen.User) (*dbgen.AsyncTask, error) {
 	reader := &StoreOneReader[pgtype.UUID, dbgen.AsyncTask]{
-		CacheKey: asyncTaskCacheKey(UUIDToString(uuid)),
-		Cache:    impl.cache,
+		CacheKey:    asyncTaskCacheKey(UUIDToString(uuid)),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -3265,8 +3283,9 @@ func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID 
 
 func (impl *BusinessStoreImpl) RetrieveDifficultyRule(ctx context.Context, ruleID int32) (*dbgen.DifficultyRule, error) {
 	reader := &StoreOneReader[int32, dbgen.DifficultyRule]{
-		CacheKey: DifficultyRuleCacheKey(ruleID),
-		Cache:    impl.cache,
+		CacheKey:    DifficultyRuleCacheKey(ruleID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
@@ -3648,8 +3667,9 @@ func (impl *BusinessStoreImpl) MoveDifficultyRuleWithRebalancing(ctx context.Con
 
 func (impl *BusinessStoreImpl) RetrieveUserSettings(ctx context.Context, userID int32) (*dbgen.UserSettings, error) {
 	reader := &StoreOneReader[int32, dbgen.UserSettings]{
-		CacheKey: UserSettingsCacheKey(userID),
-		Cache:    impl.cache,
+		CacheKey:    UserSettingsCacheKey(userID),
+		Cache:       impl.cache,
+		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
