@@ -282,6 +282,22 @@ func TestNewAsyncTaskRequesterIP(t *testing.T) {
 	}
 }
 
+func TestNewAsyncTaskRequesterIPMissingValue(t *testing.T) {
+	requesterIP := newAsyncTaskRequesterIP(t.Context())
+	if requesterIP != (asyncTaskRequesterIP{}) {
+		t.Fatalf("expected empty requester IP, got %+v", requesterIP)
+	}
+}
+
+func TestNewAsyncTaskRequesterIPInvalidValue(t *testing.T) {
+	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, netip.Addr{})
+
+	requesterIP := newAsyncTaskRequesterIP(ctx)
+	if requesterIP != (asyncTaskRequesterIP{}) {
+		t.Fatalf("expected empty requester IP, got %+v", requesterIP)
+	}
+}
+
 func TestFillAsyncTaskRequesterIP(t *testing.T) {
 	ctx := fillAsyncTaskRequesterIP(t.Context(), "203.0.113.25")
 
@@ -291,6 +307,13 @@ func TestFillAsyncTaskRequesterIP(t *testing.T) {
 	}
 	if ip.String() != "203.0.113.25" {
 		t.Fatalf("unexpected requester IP in context: %s", ip)
+	}
+}
+
+func TestFillAsyncTaskRequesterIPEmptyValue(t *testing.T) {
+	ctx := t.Context()
+	if fillAsyncTaskRequesterIP(ctx, "") != ctx {
+		t.Fatal("expected empty requester IP to keep original context")
 	}
 }
 
