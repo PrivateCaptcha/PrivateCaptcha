@@ -187,7 +187,6 @@ func TestCachedRefreshReaderDropsInvalidCacheItem(t *testing.T) {
 	if _, err := cache.Get(ctx, cacheKey); err != ErrCacheMiss {
 		t.Fatalf("expected invalid cache item to be deleted, got %v", err)
 	}
-
 }
 
 func TestStoreBulkReaderDropsInvalidCacheItem(t *testing.T) {
