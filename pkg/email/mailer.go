@@ -59,10 +59,14 @@ func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
 }
 
 func NewMailSender(cfg common.ConfigStore) *simpleMailer {
+	return NewMailSenderEx(cfg.Get(common.SmtpEndpointKey), cfg.Get(common.SmtpUsernameKey), cfg.Get(common.SmtpPasswordKey))
+}
+
+func NewMailSenderEx(endpoint, username, password common.ConfigItem) *simpleMailer {
 	return &simpleMailer{
-		endpoint: cfg.Get(common.SmtpEndpointKey),
-		username: cfg.Get(common.SmtpUsernameKey),
-		password: cfg.Get(common.SmtpPasswordKey),
+		endpoint: endpoint,
+		username: username,
+		password: password,
 	}
 }
 
