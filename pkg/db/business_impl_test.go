@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -19,6 +21,16 @@ var testAPIKeyUUID = pgtype.UUID{Bytes: [16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 
 var testAPIKeySecret = UUIDToSecret(testAPIKeyUUID)
 var testCacheKeyStr = SessionCacheKey("valid-sid").String()
 var testCacheKey = SessionCacheKey("valid-sid")
+
+type dummySessionStore struct{}
+
+func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
+func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
+func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
+	return nil, nil
+}
+func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
+func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error              { return nil }
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
 	stub := &QuerierStub{Error: expectedErr}
@@ -217,7 +229,32 @@ func TestBusinessStoreImplRetrieveUserSession(t *testing.T) {
 }
 
 func TestBusinessStoreImplStoreUserSessions(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		sd := session.NewSessionData("valid-sid")
+		sess := session.NewSession(sd, &dummySessionStore{})
+		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
+		store.cache.Set(context.Background(), testCacheKey, sd)
 
+		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		sd := session.NewSessionData("valid-sid")
+		sess := session.NewSession(sd, &dummySessionStore{})
+		_ = sess.Set(context.Background(), session.KeyPersistent, "true")
+		store.cache.Set(context.Background(), testCacheKey, sd)
+
+		err := store.StoreUserSessions(context.Background(), map[string]uint{"valid-sid": 1}, session.KeyPersistent, time.Minute)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplRetrievePropertyBySitekey(t *testing.T) {
@@ -1059,7 +1096,22 @@ func TestBusinessStoreImplDeleteAPIKey(t *testing.T) {
 }
 
 func TestBusinessStoreImplUpdateAPIKeysLastUsedAt(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.UpdateAPIKeysLastUsedAt(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.UpdateAPIKeysLastUsedAt(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplRetrieveUsersWithoutSubscription(t *testing.T) {
@@ -1233,7 +1285,22 @@ func TestBusinessStoreImplRetrieveSoftDeletedProperties(t *testing.T) {
 }
 
 func TestBusinessStoreImplDeleteProperties(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.DeleteProperties(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.DeleteProperties(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplRetrieveSoftDeletedOrganizations(t *testing.T) {
@@ -1270,7 +1337,22 @@ func TestBusinessStoreImplRetrieveSoftDeletedOrganizations(t *testing.T) {
 }
 
 func TestBusinessStoreImplDeleteOrganizations(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.DeleteOrganizations(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.DeleteOrganizations(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplRetrieveSoftDeletedUsers(t *testing.T) {
@@ -1307,7 +1389,22 @@ func TestBusinessStoreImplRetrieveSoftDeletedUsers(t *testing.T) {
 }
 
 func TestBusinessStoreImplDeleteUsers(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.DeleteUsers(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.DeleteUsers(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplRetrieveSystemNotification(t *testing.T) {
@@ -1631,11 +1728,41 @@ func TestBusinessStoreImplRetrievePendingUserNotifications(t *testing.T) {
 }
 
 func TestBusinessStoreImplMarkUserNotificationsAttempted(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.MarkUserNotificationsAttempted(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.MarkUserNotificationsAttempted(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplMarkUserNotificationsProcessed(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.MarkUserNotificationsProcessed(context.Background(), []int32{1, 2}, time.Now())
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.MarkUserNotificationsProcessed(context.Background(), []int32{1, 2}, time.Now())
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }
 
 func TestBusinessStoreImplDeleteUnusedNotificationTemplates(t *testing.T) {
