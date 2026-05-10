@@ -326,6 +326,14 @@ func (rg *RouteGenerator) Register(router *http.ServeMux) {
 	}
 }
 
+func (rg *RouteGenerator) Routes() []*RouteAndHandler {
+	return rg.routes
+}
+
+func (rh *RouteAndHandler) Handler() http.Handler {
+	return rh.chain.Then(rh.handler)
+}
+
 func APIKeyMiddleware(apiKey string) alice.Constructor {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

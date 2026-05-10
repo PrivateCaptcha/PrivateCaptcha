@@ -87,7 +87,10 @@ func NewBusinessEx(pool *pgxpool.Pool, cache common.Cache[CacheKey, any]) *Busin
 	if pool != nil {
 		querier = dbgen.New(pool)
 	}
+	return NewBusinessWithQuerier(pool, querier, cache)
+}
 
+func NewBusinessWithQuerier(pool *pgxpool.Pool, querier dbgen.Querier, cache common.Cache[CacheKey, any]) *BusinessStore {
 	auditLog := NewAuditLog(querier, auditBatchSize)
 
 	return &BusinessStore{

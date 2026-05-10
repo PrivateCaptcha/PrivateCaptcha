@@ -1461,7 +1461,7 @@ func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user 
 		auditEvent = newUpdateUserSubscriptionEvent(user, oldSubscription, subscription)
 	}
 
-	return user, auditEvent, nil
+	return updatedUser, auditEvent, nil
 }
 
 func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, user *dbgen.User, name string, newEmail, oldEmail string) (*common.AuditLogEvent, error) {
