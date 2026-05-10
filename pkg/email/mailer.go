@@ -25,6 +25,7 @@ type Message struct {
 var (
 	errInvalidMessage = errors.New("mail message is not valid")
 	errNoEmailBody    = errors.New("no email body was generated")
+	ErrUnconfigured   = errors.New("not configured")
 )
 
 func (m *Message) Valid() bool {
@@ -87,6 +88,14 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 		return errInvalidMessage
 	}
 
+	endpoint := sm.endpoint.Value()
+	username := sm.username.Value()
+	password := sm.password.Value()
+
+	if (len(endpoint) == 0) || (len(username) == 0) || (len(password) == 0) {
+		return ErrUnconfigured
+	}
+
 	m := gomail.NewMessage()
 
 	m.SetAddressHeader("To", msg.EmailTo, msg.NameTo)
@@ -111,7 +120,7 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 		return errNoEmailBody
 	}
 
-	dialer, err := smtpDialer(sm.endpoint.Value(), sm.username.Value(), sm.password.Value())
+	dialer, err := smtpDialer(endpoint, username, password)
 	if err != nil {
 		return err
 	}
