@@ -26,7 +26,7 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
         } else {
             let json = await response.json();
             if (json && json.error) {
-                throw Error(json.error);
+                throw new Error(json.error);
             }
         }
     } catch (err) {
@@ -34,7 +34,7 @@ export async function getPuzzle(endpoint, sitekey, options = {}) {
         throw err;
     }
 
-    throw Error('Internal error');
+    throw new Error('Internal error');
 };
 
 function wait(delay, signal) {
@@ -172,7 +172,7 @@ export class Puzzle {
     parse(rawData) {
         const parts = rawData.split('.');
         if (parts.length !== 2) {
-            throw Error(`Invalid amount of parts: ${parts.length}`);
+            throw new Error(`Invalid amount of parts: ${parts.length}`);
         }
 
         const buffer = parts[0];

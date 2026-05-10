@@ -414,7 +414,7 @@ export class CaptchaElement extends SafeHTMLElement {
 
         switch (name) {
             case 'progress':
-                const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
+                const progressValue = newValue !== null ? Number.parseFloat(newValue) : Number.NaN;
                 if (!Number.isNaN(progressValue)) {
                     this.setProgress(progressValue);
                 }

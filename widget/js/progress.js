@@ -98,7 +98,7 @@ export class ProgressRing extends SafeHTMLElement {
         if (oldValue === newValue) { return; }
 
         if (name === 'progress') {
-            const progressValue = newValue !== null ? parseFloat(newValue) : NaN;
+            const progressValue = newValue !== null ? Number.parseFloat(newValue) : Number.NaN;
             if (!Number.isNaN(progressValue)) {
                 this.setProgress(progressValue);
             }
