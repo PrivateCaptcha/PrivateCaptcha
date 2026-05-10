@@ -55,7 +55,6 @@ type UserEmailNotificationsJob struct {
 	Sender        email.Sender
 	ChunkSize     int
 	MaxAttempts   int
-	EmailFrom     common.ConfigItem
 	ReplyToEmail  common.ConfigItem
 	PlanService   billing.PlanService
 	EmailVerifier common.EmailVerifier
@@ -316,7 +315,6 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 	tpl *preparedNotificationTemplate,
 	notifications []*dbgen.GetPendingUserNotificationsRow,
 	b *backoff.Backoff) []int32 {
-	emailFrom := j.EmailFrom.Value()
 	replyToEmail := j.ReplyToEmail.Value()
 	processedNotificationIDs := make([]int32, 0, len(notifications))
 	lastSentCount := 0
@@ -377,7 +375,7 @@ func (j *UserEmailNotificationsJob) processNotificationsChunk(ctx context.Contex
 			}
 		}
 
-		notifEmailFrom := emailFrom
+		var notifEmailFrom string
 		notifReplyTo := replyToEmail
 
 		if un.EmailFrom.Valid && (len(un.EmailFrom.String) > 0) {

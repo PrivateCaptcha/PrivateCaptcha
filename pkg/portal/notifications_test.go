@@ -79,7 +79,6 @@ func TestUserNotificationsJob(t *testing.T) {
 		ChunkSize:    100,
 		MaxAttempts:  5,
 		PlanService:  server.PlanService,
-		EmailFrom:    config.NewStaticValue(common.EmailFromKey, "foo@bar.com"),
 		ReplyToEmail: config.NewStaticValue(common.ReplyToEmailKey, "foo@bar.com"),
 		UserIDs:      map[int32]struct{}{user.ID: struct{}{}},
 	}
@@ -358,7 +357,6 @@ func TestNotificationMaxAttempts(t *testing.T) {
 		ChunkSize:    100,
 		MaxAttempts:  times,
 		PlanService:  server.PlanService,
-		EmailFrom:    config.NewStaticValue(common.EmailFromKey, "foo@bar.com"),
 		ReplyToEmail: config.NewStaticValue(common.ReplyToEmailKey, "foo@bar.com"),
 		UserIDs:      map[int32]struct{}{user.ID: struct{}{}},
 	}
@@ -411,7 +409,6 @@ func TestNotificationProcessingAttempts(t *testing.T) {
 		ChunkSize:    100,
 		MaxAttempts:  100,
 		PlanService:  server.PlanService,
-		EmailFrom:    config.NewStaticValue(common.EmailFromKey, "foo@bar.com"),
 		ReplyToEmail: config.NewStaticValue(common.ReplyToEmailKey, "foo@bar.com"),
 		UserIDs:      map[int32]struct{}{user.ID: struct{}{}},
 	}
@@ -481,7 +478,6 @@ func TestRequireSubscription(t *testing.T) {
 		ChunkSize:    100,
 		MaxAttempts:  100,
 		PlanService:  server.PlanService,
-		EmailFrom:    config.NewStaticValue(common.EmailFromKey, "foo@bar.com"),
 		ReplyToEmail: config.NewStaticValue(common.ReplyToEmailKey, "foo@bar.com"),
 		UserIDs:      map[int32]struct{}{user.ID: struct{}{}},
 	}

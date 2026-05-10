@@ -438,7 +438,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Sender:        sender,
 		ChunkSize:     50,
 		MaxAttempts:   5,
-		EmailFrom:     cfg.Get(common.EmailFromKey),
 		ReplyToEmail:  cfg.Get(common.ReplyToEmailKey),
 		PlanService:   planService,
 		EmailVerifier: emailVerifier,
