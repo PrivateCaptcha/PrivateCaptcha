@@ -23,8 +23,8 @@ type Message struct {
 }
 
 var (
-	errInvalidMessage = errors.New("mail message is not valid")
-	errNoEmailBody    = errors.New("no email body was generated")
+	ErrInvalidMessage = errors.New("mail message is not valid")
+	ErrNoEmailBody    = errors.New("no email body was generated")
 	ErrUnconfigured   = errors.New("not configured")
 )
 
@@ -85,7 +85,7 @@ var _ Sender = (*simpleMailer)(nil)
 
 func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 	if !msg.Valid() {
-		return errInvalidMessage
+		return ErrInvalidMessage
 	}
 
 	endpoint := sm.endpoint.Value()
@@ -117,7 +117,7 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 		hasBody = true
 	}
 	if !hasBody {
-		return errNoEmailBody
+		return ErrNoEmailBody
 	}
 
 	dialer, err := smtpDialer(endpoint, username, password)
