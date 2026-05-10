@@ -60,14 +60,20 @@ func smtpDialer(smtpURL, user, pass string) (*gomail.Dialer, error) {
 }
 
 func NewMailSender(cfg common.ConfigStore) *simpleMailer {
-	return NewMailSenderEx(cfg.Get(common.SmtpEndpointKey), cfg.Get(common.SmtpUsernameKey), cfg.Get(common.SmtpPasswordKey))
+	return NewMailSenderEx(
+		cfg.Get(common.SmtpEndpointKey),
+		cfg.Get(common.SmtpUsernameKey),
+		cfg.Get(common.SmtpPasswordKey),
+		cfg.Get(common.EmailFromKey),
+	)
 }
 
-func NewMailSenderEx(endpoint, username, password common.ConfigItem) *simpleMailer {
+func NewMailSenderEx(endpoint, username, password, emailFrom common.ConfigItem) *simpleMailer {
 	return &simpleMailer{
-		endpoint: endpoint,
-		username: username,
-		password: password,
+		endpoint:  endpoint,
+		username:  username,
+		password:  password,
+		emailFrom: emailFrom,
 	}
 }
 
@@ -76,9 +82,10 @@ type Sender interface {
 }
 
 type simpleMailer struct {
-	endpoint common.ConfigItem
-	username common.ConfigItem
-	password common.ConfigItem
+	endpoint  common.ConfigItem
+	username  common.ConfigItem
+	password  common.ConfigItem
+	emailFrom common.ConfigItem
 }
 
 var _ Sender = (*simpleMailer)(nil)
@@ -99,7 +106,14 @@ func (sm *simpleMailer) SendEmail(ctx context.Context, msg *Message) error {
 	m := gomail.NewMessage()
 
 	m.SetAddressHeader("To", msg.EmailTo, msg.NameTo)
-	m.SetAddressHeader("From", msg.EmailFrom, msg.NameFrom)
+	emailFrom := msg.EmailFrom
+	if len(emailFrom) == 0 {
+		emailFrom = sm.emailFrom.Value()
+	}
+	if len(emailFrom) == 0 {
+		return ErrUnconfigured
+	}
+	m.SetAddressHeader("From", emailFrom, msg.NameFrom)
 	m.SetHeader("Subject", msg.Subject)
 	if len(msg.ReplyTo) > 0 {
 		m.SetHeader("Reply-To", msg.ReplyTo)

@@ -44,7 +44,6 @@ type PortalMailer struct {
 	Mailer             emailpkg.Sender
 	CDNURL             string
 	PortalURL          string
-	EmailFrom          common.ConfigItem
 	AdminEmail         common.ConfigItem
 	ReplyToEmail       common.ConfigItem
 	TwofactorTemplate  *common.EmailTemplate
@@ -60,7 +59,6 @@ func NewPortalMailer(cdnURL, portalURL string, mailer emailpkg.Sender, cfg commo
 
 	return &PortalMailer{
 		Mailer:             mailer,
-		EmailFrom:          cfg.Get(common.EmailFromKey),
 		AdminEmail:         cfg.Get(common.AdminEmailKey),
 		ReplyToEmail:       cfg.Get(common.ReplyToEmailKey),
 		CDNURL:             strings.TrimSuffix(cdnURL, "/"),
@@ -105,13 +103,12 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 	}
 
 	msg := &emailpkg.Message{
-		HTMLBody:  htmlBody,
-		TextBody:  textBody,
-		Subject:   fmt.Sprintf("[%s] Your verification code is %v", common.PrivateCaptcha, data.Code),
-		EmailTo:   email,
-		EmailFrom: pm.EmailFrom.Value(),
-		NameFrom:  common.PrivateCaptchaTeam,
-		ReplyTo:   pm.ReplyToEmail.Value(),
+		HTMLBody: htmlBody,
+		TextBody: textBody,
+		Subject:  fmt.Sprintf("[%s] Your verification code is %v", common.PrivateCaptcha, data.Code),
+		EmailTo:  email,
+		NameFrom: common.PrivateCaptchaTeam,
+		ReplyTo:  pm.ReplyToEmail.Value(),
 	}
 
 	clog := slog.With("email", email)
@@ -158,13 +155,12 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email, name string) err
 	}
 
 	msg := &emailpkg.Message{
-		HTMLBody:  htmlBody,
-		TextBody:  textBody,
-		Subject:   "Welcome to Private Captcha",
-		EmailTo:   email,
-		EmailFrom: pm.EmailFrom.Value(),
-		NameFrom:  common.PrivateCaptchaTeam,
-		ReplyTo:   pm.ReplyToEmail.Value(),
+		HTMLBody: htmlBody,
+		TextBody: textBody,
+		Subject:  "Welcome to Private Captcha",
+		EmailTo:  email,
+		NameFrom: common.PrivateCaptchaTeam,
+		ReplyTo:  pm.ReplyToEmail.Value(),
 	}
 
 	if err := pm.Mailer.SendEmail(ctx, msg); err != nil {
@@ -211,12 +207,11 @@ func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, o
 	}
 
 	msg := &emailpkg.Message{
-		HTMLBody:  htmlBody,
-		TextBody:  textBody,
-		Subject:   fmt.Sprintf("[%s] You have been invited to the %s organization", common.PrivateCaptcha, data.OrgName),
-		EmailTo:   email,
-		EmailFrom: pm.EmailFrom.Value(),
-		NameFrom:  common.PrivateCaptchaTeam,
+		HTMLBody: htmlBody,
+		TextBody: textBody,
+		Subject:  fmt.Sprintf("[%s] You have been invited to the %s organization", common.PrivateCaptcha, data.OrgName),
+		EmailTo:  email,
+		NameFrom: common.PrivateCaptchaTeam,
 	}
 
 	olog := slog.With("email", email, "org", orgName)
