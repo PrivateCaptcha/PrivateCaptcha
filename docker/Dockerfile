@@ -9,6 +9,7 @@ WORKDIR /app/web
 
 # Install dependencies and build the frontend
 COPY ./web/package.json /app/web/package.json
+COPY ./web/package-lock.json /app/web/package-lock.json
 RUN --mount=type=cache,target=/cache/web npm install --verbose --ignore-scripts
 
 # copy the rest
@@ -26,6 +27,7 @@ WORKDIR /app/widget
 
 # Install dependencies and build the frontend
 COPY ./widget/package.json /app/widget/package.json
+COPY ./widget/package-lock.json /app/widget/package-lock.json
 RUN --mount=type=cache,target=/cache/widget npm install --verbose --ignore-scripts
 
 # copy the rest
