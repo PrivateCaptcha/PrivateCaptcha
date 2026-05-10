@@ -307,7 +307,7 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 		return nil, ErrMaintenance
 	}
 
-	user, err := impl.querier.SoftDeleteUser(ctx, user.ID)
+	_, err := impl.querier.SoftDeleteUser(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to soft-delete user", "userID", user.ID, common.ErrAttr(err))
 		return nil, err
@@ -1146,7 +1146,7 @@ func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbg
 
 	oldName := org.Name
 
-	org, err := impl.querier.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
+	updatedOrg, err := impl.querier.UpdateOrganization(ctx, &dbgen.UpdateOrganizationParams{
 		Name: name,
 		ID:   org.ID,
 	})
@@ -1158,14 +1158,14 @@ func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbg
 
 	slog.InfoContext(ctx, "Updated organization", "name", name, "orgID", org.ID)
 
-	cacheKey := orgCacheKey(org.ID)
-	_ = impl.cache.Set(ctx, cacheKey, org)
-	// invalidate user orgs in cache as we just updated name
-	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(org.UserID.Int32))
+	cacheKey := orgCacheKey(updatedOrg.ID)
+	_ = impl.cache.Set(ctx, cacheKey, updatedOrg)
+	// invalidate user org. in cache as we just updated name
+	_ = impl.cache.Delete(ctx, UserOrgsCacheKey(updatedOrg.UserID.Int32))
 
-	auditEvent := newUpdateOrgAuditLogEvent(user, org, oldName)
+	auditEvent := newUpdateOrgAuditLogEvent(user, updatedOrg, oldName)
 
-	return org, auditEvent, nil
+	return updatedOrg, auditEvent, nil
 }
 
 func (impl *BusinessStoreImpl) SoftDeleteOrganization(ctx context.Context, org *dbgen.Organization, user *dbgen.User) (*common.AuditLogEvent, error) {
@@ -1442,7 +1442,7 @@ func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user 
 		oldSubscription, _ = FetchCachedOne[dbgen.Subscription](ctx, impl.cache, SubscriptionCacheKey(user.SubscriptionID.Int32))
 	}
 
-	user, err := impl.querier.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
+	updatedUser, err := impl.querier.UpdateUserSubscription(ctx, &dbgen.UpdateUserSubscriptionParams{
 		ID:             user.ID,
 		SubscriptionID: Int(subscription.ID),
 	})
@@ -1455,13 +1455,13 @@ func (impl *BusinessStoreImpl) UpdateUserSubscription(ctx context.Context, user 
 	var auditEvent *common.AuditLogEvent
 
 	if user != nil {
-		slog.InfoContext(ctx, "Updated user subscription", "userID", user.ID, "subscriptionID", subscription.ID)
-		_ = impl.cache.Set(ctx, UserCacheKey(user.ID), user)
+		slog.InfoContext(ctx, "Updated user subscription", "userID", updatedUser.ID, "subscriptionID", subscription.ID)
+		_ = impl.cache.Set(ctx, UserCacheKey(updatedUser.ID), updatedUser)
 
 		auditEvent = newUpdateUserSubscriptionEvent(user, oldSubscription, subscription)
 	}
 
-	return user, auditEvent, nil
+	return updatedUser, auditEvent, nil
 }
 
 func (impl *BusinessStoreImpl) UpdateUser(ctx context.Context, user *dbgen.User, name string, newEmail, oldEmail string) (*common.AuditLogEvent, error) {

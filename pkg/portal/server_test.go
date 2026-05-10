@@ -1,6 +1,11 @@
 package portal
 
 import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+
 	"context"
 	"database/sql"
 	"flag"
@@ -13,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/difficulty"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
@@ -190,4 +196,119 @@ func TestMain(m *testing.M) {
 		exitCode = db_tests.TestCacheSerialization(store)
 	}
 	os.Exit(exitCode)
+}
+
+func TestPortalServerStoreErrors(t *testing.T) {
+	expectedErr := errors.New("generic db error")
+	stub := &db.QuerierStub{Error: expectedErr}
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, stub, cache)
+
+	planService := billing.NewPlanService(nil)
+	dataCtx, err := web.LoadData()
+	if err != nil {
+		t.Fatalf("web.LoadData failed: %v", err)
+	}
+	platformCtx := PlatformRenderContext{
+		GitCommit:  "abcde",
+		Enterprise: true,
+	}
+	puzzleEngine := &portal_tests.StubPuzzleEngine{Result: &puzzle.VerifyResult{Error: puzzle.VerifyNoError}}
+	stubMetrics := monitoring.NewStub()
+
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, stubMetrics)
+
+	ctx := context.TODO()
+	baseCfg := config.NewBaseConfig(config.NewEnvConfig(os.Getenv))
+	cdnURLConfig := config.AsURL(ctx, baseCfg.Get(common.CDNBaseURLKey))
+	portalURLConfig := config.AsURL(ctx, baseCfg.Get(common.PortalBaseURLKey))
+	mailer := NewPortalMailer("https:"+cdnURLConfig.URL(), "https:"+portalURLConfig.URL(), &email.StubSender{}, baseCfg, useragent.NewParser())
+
+	srv := &Server{
+		Stage:      common.StageTest,
+		Store:      store,
+		TimeSeries: db.NewMemoryTimeSeries(),
+		Prefix:     "",
+		XSRF:       &common.XSRFMiddleware{Key: "key", Timeout: 1 * time.Hour},
+		Sessions: &session.Manager{
+			CookieName:  "pcsid",
+			Store:       sessionStore,
+			MaxLifetime: sessionStore.TTL(),
+		},
+		Mailer:             mailer,
+		RateLimiter:        &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"},
+		PuzzleEngine:       puzzleEngine,
+		Metrics:            stubMetrics,
+		PlanService:        planService,
+		DataCtx:            dataCtx,
+		PlatformCtx:        platformCtx,
+		IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
+		AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
+		CountryCodeHeader:  config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),
+		UserLimiter:        api.NewUserLimiter(store),
+		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
+		EmailVerifier:      &PortalEmailVerifier{},
+		LicenseService:     &stubLicenseService{},
+	}
+
+	templatesBuilder := NewTemplatesBuilder()
+	if err := templatesBuilder.AddFS(ctx, web.Templates(), "core"); err != nil {
+		t.Fatalf("AddFS failed: %v", err)
+	}
+	if err := srv.Init(ctx, templatesBuilder, "", 1*time.Second); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	rg := srv.Setup("/portal", common.NoopMiddleware)
+	mux := http.NewServeMux()
+	rg.Register(mux)
+
+	for _, route := range rg.Routes() {
+		parts := strings.SplitN(route.Prefix, " ", 2)
+		var method, path string
+		if len(parts) == 2 {
+			method = parts[0]
+			path = parts[1] + route.Path
+		} else {
+			method = http.MethodGet
+			path = parts[0] + route.Path
+		}
+		path = strings.ReplaceAll(path, "{$}", "")
+		path = strings.ReplaceAll(path, "{id}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{orgID}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{propertyID}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{org}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{property}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{rule}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{user}", srv.IDHasher.Encrypt(1))
+		path = strings.ReplaceAll(path, "{key}", "123")
+		path = strings.ReplaceAll(path, "{period}", common.TimePeriodMonth.String())
+		path = strings.ReplaceAll(path, "{tab}", common.GeneralEndpoint)
+		path = strings.ReplaceAll(path, "{difficulty}", string(dbgen.DifficultyGrowthMedium))
+		path = strings.ReplaceAll(path, "{code}", "429")
+
+		req := httptest.NewRequest(method, path, nil)
+
+		req.AddCookie(&http.Cookie{
+			Name:  "pcsid",
+			Value: "12345678901234567890123456789012",
+		})
+		req.Header.Set(common.HeaderCSRFToken, srv.XSRF.Token(""))
+		req.RemoteAddr = "127.0.0.1:1234"
+
+		w := httptest.NewRecorder()
+
+		func(method, path string) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("Route %s %s panicked: %v", method, path, r)
+				}
+			}()
+			mux.ServeHTTP(w, req)
+		}(method, path)
+
+		if w.Code < 300 && w.Code != http.StatusNotFound && method != "OPTIONS" && !strings.HasSuffix(path, "/login") && !strings.HasSuffix(path, "/expired") {
+			t.Errorf("Route %s %s expected error status, got %d", method, path, w.Code)
+		}
+	}
 }
