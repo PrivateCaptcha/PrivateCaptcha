@@ -1,7 +1,9 @@
 package rules
 
 import (
+	"bytes"
 	"context"
+	"encoding/gob"
 	"net/http/httptest"
 	"net/netip"
 	"strings"
@@ -3200,5 +3202,97 @@ func TestLooksLikeBotIOSIPod(t *testing.T) {
 				t.Errorf("looksLikeBot(%q) = %v, want %v", tc.ua, got, tc.wantBot)
 			}
 		})
+	}
+}
+
+func roundTripCompiledRules(t *testing.T, compiled *CompiledRules) *CompiledRules {
+	t.Helper()
+
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(compiled); err != nil {
+		t.Fatalf("failed to encode compiled rules: %v", err)
+	}
+
+	var decoded CompiledRules
+	if err := gob.NewDecoder(&buf).Decode(&decoded); err != nil {
+		t.Fatalf("failed to decode compiled rules: %v", err)
+	}
+
+	return &decoded
+}
+
+func stubProperty(level int16) difficulty.Property {
+	return difficulty.NewStubProperty(1, true, 1, 1, level, dbgen.DifficultyGrowthMedium)
+}
+
+func newCoreRequestInfo(userAgent string, ip netip.Addr) *RequestInfo {
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("User-Agent", userAgent)
+	ctx := context.WithValue(req.Context(), common.RateLimitKeyContextKey, ip)
+	return NewRequestInfo(req.WithContext(ctx), "")
+}
+
+func TestCompiledRulesGobRoundTripPreservesDifficultyRule(t *testing.T) {
+	compiler := NewRulesCompiler(useragent.NewParser())
+	compiled := compiler.Compile(context.Background(), []*dbgen.DifficultyRule{
+		{
+			ID:                42,
+			ConditionProperty: dbgen.RuleConditionPropertyUserAgent,
+			ConditionOperator: dbgen.RuleConditionOperatorContains,
+			ConditionValueStr: pgtype.Text{String: "BadBot", Valid: true},
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       50,
+			Enabled:           true,
+			Terminal:          true,
+		},
+	})
+
+	decoded := roundTripCompiledRules(t, compiled)
+
+	applied, terminal := decoded.Apply(newCoreRequestInfo("Mozilla/5.0 BadBot/1.0", netip.MustParseAddr("1.2.3.4")), stubProperty(50))
+	if !terminal {
+		t.Fatal("expected decoded rules to preserve terminal behavior")
+	}
+	if applied.RuleID() != 42 {
+		t.Fatalf("expected decoded rules to preserve rule ID, got %d", applied.RuleID())
+	}
+	if applied.Level() <= 50 {
+		t.Fatalf("expected decoded rules to preserve difficulty override, got level %d", applied.Level())
+	}
+}
+
+func TestCompiledRulesGobRoundTripPreservesBreakRule(t *testing.T) {
+	compiler := NewRulesCompiler(useragent.NewParser())
+	compiled := compiler.Compile(context.Background(), []*dbgen.DifficultyRule{
+		{
+			ID:                7,
+			ConditionProperty: dbgen.RuleConditionPropertyAlways,
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ActionProperty:    dbgen.RuleActionPropertyBreak,
+			Enabled:           true,
+			Terminal:          true,
+		},
+		{
+			ID:                8,
+			ConditionProperty: dbgen.RuleConditionPropertyAlways,
+			ConditionOperator: dbgen.RuleConditionOperatorEquals,
+			ActionProperty:    dbgen.RuleActionPropertyDifficultyLevelPercent,
+			ActionValue:       100,
+			Enabled:           true,
+			Terminal:          true,
+		},
+	})
+
+	decoded := roundTripCompiledRules(t, compiled)
+
+	applied, terminal := decoded.Apply(newCoreRequestInfo("Mozilla/5.0", netip.MustParseAddr("1.2.3.4")), stubProperty(50))
+	if !terminal {
+		t.Fatal("expected decoded break rule to remain terminal")
+	}
+	if applied.RuleID() != 7 {
+		t.Fatalf("expected decoded break rule to preserve rule ID, got %d", applied.RuleID())
+	}
+	if applied.Level() != 50 {
+		t.Fatalf("expected decoded break rule to stop later overrides, got level %d", applied.Level())
 	}
 }
