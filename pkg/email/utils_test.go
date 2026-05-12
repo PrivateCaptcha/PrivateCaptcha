@@ -30,6 +30,9 @@ func TestIsLikelyValidDomain(t *testing.T) {
 		{"Consecutive dots", "example..com", false},
 		{"Leading consecutive dots", "..example.com", false},
 
+		// email
+		{"Email", "foo@bar.com", false},
+
 		// Success Cases
 		{"Valid simple domain", "google.com", true},
 		{"Valid subdomain", "blog.example.org", true},

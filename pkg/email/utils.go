@@ -29,5 +29,10 @@ func IsLikelyValidDomain(s string) bool {
 		return false
 	}
 
+	// this is an actual email
+	if strings.Contains(s, "@") {
+		return false
+	}
+
 	return true
 }
