@@ -174,8 +174,8 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	// this should be OK now because we verified that user is a registered user AND they solved captcha
 	_ = sess.Set(ctx, session.KeyPersistent, true)
 
-	data.Token = s.XSRF.Token(email)
-	data.Email = common.MaskEmail(email, '*')
+	data.Token = s.XSRF.Token(user.Email)
+	data.Email = common.MaskEmail(user.Email, '*')
 
 	s.render(w, r, twofactorContentsTemplate, data)
 }
