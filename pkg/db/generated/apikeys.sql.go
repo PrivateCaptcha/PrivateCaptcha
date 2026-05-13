@@ -95,16 +95,28 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*A
 	return &i, err
 }
 
-const deleteUserAPIKeys = `-- name: DeleteUserAPIKeys :execrows
-DELETE FROM backend.apikeys WHERE user_id = $1
+const deleteUserAPIKeys = `-- name: DeleteUserAPIKeys :many
+DELETE FROM backend.apikeys WHERE user_id = $1 RETURNING external_id
 `
 
-func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteUserAPIKeys, userID)
+func (q *Queries) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]pgtype.UUID, error) {
+	rows, err := q.db.Query(ctx, deleteUserAPIKeys, userID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []pgtype.UUID
+	for rows.Next() {
+		var external_id pgtype.UUID
+		if err := rows.Scan(&external_id); err != nil {
+			return nil, err
+		}
+		items = append(items, external_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getAPIKeyByExternalID = `-- name: GetAPIKeyByExternalID :one

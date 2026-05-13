@@ -322,14 +322,19 @@ func (impl *BusinessStoreImpl) SoftDeleteUser(ctx context.Context, user *dbgen.U
 		slog.InfoContext(ctx, "Soft-deleted user organizations", "userID", user.ID, "affected", affected)
 	}
 
-	if affected, err := impl.querier.DeleteUserAPIKeys(ctx, Int(user.ID)); err != nil {
+	if externalIDs, err := impl.querier.DeleteUserAPIKeys(ctx, Int(user.ID)); err != nil {
 		slog.ErrorContext(ctx, "Failed to delete user API keys", "userID", user.ID, common.ErrAttr(err))
 		return nil, err
 	} else {
-		slog.InfoContext(ctx, "Deleted user API keys", "userID", user.ID, "affected", affected)
+		slog.InfoContext(ctx, "Deleted user API keys", "userID", user.ID, "affected", len(externalIDs))
+		for _, externalID := range externalIDs {
+			secret := UUIDToSecret(externalID)
+			cacheKey := APIKeyCacheKey(secret)
+			_ = impl.cache.Delete(ctx, cacheKey)
+		}
 	}
 
-	// TODO: Delete user API keys from cache
+	_ = impl.cache.Delete(ctx, UserAPIKeysCacheKey(user.ID))
 
 	// invalidate user caches
 	userOrgsCacheKey := UserOrgsCacheKey(user.ID)

@@ -94,8 +94,8 @@ func (s *QuerierStub) DeleteUnprocessedUserNotifications(ctx context.Context, sc
 func (s *QuerierStub) DeleteUnusedNotificationTemplates(ctx context.Context, arg *dbgen.DeleteUnusedNotificationTemplatesParams) (int64, error) {
 	return 0, s.Error
 }
-func (s *QuerierStub) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) (int64, error) {
-	return 0, s.Error
+func (s *QuerierStub) DeleteUserAPIKeys(ctx context.Context, userID pgtype.Int4) ([]pgtype.UUID, error) {
+	return nil, s.Error
 }
 func (s *QuerierStub) DeleteUsers(ctx context.Context, dollar_1 []int32) (int64, error) {
 	return 0, s.Error
