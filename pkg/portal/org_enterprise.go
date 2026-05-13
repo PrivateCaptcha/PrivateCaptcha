@@ -402,15 +402,19 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if ownerSubscr, err := s.Store.Impl().RetrieveSubscription(ctx, org.UserID.Int32); err == nil {
+	_, ownerSubscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
+		// NOTE: we intentionally allow this to happen as a safe fallback
+	}
+
+	if ownerSubscr != nil {
 		if ok, extra, err := s.SubscriptionLimits.CheckOrgMembersLimit(ctx, org.ID, ownerSubscr); err == nil && !ok {
 			slog.WarnContext(ctx, "Organization members limit check failed", "extra", extra, "orgID", org.ID, "subscriptionID", ownerSubscr.ID,
 				"internal", db.IsInternalSubscription(ownerSubscr.Source))
 			s.RedirectError(http.StatusPaymentRequired, w, r)
 			return
 		}
-	} else {
-		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
 	}
 
 	if auditEvent, err := s.Store.Impl().JoinOrg(ctx, org.ID, user); err == nil {
