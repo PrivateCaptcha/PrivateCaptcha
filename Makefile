@@ -6,6 +6,8 @@ DOCKER_IMAGE ?= private-captcha
 DOCKER ?= docker
 SQLC_MIGRATION_FIX = pkg/db/migrations/postgres/000000_sqlc_fix.sql
 EXTRA_BUILD_FLAGS ?=
+EXTRA_TEST_FLAGS ?=
+CGO_TEST_ENABLED ?= 0
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
 GOPATH := $(shell go env GOPATH)
@@ -30,10 +32,18 @@ init-web:
 	cd web && env STAGE="$(STAGE)" npm install
 
 test-unit:
-	@env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -short ./...
+	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags enterprise -short ./...
+
+test-unit-race: EXTRA_TEST_FLAGS = -race
+test-unit-race: CGO_TEST_ENABLED = 1
+test-unit-race: test-unit
 
 test-unit-cover:
-	@env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -tags enterprise -short -coverprofile=coverage_unit.cov -coverpkg=$(shell go list ./... | paste -sd, -) ./...
+	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags enterprise -short -coverprofile=coverage_unit.cov -coverpkg=$(shell go list ./... | paste -sd, -) ./...
+
+test-unit-cover-race: EXTRA_TEST_FLAGS = -race
+test-unit-cover-race: CGO_TEST_ENABLED = 1
+test-unit-cover-race: test-unit-cover
 
 test-widget-unit:
 	cd widget && env STAGE="$(STAGE)" npm run test
@@ -59,10 +69,14 @@ vendors:
 build: build-server build-loadtest build-view-emails build-view-widget build-puzzledbg
 
 build-tests:
-	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go test -c -cover -covermode=atomic $(EXTRA_BUILD_FLAGS) -o tests/ $(shell go list $(EXTRA_BUILD_FLAGS) -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...) -coverpkg=$(shell go list $(EXTRA_BUILD_FLAGS) ./... | paste -sd, -)
+	env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -c -cover -covermode=atomic $(EXTRA_BUILD_FLAGS) -o tests/ $(shell go list $(EXTRA_BUILD_FLAGS) -f '{{if .TestGoFiles}}{{.ImportPath}}{{end}}' ./...) -coverpkg=$(shell go list $(EXTRA_BUILD_FLAGS) ./... | paste -sd, -)
 
 build-tests-ee: EXTRA_BUILD_FLAGS = -tags enterprise
 build-tests-ee: build-tests
+
+build-tests-ee-race: EXTRA_TEST_FLAGS = -race
+build-tests-ee-race: CGO_TEST_ENABLED = 1
+build-tests-ee-race: build-tests-ee
 
 build-server:
 	env GOFLAGS="-mod=vendor" CGO_ENABLED=0 go build -ldflags="-s -w -X main.GitCommit=$(GIT_COMMIT)" $(EXTRA_BUILD_FLAGS) -o bin/server ./cmd/server

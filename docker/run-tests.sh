@@ -2,6 +2,8 @@
 
 set -e
 
+export GORACE="halt_on_error=1"
+
 echo "Started in $PWD"
 
 # echo "Compiling... (GOCACHE=$GOCACHE)"

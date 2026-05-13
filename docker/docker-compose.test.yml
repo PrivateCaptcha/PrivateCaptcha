@@ -6,6 +6,8 @@ services:
       args:
         GIT_COMMIT: '${GIT_COMMIT}'
         EXTRA_BUILD_FLAGS: '-tags enterprise'
+        EXTRA_TEST_FLAGS: '${EXTRA_TEST_FLAGS}'
+        CGO_TEST_ENABLED: '${CGO_TEST_ENABLED:-0}'
     ports:
       - 8080:8080
     environment:
