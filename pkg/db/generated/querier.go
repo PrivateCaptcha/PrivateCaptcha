@@ -63,6 +63,7 @@ type Querier interface {
 	GetProperties(ctx context.Context, limit int32) ([]*Property, error)
 	GetPropertiesByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Property, error)
 	GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*Property, error)
+	GetPropertyAccessViolations(ctx context.Context, arg *GetPropertyAccessViolationsParams) ([]int32, error)
 	GetPropertyAuditLogs(ctx context.Context, arg *GetPropertyAuditLogsParams) ([]*GetPropertyAuditLogsRow, error)
 	GetPropertyByExternalID(ctx context.Context, externalID pgtype.UUID) (*Property, error)
 	GetPropertyByID(ctx context.Context, id int32) (*Property, error)

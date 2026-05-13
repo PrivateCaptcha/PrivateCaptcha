@@ -317,6 +317,42 @@ func (q *Queries) GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*P
 	return items, nil
 }
 
+const getPropertyAccessViolations = `-- name: GetPropertyAccessViolations :many
+SELECT p.id
+FROM backend.properties p
+LEFT JOIN backend.organization_users ou ON p.org_id = ou.org_id AND ou.user_id = $2 AND ou.level != 'invited'
+WHERE p.id = ANY($1::INT[])
+  AND NOT (
+    p.org_owner_id = $2 
+    OR (p.creator_id = $2 AND ou.user_id IS NOT NULL)
+  )
+`
+
+type GetPropertyAccessViolationsParams struct {
+	Column1 []int32     `db:"column_1" json:"column_1"`
+	UserID  pgtype.Int4 `db:"user_id" json:"user_id"`
+}
+
+func (q *Queries) GetPropertyAccessViolations(ctx context.Context, arg *GetPropertyAccessViolationsParams) ([]int32, error) {
+	rows, err := q.db.Query(ctx, getPropertyAccessViolations, arg.Column1, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int32
+	for rows.Next() {
+		var id int32
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getPropertyByExternalID = `-- name: GetPropertyByExternalID :one
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice from backend.properties WHERE external_id = $1
 `

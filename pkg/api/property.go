@@ -558,15 +558,35 @@ func (s *Server) handleDeleteProperties(ctx context.Context, task *dbgen.AsyncTa
 
 func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user *dbgen.User, params *asyncTaskDeleteProperties) ([]*operationResult, error) {
 	var org *dbgen.Organization
+	var violationSet map[int32]struct{}
+	var idsToProcess []int32
+
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Delete task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
 		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
 		}
+		idsToProcess = params.PropertyIDs
+	} else {
+		var err error
+		violationSet, err = s.BusinessDB.Impl().RetrievePropertyAccessViolations(ctx, params.PropertyIDs, user)
+		if err != nil {
+			return nil, err
+		}
+		if len(violationSet) > 0 {
+			tlog.WarnContext(ctx, "Property edit violations detected", "count", len(violationSet))
+			for _, id := range params.PropertyIDs {
+				if _, ok := violationSet[id]; !ok {
+					idsToProcess = append(idsToProcess, id)
+				}
+			}
+		} else {
+			idsToProcess = params.PropertyIDs
+		}
 	}
 
-	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, params.PropertyIDs, user, org)
+	deletedIDs, auditEvents, err := s.BusinessDB.Impl().SoftDeleteProperties(ctx, idsToProcess, user, org)
 	if err != nil {
 		tlog.ErrorContext(ctx, "Failed to soft delete properties", common.ErrAttr(err))
 		return nil, err
@@ -580,7 +600,11 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 		result := &operationResult{Code: common.StatusOK}
 		if _, ok := deletedIDs[propertyID]; !ok {
 			tlog.WarnContext(ctx, "Property was not deleted", "index", i, "propertyID", propertyID)
-			result.Code = common.StatusFailure
+			if _, ok := violationSet[propertyID]; ok {
+				result.Code = common.StatusPropertyPermissionsError
+			} else {
+				result.Code = common.StatusFailure
+			}
 		}
 		results = append(results, result)
 	}
@@ -762,11 +786,29 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 	results := make([]*operationResult, 0, len(params.Properties))
 
 	var org *dbgen.Organization
+	var violationSet map[int32]struct{}
+
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Update task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
 		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
+		}
+	} else {
+		var propertyIDs []int32
+		for _, property := range params.Properties {
+			propertyID, err := s.IDHasher.Decrypt(property.ID)
+			if err != nil {
+				continue // handled per property below
+			}
+			propertyIDs = append(propertyIDs, int32(propertyID))
+		}
+		if len(propertyIDs) > 0 {
+			var err error
+			violationSet, err = s.BusinessDB.Impl().RetrievePropertyAccessViolations(ctx, propertyIDs, user)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -776,6 +818,16 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 			case <-ctx.Done():
 				return results, ctx.Err()
 			case <-time.After(b.Duration()):
+			}
+		}
+
+		if violationSet != nil {
+			propertyID, err := s.IDHasher.Decrypt(property.ID)
+			if err == nil {
+				if _, ok := violationSet[int32(propertyID)]; ok {
+					results = append(results, &operationResult{Code: common.StatusPropertyPermissionsError})
+					continue
+				}
 			}
 		}
 

@@ -93,3 +93,13 @@ SELECT COUNT(*) as count FROM backend.properties WHERE org_id = $1 AND deleted_a
 
 -- name: TransferOrgProperties :execrows
 UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3;
+
+-- name: GetPropertyAccessViolations :many
+SELECT p.id
+FROM backend.properties p
+LEFT JOIN backend.organization_users ou ON p.org_id = ou.org_id AND ou.user_id = $2 AND ou.level != 'invited'
+WHERE p.id = ANY($1::INT[])
+  AND NOT (
+    p.org_owner_id = $2 
+    OR (p.creator_id = $2 AND ou.user_id IS NOT NULL)
+  );

@@ -3769,3 +3769,37 @@ func (impl *BusinessStoreImpl) RetrieveUsersWithPendingMonthlyReport(ctx context
 
 	return users, nil
 }
+
+func (impl *BusinessStoreImpl) RetrievePropertyAccessViolations(ctx context.Context, ids []int32, user *dbgen.User) (map[int32]struct{}, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	if user == nil {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	params := &dbgen.GetPropertyAccessViolationsParams{
+		Column1: ids,
+		UserID:  Int(user.ID),
+	}
+
+	violations, err := impl.querier.GetPropertyAccessViolations(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to get property access violations", "count", len(ids), "userID", user.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Retrieve property access violations", "count", len(violations))
+
+	violationSet := make(map[int32]struct{}, len(violations))
+	for _, v := range violations {
+		violationSet[v] = struct{}{}
+	}
+
+	return violationSet, nil
+}

@@ -169,6 +169,9 @@ func (s *QuerierStub) GetPropertiesByExternalID(ctx context.Context, dollar_1 []
 func (s *QuerierStub) GetPropertiesByID(ctx context.Context, dollar_1 []int32) ([]*dbgen.Property, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetPropertyAccessViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetPropertyAuditLogs(ctx context.Context, arg *dbgen.GetPropertyAuditLogsParams) ([]*dbgen.GetPropertyAuditLogsRow, error) {
 	return nil, s.Error
 }
@@ -324,4 +327,8 @@ func (s *QuerierStub) UpdateUserSubscription(ctx context.Context, arg *dbgen.Upd
 }
 func (s *QuerierStub) UpsertUserSettings(ctx context.Context, arg *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, error) {
 	return nil, s.Error
+}
+
+func (q *QuerierStub) GetPropertyEditViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
+	return nil, nil
 }

@@ -2385,3 +2385,104 @@ func TestApiDeleteDisabledProperty(t *testing.T) {
 		t.Error("Disabled property should not be soft-deleted")
 	}
 }
+
+func TestApiDeletePropertiesAfterRemovedFromOrgWithExistingKey(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	user1, org1, _, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create user2
+	user2, _, err := db_test.CreateNewAccountForTest(ctx, store, t.Name()+"_user2", testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Invite user2 to org1 and accept
+	_, err = server.BusinessDB.Impl().InviteUserToOrg(ctx, user1, org1, user2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = server.BusinessDB.Impl().JoinOrg(ctx, org1.ID, user2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// User2 creates an unscoped API key
+	keyParams := db_test.CreateNewPuzzleAPIKeyParams("user2_key", time.Now(), 1*time.Hour, 10.0 /*rps*/)
+	keyParams.Scope = dbgen.ApiKeyScopePortal
+	keyParams.Readonly = false
+	apiKey2, _, err := server.BusinessDB.Impl().CreateAPIKey(ctx, user2, keyParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apiKeyStr := db.UUIDToSecret(apiKey2.ExternalID)
+
+	// User2 creates a property
+	p1, _, err := server.BusinessDB.Impl().CreateNewProperty(ctx, db_test.CreateNewPropertyParams(user2.ID, "user2prop.com"), org1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// User1 (owner) removes User2 from the org
+	_, err = server.BusinessDB.Impl().RemoveUserFromOrg(ctx, user1, org1, user2.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Try to delete the property using User2's API key
+	idsToDelete := []string{
+		server.IDHasher.Encrypt(int(p1.ID)),
+	}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, idsToDelete,
+		http.MethodDelete,
+		"/"+common.PropertiesEndpoint,
+		apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKeyStr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Task did not finish")
+	}
+
+	// Verify property was NOT deleted
+	p1check, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org1, p1.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if p1check.DeletedAt.Valid {
+		t.Fatalf("User was able to delete property after being removed from org")
+	}
+}
