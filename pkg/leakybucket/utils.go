@@ -16,7 +16,7 @@ func Cap(value string, fallback uint32) uint32 {
 
 func Interval(value string, fallback time.Duration) time.Duration {
 	rps, err := strconv.ParseFloat(value, 64)
-	if err != nil {
+	if err != nil || rps <= 0 {
 		return fallback
 	}
 
