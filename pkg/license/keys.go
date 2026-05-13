@@ -23,10 +23,12 @@ func activationKeys(hardcodedKeys []*hardcodedKey) ([]*ActivationKey, error) {
 			return nil, err
 		}
 
-		keys = append(keys, &ActivationKey{
-			ID:   k.KeyID,
-			Data: ed25519.PublicKey(publicKey),
-		})
+		if len(publicKey) == ed25519.PublicKeySize {
+			keys = append(keys, &ActivationKey{
+				ID:   k.KeyID,
+				Data: ed25519.PublicKey(publicKey),
+			})
+		}
 	}
 	return keys, nil
 }
