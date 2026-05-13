@@ -185,7 +185,7 @@ func (vp *VerifyPayload) VerifySignature(ctx context.Context, salt *Salt, extraS
 
 	actualSignature := hasher.Sum(nil)
 
-	if !bytes.Equal(actualSignature, vp.signature.Hash) {
+	if !hmac.Equal(actualSignature, vp.signature.Hash) {
 		slog.WarnContext(ctx, "Puzzle hash is not equal")
 		return errSignatureMismatch
 	}
