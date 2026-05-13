@@ -2476,6 +2476,17 @@ func TestApiDeletePropertiesAfterRemovedFromOrgWithExistingKey(t *testing.T) {
 		t.Fatal("Task did not finish")
 	}
 
+	taskResult, _, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKeyStr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opResults []*operationResult
+	b, _ := json.Marshal(taskResult.Result)
+	_ = json.Unmarshal(b, &opResults)
+	if len(opResults) != 1 || opResults[0].Code != common.StatusPropertyPermissionsError {
+		t.Fatalf("expected StatusPropertyPermissionsError, got %+v", opResults)
+	}
+
 	// Verify property was NOT deleted
 	p1check, err := server.BusinessDB.Impl().RetrieveOrgProperty(ctx, org1, p1.ID)
 	if err != nil {

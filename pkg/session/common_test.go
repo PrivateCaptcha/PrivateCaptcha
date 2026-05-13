@@ -198,3 +198,45 @@ func TestSessionGobEncoding(t *testing.T) {
 		t.Errorf("Expected email test@example.com, got %v", val)
 	}
 }
+
+func TestSessionDataMergeWithOverwrite(t *testing.T) {
+	sd1 := NewSessionData("session1")
+	sd2 := NewSessionData("session2")
+
+	sd1.set(KeyUserID, 123)
+	sd2.set(KeyUserID, 456)
+	sd2.set(KeyUserEmail, "new@example.com")
+
+	sd1.Merge(sd2, true)
+
+	if val, _ := sd1.get(KeyUserID); val != 456 {
+		t.Errorf("Existing key should be overwritten, got %v", val)
+	}
+
+	if val, ok := sd1.get(KeyUserEmail); !ok || val != "new@example.com" {
+		t.Errorf("New key should be added, got %v, %v", val, ok)
+	}
+}
+
+func TestSessionRefresh(t *testing.T) {
+	sd1 := NewSessionData("session1")
+	sd2 := NewSessionData("session2")
+
+	store := &stubStore{}
+	s1 := NewSession(sd1, store)
+	s2 := NewSession(sd2, store)
+
+	sd1.set(KeyUserID, 100)
+	sd2.set(KeyUserID, 200)
+	sd2.set(KeyUserName, "newuser")
+
+	s1.Refresh(s2)
+
+	if val, _ := s1.Data().get(KeyUserID); val != 200 {
+		t.Errorf("Existing key should be overwritten, got %v", val)
+	}
+
+	if val, ok := s1.Data().get(KeyUserName); !ok || val != "newuser" {
+		t.Errorf("New key should be added, got %v, %v", val, ok)
+	}
+}

@@ -2,7 +2,7 @@ import * as b2wasm from 'blake2b-wasm';
 import { blake2bInit, blake2bUpdate, blake2bFinal } from 'blakejs';
 
 function Blake2b(outlen, key, salt, personal) {
-    this._ctx = blake2bInit(outlen, key);
+    this._ctx = blake2bInit(outlen, key, salt, personal);
 }
 
 Blake2b.prototype.update = function(input) {
@@ -25,7 +25,7 @@ Blake2b.ready = function(cb) {
 }
 
 function createHash(outlen, key, salt, personal) {
-    return new Blake2b(outlen, key);
+    return new Blake2b(outlen, key, salt, personal);
 }
 
 export function ready(cb) {

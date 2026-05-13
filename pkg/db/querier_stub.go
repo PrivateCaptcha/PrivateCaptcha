@@ -329,6 +329,6 @@ func (s *QuerierStub) UpsertUserSettings(ctx context.Context, arg *dbgen.UpsertU
 	return nil, s.Error
 }
 
-func (q *QuerierStub) GetPropertyEditViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
-	return nil, nil
+func (s *QuerierStub) GetPropertyEditViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
+	return nil, s.Error
 }

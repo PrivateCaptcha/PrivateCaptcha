@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 )
 
 //go:embed *.keys
@@ -28,6 +29,8 @@ func activationKeys(hardcodedKeys []*hardcodedKey) ([]*ActivationKey, error) {
 				ID:   k.KeyID,
 				Data: ed25519.PublicKey(publicKey),
 			})
+		} else {
+			slog.Error("Skipping activation key with invalid size", "keyID", k.KeyID, "expected", ed25519.PublicKeySize, "actual", len(publicKey))
 		}
 	}
 	return keys, nil

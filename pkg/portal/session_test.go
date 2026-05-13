@@ -202,4 +202,9 @@ func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
 	if step != loginStepCompleted {
 		t.Errorf("KeyLoginStep not updated. Expected %d, got %d", loginStepCompleted, step)
 	}
+
+	email, _ := staleSess.Get(ctx, session.KeyUserEmail).(string)
+	if email != "fresh@example.com" {
+		t.Errorf("KeyUserEmail not updated. Expected %s, got %s", "fresh@example.com", email)
+	}
 }
