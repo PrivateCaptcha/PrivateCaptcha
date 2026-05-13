@@ -19,7 +19,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres
+        image: postgres # zizmor: ignore[unpinned-images]
         env:
           POSTGRES_DB: privatecaptcha
           POSTGRES_USER: postgres
