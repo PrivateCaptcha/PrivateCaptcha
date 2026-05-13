@@ -69,6 +69,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	codeTimestamp, ok := sess.Get(ctx, session.KeyTwoFactorCodeTimestamp).(time.Time)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get verification code timestamp")
+		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
+		return
 	}
 
 	data := &loginRenderContext{

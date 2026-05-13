@@ -374,6 +374,8 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		codeTimestamp, ok := sess.Get(ctx, session.KeyTwoFactorCodeTimestamp).(time.Time)
 		if !ok {
 			slog.ErrorContext(ctx, "Failed to get verification code timestamp")
+			renderCtx.EmailError = "Code is not valid."
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
 		}
 		formCode := r.FormValue(common.ParamVerificationCode)
 
