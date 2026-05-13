@@ -159,7 +159,7 @@ func (sd *SessionData) GobDecode(data []byte) error {
 	return nil
 }
 
-func (sd *SessionData) Merge(from *SessionData) {
+func (sd *SessionData) Merge(from *SessionData, overwrite bool) {
 	// Acquire locks in consistent order to prevent deadlock
 	first, second := sd, from
 	if sd.sid > from.sid {
@@ -173,7 +173,7 @@ func (sd *SessionData) Merge(from *SessionData) {
 	defer second.lock.Unlock()
 
 	for key, value := range from.values {
-		if _, ok := sd.values[key]; !ok {
+		if _, ok := sd.values[key]; !ok || overwrite {
 			sd.values[key] = value
 		}
 	}
@@ -224,7 +224,11 @@ func NewSession(data *SessionData, store Store) *Session {
 }
 
 func (s *Session) Merge(from *Session) {
-	s.data.Merge(from.data)
+	s.data.Merge(from.data, false /*overwrite*/)
+}
+
+func (s *Session) Refresh(from *Session) {
+	s.data.Merge(from.data, true /*overwrite*/)
 }
 
 func (s *Session) Data() *SessionData {

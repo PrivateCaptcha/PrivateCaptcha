@@ -98,7 +98,7 @@ func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session 
 
 func (m *Manager) RecoverSession(ctx context.Context, sess *Session) {
 	if dbSess, err := m.Store.Read(ctx, sess.ID(), true /*skip cache*/); err == nil {
-		sess.Merge(dbSess)
+		sess.Refresh(dbSess)
 	}
 }
 

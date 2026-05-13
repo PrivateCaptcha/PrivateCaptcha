@@ -133,3 +133,73 @@ func TestDeleteSession(t *testing.T) {
 		t.Errorf("Session field (%v) should not be serialized or present in session", name)
 	}
 }
+
+func TestSessionRecoveryOverwritesStaleValues(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	sessionStore := db.NewSessionStore(store, session.KeyPersistent, monitoring.NewStub())
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	manager := &session.Manager{
+		CookieName:  "pcsid",
+		Store:       sessionStore,
+		MaxLifetime: 10 * time.Minute,
+	}
+	manager.Init("test", "/", 400*time.Millisecond)
+	defer sessionStore.Shutdown()
+
+	req1 := httptest.NewRequest("GET", "/support", nil)
+	w1 := httptest.NewRecorder()
+	// Step 1: Create session with stale values (Node A's cache)
+	sess := manager.SessionStart(w1, req1)
+	sess.Set(ctx, session.KeyLoginStep, loginStepSignInVerify) // STALE
+	sess.Set(ctx, session.KeyUserEmail, "stale@example.com")
+	sess.Set(ctx, session.KeyPersistent, true)
+
+	resp1 := w1.Result()
+	idx := slices.IndexFunc(resp1.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
+	if idx == -1 {
+		t.Error("cannot find session cookie in response")
+	}
+	cookie := resp1.Cookies()[idx]
+
+	// Step 2: Wait for session to be persisted to DB
+	var err error
+
+	for attempt := 0; attempt < 5; attempt++ {
+		time.Sleep(400 * time.Millisecond)
+
+		_, err = store.Impl().RetrieveFromCache(ctx, "session/"+sess.ID())
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Step 3: Simulate Node B completing login - update DB directly
+	freshSess := session.NewSession(session.NewSessionData(sess.ID()), sessionStore)
+	freshSess.Set(ctx, session.KeyLoginStep, loginStepCompleted) // FRESH
+	freshSess.Set(ctx, session.KeyUserEmail, "fresh@example.com")
+	freshSess.Set(ctx, session.KeyPersistent, true)
+	freshData, _ := freshSess.Data().MarshalBinary()
+	_ = store.Impl().StoreInCache(ctx, db.SessionCacheKey(sess.ID()).String(), freshData, 3*time.Hour)
+
+	req2 := httptest.NewRequest("GET", "/settings", nil)
+	w2 := httptest.NewRecorder()
+	req2.AddCookie(cookie)
+	// Step 4: Node A reads from its local cache (has stale values)
+	staleSess := manager.SessionStart(w2, req2) // Returns cached stale values
+
+	// Step 5: Attempt to recover from DB
+	manager.RecoverSession(ctx, staleSess)
+
+	// Step 6: Assert values were updated
+	step, _ := staleSess.Get(ctx, session.KeyLoginStep).(int)
+	if step != loginStepCompleted {
+		t.Errorf("KeyLoginStep not updated. Expected %d, got %d", loginStepCompleted, step)
+	}
+}

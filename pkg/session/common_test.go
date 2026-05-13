@@ -69,7 +69,7 @@ func TestSessionDataMerge(t *testing.T) {
 	sd2.set(KeyUserID, 456)
 	sd2.set(KeyUserEmail, "test@example.com")
 
-	sd1.Merge(sd2)
+	sd1.Merge(sd2, false)
 
 	if val, _ := sd1.get(KeyUserID); val != 123 {
 		t.Errorf("Existing key should not be overwritten, got %v", val)
@@ -87,7 +87,7 @@ func TestSessionDataMergeSameIDs(t *testing.T) {
 	sd1.set(KeyUserName, "name1")
 	sd2.set(KeyPersistent, true)
 
-	sd1.Merge(sd2)
+	sd1.Merge(sd2, false)
 
 	if val, _ := sd1.get(KeyUserName); val != "name1" {
 		t.Errorf("Existing key should be preserved")
@@ -104,7 +104,7 @@ func TestSessionDataMergeEmpty(t *testing.T) {
 
 	sd1.set(KeyUserID, 123)
 
-	sd1.Merge(sd2)
+	sd1.Merge(sd2, false)
 
 	if sd1.Size() != 1 {
 		t.Errorf("Size should remain 1 after merging empty session, got %d", sd1.Size())
