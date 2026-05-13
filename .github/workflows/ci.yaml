@@ -101,7 +101,7 @@ jobs:
       run: make build
 
     - name: Unit Tests
-      run: make test-unit-cover-race
+      run: make test-unit-cover
 
     - name: Cache unit coverage report
       uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -110,7 +110,7 @@ jobs:
         key: unit-coverage-${{ github.run_id }}
 
     - name: Build tests
-      run: make build-tests-ee-race
+      run: make build-tests-ee
 
     - name: Init Postgres
       env:
@@ -149,8 +149,6 @@ jobs:
 
     - name: Integration Tests
       env:
-        EXTRA_TEST_FLAGS: "-race"
-        CGO_TEST_ENABLED: "1"
         PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
         PC_CLICKHOUSE_HOST: localhost
         PC_CLICKHOUSE_DB: privatecaptcha

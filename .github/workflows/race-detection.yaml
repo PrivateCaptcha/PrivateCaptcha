@@ -1,0 +1,132 @@
+name: Race detection tests
+
+on:
+  schedule:
+    # Run every day at 02:00 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: {} # zizmor: ignore[dangerous-triggers]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests-race:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_DB: privatecaptcha
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+
+    - name: Use Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: '24.x'
+        package-manager-cache: false
+
+    - name: Install portal NPM dependencies
+      env:
+        STAGE: prod
+      run: make init-web
+
+    - name: Install widget NPM dependencies
+      env:
+        STAGE: prod
+      run: make init-widget
+
+    - name: Build web
+      env:
+        STAGE: prod
+      run: make build-js
+
+    - name: Build widget script
+      env:
+        STAGE: prod
+      run: make build-widget-script
+
+    - name: Copy static js
+      run: make copy-static-js
+
+    - name: Set up Go
+      uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+      with:
+        go-version-file: go.mod
+        cache: false
+
+    - name: Build all targets
+      run: make build
+
+    - name: Unit Tests (with Race Detection)
+      run: make test-unit-race
+
+    - name: Build tests (with Race Detection)
+      run: make build-tests-ee-race
+
+    - name: Init Postgres
+      env:
+        PGHOST: localhost
+        PGPORT: 5432
+        PGUSER: postgres
+        PGPASSWORD: postgres
+        PGDATABASE: privatecaptcha
+        PGOPTIONS: "--search_path=public"
+      run: pkg/db/migrations/init/postgres.sh
+
+    - name: Run ClickHouse
+      run: ./docker/run-clickhouse.sh
+
+    - name: Migrate Databases Up
+      env:
+        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?search_path=public
+        PC_CLICKHOUSE_HOST: localhost
+        PC_CLICKHOUSE_DB: privatecaptcha
+        PC_CLICKHOUSE_USER: default
+        PC_DOMAIN: privatecaptcha.local
+        PC_ADMIN_EMAIL: admin@privatecaptcha.local
+        PC_VERBOSE: 1
+      run: ./bin/server -mode migrate -migrate-hash $GITHUB_SHA
+
+    - name: Set up sqlc
+      uses: sqlc-dev/setup-sqlc@c0209b9199cd1cce6a14fc27cabcec491b651761 # v4.0.0
+      with:
+        sqlc-version: '1.31.1'
+
+    - name: Vet Postgres queries
+      env:
+        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
+      run: |
+        make vet-sqlc
+
+    - name: Integration Tests (with Race Detection)
+      env:
+        EXTRA_TEST_FLAGS: "-race"
+        CGO_TEST_ENABLED: "1"
+        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
+        PC_CLICKHOUSE_HOST: localhost
+        PC_CLICKHOUSE_DB: privatecaptcha
+        PC_CLICKHOUSE_USER: captchasrv
+        PC_CLICKHOUSE_PASSWORD: uwnhNn4YW01
+        PC_ADMIN_EMAIL: admin@privatecaptcha.local
+        PC_USER_FINGERPRINT_KEY: ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c
+        PC_RATE_LIMIT_HEADER: X-REAL-IP
+        PC_REGISTRATION_ALLOWED: 1
+      run: ./docker/run-tests.sh
