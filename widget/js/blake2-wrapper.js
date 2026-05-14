@@ -11,9 +11,12 @@ Blake2b.prototype.update = function(input) {
 };
 
 Blake2b.prototype.digest = function(out) {
-    var buf = (!out) ? new Uint8Array(this._ctx.outlen) : out;
-    blake2bFinal(this._ctx, buf);
-    return buf;
+    const result = blake2bFinal(this._ctx);
+    if (out) {
+        out.set(result);
+        return out;
+    }
+    return result;
 };
 
 Blake2b.prototype.final = Blake2b.prototype.digest;
