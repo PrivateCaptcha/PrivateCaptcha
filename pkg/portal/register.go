@@ -191,6 +191,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(ctx, session.KeyUserName, name)
 	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
 	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
+	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
 	// see comment in postLogin() why we have to use persistent here (although "registered user" argument does not apply)
 	_ = sess.Set(ctx, session.KeyPersistent, true)
 

@@ -126,6 +126,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
 	_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
 	_ = sess.Delete(ctx, session.KeyUserEmail)
+	// at this point it's safe to remove because we check that session does not have the flag prior to this
+	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
 	_ = sess.Set(ctx, session.KeyPersistent, true)
 
 	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
