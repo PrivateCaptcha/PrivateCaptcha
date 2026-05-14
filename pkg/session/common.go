@@ -36,6 +36,7 @@ const (
 	KeyOrgInviteID
 	KeyFirstSession
 	KeyAdhocNotification
+	KeyVerifyRegistration
 	// Add new fields _above_
 	SESSION_KEYS_COUNT
 )

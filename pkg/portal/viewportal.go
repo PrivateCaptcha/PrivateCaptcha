@@ -202,6 +202,14 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 				}
 			},
 		},
+		{
+			Path:       p(common.AccountVerifyEndpoint),
+			Template:   accountVerifyTemplate,
+			ShowInList: true,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &loginRenderContext{}
+			},
+		},
 		// --- Settings pages ---
 		{
 			Path:       p(common.SettingsEndpoint),

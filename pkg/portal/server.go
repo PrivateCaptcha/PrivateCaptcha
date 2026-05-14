@@ -324,6 +324,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	openRead := public.Append(s.maintenance, publicReadTimeout)
 	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
 	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
+	rg.Handle(rg.Get(common.AccountVerifyEndpoint), openRead.Append(common.Cached), s.Handler(s.getAccountVerify))
 	rg.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public, http.HandlerFunc(s.error))
 	rg.Handle(rg.Get(common.ExpiredEndpoint), public, http.HandlerFunc(s.expired))
 	rg.Handle(rg.Get(common.LogoutEndpoint), public, http.HandlerFunc(s.logout))

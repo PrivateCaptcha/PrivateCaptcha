@@ -10,6 +10,7 @@ const (
 	ResendEndpoint        = "resend"
 	ErrorEndpoint         = "error"
 	RegisterEndpoint      = "signup"
+	AccountVerifyEndpoint = "accountverify"
 	OrgInviteEndpoint     = "orginvite"
 	ExpiredEndpoint       = "expired"
 	SettingsEndpoint      = "settings"

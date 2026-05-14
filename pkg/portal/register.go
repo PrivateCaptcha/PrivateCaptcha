@@ -26,6 +26,7 @@ const (
 	registerContentsTemplate    = "login/register-contents.html"
 	userNameErrorMessage        = "Name contains invalid characters."
 	emailAlreadyRegisteredError = "Such email is already registered. Login instead?"
+	accountVerifyTemplate       = "account-verify/verification.html"
 )
 
 func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -42,6 +43,17 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel
 			IsRegister:           true,
 		},
 		View: loginTemplate,
+	}, nil
+}
+
+func (s *Server) getAccountVerify(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	if !s.canRegister.Load() {
+		return nil, errRegistrationDisabled
+	}
+
+	return &ViewModel{
+		Model: &loginRenderContext{},
+		View:  accountVerifyTemplate,
 	}, nil
 }
 
@@ -181,6 +193,13 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	// see comment in postLogin() why we have to use persistent here (although "registered user" argument does not apply)
 	_ = sess.Set(ctx, session.KeyPersistent, true)
+
+	job := s.Jobs.CheckRegistration(sess)
+	jobCtx := common.CopyTraceID(ctx, context.Background())
+	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
+		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
+	}
+	go common.RunOneOffJob(jobCtx, job, job.NewParams())
 
 	data.Token = s.XSRF.Token(email)
 	data.Email = common.MaskEmail(email, '*')

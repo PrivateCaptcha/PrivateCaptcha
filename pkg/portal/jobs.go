@@ -12,10 +12,15 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
+const (
+	spammerEmail = "spammer@privatecaptcha.local"
+)
+
 type Jobs interface {
 	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob
 	OffboardUser(user *dbgen.User) common.OneOffJob
 	LoginUser(sess *session.Session) common.OneOffJob
+	CheckRegistration(sess *session.Session) common.OneOffJob
 }
 
 func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob {
@@ -24,6 +29,10 @@ func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *i
 
 func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
 	return &common.StubOneOffJob{}
+}
+
+func (s *Server) CheckRegistration(sess *session.Session) common.OneOffJob {
+	return &registrationCheckJob{Sess: sess}
 }
 
 func (s *Server) LoginUser(sess *session.Session) common.OneOffJob {
@@ -93,6 +102,34 @@ func (j *LoginUserJob) RunOnce(ctx context.Context, params any) error {
 		}
 	} else {
 		slog.ErrorContext(ctx, "UserID not found in session")
+	}
+
+	return nil
+}
+
+type registrationCheckJob struct {
+	Sess *session.Session
+}
+
+func (j *registrationCheckJob) Name() string {
+	return "RegistrationCheck"
+}
+func (j *registrationCheckJob) InitialPause() time.Duration {
+	return 0
+}
+func (j *registrationCheckJob) NewParams() any {
+	return struct{}{}
+}
+func (j *registrationCheckJob) RunOnce(ctx context.Context, params any) error {
+	email, hasEmail := j.Sess.Get(ctx, session.KeyUserEmail).(string)
+	if !hasEmail {
+		return nil
+	}
+
+	if email == spammerEmail {
+		if serr := j.Sess.Set(ctx, session.KeyVerifyRegistration, true); serr != nil {
+			slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
+		}
 	}
 
 	return nil

@@ -92,6 +92,12 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	rootRedirectURL := s.RelURL("/")
 
 	if step == loginStepSignUpVerify {
+		if _, ok := sess.Get(ctx, session.KeyVerifyRegistration).(bool); ok {
+			slog.WarnContext(ctx, "Account requires an additional verification", "email", email)
+			common.Redirect(s.RelURL(common.AccountVerifyEndpoint), http.StatusUnauthorized, w, r)
+			return
+		}
+
 		slog.DebugContext(ctx, "Proceeding with the user registration flow after 2FA")
 		if user, _, err := s.doRegister(ctx, sess); err == nil {
 			_ = sess.Set(ctx, session.KeyUserID, user.ID)
