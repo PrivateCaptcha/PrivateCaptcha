@@ -35,7 +35,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	// "random" POST request to /twofactor with valid cookie might mean we access it from another node without this session
 	// BUT if we have a local "weird" cached session, something is wrong and if it's not cached, it will be pulled from DB
 	step, ok := sess.Get(ctx, session.KeyLoginStep).(int)
-	if !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
+	if !ok || ((step != loginStepSignInVerify) && (step != LoginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return
@@ -91,7 +91,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	var newRegistrationRedirectURL string
 	rootRedirectURL := s.RelURL("/")
 
-	if step == loginStepSignUpVerify {
+	if step == LoginStepSignUpVerify {
 		if value, ok := sess.Get(ctx, session.KeyVerifyRegistration).(bool); ok {
 			slog.WarnContext(ctx, "Account requires an additional verification", "email", email, "value", value)
 			common.Redirect(s.RelURL(common.AccountVerifyEndpoint), http.StatusUnauthorized, w, r)
@@ -156,7 +156,7 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	sess := s.Sessions.SessionStart(w, r)
-	if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != loginStepSignUpVerify)) {
+	if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); !ok || ((step != loginStepSignInVerify) && (step != LoginStepSignUpVerify)) {
 		slog.WarnContext(ctx, "User session is not valid", "step", step)
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
 		return

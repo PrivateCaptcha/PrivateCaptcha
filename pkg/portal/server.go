@@ -479,7 +479,7 @@ func (s *Server) private(next http.Handler) http.Handler {
 
 		if step, ok := sess.Get(ctx, session.KeyLoginStep).(int); ok {
 			// this is a sign it could be a local stale session in case user finished login on another node
-			if (step == loginStepSignInVerify) || (step == loginStepSignUpVerify) {
+			if (step == loginStepSignInVerify) || (step == LoginStepSignUpVerify) {
 				slog.WarnContext(ctx, "About to recover potential stale session from DB")
 				s.Sessions.RecoverSession(ctx, sess)
 				step, _ = sess.Get(ctx, session.KeyLoginStep).(int)
