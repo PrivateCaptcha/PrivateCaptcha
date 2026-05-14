@@ -17,7 +17,7 @@ import (
 
 const (
 	loginStepSignInVerify     = 1
-	LoginStepSignUpVerify     = 2
+	loginStepSignUpVerify     = 2
 	loginStepCompleted        = 3
 	loginTemplate             = "login/login.html"
 	loginContentsTemplate     = "login/login-contents.html"

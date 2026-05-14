@@ -186,7 +186,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	sess := s.Sessions.SessionStart(w, r)
 	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
 
-	_ = sess.Set(ctx, session.KeyLoginStep, LoginStepSignUpVerify)
+	_ = sess.Set(ctx, session.KeyLoginStep, loginStepSignUpVerify)
 	_ = sess.Set(ctx, session.KeyUserEmail, email)
 	_ = sess.Set(ctx, session.KeyUserName, name)
 	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
