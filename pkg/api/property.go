@@ -564,8 +564,13 @@ func (s *Server) doDeleteProperties(ctx context.Context, tlog *slog.Logger, user
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Delete task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
-		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+		var level dbgen.NullAccessLevel
+		if org, level, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
+		}
+		if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+			tlog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", params.AllowedOrgID, "userID", user.ID)
+			return nil, db.ErrPermissions
 		}
 		idsToProcess = params.PropertyIDs
 	} else {
@@ -791,8 +796,13 @@ func (s *Server) doUpdateProperties(ctx context.Context, tlog *slog.Logger, user
 	if params.AllowedOrgID != 0 {
 		slog.DebugContext(ctx, "Update task is scoped for org", "orgID", params.AllowedOrgID)
 		var err error
-		if org, _, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
+		var level dbgen.NullAccessLevel
+		if org, level, err = s.BusinessDB.Impl().RetrieveUserOrganization(ctx, user, params.AllowedOrgID); err != nil {
 			return nil, err
+		}
+		if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+			tlog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", params.AllowedOrgID, "userID", user.ID)
+			return nil, db.ErrPermissions
 		}
 	} else {
 		var propertyIDs []int32
