@@ -723,7 +723,7 @@ func (s *Server) RuleForProperty(r *http.Request, propertyID int32) (*dbgen.Diff
 	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
+		return nil, ErrInvalidPathArg
 	}
 
 	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))
@@ -746,7 +746,7 @@ func (s *Server) RuleForOrg(r *http.Request, orgID int32) (*dbgen.DifficultyRule
 	ruleID, value, err := common.IntPathArg(r, common.ParamRule, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse rule path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
+		return nil, ErrInvalidPathArg
 	}
 
 	rule, err := s.Store.Impl().RetrieveDifficultyRule(ctx, int32(ruleID))

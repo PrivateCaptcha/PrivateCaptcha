@@ -791,7 +791,7 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewMode
 	keyID, value, err := common.IntPathArg(r, common.ParamKey, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse key path parameter", "value", value)
-		return nil, errInvalidPathArg
+		return nil, ErrInvalidPathArg
 	}
 
 	key, auditEvent, err := s.Store.Impl().RotateAPIKey(ctx, user, keyID)

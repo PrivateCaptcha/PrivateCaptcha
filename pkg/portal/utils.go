@@ -34,7 +34,7 @@ func (s *Server) Org(user *dbgen.User, r *http.Request) (*dbgen.Organization, db
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
-		return nil, dbgen.NullAccessLevel{}, errInvalidPathArg
+		return nil, dbgen.NullAccessLevel{}, ErrInvalidPathArg
 	}
 
 	org, level, err := s.Store.Impl().RetrieveUserOrganization(ctx, user, orgID)
@@ -65,7 +65,7 @@ func (s *Server) OrgID(r *http.Request) (int32, error) {
 	orgID, value, err := common.IntPathArg(r, common.ParamOrg, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse org path parameter", "value", value, common.ErrAttr(err))
-		return -1, errInvalidPathArg
+		return -1, ErrInvalidPathArg
 	}
 
 	return int32(orgID), nil
@@ -77,7 +77,7 @@ func (s *Server) Property(org *dbgen.Organization, r *http.Request) (*dbgen.Prop
 	propertyID, value, err := common.IntPathArg(r, common.ParamProperty, s.IDHasher)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse property path parameter", "value", value, common.ErrAttr(err))
-		return nil, errInvalidPathArg
+		return nil, ErrInvalidPathArg
 	}
 
 	property, err := s.Store.Impl().RetrieveOrgProperty(ctx, org, propertyID)
@@ -113,7 +113,7 @@ func (s *Server) SessionUser(ctx context.Context, sess *session.Session) (*dbgen
 	userID, ok := sess.Get(ctx, session.KeyUserID).(int32)
 	if !ok {
 		slog.ErrorContext(ctx, "Failed to get userID from session")
-		return nil, errInvalidSession
+		return nil, ErrInvalidSession
 	}
 
 	user, err := s.Store.Impl().RetrieveUser(ctx, userID)

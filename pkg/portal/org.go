@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	errInvalidSession = errors.New("session contains invalid data")
+	ErrInvalidSession = errors.New("session contains invalid data")
 	errNoOrgs         = errors.New("user has no organizations")
 	stubUserOrg       = &UserOrg{ID: "-1"}
 	propertiesPerPage = 30
@@ -233,7 +233,7 @@ func (s *Server) createPortalBaseContext(ctx context.Context, orgID int32, sess 
 		idx = slices.IndexFunc(orgs, func(o *dbgen.GetUserOrganizationsRow) bool { return o.Organization.ID == orgID })
 		if idx == -1 {
 			slog.WarnContext(ctx, "Org is not found in user orgs", "orgID", orgID, "userID", user.ID)
-			return nil, nil, errInvalidPathArg
+			return nil, nil, ErrInvalidPathArg
 		}
 	}
 
@@ -306,11 +306,11 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter, r *http.Request) {
 	if (orgID == -1) && (err == errNoOrgs) {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
-	} else if err == errInvalidSession {
+	} else if err == ErrInvalidSession {
 		slog.WarnContext(r.Context(), "Inconsistent user session found")
 		s.Sessions.SessionDestroy(w, r)
 		common.Redirect(s.RelURL(common.LoginEndpoint), http.StatusUnauthorized, w, r)
-	} else if err == errInvalidPathArg {
+	} else if err == ErrInvalidPathArg {
 		s.RedirectError(http.StatusBadRequest, w, r)
 	} else if err == errLimitedFeature {
 		s.RedirectError(http.StatusPaymentRequired, w, r)
