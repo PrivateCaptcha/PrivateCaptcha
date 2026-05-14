@@ -1,6 +1,7 @@
 'use strict';
 
 import { decode } from 'base64-arraybuffer';
+import { readUInt32LE } from './puzzle.utils.js';
 
 const PUZZLE_BUFFER_LENGTH = 128;
 // RequestTimeout, Conflict, TooManyRequests
@@ -135,15 +136,6 @@ async function fetchWithBackoff(url, options = {}) {
     const error = new Error('Captcha puzzle load failed after maximum retry attempts');
     error.internalError = lastError;
     throw error;
-}
-
-function readUInt32LE(binaryData, offset) {
-    return (
-        binaryData[offset] |
-        (binaryData[offset + 1] << 8) |
-        (binaryData[offset + 2] << 16) |
-        (binaryData[offset + 3] << 24)
-    ) >>> 0;
 }
 
 function readUInt64LE(binaryData, offset) {

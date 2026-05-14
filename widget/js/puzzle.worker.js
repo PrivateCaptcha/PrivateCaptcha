@@ -1,6 +1,7 @@
 'use strict';
 
 import * as blake2bModule from './blake2-wrapper.js';
+import { thresholdFromDifficulty, findSolution } from './puzzle.utils.js';
 let blake2b = blake2bModule.impl;
 let blake2bInitialized = false;
 let puzzleBuffer = null;
@@ -21,58 +22,6 @@ if (blake2bModule.ready) {
     console.warn('[privatecaptcha][worker] Blake2b ready() is not defined');
 }
 
-function readUInt32LE(buffer, offset) {
-    return (
-        buffer[offset] |
-        (buffer[offset + 1] << 8) |
-        (buffer[offset + 2] << 16) |
-        (buffer[offset + 3] << 24)
-    ) >>> 0;
-}
-
-function thresholdFromDifficulty(d) {
-    return (Math.pow(2, (255.999 - d) / 8.0)) >>> 0;
-}
-
-function findSolution(threshold, puzzleIndex, debug) {
-    const length = puzzleBuffer.length;
-    if (debug) {
-        console.debug(`[privatecaptcha][worker] looking for a solution. threshold=${threshold} puzzleID=${puzzleIndex} length=${length}`);
-    }
-    puzzleBuffer[length - 8] = puzzleIndex;
-
-    let hash = new Uint8Array(32);
-
-    for (let i = 0; i < 256; i++) {
-        puzzleBuffer[length - 1 - 3] = i;
-
-        for (let j = 0; j < 256; j++) {
-            puzzleBuffer[length - 1 - 2] = j;
-
-            for (let k = 0; k < 256; k++) {
-                puzzleBuffer[length - 1 - 1] = k;
-
-                for (let l = 0; l < 256; l++) {
-                    puzzleBuffer[length - 1 - 0] = l;
-
-                    hash.fill(0);
-                    blake2b(hash.length).update(puzzleBuffer).digest(hash);
-                    const prefix = readUInt32LE(hash, 0);
-
-                    if (prefix <= threshold) {
-                        if (debug) {
-                            console.debug(`[privatecaptcha][worker] found solution. prefix=${prefix} threshold=${threshold}`);
-                        }
-                        return puzzleBuffer.subarray(length - 8);
-                    }
-                }
-            }
-        }
-    }
-
-    return new Uint8Array(0);
-}
-
 self.onmessage = (event) => {
     const { command, argument } = event.data;
 
@@ -91,7 +40,7 @@ self.onmessage = (event) => {
         case "solve":
             const { difficulty, puzzleIndex, debug } = argument;
             const threshold = thresholdFromDifficulty(difficulty);
-            const solution = findSolution(threshold, puzzleIndex, debug);
+            const solution = findSolution(puzzleBuffer, threshold, puzzleIndex, debug, blake2b);
             self.postMessage({ command: command, argument: { id: puzzleID, solution: solution, wasm: useWasm } });
             break;
         default:

@@ -648,3 +648,48 @@ test('getPuzzle global timeout triggers with 2 attempts', async (t) => {
 
     console.log('✓ getPuzzle global timeout test passed');
 });
+
+test('worker findSolution implementations', async (t) => {
+    const blake2bModule = await import('../js/blake2-wrapper.js');
+    await new Promise(r => blake2bModule.ready(r));
+
+    const { findSolution, thresholdFromDifficulty, readUInt32LE } = await import('../js/puzzle.utils.js');
+
+    const testCases = [
+        { name: 'JS fallback', hasher: blake2bModule.jsFallbackImpl, requiresWasm: false },
+        { name: 'WASM implementation', hasher: blake2bModule.impl, requiresWasm: true }
+    ];
+
+    for (const { name, hasher, requiresWasm } of testCases) {
+        await t.test(`uses blake2b ${name}`, async (t) => {
+            if (requiresWasm && !blake2bModule.WASM_SUPPORTED) {
+                t.skip('WASM not supported in this environment');
+                return;
+            }
+
+            if (requiresWasm) {
+                assert.strictEqual(blake2bModule.WASM_LOADED, true, 'WASM should be loaded');
+            }
+
+            const puzzleBuffer = new Uint8Array(128);
+            globalThis.crypto.getRandomValues(puzzleBuffer);
+
+            const difficulty = 120;
+            const threshold = thresholdFromDifficulty(difficulty);
+
+            const solution = findSolution(puzzleBuffer, threshold, requiresWasm ? 1 : 0, false, hasher);
+
+            assert.ok(solution, 'Should return a solution');
+            assert.strictEqual(solution.length, 8, 'Solution should be 8 bytes long');
+
+            const length = puzzleBuffer.length;
+            let hash = new Uint8Array(32);
+            hasher(hash.length).update(puzzleBuffer).digest(hash);
+            const prefix = readUInt32LE(hash, 0);
+
+            assert.ok(prefix <= threshold, 'The solution hash prefix should be less or equal to threshold');
+        });
+    }
+
+    console.log('✓ worker findSolution implementations test passed');
+});

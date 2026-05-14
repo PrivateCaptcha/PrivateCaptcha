@@ -40,6 +40,7 @@ export function ready(cb) {
 export const WASM_SUPPORTED = b2wasm.SUPPORTED;
 export let WASM_LOADED = false;
 export let impl = createHash;
+export const jsFallbackImpl = createHash;
 
 b2wasm.ready(function(err) {
     if (!err) {
