@@ -44,17 +44,17 @@ func (plan *basePlan) Equals(productID string, priceID string) bool {
 		((plan.priceIDMonthly == priceID) || (plan.priceIDYearly == priceID))
 }
 
-func (p *basePlan) Name() string                  { return p.name }
-func (p *basePlan) ProductID() string             { return p.productID }
-func (p *basePlan) PriceIDs() (string, string)    { return p.priceIDMonthly, p.priceIDYearly }
-func (p *basePlan) TrialDays() int                { return p.trialDays }
-func (p *basePlan) RequestsLimit() int64          { return p.requestsLimit }
-func (p *basePlan) APIRequestsPerSecond() float64 { return p.apiRequestsPerSecond }
-func (p *basePlan) PropertiesLimit() int          { return 50 }
-func (p *basePlan) OrgsLimit() int                { return p.orgsLimit }
-func (p *basePlan) OrgMembersLimit() int          { return 10 }
-func (p *basePlan) OrgRulesLimit() int            { return p.rulesLimit }
-func (p *basePlan) PropertyRulesLimit() int       { return p.rulesLimit }
+func (p *basePlan) Name() string                            { return p.name }
+func (p *basePlan) ProductID() string                       { return p.productID }
+func (p *basePlan) PriceIDs() (string, string)              { return p.priceIDMonthly, p.priceIDYearly }
+func (p *basePlan) TrialDays() int                          { return p.trialDays }
+func (p *basePlan) RequestsLimit(trial bool) int64          { return p.requestsLimit }
+func (p *basePlan) APIRequestsPerSecond(trial bool) float64 { return p.apiRequestsPerSecond }
+func (p *basePlan) PropertiesLimit(trial bool) int          { return 50 }
+func (p *basePlan) OrgsLimit(trial bool) int                { return p.orgsLimit }
+func (p *basePlan) OrgMembersLimit(trial bool) int          { return 10 }
+func (p *basePlan) OrgRulesLimit(trial bool) int            { return p.rulesLimit }
+func (p *basePlan) PropertyRulesLimit(trial bool) int       { return p.rulesLimit }
 
 const (
 	version1 = 1
@@ -73,18 +73,19 @@ type Plan interface {
 	IsValid() bool
 	Equals(productID string, priceID string) bool
 	TrialDays() int
-	RequestsLimit() int64
-	PropertiesLimit() int
-	OrgsLimit() int
-	OrgMembersLimit() int
-	OrgRulesLimit() int
-	PropertyRulesLimit() int
-	APIRequestsPerSecond() float64
+	RequestsLimit(trial bool) int64
+	PropertiesLimit(trial bool) int
+	OrgsLimit(trial bool) int
+	OrgMembersLimit(trial bool) int
+	OrgRulesLimit(trial bool) int
+	PropertyRulesLimit(trial bool) int
+	APIRequestsPerSecond(trial bool) float64
 }
 
 type PlanService interface {
 	FindPlan(productID string, priceID string, stage string, internal bool) (Plan, error)
 	IsSubscriptionActive(status string) bool
+	IsSubscriptionTrialing(status string) bool
 	ActiveTrialStatus() string
 	ExpiredTrialStatus() string
 	CancelSubscription(ctx context.Context, sid string) error
@@ -192,6 +193,15 @@ func (s *CorePlanService) CancelSubscription(ctx context.Context, sid string) er
 }
 
 func (s *CorePlanService) IsSubscriptionActive(status string) bool {
+	switch status {
+	case InternalStatusTrialing:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *CorePlanService) IsSubscriptionTrialing(status string) bool {
 	switch status {
 	case InternalStatusTrialing:
 		return true

@@ -88,9 +88,10 @@ func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID
 		return 0
 	}
 
-	if status == j.PlanService.ActiveTrialStatus() {
+	isTrialing := j.PlanService.IsSubscriptionTrialing(status)
+	if isTrialing {
 		if trialPlan := j.PlanService.GetInternalTrialPlan(); trialPlan.Equals(productID, priceID) {
-			return uint64(trialPlan.RequestsLimit())
+			return uint64(trialPlan.RequestsLimit(true /*isTrial*/))
 		}
 
 		return 0
@@ -101,7 +102,7 @@ func (j *ScheduleReportsJob) retrieveRequestLimit(ctx context.Context, productID
 	if plan, err := j.PlanService.FindPlan(productID, priceID, j.Stage, false /*internal*/); err != nil {
 		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", productID, "priceID", priceID, common.ErrAttr(err))
 	} else {
-		accountLimit = uint64(plan.RequestsLimit())
+		accountLimit = uint64(plan.RequestsLimit(isTrialing))
 	}
 
 	return accountLimit

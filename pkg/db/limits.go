@@ -67,9 +67,10 @@ func (sl *SubscriptionLimitsImpl) CheckOrgsLimit(ctx context.Context, userID int
 		return false, 0, err
 	}
 
-	ok := (plan.OrgsLimit() == 0) || (count < plan.OrgsLimit())
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	ok := (plan.OrgsLimit(isTrialing) == 0) || (count < plan.OrgsLimit(isTrialing))
 
-	return ok, count - plan.OrgsLimit(), nil
+	return ok, count - plan.OrgsLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) CheckOrgMembersLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
@@ -90,9 +91,10 @@ func (sl *SubscriptionLimitsImpl) CheckOrgMembersLimit(ctx context.Context, orgI
 		return false, 0, err
 	}
 
-	ok := (plan.OrgMembersLimit() == 0) || (len(members) < plan.OrgMembersLimit())
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	ok := (plan.OrgMembersLimit(isTrialing) == 0) || (len(members) < plan.OrgMembersLimit(isTrialing))
 
-	return ok, len(members) - plan.OrgMembersLimit(), nil
+	return ok, len(members) - plan.OrgMembersLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
@@ -113,9 +115,10 @@ func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, user
 		return false, 0, err
 	}
 
-	ok := (plan.PropertiesLimit() == 0) || (count < int64(plan.PropertiesLimit()))
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	ok := (plan.PropertiesLimit(isTrialing) == 0) || (count < int64(plan.PropertiesLimit(isTrialing)))
 
-	return ok, int(count) - plan.PropertiesLimit(), nil
+	return ok, int(count) - plan.PropertiesLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error) {
@@ -130,7 +133,8 @@ func (sl *SubscriptionLimitsImpl) RequestsLimit(ctx context.Context, subscr *dbg
 		return 0, err
 
 	}
-	return plan.RequestsLimit(), nil
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	return plan.RequestsLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
@@ -145,7 +149,8 @@ func (sl *SubscriptionLimitsImpl) PropertiesLimit(ctx context.Context, subscr *d
 		return 0, err
 
 	}
-	return plan.PropertiesLimit(), nil
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	return plan.PropertiesLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
@@ -160,7 +165,8 @@ func (sl *SubscriptionLimitsImpl) OrgsLimit(ctx context.Context, subscr *dbgen.S
 		return 0, err
 
 	}
-	return plan.OrgsLimit(), nil
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	return plan.OrgsLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
@@ -187,10 +193,11 @@ func (sl *SubscriptionLimitsImpl) CheckOrgRulesLimit(ctx context.Context, orgID 
 		count = len(orgRules)
 	}
 
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
 	// for rules, 0 means "zero" and not unlimited (like for orgs/properties)
-	ok := /*(plan.OrgRulesLimit() == 0) || */ (count < plan.OrgRulesLimit())
+	ok := /*(plan.OrgRulesLimit() == 0) || */ (count < plan.OrgRulesLimit(isTrialing))
 
-	return ok, count - plan.OrgRulesLimit(), nil
+	return ok, count - plan.OrgRulesLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (bool, int, error) {
@@ -217,10 +224,11 @@ func (sl *SubscriptionLimitsImpl) CheckPropertyRulesLimit(ctx context.Context, p
 		count = len(propRules)
 	}
 
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
 	// for rules, 0 means "zero" and not unlimited (like for orgs/properties)
-	ok := /*(plan.PropertyRulesLimit() == 0) ||*/ (count < plan.PropertyRulesLimit())
+	ok := /*(plan.PropertyRulesLimit() == 0) ||*/ (count < plan.PropertyRulesLimit(isTrialing))
 
-	return ok, count - plan.PropertyRulesLimit(), nil
+	return ok, count - plan.PropertyRulesLimit(isTrialing), nil
 }
 
 type StubSubscriptionLimits struct{}

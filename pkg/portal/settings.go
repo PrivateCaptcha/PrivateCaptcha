@@ -693,10 +693,11 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
 			if plan, err := s.PlanService.FindPlan(subscription.ExternalProductID, subscription.ExternalPriceID, s.Stage,
 				db.IsInternalSubscription(subscription.Source)); err == nil {
+				isTrialing := s.PlanService.IsSubscriptionTrialing(subscription.Status)
 				if scope == dbgen.ApiKeyScopePuzzle {
-					apiKeyRequestsPerSecond = plan.APIRequestsPerSecond()
+					apiKeyRequestsPerSecond = plan.APIRequestsPerSecond(isTrialing)
 				} else {
-					apiKeyRequestsPerSecond = max(1.0, math.Ceil(math.Log(plan.APIRequestsPerSecond())))
+					apiKeyRequestsPerSecond = max(1.0, math.Ceil(math.Log(plan.APIRequestsPerSecond(isTrialing))))
 				}
 			}
 		}
