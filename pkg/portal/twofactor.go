@@ -92,8 +92,8 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	rootRedirectURL := s.RelURL("/")
 
 	if step == loginStepSignUpVerify {
-		if _, ok := sess.Get(ctx, session.KeyVerifyRegistration).(bool); ok {
-			slog.WarnContext(ctx, "Account requires an additional verification", "email", email)
+		if value, ok := sess.Get(ctx, session.KeyVerifyRegistration).(bool); ok {
+			slog.WarnContext(ctx, "Account requires an additional verification", "email", email, "value", value)
 			common.Redirect(s.RelURL(common.AccountVerifyEndpoint), http.StatusUnauthorized, w, r)
 			return
 		}

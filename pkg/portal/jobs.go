@@ -121,12 +121,17 @@ func (j *registrationCheckJob) NewParams() any {
 	return struct{}{}
 }
 func (j *registrationCheckJob) RunOnce(ctx context.Context, params any) error {
+	if j.Sess == nil {
+		return nil
+	}
+
 	email, hasEmail := j.Sess.Get(ctx, session.KeyUserEmail).(string)
 	if !hasEmail {
 		return nil
 	}
 
 	if email == spammerEmail {
+		slog.WarnContext(ctx, "Requiring verification for registration", "reason", "email", common.SessionIDAttr(j.Sess.ID()))
 		if serr := j.Sess.Set(ctx, session.KeyVerifyRegistration, true); serr != nil {
 			slog.WarnContext(ctx, "Failed to set session value", common.ErrAttr(serr))
 		}

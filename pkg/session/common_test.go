@@ -240,3 +240,19 @@ func TestSessionRefresh(t *testing.T) {
 		t.Errorf("New key should be added, got %v, %v", val, ok)
 	}
 }
+
+func TestSessionBool(t *testing.T) {
+	store := &stubStore{}
+	sess := NewSession(NewSessionData("sid"), store)
+	ctx := t.Context()
+
+	if _, ok := sess.Get(ctx, KeyVerifyRegistration).(bool); ok {
+		t.Error("Get messed up return value for non-existing key")
+	}
+
+	sess.Set(ctx, KeyVerifyRegistration, true)
+
+	if value, ok := sess.Get(ctx, KeyVerifyRegistration).(bool); !ok || !value {
+		t.Error("Get messed up return value for existing key")
+	}
+}

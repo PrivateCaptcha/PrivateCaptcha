@@ -65,6 +65,8 @@ func (key SessionKey) String() string {
 		return "OrgInviteID"
 	case KeyFirstSession:
 		return "FirstSession"
+	case KeyVerifyRegistration:
+		return "VerifyRegistration"
 	default:
 		return "SessionKey"
 	}
@@ -161,6 +163,10 @@ func (sd *SessionData) GobDecode(data []byte) error {
 }
 
 func (sd *SessionData) Merge(from *SessionData, overwrite bool) {
+	if sd == from {
+		return
+	}
+
 	// Acquire locks in consistent order to prevent deadlock
 	first, second := sd, from
 	if sd.sid > from.sid {
