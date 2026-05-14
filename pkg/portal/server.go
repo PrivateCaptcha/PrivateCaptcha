@@ -304,11 +304,11 @@ func (s *Server) MiddlewarePublicChain(rg *common.RouteGenerator, security alice
 }
 
 func (s *Server) MiddlewarePrivateRead(public alice.Chain, timeout alice.Constructor) alice.Chain {
-	return public.Append(s.maintenance, timeout, s.private)
+	return public.Append(s.Maintenance, timeout, s.private)
 }
 
 func (s *Server) MiddlewarePrivateWrite(public alice.Chain, timeout alice.Constructor) alice.Chain {
-	return public.Append(s.maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
+	return public.Append(s.Maintenance, defaultMaxBytesHandler, timeout, s.csrf(s.csrfUserIDKeyFunc), s.private)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Constructor) {
@@ -321,7 +321,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	// separately configured "public" ones
 	public := s.MiddlewarePublicChain(rg, security)
 	publicReadTimeout := common.SoftTimeoutHandler(2 * time.Second)
-	openRead := public.Append(s.maintenance, publicReadTimeout)
+	openRead := public.Append(s.Maintenance, publicReadTimeout)
 	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
 	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
 	rg.Handle(rg.Get(common.AccountVerifyEndpoint), openRead.Append(common.Cached), s.Handler(s.getAccountVerify))
@@ -332,7 +332,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	// openWrite is protected by captcha, other "write" handlers are protected by CSRF token / auth
 	// larger write timeout is mostly due to emails / external APIs
 	publicWriteTimeout := common.SoftTimeoutHandler(5 * time.Second)
-	openWrite := public.Append(s.maintenance, defaultMaxBytesHandler, publicWriteTimeout)
+	openWrite := public.Append(s.Maintenance, defaultMaxBytesHandler, publicWriteTimeout)
 	csrfEmail := openWrite.Append(s.csrf(s.csrfUserEmailKeyFunc))
 	internalTimeout := common.HardTimeoutHandler(10 * time.Second)
 	privateWrite := s.MiddlewarePrivateWrite(public, internalTimeout)
@@ -451,7 +451,7 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 	})
 }
 
-func (s *Server) maintenance(next http.Handler) http.Handler {
+func (s *Server) Maintenance(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.isMaintenanceMode() {
 			slog.Log(r.Context(), common.LevelTrace, "Rejecting request under maintenance mode")
