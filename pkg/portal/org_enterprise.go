@@ -669,6 +669,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 		sess := s.Sessions.SessionStart(w, r)
 		_ = sess.Set(ctx, session.KeyOrgInviteID, int32(inviteID))
 		_ = sess.Delete(ctx, session.KeyVerifyRegistration)
+		_ = sess.Set(ctx, session.KeyPersistent, true)
 	}
 
 	// Return the register page view (same as regular register)
