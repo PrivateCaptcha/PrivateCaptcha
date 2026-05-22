@@ -63,8 +63,8 @@
 - Test after writing. Never leave code untested.
 - To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
 - To run JS widget tests, run `make test-widget-unit`
-- To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). Docker is required.
-- To run all Go integration tests, run `make test-docker-light`. Docker is required.
+- To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). If docker is not available, use `make test-local-light TEST_NAME=<your-test-name>`.
+- To run all Go integration tests, run `make test-docker-light`. If docker is not available, use `make test-local-light`.
 - Do not use underscores in Golang test names
 - Put any new integration test for maintenance jobs to either Portal tests or API tests
 - Prefer to not add any new DB methods for tests only, first try to reuse existing DB methods with some tests-only helpers (even if not optimal)
