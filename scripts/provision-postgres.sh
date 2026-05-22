@@ -20,23 +20,16 @@ export HISTIGNORE
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-make_safe_id() {
-    printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '_' | sed -E 's/^_+//; s/_+$//; s/_+/_/g; s/^$/local/' | cut -c 1-40
-}
-
-current_branch() {
-    git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null || basename "$REPO_ROOT"
-}
-
-TEST_DB_ID="${1:-${POSTGRES_TEST_RUN_ID:-}}"
-if [ -z "$TEST_DB_ID" ]; then
-    TEST_DB_ID="$(make_safe_id "$(current_branch)")_$(openssl rand -hex 4)"
-else
-    TEST_DB_ID="$(make_safe_id "$TEST_DB_ID")"
+TEST_RUN_ID="${1:-${TEST_RUN_ID:-}}"
+if [ -z "$TEST_RUN_ID" ]; then
+    echo "Error: TEST_RUN_ID is required (pass as argument or environment variable)"
+    exit 1
 fi
 
-PC_DB_NAME="pc_test_${TEST_DB_ID}"
-PC_DB_USER="pc_test_user_${TEST_DB_ID}"
+DB_SUFFIX="$TEST_RUN_ID"
+
+PC_DB_NAME="pc_test_${DB_SUFFIX}"
+PC_DB_USER="pc_test_user_${DB_SUFFIX}"
 PC_DB_PASSWORD=$(openssl rand -base64 16 | tr -d '/+=' | head -c 16)
 
 PG_ADMIN_USER="${PG_ADMIN_USER:-postgres}"
@@ -45,7 +38,7 @@ PG_PORT="${PG_PORT:-5432}"
 PG_DATABASE="${PG_DATABASE:-postgres}"
 
 echo "=== Provisioning Local Postgres Test Database ==="
-echo "Run ID: $TEST_DB_ID"
+echo "Run ID: $CI_RUNNER_ID"
 echo "Database: $PC_DB_NAME"
 echo "User: $PC_DB_USER"
 echo ""
@@ -62,14 +55,12 @@ EOSQL
 # Write env file for test scripts to source.
 ENV_FILE="${REPO_ROOT}/.postgres-test-env"
 cat > "$ENV_FILE" <<EOF
-POSTGRES_TEST_RUN_ID=${TEST_DB_ID}
 PC_DB_NAME=${PC_DB_NAME}
 PC_DB_USER=${PC_DB_USER}
 PC_DB_PASSWORD=${PC_DB_PASSWORD}
 PC_POSTGRES_HOST=${PG_HOST}
 PC_POSTGRES_PORT=${PG_PORT}
 PC_POSTGRES_DB=${PC_DB_NAME}
-PC_POSTGRES=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=backend
 PC_POSTGRES_BACKEND=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=backend
 EOF
 
