@@ -24,6 +24,11 @@ var testCacheKey = SessionCacheKey("valid-sid")
 
 type dummySessionStore struct{}
 
+type createPropertyQuerierStub struct {
+	*QuerierStub
+	property *dbgen.Property
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -31,6 +36,10 @@ func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool
 }
 func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error              { return nil }
+
+func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	return s.property, s.Error
+}
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
 	stub := &QuerierStub{Error: expectedErr}
@@ -542,6 +551,43 @@ func TestBusinessStoreImplFindOrg(t *testing.T) {
 }
 
 func TestBusinessStoreImplCreateNewProperty(t *testing.T) {
+	t.Run("AllowsEmptyDomain", func(t *testing.T) {
+		querier := &createPropertyQuerierStub{
+			QuerierStub: &QuerierStub{},
+			property: &dbgen.Property{
+				ID:              1,
+				Name:            "valid",
+				Domain:          "",
+				CreatorID:       Int(12),
+				OrgID:           Int(1),
+				OrgOwnerID:      Int(99),
+				AllowSubdomains: true,
+				AllowLocalhost:  true,
+			},
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		property, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{
+			Name:            "valid",
+			CreatorID:       Int(12),
+			Domain:          "",
+			AllowSubdomains: true,
+			AllowLocalhost:  true,
+		}, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		if err != nil {
+			t.Fatalf("expected empty domain to be allowed, got %v", err)
+		}
+		if property == nil {
+			t.Fatal("expected property to be returned")
+		}
+		if property.Domain != "" {
+			t.Fatalf("expected empty domain, got %q", property.Domain)
+		}
+	})
+
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
 		_, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{Name: "valid", Domain: testDomain}, &dbgen.Organization{ID: 1})

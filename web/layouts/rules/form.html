@@ -42,7 +42,7 @@
                     {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
                     {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
-                    {{ if .Params.Property }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
+                    {{ if and .Params.Property .Params.Property.HasDomain }}{{ with .Const.ConditionPropertyDomain }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Domain</option>{{ end }}{{ end }}
                     {{ with .Const.ConditionPropertyHTTPHeaderName }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>HTTP Header Name</option>{{ end }}
                     {{ with .Const.ConditionPropertyAlways }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Always</option>{{ end }}
                     {{ block "rule-condition-property-extension" . }}{{ end }}

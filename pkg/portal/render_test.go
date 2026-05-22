@@ -476,6 +476,35 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, common.NewEndpoint},
+			template: ruleTemplate,
+			model: &RuleWizardRenderContext{
+				CsrfRenderContext:  stubToken(),
+				AlertRenderContext: AlertRenderContext{},
+				RuleFormData: RuleFormData{
+					Name:              "Name",
+					ConditionProperty: string(dbgen.RuleConditionPropertyUserAgent),
+					ConditionOperator: string(dbgen.RuleConditionOperatorContains),
+					ConditionValue:    "curl",
+					ActionProperty:    string(dbgen.RuleActionPropertyDifficultyGrowth),
+					ActionValue:       string(dbgen.DifficultyGrowthFast),
+					Enabled:           true,
+				},
+				CurrentOrg: stubOrg("123"),
+				Property: &userProperty{
+					ID:        "456",
+					OrgID:     "123",
+					Name:      "No Domain",
+					Domain:    "any domain (*)",
+					HasDomain: false,
+					Enabled:   true,
+				},
+				Countries: []CountryOption{},
+			},
+			selector: "option[value=\"domain\"]",
+			matches:  []string{},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456", common.RulesEndpoint, "789", common.EditEndpoint},
 			template: ruleTemplate,
 			model: &RuleWizardRenderContext{

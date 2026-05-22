@@ -17,7 +17,46 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
+	tests := []struct {
+		name            string
+		domain          string
+		expected        string
+		allowSubdomains bool
+		hasDomain       bool
+	}{
+		{name: "EmptyDomain", domain: "", allowSubdomains: false, expected: "any domain (*)", hasDomain: false},
+		{name: "EmptyDomainWithSubdomains", domain: "", allowSubdomains: true, expected: "any domain (*)", hasDomain: false},
+		{name: "Subdomains", domain: "example.com", allowSubdomains: true, expected: "*.example.com", hasDomain: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			property := &dbgen.Property{
+				ID:               1,
+				OrgID:            db.Int(2),
+				Domain:           tt.domain,
+				AllowSubdomains:  tt.allowSubdomains,
+				Level:            db.Int2(1),
+				Growth:           dbgen.DifficultyGrowthMedium,
+				ValidityInterval: 6 * time.Hour,
+				MaxReplayCount:   1,
+				ExternalID:       pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+			}
+
+			result := propertyToUserProperty(property, server.IDHasher)
+			if result.Domain != tt.expected {
+				t.Errorf("Domain = %q; want %q", result.Domain, tt.expected)
+			}
+			if result.HasDomain != tt.hasDomain {
+				t.Errorf("HasDomain = %v; want %v", result.HasDomain, tt.hasDomain)
+			}
+		})
+	}
+}
 
 func TestGetNewOrgProperty(t *testing.T) {
 	if testing.Short() {

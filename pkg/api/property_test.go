@@ -272,6 +272,83 @@ func TestApiPostProperties(t *testing.T) {
 	}
 }
 
+func TestApiPostPropertiesEmptyDomain(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+
+	_, org, apiKey, err := setupAPISuite(ctx, t.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inputs := []*apiCreatePropertyInput{{
+		apiPropertySettings: apiPropertySettings{
+			Name:            t.Name() + " Property",
+			AllowSubdomains: true,
+			AllowLocalhost:  true,
+		},
+		Domain: "",
+	}}
+
+	output, meta, err := requestResponseAPISuite[*apiAsyncTaskOutput](ctx, inputs,
+		http.MethodPost,
+		fmt.Sprintf("/%s/%s/%s", common.OrgEndpoint, server.IDHasher.Encrypt(int(org.ID)), common.PropertiesEndpoint),
+		apiKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !meta.Code.Success() {
+		t.Fatalf("Unexpected status code: %v", meta.Description)
+	}
+
+	finished := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(500 * time.Millisecond)
+
+		result, meta, err := requestResponseAPISuite[*apiAsyncTaskResultOutput](ctx, nil, http.MethodGet, "/"+common.AsyncTaskEndpoint+"/"+output.ID, apiKey)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !meta.Code.Success() {
+			t.Fatalf("Unexpected status code: %v", meta.Description)
+		}
+
+		if result.Finished {
+			finished = true
+			break
+		}
+	}
+
+	if !finished {
+		t.Fatal("Async task did not complete within timeout")
+	}
+
+	properties, _, err := server.BusinessDB.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(properties) != 1 {
+		t.Fatalf("Unexpected number of properties: %v", len(properties))
+	}
+
+	property := properties[0]
+	if property.Domain != "" {
+		t.Fatalf("expected empty domain, got %q", property.Domain)
+	}
+	if !property.AllowSubdomains {
+		t.Fatal("expected allow_subdomains to be preserved")
+	}
+	if !property.AllowLocalhost {
+		t.Fatal("expected allow_localhost to be preserved")
+	}
+}
+
 func TestNewAsyncTaskRequesterIP(t *testing.T) {
 	ip := netip.MustParseAddr("203.0.113.25")
 	ctx := context.WithValue(t.Context(), common.RateLimitKeyContextKey, ip)
@@ -1486,13 +1563,6 @@ func TestApiPostPropertiesValidationErrors(t *testing.T) {
 		input    []*apiCreatePropertyInput
 		wantCode common.StatusCode
 	}{
-		{
-			name: "Empty Domain",
-			input: []*apiCreatePropertyInput{
-				{apiPropertySettings: apiPropertySettings{Name: "Valid Name"}, Domain: ""},
-			},
-			wantCode: common.StatusPropertyDomainEmptyError,
-		},
 		{
 			name: "Localhost Domain",
 			input: []*apiCreatePropertyInput{
