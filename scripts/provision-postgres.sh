@@ -38,7 +38,7 @@ PG_PORT="${PG_PORT:-5432}"
 PG_DATABASE="${PG_DATABASE:-postgres}"
 
 echo "=== Provisioning Local Postgres Test Database ==="
-echo "Run ID: $CI_RUNNER_ID"
+echo "Run ID: $TEST_RUN_ID"
 echo "Database: $PC_DB_NAME"
 echo "User: $PC_DB_USER"
 echo ""
@@ -53,7 +53,7 @@ CREATE USER ${PC_DB_USER} WITH ENCRYPTED PASSWORD '${PC_DB_PASSWORD}';
 EOSQL
 
 # Write env file for test scripts to source.
-ENV_FILE="${REPO_ROOT}/.postgres-test-env"
+ENV_FILE="${REPO_ROOT}/.postgres-test-env-${TEST_RUN_ID}"
 cat > "$ENV_FILE" <<EOF
 PC_DB_NAME=${PC_DB_NAME}
 PC_DB_USER=${PC_DB_USER}

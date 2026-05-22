@@ -4,15 +4,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-ENV_FILE="$REPO_ROOT/.postgres-test-env"
-
-cleanup() {
-    if [ "${KEEP_POSTGRES_TEST_DB:-}" = "1" ]; then
-        echo "Keeping Postgres test database because KEEP_POSTGRES_TEST_DB=1"
-        return
-    fi
-    "$SCRIPT_DIR/cleanup-postgres.sh"
-}
 
 make_safe_id() {
     printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '_' | sed -E 's/^_+//; s/_+$//; s/_+/_/g; s/^$/local/' | cut -c 1-40
@@ -22,6 +13,16 @@ current_branch() {
     git branch --show-current 2>/dev/null || git rev-parse --abbrev-ref HEAD 2>/dev/null || basename "$REPO_ROOT"
 }
 
+TEST_RUN_ID="$(make_safe_id "$(current_branch)")_$(openssl rand -hex 4)"
+
+cleanup() {
+    if [ "${KEEP_POSTGRES_TEST_DB:-}" = "1" ]; then
+        echo "Keeping Postgres test database because KEEP_POSTGRES_TEST_DB=1"
+        return
+    fi
+    "$SCRIPT_DIR/cleanup-postgres.sh" "$TEST_RUN_ID"
+}
+
 pushd "$REPO_ROOT"
 
 export PG_ADMIN_USER="${PG_ADMIN_USER:-postgres}"
@@ -29,11 +30,10 @@ export PGPASSWORD="${PGPASSWORD:-postgres}"
 export PG_HOST="${PG_HOST:-localhost}"
 export PG_PORT="${PG_PORT:-5432}"
 
-TEST_RUN_ID="$(make_safe_id "$(current_branch)")_$(openssl rand -hex 4)"
-
-"$SCRIPT_DIR/provision-postgres.sh" "$TEST_RUN_ID"
 trap cleanup EXIT
+"$SCRIPT_DIR/provision-postgres.sh" "$TEST_RUN_ID"
 
+ENV_FILE="${REPO_ROOT}/.postgres-test-env-${TEST_RUN_ID}"
 source "$ENV_FILE"
 
 echo "=== Initializing Postgres Test Database ==="
@@ -49,8 +49,7 @@ echo "=== Migrating Postgres Test Database ==="
 PC_POSTGRES="postgres://${PG_ADMIN_USER}:${PGPASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=public" \
 PC_CLICKHOUSE_OPTIONAL="true" \
 PC_DOMAIN="privatecaptcha.local" \
-PC_ADMIN_EMAIL="admin@privatecaptcha.local" \
-PC_VERBOSE="1" \
+PC_ADMIN_EMAIL="admin@privatecaptcha.local"
 ./bin/server -mode migrate -migrate-hash ignore
 
 echo "=== Running Integration Tests ==="

@@ -34,7 +34,7 @@ pkg/db/migrations/postgres/000000_sqlc_fix.sql
 pc.env
 fullcode.txt
 .env
-.postgres-test-env
+.postgres-test-env-*
 .DS_Store
 
 .aider*

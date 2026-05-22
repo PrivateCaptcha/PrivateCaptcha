@@ -11,7 +11,13 @@ export HISTIGNORE
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-ENV_FILE="${REPO_ROOT}/.postgres-test-env"
+TEST_RUN_ID="${1:-${TEST_RUN_ID:-}}"
+if [ -z "$TEST_RUN_ID" ]; then
+    echo "Error: TEST_RUN_ID is required (pass as argument or environment variable)"
+    exit 1
+fi
+
+ENV_FILE="${REPO_ROOT}/.postgres-test-env-${TEST_RUN_ID}"
 
 if [ -f "$ENV_FILE" ]; then
     source "$ENV_FILE"

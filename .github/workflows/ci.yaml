@@ -121,7 +121,7 @@ jobs:
         TEST_RUN_ID: ${{ github.run_id }}_${{ github.run_attempt }}
       run: |
         ./scripts/provision-postgres.sh
-        cat ".postgres-test-env" >> $GITHUB_ENV
+        cat ".postgres-test-env-${TEST_RUN_ID}" >> $GITHUB_ENV
 
     - name: Init Postgres
       env:
