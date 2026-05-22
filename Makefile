@@ -10,6 +10,7 @@ EXTRA_TEST_FLAGS ?=
 CGO_TEST_ENABLED ?= 0
 TEST_NAME ?=
 TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-compose.test.clickhouse.yml
+POSTGRES_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.postgres-test.yml
 GOPATH := $(shell go env GOPATH)
 OPEN ?= printf "file://%s\n"
 
@@ -61,6 +62,15 @@ test-docker:
 
 test-docker-light: TEST_DOCKER_COMPOSE_FILES = -f docker/docker-compose.test.yml
 test-docker-light: test-docker
+
+run-postgres-test-db:
+	@$(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) up -d --wait
+
+stop-postgres-test-db:
+	@$(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) down -v --remove-orphans
+
+test-local-light: build-tests-ee
+	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$${PG_PORT:-5432}" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/run-postgres-tests.sh
 
 vendors:
 	go mod tidy

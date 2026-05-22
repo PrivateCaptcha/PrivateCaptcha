@@ -1,0 +1,23 @@
+services:
+  postgres-test:
+    image: postgres:18
+    pull_policy: if_not_present
+    command: >
+        -c log_statement=all
+        -c log_destination=stderr
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: pg_isready -U postgres -d postgres
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - postgres_test_data_volume:/var/lib/postgresql/18/data
+
+volumes:
+  postgres_test_data_volume:

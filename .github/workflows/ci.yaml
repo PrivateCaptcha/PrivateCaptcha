@@ -112,22 +112,32 @@ jobs:
     - name: Build tests
       run: make build-tests-ee
 
+    - name: Provision Postgres
+      env:
+        PG_HOST: localhost
+        PG_PORT: 5432
+        PG_ADMIN_USER: postgres
+        PGPASSWORD: postgres
+        POSTGRES_TEST_RUN_ID: gh-${{ github.run_id }}-${{ github.run_attempt }}
+      run: |
+        ./scripts/provision-postgres.sh
+        cat ".postgres-test-env" >> $GITHUB_ENV
+
     - name: Init Postgres
       env:
         PGHOST: localhost
         PGPORT: 5432
         PGUSER: postgres
         PGPASSWORD: postgres
-        PGDATABASE: privatecaptcha
+        PGDATABASE: ${{ env.PC_DB_NAME }}
         PGOPTIONS: "--search_path=public"
-      run: pkg/db/migrations/init/postgres.sh
+      run: pkg/db/migrations/init/postgres.sh "$PC_DB_NAME" "$PC_DB_USER" "$PC_DB_PASSWORD"
 
     - name: Run ClickHouse
       run: ./docker/run-clickhouse.sh
 
     - name: Migrate Databases Up
       env:
-        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?search_path=public
         PC_CLICKHOUSE_HOST: localhost
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
@@ -143,13 +153,13 @@ jobs:
 
     - name: Vet Postgres queries
       env:
-        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
+        PC_POSTGRES: ${{ env.PC_POSTGRES_BACKEND }}
       run: |
         make vet-sqlc
 
     - name: Integration Tests
       env:
-        PC_POSTGRES: postgres://captchasrv:QMS0fJmTHS8Gzq@localhost:5432/privatecaptcha?search_path=backend
+        PC_POSTGRES: ${{ env.PC_POSTGRES_BACKEND }}
         PC_CLICKHOUSE_HOST: localhost
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: captchasrv
@@ -169,13 +179,22 @@ jobs:
 
     - name: Migrate Databases Down
       env:
-        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/privatecaptcha?search_path=public
+        PC_POSTGRES: postgres://postgres:postgres@localhost:5432/${{ env.PC_DB_NAME }}?search_path=public
         PC_CLICKHOUSE_HOST: localhost
         PC_CLICKHOUSE_DB: privatecaptcha
         PC_CLICKHOUSE_USER: default
         PC_DOMAIN: privatecaptcha.local
         PC_VERBOSE: 1
       run: ./bin/server -mode rollback -migrate-hash $GITHUB_SHA
+
+    - name: Cleanup Postgres
+      if: always()
+      env:
+        PG_HOST: localhost
+        PG_PORT: 5432
+        PG_ADMIN_USER: postgres
+        PGPASSWORD: postgres
+      run: ./scripts/cleanup-postgres.sh
 
     - name: Generate checksum
       run: |
