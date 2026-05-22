@@ -42,6 +42,7 @@ fullcode.txt
 .cursor/
 .continue/
 .copilot/
+tasks/
 
 coverage_*.out
 coverage_*.cov
