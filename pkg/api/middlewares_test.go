@@ -136,6 +136,14 @@ func TestIsOriginAllowed(t *testing.T) {
 		expected     bool
 	}{
 		{
+			name:         "EmptyDomainAllowsAnyOrigin",
+			origin:       "example.com",
+			domain:       "",
+			allowLocal:   false,
+			allowSubdoms: false,
+			expected:     true,
+		},
+		{
 			name:         "ExactDomainMatch",
 			origin:       "example.com",
 			domain:       "example.com",

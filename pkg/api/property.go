@@ -159,30 +159,27 @@ func (s *Server) readCreatePropertiesRequest(ctx context.Context, r *http.Reques
 
 		namesMap[name] = struct{}{}
 
-		if len(input.Domain) == 0 {
-			ilog.WarnContext(ctx, "Property domain name is empty")
-			return nil, common.StatusPropertyDomainEmptyError, nil
-		}
+		if len(input.Domain) > 0 {
+			domain, err := common.ParseDomainName(input.Domain)
+			if err != nil {
+				ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))
+				return nil, common.StatusPropertyDomainFormatError, nil
+			}
 
-		domain, err := common.ParseDomainName(input.Domain)
-		if err != nil {
-			ilog.WarnContext(ctx, "Failed to parse domain name", common.ErrAttr(err))
-			return nil, common.StatusPropertyDomainFormatError, nil
-		}
+			if common.IsLocalhost(domain) {
+				ilog.WarnContext(ctx, "Property domain name is localhost")
+				return nil, common.StatusPropertyDomainLocalhostError, nil
+			}
 
-		if common.IsLocalhost(domain) {
-			ilog.WarnContext(ctx, "Property domain name is localhost")
-			return nil, common.StatusPropertyDomainLocalhostError, nil
-		}
+			if common.IsIPAddress(domain) {
+				ilog.WarnContext(ctx, "Property domain name is IP")
+				return nil, common.StatusPropertyDomainIPAddrError, nil
+			}
 
-		if common.IsIPAddress(domain) {
-			ilog.WarnContext(ctx, "Property domain name is IP")
-			return nil, common.StatusPropertyDomainIPAddrError, nil
-		}
-
-		if _, err := idna.Lookup.ToASCII(domain); err != nil {
-			ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
-			return nil, common.StatusPropertyDomainNameInvalidError, nil
+			if _, err := idna.Lookup.ToASCII(domain); err != nil {
+				ilog.WarnContext(ctx, "Failed to convert domain name to ASCII", common.ErrAttr(err))
+				return nil, common.StatusPropertyDomainNameInvalidError, nil
+			}
 		}
 
 		inputs = append(inputs, &input)
@@ -376,10 +373,14 @@ func (s *Server) doCreateProperties(ctx context.Context, tlog *slog.Logger, user
 func (s *Server) doCreateProperty(ctx context.Context, tlog *slog.Logger, property *apiCreatePropertyInput, user *dbgen.User, org *dbgen.Organization) common.StatusCode {
 	// this should have been filtered out when we validated user request
 	// but we repeat this here because we save to DB _exact_ user request
-	domain, err := common.ParseDomainName(property.Domain)
-	if err != nil {
-		tlog.WarnContext(ctx, "Failed to parse domain name", "domain", property.Domain, common.ErrAttr(err))
-		return common.StatusPropertyDomainFormatError
+	domain := ""
+	if len(property.Domain) > 0 {
+		var err error
+		domain, err = common.ParseDomainName(property.Domain)
+		if err != nil {
+			tlog.WarnContext(ctx, "Failed to parse domain name", "domain", property.Domain, common.ErrAttr(err))
+			return common.StatusPropertyDomainFormatError
+		}
 	}
 
 	// NOTE: we do NOT validate property name "for real" (against other org properties) due to too many DB roundtrips.

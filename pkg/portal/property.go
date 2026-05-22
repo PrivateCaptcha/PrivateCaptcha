@@ -70,6 +70,7 @@ type userProperty struct {
 	Growth           int
 	ValidityInterval int
 	MaxReplayCount   int
+	HasDomain        bool
 	AllowSubdomains  bool
 	AllowLocalhost   bool
 	AllowReplay      bool
@@ -144,7 +145,8 @@ func propertyToUserProperty(p *dbgen.Property, hasher common.IdentifierHasher) *
 		ID:               hasher.Encrypt(int(p.ID)),
 		OrgID:            hasher.Encrypt(int(p.OrgID.Int32)),
 		Name:             p.Name,
-		Domain:           p.Domain,
+		Domain:           common.DisplayPropertyDomain(p.Domain, p.AllowSubdomains),
+		HasDomain:        len(p.Domain) > 0,
 		Level:            int(p.Level.Int16),
 		Growth:           growthLevelToIndex(p.Growth),
 		Sitekey:          db.UUIDToSiteKey(p.ExternalID),

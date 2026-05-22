@@ -414,6 +414,10 @@ func (am *AuthMiddleware) originAllowed(r *http.Request, origin string) (bool, [
 }
 
 func isOriginAllowed(origin string, property *dbgen.Property) bool {
+	if len(property.Domain) == 0 {
+		return true
+	}
+
 	if origin == property.Domain {
 		return true
 	}

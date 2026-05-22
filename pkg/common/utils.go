@@ -341,6 +341,18 @@ func IsSubDomainOrDomain(subDomain, domain string) bool {
 	return false
 }
 
+func DisplayPropertyDomain(domain string, allowSubdomains bool) string {
+	if len(domain) == 0 {
+		return "any domain (*)"
+	}
+
+	if allowSubdomains {
+		return "*." + domain
+	}
+
+	return domain
+}
+
 func EnvToBool(value string) bool {
 	switch value {
 	case "1", "Y", "y", "yes", "true", "YES", "TRUE":

@@ -17,7 +17,42 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
+	tests := []struct {
+		name            string
+		domain          string
+		allowSubdomains bool
+		expected        string
+	}{
+		{name: "EmptyDomain", domain: "", allowSubdomains: false, expected: "any domain (*)"},
+		{name: "EmptyDomainWithSubdomains", domain: "", allowSubdomains: true, expected: "any domain (*)"},
+		{name: "Subdomains", domain: "example.com", allowSubdomains: true, expected: "*.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			property := &dbgen.Property{
+				ID:               1,
+				OrgID:            db.Int(2),
+				Domain:           tt.domain,
+				AllowSubdomains:  tt.allowSubdomains,
+				Level:            db.Int2(1),
+				Growth:           dbgen.DifficultyGrowthMedium,
+				ValidityInterval: 6 * time.Hour,
+				MaxReplayCount:   1,
+				ExternalID:       pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+			}
+
+			result := propertyToUserProperty(property, server.IDHasher)
+			if result.Domain != tt.expected {
+				t.Errorf("Domain = %q; want %q", result.Domain, tt.expected)
+			}
+		})
+	}
+}
 
 func TestGetNewOrgProperty(t *testing.T) {
 	if testing.Short() {

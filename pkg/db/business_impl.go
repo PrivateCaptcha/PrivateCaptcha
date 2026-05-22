@@ -929,7 +929,7 @@ func (impl *BusinessStoreImpl) FindOrg(ctx context.Context, name string, user *d
 }
 
 func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *dbgen.CreatePropertyParams, org *dbgen.Organization) (*dbgen.Property, *common.AuditLogEvent, error) {
-	if (params == nil) || (len(params.Domain) == 0) || (len(params.Name) == 0) {
+	if (params == nil) || (len(params.Name) == 0) {
 		return nil, nil, ErrInvalidInput
 	}
 
