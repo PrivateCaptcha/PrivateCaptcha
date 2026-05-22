@@ -69,8 +69,8 @@ PC_DB_PASSWORD=${PC_DB_PASSWORD}
 PC_POSTGRES_HOST=${PG_HOST}
 PC_POSTGRES_PORT=${PG_PORT}
 PC_POSTGRES_DB=${PC_DB_NAME}
-PC_POSTGRES=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?sslmode=disable\&search_path=backend
-PC_POSTGRES_BACKEND=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?sslmode=disable\&search_path=backend
+PC_POSTGRES=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=backend
+PC_POSTGRES_BACKEND=postgres://${PC_DB_USER}:${PC_DB_PASSWORD}@${PG_HOST}:${PG_PORT}/${PC_DB_NAME}?search_path=backend
 EOF
 
 echo "=== Postgres Provisioning Complete ==="

@@ -43,8 +43,13 @@ EOSQL
 
 $PSQL_CMD -v ON_ERROR_STOP=0 <<-EOSQL || true
 DROP DATABASE IF EXISTS ${PC_DB_NAME};
+EOSQL
+
+if [ -n "${PC_DB_USER:-}" ]; then
+$PSQL_CMD -v ON_ERROR_STOP=0 <<-EOSQL || true
 DROP USER IF EXISTS ${PC_DB_USER};
 EOSQL
+fi
 
 rm -vf "$ENV_FILE"
 echo "=== Postgres Cleanup Complete ==="
