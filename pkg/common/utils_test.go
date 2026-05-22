@@ -126,6 +126,29 @@ func TestSubDomain(t *testing.T) {
 	}
 }
 
+func TestDisplayPropertyDomain(t *testing.T) {
+	tests := []struct {
+		name            string
+		domain          string
+		allowSubdomains bool
+		expected        string
+	}{
+		{name: "EmptyDomain", domain: "", allowSubdomains: false, expected: "any domain (*)"},
+		{name: "EmptyDomainWithSubdomains", domain: "", allowSubdomains: true, expected: "any domain (*)"},
+		{name: "ExactDomain", domain: "example.com", allowSubdomains: false, expected: "example.com"},
+		{name: "Subdomains", domain: "example.com", allowSubdomains: true, expected: "*.example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := DisplayPropertyDomain(tt.domain, tt.allowSubdomains)
+			if actual != tt.expected {
+				t.Errorf("DisplayPropertyDomain(%q, %v) = %q; want %q", tt.domain, tt.allowSubdomains, actual, tt.expected)
+			}
+		})
+	}
+}
+
 func TestIsSkipName(t *testing.T) {
 	tests := []struct {
 		name     string

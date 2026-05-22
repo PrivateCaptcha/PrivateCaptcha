@@ -24,6 +24,11 @@ var testCacheKey = SessionCacheKey("valid-sid")
 
 type dummySessionStore struct{}
 
+type createPropertyQuerierStub struct {
+	*QuerierStub
+	property *dbgen.Property
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -31,6 +36,10 @@ func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool
 }
 func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error              { return nil }
+
+func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	return s.property, s.Error
+}
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
 	stub := &QuerierStub{Error: expectedErr}
@@ -352,17 +361,11 @@ func TestBusinessStoreImplFindUserAPIKeyByName(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.FindUserAPIKeyByName(context.Background(), &dbgen.User{}, "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -404,17 +407,11 @@ func TestBusinessStoreImplFindUserByEmail(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.FindUserByEmail(context.Background(), "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -494,17 +491,11 @@ func TestBusinessStoreImplFindOrgProperty(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.FindOrgProperty(context.Background(), "", &dbgen.Organization{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -527,21 +518,52 @@ func TestBusinessStoreImplFindOrg(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.FindOrg(context.Background(), "", &dbgen.User{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
 func TestBusinessStoreImplCreateNewProperty(t *testing.T) {
+	t.Run("AllowsEmptyDomain", func(t *testing.T) {
+		querier := &createPropertyQuerierStub{
+			QuerierStub: &QuerierStub{},
+			property: &dbgen.Property{
+				ID:              1,
+				Name:            "valid",
+				Domain:          "",
+				CreatorID:       Int(12),
+				OrgID:           Int(1),
+				OrgOwnerID:      Int(99),
+				AllowSubdomains: true,
+				AllowLocalhost:  true,
+			},
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		property, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{
+			Name:            "valid",
+			CreatorID:       Int(12),
+			Domain:          "",
+			AllowSubdomains: true,
+			AllowLocalhost:  true,
+		}, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		if err != nil {
+			t.Fatalf("expected empty domain to be allowed, got %v", err)
+		}
+		if property == nil {
+			t.Fatal("expected property to be returned")
+		}
+		if property.Domain != "" {
+			t.Fatalf("expected empty domain, got %q", property.Domain)
+		}
+	})
+
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
 		_, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{Name: "valid", Domain: testDomain}, &dbgen.Organization{ID: 1})
@@ -560,17 +582,11 @@ func TestBusinessStoreImplCreateNewProperty(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{}, &dbgen.Organization{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -593,17 +609,11 @@ func TestBusinessStoreImplUpdateProperty(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.UpdateProperty(context.Background(), nil, nil, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -645,17 +655,11 @@ func TestBusinessStoreImplSoftDeleteProperties(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.SoftDeleteProperties(context.Background(), []int32{1}, nil, &dbgen.Organization{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -678,17 +682,11 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.RetrieveOrgProperties(context.Background(), &dbgen.Organization{}, 0, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -939,17 +937,11 @@ func TestBusinessStoreImplUpdateUserSubscription(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.UpdateUserSubscription(context.Background(), &dbgen.User{}, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1010,17 +1002,11 @@ func TestBusinessStoreImplUpdateAPIKey(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.UpdateAPIKey(context.Background(), &dbgen.User{}, &dbgen.APIKey{}, time.Time{}, false)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1043,17 +1029,11 @@ func TestBusinessStoreImplCreateAPIKey(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.CreateAPIKey(context.Background(), &dbgen.User{}, &dbgen.CreateAPIKeyParams{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1152,17 +1132,11 @@ func TestBusinessStoreImplRetrieveLock(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveLock(context.Background(), "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1185,17 +1159,11 @@ func TestBusinessStoreImplAcquireLock(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.AcquireLock(context.Background(), "", nil, time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1237,17 +1205,11 @@ func TestBusinessStoreImplDeleteDeletedRecords(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.DeleteDeletedRecords(context.Background(), time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1270,17 +1232,11 @@ func TestBusinessStoreImplRetrieveSoftDeletedProperties(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveSoftDeletedProperties(context.Background(), time.Time{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1322,17 +1278,11 @@ func TestBusinessStoreImplRetrieveSoftDeletedOrganizations(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveSoftDeletedOrganizations(context.Background(), time.Time{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1374,17 +1324,11 @@ func TestBusinessStoreImplRetrieveSoftDeletedUsers(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveSoftDeletedUsers(context.Background(), time.Time{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1464,17 +1408,11 @@ func TestBusinessStoreImplCreateSystemNotification(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.CreateSystemNotification(context.Background(), "", time.Time{}, nil, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1535,17 +1473,11 @@ func TestBusinessStoreImplGetCachedPropertyBySitekey(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.GetCachedPropertyBySitekey(context.Background(), "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1625,17 +1557,11 @@ func TestBusinessStoreImplCreateNewAccount(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, _, err := store.CreateNewAccount(context.Background(), &dbgen.CreateSubscriptionParams{}, "", "", "", 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1696,34 +1622,21 @@ func TestBusinessStoreImplCreateUserNotification(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.CreateUserNotification(context.Background(), &common.ScheduledNotification{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
 func TestBusinessStoreImplRetrievePendingUserNotifications(t *testing.T) {
-
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrievePendingUserNotifications(context.Background(), time.Time{}, 0, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1803,17 +1716,11 @@ func TestBusinessStoreImplDeleteSentUserNotifications(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.DeleteSentUserNotifications(context.Background(), time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1836,17 +1743,11 @@ func TestBusinessStoreImplDeleteUnsentUserNotifications(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.DeleteUnsentUserNotifications(context.Background(), time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1907,17 +1808,11 @@ func TestBusinessStoreImplMoveProperty(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.MoveProperty(context.Background(), &dbgen.User{}, &dbgen.Property{}, &dbgen.GetUserOrganizationsRow{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1940,17 +1835,11 @@ func TestBusinessStoreImplTransferOrganization(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.TransferOrganization(context.Background(), &dbgen.User{}, &dbgen.Organization{}, &dbgen.User{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -1973,17 +1862,11 @@ func TestBusinessStoreImplDeleteOldAuditLogs(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.DeleteOldAuditLogs(context.Background(), time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2006,68 +1889,41 @@ func TestBusinessStoreImplGetCachedAuditLogs(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.GetCachedAuditLogs(context.Background(), &dbgen.User{}, 0, time.Time{}, time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
 func TestBusinessStoreImplRetrieveUserAuditLogs(t *testing.T) {
-
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveUserAuditLogs(context.Background(), &dbgen.User{}, 0, time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
 func TestBusinessStoreImplRetrievePropertyAuditLogs(t *testing.T) {
-
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrievePropertyAuditLogs(context.Background(), &dbgen.Property{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
 func TestBusinessStoreImplRetrieveOrganizationAuditLogs(t *testing.T) {
-
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveOrganizationAuditLogs(context.Background(), &dbgen.Organization{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2090,17 +1946,11 @@ func TestBusinessStoreImplCreateNewAsyncTask(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.CreateNewAsyncTask(context.Background(), nil, "", nil, time.Time{}, "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2124,19 +1974,12 @@ func TestBusinessStoreImplRetrieveAsyncTask(t *testing.T) {
 }
 
 func TestBusinessStoreImplRetrievePendingAsyncTasks(t *testing.T) {
-
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrievePendingAsyncTasks(context.Background(), 0, time.Time{}, 0)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2159,17 +2002,11 @@ func TestBusinessStoreImplDeleteOldAsyncTasks(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.DeleteOldAsyncTasks(context.Background(), time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2192,17 +2029,11 @@ func TestBusinessStoreImplUpdateAsyncTask(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		err := store.UpdateAsyncTask(context.Background(), pgtype.UUID{}, nil, time.Time{})
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2339,17 +2170,11 @@ func TestBusinessStoreImplCreateDifficultyRule(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.CreateDifficultyRule(context.Background(), nil, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2429,17 +2254,11 @@ func TestBusinessStoreImplUpdateDifficultyRule(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.UpdateDifficultyRule(context.Background(), nil, nil, nil, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2462,17 +2281,11 @@ func TestBusinessStoreImplDeleteDifficultyRule(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.DeleteDifficultyRule(context.Background(), nil, nil, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2495,17 +2308,11 @@ func TestBusinessStoreImplMoveDifficultyRule(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, _, err := store.MoveDifficultyRule(context.Background(), nil, nil, 0, nil)
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2616,17 +2423,11 @@ func TestBusinessStoreImplRetrieveUsersWithPendingWeeklyReport(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveUsersWithPendingWeeklyReport(context.Background(), 0, 0, "", "", "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }
 
@@ -2642,16 +2443,10 @@ func TestBusinessStoreImplRetrieveUsersWithPendingMonthlyReport(t *testing.T) {
 	})
 
 	t.Run("InvalidInput", func(t *testing.T) {
-
 		store := setupTestStore(t, nil)
-
 		_, err := store.RetrieveUsersWithPendingMonthlyReport(context.Background(), 0, 0, "", "", "")
-
 		if !errors.Is(err, ErrInvalidInput) {
-
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-
 		}
-
 	})
 }

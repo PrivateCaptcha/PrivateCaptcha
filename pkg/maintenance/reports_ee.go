@@ -431,15 +431,12 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 
 		pStat := &email.PropertyStat{
 			Name:      prop.Name,
-			Domain:    prop.Domain,
+			Domain:    common.DisplayPropertyDomain(prop.Domain, prop.AllowSubdomains),
 			Link:      propertyDashboardURL(ctx, portalURL, hasher, prop),
 			Count:     ps.CurrentRequests,
 			Percent:   percent,
 			Change:    change,
 			Alternate: len(topProperties)%2 == 1,
-		}
-		if prop.AllowSubdomains {
-			pStat.Domain = "*." + prop.Domain
 		}
 
 		topProperties = append(topProperties, pStat)
