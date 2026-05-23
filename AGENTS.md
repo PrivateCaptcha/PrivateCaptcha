@@ -17,7 +17,7 @@
 
 - Postgres migrations are in `pkg/db/migrations/postgres/` and queries are in `pkg/db/queries/postgres/`
 - We use sqlc (config in `pkg/db/sqlc.yaml`) to codegen plain SQL into golang source code. After changing queries or migrations, run `make sqlc` in the root to regenerate the Go source code.
-- you can verify the sqlc queries/migrations using `make vet-docker`
+- you can verify the sqlc queries/migrations using `make vet-sqlc-local`
 - we use generated Go code for Postgres via `pkg/db/business_impl.go`
 - for `business_impl.go` methods naming convention for getters is to use `Retrieve` prefix instead of `Get` and to use `GetCached` prefix for cache-only data (sql queries in `pkg/db/queries/` can still use `Get`)
 
@@ -63,8 +63,8 @@
 - Test after writing. Never leave code untested.
 - To run all Go unit tests, run `make test-unit`. Unit tests always run with "enterprise" tag. You can use `make test-unit` also as a "shortcut" to check if everything builds.
 - To run JS widget tests, run `make test-widget-unit`
-- To run a single Go integration test, run `make test-docker-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging). If docker is not available, use `make test-local-light TEST_NAME=<your-test-name>`.
-- To run all Go integration tests, run `make test-docker-light`. If docker is not available, use `make test-local-light`.
+- To run a single Go integration test, run `make test-local-light TEST_NAME=<your-test-name>` (prefer running a single test for debugging)
+- To run all Go integration tests, run `make test-local-light`
 - Do not use underscores in Golang test names
 - Put any new integration test for maintenance jobs to either Portal tests or API tests
 - Prefer to not add any new DB methods for tests only, first try to reuse existing DB methods with some tests-only helpers (even if not optimal)

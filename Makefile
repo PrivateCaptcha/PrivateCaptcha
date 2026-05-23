@@ -13,6 +13,7 @@ TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.test.yml -f docker/docker-
 POSTGRES_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.postgres-test.yml
 GOPATH := $(shell go env GOPATH)
 OPEN ?= printf "file://%s\n"
+TEST_PG_PORT ?= 15432
 
 setup-git:
 	git config core.hooksPath scripts/hooks
@@ -64,13 +65,13 @@ test-docker-light: TEST_DOCKER_COMPOSE_FILES = -f docker/docker-compose.test.yml
 test-docker-light: test-docker
 
 run-postgres-test-db:
-	@$(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) up -d --wait
+	@env PG_PORT=$(TEST_PG_PORT) $(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) up -d --wait
 
 stop-postgres-test-db:
 	@$(DOCKER) compose $(POSTGRES_TEST_DOCKER_COMPOSE_FILES) down -v --remove-orphans
 
-test-local-light: build-tests-ee
-	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$${PG_PORT:-5432}" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/run-postgres-tests.sh
+test-local-light: build-server-ee build-tests-ee
+	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh ./docker/run-tests.sh
 
 vendors:
 	go mod tidy
@@ -197,7 +198,10 @@ vet-sqlc:
 	cd pkg/db && sqlc vet
 	rm -v $(SQLC_MIGRATION_FIX)
 
-vet-docker:
+vet-sqlc-local:
+	@PGPASSWORD="$${PGPASSWORD:-postgres}" PG_ADMIN_USER="$${PG_ADMIN_USER:-postgres}" PG_HOST="$${PG_HOST:-localhost}" PG_PORT="$(TEST_PG_PORT)" GIT_COMMIT="$(GIT_COMMIT)" bash scripts/test-local-postgres.sh make vet-sqlc
+
+vet-sqlc-docker:
 	@$(DOCKER) compose -f docker/docker-compose.test.yml run --build --remove-orphans --rm vetsqlc
 
 view-docker-logs: OPEN = open

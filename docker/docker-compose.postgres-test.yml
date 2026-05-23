@@ -15,7 +15,7 @@ services:
       timeout: 3s
       retries: 10
     ports:
-      - "${PG_PORT:-5432}:5432"
+      - "127.0.0.1:${PG_PORT:-5432}:5432"
     volumes:
       - postgres_test_data_volume:/var/lib/postgresql/18/data
 

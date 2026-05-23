@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 make_safe_id() {
@@ -23,7 +23,7 @@ cleanup() {
     "$SCRIPT_DIR/cleanup-postgres.sh" "$TEST_RUN_ID"
 }
 
-pushd "$REPO_ROOT"
+pushd "$REPO_ROOT" > /dev/null
 
 export PG_ADMIN_USER="${PG_ADMIN_USER:-postgres}"
 export PGPASSWORD="${PGPASSWORD:-postgres}"
@@ -52,13 +52,17 @@ PC_DOMAIN="privatecaptcha.local" \
 PC_ADMIN_EMAIL="admin@privatecaptcha.local" \
 ./bin/server -mode migrate -migrate-hash ignore
 
-echo "=== Running Integration Tests ==="
-PC_POSTGRES="$PC_POSTGRES_BACKEND" \
-PC_CLICKHOUSE_OPTIONAL="true" \
-PC_ADMIN_EMAIL="admin@privatecaptcha.local" \
-PC_USER_FINGERPRINT_KEY="ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c" \
-PC_RATE_LIMIT_HEADER="X-REAL-IP" \
-PC_REGISTRATION_ALLOWED="1" \
-./docker/run-tests.sh
+echo "=== Executing Target Command: $* ==="
 
-popd
+# Export all necessary environment variables so the wrapped command inherits them
+export PC_POSTGRES="$PC_POSTGRES_BACKEND"
+export PC_CLICKHOUSE_OPTIONAL="true"
+export PC_ADMIN_EMAIL="admin@privatecaptcha.local"
+export PC_USER_FINGERPRINT_KEY="ea3ad6863f0ba598c01bb561eda18c24fa72b75629baed833fb92a7fde29a5dd3ce1cbd466e5c0a2762034b43127bb11a4dd86f1c8ea3c24ea70da21f5b2201c"
+export PC_RATE_LIMIT_HEADER="X-REAL-IP"
+export PC_REGISTRATION_ALLOWED="1"
+
+# Execute the command passed as arguments to this script
+"$@"
+
+popd > /dev/null
