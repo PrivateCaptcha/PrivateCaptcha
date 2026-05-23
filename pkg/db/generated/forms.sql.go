@@ -18,7 +18,7 @@ RETURNING id, external_id, url, created_at, updated_at, deleted_at, property_id,
 `
 
 type CreateFormParams struct {
-	Url               string     `db:"url" json:"url"`
+	URL               string     `db:"url" json:"url"`
 	PropertyID        int32      `db:"property_id" json:"property_id"`
 	Fields            []byte     `db:"fields" json:"fields"`
 	Enabled           bool       `db:"enabled" json:"enabled"`
@@ -30,7 +30,7 @@ type CreateFormParams struct {
 
 func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form, error) {
 	row := q.db.QueryRow(ctx, createForm,
-		arg.Url,
+		arg.URL,
 		arg.PropertyID,
 		arg.Fields,
 		arg.Enabled,
@@ -43,7 +43,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
-		&i.Url,
+		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -68,7 +68,7 @@ func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUI
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
-		&i.Url,
+		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -93,7 +93,7 @@ func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*F
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
-		&i.Url,
+		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeletedAt,
@@ -124,7 +124,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 		if err := rows.Scan(
 			&i.ID,
 			&i.ExternalID,
-			&i.Url,
+			&i.URL,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,

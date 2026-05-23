@@ -541,7 +541,7 @@ type DifficultyRule struct {
 type Form struct {
 	ID                int32              `db:"id" json:"id"`
 	ExternalID        pgtype.UUID        `db:"external_id" json:"external_id"`
-	Url               string             `db:"url" json:"url"`
+	URL               string             `db:"url" json:"url"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`

@@ -26,7 +26,7 @@ func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain stri
 	}
 
 	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, domain), &dbgen.CreateFormParams{
-		Url:               "https://example.com/submit",
+		URL:               "https://example.com/submit",
 		Fields:            []byte(`{}`),
 		Enabled:           true,
 		RequestsPerSecond: 1,

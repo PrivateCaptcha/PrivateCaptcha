@@ -640,7 +640,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		form := &dbgen.Form{
 			ID:         456,
 			ExternalID: TestPropertyUUID,
-			Url:        "https://example.com/submit",
+			URL:        "https://example.com/submit",
 			PropertyID: property.ID,
 			Enabled:    true,
 			Method:     dbgen.FormMethodPost,
@@ -660,7 +660,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			CreatorID: Int(12),
 			Domain:    "example.com",
 		}, &dbgen.CreateFormParams{
-			Url:               "https://example.com/submit",
+			URL:               "https://example.com/submit",
 			Fields:            []byte(`{"email":"text"}`),
 			RequestsPerSecond: 1,
 			RequestsBurst:     5,
