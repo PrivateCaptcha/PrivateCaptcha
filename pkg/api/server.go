@@ -83,6 +83,7 @@ type Server struct {
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
 	FormSubmissionChan chan *FormSubmission
+	FormSubmitCancel   context.CancelFunc
 	Cors               *cors.Cors
 	Metrics            common.APIMetrics
 	Mailer             common.Mailer
@@ -163,6 +164,9 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDela
 	if s.FormSubmissionChan == nil {
 		s.FormSubmissionChan = make(chan *FormSubmission, 1000)
 	}
+	if s.FormSubmitCancel == nil {
+		s.FormSubmitCancel = func() {}
+	}
 
 	if err := s.Verifier.Update(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update puzzle verifier", common.ErrAttr(err))
@@ -179,6 +183,11 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDela
 
 	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, verifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
 
+	baseFormCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
+	var cancelFormCtx context.Context
+	cancelFormCtx, s.FormSubmitCancel = context.WithCancel(context.WithValue(baseFormCtx, common.TraceIDContextKey, "submit_forms"))
+	go common.ProcessBatchArray(cancelFormCtx, s.FormSubmissionChan, min(verifyFlushInterval, 100*time.Millisecond), VerifyBatchSize, maxVerifyBatchSize, s.SubmitFormBatch)
+
 	return nil
 }
 
@@ -189,7 +198,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
 		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
 		ExposedHeaders:             []string{common.HeaderWidgetNotice},
-		AllowedMethods:             []string{http.MethodGet},
+		AllowedMethods:             []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowPrivateNetwork:        true,
 		OptionsPassthrough:         true,
 		Debug:                      verbose,
@@ -218,7 +227,9 @@ func (s *Server) Shutdown() {
 
 	slog.Debug("Shutting down API server routines")
 	s.VerifyLogCancel()
+	s.FormSubmitCancel()
 	close(s.VerifyLogChan)
+	close(s.FormSubmissionChan)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
@@ -250,7 +261,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 
 	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
 	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
-	rg.Handle(rg.Post(common.FormEndpoint, "{guid}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
+	rg.Handle(rg.Post(common.FormEndpoint, "{"+common.ParamForm+"}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
+	rg.Handle(rg.Options(common.FormEndpoint, "{"+common.ParamForm+"}"), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 

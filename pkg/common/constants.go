@@ -33,6 +33,7 @@ const (
 	ParamOrg                    = "org"
 	ParamUser                   = "user"
 	ParamPeriod                 = "period"
+	ParamForm                   = "form"
 	ParamProperty               = "property"
 	ParamRule                   = "rule"
 	ParamKey                    = "key"
@@ -86,6 +87,7 @@ var (
 	HeaderIfNoneMatch         = http.CanonicalHeaderKey("If-None-Match")
 	HeaderSitekey             = http.CanonicalHeaderKey("X-PC-Sitekey")
 	HeaderWidgetNotice        = http.CanonicalHeaderKey("X-PC-Widget-Notice")
+	HeaderClientIP            = http.CanonicalHeaderKey("X-PC-Client-IP")
 	HeaderCacheControl        = http.CanonicalHeaderKey("Cache-Control")
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
 	HeaderOrigin              = http.CanonicalHeaderKey("Origin")

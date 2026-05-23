@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -80,8 +81,26 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	}
 
 	ctx := t.Context()
-	form1, _ := createFormProxyForTest(ctx, t, t.Name()+"-one", "wrong-property-one.example.com")
-	_, property2 := createFormProxyForTest(ctx, t, t.Name()+"-two", "wrong-property-two.example.com")
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form1, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-one.example.com"), &dbgen.CreateFormParams{
+		URL:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+	property2, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-two.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create second property: %v", err)
+	}
 
 	sitekey2 := db.UUIDToSiteKey(property2.ExternalID)
 	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey2, property2.Domain)
@@ -96,6 +115,89 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	resp := formProxySuite(t, form1, body)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestFormProxySubmitsForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	var mu sync.Mutex
+	received := url.Values{}
+	receivedHeaders := http.Header{}
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("downstream failed to parse form: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		received = r.PostForm
+		receivedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "submit-form.example.com"), &dbgen.CreateFormParams{
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set("message", "hello")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	resp := formProxySuite(t, form, body)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	for i := 0; i < 5; i++ {
+		mu.Lock()
+		called := received.Get("email") != ""
+		mu.Unlock()
+		if called {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if received.Get("email") == "" {
+		t.Fatal("expected downstream endpoint to be called")
+	}
+	if received.Get("email") != "test@example.com" || received.Get("message") != "hello" {
+		t.Fatalf("unexpected downstream form data: %v", received)
+	}
+	if received.Get(common.ParamPrivateCaptchaSolution) != "" {
+		t.Fatalf("expected captcha solution field to be stripped")
+	}
+	if got := receivedHeaders.Get(common.HeaderContentType); got != common.ContentTypeURLEncoded {
+		t.Fatalf("expected downstream content type %q, got %q", common.ContentTypeURLEncoded, got)
 	}
 }
 

@@ -632,7 +632,7 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		guid := r.PathValue("guid")
+		guid := r.PathValue(common.ParamForm)
 		if !db.CanBeValidSitekey(guid) {
 			slog.Log(ctx, common.LevelTrace, "Form GUID is not valid", "length", len(guid))
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -664,31 +664,27 @@ func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 				return
 			}
 
-			properties, err := am.Store.Impl().RetrievePropertiesByID(ctx, map[int32]uint{form.PropertyID: 1})
-			if err != nil || len(properties) == 0 {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
-			}
-
-			property := properties[0]
-			if !property.Enabled {
-				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				return
-			}
-
-			if softRestriction, err := am.Limiter.EvaluatePropertyAccess(ctx, property.OrgOwnerID.Int32); err == nil {
-				if !softRestriction {
+			if property, err := am.Store.Impl().GetCachedPropertyByID(ctx, form.PropertyID); err == nil {
+				if !property.Enabled {
 					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-				} else {
-					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+					return
 				}
-				return
+
+				if softRestriction, err := am.Limiter.EvaluatePropertyAccess(ctx, property.OrgOwnerID.Int32); err == nil {
+					if !softRestriction {
+						http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					} else {
+						http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+					}
+					return
+				}
 			}
 
 			ctx = context.WithValue(ctx, common.FormContextKey, form)
+		} else {
+			ctx = context.WithValue(ctx, common.FormGUIDContextKey, guid)
 		}
 
-		ctx = context.WithValue(ctx, common.FormGUIDContextKey, guid)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

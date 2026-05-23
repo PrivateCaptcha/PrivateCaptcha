@@ -655,7 +655,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
 		}
 
-		createdForm, createdProperty, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
+		createdForm, createdProperty, auditEvents, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
 			Name:      "form property",
 			CreatorID: Int(12),
 			Domain:    "example.com",
@@ -675,6 +675,12 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		}
 		if createdForm != form {
 			t.Fatalf("expected created form to be returned")
+		}
+		if len(auditEvents) != 2 {
+			t.Fatalf("expected property and form audit events, got %d", len(auditEvents))
+		}
+		if auditEvents[0].TableName != TableNameProperties || auditEvents[1].TableName != TableNameForms {
+			t.Fatalf("expected property and form audit events, got %s and %s", auditEvents[0].TableName, auditEvents[1].TableName)
 		}
 		if len(querier.calls) != 2 || querier.calls[0] != "CreateProperty" || querier.calls[1] != "CreateForm" {
 			t.Fatalf("expected property to be created before form, got %v", querier.calls)

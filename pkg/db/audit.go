@@ -344,6 +344,32 @@ type AuditLogProperty struct {
 	AllowLocalhost      bool   `json:"allow_localhost,omitempty"`
 }
 
+type AuditLogForm struct {
+	URL               string  `json:"url,omitempty"`
+	PropertyID        int32   `json:"property_id,omitempty"`
+	Enabled           bool    `json:"enabled"`
+	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
+	RequestsBurst     int32   `json:"requests_burst,omitempty"`
+	RetryRequestCount int32   `json:"retry_request_count,omitempty"`
+	Method            string  `json:"method,omitempty"`
+}
+
+func newAuditLogForm(form *dbgen.Form) *AuditLogForm {
+	if form == nil {
+		return nil
+	}
+
+	return &AuditLogForm{
+		URL:               form.URL,
+		PropertyID:        form.PropertyID,
+		Enabled:           form.Enabled,
+		RequestsPerSecond: form.RequestsPerSecond,
+		RequestsBurst:     form.RequestsBurst,
+		RetryRequestCount: form.RetryRequestCount,
+		Method:            string(form.Method),
+	}
+}
+
 func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *AuditLogProperty {
 	if property == nil {
 		return nil
@@ -404,6 +430,17 @@ func newCreatePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organiz
 		TableName: TableNameProperties,
 		OldValue:  nil,
 		NewValue:  newAuditLogProperty(property, org),
+	}
+}
+
+func newCreateFormAuditLogEvent(form *dbgen.Form, property *dbgen.Property) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    property.CreatorID.Int32,
+		Action:    common.AuditLogActionCreate,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  nil,
+		NewValue:  newAuditLogForm(form),
 	}
 }
 
