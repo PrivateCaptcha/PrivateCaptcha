@@ -3,6 +3,9 @@ CREATE TYPE backend.form_method AS ENUM ('post', 'put', 'delete', 'patch');
 CREATE TABLE IF NOT EXISTS backend.forms(
     id SERIAL PRIMARY KEY,
     external_id UUID DEFAULT gen_random_uuid(),
+    org_id INT REFERENCES backend.organizations(id) ON DELETE CASCADE,
+    creator_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
+    org_owner_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
     url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,

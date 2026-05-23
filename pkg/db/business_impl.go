@@ -1063,16 +1063,20 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 		formParams.Method = dbgen.FormMethodPost
 	}
 
+	formParams.CreatorID = property.CreatorID
+	formParams.OrgID = property.OrgID
+	formParams.OrgOwnerID = property.OrgOwnerID
+
 	form, err := impl.querier.CreateForm(ctx, formParams)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create form in DB", "propertyID", property.ID, common.ErrAttr(err))
 		return nil, nil, nil, err
 	}
 
-	slog.InfoContext(ctx, "Created new form", "id", form.ID, "propertyID", form.PropertyID)
+	slog.InfoContext(ctx, "Created new form", "formID", form.ID, "propertyID", form.PropertyID)
 	impl.cacheForm(ctx, form)
 
-	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, property)}
+	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, org)}
 	return form, property, auditEvents, nil
 }
 

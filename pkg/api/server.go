@@ -27,6 +27,8 @@ import (
 const (
 	maxSolutionsBodySize  = 256 * 1024
 	VerifyBatchSize       = 100
+	FormBatchSize         = 100
+	maxFormBatchSize      = 10_000
 	PropertyBucketSize    = 5 * time.Minute
 	updateLimitsBatchSize = 100
 	maxVerifyBatchSize    = 100_000
@@ -159,34 +161,35 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 	return apiKey.UserID.Int32, orgID, nil
 }
 
-func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay, backpressureTimeout time.Duration) error {
+type ServerConfig struct {
+	VerifyFlushInterval time.Duration
+	AuthBackfillDelay   time.Duration
+	FormFlushInterval   time.Duration
+	BackpressureTimeout time.Duration
+}
+
+func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	s.APIHeaders = make(map[string][]string)
-	if s.FormSubmissionChan == nil {
-		s.FormSubmissionChan = make(chan *FormSubmission, 1000)
-	}
-	if s.FormSubmitCancel == nil {
-		s.FormSubmitCancel = func() {}
-	}
 
 	if err := s.Verifier.Update(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update puzzle verifier", common.ErrAttr(err))
 		return err
 	}
 
-	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, backpressureTimeout)
-	s.Auth.StartBackfill(authBackfillDelay, backpressureTimeout)
+	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, config.BackpressureTimeout)
+	s.Auth.StartBackfill(config.AuthBackfillDelay, config.BackpressureTimeout)
 	s.RegisterTaskHandlers(ctx)
 
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(context.WithValue(baseVerifyCtx, common.TraceIDContextKey, "flush_verify_log"))
 
-	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, verifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
 
 	baseFormCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormCtx context.Context
 	cancelFormCtx, s.FormSubmitCancel = context.WithCancel(context.WithValue(baseFormCtx, common.TraceIDContextKey, "submit_forms"))
-	go common.ProcessBatchArray(cancelFormCtx, s.FormSubmissionChan, min(verifyFlushInterval, 100*time.Millisecond), VerifyBatchSize, maxVerifyBatchSize, s.SubmitFormBatch)
+	go common.ProcessBatchArray(cancelFormCtx, s.FormSubmissionChan, config.FormFlushInterval, FormBatchSize, maxFormBatchSize, s.submitFormBatch)
 
 	return nil
 }

@@ -12,26 +12,32 @@ import (
 )
 
 const createForm = `-- name: CreateForm :one
-INSERT INTO backend.forms (url, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, external_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
+INSERT INTO backend.forms (url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
 `
 
 type CreateFormParams struct {
-	URL               string     `db:"url" json:"url"`
-	PropertyID        int32      `db:"property_id" json:"property_id"`
-	Fields            []byte     `db:"fields" json:"fields"`
-	Enabled           bool       `db:"enabled" json:"enabled"`
-	RequestsPerSecond float64    `db:"requests_per_second" json:"requests_per_second"`
-	RequestsBurst     int32      `db:"requests_burst" json:"requests_burst"`
-	RetryRequestCount int32      `db:"retry_request_count" json:"retry_request_count"`
-	Method            FormMethod `db:"method" json:"method"`
+	URL               string      `db:"url" json:"url"`
+	PropertyID        int32       `db:"property_id" json:"property_id"`
+	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
+	OrgOwnerID        pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
+	Fields            []byte      `db:"fields" json:"fields"`
+	Enabled           bool        `db:"enabled" json:"enabled"`
+	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
+	RequestsBurst     int32       `db:"requests_burst" json:"requests_burst"`
+	RetryRequestCount int32       `db:"retry_request_count" json:"retry_request_count"`
+	Method            FormMethod  `db:"method" json:"method"`
 }
 
 func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form, error) {
 	row := q.db.QueryRow(ctx, createForm,
 		arg.URL,
 		arg.PropertyID,
+		arg.OrgID,
+		arg.OrgOwnerID,
+		arg.CreatorID,
 		arg.Fields,
 		arg.Enabled,
 		arg.RequestsPerSecond,
@@ -43,6 +49,9 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
 		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -59,7 +68,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 }
 
 const getFormByExternalID = `-- name: GetFormByExternalID :one
-SELECT id, external_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = $1 AND deleted_at IS NULL
+SELECT id, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*Form, error) {
@@ -68,6 +77,9 @@ func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUI
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
 		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -84,7 +96,7 @@ func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUI
 }
 
 const getFormByPropertyID = `-- name: GetFormByPropertyID :one
-SELECT id, external_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE property_id = $1 AND deleted_at IS NULL
+SELECT id, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE property_id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
@@ -93,6 +105,9 @@ func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*F
 	err := row.Scan(
 		&i.ID,
 		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
 		&i.URL,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -109,7 +124,7 @@ func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*F
 }
 
 const getFormsByExternalID = `-- name: GetFormsByExternalID :many
-SELECT id, external_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[]) AND deleted_at IS NULL
+SELECT id, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[]) AND deleted_at IS NULL
 `
 
 func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error) {
@@ -124,6 +139,9 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 		if err := rows.Scan(
 			&i.ID,
 			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
 			&i.URL,
 			&i.CreatedAt,
 			&i.UpdatedAt,

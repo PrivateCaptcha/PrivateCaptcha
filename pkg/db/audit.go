@@ -346,6 +346,9 @@ type AuditLogProperty struct {
 
 type AuditLogForm struct {
 	URL               string  `json:"url,omitempty"`
+	OrgID             int32   `json:"org_id,omitempty"`
+	OrgOwnerID        int32   `json:"org_owner_id,omitempty"`
+	OrgName           string  `json:"org_name,omitempty"`
 	PropertyID        int32   `json:"property_id,omitempty"`
 	Enabled           bool    `json:"enabled"`
 	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
@@ -354,13 +357,15 @@ type AuditLogForm struct {
 	Method            string  `json:"method,omitempty"`
 }
 
-func newAuditLogForm(form *dbgen.Form) *AuditLogForm {
+func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
 	if form == nil {
 		return nil
 	}
 
-	return &AuditLogForm{
+	event := &AuditLogForm{
 		URL:               form.URL,
+		OrgID:             form.OrgID.Int32,
+		OrgOwnerID:        form.OrgOwnerID.Int32,
 		PropertyID:        form.PropertyID,
 		Enabled:           form.Enabled,
 		RequestsPerSecond: form.RequestsPerSecond,
@@ -368,6 +373,12 @@ func newAuditLogForm(form *dbgen.Form) *AuditLogForm {
 		RetryRequestCount: form.RetryRequestCount,
 		Method:            string(form.Method),
 	}
+
+	if org != nil {
+		event.OrgName = org.Name
+	}
+
+	return event
 }
 
 func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *AuditLogProperty {
@@ -433,14 +444,14 @@ func newCreatePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organiz
 	}
 }
 
-func newCreateFormAuditLogEvent(form *dbgen.Form, property *dbgen.Property) *common.AuditLogEvent {
+func newCreateFormAuditLogEvent(form *dbgen.Form, org *dbgen.Organization) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
-		UserID:    property.CreatorID.Int32,
+		UserID:    form.CreatorID.Int32,
 		Action:    common.AuditLogActionCreate,
 		EntityID:  int64(form.ID),
 		TableName: TableNameForms,
 		OldValue:  nil,
-		NewValue:  newAuditLogForm(form),
+		NewValue:  newAuditLogForm(form, org),
 	}
 }
 

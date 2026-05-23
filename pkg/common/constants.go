@@ -91,4 +91,5 @@ var (
 	HeaderCacheControl        = http.CanonicalHeaderKey("Cache-Control")
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
 	HeaderOrigin              = http.CanonicalHeaderKey("Origin")
+	HeaderUserAgent           = http.CanonicalHeaderKey("User-Agent")
 )

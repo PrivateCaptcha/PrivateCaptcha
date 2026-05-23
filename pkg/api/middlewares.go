@@ -681,9 +681,9 @@ func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 			}
 
 			ctx = context.WithValue(ctx, common.FormContextKey, form)
-		} else {
-			ctx = context.WithValue(ctx, common.FormGUIDContextKey, guid)
 		}
+
+		ctx = context.WithValue(ctx, common.FormIDContextKey, guid)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

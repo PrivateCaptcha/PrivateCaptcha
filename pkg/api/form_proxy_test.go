@@ -176,13 +176,13 @@ func TestFormProxySubmitsForm(t *testing.T) {
 	}
 
 	for i := 0; i < 5; i++ {
+		time.Sleep(formFlushInterval / 2)
 		mu.Lock()
 		called := received.Get("email") != ""
 		mu.Unlock()
 		if called {
 			break
 		}
-		time.Sleep(200 * time.Millisecond)
 	}
 
 	mu.Lock()

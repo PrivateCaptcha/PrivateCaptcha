@@ -72,8 +72,8 @@ RETURNING *;
 -- name: SoftDeleteProperties :many
 UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
 WHERE p.id = ANY($1::INT[])
-  AND (creator_id = $2 OR org_owner_id = $2)
-  AND (org_id = $3 OR $3 IS NULL)
+  AND (p.creator_id = $2 OR p.org_owner_id = $2)
+  AND (p.org_id = $3 OR $3 IS NULL)
   AND deleted_at IS NULL
   AND enabled = TRUE
   AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)

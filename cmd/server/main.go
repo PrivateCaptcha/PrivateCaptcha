@@ -191,6 +191,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		RateLimiter:        ipRateLimiter,
 		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
+		FormSubmissionChan: make(chan *api.FormSubmission, 10*api.FormBatchSize),
 		Verifier:           puzzleVerifier,
 		Metrics:            metrics,
 		Mailer:             mailer,
@@ -202,7 +203,13 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		NoticeProvider:     noticeProvider,
 	}
-	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
+	apiServerCfg := api.ServerConfig{
+		VerifyFlushInterval: 10 * time.Second,
+		AuthBackfillDelay:   1 * time.Second,
+		FormFlushInterval:   50 * time.Millisecond,
+		BackpressureTimeout: 5 * time.Second,
+	}
+	if err := apiServer.Init(ctx, apiServerCfg); err != nil {
 		return err
 	}
 

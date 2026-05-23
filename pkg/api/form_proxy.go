@@ -3,11 +3,11 @@ package api
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"log/slog"
 	"mime"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -24,12 +24,14 @@ const (
 )
 
 type FormSubmission struct {
-	FormExternalID string
-	Values         url.Values
-	UserAgent      string
-	Referer        string
-	ClientIP       string
-	TraceID        string
+	FormExternalID  string
+	Values          url.Values
+	UserAgent       string
+	Referer         string
+	ClientIP        string
+	TraceID         string
+	CaptchaSolution puzzle.SolutionPayload
+	Time            time.Time
 }
 
 func (s *Server) formPreFlight(w http.ResponseWriter, r *http.Request) {
@@ -44,31 +46,15 @@ type formOwnerSource struct {
 var _ puzzle.OwnerIDSource = (*formOwnerSource)(nil)
 
 func (s *formOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32, *int32, error) {
-	properties, err := s.Store.Impl().RetrievePropertiesByID(ctx, map[int32]uint{s.Form.PropertyID: 1})
-	if err != nil {
-		return -1, nil, err
-	}
-	if len(properties) == 0 {
-		return -1, nil, db.ErrRecordNotFound
-	}
+	orgID := new(int32)
+	*orgID = s.Form.OrgID.Int32
 
-	property := properties[0]
-	if !property.Enabled {
-		return -1, nil, db.ErrDisabled
-	}
-
-	var orgID *int32
-	if property.OrgID.Valid {
-		orgID = new(int32)
-		*orgID = property.OrgID.Int32
-	}
-
-	return property.OrgOwnerID.Int32, orgID, nil
+	return s.Form.OrgOwnerID.Int32, orgID, nil
 }
 
 func captchaSolution(values url.Values) string {
-	for _, field := range []string{common.ParamPrivateCaptchaSolution, common.ParamRecaptchaResponse, common.ParamResponse, common.ParamPortalSolution} {
-		if value := values.Get(field); value != "" {
+	for _, field := range []string{common.ParamPrivateCaptchaSolution, common.ParamRecaptchaResponse} {
+		if value := values.Get(field); len(value) > 0 {
 			return value
 		}
 	}
@@ -79,7 +65,7 @@ func sanitizedFormValues(values url.Values) url.Values {
 	result := make(url.Values, len(values))
 	for key, fieldValues := range values {
 		switch key {
-		case common.ParamPrivateCaptchaSolution, common.ParamRecaptchaResponse, common.ParamResponse, common.ParamPortalSolution:
+		case common.ParamPrivateCaptchaSolution, common.ParamRecaptchaResponse:
 			continue
 		}
 		result[key] = append([]string(nil), fieldValues...)
@@ -87,53 +73,49 @@ func sanitizedFormValues(values url.Values) url.Values {
 	return result
 }
 
-func (s *Server) retrieveForm(ctx context.Context, guid string) (*dbgen.Form, error) {
-	if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
-		return form, nil
+func (s *Server) createFormSubmission(ctx context.Context, r *http.Request, payload puzzle.SolutionPayload) *FormSubmission {
+	submission := &FormSubmission{
+		UserAgent:       r.UserAgent(),
+		Referer:         r.Header.Get(common.HeaderReferer),
+		CaptchaSolution: payload,
+		Time:            time.Now().UTC(),
 	}
-	return s.BusinessDB.Impl().RetrieveFormByExternalID(ctx, guid)
+
+	submission.Values = sanitizedFormValues(r.PostForm)
+
+	if submission.FormExternalID, _ = ctx.Value(common.FormIDContextKey).(string); len(submission.FormExternalID) == 0 {
+		submission.FormExternalID = r.PathValue(common.ParamForm)
+	}
+
+	if clientIP, ok := ctx.Value(common.RateLimitKeyContextKey).(netip.Addr); ok {
+		submission.ClientIP = clientIP.String()
+	}
+
+	if traceID, ok := ctx.Value(common.TraceIDContextKey).(string); ok {
+		submission.TraceID = traceID
+	}
+
+	return submission
 }
 
 func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	guid, _ := ctx.Value(common.FormGUIDContextKey).(string)
-	if guid == "" {
-		guid = r.PathValue(common.ParamForm)
-	}
-	if !db.CanBeValidSitekey(guid) {
-		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		return
-	}
 
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get(common.HeaderContentType))
-	if err != nil || mediaType != common.ContentTypeURLEncoded {
+	if (err != nil) || (mediaType != common.ContentTypeURLEncoded) {
 		http.Error(w, http.StatusText(http.StatusUnsupportedMediaType), http.StatusUnsupportedMediaType)
 		return
 	}
 
-	form, err := s.retrieveForm(ctx, guid)
-	if err != nil {
-		if errors.Is(err, db.ErrInvalidInput) {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-		} else {
-			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		}
-		return
-	}
-	if !form.Enabled {
-		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		return
-	}
-	guid = db.UUIDToString(form.ExternalID)
-
 	if err := r.ParseForm(); err != nil {
-		slog.ErrorContext(ctx, "Failed to read form proxy request", common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to read form proxy request", common.ErrAttr(err))
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 
 	solution := captchaSolution(r.PostForm)
-	if solution == "" {
+	if len(solution) == 0 {
+		slog.WarnContext(ctx, "Failed to find captcha solution in submission")
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
@@ -144,30 +126,26 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := s.Verifier.Verify(ctx, payload, &formOwnerSource{Store: s.BusinessDB, Form: form}, time.Now().UTC())
-	if err != nil {
-		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		return
-	}
-	if !result.Valid() || result.PropertyID != form.PropertyID {
-		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-		return
+	// if form is cached, we verify captcha on the hot path
+	if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
+		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
+		result, err := s.Verifier.Verify(ctx, payload, ownerSource, time.Now().UTC())
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+
+		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
+			http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+			return
+		}
+
+		s.addVerifyRecord(ctx, result)
+		payload = nil
 	}
 
-	s.addVerifyRecord(ctx, result)
-
-	submission := &FormSubmission{
-		FormExternalID: guid,
-		Values:         sanitizedFormValues(r.PostForm),
-		UserAgent:      r.UserAgent(),
-		Referer:        r.Header.Get(common.HeaderReferer),
-	}
-	if clientIP, ok := ctx.Value(common.RateLimitKeyContextKey).(string); ok {
-		submission.ClientIP = clientIP
-	}
-	if traceID, ok := ctx.Value(common.TraceIDContextKey).(string); ok {
-		submission.TraceID = traceID
-	}
+	submission := s.createFormSubmission(ctx, r, payload)
 
 	timer := time.NewTimer(formQueueBackpressureTimeout)
 	defer timer.Stop()
@@ -183,10 +161,12 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) SubmitFormBatch(ctx context.Context, batch []*FormSubmission) error {
+func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) error {
 	if len(batch) == 0 {
 		return nil
 	}
+
+	slog.DebugContext(ctx, "About to submit forms batch", "count", len(batch))
 
 	formIDs := make(map[string]uint, len(batch))
 	for _, submission := range batch {
@@ -206,20 +186,43 @@ func (s *Server) SubmitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		}
 	}
 
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
 	for _, submission := range batch {
-		form := formsByID[submission.FormExternalID]
-		if form == nil {
+		form, found := formsByID[submission.FormExternalID]
+		if !found || (form == nil) {
+			slog.ErrorContext(ctx, "Failed to find matching form for submission", "formID", submission.FormExternalID)
 			continue
 		}
-		s.submitForm(ctx, form, submission)
+
+		// delayed captcha check if original form was not cached at the time of request
+		if submission.CaptchaSolution != nil {
+			ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
+			result, err := s.Verifier.Verify(ctx, submission.CaptchaSolution, ownerSource, submission.Time)
+			if err != nil {
+				slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
+				continue
+			}
+
+			if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
+				slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
+				continue
+			}
+
+			s.addVerifyRecord(ctx, result)
+		}
+
+		s.submitForm(ctx, client, form, submission)
 	}
 
 	return nil
 }
 
-func (s *Server) submitForm(ctx context.Context, form *dbgen.Form, submission *FormSubmission) {
+func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) {
 	method := strings.ToUpper(string(form.Method))
-	if method == "" {
+	if len(method) == 0 {
 		method = http.MethodPost
 	}
 
@@ -233,20 +236,25 @@ func (s *Server) submitForm(ctx context.Context, form *dbgen.Form, submission *F
 		}
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-		if submission.UserAgent != "" {
-			req.Header.Set("User-Agent", submission.UserAgent)
+		if len(submission.UserAgent) > 0 {
+			req.Header.Set(common.HeaderUserAgent, submission.UserAgent)
+		} else {
+			req.Header.Set(common.HeaderUserAgent, "private-captcha/1.0")
 		}
-		if submission.Referer != "" {
+
+		if len(submission.Referer) > 0 {
 			req.Header.Set(common.HeaderReferer, submission.Referer)
 		}
-		if submission.ClientIP != "" {
+
+		if len(submission.ClientIP) > 0 {
 			req.Header.Set(common.HeaderClientIP, submission.ClientIP)
 		}
-		if submission.TraceID != "" {
+
+		if len(submission.TraceID) > 0 {
 			req.Header.Set(common.HeaderTraceID, submission.TraceID)
 		}
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "attempt", attempt+1, common.ErrAttr(err))
 			continue
@@ -254,9 +262,10 @@ func (s *Server) submitForm(ctx context.Context, form *dbgen.Form, submission *F
 		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 
-		if resp.StatusCode >= http.StatusOK && resp.StatusCode < http.StatusMultipleChoices {
+		if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
 			return
 		}
+
 		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
 }
