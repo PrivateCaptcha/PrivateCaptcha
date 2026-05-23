@@ -488,8 +488,9 @@ func (q *Queries) GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.
 }
 
 const moveProperty = `-- name: MoveProperty :one
-UPDATE backend.properties SET org_id = $2, org_owner_id = $3, updated_at = NOW()
-WHERE id = $1
+UPDATE backend.properties p SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE p.id = $1
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
 `
 
@@ -527,7 +528,14 @@ func (q *Queries) MoveProperty(ctx context.Context, arg *MovePropertyParams) (*P
 }
 
 const softDeleteProperties = `-- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL AND enabled = TRUE RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = ANY($1::INT[])
+  AND (creator_id = $2 OR org_owner_id = $2)
+  AND (org_id = $3 OR $3 IS NULL)
+  AND deleted_at IS NULL
+  AND enabled = TRUE
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
 `
 
 type SoftDeletePropertiesParams struct {
@@ -577,7 +585,10 @@ func (q *Queries) SoftDeleteProperties(ctx context.Context, arg *SoftDeletePrope
 }
 
 const softDeleteProperty = `-- name: SoftDeleteProperty :one
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = $1
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
 `
 
 func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, error) {

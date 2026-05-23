@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -95,6 +97,64 @@ func TestSoftDeleteProperty(t *testing.T) {
 	idx = slices.IndexFunc(orgProperties, func(p *dbgen.Property) bool { return p.ID == prop.ID })
 	if idx != -1 {
 		t.Errorf("Soft-deleted property found in organization properties")
+	}
+}
+
+func TestBusinessStoreImplFormPropertyRestrictions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create new account: %v", err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "form-restrictions.example.com"), &dbgen.CreateFormParams{
+		Url:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org1)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	if _, err := store.Impl().SoftDeleteProperty(ctx, property, org1, user); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected single soft delete to reject form-owned property with no rows, got %v", err)
+	}
+
+	deletedIDs, _, err := store.Impl().SoftDeleteProperties(ctx, []int32{property.ID}, user, org1)
+	if err != nil {
+		t.Fatalf("expected bulk soft delete to return no result without error, got %v", err)
+	}
+	if _, deleted := deletedIDs[property.ID]; deleted {
+		t.Fatalf("expected bulk soft delete not to delete form-owned property")
+	}
+
+	if _, _, err := store.Impl().MoveProperty(ctx, user, property, &dbgen.GetUserOrganizationsRow{Organization: *org2, Level: dbgen.AccessLevelOwner}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("expected move to reject form-owned property with no rows, got %v", err)
+	}
+
+	if err := store.Impl().DeleteProperties(ctx, []int32{property.ID}); err != nil {
+		t.Fatalf("expected hard delete to succeed, got %v", err)
+	}
+
+	var formCount int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.forms WHERE id = $1", form.ID).Scan(&formCount); err != nil {
+		t.Fatalf("failed to verify form cascade: %v", err)
+	}
+	if formCount != 0 {
+		t.Fatalf("expected hard delete to cascade form row, got count %d", formCount)
 	}
 }
 
