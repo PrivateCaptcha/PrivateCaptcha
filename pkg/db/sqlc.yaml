@@ -32,6 +32,12 @@ sql:
           backend_difficulty_growth: DifficultyGrowth
           backend_property: Property
           backend_cache: Cache
+          backend_form: Form
+          backend_form_method: FormMethod
+          backend_form_method_post: FormMethodPost
+          backend_form_method_put: FormMethodPut
+          backend_form_method_delete: FormMethodDelete
+          backend_form_method_patch: FormMethodPatch
           backend_lock: Lock
           backend_difficulty_growth_constant: DifficultyGrowthConstant
           backend_difficulty_growth_slow: DifficultyGrowthSlow

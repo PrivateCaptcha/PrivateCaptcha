@@ -29,6 +29,14 @@ type createPropertyQuerierStub struct {
 	property *dbgen.Property
 }
 
+type createFormQuerierStub struct {
+	*QuerierStub
+	property       *dbgen.Property
+	form           *dbgen.Form
+	createdFormArg *dbgen.CreateFormParams
+	calls          []string
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -39,6 +47,17 @@ func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error      
 
 func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
 	return s.property, s.Error
+}
+
+func (s *createFormQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
+	s.calls = append(s.calls, "CreateProperty")
+	return s.property, s.Error
+}
+
+func (s *createFormQuerierStub) CreateForm(ctx context.Context, arg *dbgen.CreateFormParams) (*dbgen.Form, error) {
+	s.calls = append(s.calls, "CreateForm")
+	s.createdFormArg = arg
+	return s.form, s.Error
 }
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
@@ -323,6 +342,25 @@ func TestBusinessStoreImplRetrievePropertiesByID(t *testing.T) {
 	})
 }
 
+func TestBusinessStoreImplRetrieveFormsByExternalID(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, err := store.RetrieveFormsByExternalID(context.Background(), map[string]uint{TestPropertySitekey: 1}, 1)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, err := store.RetrieveFormsByExternalID(context.Background(), map[string]uint{TestPropertySitekey: 1}, 1)
+		if !errors.Is(err, expectedErr) {
+			t.Errorf("expected expectedErr, got %v", err)
+		}
+	})
+}
+
 func TestBusinessStoreImplGetCachedAPIKey(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
@@ -584,6 +622,81 @@ func TestBusinessStoreImplCreateNewProperty(t *testing.T) {
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
 		_, _, err := store.CreateNewProperty(context.Background(), &dbgen.CreatePropertyParams{}, &dbgen.Organization{})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplCreateNewForm(t *testing.T) {
+	t.Run("CreatesPropertyBeforeForm", func(t *testing.T) {
+		property := &dbgen.Property{
+			ID:         123,
+			Name:       "form property",
+			CreatorID:  Int(12),
+			OrgID:      Int(1),
+			OrgOwnerID: Int(99),
+		}
+		form := &dbgen.Form{
+			ID:         456,
+			ExternalID: TestPropertyUUID,
+			Url:        "https://example.com/submit",
+			PropertyID: property.ID,
+			Enabled:    true,
+			Method:     dbgen.FormMethodPost,
+		}
+		querier := &createFormQuerierStub{
+			QuerierStub: &QuerierStub{},
+			property:    property,
+			form:        form,
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		createdForm, createdProperty, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
+			Name:      "form property",
+			CreatorID: Int(12),
+			Domain:    "example.com",
+		}, &dbgen.CreateFormParams{
+			Url:               "https://example.com/submit",
+			Fields:            []byte(`{"email":"text"}`),
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 2,
+			Method:            dbgen.FormMethodPost,
+		}, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		if err != nil {
+			t.Fatalf("expected form creation to succeed, got %v", err)
+		}
+		if createdProperty != property {
+			t.Fatalf("expected created property to be returned")
+		}
+		if createdForm != form {
+			t.Fatalf("expected created form to be returned")
+		}
+		if len(querier.calls) != 2 || querier.calls[0] != "CreateProperty" || querier.calls[1] != "CreateForm" {
+			t.Fatalf("expected property to be created before form, got %v", querier.calls)
+		}
+		if querier.createdFormArg == nil || querier.createdFormArg.PropertyID != property.ID {
+			t.Fatalf("expected created form property ID to be %d, got %#v", property.ID, querier.createdFormArg)
+		}
+		cachedForm, needsRefresh, err := store.GetCachedFormByExternalID(context.Background(), TestPropertySitekey)
+		if err != nil {
+			t.Fatalf("expected cached form, got %v", err)
+		}
+		if needsRefresh {
+			t.Fatalf("expected cached form not to need refresh")
+		}
+		if cachedForm != form {
+			t.Fatalf("expected cached form to match created form")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{Name: "valid"}, &dbgen.CreateFormParams{}, &dbgen.Organization{})
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}

@@ -31,6 +31,9 @@ func (s *QuerierStub) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCach
 func (s *QuerierStub) CreateDifficultyRule(ctx context.Context, arg *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) CreateForm(ctx context.Context, arg *dbgen.CreateFormParams) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) CreateNotificationTemplate(ctx context.Context, arg *dbgen.CreateNotificationTemplateParams) (*dbgen.NotificationTemplate, error) {
 	return nil, s.Error
 }
@@ -122,6 +125,15 @@ func (s *QuerierStub) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 [
 	return nil, s.Error
 }
 func (s *QuerierStub) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*dbgen.DifficultyRule, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*dbgen.Form, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetLastActiveSystemNotification(ctx context.Context, arg *dbgen.GetLastActiveSystemNotificationParams) (*dbgen.SystemNotification, error) {

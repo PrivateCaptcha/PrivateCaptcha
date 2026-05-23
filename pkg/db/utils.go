@@ -258,6 +258,15 @@ func stringKeySitekeyUUID(key string) (pgtype.UUID, error) {
 	return result, nil
 }
 
+func stringKeyUUID(key string) (pgtype.UUID, error) {
+	result := UUIDFromString(key)
+	if !result.Valid {
+		return result, ErrInvalidInput
+	}
+
+	return result, nil
+}
+
 func sessionIDFunc(sid string) (string, error) {
 	return sessionCachePrefix + sid, nil
 }
@@ -272,6 +281,10 @@ func propertySitekeyFunc(p *dbgen.Property) string {
 
 func propertyIDFunc(p *dbgen.Property) int32 {
 	return p.ID
+}
+
+func formExternalIDFunc(f *dbgen.Form) string {
+	return UUIDToString(f.ExternalID)
 }
 
 func QueryKeyPgInt(key CacheKey) (pgtype.Int4, error) {

@@ -581,6 +581,83 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 	return result, nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveFormByExternalID(ctx context.Context, externalID string) (*dbgen.Form, error) {
+	reader := &StoreOneReader[pgtype.UUID, dbgen.Form]{
+		CacheKey:    FormByExternalIDCacheKey(externalID),
+		Cache:       impl.cache,
+		DropInvalid: true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetFormByExternalID
+		reader.QueryKeyFunc = queryKeyStringUUID
+	}
+
+	form, err := reader.Read(ctx)
+	if err == nil {
+		impl.cacheForm(ctx, form)
+	}
+	return form, err
+}
+
+func (impl *BusinessStoreImpl) RetrieveFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
+	reader := &StoreOneReader[int32, dbgen.Form]{
+		CacheKey:    FormByPropertyIDCacheKey(propertyID),
+		Cache:       impl.cache,
+		DropInvalid: true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetFormByPropertyID
+		reader.QueryKeyFunc = QueryKeyInt
+	}
+
+	form, err := reader.Read(ctx)
+	if err == nil {
+		impl.cacheForm(ctx, form)
+	}
+	return form, err
+}
+
+func (impl *BusinessStoreImpl) RetrieveFormsByExternalID(ctx context.Context, externalIDs map[string]uint, minMissingCount uint) ([]*dbgen.Form, error) {
+	reader := &StoreBulkReader[string, pgtype.UUID, dbgen.Form]{
+		ArgFunc:         formExternalIDFunc,
+		Cache:           impl.cache,
+		CacheKeyFunc:    FormByExternalIDCacheKey,
+		QueryKeyFunc:    stringKeyUUID,
+		MinMissingCount: minMissingCount,
+		DropInvalid:     true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetFormsByExternalID
+	}
+
+	cached, items, err := reader.Read(ctx, externalIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range items {
+		impl.cacheForm(ctx, item)
+	}
+
+	result := cached
+	result = append(result, items...)
+	return result, nil
+}
+
+func (impl *BusinessStoreImpl) GetCachedFormByExternalID(ctx context.Context, externalID string) (*dbgen.Form, bool, error) {
+	reader := &CachedRefreshReader[string, dbgen.Form]{
+		Key:          externalID,
+		Cache:        impl.cache,
+		CacheKeyFunc: FormByExternalIDCacheKey,
+		DropInvalid:  true,
+	}
+
+	return reader.Read(ctx)
+}
+
 func (impl *BusinessStoreImpl) GetCachedAPIKey(ctx context.Context, secret string) (*dbgen.APIKey, error) {
 	cacheKey := APIKeyCacheKey(secret)
 
@@ -794,6 +871,17 @@ func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 	_ = impl.cache.SetWithTTL(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
 }
 
+func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) {
+	if form == nil {
+		return
+	}
+
+	_ = impl.cache.Set(ctx, FormByPropertyIDCacheKey(form.PropertyID), form)
+	if externalID := UUIDToString(form.ExternalID); externalID != "" {
+		_ = impl.cache.SetWithTTL(ctx, FormByExternalIDCacheKey(externalID), form, propertyTTL)
+	}
+}
+
 func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
@@ -958,6 +1046,33 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 	auditEvent := newCreatePropertyAuditLogEvent(property, org)
 
 	return property, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams *dbgen.CreatePropertyParams, formParams *dbgen.CreateFormParams, org *dbgen.Organization) (*dbgen.Form, *dbgen.Property, *common.AuditLogEvent, error) {
+	if (formParams == nil) || (len(formParams.Url) == 0) {
+		return nil, nil, nil, ErrInvalidInput
+	}
+
+	property, auditEvent, err := impl.CreateNewProperty(ctx, propertyParams, org)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	formParams.PropertyID = property.ID
+	if formParams.Method == "" {
+		formParams.Method = dbgen.FormMethodPost
+	}
+
+	form, err := impl.querier.CreateForm(ctx, formParams)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create form in DB", "propertyID", property.ID, common.ErrAttr(err))
+		return nil, nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Created new form", "id", form.ID, "propertyID", form.PropertyID)
+	impl.cacheForm(ctx, form)
+
+	return form, property, auditEvent, nil
 }
 
 func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
