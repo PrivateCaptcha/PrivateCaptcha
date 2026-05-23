@@ -5,6 +5,7 @@ const (
 	EchoPuzzleEndpoint    = "echopuzzle"
 	SiteVerifyEndpoint    = "siteverify"
 	VerifyEndpoint        = "verify"
+	FormEndpoint          = "form"
 	LoginEndpoint         = "login"
 	TwoFactorEndpoint     = "2fa"
 	ResendEndpoint        = "resend"

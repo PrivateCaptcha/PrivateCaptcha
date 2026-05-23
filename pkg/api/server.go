@@ -82,6 +82,7 @@ type Server struct {
 	Auth               *AuthMiddleware
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
+	FormSubmissionChan chan *FormSubmission
 	Cors               *cors.Cors
 	Metrics            common.APIMetrics
 	Mailer             common.Mailer
@@ -159,6 +160,9 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 
 func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay, backpressureTimeout time.Duration) error {
 	s.APIHeaders = make(map[string][]string)
+	if s.FormSubmissionChan == nil {
+		s.FormSubmissionChan = make(chan *FormSubmission, 1000)
+	}
 
 	if err := s.Verifier.Update(ctx); err != nil {
 		slog.ErrorContext(ctx, "Failed to update puzzle verifier", common.ErrAttr(err))
@@ -243,6 +247,10 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	rg.Handle(rg.Post(common.SiteVerifyEndpoint), verifyChain, http.MaxBytesHandler(formAPIAuth(http.HandlerFunc(s.recaptchaVerifyHandler)), maxSolutionsBodySize))
 	// Private Captcha format
 	rg.Handle(rg.Post(common.VerifyEndpoint), verifyChain.Append(s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)), http.MaxBytesHandler(http.HandlerFunc(s.pcVerifyHandler), maxSolutionsBodySize))
+
+	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
+	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
+	rg.Handle(rg.Post(common.FormEndpoint, "{guid}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
