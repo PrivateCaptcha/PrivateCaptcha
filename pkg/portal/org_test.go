@@ -2810,7 +2810,11 @@ func TestGetOrgFormsPaginationEndpoint(t *testing.T) {
 	for i := range propertiesPerPage + 1 {
 		form, _, _, err := store.Impl().CreateNewForm(ctx,
 			db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("forms-page-%d.example.com", i)),
-			&dbgen.CreateFormParams{Name: t.Name(), URL: fmt.Sprintf("https://hooks.example.com/forms/%d", i), Fields: []byte(`{}`), Enabled: true},
+			&dbgen.CreateFormParams{
+				Name:    fmt.Sprintf("%s-%d", t.Name(), i),
+				URL:     fmt.Sprintf("https://hooks.example.com/forms/%d", i),
+				Fields:  []byte(`{}`),
+				Enabled: true},
 			org,
 		)
 		if err != nil {

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -84,22 +83,4 @@ func formsToUserForms(ctx context.Context, forms []*dbgen.Form, hasher common.Id
 	}
 
 	return result
-}
-
-func propertiesByIDBatch(forms []*dbgen.Form) map[int32]uint {
-	result := make(map[int32]uint, len(forms))
-	for _, form := range forms {
-		if form != nil {
-			result[form.PropertyID]++
-		}
-	}
-	return result
-}
-
-func retrieveFormsProperties(ctx context.Context, impl *db.BusinessStoreImpl, forms []*dbgen.Form) ([]*dbgen.Property, error) {
-	if len(forms) == 0 {
-		return []*dbgen.Property{}, nil
-	}
-
-	return impl.RetrievePropertiesByID(ctx, propertiesByIDBatch(forms))
 }
