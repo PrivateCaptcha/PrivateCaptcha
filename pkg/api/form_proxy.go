@@ -3,9 +3,11 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -23,6 +25,11 @@ const (
 	maxFormBodySize              = 1024 * 1024
 	formQueueBackpressureTimeout = 400 * time.Millisecond
 )
+
+var formOutboundDialer = &net.Dialer{
+	Timeout:   30 * time.Second,
+	KeepAlive: 30 * time.Second,
+}
 
 type FormSubmission struct {
 	FormExternalID  string
@@ -196,9 +203,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		}
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
+	client := s.newFormHTTPClient()
 
 	for _, submission := range batch {
 		form, found := formsByID[submission.FormExternalID]
@@ -230,6 +235,72 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 	return nil
 }
 
+func (s *Server) newFormHTTPClient() *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = s.formDialContext
+
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if s.FormURLVerifier == nil {
+				return nil
+			}
+			if err := s.FormURLVerifier.VerifyFormURL(req.Context(), req.URL.String()); err != nil {
+				return fmt.Errorf("unsafe form redirect: %w", err)
+			}
+			return nil
+		},
+	}
+}
+
+func (s *Server) formDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	verifier, ok := s.FormURLVerifier.(resolvedFormURLAddressVerifier)
+	if !ok {
+		return formOutboundDialer.DialContext(ctx, network, address)
+	}
+
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	host = normalizeFormURLHostname(host)
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if err := verifier.VerifyResolvedFormURLAddress(ctx, host, ip); err != nil {
+			return nil, err
+		}
+		return formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+	}
+
+	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("form dial hostname resolved no addresses: %s", host)
+	}
+
+	var lastErr error
+	for _, address := range addresses {
+		ip, ok := netip.AddrFromSlice(address.IP)
+		if !ok {
+			return nil, fmt.Errorf("form dial resolved invalid address: %s", address.IP.String())
+		}
+		if err := verifier.VerifyResolvedFormURLAddress(ctx, host, ip); err != nil {
+			return nil, err
+		}
+
+		conn, err := formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(ip.Unmap().String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+
+	return nil, lastErr
+}
+
 func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) {
 	method := strings.ToUpper(string(form.Method))
 	if len(method) == 0 {
@@ -253,6 +324,13 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 				slog.WarnContext(ctx, "Job context cancelled while submitting form", common.ErrAttr(ctx.Err()))
 				return
 			case <-time.After(b.Duration()):
+			}
+		}
+
+		if s.FormURLVerifier != nil {
+			if err := s.FormURLVerifier.VerifyFormURL(ctx, form.URL); err != nil {
+				slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", form.ID, common.ErrAttr(err))
+				return
 			}
 		}
 

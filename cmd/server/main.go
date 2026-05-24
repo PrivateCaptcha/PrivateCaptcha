@@ -159,7 +159,8 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	if err != nil {
 		return err
 	}
-	businessDB.SetFormURLVerifier(api.NewPublicFormURLVerifier(verifiedFormURLHosts))
+	formURLVerifier := api.NewPublicFormURLVerifier(verifiedFormURLHosts)
+	businessDB.SetFormURLVerifier(formURLVerifier)
 	timeSeriesDB := db.NewTimeSeries(clickhouse, businessDB.Cache)
 
 	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey))
@@ -198,6 +199,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		FormSubmissionChan: make(chan *api.FormSubmission, 10*api.FormBatchSize),
 		Verifier:           puzzleVerifier,
+		FormURLVerifier:    formURLVerifier,
 		Metrics:            metrics,
 		Mailer:             mailer,
 		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),

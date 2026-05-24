@@ -20,6 +20,10 @@ type formURLResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
+type resolvedFormURLAddressVerifier interface {
+	VerifyResolvedFormURLAddress(ctx context.Context, host string, ip netip.Addr) error
+}
+
 type PublicFormURLVerifier struct {
 	VerifiedHosts common.Cache[string, bool]
 	Resolver      formURLResolver
@@ -97,6 +101,20 @@ func (v *PublicFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string
 		}
 	}
 
+	return nil
+}
+
+func (v *PublicFormURLVerifier) VerifyResolvedFormURLAddress(ctx context.Context, host string, ip netip.Addr) error {
+	host = normalizeFormURLHostname(host)
+	if len(host) == 0 {
+		return fmt.Errorf("%w: missing hostname", errUnsafeFormURL)
+	}
+	if isBlockedFormURLHostname(host) {
+		return fmt.Errorf("%w: blocked hostname", errUnsafeFormURL)
+	}
+	if !isSafeFormURLIP(ip) {
+		return fmt.Errorf("%w: blocked IP address", errUnsafeFormURL)
+	}
 	return nil
 }
 

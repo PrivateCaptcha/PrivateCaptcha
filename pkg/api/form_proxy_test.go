@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,16 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 )
+
+type stubSubmitFormURLVerifier struct {
+	err  error
+	urls []string
+}
+
+func (v *stubSubmitFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
+	v.urls = append(v.urls, rawURL)
+	return v.err
+}
 
 func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain string) (*dbgen.Form, *dbgen.Property) {
 	t.Helper()
@@ -55,6 +66,31 @@ func formProxySuite(t *testing.T, form *dbgen.Form, body url.Values) *http.Respo
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
+}
+
+func TestSubmitFormSkipsUnsafeFormURL(t *testing.T) {
+	downstreamCalled := false
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	expectedErr := errors.New("unsafe form URL")
+	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
+	server := &Server{FormURLVerifier: verifier}
+	client := &http.Client{Timeout: time.Second}
+	form := &dbgen.Form{ID: 1, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0}
+	submission := &FormSubmission{Values: url.Values{"email": {"test@example.com"}}}
+
+	server.submitForm(context.Background(), client, form, submission)
+
+	if len(verifier.urls) != 1 || verifier.urls[0] != downstream.URL {
+		t.Fatalf("expected verifier to receive form URL, got %v", verifier.urls)
+	}
+	if downstreamCalled {
+		t.Fatal("expected unsafe form URL to be skipped")
+	}
 }
 
 func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {
