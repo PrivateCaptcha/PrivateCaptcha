@@ -56,9 +56,37 @@
     </div>
 </div>
 
+{{ if .Params.Forms }}
+<div id="forms" class="flex-1 flex flex-col">
+    <div class="grow flex items-center justify-end gap-x-4 mt-8">
+        <a type="button"
+            href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.FormEndpoint .Const.NewEndpoint }}"
+            class="self-center inline-flex items-center gap-x-1.5 rounded-md bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-300">
+            <svg class="-ml-0.5 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add New Form
+        </a>
+    </div>
+    {{template "forms.html" .}}
+</div>
+{{ else }}
 <div class="flex-1 flex items-center">
     <div class="text-center mx-auto px-44 py-28 mt-12 border-2 border-dashed rounded-xl hover:border-gray-600">
         <h1 class="mt-6 text-xl font-bold tracking-tight text-gray-600">No forms</h1>
-        <p class="mt-4 text-base leading-7 text-gray-600">Forms will appear here once they are available for this organization.</p>
+        <p class="mt-4 text-base leading-7 text-gray-600">Get started by creating a new form</p>
+        <div class="mt-6 flex items-center justify-center gap-x-6">
+            <a
+                href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.FormEndpoint .Const.NewEndpoint }}"
+                type="button"
+                class="inline-flex items-center justify-center px-5 py-2.5 text-sm leading-4 rounded-md border border-transparent transition-all duration-200 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pclime-600 bg-pclime-600 hover:bg-pclime-500 font-semibold"
+                >
+                <svg class="w-5 h-5 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Form
+            </a>
+        </div>
     </div>
 </div>
+{{ end }}

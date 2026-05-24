@@ -305,6 +305,46 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, nil
 }
 
+func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization) (*orgFormsRenderContext, error) {
+	baseCtx.Tab = portalFormsTabIndex
+
+	renderCtx := &orgFormsRenderContext{
+		portalBaseRenderContext: *baseCtx,
+		Forms:                   []*userForm{},
+	}
+
+	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+		return renderCtx, nil
+	}
+
+	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, 0 /*offset*/, propertiesPerPage)
+	if err != nil {
+		return nil, err
+	}
+
+	properties, err := retrieveFormsProperties(ctx, s.Store.Impl(), forms)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx.Forms = formsToUserForms(ctx, forms, properties, s.IDHasher)
+	renderCtx.PaginationRenderContext = PaginationRenderContext{
+		From:    1,
+		To:      len(renderCtx.Forms),
+		Count:   len(renderCtx.Forms),
+		Page:    0,
+		PerPage: propertiesPerPage,
+	}
+
+	if hasMore {
+		if count, err := s.Store.Impl().RetrieveOrgFormsCount(ctx, org.ID); err == nil {
+			renderCtx.Count = int(count)
+		}
+	}
+
+	return renderCtx, nil
+}
+
 func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter, r *http.Request) {
 	if (orgID == -1) && (err == errNoOrgs) {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
@@ -366,8 +406,11 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	var event *common.AuditLogEvent
 	switch tabParam {
 	case common.FormsEndpoint:
-		baseCtx.Tab = portalFormsTabIndex
-		model = baseCtx
+		if vm, err := s.createOrgFormsRenderContext(ctx, baseCtx, org); err == nil {
+			model = vm
+		} else {
+			derr = err
+		}
 	case common.MembersEndpoint:
 		if vm, ae, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user); err == nil {
 			model = vm
@@ -488,7 +531,11 @@ func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	renderCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org)
+	if err != nil {
+		return nil, err
+	}
 
 	return &ViewModel{Model: renderCtx, View: orgFormsTemplate}, nil
 }

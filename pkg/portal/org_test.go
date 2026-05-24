@@ -2699,6 +2699,101 @@ func TestGetOrgFormsTabEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetPortalFormsTabShowsEmptyState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s?tab=%s", orgID, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "No forms") {
+		t.Fatalf("Expected forms empty state in body")
+	}
+	if !strings.Contains(body, "Add New Form") {
+		t.Fatalf("Expected add form CTA in body")
+	}
+	if !strings.Contains(body, fmt.Sprintf("/org/%s/%s/%s", orgID, common.FormEndpoint, common.NewEndpoint)) {
+		t.Fatalf("Expected add form CTA URL in body")
+	}
+}
+
+func TestGetPortalFormsTabShowsForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "forms-tab.example.com"),
+		&dbgen.CreateFormParams{URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	_ = form
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s?tab=%s", orgID, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, property.Name) {
+		t.Fatalf("Expected property name %q in body", property.Name)
+	}
+	if !strings.Contains(body, "hooks.example.com/submit") {
+		t.Fatalf("Expected webhook prefix in body")
+	}
+	if strings.Contains(body, "No forms") {
+		t.Fatalf("Did not expect empty state when forms exist")
+	}
+}
+
 func TestOrgIDValid(t *testing.T) {
 	const testOrgID = 42
 	encrypted := server.IDHasher.Encrypt(testOrgID)

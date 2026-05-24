@@ -26,6 +26,16 @@ func stubProperty(name, orgID string) *userProperty {
 	}
 }
 
+func stubForm(name, orgID string) *userForm {
+	return &userForm{
+		ID:            "1",
+		OrgID:         orgID,
+		Name:          name,
+		WebhookPrefix: "hooks.example.com/submit",
+		Enabled:       true,
+	}
+}
+
 func stubOrgEx(orgID string, level dbgen.AccessLevel) *UserOrg {
 	return &UserOrg{
 		Name:  "My Org " + orgID,
@@ -229,13 +239,30 @@ func TestRenderHTML(t *testing.T) {
 		{
 			path:     []string{common.OrgEndpoint, "123"},
 			template: portalTemplate,
-			model: &portalBaseRenderContext{
-				Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
-				CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
-				Tab:        1,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					Tab:        1,
+				},
+				Forms: []*userForm{},
 			},
-			selector: "h1",
-			matches:  []string{"No forms"},
+			selector: "a[href=\"/org/123/form/new\"]",
+			matches:  []string{"Add New Form"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					Tab:        1,
+				},
+				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
+			},
+			selector: "p.form-name",
+			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
