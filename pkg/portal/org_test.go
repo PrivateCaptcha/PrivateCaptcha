@@ -2752,9 +2752,9 @@ func TestGetPortalFormsTabShowsForms(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, property, _, err := store.Impl().CreateNewForm(ctx,
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "forms-tab.example.com"),
-		&dbgen.CreateFormParams{URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		&dbgen.CreateFormParams{Name: t.Name(), URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
 		org,
 	)
 	if err != nil {
@@ -2783,8 +2783,8 @@ func TestGetPortalFormsTabShowsForms(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, property.Name) {
-		t.Fatalf("Expected property name %q in body", property.Name)
+	if !strings.Contains(body, form.Name) {
+		t.Fatalf("Expected form name %q in body", form.Name)
 	}
 	if !strings.Contains(body, "hooks.example.com/submit") {
 		t.Fatalf("Expected webhook prefix in body")
@@ -2805,22 +2805,22 @@ func TestGetOrgFormsPaginationEndpoint(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	var firstPropertyName string
-	var lastPropertyName string
+	var firstFormName string
+	var lastFormName string
 	for i := range propertiesPerPage + 1 {
-		_, property, _, err := store.Impl().CreateNewForm(ctx,
+		form, _, _, err := store.Impl().CreateNewForm(ctx,
 			db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("forms-page-%d.example.com", i)),
-			&dbgen.CreateFormParams{URL: fmt.Sprintf("https://hooks.example.com/forms/%d", i), Fields: []byte(`{}`), Enabled: true},
+			&dbgen.CreateFormParams{Name: t.Name(), URL: fmt.Sprintf("https://hooks.example.com/forms/%d", i), Fields: []byte(`{}`), Enabled: true},
 			org,
 		)
 		if err != nil {
 			t.Fatalf("Failed to create form %d: %v", i, err)
 		}
 		if i == 0 {
-			firstPropertyName = property.Name
+			firstFormName = form.Name
 		}
 		if i == propertiesPerPage {
-			lastPropertyName = property.Name
+			lastFormName = form.Name
 		}
 	}
 
@@ -2839,9 +2839,9 @@ func TestGetOrgFormsPaginationEndpoint(t *testing.T) {
 		mustContain    string
 		mustNotContain string
 	}{
-		{name: "SecondPage", page: "1", mustContain: lastPropertyName, mustNotContain: firstPropertyName},
-		{name: "InvalidPageFallsBack", page: "oops", mustContain: firstPropertyName, mustNotContain: lastPropertyName},
-		{name: "NegativePageFallsBack", page: "-1", mustContain: firstPropertyName, mustNotContain: lastPropertyName},
+		{name: "SecondPage", page: "1", mustContain: lastFormName, mustNotContain: firstFormName},
+		{name: "InvalidPageFallsBack", page: "oops", mustContain: firstFormName, mustNotContain: lastFormName},
+		{name: "NegativePageFallsBack", page: "-1", mustContain: firstFormName, mustNotContain: lastFormName},
 	}
 
 	for _, tc := range testCases {

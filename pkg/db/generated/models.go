@@ -540,6 +540,7 @@ type DifficultyRule struct {
 
 type Form struct {
 	ID                int32              `db:"id" json:"id"`
+	Name              string             `db:"name" json:"name"`
 	ExternalID        pgtype.UUID        `db:"external_id" json:"external_id"`
 	OrgID             pgtype.Int4        `db:"org_id" json:"org_id"`
 	CreatorID         pgtype.Int4        `db:"creator_id" json:"creator_id"`

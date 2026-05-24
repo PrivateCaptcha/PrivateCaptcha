@@ -326,12 +326,7 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 		return nil, err
 	}
 
-	properties, err := retrieveFormsProperties(ctx, s.Store.Impl(), forms)
-	if err != nil {
-		return nil, err
-	}
-
-	renderCtx.Forms = formsToUserForms(ctx, forms, properties, s.IDHasher)
+	renderCtx.Forms = formsToUserForms(ctx, forms, s.IDHasher)
 	from := 1 + page*propertiesPerPage
 	renderCtx.PaginationRenderContext = PaginationRenderContext{
 		From:    from,

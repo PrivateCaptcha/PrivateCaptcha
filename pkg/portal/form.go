@@ -54,35 +54,22 @@ func webhookPrefixFromURL(rawURL string) string {
 	return prefix + "/" + segment
 }
 
-func formToUserForm(form *dbgen.Form, property *dbgen.Property, hasher common.IdentifierHasher) *userForm {
+func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm {
 	if form == nil {
 		return nil
-	}
-
-	name := webhookPrefixFromURL(form.URL)
-	if (property != nil) && (property.Name != "") {
-		name = property.Name
 	}
 
 	return &userForm{
 		ID:            hasher.Encrypt(int(form.ID)),
 		OrgID:         hasher.Encrypt(int(form.OrgID.Int32)),
-		Name:          name,
+		Name:          form.Name,
 		WebhookPrefix: webhookPrefixFromURL(form.URL),
 		Enabled:       form.Enabled,
 	}
 }
 
-func formsToUserForms(ctx context.Context, forms []*dbgen.Form, properties []*dbgen.Property, hasher common.IdentifierHasher) []*userForm {
+func formsToUserForms(ctx context.Context, forms []*dbgen.Form, hasher common.IdentifierHasher) []*userForm {
 	result := make([]*userForm, 0, len(forms))
-	propertiesByID := make(map[int32]*dbgen.Property, len(properties))
-
-	for _, property := range properties {
-		if property == nil {
-			continue
-		}
-		propertiesByID[property.ID] = property
-	}
 
 	for _, form := range forms {
 		if form == nil {
@@ -93,7 +80,7 @@ func formsToUserForms(ctx context.Context, forms []*dbgen.Form, properties []*db
 			continue
 		}
 
-		result = append(result, formToUserForm(form, propertiesByID[form.PropertyID], hasher))
+		result = append(result, formToUserForm(form, hasher))
 	}
 
 	return result

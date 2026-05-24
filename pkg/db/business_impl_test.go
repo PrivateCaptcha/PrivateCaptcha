@@ -676,10 +676,10 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		}
 
 		createdForm, createdProperty, auditEvents, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
-			Name:      "form property",
 			CreatorID: Int(12),
 			Domain:    "example.com",
 		}, &dbgen.CreateFormParams{
+			Name:              t.Name(),
 			URL:               "https://example.com/submit",
 			Fields:            []byte(`{"email":"text"}`),
 			RequestsPerSecond: 1,

@@ -53,6 +53,7 @@ func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain stri
 	}
 
 	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, domain), &dbgen.CreateFormParams{
+		Name:              t.Name(),
 		URL:               "https://example.com/submit",
 		Fields:            []byte(`{}`),
 		Enabled:           true,
@@ -169,6 +170,7 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 	form1, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-one.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
 		URL:               "https://example.com/submit",
 		Fields:            []byte(`{}`),
 		Enabled:           true,
@@ -230,6 +232,7 @@ func TestFormProxySubmitsForm(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "submit-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
 		URL:               downstream.URL,
 		Fields:            []byte(`{}`),
 		Enabled:           true,

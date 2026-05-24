@@ -1050,8 +1050,12 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 }
 
 func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams *dbgen.CreatePropertyParams, formParams *dbgen.CreateFormParams, org *dbgen.Organization) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
-	if (formParams == nil) || (len(formParams.URL) == 0) {
+	if (formParams == nil) || (len(formParams.Name) == 0) || (len(formParams.URL) == 0) {
 		return nil, nil, nil, ErrInvalidInput
+	}
+
+	if len(propertyParams.Name) == 0 {
+		propertyParams.Name = formParams.Name + " (form)"
 	}
 
 	property, auditEvent, err := impl.CreateNewProperty(ctx, propertyParams, org)

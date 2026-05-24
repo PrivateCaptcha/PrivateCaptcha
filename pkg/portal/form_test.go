@@ -34,7 +34,6 @@ func TestWebhookPrefixFromURL(t *testing.T) {
 
 func TestFormToUserForm(t *testing.T) {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt"))
-	property := &dbgen.Property{ID: 12, Name: "Newsletter Signup"}
 	form := &dbgen.Form{
 		ID:      34,
 		OrgID:   pgtype.Int4{Int32: 56, Valid: true},
@@ -42,7 +41,7 @@ func TestFormToUserForm(t *testing.T) {
 		Enabled: true,
 	}
 
-	userForm := formToUserForm(form, property, hasher)
+	userForm := formToUserForm(form, hasher)
 	if userForm == nil {
 		t.Fatal("expected user form")
 	}
@@ -52,8 +51,8 @@ func TestFormToUserForm(t *testing.T) {
 	if userForm.OrgID != hasher.Encrypt(int(form.OrgID.Int32)) {
 		t.Fatalf("expected encrypted org ID %q, got %q", hasher.Encrypt(int(form.OrgID.Int32)), userForm.OrgID)
 	}
-	if userForm.Name != property.Name {
-		t.Fatalf("expected property name %q, got %q", property.Name, userForm.Name)
+	if userForm.Name != form.Name {
+		t.Fatalf("expected property name %q, got %q", form.Name, userForm.Name)
 	}
 	if userForm.WebhookPrefix != "hooks.example.com/submit" {
 		t.Fatalf("expected webhook prefix %q, got %q", "hooks.example.com/submit", userForm.WebhookPrefix)

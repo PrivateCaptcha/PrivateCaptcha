@@ -117,6 +117,7 @@ func TestBusinessStoreImplFormPropertyRestrictions(t *testing.T) {
 	}
 
 	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "form-restrictions.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
 		URL:               "https://example.com/submit",
 		Fields:            []byte(`{}`),
 		Enabled:           true,
