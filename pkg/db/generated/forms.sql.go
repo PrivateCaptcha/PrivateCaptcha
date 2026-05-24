@@ -163,3 +163,66 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 	}
 	return items, nil
 }
+
+const getOrgForms = `-- name: GetOrgForms :many
+SELECT id, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
+FROM backend.forms
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY created_at
+OFFSET $2
+LIMIT $3
+`
+
+type GetOrgFormsParams struct {
+	OrgID  pgtype.Int4 `db:"org_id" json:"org_id"`
+	Offset int32       `db:"offset" json:"offset"`
+	Limit  int32       `db:"limit" json:"limit"`
+}
+
+func (q *Queries) GetOrgForms(ctx context.Context, arg *GetOrgFormsParams) ([]*Form, error) {
+	rows, err := q.db.Query(ctx, getOrgForms, arg.OrgID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*Form
+	for rows.Next() {
+		var i Form
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.OrgID,
+			&i.CreatorID,
+			&i.OrgOwnerID,
+			&i.URL,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.PropertyID,
+			&i.Fields,
+			&i.Enabled,
+			&i.RequestsPerSecond,
+			&i.RequestsBurst,
+			&i.RetryRequestCount,
+			&i.Method,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOrgFormsCount = `-- name: GetOrgFormsCount :one
+SELECT COUNT(*) as count FROM backend.forms WHERE org_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, getOrgFormsCount, orgID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}

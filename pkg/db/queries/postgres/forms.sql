@@ -11,3 +11,14 @@ SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]) AND deleted_at I
 
 -- name: GetFormByPropertyID :one
 SELECT * FROM backend.forms WHERE property_id = $1 AND deleted_at IS NULL;
+
+-- name: GetOrgForms :many
+SELECT *
+FROM backend.forms
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY created_at
+OFFSET $2
+LIMIT $3;
+
+-- name: GetOrgFormsCount :one
+SELECT COUNT(*) as count FROM backend.forms WHERE org_id = $1 AND deleted_at IS NULL;

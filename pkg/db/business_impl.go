@@ -27,6 +27,7 @@ const (
 	asyncTaskTTL             = 1 * time.Minute
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
+	orgFormsCacheKeyStr      = "0"
 )
 
 var (
@@ -1075,6 +1076,8 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 
 	slog.InfoContext(ctx, "Created new form", "formID", form.ID, "propertyID", form.PropertyID)
 	impl.cacheForm(ctx, form)
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(property.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(property.OrgID.Int32))
 
 	auditEvents := []*common.AuditLogEvent{auditEvent, newCreateFormAuditLogEvent(form, org)}
 	return form, property, auditEvents, nil
@@ -1266,6 +1269,57 @@ func (impl *BusinessStoreImpl) RetrieveOrgProperties(ctx context.Context, org *d
 	slog.DebugContext(ctx, "Retrieved org properties", "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(properties))
 
 	return properties[:min(len(properties), actualLimit)], len(properties) == int(params.Limit), nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgForms(ctx context.Context, org *dbgen.Organization, offset, limit int) ([]*dbgen.Form, bool, error) {
+	if (offset < 0) || (limit <= 0) {
+		return nil, false, ErrInvalidInput
+	}
+
+	params := &dbgen.GetOrgFormsParams{
+		OrgID:  Int(org.ID),
+		Offset: int32(offset),
+		Limit:  MaxOrgPropertiesPageSize + 1,
+	}
+
+	if offset == 0 {
+		reader := &StoreArrayReader[*dbgen.GetOrgFormsParams, dbgen.Form]{
+			CacheKey:    OrgFormsCacheKey(org.ID, orgFormsCacheKeyStr),
+			Cache:       impl.cache,
+			DropInvalid: true,
+		}
+
+		if impl.querier != nil {
+			reader.QueryKeyFunc = func(ck CacheKey) (*dbgen.GetOrgFormsParams, error) { return params, nil }
+			reader.QueryFunc = impl.querier.GetOrgForms
+		}
+
+		forms, err := reader.Read(ctx)
+		if err != nil {
+			return nil, false, err
+		}
+
+		finalForms := forms[:min(len(forms), limit, MaxOrgPropertiesPageSize)]
+
+		return finalForms, len(forms) > len(finalForms), nil
+	}
+
+	if impl.querier == nil {
+		return nil, false, ErrMaintenance
+	}
+
+	actualLimit := min(MaxOrgPropertiesPageSize, limit)
+	params.Limit = int32(actualLimit) + 1
+
+	forms, err := impl.querier.GetOrgForms(ctx, params)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org forms", "offset", offset, "limit", actualLimit, "orgID", org.ID, common.ErrAttr(err))
+		return nil, false, err
+	}
+
+	slog.DebugContext(ctx, "Retrieved org forms", "offset", offset, "limit", actualLimit, "orgID", org.ID, "count", len(forms))
+
+	return forms[:min(len(forms), actualLimit)], len(forms) == int(params.Limit), nil
 }
 
 func (impl *BusinessStoreImpl) UpdateOrganization(ctx context.Context, user *dbgen.User, org *dbgen.Organization, name string) (*dbgen.Organization, *common.AuditLogEvent, error) {
@@ -3154,6 +3208,32 @@ func (impl *BusinessStoreImpl) RetrieveOrgPropertiesCount(ctx context.Context, o
 	c := new(int64)
 	*c = count
 	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, propertiesCountTTL)
+
+	return count, nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveOrgFormsCount(ctx context.Context, orgID int32) (int64, error) {
+	if impl.querier == nil {
+		return 0, ErrMaintenance
+	}
+
+	cacheKey := orgFormsCountCacheKey(orgID)
+	if count, err := FetchCachedOne[int64](ctx, impl.cache, cacheKey); err == nil {
+		return *count, nil
+	}
+
+	count, err := impl.querier.GetOrgFormsCount(ctx, Int(orgID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve org forms count", "orgID", orgID, common.ErrAttr(err))
+		return 0, err
+	}
+
+	slog.DebugContext(ctx, "Fetched org forms count", "orgID", orgID, "count", count)
+
+	const formsCountTTL = 5 * time.Minute
+	c := new(int64)
+	*c = count
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, formsCountTTL)
 
 	return count, nil
 }
