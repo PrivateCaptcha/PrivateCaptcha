@@ -40,6 +40,12 @@ var (
 	testPlan   billing.Plan
 )
 
+type allowAllFormURLVerifier struct{}
+
+func (allowAllFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
 const (
 	authBackfillDelay   = 100 * time.Millisecond
 	verifyFlushInterval = 1 * time.Second
@@ -87,6 +93,7 @@ func TestMain(m *testing.M) {
 	}
 
 	store = db.NewBusinessEx(pool, cache)
+	store.SetFormURLVerifier(allowAllFormURLVerifier{})
 
 	metrics := monitoring.NewStub()
 

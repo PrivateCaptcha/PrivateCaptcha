@@ -104,6 +104,11 @@ func NewBusinessWithQuerier(pool *pgxpool.Pool, querier dbgen.Querier, cache com
 	}
 }
 
+func (s *BusinessStore) SetFormURLVerifier(verifier common.FormURLVerifier) {
+	s.defaultImpl.formURLVerifier = verifier
+	s.cacheOnlyImpl.formURLVerifier = verifier
+}
+
 func (s *BusinessStore) UpdateConfig(maintenanceMode bool) {
 	s.MaintenanceMode.Store(maintenanceMode)
 }
@@ -151,7 +156,7 @@ func (s *BusinessStore) WithTx(ctx context.Context, fn func(*BusinessStoreImpl) 
 
 	db := dbgen.New(s.Pool)
 	tmpCache := NewTxCache()
-	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx)}
+	impl := &BusinessStoreImpl{cache: tmpCache, querier: db.WithTx(tx), formURLVerifier: s.defaultImpl.formURLVerifier}
 	var auditEvents []*common.AuditLogEvent
 
 	auditEvents, err = fn(impl)

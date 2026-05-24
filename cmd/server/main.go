@@ -155,6 +155,11 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	defer clickhouse.Close()
 
 	businessDB := db.NewBusiness(pool)
+	verifiedFormURLHosts, err := db.NewMemoryCache[string, bool]("form_url_verifier", 100_000, false, 15*time.Minute, 15*time.Minute, time.Minute)
+	if err != nil {
+		return err
+	}
+	businessDB.SetFormURLVerifier(api.NewPublicFormURLVerifier(verifiedFormURLHosts))
 	timeSeriesDB := db.NewTimeSeries(clickhouse, businessDB.Cache)
 
 	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey))
