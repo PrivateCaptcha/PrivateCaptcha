@@ -748,3 +748,35 @@ func TestRenderFormWizardContainsURLField(t *testing.T) {
 		t.Fatal("did not expect server integration step")
 	}
 }
+
+func TestRenderFormWizardIntegrationStep(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), formWizardSetupTemplate, &formIntegrationRenderContext{
+		CsrfRenderContext: stubToken(),
+		CurrentOrg:        stubOrg("123"),
+		Sitekey:           "sitekey123",
+		FormExternalID:    "guid-123",
+	}, &RequestContext{Path: server.RelURL("/org/123/form/new")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "Add Private Captcha script") {
+		t.Fatal("expected integration instructions copied from property wizard")
+	}
+	if !strings.Contains(body, "method=&#34;POST&#34;") || !strings.Contains(body, "https://api.privatecaptcha.com/form/guid-123") {
+		t.Fatal("expected public form action in code snippet")
+	}
+	if !strings.Contains(body, `data-sitekey=&#34;sitekey123&#34;`) {
+		t.Fatal("expected sitekey in code snippet")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
+	}
+}
