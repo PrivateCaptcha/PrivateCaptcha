@@ -19,4 +19,35 @@
         {{ end }}
     </div>
 </div>
+<nav aria-label="Pagination" class="flex items-center justify-between border-t border-gray-200 bg-white mt-8 pt-3">
+    <div class="hidden sm:block">
+        <p class="text-sm text-gray-700">
+        Showing
+        <span class="font-medium">{{.Params.From}}</span>
+        to
+        <span class="font-medium">{{.Params.To}}</span>
+        of
+        <span class="font-medium">{{.Params.Count}}</span>
+        results
+        </p>
+    </div>
+    <div class="flex flex-1 justify-between sm:justify-end">
+        <button
+            hx-get="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.FormsEndpoint }}"
+            hx-target="#forms"
+            hx-vals='{"{{$.Const.Page}}": {{if gt .Params.Page 0}}{{sub .Params.Page 1}}{{else}}0{{end}}}'
+            {{if le .Params.Page 0}}disabled{{end}}
+            class="pc-internal-form-button pc-internal-button-smaller {{if le .Params.Page 0}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
+            Previous
+        </button>
+        <button
+            hx-get="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.FormsEndpoint }}"
+            hx-target="#forms"
+            hx-vals='{"{{$.Const.Page}}": {{if lt .Params.To .Params.Count}}{{plus1 .Params.Page}}{{else}}{{.Params.Page}}{{end}}}'
+            {{if ge .Params.To .Params.Count}}disabled{{end}}
+            class="ml-3 pc-internal-form-button pc-internal-button-smaller {{if ge .Params.To .Params.Count}}pc-internal-form-button-disabled{{ else }}pc-internal-form-button-secondary{{ end }}">
+            Next
+        </button>
+    </div>
+</nav>
 {{ end }}

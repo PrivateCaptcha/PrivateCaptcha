@@ -6,6 +6,8 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -59,4 +61,32 @@ func TestFormToUserForm(t *testing.T) {
 	if !userForm.Enabled {
 		t.Fatal("expected enabled form")
 	}
+}
+
+func TestRenderFormsPaginationControls(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "portal/forms.html", &orgFormsRenderContext{
+		portalBaseRenderContext: portalBaseRenderContext{CurrentOrg: stubOrg("123")},
+		PaginationRenderContext: PaginationRenderContext{From: 1, To: 30, Count: 31, Page: 0, PerPage: 30},
+		Forms:                   []*userForm{stubForm("Newsletter Signup", "123")},
+	}, &RequestContext{Path: server.RelURL("/org/123/forms")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+	buttons := document.Find("button[hx-target=\"#forms\"]")
+	if buttons.Length() != 2 {
+		t.Fatalf("expected 2 pagination buttons, got %d", buttons.Length())
+	}
+	buttons.Each(func(i int, s *goquery.Selection) {
+		if s.AttrOr("hx-get", "") != "/org/123/forms" {
+			t.Fatalf("expected pagination button to use forms endpoint, got %q", s.AttrOr("hx-get", ""))
+		}
+	})
 }

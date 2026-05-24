@@ -25,6 +25,7 @@ var (
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
+	orgFormsListTemplate          = "portal/forms.html"
 	orgFormsTemplate              = "portal/org-forms.html"
 	orgPropertiesTemplate         = "portal/properties.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
@@ -305,8 +306,11 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, nil
 }
 
-func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization) (*orgFormsRenderContext, error) {
+func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, page int) (*orgFormsRenderContext, error) {
 	baseCtx.Tab = portalFormsTabIndex
+	if page < 0 {
+		page = 0
+	}
 
 	renderCtx := &orgFormsRenderContext{
 		portalBaseRenderContext: *baseCtx,
@@ -317,7 +321,7 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 		return renderCtx, nil
 	}
 
-	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, 0 /*offset*/, propertiesPerPage)
+	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, page*propertiesPerPage, propertiesPerPage)
 	if err != nil {
 		return nil, err
 	}
@@ -328,15 +332,16 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 	}
 
 	renderCtx.Forms = formsToUserForms(ctx, forms, properties, s.IDHasher)
+	from := 1 + page*propertiesPerPage
 	renderCtx.PaginationRenderContext = PaginationRenderContext{
-		From:    1,
-		To:      len(renderCtx.Forms),
+		From:    from,
+		To:      from + len(renderCtx.Forms) - 1,
 		Count:   len(renderCtx.Forms),
-		Page:    0,
+		Page:    page,
 		PerPage: propertiesPerPage,
 	}
 
-	if hasMore {
+	if (page > 0) || hasMore {
 		if count, err := s.Store.Impl().RetrieveOrgFormsCount(ctx, org.ID); err == nil {
 			renderCtx.Count = int(count)
 		}
@@ -406,7 +411,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	var event *common.AuditLogEvent
 	switch tabParam {
 	case common.FormsEndpoint:
-		if vm, err := s.createOrgFormsRenderContext(ctx, baseCtx, org); err == nil {
+		if vm, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, 0 /*page*/); err == nil {
 			model = vm
 		} else {
 			derr = err
@@ -532,12 +537,42 @@ func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
-	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org)
+	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, 0 /*page*/)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgFormsTemplate}, nil
+}
+
+func (s *Server) getOrgForms(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	pageParam := r.URL.Query().Get(common.ParamPage)
+	page := 0
+	if len(pageParam) > 0 {
+		if page, err = strconv.Atoi(pageParam); err != nil {
+			slog.ErrorContext(ctx, "Failed to convert page parameter", "page", pageParam, common.ErrAttr(err))
+			page = 0
+		}
+	}
+
+	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, page)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: orgFormsListTemplate}, nil
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
