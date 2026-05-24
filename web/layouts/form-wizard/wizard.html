@@ -63,7 +63,11 @@
 <main class='-mt-32 flex flex-1'>
     <div class="mx-auto max-w-7xl px-4 pb-12 sm:px-6 lg:px-8 flex flex-1">
         <div id="form-wizard" class="rounded-lg bg-white p-6 shadow flex flex-1 flex-col">
+            {{- if eq .Params.Step 1 -}}
+            {{ template "client-setup.html" . }}
+            {{- else -}}
             {{ template "new.html" . }}
+            {{- end -}}
         </div>
     </div>
 </main>

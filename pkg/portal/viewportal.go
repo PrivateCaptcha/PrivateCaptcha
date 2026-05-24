@@ -460,14 +460,20 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 		},
 		{
 			Path:       p(common.OrgEndpoint, orgArg, common.FormEndpoint, common.NewEndpoint, "setup"),
-			Template:   formWizardSetupTemplate,
+			Template:   formWizardTemplate,
 			ShowInList: true,
 			ModelFunc: func(_ AlertRenderContext) interface{} {
-				return &formIntegrationRenderContext{
-					CsrfRenderContext: token,
-					CurrentOrg:        org,
-					Sitekey:           db.TestPropertySitekey,
-					FormExternalID:    "123e4567-e89b-12d3-a456-426614174000",
+				return struct {
+					formIntegrationRenderContext
+					Step int
+				}{
+					formIntegrationRenderContext: formIntegrationRenderContext{
+						CsrfRenderContext: token,
+						CurrentOrg:        org,
+						Sitekey:           db.TestPropertySitekey,
+						FormExternalID:    "123e4567-e89b-12d3-a456-426614174000",
+					},
+					Step: 1,
 				}
 			},
 		},
