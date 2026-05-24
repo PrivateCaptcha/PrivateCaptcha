@@ -26,6 +26,16 @@ func stubProperty(name, orgID string) *userProperty {
 	}
 }
 
+func stubForm(name, orgID string) *userForm {
+	return &userForm{
+		ID:            "1",
+		OrgID:         orgID,
+		Name:          name,
+		WebhookPrefix: "hooks.example.com/submit",
+		Enabled:       true,
+	}
+}
+
 func stubOrgEx(orgID string, level dbgen.AccessLevel) *UserOrg {
 	return &UserOrg{
 		Name:  "My Org " + orgID,
@@ -225,6 +235,53 @@ func TestRenderHTML(t *testing.T) {
 			},
 			selector: "p.member-name",
 			matches:  []string{"foo", "bar"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					Tab:        1,
+				},
+				Forms: []*userForm{},
+			},
+			selector: "a[href=\"/org/123/form/new\"]",
+			matches:  []string{"Add New Form"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+					Tab:        1,
+				},
+				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
+			},
+			selector: "p.form-name",
+			matches:  []string{"Newsletter Signup", "Contact Us"},
+		},
+		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint},
+			template: orgFormsListTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				},
+				PaginationRenderContext: PaginationRenderContext{
+					From:    1,
+					To:      2,
+					Count:   2,
+					Page:    0,
+					PerPage: 30,
+				},
+				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
+			},
+			selector: "p.form-name",
+			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},

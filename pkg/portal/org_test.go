@@ -2630,13 +2630,15 @@ func TestGetPortalAllTabs(t *testing.T) {
 	tabs := []struct {
 		name string
 		tab  string
+		body string
 	}{
-		{"Dashboard", common.DashboardEndpoint},
-		{"Members", common.MembersEndpoint},
-		{"Settings", common.SettingsEndpoint},
-		{"Events", common.EventsEndpoint},
-		{"Default", ""},
-		{"Unknown", "unknown-tab"},
+		{name: "Dashboard", tab: common.DashboardEndpoint},
+		{name: "Forms", tab: common.FormsEndpoint, body: "No forms"},
+		{name: "Members", tab: common.MembersEndpoint},
+		{name: "Settings", tab: common.SettingsEndpoint},
+		{name: "Events", tab: common.EventsEndpoint},
+		{name: "Default", tab: ""},
+		{name: "Unknown", tab: "unknown-tab"},
 	}
 
 	for _, tc := range tabs {
@@ -2654,6 +2656,215 @@ func TestGetPortalAllTabs(t *testing.T) {
 
 			if w.Code != http.StatusOK {
 				t.Errorf("Expected status 200 for tab '%s', got %d", tc.tab, w.Code)
+			}
+
+			if (tc.body != "") && !strings.Contains(w.Body.String(), tc.body) {
+				t.Errorf("Expected response body for tab '%s' to contain %q", tc.tab, tc.body)
+			}
+		})
+	}
+}
+
+func TestGetOrgFormsTabEndpoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/%s/%s", server.IDHasher.Encrypt(int(org.ID)), common.TabEndpoint, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "No forms") {
+		t.Fatalf("Expected forms tab endpoint body to contain %q", "No forms")
+	}
+}
+
+func TestGetPortalFormsTabShowsEmptyState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s?tab=%s", orgID, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "No forms") {
+		t.Fatalf("Expected forms empty state in body")
+	}
+	if !strings.Contains(body, "Add New Form") {
+		t.Fatalf("Expected add form CTA in body")
+	}
+	if !strings.Contains(body, fmt.Sprintf("/org/%s/%s/%s", orgID, common.FormEndpoint, common.NewEndpoint)) {
+		t.Fatalf("Expected add form CTA URL in body")
+	}
+}
+
+func TestGetPortalFormsTabShowsForms(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "forms-tab.example.com"),
+		&dbgen.CreateFormParams{URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	_ = form
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s?tab=%s", orgID, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, property.Name) {
+		t.Fatalf("Expected property name %q in body", property.Name)
+	}
+	if !strings.Contains(body, "hooks.example.com/submit") {
+		t.Fatalf("Expected webhook prefix in body")
+	}
+	if strings.Contains(body, "No forms") {
+		t.Fatalf("Did not expect empty state when forms exist")
+	}
+}
+
+func TestGetOrgFormsPaginationEndpoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	var firstPropertyName string
+	var lastPropertyName string
+	for i := range propertiesPerPage + 1 {
+		_, property, _, err := store.Impl().CreateNewForm(ctx,
+			db_tests.CreateNewPropertyParams(user.ID, fmt.Sprintf("forms-page-%d.example.com", i)),
+			&dbgen.CreateFormParams{URL: fmt.Sprintf("https://hooks.example.com/forms/%d", i), Fields: []byte(`{}`), Enabled: true},
+			org,
+		)
+		if err != nil {
+			t.Fatalf("Failed to create form %d: %v", i, err)
+		}
+		if i == 0 {
+			firstPropertyName = property.Name
+		}
+		if i == propertiesPerPage {
+			lastPropertyName = property.Name
+		}
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	testCases := []struct {
+		name           string
+		page           string
+		mustContain    string
+		mustNotContain string
+	}{
+		{name: "SecondPage", page: "1", mustContain: lastPropertyName, mustNotContain: firstPropertyName},
+		{name: "InvalidPageFallsBack", page: "oops", mustContain: firstPropertyName, mustNotContain: lastPropertyName},
+		{name: "NegativePageFallsBack", page: "-1", mustContain: firstPropertyName, mustNotContain: lastPropertyName},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/%s?%s=%s", orgID, common.FormsEndpoint, common.ParamPage, tc.page), nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("Expected status 200, got %d", w.Code)
+			}
+
+			body := w.Body.String()
+			if !strings.Contains(body, tc.mustContain) {
+				t.Fatalf("Expected body to contain %q", tc.mustContain)
+			}
+			if strings.Contains(body, tc.mustNotContain) {
+				t.Fatalf("Did not expect body to contain %q", tc.mustNotContain)
+			}
+			if strings.Contains(body, "Select a tab") {
+				t.Fatalf("Expected forms endpoint to return partial without tab chrome")
 			}
 		})
 	}

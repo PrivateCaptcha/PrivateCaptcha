@@ -28,6 +28,14 @@ func viewStubProperty(name, orgID string) *userProperty {
 	}
 }
 
+func viewStubForm(name, orgID string) *userForm {
+	return &userForm{
+		ID: "prop1", OrgID: orgID, Name: name,
+		WebhookPrefix: "https://example.com/api/...",
+		Enabled:       true,
+	}
+}
+
 func viewStubAuditLogs() []*UserAuditLog {
 	actions := []dbgen.AuditLogAction{
 		dbgen.AuditLogActionCreate, dbgen.AuditLogActionUpdate,
@@ -304,6 +312,34 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					CsrfRenderContext: token, PaginationRenderContext: pagination,
 					Properties: []*userProperty{prop, viewStubProperty("Blog", "org1")},
 					CurrentOrg: org,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.FormsEndpoint),
+			Template: orgFormsTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &orgFormsRenderContext{
+					portalBaseRenderContext: baseCtx(portalFormsTabIndex),
+					PaginationRenderContext: pagination,
+					Forms: []*userForm{
+						viewStubForm("Contact us", "org1"),
+						viewStubForm("Support", "org1"),
+					},
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.TabEndpoint, common.FormsEndpoint),
+			Template: orgFormsTemplate,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return &orgFormsRenderContext{
+					portalBaseRenderContext: baseCtx(portalFormsTabIndex),
+					PaginationRenderContext: pagination,
+					Forms: []*userForm{
+						viewStubForm("Contact us", "org1"),
+						viewStubForm("Support", "org1"),
+					},
 				}
 			},
 		},

@@ -25,6 +25,8 @@ var (
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
+	orgFormsListTemplate          = "portal/forms.html"
+	orgFormsTemplate              = "portal/org-forms.html"
 	orgPropertiesTemplate         = "portal/properties.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
@@ -36,10 +38,11 @@ const (
 	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
 	orgUserCreatedAtFormat        = "02 Jan 2006"
 	portalPropertiesTabIndex      = 0
-	portalMembersTabIndex         = 1
-	portalSettingsTabIndex        = 2
-	portalRulesTabIndex           = 3
-	portalEventsTabIndex          = 4
+	portalFormsTabIndex           = 1
+	portalMembersTabIndex         = 2
+	portalSettingsTabIndex        = 3
+	portalRulesTabIndex           = 4
+	portalEventsTabIndex          = 5
 )
 
 type portalBaseRenderContext struct {
@@ -303,6 +306,50 @@ func (s *Server) createOrgDashboardContext(ctx context.Context, baseCtx *portalB
 	return renderCtx, nil
 }
 
+func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, page int) (*orgFormsRenderContext, error) {
+	baseCtx.Tab = portalFormsTabIndex
+	if page < 0 {
+		page = 0
+	}
+
+	renderCtx := &orgFormsRenderContext{
+		portalBaseRenderContext: *baseCtx,
+		Forms:                   []*userForm{},
+	}
+
+	if baseCtx.CurrentOrg.Level == string(dbgen.AccessLevelInvited) {
+		return renderCtx, nil
+	}
+
+	forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, page*propertiesPerPage, propertiesPerPage)
+	if err != nil {
+		return nil, err
+	}
+
+	properties, err := retrieveFormsProperties(ctx, s.Store.Impl(), forms)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx.Forms = formsToUserForms(ctx, forms, properties, s.IDHasher)
+	from := 1 + page*propertiesPerPage
+	renderCtx.PaginationRenderContext = PaginationRenderContext{
+		From:    from,
+		To:      from + len(renderCtx.Forms) - 1,
+		Count:   len(renderCtx.Forms),
+		Page:    page,
+		PerPage: propertiesPerPage,
+	}
+
+	if (page > 0) || hasMore {
+		if count, err := s.Store.Impl().RetrieveOrgFormsCount(ctx, org.ID); err == nil {
+			renderCtx.Count = int(count)
+		}
+	}
+
+	return renderCtx, nil
+}
+
 func (s *Server) handlePortalError(orgID int32, err error, w http.ResponseWriter, r *http.Request) {
 	if (orgID == -1) && (err == errNoOrgs) {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, common.NewEndpoint), http.StatusOK, w, r)
@@ -363,6 +410,12 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	var derr error
 	var event *common.AuditLogEvent
 	switch tabParam {
+	case common.FormsEndpoint:
+		if vm, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, 0 /*page*/); err == nil {
+			model = vm
+		} else {
+			derr = err
+		}
 	case common.MembersEndpoint:
 		if vm, ae, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user); err == nil {
 			model = vm
@@ -469,6 +522,57 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate}, nil
+}
+
+func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, 0 /*page*/)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: orgFormsTemplate}, nil
+}
+
+func (s *Server) getOrgForms(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	pageParam := r.URL.Query().Get(common.ParamPage)
+	page := 0
+	if len(pageParam) > 0 {
+		if page, err = strconv.Atoi(pageParam); err != nil {
+			slog.ErrorContext(ctx, "Failed to convert page parameter", "page", pageParam, common.ErrAttr(err))
+			page = 0
+		}
+	}
+
+	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+	renderCtx, err := s.createOrgFormsRenderContext(ctx, baseCtx, org, page)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: orgFormsListTemplate}, nil
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

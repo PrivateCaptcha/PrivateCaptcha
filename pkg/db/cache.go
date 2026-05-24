@@ -256,6 +256,8 @@ const (
 	propertyStatsCacheKeyPrefix
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
+	orgFormsCacheKeyPrefix
+	orgFormsCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
 	compiledPropertyRulesCacheKeyPrefix
 	compiledOrgRulesCacheKeyPrefix
@@ -304,6 +306,8 @@ func init() {
 	cachePrefixToStrings[propertyStatsCacheKeyPrefix] = "propertyStats/"
 	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
 	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
+	cachePrefixToStrings[orgFormsCacheKeyPrefix] = "orgForms/"
+	cachePrefixToStrings[orgFormsCountCacheKeyPrefix] = "orgFormsCount/"
 	cachePrefixToStrings[orgInviteCacheKeyPrefix] = "orgInvite/"
 	cachePrefixToStrings[compiledPropertyRulesCacheKeyPrefix] = "compiledPropRules/"
 	cachePrefixToStrings[compiledOrgRulesCacheKeyPrefix] = "compiledOrgRules/"
@@ -343,6 +347,7 @@ func init() {
 	gob.Register([]*dbgen.GetOrgAuditLogsRow{})
 	gob.Register([]*dbgen.GetUserAuditLogsRow{})
 	gob.Register([]*dbgen.Property{})
+	gob.Register([]*dbgen.Form{})
 	gob.Register([]*dbgen.APIKey{})
 	gob.Register(&struct{}{})
 	gob.Register(&CacheMissingValue{})
@@ -420,6 +425,9 @@ func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefi
 func OrgPropertiesCacheKey(orgID int32, key string) CacheKey {
 	return CacheKey{Prefix: orgPropertiesCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }
+func OrgFormsCacheKey(orgID int32, key string) CacheKey {
+	return CacheKey{Prefix: orgFormsCacheKeyPrefix, IntValue: orgID, StrValue: key}
+}
 func propertyByIDCacheKey(propID int32) CacheKey {
 	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
 }
@@ -460,6 +468,9 @@ func asyncTaskCacheKey(key string) CacheKey {
 }
 func orgPropertiesCountCacheKey(orgID int32) CacheKey {
 	return Int32CacheKey(orgPropertiesCountCacheKeyPrefix, orgID)
+}
+func orgFormsCountCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(orgFormsCountCacheKeyPrefix, orgID)
 }
 func orgInviteCacheKey(inviteID int32) CacheKey {
 	return Int32CacheKey(orgInviteCacheKeyPrefix, inviteID)

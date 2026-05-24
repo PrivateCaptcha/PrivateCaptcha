@@ -37,6 +37,15 @@ type createFormQuerierStub struct {
 	calls          []string
 }
 
+type retrieveOrgFormsQuerierStub struct {
+	*QuerierStub
+	forms          []*dbgen.Form
+	count          int64
+	getOrgFormsArg *dbgen.GetOrgFormsParams
+	formsCalls     int
+	countCalls     int
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -58,6 +67,17 @@ func (s *createFormQuerierStub) CreateForm(ctx context.Context, arg *dbgen.Creat
 	s.calls = append(s.calls, "CreateForm")
 	s.createdFormArg = arg
 	return s.form, s.Error
+}
+
+func (s *retrieveOrgFormsQuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
+	s.getOrgFormsArg = arg
+	s.formsCalls++
+	return s.forms, s.Error
+}
+
+func (s *retrieveOrgFormsQuerierStub) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
+	s.countCalls++
+	return s.count, s.Error
 }
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
@@ -805,6 +825,69 @@ func TestBusinessStoreImplRetrieveOrgProperties(t *testing.T) {
 		_, _, err := store.RetrieveOrgProperties(context.Background(), &dbgen.Organization{}, 0, 0)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplRetrieveOrgForms(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, _, err := store.RetrieveOrgForms(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, _, err := store.RetrieveOrgForms(context.Background(), &dbgen.Organization{ID: 1}, 1, 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, _, err := store.RetrieveOrgForms(context.Background(), &dbgen.Organization{}, 0, 0)
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+
+	t.Run("FirstPageReturnsLimitedResultsAndHasMore", func(t *testing.T) {
+		querier := &retrieveOrgFormsQuerierStub{
+			QuerierStub: &QuerierStub{},
+			forms: []*dbgen.Form{
+				{ID: 1, URL: "https://one.example/submit", Enabled: true},
+				{ID: 2, URL: "https://two.example/submit", Enabled: true},
+				{ID: 3, URL: "https://three.example/submit", Enabled: true},
+			},
+		}
+
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		forms, hasMore, err := store.RetrieveOrgForms(context.Background(), &dbgen.Organization{ID: 1}, 0, 2)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if len(forms) != 2 {
+			t.Fatalf("expected 2 forms, got %d", len(forms))
+		}
+		if !hasMore {
+			t.Fatalf("expected hasMore to be true")
+		}
+		if querier.getOrgFormsArg == nil {
+			t.Fatalf("expected GetOrgForms to receive args")
+		}
+		if querier.getOrgFormsArg.OrgID.Int32 != 1 {
+			t.Fatalf("expected org ID 1, got %d", querier.getOrgFormsArg.OrgID.Int32)
+		}
+		if querier.getOrgFormsArg.Offset != 0 {
+			t.Fatalf("expected offset 0, got %d", querier.getOrgFormsArg.Offset)
 		}
 	})
 }
@@ -2190,6 +2273,58 @@ func TestBusinessStoreImplRetrieveOrgPropertiesCount(t *testing.T) {
 		_, err := store.RetrieveOrgPropertiesCount(context.Background(), 1)
 		if err == nil {
 			t.Errorf("expected error, got nil")
+		}
+	})
+}
+
+func TestBusinessStoreImplRetrieveOrgFormsCount(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("CachesCount", func(t *testing.T) {
+		querier := &retrieveOrgFormsQuerierStub{
+			QuerierStub: &QuerierStub{},
+			count:       7,
+		}
+
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		count, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if count != 7 {
+			t.Fatalf("expected count 7, got %d", count)
+		}
+
+		querier.count = 13
+
+		cachedCount, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		if err != nil {
+			t.Fatalf("expected cached count without error, got %v", err)
+		}
+		if cachedCount != 7 {
+			t.Fatalf("expected cached count 7, got %d", cachedCount)
+		}
+		if querier.countCalls != 1 {
+			t.Fatalf("expected count query to run once, got %d", querier.countCalls)
 		}
 	})
 }

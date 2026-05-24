@@ -8,6 +8,7 @@
             hx-on::config-request="event.detail.path += '/'+this.value"
             hx-swap="innerHTML">
             <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            <option value="{{ $.Const.FormsEndpoint }}">Forms</option>
             {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
             <option value="{{ $.Const.MembersEndpoint }}">Members</option>
             {{ end }}
@@ -26,6 +27,11 @@
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.FormsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Forms</a>
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"

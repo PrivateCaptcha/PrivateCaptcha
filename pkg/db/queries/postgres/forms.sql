@@ -4,10 +4,21 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: GetFormByExternalID :one
-SELECT * FROM backend.forms WHERE external_id = $1 AND deleted_at IS NULL;
+SELECT * FROM backend.forms WHERE external_id = $1;
 
 -- name: GetFormsByExternalID :many
-SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]) AND deleted_at IS NULL;
+SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]);
 
 -- name: GetFormByPropertyID :one
-SELECT * FROM backend.forms WHERE property_id = $1 AND deleted_at IS NULL;
+SELECT * FROM backend.forms WHERE property_id = $1;
+
+-- name: GetOrgForms :many
+SELECT *
+FROM backend.forms
+WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
+ORDER BY created_at
+OFFSET $2
+LIMIT $3;
+
+-- name: GetOrgFormsCount :one
+SELECT COUNT(*) as count FROM backend.forms WHERE org_id = $1 AND deleted_at IS NULL;
