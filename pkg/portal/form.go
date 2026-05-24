@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -10,7 +11,23 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-const webhookPrefixPathLimit = 12
+const (
+	webhookPrefixPathLimit = 12
+	formWizardTemplate     = "form-wizard/wizard.html"
+)
+
+type formWizardRenderContext struct {
+	CsrfRenderContext
+	AlertRenderContext
+	Name        string
+	Domain      string
+	URL         string
+	NameError   string
+	DomainError string
+	URLError    string
+	CurrentOrg  *UserOrg
+	Step        int
+}
 
 type userForm struct {
 	ID            string
@@ -24,6 +41,34 @@ type orgFormsRenderContext struct {
 	portalBaseRenderContext
 	PaginationRenderContext
 	Forms []*userForm
+}
+
+func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	data := &formWizardRenderContext{
+		CsrfRenderContext: s.CreateCsrfContext(user),
+		CurrentOrg: &UserOrg{
+			Name:  org.Name,
+			ID:    s.IDHasher.Encrypt(int(org.ID)),
+			Level: "",
+		},
+	}
+
+	if isUserOrgOwner := org.UserID.Int32 == user.ID; isUserOrgOwner && !user.SubscriptionID.Valid {
+		data.ErrorMessage = activeSubscriptionForPropertyError
+	}
+
+	return &ViewModel{Model: data, View: formWizardTemplate}, nil
 }
 
 func webhookPrefixFromURL(rawURL string) string {

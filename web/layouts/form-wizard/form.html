@@ -1,0 +1,60 @@
+<div class="space-y-4">
+    {{- if .Params.ErrorMessage -}}
+    {{ template "error-message.html" .Params.ErrorMessage }}
+    {{- end -}}
+
+    <div>
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label tooltip" data-tooltip="Convenience name for the form protected by CAPTCHA"> Name </label>
+        <div class="mt-2 relative">
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" placeholder="Contact Form" maxlength="255" value="{{.Params.Name}}" class="w-full pc-internal-form-input-base {{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label tooltip" data-tooltip="Address of the website where the CAPTCHA widget will be embedded"> Domain </label>
+        <div class="mt-2 relative">
+            {{- if .Params.DomainError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Domain }}" placeholder="example.com" maxlength="255" value="{{.Params.Domain}}" class="w-full pc-internal-form-input-base {{ if .Params.DomainError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.DomainError -}}
+        <p class="pc-form-error-text">{{ .Params.DomainError }}</p>
+        {{- end -}}
+    </div>
+
+    <div>
+        <label for="url" class="pc-internal-form-label tooltip" data-tooltip="Webhook URL where verified form submissions will be forwarded"> URL </label>
+        <div class="mt-2 relative">
+            {{- if .Params.URLError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="url" name="url" placeholder="https://example.com/hooks/contact" maxlength="2048" value="{{.Params.URL}}" class="w-full pc-internal-form-input-base {{ if .Params.URLError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}" required />
+        </div>
+        {{- if .Params.URLError -}}
+        <p class="pc-form-error-text">{{ .Params.URLError }}</p>
+        {{- end -}}
+    </div>
+</div>
+
+<div class="flex items-center justify-end mt-6 space-x-6">
+    <a href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}?tab={{ .Const.FormsEndpoint }}" class="pc-internal-form-button pc-internal-form-button-secondary">
+        Cancel
+    </a>
+    <button
+        type="submit"
+        class="pc-internal-form-button pc-internal-form-button-primary"
+    >
+    <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+        Create
+    </button>
+</div>

@@ -1,11 +1,16 @@
 package portal
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -88,4 +93,56 @@ func TestRenderFormsPaginationControls(t *testing.T) {
 			t.Fatalf("expected pagination button to use forms endpoint, got %q", s.AttrOr("hx-get", ""))
 		}
 	})
+}
+
+func TestGetNewOrgForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), nil)
+	req.AddCookie(cookie)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Form Wizard") {
+		t.Fatal("expected form wizard heading")
+	}
+	if !strings.Contains(body, "Create new form") {
+		t.Fatal("expected create new form step")
+	}
+	if !strings.Contains(body, "Website integration") {
+		t.Fatal("expected website integration step")
+	}
+	if !strings.Contains(body, `name="url"`) {
+		t.Fatal("expected URL input field")
+	}
+	if !strings.Contains(body, fmt.Sprintf("/org/%s?tab=%s", server.IDHasher.Encrypt(int(org.ID)), common.FormsEndpoint)) {
+		t.Fatal("expected cancel link back to forms area")
+	}
+	if strings.Contains(body, "Server integration") {
+		t.Fatal("did not expect server integration step")
+	}
 }
