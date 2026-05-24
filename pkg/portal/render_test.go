@@ -265,6 +265,25 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.FormsEndpoint},
+			template: orgFormsListTemplate,
+			model: &orgFormsRenderContext{
+				portalBaseRenderContext: portalBaseRenderContext{
+					CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				},
+				PaginationRenderContext: PaginationRenderContext{
+					From:    1,
+					To:      2,
+					Count:   2,
+					Page:    0,
+					PerPage: 30,
+				},
+				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
+			},
+			selector: "p.form-name",
+			matches:  []string{"Newsletter Signup", "Contact Us"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{
