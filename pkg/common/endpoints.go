@@ -6,6 +6,7 @@ const (
 	SiteVerifyEndpoint    = "siteverify"
 	VerifyEndpoint        = "verify"
 	FormEndpoint          = "form"
+	FormsEndpoint         = "forms"
 	LoginEndpoint         = "login"
 	TwoFactorEndpoint     = "2fa"
 	ResendEndpoint        = "resend"

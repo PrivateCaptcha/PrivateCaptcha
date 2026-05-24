@@ -22,6 +22,7 @@ type RenderConstants struct {
 	NewEndpoint                     string
 	OrgEndpoint                     string
 	PropertyEndpoint                string
+	FormsEndpoint                   string
 	DashboardEndpoint               string
 	TabEndpoint                     string
 	ReportsEndpoint                 string
@@ -122,6 +123,7 @@ func NewRenderConstants() *RenderConstants {
 		LogoutEndpoint:                  common.LogoutEndpoint,
 		OrgEndpoint:                     common.OrgEndpoint,
 		PropertyEndpoint:                common.PropertyEndpoint,
+		FormsEndpoint:                   common.FormsEndpoint,
 		DashboardEndpoint:               common.DashboardEndpoint,
 		NewEndpoint:                     common.NewEndpoint,
 		Token:                           common.ParamCSRFToken,

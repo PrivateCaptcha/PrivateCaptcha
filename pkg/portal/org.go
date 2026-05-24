@@ -25,6 +25,7 @@ var (
 
 const (
 	orgDashboardTemplate          = "portal/org-dashboard.html"
+	orgFormsTemplate              = "portal/org-forms.html"
 	orgPropertiesTemplate         = "portal/properties.html"
 	orgSettingsTemplate           = "portal/org-settings.html"
 	orgMembersTemplate            = "portal/org-members.html"
@@ -36,10 +37,11 @@ const (
 	enterpriseOrgError            = "Creating new organizations is only available in the enterprise edition of Private Captcha."
 	orgUserCreatedAtFormat        = "02 Jan 2006"
 	portalPropertiesTabIndex      = 0
-	portalMembersTabIndex         = 1
-	portalSettingsTabIndex        = 2
-	portalRulesTabIndex           = 3
-	portalEventsTabIndex          = 4
+	portalFormsTabIndex           = 1
+	portalMembersTabIndex         = 2
+	portalSettingsTabIndex        = 3
+	portalRulesTabIndex           = 4
+	portalEventsTabIndex          = 5
 )
 
 type portalBaseRenderContext struct {
@@ -363,6 +365,9 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 	var derr error
 	var event *common.AuditLogEvent
 	switch tabParam {
+	case common.FormsEndpoint:
+		baseCtx.Tab = portalFormsTabIndex
+		model = baseCtx
 	case common.MembersEndpoint:
 		if vm, ae, err := s.createOrgMembersRenderContext(ctx, baseCtx, org, user); err == nil {
 			model = vm
@@ -469,6 +474,23 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 	}
 
 	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate}, nil
+}
+
+func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
+
+	return &ViewModel{Model: renderCtx, View: orgFormsTemplate}, nil
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

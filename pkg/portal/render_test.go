@@ -227,6 +227,17 @@ func TestRenderHTML(t *testing.T) {
 			matches:  []string{"foo", "bar"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123"},
+			template: portalTemplate,
+			model: &portalBaseRenderContext{
+				Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner)},
+				CurrentOrg: stubOrgEx("123", dbgen.AccessLevelOwner),
+				Tab:        1,
+			},
+			selector: "h1",
+			matches:  []string{"No forms"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.TabEndpoint, common.SettingsEndpoint},
 			template: orgSettingsTemplate,
 			model: &orgSettingsRenderContext{

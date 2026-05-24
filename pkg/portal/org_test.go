@@ -2630,13 +2630,15 @@ func TestGetPortalAllTabs(t *testing.T) {
 	tabs := []struct {
 		name string
 		tab  string
+		body string
 	}{
-		{"Dashboard", common.DashboardEndpoint},
-		{"Members", common.MembersEndpoint},
-		{"Settings", common.SettingsEndpoint},
-		{"Events", common.EventsEndpoint},
-		{"Default", ""},
-		{"Unknown", "unknown-tab"},
+		{name: "Dashboard", tab: common.DashboardEndpoint},
+		{name: "Forms", tab: common.FormsEndpoint, body: "No forms"},
+		{name: "Members", tab: common.MembersEndpoint},
+		{name: "Settings", tab: common.SettingsEndpoint},
+		{name: "Events", tab: common.EventsEndpoint},
+		{name: "Default", tab: ""},
+		{name: "Unknown", tab: "unknown-tab"},
 	}
 
 	for _, tc := range tabs {
@@ -2655,7 +2657,45 @@ func TestGetPortalAllTabs(t *testing.T) {
 			if w.Code != http.StatusOK {
 				t.Errorf("Expected status 200 for tab '%s', got %d", tc.tab, w.Code)
 			}
+
+			if (tc.body != "") && !strings.Contains(w.Body.String(), tc.body) {
+				t.Errorf("Expected response body for tab '%s' to contain %q", tc.tab, tc.body)
+			}
 		})
+	}
+}
+
+func TestGetOrgFormsTabEndpoint(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest("GET", fmt.Sprintf("/org/%s/%s/%s", server.IDHasher.Encrypt(int(org.ID)), common.TabEndpoint, common.FormsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "No forms") {
+		t.Fatalf("Expected forms tab endpoint body to contain %q", "No forms")
 	}
 }
 
