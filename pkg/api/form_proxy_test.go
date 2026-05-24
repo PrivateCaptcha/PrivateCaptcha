@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type stubSubmitFormURLVerifier struct {
@@ -32,6 +33,15 @@ func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string
 
 func (v *stubSubmitFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+type formProxyQuerierStub struct {
+	*db.QuerierStub
+	forms []*dbgen.Form
+}
+
+func (s *formProxyQuerierStub) GetFormsByExternalID(ctx context.Context, externalIDs []pgtype.UUID) ([]*dbgen.Form, error) {
+	return s.forms, s.Error
 }
 
 func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain string) (*dbgen.Form, *dbgen.Property) {
@@ -73,7 +83,7 @@ func formProxySuite(t *testing.T, form *dbgen.Form, body url.Values) *http.Respo
 	return w.Result()
 }
 
-func TestSubmitFormSkipsUnsafeFormURL(t *testing.T) {
+func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
 	downstreamCalled := false
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		downstreamCalled = true
@@ -83,12 +93,15 @@ func TestSubmitFormSkipsUnsafeFormURL(t *testing.T) {
 
 	expectedErr := errors.New("unsafe form URL")
 	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
-	server := &Server{FormURLVerifier: verifier}
-	client := &http.Client{Timeout: time.Second}
-	form := &dbgen.Form{ID: 1, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0}
-	submission := &FormSubmission{Values: url.Values{"email": {"test@example.com"}}}
+	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true}
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
+	server := &Server{BusinessDB: store, FormURLVerifier: verifier}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	server.submitForm(context.Background(), client, form, submission)
+	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
+		t.Fatalf("expected batch submission to continue after unsafe URL, got %v", err)
+	}
 
 	if len(verifier.urls) != 1 || verifier.urls[0] != downstream.URL {
 		t.Fatalf("expected verifier to receive form URL, got %v", verifier.urls)
