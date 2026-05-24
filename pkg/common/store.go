@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"net/netip"
 	"time"
 )
 
@@ -111,6 +112,11 @@ type AuditLog interface {
 
 type EmailVerifier interface {
 	VerifyEmail(ctx context.Context, email string) error
+}
+
+type FormURLVerifier interface {
+	VerifyURL(ctx context.Context, rawURL string) error
+	VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error
 }
 
 type LicenseService interface {

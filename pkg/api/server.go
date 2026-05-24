@@ -91,6 +91,7 @@ type Server struct {
 	Mailer             common.Mailer
 	RateLimiter        ratelimit.HTTPRateLimiter
 	Verifier           *Verifier
+	FormURLVerifier    common.FormURLVerifier
 	SubscriptionLimits db.SubscriptionLimits
 	IDHasher           common.IdentifierHasher
 	AsyncTasks         db.AsyncTasks

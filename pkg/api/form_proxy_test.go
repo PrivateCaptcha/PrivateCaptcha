@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -16,7 +18,31 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type stubSubmitFormURLVerifier struct {
+	err  error
+	urls []string
+}
+
+func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	v.urls = append(v.urls, rawURL)
+	return v.err
+}
+
+func (v *stubSubmitFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
+	return v.err
+}
+
+type formProxyQuerierStub struct {
+	*db.QuerierStub
+	forms []*dbgen.Form
+}
+
+func (s *formProxyQuerierStub) GetFormsByExternalID(ctx context.Context, externalIDs []pgtype.UUID) ([]*dbgen.Form, error) {
+	return s.forms, s.Error
+}
 
 func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain string) (*dbgen.Form, *dbgen.Property) {
 	t.Helper()
@@ -55,6 +81,63 @@ func formProxySuite(t *testing.T, form *dbgen.Form, body url.Values) *http.Respo
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 	return w.Result()
+}
+
+func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
+	downstreamCalled := false
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		downstreamCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	expectedErr := errors.New("unsafe form URL")
+	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
+	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true}
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
+	server := &Server{BusinessDB: store, FormURLVerifier: verifier}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
+		t.Fatalf("expected batch submission to continue after unsafe URL, got %v", err)
+	}
+
+	if len(verifier.urls) != 1 || verifier.urls[0] != downstream.URL {
+		t.Fatalf("expected verifier to receive form URL, got %v", verifier.urls)
+	}
+	if downstreamCalled {
+		t.Fatal("expected unsafe form URL to be skipped")
+	}
+}
+
+func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
+	expectedErr := errors.New("unsafe redirect URL")
+	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
+	server := &Server{FormURLVerifier: verifier}
+	client := server.newFormHTTPClient()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
+
+	err := client.CheckRedirect(req, nil)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected redirect verifier error, got %v", err)
+	}
+	if len(verifier.urls) != 1 || verifier.urls[0] != "http://127.0.0.1/form" {
+		t.Fatalf("expected redirect URL to be verified, got %v", verifier.urls)
+	}
+}
+
+func TestFormDialContextRejectsUnsafeResolvedAddress(t *testing.T) {
+	server := &Server{FormURLVerifier: NewFormURLVerifier()}
+	_, err := server.formDialContext(context.Background(), "tcp", "127.0.0.1:80")
+	if err == nil {
+		t.Fatal("expected localhost dial target to be rejected")
+	}
+
+	_, err = server.formDialContext(context.Background(), "tcp", "[::1]:80")
+	if err == nil {
+		t.Fatal("expected IPv6 localhost dial target to be rejected")
+	}
 }
 
 func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {

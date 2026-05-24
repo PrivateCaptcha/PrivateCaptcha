@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 
 	"context"
@@ -39,6 +40,18 @@ var (
 	store      *db.BusinessStore
 	testPlan   billing.Plan
 )
+
+type allowAllFormURLVerifier struct{}
+
+var _ common.FormURLVerifier = (*allowAllFormURLVerifier)(nil)
+
+func (allowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
+func (allowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
+	return nil
+}
 
 const (
 	authBackfillDelay   = 100 * time.Millisecond
@@ -103,6 +116,7 @@ func TestMain(m *testing.M) {
 		FormSubmissionChan: make(chan *FormSubmission, 10*FormBatchSize),
 		FormSubmitCancel:   func() {},
 		Verifier:           NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
+		FormURLVerifier:    allowAllFormURLVerifier{},
 		Metrics:            metrics,
 		Mailer:             &email.StubMailer{},
 		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
@@ -153,6 +167,7 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10),
 		FormSubmissionChan: make(chan *FormSubmission, 10),
+		FormURLVerifier:    allowAllFormURLVerifier{},
 		Verifier:           NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
 		Metrics:            metrics,
 		Mailer:             &email.StubMailer{},
@@ -164,6 +179,13 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		CountryCodeHeader:  config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),
 		NoticeProvider:     &db_tests.StubNoticeProvider{},
 	}
+
+	srv.Init(t.Context(), ServerConfig{
+		VerifyFlushInterval: verifyFlushInterval,
+		AuthBackfillDelay:   authBackfillDelay,
+		FormFlushInterval:   formFlushInterval,
+		BackpressureTimeout: 100 * time.Millisecond,
+	})
 
 	srv.APIHeaders = make(map[string][]string)
 	rg := srv.Setup("/api", false, common.NoopMiddleware)
