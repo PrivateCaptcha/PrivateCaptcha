@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/netip"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 )
 
 var (
@@ -20,25 +23,35 @@ type formURLResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
-type resolvedFormURLAddressVerifier interface {
-	VerifyResolvedFormURLAddress(ctx context.Context, host string, ip netip.Addr) error
+type FormURLVerifierImpl struct {
+	Cache    common.Cache[string, *bool]
+	Resolver formURLResolver
 }
 
-type PublicFormURLVerifier struct {
-	VerifiedHosts common.Cache[string, bool]
-	Resolver      formURLResolver
+var _ common.FormURLVerifier = (*FormURLVerifierImpl)(nil)
+
+func NewFormURLVerifier() *FormURLVerifierImpl {
+	const maxCacheSize = 10_000
+	var cache common.Cache[string, *bool]
+	var err error
+	cache, err = db.NewMemoryCache[string, *bool]("form_url_verifier", maxCacheSize, nil, /*missing value*/
+		10*time.Minute /*expiry*/, 5*time.Minute /*refresh*/, time.Minute /*missing */)
+	if err != nil {
+		slog.Error("Failed to create memory cache", common.ErrAttr(err))
+		cache = db.NewStaticCache[string, *bool](maxCacheSize, nil)
+	}
+
+	return NewFormURLVerifierEx(cache)
 }
 
-var _ common.FormURLVerifier = (*PublicFormURLVerifier)(nil)
-
-func NewPublicFormURLVerifier(verifiedHosts common.Cache[string, bool]) *PublicFormURLVerifier {
-	return &PublicFormURLVerifier{
-		VerifiedHosts: verifiedHosts,
-		Resolver:      net.DefaultResolver,
+func NewFormURLVerifierEx(cache common.Cache[string, *bool]) *FormURLVerifierImpl {
+	return &FormURLVerifierImpl{
+		Cache:    cache,
+		Resolver: net.DefaultResolver,
 	}
 }
 
-func (v *PublicFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
+func (v *FormURLVerifierImpl) VerifyURL(ctx context.Context, rawURL string) error {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("%w: malformed URL", errUnsafeFormURL)
@@ -46,7 +59,7 @@ func (v *PublicFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string
 
 	scheme := strings.ToLower(parsedURL.Scheme)
 	if (scheme != "http") && (scheme != "https") {
-		return fmt.Errorf("%w: unsupported scheme", errUnsafeFormURL)
+		return fmt.Errorf("%w: unsupported scheme: %v", errUnsafeFormURL, scheme)
 	}
 
 	if parsedURL.User != nil {
@@ -58,21 +71,28 @@ func (v *PublicFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string
 		return fmt.Errorf("%w: missing hostname", errUnsafeFormURL)
 	}
 
+	if verified, err := v.Cache.Get(ctx, host); (err == nil) && (verified != nil) {
+		if *verified {
+			return nil
+		} else {
+			return errUnsafeFormURL
+		}
+	}
+
+	safe := new(bool)
+
 	if isBlockedFormURLHostname(host) {
+		_ = v.Cache.Set(ctx, host, safe)
 		return fmt.Errorf("%w: blocked hostname", errUnsafeFormURL)
 	}
 
 	if ip, err := netip.ParseAddr(host); err == nil {
 		if !isSafeFormURLIP(ip) {
+			_ = v.Cache.Set(ctx, host, safe)
 			return fmt.Errorf("%w: blocked IP address", errUnsafeFormURL)
 		}
-		return nil
-	}
 
-	if v.VerifiedHosts != nil {
-		if verified, err := v.VerifiedHosts.Get(ctx, host); err == nil && verified {
-			return nil
-		}
+		return nil
 	}
 
 	resolver := v.Resolver
@@ -91,20 +111,18 @@ func (v *PublicFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string
 	for _, address := range addresses {
 		ip, ok := netip.AddrFromSlice(address.IP)
 		if !ok || !isSafeFormURLIP(ip) {
+			_ = v.Cache.Set(ctx, host, safe)
 			return fmt.Errorf("%w: DNS resolved unsafe address", errUnsafeFormURL)
 		}
 	}
 
-	if v.VerifiedHosts != nil {
-		if err := v.VerifiedHosts.Set(ctx, host, true); err != nil {
-			return err
-		}
-	}
+	*safe = true
+	_ = v.Cache.Set(ctx, host, safe)
 
 	return nil
 }
 
-func (v *PublicFormURLVerifier) VerifyResolvedFormURLAddress(ctx context.Context, host string, ip netip.Addr) error {
+func (v *FormURLVerifierImpl) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	host = normalizeFormURLHostname(host)
 	if len(host) == 0 {
 		return fmt.Errorf("%w: missing hostname", errUnsafeFormURL)

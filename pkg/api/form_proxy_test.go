@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"sync"
@@ -24,8 +25,12 @@ type stubSubmitFormURLVerifier struct {
 	urls []string
 }
 
-func (v *stubSubmitFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
+func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
 	v.urls = append(v.urls, rawURL)
+	return v.err
+}
+
+func (v *stubSubmitFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
 }
 
@@ -110,7 +115,7 @@ func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
 }
 
 func TestFormDialContextRejectsUnsafeResolvedAddress(t *testing.T) {
-	server := &Server{FormURLVerifier: &PublicFormURLVerifier{}}
+	server := &Server{FormURLVerifier: &FormURLVerifierImpl{}}
 	_, err := server.formDialContext(context.Background(), "tcp", "127.0.0.1:80")
 	if err == nil {
 		t.Fatal("expected localhost dial target to be rejected")

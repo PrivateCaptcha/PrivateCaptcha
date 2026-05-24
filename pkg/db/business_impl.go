@@ -125,9 +125,8 @@ func (c *TxCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any])
 }
 
 type BusinessStoreImpl struct {
-	querier         dbgen.Querier
-	cache           common.Cache[CacheKey, any]
-	formURLVerifier common.FormURLVerifier
+	querier dbgen.Querier
+	cache   common.Cache[CacheKey, any]
 }
 
 func (impl *BusinessStoreImpl) RetrieveFromCache(ctx context.Context, key string) ([]byte, error) {
@@ -1052,13 +1051,6 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams *dbgen.CreatePropertyParams, formParams *dbgen.CreateFormParams, org *dbgen.Organization) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
 	if (formParams == nil) || (len(formParams.URL) == 0) {
 		return nil, nil, nil, ErrInvalidInput
-	}
-
-	if impl.formURLVerifier != nil {
-		if err := impl.formURLVerifier.VerifyFormURL(ctx, formParams.URL); err != nil {
-			slog.WarnContext(ctx, "Rejected unsafe form URL", common.ErrAttr(err))
-			return nil, nil, nil, err
-		}
 	}
 
 	property, auditEvent, err := impl.CreateNewProperty(ctx, propertyParams, org)

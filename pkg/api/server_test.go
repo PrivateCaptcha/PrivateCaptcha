@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 
 	"context"
@@ -42,7 +43,13 @@ var (
 
 type allowAllFormURLVerifier struct{}
 
-func (allowAllFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
+var _ common.FormURLVerifier = (*allowAllFormURLVerifier)(nil)
+
+func (allowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
+func (allowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return nil
 }
 
@@ -93,7 +100,6 @@ func TestMain(m *testing.M) {
 	}
 
 	store = db.NewBusinessEx(pool, cache)
-	store.SetFormURLVerifier(allowAllFormURLVerifier{})
 
 	metrics := monitoring.NewStub()
 

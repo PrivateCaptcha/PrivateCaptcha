@@ -155,12 +155,6 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 	defer clickhouse.Close()
 
 	businessDB := db.NewBusiness(pool)
-	verifiedFormURLHosts, err := db.NewMemoryCache[string, bool]("form_url_verifier", 100_000, false, 15*time.Minute, 15*time.Minute, time.Minute)
-	if err != nil {
-		return err
-	}
-	formURLVerifier := api.NewPublicFormURLVerifier(verifiedFormURLHosts)
-	businessDB.SetFormURLVerifier(formURLVerifier)
 	timeSeriesDB := db.NewTimeSeries(clickhouse, businessDB.Cache)
 
 	puzzleVerifier := api.NewVerifier(cfg, businessDB, cfg.Get(common.FingerprintHeaderKey))
@@ -199,7 +193,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
 		FormSubmissionChan: make(chan *api.FormSubmission, 10*api.FormBatchSize),
 		Verifier:           puzzleVerifier,
-		FormURLVerifier:    formURLVerifier,
+		FormURLVerifier:    api.NewFormURLVerifier(),
 		Metrics:            metrics,
 		Mailer:             mailer,
 		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),

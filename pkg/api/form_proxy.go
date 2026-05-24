@@ -27,8 +27,8 @@ const (
 )
 
 var formOutboundDialer = &net.Dialer{
-	Timeout:   30 * time.Second,
-	KeepAlive: 30 * time.Second,
+	Timeout:   10 * time.Second,
+	KeepAlive: 10 * time.Second,
 }
 
 type FormSubmission struct {
@@ -229,6 +229,11 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 			s.addVerifyRecord(ctx, result)
 		}
 
+		if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
+			slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", form.ID, "url", form.URL, common.ErrAttr(err))
+			continue
+		}
+
 		s.submitForm(ctx, client, form, submission)
 	}
 
@@ -243,10 +248,7 @@ func (s *Server) newFormHTTPClient() *http.Client {
 		Timeout:   10 * time.Second,
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if s.FormURLVerifier == nil {
-				return nil
-			}
-			if err := s.FormURLVerifier.VerifyFormURL(req.Context(), req.URL.String()); err != nil {
+			if err := s.FormURLVerifier.VerifyURL(req.Context(), req.URL.String()); err != nil {
 				return fmt.Errorf("unsafe form redirect: %w", err)
 			}
 			return nil
@@ -255,11 +257,6 @@ func (s *Server) newFormHTTPClient() *http.Client {
 }
 
 func (s *Server) formDialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	verifier, ok := s.FormURLVerifier.(resolvedFormURLAddressVerifier)
-	if !ok {
-		return formOutboundDialer.DialContext(ctx, network, address)
-	}
-
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return nil, err
@@ -267,7 +264,7 @@ func (s *Server) formDialContext(ctx context.Context, network, address string) (
 
 	host = normalizeFormURLHostname(host)
 	if ip, err := netip.ParseAddr(host); err == nil {
-		if err := verifier.VerifyResolvedFormURLAddress(ctx, host, ip); err != nil {
+		if err := s.FormURLVerifier.VerifyResolvedAddress(ctx, host, ip); err != nil {
 			return nil, err
 		}
 		return formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(host, port))
@@ -287,7 +284,7 @@ func (s *Server) formDialContext(ctx context.Context, network, address string) (
 		if !ok {
 			return nil, fmt.Errorf("form dial resolved invalid address: %s", address.IP.String())
 		}
-		if err := verifier.VerifyResolvedFormURLAddress(ctx, host, ip); err != nil {
+		if err := s.FormURLVerifier.VerifyResolvedAddress(ctx, host, ip); err != nil {
 			return nil, err
 		}
 
@@ -324,13 +321,6 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 				slog.WarnContext(ctx, "Job context cancelled while submitting form", common.ErrAttr(ctx.Err()))
 				return
 			case <-time.After(b.Duration()):
-			}
-		}
-
-		if s.FormURLVerifier != nil {
-			if err := s.FormURLVerifier.VerifyFormURL(ctx, form.URL); err != nil {
-				slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", form.ID, common.ErrAttr(err))
-				return
 			}
 		}
 

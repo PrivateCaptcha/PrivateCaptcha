@@ -37,16 +37,6 @@ type createFormQuerierStub struct {
 	calls          []string
 }
 
-type stubFormURLVerifier struct {
-	err  error
-	urls []string
-}
-
-func (v *stubFormURLVerifier) VerifyFormURL(ctx context.Context, rawURL string) error {
-	v.urls = append(v.urls, rawURL)
-	return v.err
-}
-
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -715,28 +705,6 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{Name: "valid"}, &dbgen.CreateFormParams{}, &dbgen.Organization{})
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
-		}
-	})
-
-	t.Run("VerifiesURLBeforeCreatingProperty", func(t *testing.T) {
-		expectedErr := errors.New("unsafe form URL")
-		verifier := &stubFormURLVerifier{err: expectedErr}
-		querier := &createFormQuerierStub{QuerierStub: &QuerierStub{}}
-		store := &BusinessStoreImpl{
-			querier:         querier,
-			cache:           NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
-			formURLVerifier: verifier,
-		}
-
-		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{Name: "valid"}, &dbgen.CreateFormParams{URL: "http://127.0.0.1/form"}, &dbgen.Organization{})
-		if !errors.Is(err, expectedErr) {
-			t.Fatalf("expected verifier error, got %v", err)
-		}
-		if len(verifier.urls) != 1 || verifier.urls[0] != "http://127.0.0.1/form" {
-			t.Fatalf("expected verifier to receive form URL, got %v", verifier.urls)
-		}
-		if len(querier.calls) != 0 {
-			t.Fatalf("expected no DB writes before verifier success, got %v", querier.calls)
 		}
 	})
 }

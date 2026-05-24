@@ -31,17 +31,17 @@ func (r *stubFormURLResolver) LookupIPAddr(ctx context.Context, host string) ([]
 	return result, nil
 }
 
-func newTestPublicFormURLVerifier(t *testing.T, resolver *stubFormURLResolver) *PublicFormURLVerifier {
+func newTestFormURLVerifier(t *testing.T, resolver *stubFormURLResolver) *FormURLVerifierImpl {
 	t.Helper()
 
-	cache, err := db.NewMemoryCache[string, bool]("test-form-url-verifier", 1000, false, time.Minute, time.Minute, time.Second)
+	cache, err := db.NewMemoryCache[string, *bool]("test-form-url-verifier", 1000, nil, time.Minute, time.Minute, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return &PublicFormURLVerifier{
-		VerifiedHosts: cache,
-		Resolver:      resolver,
+	return &FormURLVerifierImpl{
+		Cache:    cache,
+		Resolver: resolver,
 	}
 }
 
@@ -53,7 +53,7 @@ func TestPublicFormURLVerifierAllowsPublicURLs(t *testing.T) {
 		},
 		calls: map[string]int{},
 	}
-	verifier := newTestPublicFormURLVerifier(t, resolver)
+	verifier := newTestFormURLVerifier(t, resolver)
 
 	for _, rawURL := range []string{
 		"https://example.com/form",
@@ -62,7 +62,7 @@ func TestPublicFormURLVerifierAllowsPublicURLs(t *testing.T) {
 		"https://[2606:2800:220:1:248:1893:25c8:1946]/form",
 	} {
 		t.Run(rawURL, func(t *testing.T) {
-			if err := verifier.VerifyFormURL(ctx, rawURL); err != nil {
+			if err := verifier.VerifyURL(ctx, rawURL); err != nil {
 				t.Fatalf("expected URL to be allowed: %v", err)
 			}
 		})
@@ -77,12 +77,12 @@ func TestPublicFormURLVerifierCachesSafeHostnames(t *testing.T) {
 		},
 		calls: map[string]int{},
 	}
-	verifier := newTestPublicFormURLVerifier(t, resolver)
+	verifier := newTestFormURLVerifier(t, resolver)
 
-	if err := verifier.VerifyFormURL(ctx, "https://example.com/form"); err != nil {
+	if err := verifier.VerifyURL(ctx, "https://example.com/form"); err != nil {
 		t.Fatalf("expected first URL verification to pass: %v", err)
 	}
-	if err := verifier.VerifyFormURL(ctx, "https://Example.COM./other-form"); err != nil {
+	if err := verifier.VerifyURL(ctx, "https://Example.COM./other-form"); err != nil {
 		t.Fatalf("expected cached URL verification to pass: %v", err)
 	}
 	if resolver.calls["example.com"] != 1 {
@@ -103,7 +103,7 @@ func TestPublicFormURLVerifierBlocksUnsafeURLs(t *testing.T) {
 		},
 		calls: map[string]int{},
 	}
-	verifier := newTestPublicFormURLVerifier(t, resolver)
+	verifier := newTestFormURLVerifier(t, resolver)
 
 	for _, rawURL := range []string{
 		"http://localhost/form",
@@ -125,7 +125,7 @@ func TestPublicFormURLVerifierBlocksUnsafeURLs(t *testing.T) {
 		"https://missing.example/form",
 	} {
 		t.Run(rawURL, func(t *testing.T) {
-			if err := verifier.VerifyFormURL(ctx, rawURL); err == nil {
+			if err := verifier.VerifyURL(ctx, rawURL); err == nil {
 				t.Fatal("expected URL to be blocked")
 			}
 		})
