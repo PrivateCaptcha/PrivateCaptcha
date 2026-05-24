@@ -6,14 +6,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
 const (
-	webhookPrefixPathLimit = 12
-	formWizardTemplate     = "form-wizard/wizard.html"
+	webhookPrefixPathLimit  = 12
+	formWizardTemplate      = "form-wizard/wizard.html"
+	formWizardNewTemplate   = "form-wizard/new.html"
+	formWizardSetupTemplate = "form-wizard/client-setup.html"
 )
 
 type formWizardRenderContext struct {
@@ -43,6 +47,13 @@ type orgFormsRenderContext struct {
 	Forms []*userForm
 }
 
+type formIntegrationRenderContext struct {
+	CsrfRenderContext
+	CurrentOrg     *UserOrg
+	Sitekey        string
+	FormExternalID string
+}
+
 func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -69,6 +80,112 @@ func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMod
 	}
 
 	return &ViewModel{Model: data, View: formWizardTemplate}, nil
+}
+
+func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, db.ErrInvalidInput
+	}
+
+	org, level, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, db.ErrPermissions
+	}
+
+	renderCtx := &formWizardRenderContext{
+		CsrfRenderContext:  s.CreateCsrfContext(user),
+		AlertRenderContext: AlertRenderContext{},
+		CurrentOrg:         orgToUserOrg(org, user.ID, s.IDHasher),
+	}
+
+	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
+	if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, renderCtx.Name, nil); !nameStatus.Success() {
+		renderCtx.NameError = nameStatus.String()
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
+	domain, err := common.ParseDomainName(renderCtx.Domain)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
+		renderCtx.DomainError = common.StatusPropertyDomainFormatError.String()
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	_, ignoreError := r.Form[common.ParamIgnoreError]
+	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
+		renderCtx.DomainError = domainStatus.String()
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	renderCtx.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
+	if len(renderCtx.URL) == 0 {
+		renderCtx.URLError = "URL cannot be empty."
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	if s.FormURLVerifier == nil {
+		slog.ErrorContext(ctx, "Form URL verifier is not configured")
+		renderCtx.URLError = "URL is not valid."
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	if err := s.FormURLVerifier.VerifyURL(ctx, renderCtx.URL); err != nil {
+		slog.WarnContext(ctx, "Failed to verify form URL", "url", renderCtx.URL, common.ErrAttr(err))
+		renderCtx.URLError = "URL is not valid."
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
+		renderCtx.ErrorMessage = limitError
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, &dbgen.CreatePropertyParams{
+		CreatorID:        db.Int(user.ID),
+		Domain:           domain,
+		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	}, &dbgen.CreateFormParams{
+		Name:              renderCtx.Name,
+		URL:               renderCtx.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create the form", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to create the form. Please try again later."
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+
+	return &ViewModel{Model: &formIntegrationRenderContext{
+		CsrfRenderContext: s.CreateCsrfContext(user),
+		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
+		Sitekey:           db.UUIDToSiteKey(property.ExternalID),
+		FormExternalID:    db.UUIDToString(form.ExternalID),
+	}, View: formWizardSetupTemplate}, nil
 }
 
 func webhookPrefixFromURL(rawURL string) string {

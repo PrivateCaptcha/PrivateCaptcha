@@ -171,6 +171,7 @@ type Server struct {
 	OrgRulesFunc       OrgRulesConstructor
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
+	FormURLVerifier    common.FormURLVerifier
 	TwoFactorDuration  time.Duration
 	LicenseService     common.LicenseService
 	Rules              *RuleRegistry
@@ -353,6 +354,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormsEndpoint), privateRead, s.Handler(s.getOrgForms))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgForm))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgProperty))

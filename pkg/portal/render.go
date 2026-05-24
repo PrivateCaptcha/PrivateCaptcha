@@ -32,6 +32,7 @@ type RenderConstants struct {
 	Token                           string
 	Email                           string
 	Name                            string
+	URL                             string
 	Tab                             string
 	VerificationCode                string
 	Domain                          string
@@ -131,6 +132,7 @@ func NewRenderConstants() *RenderConstants {
 		Token:                           common.ParamCSRFToken,
 		Email:                           common.ParamEmail,
 		Name:                            common.ParamName,
+		URL:                             common.ParamURL,
 		Tab:                             common.ParamTab,
 		VerificationCode:                common.ParamVerificationCode,
 		Domain:                          common.ParamDomain,

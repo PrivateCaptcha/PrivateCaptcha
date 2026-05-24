@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/config"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
@@ -144,5 +146,91 @@ func TestGetNewOrgForm(t *testing.T) {
 	}
 	if strings.Contains(body, "Server integration") {
 		t.Fatal("did not expect server integration step")
+	}
+}
+
+func TestPostNewOrgForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	formName := t.Name() + " Contact"
+	formData := url.Values{}
+	formData.Set(common.ParamCSRFToken, server.XSRF.Token(fmt.Sprintf("%d", user.ID)))
+	formData.Set(common.ParamName, formName)
+	formData.Set(common.ParamDomain, "example.com")
+	formData.Set(common.ParamURL, "https://hooks.example.com/submit")
+	formData.Set(common.ParamIgnoreError, "true")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/new", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(formData.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 {
+		t.Fatalf("expected 1 form, got %d", len(forms))
+	}
+
+	createdForm := forms[0]
+	if createdForm.Name != formName {
+		t.Fatalf("expected form name %q, got %q", formName, createdForm.Name)
+	}
+	if createdForm.URL != "https://hooks.example.com/submit" {
+		t.Fatalf("expected form URL to be preserved, got %q", createdForm.URL)
+	}
+	if !createdForm.Enabled {
+		t.Fatal("expected created form to be enabled")
+	}
+	if createdForm.Method != dbgen.FormMethodPost {
+		t.Fatalf("expected form method %q, got %q", dbgen.FormMethodPost, createdForm.Method)
+	}
+	if createdForm.RequestsPerSecond != 1 {
+		t.Fatalf("expected requests per second 1, got %v", createdForm.RequestsPerSecond)
+	}
+	if createdForm.RequestsBurst != 5 {
+		t.Fatalf("expected requests burst 5, got %d", createdForm.RequestsBurst)
+	}
+	if createdForm.RetryRequestCount != 0 {
+		t.Fatalf("expected retry count 0, got %d", createdForm.RetryRequestCount)
+	}
+
+	createdProperty, err := store.Impl().GetCachedPropertyByID(ctx, createdForm.PropertyID)
+	if err != nil {
+		t.Fatalf("expected backing property, got %v", err)
+	}
+	if createdProperty == nil {
+		t.Fatal("expected backing property to exist")
+	}
+	if createdProperty.Domain != "example.com" {
+		t.Fatalf("expected backing property domain %q, got %q", "example.com", createdProperty.Domain)
+	}
+
+	formGUID := db.UUIDToString(createdForm.ExternalID)
+	if !strings.Contains(w.Body.String(), "https://api.privatecaptcha.com/form/"+formGUID) {
+		t.Fatal("expected integration step to include public form endpoint")
 	}
 }
