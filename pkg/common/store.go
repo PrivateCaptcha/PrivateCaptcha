@@ -113,6 +113,10 @@ type EmailVerifier interface {
 	VerifyEmail(ctx context.Context, email string) error
 }
 
+type FormURLVerifier interface {
+	VerifyFormURL(ctx context.Context, rawURL string) error
+}
+
 type LicenseService interface {
 	IsRegistered() bool
 }
