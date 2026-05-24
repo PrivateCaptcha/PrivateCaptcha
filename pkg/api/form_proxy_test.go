@@ -93,6 +93,35 @@ func TestSubmitFormSkipsUnsafeFormURL(t *testing.T) {
 	}
 }
 
+func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
+	expectedErr := errors.New("unsafe redirect URL")
+	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
+	server := &Server{FormURLVerifier: verifier}
+	client := server.newFormHTTPClient()
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
+
+	err := client.CheckRedirect(req, nil)
+	if !errors.Is(err, expectedErr) {
+		t.Fatalf("expected redirect verifier error, got %v", err)
+	}
+	if len(verifier.urls) != 1 || verifier.urls[0] != "http://127.0.0.1/form" {
+		t.Fatalf("expected redirect URL to be verified, got %v", verifier.urls)
+	}
+}
+
+func TestFormDialContextRejectsUnsafeResolvedAddress(t *testing.T) {
+	server := &Server{FormURLVerifier: &PublicFormURLVerifier{}}
+	_, err := server.formDialContext(context.Background(), "tcp", "127.0.0.1:80")
+	if err == nil {
+		t.Fatal("expected localhost dial target to be rejected")
+	}
+
+	_, err = server.formDialContext(context.Background(), "tcp", "[::1]:80")
+	if err == nil {
+		t.Fatal("expected IPv6 localhost dial target to be rejected")
+	}
+}
+
 func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

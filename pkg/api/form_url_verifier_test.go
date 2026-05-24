@@ -69,6 +69,27 @@ func TestPublicFormURLVerifierAllowsPublicURLs(t *testing.T) {
 	}
 }
 
+func TestPublicFormURLVerifierCachesSafeHostnames(t *testing.T) {
+	ctx := context.Background()
+	resolver := &stubFormURLResolver{
+		addresses: map[string][]string{
+			"example.com": {"93.184.216.34"},
+		},
+		calls: map[string]int{},
+	}
+	verifier := newTestPublicFormURLVerifier(t, resolver)
+
+	if err := verifier.VerifyFormURL(ctx, "https://example.com/form"); err != nil {
+		t.Fatalf("expected first URL verification to pass: %v", err)
+	}
+	if err := verifier.VerifyFormURL(ctx, "https://Example.COM./other-form"); err != nil {
+		t.Fatalf("expected cached URL verification to pass: %v", err)
+	}
+	if resolver.calls["example.com"] != 1 {
+		t.Fatalf("expected one resolver call for cached hostname, got %d", resolver.calls["example.com"])
+	}
+}
+
 func TestPublicFormURLVerifierBlocksUnsafeURLs(t *testing.T) {
 	ctx := context.Background()
 	dnsErr := errors.New("dns failed")
