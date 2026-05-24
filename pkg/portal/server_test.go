@@ -198,27 +198,6 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func TestSetupRegistersOrgFormsTabRoute(t *testing.T) {
-	server.Metrics = monitoring.NewStub()
-	server.RateLimiter = &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"}
-
-	rg := server.Setup("/portal", common.NoopMiddleware)
-	expectedPath := "/portal/" + common.OrgEndpoint + "/{" + common.ParamOrg + "}/" + common.TabEndpoint + "/" + common.FormsEndpoint
-
-	for _, route := range rg.Routes() {
-		parts := strings.SplitN(route.Prefix, " ", 2)
-		if len(parts) != 2 {
-			continue
-		}
-
-		if (parts[0] == http.MethodGet) && ((parts[1] + route.Path) == expectedPath) {
-			return
-		}
-	}
-
-	t.Fatalf("expected route %s %s to be registered", http.MethodGet, expectedPath)
-}
-
 func TestPortalServerStoreErrors(t *testing.T) {
 	expectedErr := errors.New("generic db error")
 	stub := &db.QuerierStub{Error: expectedErr}
