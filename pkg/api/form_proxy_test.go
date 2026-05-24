@@ -1,0 +1,202 @@
+package api
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	common_test "github.com/PrivateCaptcha/PrivateCaptcha/pkg/common/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
+	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+)
+
+func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain string) (*dbgen.Form, *dbgen.Property) {
+	t.Helper()
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, name, testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, domain), &dbgen.CreateFormParams{
+		URL:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	return form, property
+}
+
+func formProxySuite(t *testing.T, form *dbgen.Form, body url.Values) *http.Response {
+	t.Helper()
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+db.UUIDToString(form.ExternalID), strings.NewReader(body.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+	return w.Result()
+}
+
+func TestFormProxyRejectsInvalidCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	form, _ := createFormProxyForTest(ctx, t, t.Name(), "invalid-captcha.example.com")
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set(common.ParamPrivateCaptchaSolution, "invalid-captcha")
+
+	resp := formProxySuite(t, form, body)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form1, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-one.example.com"), &dbgen.CreateFormParams{
+		URL:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+	property2, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-two.example.com"), org)
+	if err != nil {
+		t.Fatalf("Failed to create second property: %v", err)
+	}
+
+	sitekey2 := db.UUIDToSiteKey(property2.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey2, property2.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	resp := formProxySuite(t, form1, body)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+}
+
+func TestFormProxySubmitsForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	var mu sync.Mutex
+	received := url.Values{}
+	receivedHeaders := http.Header{}
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Errorf("downstream failed to parse form: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		received = r.PostForm
+		receivedHeaders = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "submit-form.example.com"), &dbgen.CreateFormParams{
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set("message", "hello")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	resp := formProxySuite(t, form, body)
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("Unexpected submit status code %d", resp.StatusCode)
+	}
+
+	for i := 0; i < 5; i++ {
+		time.Sleep(formFlushInterval / 2)
+		mu.Lock()
+		called := received.Get("email") != ""
+		mu.Unlock()
+		if called {
+			break
+		}
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if received.Get("email") == "" {
+		t.Fatal("expected downstream endpoint to be called")
+	}
+	if received.Get("email") != "test@example.com" || received.Get("message") != "hello" {
+		t.Fatalf("unexpected downstream form data: %v", received)
+	}
+	if received.Get(common.ParamPrivateCaptchaSolution) != "" {
+		t.Fatalf("expected captcha solution field to be stripped")
+	}
+	if got := receivedHeaders.Get(common.HeaderContentType); got != common.ContentTypeURLEncoded {
+		t.Fatalf("expected downstream content type %q, got %q", common.ContentTypeURLEncoded, got)
+	}
+}

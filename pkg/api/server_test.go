@@ -43,6 +43,7 @@ var (
 const (
 	authBackfillDelay   = 100 * time.Millisecond
 	verifyFlushInterval = 1 * time.Second
+	formFlushInterval   = 500 * time.Millisecond
 )
 
 func testsConfigStore() common.ConfigStore {
@@ -99,6 +100,8 @@ func TestMain(m *testing.M) {
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
 		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
+		FormSubmissionChan: make(chan *FormSubmission, 10*FormBatchSize),
+		FormSubmitCancel:   func() {},
 		Verifier:           NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
 		Metrics:            metrics,
 		Mailer:             &email.StubMailer{},
@@ -110,7 +113,14 @@ func TestMain(m *testing.M) {
 		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
 		NoticeProvider:     &db_tests.StubNoticeProvider{},
 	}
-	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
+
+	serverCfg := ServerConfig{
+		VerifyFlushInterval: verifyFlushInterval,
+		AuthBackfillDelay:   authBackfillDelay,
+		FormFlushInterval:   formFlushInterval,
+		BackpressureTimeout: 100 * time.Millisecond,
+	}
+	if err := server.Init(context.TODO(), serverCfg); err != nil {
 		panic(err)
 	}
 	defer server.Shutdown()
@@ -142,6 +152,7 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		RateLimiter:        &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"},
 		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
 		VerifyLogChan:      make(chan *common.VerifyRecord, 10),
+		FormSubmissionChan: make(chan *FormSubmission, 10),
 		Verifier:           NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
 		Metrics:            metrics,
 		Mailer:             &email.StubMailer{},

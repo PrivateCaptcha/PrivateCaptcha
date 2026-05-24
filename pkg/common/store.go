@@ -78,6 +78,7 @@ const (
 	SitekeyEventType       MetricEventType = "sitekey"
 	APIKeyEventType        MetricEventType = "apikey"
 	PropertyRulesEventType MetricEventType = "property_rules"
+	FormEventType          MetricEventType = "form"
 )
 
 type BaseMetrics interface {

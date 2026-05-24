@@ -27,6 +27,8 @@ import (
 const (
 	maxSolutionsBodySize  = 256 * 1024
 	VerifyBatchSize       = 100
+	FormBatchSize         = 100
+	maxFormBatchSize      = 10_000
 	PropertyBucketSize    = 5 * time.Minute
 	updateLimitsBatchSize = 100
 	maxVerifyBatchSize    = 100_000
@@ -82,6 +84,8 @@ type Server struct {
 	Auth               *AuthMiddleware
 	VerifyLogChan      chan *common.VerifyRecord
 	VerifyLogCancel    context.CancelFunc
+	FormSubmissionChan chan *FormSubmission
+	FormSubmitCancel   context.CancelFunc
 	Cors               *cors.Cors
 	Metrics            common.APIMetrics
 	Mailer             common.Mailer
@@ -157,7 +161,14 @@ func (a *apiKeyOwnerSource) OwnerID(ctx context.Context, tnow time.Time) (int32,
 	return apiKey.UserID.Int32, orgID, nil
 }
 
-func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDelay, backpressureTimeout time.Duration) error {
+type ServerConfig struct {
+	VerifyFlushInterval time.Duration
+	AuthBackfillDelay   time.Duration
+	FormFlushInterval   time.Duration
+	BackpressureTimeout time.Duration
+}
+
+func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	s.APIHeaders = make(map[string][]string)
 
 	if err := s.Verifier.Update(ctx); err != nil {
@@ -165,15 +176,20 @@ func (s *Server) Init(ctx context.Context, verifyFlushInterval, authBackfillDela
 		return err
 	}
 
-	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, backpressureTimeout)
-	s.Auth.StartBackfill(authBackfillDelay, backpressureTimeout)
+	s.Levels.Init(2*time.Second /*access log interval*/, PropertyBucketSize /*backfill interval*/, config.BackpressureTimeout)
+	s.Auth.StartBackfill(config.AuthBackfillDelay, config.BackpressureTimeout)
 	s.RegisterTaskHandlers(ctx)
 
 	baseVerifyCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelVerifyCtx context.Context
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(context.WithValue(baseVerifyCtx, common.TraceIDContextKey, "flush_verify_log"))
 
-	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, verifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+
+	baseFormCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
+	var cancelFormCtx context.Context
+	cancelFormCtx, s.FormSubmitCancel = context.WithCancel(context.WithValue(baseFormCtx, common.TraceIDContextKey, "submit_forms"))
+	go common.ProcessBatchArray(cancelFormCtx, s.FormSubmissionChan, config.FormFlushInterval, FormBatchSize, maxFormBatchSize, s.submitFormBatch)
 
 	return nil
 }
@@ -185,7 +201,7 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
 		AllowedHeaders:             []string{common.HeaderCaptchaVersion, "accept", "content-type", "x-requested-with"},
 		ExposedHeaders:             []string{common.HeaderWidgetNotice},
-		AllowedMethods:             []string{http.MethodGet},
+		AllowedMethods:             []string{http.MethodGet, http.MethodPost, http.MethodOptions},
 		AllowPrivateNetwork:        true,
 		OptionsPassthrough:         true,
 		Debug:                      verbose,
@@ -214,7 +230,9 @@ func (s *Server) Shutdown() {
 
 	slog.Debug("Shutting down API server routines")
 	s.VerifyLogCancel()
+	s.FormSubmitCancel()
 	close(s.VerifyLogChan)
+	close(s.FormSubmissionChan)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
@@ -243,6 +261,11 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	rg.Handle(rg.Post(common.SiteVerifyEndpoint), verifyChain, http.MaxBytesHandler(formAPIAuth(http.HandlerFunc(s.recaptchaVerifyHandler)), maxSolutionsBodySize))
 	// Private Captcha format
 	rg.Handle(rg.Post(common.VerifyEndpoint), verifyChain.Append(s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)), http.MaxBytesHandler(http.HandlerFunc(s.pcVerifyHandler), maxSolutionsBodySize))
+
+	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
+	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
+	rg.Handle(rg.Post(common.FormEndpoint, "{"+common.ParamForm+"}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
+	rg.Handle(rg.Options(common.FormEndpoint, "{"+common.ParamForm+"}"), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 

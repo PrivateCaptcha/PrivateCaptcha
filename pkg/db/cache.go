@@ -264,6 +264,8 @@ const (
 	difficultyRuleCacheKeyPrefix
 	propertyRuleStatsCacheKeyPrefix
 	userSettingsCacheKeyPrefix
+	formByExternalIDCacheKeyPrefix
+	formByPropertyIDCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -310,6 +312,8 @@ func init() {
 	cachePrefixToStrings[difficultyRuleCacheKeyPrefix] = "diffRule/"
 	cachePrefixToStrings[propertyRuleStatsCacheKeyPrefix] = "propertyRuleStats/"
 	cachePrefixToStrings[userSettingsCacheKeyPrefix] = "userSettings/"
+	cachePrefixToStrings[formByExternalIDCacheKeyPrefix] = "formExternalID/"
+	cachePrefixToStrings[formByPropertyIDCacheKeyPrefix] = "formPropertyID/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -326,6 +330,7 @@ func init() {
 	gob.Register(&dbgen.DifficultyRule{})
 	gob.Register(&session.SessionData{})
 	gob.Register(&dbgen.APIKey{})
+	gob.Register(&dbgen.Form{})
 	gob.Register(&dbgen.AsyncTask{})
 	gob.Register(&dbgen.SystemNotification{})
 	gob.Register(&dbgen.OrganizationUser{})
@@ -479,4 +484,10 @@ func propertyRuleStatsCacheKey(propertyID int32, key string) CacheKey {
 }
 func UserSettingsCacheKey(userID int32) CacheKey {
 	return Int32CacheKey(userSettingsCacheKeyPrefix, userID)
+}
+func FormByExternalIDCacheKey(externalID string) CacheKey {
+	return StringCacheKey(formByExternalIDCacheKeyPrefix, externalID)
+}
+func FormByPropertyIDCacheKey(propertyID int32) CacheKey {
+	return Int32CacheKey(formByPropertyIDCacheKeyPrefix, propertyID)
 }

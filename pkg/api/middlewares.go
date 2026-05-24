@@ -35,11 +35,13 @@ type AuthMiddleware struct {
 	Store                 db.Implementor
 	PlanService           billing.PlanService
 	SitekeyChan           chan string
+	FormChan              chan string
 	UsersChan             chan int32
 	APIKeyLastUsedChan    chan int32
 	RulesChan             chan int32
 	BatchSize             int
 	SitekeyBackfillCancel context.CancelFunc
+	FormBackfillCancel    context.CancelFunc
 	UsersBackfillCancel   context.CancelFunc
 	APIKeyLastUsedCancel  context.CancelFunc
 	RulesBackfillCancel   context.CancelFunc
@@ -154,6 +156,7 @@ func NewAuthMiddleware(store db.Implementor,
 		Limiter:               userLimiter,
 		PlanService:           planService,
 		SitekeyChan:           make(chan string, 100*batchSize),
+		FormChan:              make(chan string, 100*batchSize),
 		UsersChan:             make(chan int32, 10*batchSize),
 		APIKeyLastUsedChan:    make(chan int32, apiKeyLastUsedChannelSize),
 		RulesChan:             make(chan int32, 10*batchSize),
@@ -161,6 +164,7 @@ func NewAuthMiddleware(store db.Implementor,
 		Metrics:               metrics,
 		RulesCompiler:         rulesCompiler,
 		SitekeyBackfillCancel: func() {},
+		FormBackfillCancel:    func() {},
 		UsersBackfillCancel:   func() {},
 		APIKeyLastUsedCancel:  func() {},
 		RulesBackfillCancel:   func() {},
@@ -178,6 +182,12 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 	sitekeyBackfillCtx, am.SitekeyBackfillCancel = context.WithCancel(
 		context.WithValue(sitekeyBackfillBaseCtx, common.TraceIDContextKey, "sitekey_backfill"))
 	go common.ProcessBatchMap(sitekeyBackfillCtx, am.SitekeyChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillSitekeyImpl)
+
+	var formBackfillCtx context.Context
+	formBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
+	formBackfillCtx, am.FormBackfillCancel = context.WithCancel(
+		context.WithValue(formBackfillBaseCtx, common.TraceIDContextKey, "form_backfill"))
+	go common.ProcessBatchMap(formBackfillCtx, am.FormChan, backfillDelay, am.BatchSize, am.BatchSize*100, am.backfillFormsImpl)
 
 	var usersBackfillCtx context.Context
 	userBackfillBaseCtx := context.WithValue(context.Background(), common.ServiceContextKey, AuthService)
@@ -207,13 +217,59 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 func (am *AuthMiddleware) Shutdown() {
 	slog.Debug("Shutting down auth middleware")
 	am.SitekeyBackfillCancel()
+	am.FormBackfillCancel()
 	am.UsersBackfillCancel()
 	am.APIKeyLastUsedCancel()
 	am.RulesBackfillCancel()
 	close(am.SitekeyChan)
+	close(am.FormChan)
 	close(am.UsersChan)
 	close(am.APIKeyLastUsedChan)
 	close(am.RulesChan)
+}
+
+func (am *AuthMiddleware) backfillFormsImpl(ctx context.Context, batch map[string]uint) error {
+	forms, err := am.Store.Impl().RetrieveFormsByExternalID(ctx, batch, am.NegativeSitekeyThreshold)
+	if err != nil {
+		level := slog.LevelError
+		if err == db.ErrNegativeCacheHit {
+			level = slog.LevelWarn
+		}
+		slog.Log(ctx, level, "Failed to retrieve forms by external ID", "count", len(batch), common.ErrAttr(err))
+		if (err == db.ErrInvalidInput) || (err == db.ErrNegativeCacheHit) {
+			return nil
+		}
+		return err
+	}
+
+	properties := make(map[int32]uint, len(forms))
+	for _, form := range forms {
+		properties[form.PropertyID] = 1
+	}
+
+	if len(properties) == 0 {
+		return nil
+	}
+
+	props, err := am.Store.Impl().RetrievePropertiesByID(ctx, properties)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve form properties", common.ErrAttr(err))
+		return err
+	}
+
+	for _, p := range props {
+		if p.OrgOwnerID.Valid {
+			select {
+			case am.UsersChan <- p.OrgOwnerID.Int32:
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(am.backpressureTimeout):
+				am.Metrics.ObserveEventDropped(common.UserLimitEventType)
+			}
+		}
+	}
+
+	return nil
 }
 
 // we cache properties and send owners down the background pipeline
@@ -465,6 +521,19 @@ func (am *AuthMiddleware) refreshPropertyBySitekey(ctx context.Context, sitekey 
 	}
 }
 
+func (am *AuthMiddleware) refreshForm(ctx context.Context, guid string) {
+	timer := time.NewTimer(am.backpressureTimeout)
+	defer timer.Stop()
+
+	select {
+	case am.FormChan <- guid:
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for form refresh", "guid", guid, common.ErrAttr(ctx.Err()))
+	case <-timer.C:
+		am.Metrics.ObserveEventDropped(common.FormEventType)
+	}
+}
+
 func (am *AuthMiddleware) refreshAPIKeyLastUsed(ctx context.Context, id int32) {
 	timer := time.NewTimer(am.backpressureTimeout)
 	defer timer.Stop()
@@ -555,6 +624,66 @@ func (am *AuthMiddleware) Sitekey(next http.Handler) http.Handler {
 		} else {
 			ctx = context.WithValue(ctx, common.SitekeyContextKey, sitekey)
 		}
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		guid := r.PathValue(common.ParamForm)
+		if !db.CanBeValidSitekey(guid) {
+			slog.Log(ctx, common.LevelTrace, "Form GUID is not valid", "length", len(guid))
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		form, needsRefresh, err := am.Store.Impl().GetCachedFormByExternalID(ctx, guid)
+		if err != nil {
+			switch err {
+			case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			case db.ErrInvalidInput:
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+				return
+			case db.ErrCacheMiss:
+				am.refreshForm(ctx, guid)
+			default:
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		} else if needsRefresh {
+			am.refreshForm(ctx, guid)
+		}
+
+		if form != nil {
+			if !form.Enabled {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
+
+			if property, err := am.Store.Impl().GetCachedPropertyByID(ctx, form.PropertyID); err == nil {
+				if !property.Enabled {
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					return
+				}
+
+				if softRestriction, err := am.Limiter.EvaluatePropertyAccess(ctx, property.OrgOwnerID.Int32); err == nil {
+					if !softRestriction {
+						http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+					} else {
+						http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+					}
+					return
+				}
+			}
+
+			ctx = context.WithValue(ctx, common.FormContextKey, form)
+		}
+
+		ctx = context.WithValue(ctx, common.FormIDContextKey, guid)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

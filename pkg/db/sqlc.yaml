@@ -19,6 +19,7 @@ sql:
         emit_json_tags: true
         emit_result_struct_pointers: true
         emit_params_struct_pointers: true
+        initialisms: ["id", "url"]
         #emit_pointers_for_null_types: true
         rename:
           #"backend_(.*)": "$1"
@@ -32,6 +33,12 @@ sql:
           backend_difficulty_growth: DifficultyGrowth
           backend_property: Property
           backend_cache: Cache
+          backend_form: Form
+          backend_form_method: FormMethod
+          backend_form_method_post: FormMethodPost
+          backend_form_method_put: FormMethodPut
+          backend_form_method_delete: FormMethodDelete
+          backend_form_method_patch: FormMethodPatch
           backend_lock: Lock
           backend_difficulty_growth_constant: DifficultyGrowthConstant
           backend_difficulty_growth_slow: DifficultyGrowthSlow
