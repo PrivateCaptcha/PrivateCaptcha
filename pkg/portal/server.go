@@ -33,6 +33,7 @@ var (
 	ErrInvalidRequestArg   = errors.New("request argument is not valid")
 	errOrgSoftDeleted      = errors.New("organization is deleted")
 	errPropertySoftDeleted = errors.New("property is deleted")
+	errFormSoftDeleted     = errors.New("form is deleted")
 	errLimitedFeature      = errors.New("feature is limited")
 
 	englishCaser = cases.Title(language.English)

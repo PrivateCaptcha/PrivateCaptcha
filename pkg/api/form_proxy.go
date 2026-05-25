@@ -22,10 +22,11 @@ import (
 )
 
 const (
-	maxFormBodySize              = 1024 * 1024
-	formQueueBackpressureTimeout = 400 * time.Millisecond
-	formSubmitStatusSuccess      = 0
-	formSubmitStatusFailure      = 1
+	maxFormBodySize                  = 1024 * 1024
+	formQueueBackpressureTimeout     = 400 * time.Millisecond
+	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
+	formSubmitStatusSuccess          = 0
+	formSubmitStatusFailure          = 1
 )
 
 var formOutboundDialer = &net.Dialer{
@@ -301,7 +302,7 @@ func (s *Server) formDialContext(ctx context.Context, network, address string) (
 }
 
 func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
-	if s.FormSubmitLogChan == nil || form == nil {
+	if form == nil {
 		return
 	}
 
@@ -313,20 +314,13 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 		Status:    status,
 	}
 
-	timeout := formQueueBackpressureTimeout
-	if s.Levels != nil {
-		timeout = s.Levels.BackfillTimeout()
-	}
-
 	select {
 	case s.FormSubmitLogChan <- record:
 		// nothing
 	case <-ctx.Done():
 		slog.WarnContext(ctx, "Context cancelled for adding form submit record", common.ErrAttr(ctx.Err()))
-	case <-time.After(timeout):
-		if s.Metrics != nil {
-			s.Metrics.ObserveEventDropped(common.FormEventType)
-		}
+	case <-time.After(formSubmitLogBackpressureTimeout):
+		s.Metrics.ObserveEventDropped(common.FormLogEventType)
 	}
 }
 

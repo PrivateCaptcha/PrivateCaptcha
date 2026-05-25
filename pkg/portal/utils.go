@@ -93,6 +93,28 @@ func (s *Server) Property(org *dbgen.Organization, r *http.Request) (*dbgen.Prop
 	return property, nil
 }
 
+func (s *Server) Form(org *dbgen.Organization, r *http.Request) (*dbgen.Form, error) {
+	ctx := r.Context()
+
+	formID, value, err := common.IntPathArg(r, common.ParamForm, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form path parameter", "value", value, common.ErrAttr(err))
+		return nil, ErrInvalidPathArg
+	}
+
+	form, err := s.Store.Impl().RetrieveOrgForm(ctx, org, formID)
+	if err != nil {
+		if err == db.ErrSoftDeleted {
+			return nil, errFormSoftDeleted
+		}
+
+		slog.ErrorContext(ctx, "Failed to find form by ID", common.ErrAttr(err))
+		return nil, err
+	}
+
+	return form, nil
+}
+
 func (s *Server) Session(w http.ResponseWriter, r *http.Request) *session.Session {
 	ctx := r.Context()
 	sess, ok := ctx.Value(common.SessionContextKey).(*session.Session)

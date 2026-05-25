@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
@@ -267,6 +266,7 @@ func formsToUserForms(ctx context.Context, forms []*dbgen.Form, hasher common.Id
 		if form == nil {
 			continue
 		}
+
 		if form.DeletedAt.Valid {
 			slog.WarnContext(ctx, "Skipping soft-deleted form", "formID", form.ID, "orgID", form.OrgID, "deletedAt", form.DeletedAt)
 			continue
@@ -276,35 +276,6 @@ func formsToUserForms(ctx context.Context, forms []*dbgen.Form, hasher common.Id
 	}
 
 	return result
-}
-
-func (s *Server) Form(org *dbgen.Organization, r *http.Request) (*dbgen.Form, error) {
-	ctx := r.Context()
-
-	formID, value, err := common.IntPathArg(r, common.ParamForm, s.IDHasher)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to parse form path parameter", "value", value, common.ErrAttr(err))
-		return nil, ErrInvalidPathArg
-	}
-
-	for offset := 0; ; offset += db.MaxOrgPropertiesPageSize {
-		forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, offset, db.MaxOrgPropertiesPageSize)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, form := range forms {
-			if form.ID == int32(formID) {
-				return form, nil
-			}
-		}
-
-		if !hasMore {
-			break
-		}
-	}
-
-	return nil, db.ErrRecordNotFound
 }
 
 func periodFromPath(ctx context.Context, r *http.Request) common.TimePeriod {

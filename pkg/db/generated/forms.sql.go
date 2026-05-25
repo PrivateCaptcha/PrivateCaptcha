@@ -82,41 +82,12 @@ func (q *Queries) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, err
 	return result.RowsAffected(), nil
 }
 
-const getFormByExternalID = `-- name: GetFormByExternalID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = $1
+const getFormByID = `-- name: GetFormByID :one
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = $1
 `
 
-func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*Form, error) {
-	row := q.db.QueryRow(ctx, getFormByExternalID, externalID)
-	var i Form
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.ExternalID,
-		&i.OrgID,
-		&i.CreatorID,
-		&i.OrgOwnerID,
-		&i.URL,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.PropertyID,
-		&i.Fields,
-		&i.Enabled,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
-		&i.RetryRequestCount,
-		&i.Method,
-	)
-	return &i, err
-}
-
-const getFormByPropertyID = `-- name: GetFormByPropertyID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE property_id = $1
-`
-
-func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
-	row := q.db.QueryRow(ctx, getFormByPropertyID, propertyID)
+func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
+	row := q.db.QueryRow(ctx, getFormByID, id)
 	var i Form
 	err := row.Scan(
 		&i.ID,

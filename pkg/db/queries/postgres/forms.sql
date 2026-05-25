@@ -3,14 +3,11 @@ INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 RETURNING *;
 
--- name: GetFormByExternalID :one
-SELECT * FROM backend.forms WHERE external_id = $1;
+-- name: GetFormByID :one
+SELECT * FROM backend.forms WHERE id = $1;
 
 -- name: GetFormsByExternalID :many
 SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]);
-
--- name: GetFormByPropertyID :one
-SELECT * FROM backend.forms WHERE property_id = $1;
 
 -- name: GetOrgFormByName :one
 SELECT * FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL;

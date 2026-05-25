@@ -165,6 +165,10 @@ func propertiesToUserProperties(ctx context.Context, properties []*dbgen.Propert
 	result := make([]*userProperty, 0, len(properties))
 
 	for _, p := range properties {
+		if p == nil {
+			continue
+		}
+
 		if p.DeletedAt.Valid {
 			slog.WarnContext(ctx, "Skipping soft-deleted property", "propID", p.ID, "orgID", p.OrgID, "deletedAt", p.DeletedAt)
 			continue

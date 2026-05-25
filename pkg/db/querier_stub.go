@@ -133,7 +133,7 @@ func (s *QuerierStub) GetDifficultyRulesByPropertyIDs(ctx context.Context, dolla
 func (s *QuerierStub) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*dbgen.Form, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) GetFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
+func (s *QuerierStub) GetFormByID(ctx context.Context, formID int32) (*dbgen.Form, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {

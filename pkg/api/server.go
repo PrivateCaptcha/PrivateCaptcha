@@ -191,9 +191,6 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
 
-	if s.FormSubmitLogChan == nil {
-		s.FormSubmitLogChan = make(chan *common.FormSubmitRecord, 10*FormSubmitLogBatchSize)
-	}
 	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormSubmitLogCtx context.Context
 	cancelFormSubmitLogCtx, s.FormSubmitLogCancel = context.WithCancel(context.WithValue(baseFormSubmitLogCtx, common.TraceIDContextKey, "flush_form_submit_log"))

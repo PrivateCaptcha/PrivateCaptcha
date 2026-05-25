@@ -267,7 +267,7 @@ const (
 	propertyRuleStatsCacheKeyPrefix
 	userSettingsCacheKeyPrefix
 	formByExternalIDCacheKeyPrefix
-	formByPropertyIDCacheKeyPrefix
+	formCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -317,7 +317,7 @@ func init() {
 	cachePrefixToStrings[propertyRuleStatsCacheKeyPrefix] = "propertyRuleStats/"
 	cachePrefixToStrings[userSettingsCacheKeyPrefix] = "userSettings/"
 	cachePrefixToStrings[formByExternalIDCacheKeyPrefix] = "formExternalID/"
-	cachePrefixToStrings[formByPropertyIDCacheKeyPrefix] = "formPropertyID/"
+	cachePrefixToStrings[formCacheKeyPrefix] = "form/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -499,6 +499,6 @@ func UserSettingsCacheKey(userID int32) CacheKey {
 func FormByExternalIDCacheKey(externalID string) CacheKey {
 	return StringCacheKey(formByExternalIDCacheKeyPrefix, externalID)
 }
-func FormByPropertyIDCacheKey(propertyID int32) CacheKey {
-	return Int32CacheKey(formByPropertyIDCacheKeyPrefix, propertyID)
+func formByIDCacheKey(formID int32) CacheKey {
+	return Int32CacheKey(formCacheKeyPrefix, formID)
 }
