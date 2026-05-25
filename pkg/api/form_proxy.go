@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -206,6 +207,11 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 
 	client := s.newFormHTTPClient()
 
+	concurrencyLimit := 4
+
+	sem := make(chan struct{}, concurrencyLimit)
+	var wg sync.WaitGroup
+
 	for _, submission := range batch {
 		form, found := formsByID[submission.FormExternalID]
 		if !found || (form == nil) {
@@ -218,30 +224,47 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 			continue
 		}
 
-		// delayed captcha check if original form was not cached at the time of request
-		if submission.CaptchaSolution != nil {
-			ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: form}
-			result, err := s.Verifier.Verify(ctx, submission.CaptchaSolution, ownerSource, submission.Time)
-			if err != nil {
-				slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
-				continue
-			}
-
-			if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
-				slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
-				continue
-			}
-
-			s.addVerifyRecord(ctx, result)
+		select {
+		case <-ctx.Done():
+			slog.WarnContext(ctx, "Batch processing aborted due to context cancellation")
+			wg.Wait()
+			return ctx.Err()
+			// Block here if the semaphore buffer is full
+		case sem <- struct{}{}:
 		}
 
-		if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
-			slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", form.ID, "url", form.URL, common.ErrAttr(err))
-			continue
-		}
+		wg.Add(1)
+		go func(f *dbgen.Form, sub *FormSubmission) {
+			defer wg.Done()
+			defer func() { <-sem }() // Free up a spot in the semaphore when finished
 
-		s.submitForm(ctx, client, form, submission)
+			// delayed captcha check if original form was not cached at the time of request
+			if sub.CaptchaSolution != nil {
+				ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: f}
+				result, err := s.Verifier.Verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
+				if err != nil {
+					slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
+					return
+				}
+
+				if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
+					slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
+					return
+				}
+
+				s.addVerifyRecord(ctx, result)
+			}
+
+			if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {
+				slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", f.ID, common.ErrAttr(err))
+				return
+			}
+
+			s.submitForm(ctx, client, f, sub)
+		}(form, submission)
 	}
+
+	wg.Wait()
 
 	return nil
 }
