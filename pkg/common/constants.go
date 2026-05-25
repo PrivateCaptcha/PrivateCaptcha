@@ -21,6 +21,7 @@ const (
 	ParamResponse               = "response"
 	ParamEmail                  = "email"
 	ParamName                   = "name"
+	ParamURL                    = "url"
 	ParamCSRFToken              = "csrf_token"
 	ParamVerificationCode       = "vcode"
 	ParamDomain                 = "domain"

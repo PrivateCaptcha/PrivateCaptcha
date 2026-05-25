@@ -57,9 +57,9 @@ type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
 
 type Model = any
 type ViewModel struct {
-	Model      Model
-	View       string
-	AuditEvent *common.AuditLogEvent
+	Model       Model
+	View        string
+	AuditEvents []*common.AuditLogEvent
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
@@ -139,6 +139,14 @@ func (ac *AlertRenderContext) ClearAlerts() {
 	ac.InfoMessage = ""
 }
 
+func singleAuditEvents(event *common.AuditLogEvent) []*common.AuditLogEvent {
+	if event == nil {
+		return nil
+	}
+
+	return []*common.AuditLogEvent{event}
+}
+
 type Server struct {
 	Store              db.Implementor
 	TimeSeries         common.TimeSeriesStore
@@ -171,6 +179,7 @@ type Server struct {
 	OrgRulesFunc       OrgRulesConstructor
 	SubscriptionLimits db.SubscriptionLimits
 	EmailVerifier      common.EmailVerifier
+	FormURLVerifier    common.FormURLVerifier
 	TwoFactorDuration  time.Duration
 	LicenseService     common.LicenseService
 	Rules              *RuleRegistry
@@ -352,6 +361,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.TabEndpoint, common.RulesEndpoint), privateRead, s.Handler(s.getOrgRules))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.EditEndpoint), privateWrite, s.Handler(s.putOrg))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormsEndpoint), privateRead, s.Handler(s.getOrgForms))
+	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgForm))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgProperty))
@@ -447,8 +458,8 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 			s.render(w, r, mv.View, mv.Model)
 		}
 		// If tpl is empty, it means modelFunc handled the response (e.g., redirect, error, or manual write).
-		if mv.AuditEvent != nil {
-			s.Store.AuditLog().RecordEvent(ctx, mv.AuditEvent, common.AuditLogSourcePortal)
+		if len(mv.AuditEvents) > 0 {
+			s.Store.AuditLog().RecordEvents(ctx, mv.AuditEvents, common.AuditLogSourcePortal)
 		}
 	})
 }

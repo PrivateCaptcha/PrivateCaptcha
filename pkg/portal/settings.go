@@ -304,9 +304,9 @@ func (s *Server) getGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 	renderCtx := s.createGeneralSettingsModel(ctx, user)
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       "",
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameUsers, int64(user.ID), user.Name, common.SettingsEndpoint),
+		Model:       renderCtx,
+		View:        "",
+		AuditEvents: singleAuditEvents(newAccessAuditLogEvent(user, db.TableNameUsers, int64(user.ID), user.Name, common.SettingsEndpoint)),
 	}, nil
 }
 
@@ -427,7 +427,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -523,8 +523,8 @@ func (s *Server) getAPIKeysSettings(w http.ResponseWriter, r *http.Request) (*Vi
 	renderCtx := s.createAPIKeysSettingsModel(ctx, user)
 
 	return &ViewModel{
-		Model:      renderCtx,
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameAPIKeys, int64(user.ID), user.Name, common.SettingsEndpoint),
+		Model:       renderCtx,
+		AuditEvents: singleAuditEvents(newAccessAuditLogEvent(user, db.TableNameAPIKeys, int64(user.ID), user.Name, common.SettingsEndpoint)),
 	}, nil
 }
 
@@ -755,7 +755,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		renderCtx.ErrorMessage = "Failed to create API key. Please try again."
 	}
 
-	return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen.APIKey, userKey *userAPIKey) error {
@@ -822,7 +822,7 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewMode
 		return anyError
 	})
 
-	return &ViewModel{Model: userKey, View: apiKeyRowTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: userKey, View: apiKeyRowTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -1131,8 +1131,8 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 	renderCtx.SuccessMessage = "Notification settings saved."
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       settingsNotificationsFormTemplate,
-		AuditEvent: auditEvent,
+		Model:       renderCtx,
+		View:        settingsNotificationsFormTemplate,
+		AuditEvents: singleAuditEvents(auditEvent),
 	}, nil
 }

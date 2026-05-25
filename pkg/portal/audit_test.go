@@ -632,8 +632,8 @@ func TestGetAuditLogs(t *testing.T) {
 		t.Errorf("Expected view to be %s, got %s", auditLogsTemplate, viewModel.View)
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 

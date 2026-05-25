@@ -269,7 +269,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		})
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 // inviteEmailToOrg handles inviting a non-existing user by email
@@ -296,7 +296,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name, user.Email), registerInviteURL, true /*register*/)
 	})
 
-	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {

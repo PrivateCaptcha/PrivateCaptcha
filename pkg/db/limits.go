@@ -14,6 +14,7 @@ type SubscriptionLimits interface {
 	CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckOrgMembersLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
+	CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (bool, int, error)
 	RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error)
@@ -119,6 +120,30 @@ func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, user
 	ok := (plan.PropertiesLimit(isTrialing) == 0) || (count < int64(plan.PropertiesLimit(isTrialing)))
 
 	return ok, int(count) - plan.PropertiesLimit(isTrialing), nil
+}
+
+func (sl *SubscriptionLimitsImpl) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return false, 0, ErrNoActiveSubscription
+	}
+
+	isInternalSubscription := IsInternalSubscription(subscr.Source)
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage, isInternalSubscription)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan for subscription", "subscriptionID", subscr.ID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	count, err := sl.store.Impl().RetrieveOrgFormsCount(ctx, orgID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve forms count", "orgID", orgID, common.ErrAttr(err))
+		return false, 0, err
+	}
+
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	ok := (plan.FormsLimit(isTrialing) == 0) || (count < int64(plan.FormsLimit(isTrialing)))
+
+	return ok, int(count) - plan.FormsLimit(isTrialing), nil
 }
 
 func (sl *SubscriptionLimitsImpl) RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error) {
@@ -240,6 +265,9 @@ func (StubSubscriptionLimits) CheckOrgMembersLimit(ctx context.Context, orgID in
 	return true, 0, nil
 }
 func (StubSubscriptionLimits) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
+	return true, 0, nil
+}
+func (StubSubscriptionLimits) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {
 	return true, 0, nil
 }
 func (StubSubscriptionLimits) CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (_ bool, _ int, _ error) {

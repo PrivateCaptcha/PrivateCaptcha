@@ -317,6 +317,11 @@ func TestRenderHTML(t *testing.T) {
 			model:    &propertyWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken(), NameError: "Name error"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, common.NewEndpoint},
+			template: formWizardTemplate,
+			model:    &formWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken(), NameError: "Name error"},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardTemplate,
 			model: &propertyDashboardRenderContext{
@@ -709,5 +714,69 @@ func TestRenderHTML(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestRenderFormWizardContainsURLField(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), formWizardTemplate, &formWizardRenderContext{
+		CsrfRenderContext: stubToken(),
+		CurrentOrg:        stubOrg("123"),
+	}, &RequestContext{Path: server.RelURL("/org/123/form/new")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+	if document.Find(`input[name="url"]`).Length() != 1 {
+		t.Fatal("expected URL input field")
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "Create new form") {
+		t.Fatal("expected create new form progress step")
+	}
+	if !strings.Contains(body, "Website integration") {
+		t.Fatal("expected website integration progress step")
+	}
+	if strings.Contains(body, "Server integration") {
+		t.Fatal("did not expect server integration step")
+	}
+}
+
+func TestRenderFormWizardIntegrationStep(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), formWizardSetupTemplate, &formIntegrationRenderContext{
+		CsrfRenderContext: stubToken(),
+		CurrentOrg:        stubOrg("123"),
+		Form:              &userForm{ID: "1", OrgID: "123", ExternalID: "guid-123", Name: "Contact"},
+		Sitekey:           "sitekey123",
+	}, &RequestContext{Path: server.RelURL("/org/123/form/new")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "Add Private Captcha script") {
+		t.Fatal("expected integration instructions copied from property wizard")
+	}
+	if !strings.Contains(body, "method=&#34;POST&#34;") || !strings.Contains(body, "https://api.privatecaptcha.com/form/guid-123") {
+		t.Fatal("expected public form action in code snippet")
+	}
+	if !strings.Contains(body, `data-sitekey=&#34;sitekey123&#34;`) {
+		t.Fatal("expected sitekey in code snippet")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
 	}
 }

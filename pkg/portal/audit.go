@@ -300,9 +300,9 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       auditLogsTemplate,
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameAuditLogs, int64(user.ID), "", ""),
+		Model:       renderCtx,
+		View:        auditLogsTemplate,
+		AuditEvents: singleAuditEvents(newAccessAuditLogEvent(user, db.TableNameAuditLogs, int64(user.ID), "", "")),
 	}, nil
 }
 

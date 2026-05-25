@@ -434,8 +434,8 @@ func TestGetOrgSettings(t *testing.T) {
 		t.Error("Expected CanEdit to be true for org owner")
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 
@@ -540,8 +540,8 @@ func TestPutOrg(t *testing.T) {
 		t.Errorf("Expected org name to be %s, got %s", newName, renderCtx.CurrentOrg.Name)
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 
@@ -1070,6 +1070,7 @@ func TestOrgEndpointsInvalidPathArg(t *testing.T) {
 		{"GetOrgAuditLogsInvalidOrg", "GET", "/org/invalid-id/tab/events", http.StatusSeeOther},
 		{"GetOrgPropertiesInvalidOrg", "GET", "/org/invalid-id/properties", http.StatusSeeOther},
 		{"GetNewPropertyInvalidOrg", "GET", "/org/invalid-id/property/new", http.StatusSeeOther},
+		{"GetNewFormInvalidOrg", "GET", "/org/invalid-id/form/new", http.StatusSeeOther},
 	}
 
 	for _, tc := range tests {

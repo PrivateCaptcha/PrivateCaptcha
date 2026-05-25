@@ -30,8 +30,11 @@ func viewStubProperty(name, orgID string) *userProperty {
 
 func viewStubForm(name, orgID string) *userForm {
 	return &userForm{
-		ID: "prop1", OrgID: orgID, Name: name,
+		ID:            "prop1",
+		OrgID:         orgID,
+		Name:          name,
 		WebhookPrefix: "https://example.com/api/...",
+		ExternalID:    "123e4567e89b12d3a456426614174000",
 		Enabled:       true,
 	}
 }
@@ -443,6 +446,37 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 					},
 					Property: prop,
 					Sitekey:  db.TestPropertySitekey,
+				}
+			},
+		},
+		{
+			Path:       p(common.OrgEndpoint, orgArg, common.FormEndpoint, common.NewEndpoint),
+			Template:   formWizardTemplate,
+			ShowInList: true,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &formWizardRenderContext{
+					CsrfRenderContext:  token,
+					AlertRenderContext: a,
+					CurrentOrg:         org,
+				}
+			},
+		},
+		{
+			Path:       p(common.OrgEndpoint, orgArg, common.FormEndpoint, common.NewEndpoint, "setup"),
+			Template:   formWizardTemplate,
+			ShowInList: true,
+			ModelFunc: func(_ AlertRenderContext) interface{} {
+				return struct {
+					formIntegrationRenderContext
+					Step int
+				}{
+					formIntegrationRenderContext: formIntegrationRenderContext{
+						CsrfRenderContext: token,
+						Form:              viewStubForm("Contact us", "org1"),
+						CurrentOrg:        org,
+						Sitekey:           db.TestPropertySitekey,
+					},
+					Step: 1,
 				}
 			},
 		},
