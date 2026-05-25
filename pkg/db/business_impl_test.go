@@ -1488,6 +1488,52 @@ func TestBusinessStoreImplDeleteProperties(t *testing.T) {
 	})
 }
 
+func TestBusinessStoreImplRetrieveSoftDeletedForms(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, err := store.RetrieveSoftDeletedForms(context.Background(), time.Now(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, err := store.RetrieveSoftDeletedForms(context.Background(), time.Now(), 1)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, err := store.RetrieveSoftDeletedForms(context.Background(), time.Time{}, 0)
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplDeleteForms(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		err := store.DeleteForms(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		err := store.DeleteForms(context.Background(), []int32{1, 2})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+}
+
 func TestBusinessStoreImplRetrieveSoftDeletedOrganizations(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)

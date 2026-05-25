@@ -306,6 +306,108 @@ func TestMemoryTimeSeriesRetrievePropertyStatsByPeriodAllPeriods(t *testing.T) {
 	}
 }
 
+func TestMemoryTimeSeriesRetrieveFormStatsByPeriod(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-30 * time.Minute), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-20 * time.Minute), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-10 * time.Minute), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now.Add(-10 * time.Minute), Status: 0},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveFormStatsByPeriod(ctx, 10, 1000, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	successCount := 0
+	failureCount := 0
+	for _, stat := range stats {
+		successCount += stat.SuccessCount
+		failureCount += stat.FailureCount
+	}
+
+	if successCount != 2 {
+		t.Errorf("RetrieveFormStatsByPeriod() success count = %d, want 2", successCount)
+	}
+	if failureCount != 1 {
+		t.Errorf("RetrieveFormStatsByPeriod() failure count = %d, want 1", failureCount)
+	}
+}
+
+func TestMemoryTimeSeriesDeleteFormsData(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now, Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now, Status: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ts.DeleteFormsData(ctx, []int32{1000}); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err := ts.RetrieveFormStatsByPeriod(ctx, 10, 1000, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) != 0 {
+		t.Fatalf("DeleteFormsData() left %d stats for deleted form, want 0", len(stats))
+	}
+
+	stats, err = ts.RetrieveFormStatsByPeriod(ctx, 10, 2000, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) == 0 {
+		t.Fatal("DeleteFormsData() deleted unrelated form stats")
+	}
+}
+
+func TestMemoryTimeSeriesDeletesFormDataByOwner(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now, Status: 0},
+		{UserID: 2, OrgID: 20, FormID: 2000, Timestamp: now, Status: 1},
+		{UserID: 3, OrgID: 30, FormID: 3000, Timestamp: now, Status: 0},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ts.DeleteFormsData(ctx, []int32{1000}); err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := ts.RetrieveFormStatsByPeriod(ctx, 10, 1000, common.TimePeriodToday); err != nil || len(stats) != 0 {
+		t.Fatalf("DeletePropertiesData() form stats len = %d, err = %v, want 0 nil", len(stats), err)
+	}
+
+	if err := ts.DeleteOrganizationsData(ctx, []int32{20}); err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := ts.RetrieveFormStatsByPeriod(ctx, 20, 2000, common.TimePeriodToday); err != nil || len(stats) != 0 {
+		t.Fatalf("DeleteOrganizationsData() form stats len = %d, err = %v, want 0 nil", len(stats), err)
+	}
+
+	if err := ts.DeleteUsersData(ctx, []int32{3}); err != nil {
+		t.Fatal(err)
+	}
+	if stats, err := ts.RetrieveFormStatsByPeriod(ctx, 30, 3000, common.TimePeriodToday); err != nil || len(stats) != 0 {
+		t.Fatalf("DeleteUsersData() form stats len = %d, err = %v, want 0 nil", len(stats), err)
+	}
+}
+
 func TestMemoryTimeSeriesRecentTopPropertiesLimit(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()

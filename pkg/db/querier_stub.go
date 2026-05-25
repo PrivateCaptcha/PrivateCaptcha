@@ -70,6 +70,9 @@ func (s *QuerierStub) DeleteDifficultyRule(ctx context.Context, arg *dbgen.Delet
 func (s *QuerierStub) DeleteExpiredCache(ctx context.Context) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) DeleteLock(ctx context.Context, name string) (int64, error) {
 	return 0, s.Error
 }
@@ -130,7 +133,7 @@ func (s *QuerierStub) GetDifficultyRulesByPropertyIDs(ctx context.Context, dolla
 func (s *QuerierStub) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*dbgen.Form, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) GetFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
+func (s *QuerierStub) GetFormByID(ctx context.Context, formID int32) (*dbgen.Form, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
@@ -206,6 +209,9 @@ func (s *QuerierStub) GetSoftDeletedOrganizations(ctx context.Context, arg *dbge
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedProperties(ctx context.Context, arg *dbgen.GetSoftDeletedPropertiesParams) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetSoftDeletedForms(ctx context.Context, arg *dbgen.GetSoftDeletedFormsParams) ([]*dbgen.GetSoftDeletedFormsRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedUsers(ctx context.Context, arg *dbgen.GetSoftDeletedUsersParams) ([]*dbgen.GetSoftDeletedUsersRow, error) {

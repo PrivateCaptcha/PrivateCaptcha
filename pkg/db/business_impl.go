@@ -23,6 +23,7 @@ import (
 const (
 	// NOTE: this is the time during which changes to difficulty will propagate when we have multiple API nodes
 	propertyTTL              = 1 * time.Hour
+	formTTL                  = 1 * time.Hour
 	apiKeyTTL                = 12 * time.Hour
 	asyncTaskTTL             = 1 * time.Minute
 	MaxOrgPropertiesPageSize = 50
@@ -582,42 +583,61 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 	return result, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveFormByExternalID(ctx context.Context, externalID string) (*dbgen.Form, error) {
-	reader := &StoreOneReader[pgtype.UUID, dbgen.Form]{
-		CacheKey:    FormByExternalIDCacheKey(externalID),
-		Cache:       impl.cache,
-		DropInvalid: true,
+func (impl *BusinessStoreImpl) retrieveOrgForm(ctx context.Context, orgID, formID int32) (*dbgen.Form, error) {
+	cacheKey := formByIDCacheKey(formID)
+
+	if prop, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, cacheKey); err == nil {
+		return prop, nil
+	} else if err == ErrNegativeCacheHit {
+		return nil, ErrNegativeCacheHit
 	}
 
-	if impl.querier != nil {
-		reader.QueryFunc = impl.querier.GetFormByExternalID
-		reader.QueryKeyFunc = queryKeyStringUUID
+	if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)); err == nil {
+		if index := slices.IndexFunc(forms, func(f *dbgen.Form) bool { return f.ID == formID }); index != -1 {
+			form := forms[index]
+			impl.cacheForm(ctx, form)
+			return form, nil
+		}
 	}
 
-	form, err := reader.Read(ctx)
-	if err == nil {
-		impl.cacheForm(ctx, form)
+	if impl.querier == nil {
+		return nil, ErrMaintenance
 	}
-	return form, err
+
+	form, err := impl.querier.GetFormByID(ctx, formID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			_ = impl.cache.SetMissing(ctx, cacheKey)
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve form by ID", "formID", formID, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	impl.cacheForm(ctx, form)
+
+	return form, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
-	reader := &StoreOneReader[int32, dbgen.Form]{
-		CacheKey:    FormByPropertyIDCacheKey(propertyID),
-		Cache:       impl.cache,
-		DropInvalid: true,
+func (impl *BusinessStoreImpl) RetrieveOrgForm(ctx context.Context, org *dbgen.Organization, formID int32) (*dbgen.Form, error) {
+	form, err := impl.retrieveOrgForm(ctx, org.ID, formID)
+	if err != nil {
+		return nil, err
 	}
 
-	if impl.querier != nil {
-		reader.QueryFunc = impl.querier.GetFormByPropertyID
-		reader.QueryKeyFunc = QueryKeyInt
+	if !form.OrgID.Valid || (form.OrgID.Int32 != org.ID) {
+		slog.ErrorContext(ctx, "Form org does not match", "formOrgID", form.OrgID.Int32, "orgID", org.ID)
+		return nil, ErrPermissions
 	}
 
-	form, err := reader.Read(ctx)
-	if err == nil {
-		impl.cacheForm(ctx, form)
+	if form.DeletedAt.Valid {
+		slog.WarnContext(ctx, "Form is soft-deleted", "formID", formID, "deletedAt", form.DeletedAt.Time)
+		return form, ErrSoftDeleted
 	}
-	return form, err
+
+	return form, nil
 }
 
 func (impl *BusinessStoreImpl) RetrieveFormsByExternalID(ctx context.Context, externalIDs map[string]uint, minMissingCount uint) ([]*dbgen.Form, error) {
@@ -877,9 +897,9 @@ func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) 
 		return
 	}
 
-	_ = impl.cache.Set(ctx, FormByPropertyIDCacheKey(form.PropertyID), form)
-	if externalID := UUIDToString(form.ExternalID); externalID != "" {
-		_ = impl.cache.SetWithTTL(ctx, FormByExternalIDCacheKey(externalID), form, propertyTTL)
+	_ = impl.cache.Set(ctx, formByIDCacheKey(form.ID), form)
+	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
+		_ = impl.cache.SetWithTTL(ctx, FormByExternalIDCacheKey(externalID), form, formTTL)
 	}
 }
 
@@ -2074,6 +2094,52 @@ func (impl *BusinessStoreImpl) DeleteProperties(ctx context.Context, ids []int32
 	}
 
 	slog.InfoContext(ctx, "Deleted properties", "count", len(ids), "affected", affected)
+
+	return nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveSoftDeletedForms(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedFormsRow, error) {
+	if before.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	forms, err := impl.querier.GetSoftDeletedForms(ctx, &dbgen.GetSoftDeletedFormsParams{
+		DeletedAt: Timestampz(before),
+		Limit:     limit,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted forms", "before", before, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched soft-deleted forms", "count", len(forms), "before", before)
+
+	return forms, nil
+}
+
+func (impl *BusinessStoreImpl) DeleteForms(ctx context.Context, ids []int32) error {
+	if len(ids) == 0 {
+		slog.WarnContext(ctx, "No forms to delete")
+		return nil
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteForms(ctx, ids)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete forms", "count", len(ids), common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Deleted forms", "count", len(ids), "affected", affected)
 
 	return nil
 }

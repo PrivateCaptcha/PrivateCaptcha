@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -25,15 +26,17 @@ import (
 )
 
 const (
-	maxSolutionsBodySize  = 256 * 1024
-	VerifyBatchSize       = 100
-	FormBatchSize         = 100
-	maxFormBatchSize      = 10_000
-	PropertyBucketSize    = 5 * time.Minute
-	updateLimitsBatchSize = 100
-	maxVerifyBatchSize    = 100_000
-	ApiService            = "api"
-	recaptchaCompatV3     = "rcV3"
+	maxSolutionsBodySize      = 256 * 1024
+	VerifyBatchSize           = 100
+	FormSubmitLogBatchSize    = 100
+	FormBatchSize             = 100
+	maxFormBatchSize          = 10_000
+	PropertyBucketSize        = 5 * time.Minute
+	updateLimitsBatchSize     = 100
+	maxVerifyBatchSize        = 100_000
+	maxFormSubmitLogBatchSize = 100_000
+	ApiService                = "api"
+	recaptchaCompatV3         = "rcV3"
 )
 
 var (
@@ -75,28 +78,30 @@ func init() {
 }
 
 type Server struct {
-	APIHeaders         map[string][]string
-	Stage              string
-	Prefix             string
-	BusinessDB         db.Implementor
-	TimeSeries         common.TimeSeriesStore
-	Levels             *difficulty.Levels
-	Auth               *AuthMiddleware
-	VerifyLogChan      chan *common.VerifyRecord
-	VerifyLogCancel    context.CancelFunc
-	FormSubmissionChan chan *FormSubmission
-	FormSubmitCancel   context.CancelFunc
-	Cors               *cors.Cors
-	Metrics            common.APIMetrics
-	Mailer             common.Mailer
-	RateLimiter        ratelimit.HTTPRateLimiter
-	Verifier           *Verifier
-	FormURLVerifier    common.FormURLVerifier
-	SubscriptionLimits db.SubscriptionLimits
-	IDHasher           common.IdentifierHasher
-	AsyncTasks         db.AsyncTasks
-	CountryCodeHeader  common.ConfigItem
-	NoticeProvider     db.PropertyNoticeProvider
+	APIHeaders          map[string][]string
+	Stage               string
+	Prefix              string
+	BusinessDB          db.Implementor
+	TimeSeries          common.TimeSeriesStore
+	Levels              *difficulty.Levels
+	Auth                *AuthMiddleware
+	VerifyLogChan       chan *common.VerifyRecord
+	VerifyLogCancel     context.CancelFunc
+	FormSubmitLogChan   chan *common.FormSubmitRecord
+	FormSubmitLogCancel context.CancelFunc
+	FormSubmissionChan  chan *FormSubmission
+	FormSubmitCancel    context.CancelFunc
+	Cors                *cors.Cors
+	Metrics             common.APIMetrics
+	Mailer              common.Mailer
+	RateLimiter         ratelimit.HTTPRateLimiter
+	Verifier            *Verifier
+	FormURLVerifier     common.FormURLVerifier
+	SubscriptionLimits  db.SubscriptionLimits
+	IDHasher            common.IdentifierHasher
+	AsyncTasks          db.AsyncTasks
+	CountryCodeHeader   common.ConfigItem
+	NoticeProvider      db.PropertyNoticeProvider
 }
 
 type apiKeyOwnerSource struct {
@@ -187,6 +192,11 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
 
+	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
+	var cancelFormSubmitLogCtx context.Context
+	cancelFormSubmitLogCtx, s.FormSubmitLogCancel = context.WithCancel(context.WithValue(baseFormSubmitLogCtx, common.TraceIDContextKey, "flush_form_submit_log"))
+	go common.ProcessBatchArray(cancelFormSubmitLogCtx, s.FormSubmitLogChan, config.VerifyFlushInterval, FormSubmitLogBatchSize, maxFormSubmitLogBatchSize, s.TimeSeries.WriteFormSubmitBatch)
+
 	baseFormCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormCtx context.Context
 	cancelFormCtx, s.FormSubmitCancel = context.WithCancel(context.WithValue(baseFormCtx, common.TraceIDContextKey, "submit_forms"))
@@ -231,12 +241,19 @@ func (s *Server) Shutdown() {
 
 	slog.Debug("Shutting down API server routines")
 	s.VerifyLogCancel()
+	s.FormSubmitLogCancel()
 	s.FormSubmitCancel()
 	close(s.VerifyLogChan)
+	// we have background works that call addFormSubmitRecord() which can panic so we don't close this channel here
+	//close(s.FormSubmitLogChan)
 	close(s.FormSubmissionChan)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
+	arg := func(s string) string {
+		return fmt.Sprintf("{%s}", s)
+	}
+
 	svc := common.ServiceMiddleware(ApiService)
 	recovered := common.Recovered(s.Metrics)
 	publicChain := alice.New(svc, recovered, security)
@@ -265,8 +282,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 
 	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
 	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
-	rg.Handle(rg.Post(common.FormEndpoint, "{"+common.ParamForm+"}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
-	rg.Handle(rg.Options(common.FormEndpoint, "{"+common.ParamForm+"}"), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
+	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
+	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 

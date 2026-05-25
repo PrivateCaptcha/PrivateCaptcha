@@ -267,7 +267,8 @@ const (
 	propertyRuleStatsCacheKeyPrefix
 	userSettingsCacheKeyPrefix
 	formByExternalIDCacheKeyPrefix
-	formByPropertyIDCacheKeyPrefix
+	formCacheKeyPrefix
+	formStatsCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -317,7 +318,8 @@ func init() {
 	cachePrefixToStrings[propertyRuleStatsCacheKeyPrefix] = "propertyRuleStats/"
 	cachePrefixToStrings[userSettingsCacheKeyPrefix] = "userSettings/"
 	cachePrefixToStrings[formByExternalIDCacheKeyPrefix] = "formExternalID/"
-	cachePrefixToStrings[formByPropertyIDCacheKeyPrefix] = "formPropertyID/"
+	cachePrefixToStrings[formCacheKeyPrefix] = "form/"
+	cachePrefixToStrings[formStatsCacheKeyPrefix] = "formStats/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -354,6 +356,7 @@ func init() {
 	gob.Register([]*common.TimeCount{})
 	gob.Register([]*common.OrgTimeCount{})
 	gob.Register([]*common.TimePeriodStat{})
+	gob.Register([]*common.FormSubmitStat{})
 }
 
 func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {
@@ -463,6 +466,9 @@ func userAccountStatsCacheKey(userID int32, key string) CacheKey {
 func propertyStatsCacheKey(propertyID int32, key string) CacheKey {
 	return CacheKey{Prefix: propertyStatsCacheKeyPrefix, IntValue: propertyID, StrValue: key}
 }
+func FormStatsCacheKey(formID int32, key string) CacheKey {
+	return CacheKey{Prefix: formStatsCacheKeyPrefix, IntValue: formID, StrValue: key}
+}
 func asyncTaskCacheKey(key string) CacheKey {
 	return StringCacheKey(asyncTaskCacheKeyPrefix, key)
 }
@@ -499,6 +505,6 @@ func UserSettingsCacheKey(userID int32) CacheKey {
 func FormByExternalIDCacheKey(externalID string) CacheKey {
 	return StringCacheKey(formByExternalIDCacheKeyPrefix, externalID)
 }
-func FormByPropertyIDCacheKey(propertyID int32) CacheKey {
-	return Int32CacheKey(formByPropertyIDCacheKeyPrefix, propertyID)
+func formByIDCacheKey(formID int32) CacheKey {
+	return Int32CacheKey(formCacheKeyPrefix, formID)
 }

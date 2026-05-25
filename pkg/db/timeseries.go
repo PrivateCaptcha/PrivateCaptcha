@@ -20,15 +20,19 @@ import (
 )
 
 const (
-	VerifyLogTableName    = "privatecaptcha.verify_logs"
-	VerifyLogTable1h      = "privatecaptcha.verify_logs_1h"
-	VerifyLogTable1d      = "privatecaptcha.verify_logs_1d"
-	AccessLogTableName    = "privatecaptcha.request_logs"
-	AccessLogTableName5m  = "privatecaptcha.request_logs_5m"
-	AccessLogTableName1h  = "privatecaptcha.request_logs_1h"
-	AccessLogTableName1d  = "privatecaptcha.request_logs_1d"
-	AccessLogTableName1mo = "privatecaptcha.request_logs_1mo"
-	RulesLogsTableName1d  = "privatecaptcha.rules_logs_1d"
+	VerifyLogTableName        = "privatecaptcha.verify_logs"
+	VerifyLogTable1h          = "privatecaptcha.verify_logs_1h"
+	VerifyLogTable1d          = "privatecaptcha.verify_logs_1d"
+	AccessLogTableName        = "privatecaptcha.request_logs"
+	AccessLogTableName5m      = "privatecaptcha.request_logs_5m"
+	AccessLogTableName1h      = "privatecaptcha.request_logs_1h"
+	AccessLogTableName1d      = "privatecaptcha.request_logs_1d"
+	AccessLogTableName1mo     = "privatecaptcha.request_logs_1mo"
+	RulesLogsTableName1d      = "privatecaptcha.rules_logs_1d"
+	FormSubmitLogTableName    = "privatecaptcha.form_submit_logs"
+	FormSubmitLogTableName1h  = "privatecaptcha.form_submit_logs_1h"
+	FormSubmitLogTableName1d  = "privatecaptcha.form_submit_logs_1d"
+	FormSubmitLogTableName1mo = "privatecaptcha.form_submit_logs_1mo"
 )
 
 var (
@@ -83,7 +87,7 @@ FROM requests
 LEFT OUTER JOIN verifies ON verifies.agg_time = requests.agg_time
 GROUP BY agg_time
 ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
-SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`
+SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'property_stats_period'`
 
 	return &TimeSeriesDB{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
@@ -116,6 +120,15 @@ func (ts *TimeSeriesDB) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (ts *TimeSeriesDB) DropCache(ctx context.Context, tag string) error {
+	if len(tag) == 0 {
+		return ErrInvalidInput
+	}
+
+	_, err := ts.Clickhouse.Exec(fmt.Sprintf("SYSTEM DROP QUERY CACHE TAG '%s'", tag))
+	return err
 }
 
 func (ts *TimeSeriesDB) IsAvailable() bool {
@@ -216,6 +229,55 @@ func (ts *TimeSeriesDB) WriteVerifyLogBatch(ctx context.Context, records []*comm
 		slog.InfoContext(ctx, "Inserted batch of verify records", "size", len(records))
 	} else {
 		slog.ErrorContext(ctx, "Failed to insert verify log batch", common.ErrAttr(err))
+	}
+
+	return err
+}
+
+func (ts *TimeSeriesDB) WriteFormSubmitBatch(ctx context.Context, records []*common.FormSubmitRecord) error {
+	if len(records) == 0 {
+		slog.WarnContext(ctx, "Attempt to insert empty form submit batch")
+		return nil
+	}
+
+	if !ts.IsAvailable() {
+		return ErrMaintenance
+	}
+
+	scope, err := ts.Clickhouse.Begin()
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to begin batch insert", common.ErrAttr(err))
+		return err
+	}
+	var committed bool
+	defer func() {
+		if !committed {
+			if rerr := scope.Rollback(); rerr != nil {
+				slog.ErrorContext(ctx, "Failed to rollback transaction", common.ErrAttr(rerr))
+			}
+		}
+	}()
+
+	batch, err := scope.Prepare(fmt.Sprintf("INSERT INTO %s SETTINGS async_insert = 1, wait_for_async_insert = 1", FormSubmitLogTableName))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to prepare insert query", common.ErrAttr(err))
+		return err
+	}
+
+	for i, r := range records {
+		_, err = batch.Exec(r.UserID, r.OrgID, r.FormID, r.Status, r.Timestamp.UTC())
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
+			return err
+		}
+	}
+
+	err = scope.Commit()
+	if err == nil {
+		committed = true
+		slog.InfoContext(ctx, "Inserted batch of form submit records", "size", len(records))
+	} else {
+		slog.ErrorContext(ctx, "Failed to insert form submit log batch", common.ErrAttr(err))
 	}
 
 	return err
@@ -511,6 +573,100 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 	return results, nil
 }
 
+func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period common.TimePeriod) ([]*common.FormSubmitStat, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	tnow := time.Now().UTC()
+	var timeFrom time.Time
+	var table string
+	var timeFunction string
+	var interval string
+	var cacheKey *CacheKey
+
+	switch period {
+	case common.TimePeriodToday:
+		timeFrom = tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
+		table = FormSubmitLogTableName1h
+		timeFunction = "toStartOfHour(%s)"
+		interval = "INTERVAL 1 HOUR"
+		// in server we only cache the "today" as this is the default chart in the UI
+		cacheKey = new(CacheKey)
+		*cacheKey = FormStatsCacheKey(formID, timeFrom.Format(time.DateTime))
+	case common.TimePeriodWeek:
+		timeFrom = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+		table = FormSubmitLogTableName1d
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
+	case common.TimePeriodMonth:
+		timeFrom = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
+		table = FormSubmitLogTableName1d
+		timeFunction = "toStartOfDay(%s)"
+		interval = "INTERVAL 1 DAY"
+	case common.TimePeriodYear:
+		timeFrom = tnow.AddDate(-1, 0, 0).Truncate(24 * time.Hour)
+		table = FormSubmitLogTableName1mo
+		timeFunction = "toStartOfMonth(%s)"
+		interval = "INTERVAL 1 MONTH"
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	if cacheKey != nil {
+		if stats, err := FetchCachedArray[common.FormSubmitStat](ctx, ts.Cache, *cacheKey); (err == nil) && (len(stats) > 0) {
+			slog.DebugContext(ctx, "Form stats were cached", "orgID", orgID, "formID", formID, "key", *cacheKey, "count", len(stats))
+			return stats, nil
+		}
+	}
+
+	query := fmt.Sprintf(`SELECT
+		toDateTime(%s) AS agg_time,
+		sum(success_count) AS success_count,
+		sum(failure_count) AS failure_count
+	FROM %s FINAL
+	WHERE org_id = {org_id:UInt32} AND form_id = {form_id:UInt32} AND timestamp >= {timestamp:DateTime}
+	GROUP BY agg_time
+	ORDER BY agg_time WITH FILL FROM toDateTime(%s) TO now() STEP %s
+	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'form_stats_period';`,
+		fmt.Sprintf(timeFunction, "timestamp"),
+		table,
+		fmt.Sprintf(timeFunction, "{timestamp:DateTime}"),
+		interval)
+
+	rows, err := ts.Clickhouse.Query(query,
+		clickhouse.Named("org_id", strconv.Itoa(int(orgID))),
+		clickhouse.Named("form_id", strconv.Itoa(int(formID))),
+		clickhouse.Named("timestamp", timeFrom.Format(time.DateTime)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query form submit stats", common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	results := make([]*common.FormSubmitStat, 0)
+	for rows.Next() {
+		stat := &common.FormSubmitStat{}
+		if err := rows.Scan(&stat.Timestamp, &stat.SuccessCount, &stat.FailureCount); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from form submit stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, stat)
+	}
+
+	slog.InfoContext(ctx, "Fetched form submit stats", "count", len(results), "orgID", orgID, "formID", formID,
+		"from", timeFrom, "period", period)
+
+	if cacheKey != nil {
+		const formStatsCacheTTL = 5 * time.Minute
+		// we have 5 min buffers for updates and we do NOT delete this cache item
+		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, formStatsCacheTTL)
+	}
+
+	return results, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -644,6 +800,30 @@ func (ts *TimeSeriesDB) lightDelete(ctx context.Context, tables []string, column
 	return nil
 }
 
+func (ts *TimeSeriesDB) DeleteFormsData(ctx context.Context, formIDs []int32) error {
+	if len(formIDs) == 0 {
+		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
+		return nil
+	}
+
+	if !ts.IsAvailable() {
+		return ErrMaintenance
+	}
+
+	ids := idsToString(formIDs)
+	tables := []string{FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo}
+
+	tnow := time.Now().UTC()
+	timeFrom := tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
+	strCacheKey := timeFrom.Format(time.DateTime)
+	for _, formID := range formIDs {
+		cacheKey := FormStatsCacheKey(formID, strCacheKey)
+		_ = ts.Cache.Delete(ctx, cacheKey)
+	}
+
+	return ts.lightDelete(ctx, tables, "form_id", ids)
+}
+
 func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []int32) error {
 	if len(propertyIDs) == 0 {
 		slog.WarnContext(ctx, "Nothing to delete from ClickHouse")
@@ -660,6 +840,14 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+	}
+
+	tnow := time.Now().UTC()
+	timeFrom := tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
+	strCacheKey := timeFrom.Format(time.DateTime)
+	for _, propertyID := range propertyIDs {
+		cacheKey := propertyStatsCacheKey(propertyID, strCacheKey)
+		_ = ts.Cache.Delete(ctx, cacheKey)
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
@@ -680,6 +868,7 @@ func (ts *TimeSeriesDB) DeleteOrganizationsData(ctx context.Context, orgIDs []in
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+		FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo,
 	}
 
 	return ts.lightDelete(ctx, tables, "org_id", ids)
@@ -700,27 +889,34 @@ func (ts *TimeSeriesDB) DeleteUsersData(ctx context.Context, userIDs []int32) er
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d, AccessLogTableName1mo,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+		FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo,
 	}
 
 	return ts.lightDelete(ctx, tables, "user_id", ids)
 }
 
 type MemoryTimeSeries struct {
-	mu         sync.RWMutex
-	accessLogs []*common.AccessRecord
-	verifyLogs []*common.VerifyRecord
+	mu             sync.RWMutex
+	accessLogs     []*common.AccessRecord
+	verifyLogs     []*common.VerifyRecord
+	formSubmitLogs []*common.FormSubmitRecord
 }
 
 var _ common.TimeSeriesStore = (*MemoryTimeSeries)(nil)
 
 func NewMemoryTimeSeries() *MemoryTimeSeries {
 	return &MemoryTimeSeries{
-		accessLogs: make([]*common.AccessRecord, 0),
-		verifyLogs: make([]*common.VerifyRecord, 0),
+		accessLogs:     make([]*common.AccessRecord, 0),
+		verifyLogs:     make([]*common.VerifyRecord, 0),
+		formSubmitLogs: make([]*common.FormSubmitRecord, 0),
 	}
 }
 
 func (m *MemoryTimeSeries) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (m *MemoryTimeSeries) DropCache(ctx context.Context, tag string) error {
 	return nil
 }
 
@@ -735,6 +931,13 @@ func (m *MemoryTimeSeries) WriteVerifyLogBatch(ctx context.Context, records []*c
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.verifyLogs = append(m.verifyLogs, records...)
+	return nil
+}
+
+func (m *MemoryTimeSeries) WriteFormSubmitBatch(ctx context.Context, records []*common.FormSubmitRecord) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.formSubmitLogs = append(m.formSubmitLogs, records...)
 	return nil
 }
 
@@ -961,6 +1164,56 @@ func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, or
 	return result, nil
 }
 
+func (m *MemoryTimeSeries) RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period common.TimePeriod) ([]*common.FormSubmitStat, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	from := getStartTime(period).UTC()
+	statsMap := make(map[time.Time]*common.FormSubmitStat)
+
+	var truncate func(time.Time) time.Time
+	switch period {
+	case common.TimePeriodToday:
+		truncate = func(t time.Time) time.Time { return t.UTC().Truncate(time.Hour) }
+	case common.TimePeriodWeek, common.TimePeriodMonth:
+		truncate = func(t time.Time) time.Time {
+			y, m, d := t.UTC().Date()
+			return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		}
+	case common.TimePeriodYear:
+		truncate = func(t time.Time) time.Time {
+			y, m, _ := t.UTC().Date()
+			return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
+		}
+	default:
+		return nil, ErrUnsupportedPeriod
+	}
+
+	for _, log := range m.formSubmitLogs {
+		if log.OrgID != orgID || log.FormID != formID || log.Timestamp.UTC().Before(from) {
+			continue
+		}
+
+		ts := truncate(log.Timestamp)
+		if _, ok := statsMap[ts]; !ok {
+			statsMap[ts] = &common.FormSubmitStat{Timestamp: ts}
+		}
+		if log.Status == 0 {
+			statsMap[ts].SuccessCount++
+		} else {
+			statsMap[ts].FailureCount++
+		}
+	}
+
+	result := make([]*common.FormSubmitStat, 0, len(statsMap))
+	for _, stat := range statsMap {
+		result = append(result, stat)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
+
+	return result, nil
+}
+
 func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -1058,6 +1311,26 @@ func (m *MemoryTimeSeries) DeletePropertiesData(ctx context.Context, propertyIDs
 	return nil
 }
 
+func (m *MemoryTimeSeries) DeleteFormsData(ctx context.Context, formIDs []int32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	ids := make(map[int32]struct{})
+	for _, id := range formIDs {
+		ids[id] = struct{}{}
+	}
+
+	newFormSubmitLogs := m.formSubmitLogs[:0]
+	for _, log := range m.formSubmitLogs {
+		if _, ok := ids[log.FormID]; !ok {
+			newFormSubmitLogs = append(newFormSubmitLogs, log)
+		}
+	}
+	m.formSubmitLogs = newFormSubmitLogs
+
+	return nil
+}
+
 func (m *MemoryTimeSeries) DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -1082,6 +1355,14 @@ func (m *MemoryTimeSeries) DeleteOrganizationsData(ctx context.Context, orgIDs [
 		}
 	}
 	m.verifyLogs = newVerify
+
+	newFormSubmitLogs := m.formSubmitLogs[:0]
+	for _, log := range m.formSubmitLogs {
+		if _, ok := ids[log.OrgID]; !ok {
+			newFormSubmitLogs = append(newFormSubmitLogs, log)
+		}
+	}
+	m.formSubmitLogs = newFormSubmitLogs
 
 	return nil
 }
@@ -1110,6 +1391,14 @@ func (m *MemoryTimeSeries) DeleteUsersData(ctx context.Context, userIDs []int32)
 		}
 	}
 	m.verifyLogs = newVerify
+
+	newFormSubmitLogs := m.formSubmitLogs[:0]
+	for _, log := range m.formSubmitLogs {
+		if _, ok := ids[log.UserID]; !ok {
+			newFormSubmitLogs = append(newFormSubmitLogs, log)
+		}
+	}
+	m.formSubmitLogs = newFormSubmitLogs
 
 	return nil
 }

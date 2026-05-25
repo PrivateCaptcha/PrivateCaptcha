@@ -22,8 +22,11 @@ import (
 )
 
 const (
-	maxFormBodySize              = 1024 * 1024
-	formQueueBackpressureTimeout = 400 * time.Millisecond
+	maxFormBodySize                  = 1024 * 1024
+	formQueueBackpressureTimeout     = 400 * time.Millisecond
+	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
+	formSubmitStatusSuccess          = 0
+	formSubmitStatusFailure          = 1
 )
 
 var formOutboundDialer = &net.Dialer{
@@ -298,6 +301,29 @@ func (s *Server) formDialContext(ctx context.Context, network, address string) (
 	return nil, lastErr
 }
 
+func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
+	if form == nil {
+		return
+	}
+
+	record := &common.FormSubmitRecord{
+		UserID:    form.OrgOwnerID.Int32,
+		OrgID:     form.OrgID.Int32,
+		FormID:    form.ID,
+		Timestamp: time.Now().UTC(),
+		Status:    status,
+	}
+
+	select {
+	case s.FormSubmitLogChan <- record:
+		// nothing
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled for adding form submit record", common.ErrAttr(ctx.Err()))
+	case <-time.After(formSubmitLogBackpressureTimeout):
+		s.Metrics.ObserveEventDropped(common.FormLogEventType)
+	}
+}
+
 func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) {
 	method := strings.ToUpper(string(form.Method))
 	if len(method) == 0 {
@@ -358,9 +384,12 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 		_ = resp.Body.Close()
 
 		if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
+			s.addFormSubmitRecord(ctx, form, formSubmitStatusSuccess)
 			return
 		}
 
 		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
+
+	s.addFormSubmitRecord(ctx, form, formSubmitStatusFailure)
 }

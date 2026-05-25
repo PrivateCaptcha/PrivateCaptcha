@@ -19,3 +19,11 @@ type VerifyRecord struct {
 	Timestamp  time.Time
 	Status     int8
 }
+
+type FormSubmitRecord struct {
+	UserID    int32
+	OrgID     int32
+	FormID    int32
+	Timestamp time.Time
+	Status    int8
+}

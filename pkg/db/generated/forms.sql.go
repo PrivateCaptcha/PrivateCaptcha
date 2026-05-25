@@ -70,41 +70,24 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 	return &i, err
 }
 
-const getFormByExternalID = `-- name: GetFormByExternalID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = $1
+const deleteForms = `-- name: DeleteForms :execrows
+DELETE FROM backend.forms WHERE id = ANY($1::INT[])
 `
 
-func (q *Queries) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*Form, error) {
-	row := q.db.QueryRow(ctx, getFormByExternalID, externalID)
-	var i Form
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.ExternalID,
-		&i.OrgID,
-		&i.CreatorID,
-		&i.OrgOwnerID,
-		&i.URL,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.PropertyID,
-		&i.Fields,
-		&i.Enabled,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
-		&i.RetryRequestCount,
-		&i.Method,
-	)
-	return &i, err
+func (q *Queries) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteForms, dollar_1)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const getFormByPropertyID = `-- name: GetFormByPropertyID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE property_id = $1
+const getFormByID = `-- name: GetFormByID :one
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = $1
 `
 
-func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
-	row := q.db.QueryRow(ctx, getFormByPropertyID, propertyID)
+func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
+	row := q.db.QueryRow(ctx, getFormByID, id)
 	var i Form
 	err := row.Scan(
 		&i.ID,
@@ -266,4 +249,63 @@ func (q *Queries) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int6
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getSoftDeletedForms = `-- name: GetSoftDeletedForms :many
+SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.requests_per_second, f.requests_burst, f.retry_request_count, f.method
+FROM backend.forms f
+JOIN backend.organizations o ON f.org_id = o.id
+JOIN backend.users u ON o.user_id = u.id
+WHERE f.deleted_at IS NOT NULL
+  AND f.deleted_at < $1
+  AND o.deleted_at IS NULL
+  AND u.deleted_at IS NULL
+LIMIT $2
+`
+
+type GetSoftDeletedFormsParams struct {
+	DeletedAt pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	Limit     int32              `db:"limit" json:"limit"`
+}
+
+type GetSoftDeletedFormsRow struct {
+	Form Form `db:"form" json:"form"`
+}
+
+func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFormsParams) ([]*GetSoftDeletedFormsRow, error) {
+	rows, err := q.db.Query(ctx, getSoftDeletedForms, arg.DeletedAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetSoftDeletedFormsRow
+	for rows.Next() {
+		var i GetSoftDeletedFormsRow
+		if err := rows.Scan(
+			&i.Form.ID,
+			&i.Form.Name,
+			&i.Form.ExternalID,
+			&i.Form.OrgID,
+			&i.Form.CreatorID,
+			&i.Form.OrgOwnerID,
+			&i.Form.URL,
+			&i.Form.CreatedAt,
+			&i.Form.UpdatedAt,
+			&i.Form.DeletedAt,
+			&i.Form.PropertyID,
+			&i.Form.Fields,
+			&i.Form.Enabled,
+			&i.Form.RequestsPerSecond,
+			&i.Form.RequestsBurst,
+			&i.Form.RetryRequestCount,
+			&i.Form.Method,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

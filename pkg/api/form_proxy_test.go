@@ -97,7 +97,7 @@ func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
 	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
-	server := &Server{BusinessDB: store, FormURLVerifier: verifier}
+	server := &Server{BusinessDB: store, FormURLVerifier: verifier, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
@@ -109,6 +109,75 @@ func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
 	}
 	if downstreamCalled {
 		t.Fatal("expected unsafe form URL to be skipped")
+	}
+	select {
+	case record := <-server.FormSubmitLogChan:
+		t.Fatalf("expected unsafe form URL not to record metrics, got %+v", record)
+	default:
+	}
+}
+
+func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true}
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
+	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
+		t.Fatalf("expected batch submission to succeed, got %v", err)
+	}
+
+	select {
+	case record := <-server.FormSubmitLogChan:
+		if record.UserID != 7 || record.OrgID != 8 || record.FormID != 123 || record.Status != 0 {
+			t.Fatalf("unexpected success record: %+v", record)
+		}
+	default:
+		t.Fatal("expected success form metric record")
+	}
+}
+
+func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true}
+	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
+	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
+	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 2)}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
+		t.Fatalf("expected batch submission to continue after downstream failures, got %v", err)
+	}
+
+	if attempts != 3 {
+		t.Fatalf("expected 3 downstream attempts, got %d", attempts)
+	}
+
+	select {
+	case record := <-server.FormSubmitLogChan:
+		if record.UserID != 7 || record.OrgID != 8 || record.FormID != 123 || record.Status != 1 {
+			t.Fatalf("unexpected failure record: %+v", record)
+		}
+	default:
+		t.Fatal("expected failure form metric record")
+	}
+
+	select {
+	case record := <-server.FormSubmitLogChan:
+		t.Fatalf("expected one final failure record, got extra %+v", record)
+	default:
 	}
 }
 
