@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -204,6 +205,28 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 	return nil
 }
 
+func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error {
+	ul.Resource = "Form"
+
+	if (oldValue != nil) && (newValue != nil) {
+		if oldValue.URL != newValue.URL {
+			ul.Property = "URL"
+			ul.Value = newValue.URL
+		} else if oldValue.RetryRequestCount != newValue.RetryRequestCount {
+			ul.Property = "Retry count"
+			ul.Value = strconv.Itoa(int(newValue.RetryRequestCount))
+		} else if oldValue.RequestsPerSecond != newValue.RequestsPerSecond {
+			ul.Property = "Requests per minute"
+			ul.Value = strconv.Itoa(int(math.Round(newValue.RequestsPerSecond * 60.0)))
+		} else if oldValue.Active != newValue.Active {
+			ul.Property = "Active"
+			ul.Value = strconv.FormatBool(newValue.Active)
+		}
+	}
+
+	return nil
+}
+
 func (ul *UserAuditLog) initFromUserSettings(oldValue, newValue *db.AuditLogUserSettings) error {
 	ul.Resource = "Notification Settings"
 
@@ -347,6 +370,11 @@ func (s *Server) NewUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 			var oldProperty, newProperty *db.AuditLogProperty
 			if oldProperty, newProperty, err = db.ParseAuditLogPayloads[db.AuditLogProperty](ctx, log); err == nil {
 				err = ul.initFromProperty(oldProperty, newProperty)
+			}
+		case db.TableNameForms:
+			var oldForm, newForm *db.AuditLogForm
+			if oldForm, newForm, err = db.ParseAuditLogPayloads[db.AuditLogForm](ctx, log); err == nil {
+				err = ul.initFromForm(oldForm, newForm)
 			}
 		case db.TableNameAPIKeys:
 			var oldAPIKey, newAPIKey *db.AuditLogAPIKey

@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,6 +19,7 @@ const (
 	formDashboardTemplate             = "form/dashboard.html"
 	formDashboardReportsTemplate      = "form/reports.html"
 	formDashboardIntegrationsTemplate = "form/integrations.html"
+	formDashboardSettingsTemplate     = "form/settings.html"
 	formWizardTemplate                = "form-wizard/wizard.html"
 	formWizardNewTemplate             = "form-wizard/new.html"
 	formWizardSetupTemplate           = "form-wizard/client-setup.html"
@@ -42,12 +44,16 @@ type formWizardRenderContext struct {
 }
 
 type userForm struct {
-	ID            string
-	OrgID         string
-	Name          string
-	WebhookPrefix string
-	ExternalID    string
-	Enabled       bool
+	ID                string
+	OrgID             string
+	Name              string
+	URL               string
+	WebhookPrefix     string
+	ExternalID        string
+	Enabled           bool
+	Active            bool
+	RetryRequestCount int
+	RequestsPerMinute int
 }
 
 type orgFormsRenderContext struct {
@@ -75,6 +81,10 @@ type formDashboardRenderContext struct {
 type formDashboardIntegrationsRenderContext struct {
 	formDashboardRenderContext
 	Sitekey string
+}
+
+type formSettingsRenderContext struct {
+	formDashboardRenderContext
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
@@ -271,13 +281,20 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 		return nil
 	}
 
+	requestsPerMinute := int(math.Round(form.RequestsPerSecond * 60.0))
+	requestsPerMinute = max(1, min(requestsPerMinute, 60))
+
 	return &userForm{
-		ID:            hasher.Encrypt(int(form.ID)),
-		OrgID:         hasher.Encrypt(int(form.OrgID.Int32)),
-		Name:          form.Name,
-		WebhookPrefix: webhookPrefixFromURL(form.URL),
-		ExternalID:    db.UUIDToString(form.ExternalID),
-		Enabled:       form.Enabled,
+		ID:                hasher.Encrypt(int(form.ID)),
+		OrgID:             hasher.Encrypt(int(form.OrgID.Int32)),
+		Name:              form.Name,
+		URL:               form.URL,
+		WebhookPrefix:     webhookPrefixFromURL(form.URL),
+		ExternalID:        db.UUIDToString(form.ExternalID),
+		Enabled:           form.Enabled,
+		Active:            form.Active,
+		RetryRequestCount: int(form.RetryRequestCount),
+		RequestsPerMinute: requestsPerMinute,
 	}
 }
 
@@ -315,6 +332,41 @@ func periodFromPath(ctx context.Context, r *http.Request) common.TimePeriod {
 		slog.ErrorContext(ctx, "Incorrect period argument", "period", periodStr)
 		return common.TimePeriodToday
 	}
+}
+
+func parseRetryRequestCount(ctx context.Context, value string) int32 {
+	i, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse retry request count", "value", value, common.ErrAttr(err))
+		return 0
+	}
+
+	const maxValue = 1_000_000
+	const minValue = 0
+
+	if (i < minValue) || (i > maxValue) {
+		slog.ErrorContext(ctx, "Invalid value of retry request count", "value", value)
+	}
+
+	return max(minValue, min(int32(i), maxValue))
+}
+
+func parseRequestsPerMinute(ctx context.Context, value string) float64 {
+	i, err := strconv.ParseInt(value, 10, 32)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse requests per minute", "value", value, common.ErrAttr(err))
+		return 1.0 / 60.0
+	}
+
+	const maxValue = 60
+	const minValue = 1
+
+	if (i < minValue) || (i > maxValue) {
+		slog.ErrorContext(ctx, "Invalid value of requests per minute", "value", value)
+	}
+
+	rpm := max(minValue, min(int32(i), maxValue))
+	return float64(rpm) / 60.0
 }
 
 func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
@@ -422,6 +474,12 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 			return nil, err
 		}
 		model = renderCtx
+	case common.SettingsEndpoint:
+		renderCtx, err := s.getOrgFormSettings(w, r)
+		if err != nil {
+			return nil, err
+		}
+		model = renderCtx
 	case "", common.ReportsEndpoint:
 		renderCtx, _, err := s.getOrgForm(w, r)
 		if err != nil {
@@ -492,4 +550,112 @@ func (s *Server) getFormIntegrationsTab(w http.ResponseWriter, r *http.Request) 
 	}
 
 	return &ViewModel{Model: renderCtx, View: formDashboardIntegrationsTemplate}, nil
+}
+
+func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, error) {
+	dashboardCtx, _, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx := &formSettingsRenderContext{formDashboardRenderContext: *dashboardCtx}
+	renderCtx.Tab = formSettingsTabIndex
+
+	return renderCtx, nil
+}
+
+func (s *Server) getFormSettingsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, err := s.getOrgFormSettings(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+}
+
+func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	renderCtx, err := s.getOrgFormSettings(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !renderCtx.CanEdit {
+		slog.WarnContext(ctx, "Insufficient permissions to edit form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
+		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	}
+
+	name := strings.TrimSpace(r.FormValue(common.ParamName))
+	if name != form.Name {
+		if nameStatus := s.Store.Impl().ValidateFormName(ctx, name, org); !nameStatus.Success() {
+			renderCtx.ErrorMessage = ""
+			renderCtx.Form.Name = name
+			renderCtx.Form.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
+			return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		}
+	}
+
+	urlValue := strings.TrimSpace(r.FormValue(common.ParamURL))
+	if len(urlValue) == 0 {
+		renderCtx.ErrorMessage = "URL cannot be empty."
+		renderCtx.Form.Name = name
+		renderCtx.Form.URL = urlValue
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	}
+
+	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
+		slog.WarnContext(ctx, "Failed to verify form URL", "url", urlValue, common.ErrAttr(err))
+		renderCtx.ErrorMessage = "URL is not valid."
+		renderCtx.Form.Name = name
+		renderCtx.Form.URL = urlValue
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	}
+
+	_, active := r.Form[common.ParamActive]
+	retryRequestCount := parseRetryRequestCount(ctx, r.FormValue(common.ParamRetryRequestCount))
+	requestsPerSecond := parseRequestsPerMinute(ctx, r.FormValue(common.ParamRequestsPerMinute))
+
+	var auditEvent *common.AuditLogEvent
+	if (name != form.Name) || (urlValue != form.URL) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerSecond != form.RequestsPerSecond) {
+		params := &dbgen.UpdateFormParams{
+			ID:                form.ID,
+			Name:              name,
+			URL:               urlValue,
+			Active:            active,
+			RetryRequestCount: retryRequestCount,
+			RequestsPerSecond: requestsPerSecond,
+		}
+
+		var updatedForm *dbgen.Form
+		if updatedForm, auditEvent, err = s.Store.Impl().UpdateForm(ctx, org, user, params); err != nil {
+			renderCtx.ErrorMessage = "Failed to update settings. Please try again."
+		} else {
+			slog.InfoContext(ctx, "Edited form", "formID", form.ID, "orgID", org.ID)
+			renderCtx.SuccessMessage = "Settings were updated"
+			renderCtx.Form = formToUserForm(updatedForm, s.IDHasher)
+		}
+	}
+
+	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }

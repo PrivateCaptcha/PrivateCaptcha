@@ -856,3 +856,68 @@ func TestRenderFormDashboardIntegrations(t *testing.T) {
 		t.Fatal("did not expect other integrations section")
 	}
 }
+
+func TestRenderFormDashboardSettings(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/settings.html", &struct {
+		CsrfRenderContext
+		ErrorMessage   string
+		SuccessMessage string
+		Form           *struct {
+			ID                string
+			OrgID             string
+			Name              string
+			URL               string
+			Active            bool
+			RetryRequestCount int
+			RequestsPerMinute int
+		}
+		Org     *UserOrg
+		Tab     int
+		CanEdit bool
+	}{
+		CsrfRenderContext: stubToken(),
+		ErrorMessage:      "",
+		SuccessMessage:    "",
+		Form: &struct {
+			ID                string
+			OrgID             string
+			Name              string
+			URL               string
+			Active            bool
+			RetryRequestCount int
+			RequestsPerMinute int
+		}{
+			ID:                "456",
+			OrgID:             "123",
+			Name:              "Contact",
+			URL:               "https://hooks.example.com/contact",
+			Active:            true,
+			RetryRequestCount: 2,
+			RequestsPerMinute: 30,
+		},
+		Org:     stubOrg("123"),
+		Tab:     2,
+		CanEdit: true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=settings")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	for _, label := range []string{"Active", "Retry count", "Requests per minute"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected settings to contain %q", label)
+		}
+	}
+	for _, removed := range []string{"Allow subdomains", "Allow localhost", "Difficulty growth", "Base difficulty", "Test widget here"} {
+		if strings.Contains(body, removed) {
+			t.Fatalf("did not expect property-only setting %q", removed)
+		}
+	}
+}

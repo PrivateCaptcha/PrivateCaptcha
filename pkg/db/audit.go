@@ -351,6 +351,7 @@ type AuditLogForm struct {
 	OrgName           string  `json:"org_name,omitempty"`
 	PropertyID        int32   `json:"property_id,omitempty"`
 	Enabled           bool    `json:"enabled"`
+	Active            bool    `json:"active"`
 	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
 	RequestsBurst     int32   `json:"requests_burst,omitempty"`
 	RetryRequestCount int32   `json:"retry_request_count,omitempty"`
@@ -368,9 +369,35 @@ func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
 		OrgOwnerID:        form.OrgOwnerID.Int32,
 		PropertyID:        form.PropertyID,
 		Enabled:           form.Enabled,
+		Active:            form.Active,
 		RequestsPerSecond: form.RequestsPerSecond,
 		RequestsBurst:     form.RequestsBurst,
 		RetryRequestCount: form.RetryRequestCount,
+		Method:            string(form.Method),
+	}
+
+	if org != nil {
+		event.OrgName = org.Name
+	}
+
+	return event
+}
+
+func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *dbgen.Organization) *AuditLogForm {
+	if updateRow == nil {
+		return nil
+	}
+
+	event := &AuditLogForm{
+		URL:               updateRow.OldURL,
+		OrgID:             form.OrgID.Int32,
+		OrgOwnerID:        form.OrgOwnerID.Int32,
+		PropertyID:        form.PropertyID,
+		Enabled:           form.Enabled,
+		Active:            updateRow.OldActive,
+		RequestsPerSecond: updateRow.OldRequestsPerSecond,
+		RequestsBurst:     form.RequestsBurst,
+		RetryRequestCount: updateRow.OldRetryRequestCount,
 		Method:            string(form.Method),
 	}
 
@@ -463,6 +490,17 @@ func newUpdatePropertyAuditLogEvent(updatedProperty *dbgen.Property, updateRow *
 		TableName: TableNameProperties,
 		OldValue:  newAuditLogOldProperty(updatedProperty, updateRow, org),
 		NewValue:  newAuditLogProperty(updatedProperty, org),
+	}
+}
+
+func newUpdateFormAuditLogEvent(updatedForm *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(updatedForm.ID),
+		TableName: TableNameForms,
+		OldValue:  newAuditLogOldForm(updatedForm, updateRow, org),
+		NewValue:  newAuditLogForm(updatedForm, org),
 	}
 }
 

@@ -116,6 +116,7 @@ type Querier interface {
 	UpdateAttemptedUserNotifications(ctx context.Context, dollar_1 []int32) (int64, error)
 	UpdateCacheExpiration(ctx context.Context, arg *UpdateCacheExpirationParams) (int64, error)
 	UpdateDifficultyRule(ctx context.Context, arg *UpdateDifficultyRuleParams) (*UpdateDifficultyRuleRow, error)
+	UpdateForm(ctx context.Context, arg *UpdateFormParams) (*UpdateFormRow, error)
 	UpdateInternalSubscriptions(ctx context.Context, arg *UpdateInternalSubscriptionsParams) (int64, error)
 	UpdateOrgMembershipLevel(ctx context.Context, arg *UpdateOrgMembershipLevelParams) (int64, error)
 	UpdateOrganization(ctx context.Context, arg *UpdateOrganizationParams) (*Organization, error)

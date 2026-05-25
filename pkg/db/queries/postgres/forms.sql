@@ -34,5 +34,32 @@ WHERE f.deleted_at IS NOT NULL
   AND u.deleted_at IS NULL
 LIMIT $2;
 
+-- name: UpdateForm :one
+WITH old AS (
+    SELECT * FROM backend.forms f
+    WHERE f.id = $1 AND (f.creator_id = $7 OR f.org_owner_id = $7) AND (f.org_id = $8 OR $8 IS NULL) AND f.enabled = TRUE
+    FOR UPDATE
+),
+upd AS (
+    UPDATE backend.forms f
+    SET name = $2,
+        url = $3,
+        active = $4,
+        retry_request_count = $5,
+        requests_per_second = $6,
+        updated_at = NOW()
+    WHERE f.id = (SELECT id FROM old)
+    RETURNING *
+)
+SELECT
+    upd.*, 
+    old.name AS old_name,
+    old.url AS old_url,
+    old.active AS old_active,
+    old.retry_request_count AS old_retry_request_count,
+    old.requests_per_second AS old_requests_per_second
+FROM upd
+CROSS JOIN old;
+
 -- name: DeleteForms :execrows
 DELETE FROM backend.forms WHERE id = ANY($1::INT[]);

@@ -1160,6 +1160,70 @@ func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
 	}
 }
 
+func createFormFromUpdate(row *dbgen.UpdateFormRow) *dbgen.Form {
+	return &dbgen.Form{
+		ID:                row.ID,
+		Name:              row.Name,
+		ExternalID:        row.ExternalID,
+		OrgID:             row.OrgID,
+		CreatorID:         row.CreatorID,
+		OrgOwnerID:        row.OrgOwnerID,
+		URL:               row.URL,
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
+		DeletedAt:         row.DeletedAt,
+		PropertyID:        row.PropertyID,
+		Fields:            row.Fields,
+		RequestsPerSecond: row.RequestsPerSecond,
+		RequestsBurst:     row.RequestsBurst,
+		RetryRequestCount: row.RetryRequestCount,
+		Method:            row.Method,
+		Enabled:           row.Enabled,
+		Active:            row.Active,
+	}
+}
+
+func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdateFormParams) (*dbgen.Form, *common.AuditLogEvent, error) {
+	if (params == nil) || (user == nil) {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	params.CreatorID = Int(user.ID)
+	if org != nil {
+		params.OrgID = Int(org.ID)
+	}
+
+	updatedForm, err := impl.querier.UpdateForm(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			flog := slog.With("formID", params.ID, "userID", user.ID)
+			if form, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, formByIDCacheKey(params.ID)); err == nil {
+				flog = flog.With("orgOwnerID", form.OrgOwnerID.Int32, "creatorID", form.CreatorID.Int32)
+			}
+			flog.WarnContext(ctx, "Cannot update form in DB")
+
+			return nil, nil, ErrPermissions
+		}
+
+		slog.ErrorContext(ctx, "Failed to update form in DB", "name", params.Name, "formID", params.ID, "userID", user.ID, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Updated form", "name", updatedForm.Name, "formID", updatedForm.ID)
+
+	cacheForm := createFormFromUpdate(updatedForm)
+	impl.cacheForm(ctx, cacheForm)
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+
+	auditEvent := newUpdateFormAuditLogEvent(cacheForm, updatedForm, org, user)
+
+	return cacheForm, auditEvent, nil
+}
+
 func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
 	if (params == nil) || (user == nil) {
 		return nil, nil, ErrInvalidInput

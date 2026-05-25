@@ -331,6 +331,9 @@ func (s *QuerierStub) UpdateCacheExpiration(ctx context.Context, arg *dbgen.Upda
 func (s *QuerierStub) UpdateDifficultyRule(ctx context.Context, arg *dbgen.UpdateDifficultyRuleParams) (*dbgen.UpdateDifficultyRuleRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) UpdateForm(ctx context.Context, arg *dbgen.UpdateFormParams) (*dbgen.UpdateFormRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) UpdateInternalSubscriptions(ctx context.Context, arg *dbgen.UpdateInternalSubscriptionsParams) (int64, error) {
 	return 0, s.Error
 }
