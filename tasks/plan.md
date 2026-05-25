@@ -79,16 +79,16 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Description:** Add a form metrics channel and emit exactly one success/failure metric per final form submission attempt.
 
 **Acceptance criteria:**
-- [ ] `api.Server` has `FormSubmitLogChan` and `FormSubmitLogCancel` analogous to `VerifyLogChan`.
-- [ ] `Server.Init` starts a batch processor using `TimeSeries.WriteFormSubmitBatch`.
-- [ ] `Server.Shutdown` cancels and closes the new channel safely.
-- [ ] `submitForm` records one final metric after retries finish.
-- [ ] Failed captcha, missing form, disabled form, unsafe URL, and request construction errors do not emit form metrics.
-- [ ] HTTP 2xx emits success; exhausted attempts with HTTP non-2xx or `client.Do` errors emit failure once.
+- [x] `api.Server` has `FormSubmitLogChan` and `FormSubmitLogCancel` analogous to `VerifyLogChan`.
+- [x] `Server.Init` starts a batch processor using `TimeSeries.WriteFormSubmitBatch`.
+- [x] `Server.Shutdown` cancels and closes the new channel safely.
+- [x] `submitForm` records one final metric after retries finish.
+- [x] Failed captcha, missing form, disabled form, unsafe URL, and request construction errors do not emit form metrics.
+- [x] HTTP 2xx emits success; exhausted attempts with HTTP non-2xx or `client.Do` errors emit failure once.
 
 **Verification:**
-- [ ] Run `make test-unit`.
-- [ ] Add or extend `pkg/api/form_proxy_test.go` tests for success, downstream failure with retries, invalid captcha, and unsafe URL metric behavior.
+- [x] Run `make test-unit`.
+- [x] Add or extend `pkg/api/form_proxy_test.go` tests for success, downstream failure with retries, invalid captcha, and unsafe URL metric behavior.
 
 **Dependencies:** Task 2.
 
@@ -102,9 +102,9 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Estimated scope:** M
 
 ## Checkpoint: End-to-End Write Path
-- [ ] API unit/integration tests prove successful form proxy submission writes one success metric.
-- [ ] Retry tests prove multiple retries still produce one final metric.
-- [ ] `make test-unit` passes.
+- [x] API unit/integration tests prove successful form proxy submission writes one success metric.
+- [x] Retry tests prove multiple retries still produce one final metric.
+- [x] `make test-unit` passes.
 
 ## Phase 3: Read Path
 

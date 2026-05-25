@@ -12,12 +12,12 @@
 - [x] Review ClickHouse schema and deletion keys.
 
 ## Phase 2: API Write Path
-- [ ] Add API server form metrics channel/cancel lifecycle.
-- [ ] Emit one final form submission metric from `submitForm`.
-- [ ] Add form proxy tests for success, final failure, retry overcount prevention, invalid captcha, and unsafe URL.
+- [x] Add API server form metrics channel/cancel lifecycle.
+- [x] Emit one final form submission metric from `submitForm`.
+- [x] Add form proxy tests for success, final failure, retry overcount prevention, invalid captcha, and unsafe URL.
 
 ## Checkpoint 2
-- [ ] Run `make test-unit`.
+- [x] Run `make test-unit`.
 
 ## Phase 3: Portal Read Path
 - [ ] Add form stats TimeSeries query usage in Portal handler.
