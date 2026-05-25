@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -189,16 +188,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
 
-	propertyParams := &dbgen.CreatePropertyParams{
-		CreatorID:        db.Int(user.ID),
-		Domain:           domain,
-		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
-		Growth:           dbgen.DifficultyGrowthMedium,
-		ValidityInterval: 6 * time.Hour,
-		AllowSubdomains:  false,
-		AllowLocalhost:   false,
-		MaxReplayCount:   1,
-	}
+	propertyParams := db.NewDefaultPropertyParams("" /*name*/, domain, user.ID)
 	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, propertyParams, &dbgen.CreateFormParams{
 		Name:              renderCtx.Name,
 		URL:               renderCtx.URL,
