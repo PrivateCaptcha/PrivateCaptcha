@@ -13,7 +13,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
-func gcDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, t *testing.T) {
+func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func(p *dbgen.Property) error, t *testing.T) {
 	t.Helper()
 
 	const requests = 1000
@@ -70,6 +70,54 @@ func gcDataTestSuite(ctx context.Context, property *dbgen.Property, deleter func
 	}
 }
 
+func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *dbgen.Form) error, t *testing.T) {
+	t.Helper()
+
+	const requests = 1000
+
+	for i := 0; i < requests; i++ {
+		server.addFormSubmitRecord(ctx, form, int8(i%2))
+	}
+
+	// we need to wait for the timeout in the ProcessAccessLog()
+	time.Sleep(1 * time.Second)
+
+	stats, err := timeSeries.RetrieveFormStatsByPeriod(ctx, form.OrgID.Int32, form.ID, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stats) == 0 {
+		t.Error("There are no stats found")
+	}
+
+	err = deleter(form)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	job := &maintenance.GarbageCollectDataJob{
+		Age:        0,
+		BusinessDB: store,
+		TimeSeries: timeSeries,
+	}
+
+	err = job.RunOnce(ctx, job.NewParams())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err = timeSeries.RetrieveFormStatsByPeriod(ctx, form.OrgID.Int32, form.ID, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stats) > 0 {
+		t.Errorf("There are %v stats found", len(stats))
+	}
+}
+
 func TestGCPropertyData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -87,13 +135,13 @@ func TestGCPropertyData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
+	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteProperty(ctx, p, org, user)
 		return err
 	}, t)
 }
 
-func TestGCOrganizationData(t *testing.T) {
+func TestGCPropertyOrgData(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -110,7 +158,7 @@ func TestGCOrganizationData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
+	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
 		return err
 	}, t)
@@ -133,7 +181,7 @@ func TestGCUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gcDataTestSuite(ctx, property, func(p *dbgen.Property) error {
+	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
 			event, err := impl.SoftDeleteUser(ctx, user)
 			return []*common.AuditLogEvent{event}, err
@@ -164,55 +212,38 @@ func TestGCFormData(t *testing.T) {
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)
+
+	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
+		_, err := store.Pool.Exec(ctx, "UPDATE backend.forms SET deleted_at = NOW() - INTERVAL '1 hour' WHERE id = $1", form.ID)
+		return err
+	}, t)
+}
+
+func TestGCFormOrgData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	now := time.Now()
-	if err := timeSeries.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now, Status: 0},
-		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now, Status: 1},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
 
-	time.Sleep(100 * time.Millisecond)
-
-	stats, err := timeSeries.RetrieveFormStatsByPeriod(ctx, org.ID, form.ID, common.TimePeriodToday)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(stats) == 0 {
-		t.Fatal("There are no form stats found")
-	}
-
-	if _, err := store.Pool.Exec(ctx, "UPDATE backend.forms SET deleted_at = NOW() - INTERVAL '1 hour' WHERE id = $1", form.ID); err != nil {
-		t.Fatal(err)
-	}
-
-	job := &maintenance.GarbageCollectDataJob{
-		Age:        0,
-		BusinessDB: store,
-		TimeSeries: timeSeries,
-	}
-
-	if err := job.RunOnce(ctx, job.NewParams()); err != nil {
-		t.Fatal(err)
-	}
-
-	stats, err = timeSeries.RetrieveFormStatsByPeriod(ctx, org.ID, form.ID, common.TimePeriodToday)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(stats) > 0 {
-		t.Errorf("There are %v form stats found", len(stats))
-	}
-
-	var count int
-	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.forms WHERE id = $1", form.ID).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	if count != 0 {
-		t.Errorf("Expected hard-deleted form, got count %d", count)
-	}
+	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
+		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
+		return err
+	}, t)
 }

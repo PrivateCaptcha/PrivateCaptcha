@@ -342,6 +342,8 @@ func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve form stats", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 
 	cacheHeaders := map[string][]string{

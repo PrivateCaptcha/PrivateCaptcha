@@ -556,6 +556,8 @@ func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve property stats", common.ErrAttr(err))
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
 	}
 
 	response := PropertyStatsResponse{

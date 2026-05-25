@@ -574,6 +574,7 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 	var table string
 	var timeFunction string
 	var interval string
+	var cacheKey *CacheKey
 
 	switch period {
 	case common.TimePeriodToday:
@@ -581,6 +582,9 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 		table = FormSubmitLogTableName1h
 		timeFunction = "toStartOfHour(%s)"
 		interval = "INTERVAL 1 HOUR"
+		// in server we only cache the "today" as this is the default chart in the UI
+		cacheKey = new(CacheKey)
+		*cacheKey = formStatsCacheKey(formID, timeFrom.Format(time.DateTime))
 	case common.TimePeriodWeek:
 		timeFrom = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
 		table = FormSubmitLogTableName1d
@@ -598,6 +602,13 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 		interval = "INTERVAL 1 MONTH"
 	default:
 		return nil, ErrUnsupportedPeriod
+	}
+
+	if cacheKey != nil {
+		if stats, err := FetchCachedArray[common.FormSubmitStat](ctx, ts.Cache, *cacheKey); (err == nil) && (len(stats) > 0) {
+			slog.DebugContext(ctx, "Form stats were cached", "orgID", orgID, "formID", formID, "key", *cacheKey, "count", len(stats))
+			return stats, nil
+		}
 	}
 
 	query := fmt.Sprintf(`SELECT
@@ -637,6 +648,12 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 
 	slog.InfoContext(ctx, "Fetched form submit stats", "count", len(results), "orgID", orgID, "formID", formID,
 		"from", timeFrom, "period", period)
+
+	if cacheKey != nil {
+		const formStatsCacheTTL = 5 * time.Minute
+		// we have 5 min buffers for updates and we do NOT delete this cache item
+		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, formStatsCacheTTL)
+	}
 
 	return results, nil
 }
@@ -787,6 +804,14 @@ func (ts *TimeSeriesDB) DeleteFormsData(ctx context.Context, formIDs []int32) er
 	ids := idsToString(formIDs)
 	tables := []string{FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo}
 
+	tnow := time.Now().UTC()
+	timeFrom := tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
+	strCacheKey := timeFrom.Format(time.DateTime)
+	for _, formID := range formIDs {
+		cacheKey := formStatsCacheKey(formID, strCacheKey)
+		_ = ts.Cache.Delete(ctx, cacheKey)
+	}
+
 	return ts.lightDelete(ctx, tables, "form_id", ids)
 }
 
@@ -806,6 +831,14 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
+	}
+
+	tnow := time.Now().UTC()
+	timeFrom := tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
+	strCacheKey := timeFrom.Format(time.DateTime)
+	for _, propertyID := range propertyIDs {
+		cacheKey := propertyStatsCacheKey(propertyID, strCacheKey)
+		_ = ts.Cache.Delete(ctx, cacheKey)
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
@@ -1140,7 +1173,7 @@ func (m *MemoryTimeSeries) RetrieveFormStatsByPeriod(ctx context.Context, orgID,
 			return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
 		}
 	default:
-		truncate = func(t time.Time) time.Time { return t.UTC().Truncate(time.Hour) }
+		return nil, ErrUnsupportedPeriod
 	}
 
 	for _, log := range m.formSubmitLogs {

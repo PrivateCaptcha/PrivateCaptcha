@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -243,11 +244,16 @@ func (s *Server) Shutdown() {
 	s.FormSubmitLogCancel()
 	s.FormSubmitCancel()
 	close(s.VerifyLogChan)
-	close(s.FormSubmitLogChan)
+	// we have background works that call addFormSubmitRecord() which can panic so we don't close this channel here
+	//close(s.FormSubmitLogChan)
 	close(s.FormSubmissionChan)
 }
 
 func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
+	arg := func(s string) string {
+		return fmt.Sprintf("{%s}", s)
+	}
+
 	svc := common.ServiceMiddleware(ApiService)
 	recovered := common.Recovered(s.Metrics)
 	publicChain := alice.New(svc, recovered, security)
@@ -276,8 +282,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 
 	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
 	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
-	rg.Handle(rg.Post(common.FormEndpoint, "{"+common.ParamForm+"}"), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
-	rg.Handle(rg.Options(common.FormEndpoint, "{"+common.ParamForm+"}"), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
+	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
+	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
