@@ -112,16 +112,16 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Description:** Add a Portal JSON endpoint for form stats, analogous to `getPropertyStats`.
 
 **Acceptance criteria:**
-- [ ] New route serves form stats, with path: `/org/{org}/form/{form}/stats/{period}`.
-- [ ] Handler authenticates the session, validates org access, validates the form belongs to the org, handles ETag/private cache headers, and returns success/failure series.
-- [ ] New response type uses meaningful JSON keys, for example `success` and `failure`.
-- [ ] `cmd/viewportal/main.go` includes a `stubFormStatsHandler`.
-- [ ] Integration test mirrors `TestGetPropertyStats`: create account/form, insert form metrics, query all periods, assert totals.
+- [x] New route serves form stats, with path: `/org/{org}/form/{form}/stats/{period}`.
+- [x] Handler authenticates the session, validates org access, validates the form belongs to the org, handles ETag/private cache headers, and returns success/failure series.
+- [x] New response type uses meaningful JSON keys, for example `success` and `failure`.
+- [x] `cmd/viewportal/main.go` includes a `stubFormStatsHandler`.
+- [x] Integration test mirrors `TestGetPropertyStats`: create account/form, insert form metrics, query all periods, assert totals.
 
 **Verification:**
-- [ ] Run `make generate-easyjson` if new easyjson response structs are added.
-- [ ] Run `make test-unit`.
-- [ ] Run `make test-local-light TEST_NAME=TestGetFormStats`.
+- [x] Added manual easyjson marshaler because `make generate-easyjson` is blocked by the existing API init panic.
+- [x] Run `make test-unit`.
+- [x] Run `make test-local-light TEST_NAME=TestGetFormStats`.
 
 **Dependencies:** Task 2.
 
@@ -137,9 +137,9 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Estimated scope:** M
 
 ## Checkpoint: Read Path
-- [ ] Form stats endpoint is protected and rejects bad org/form IDs.
-- [ ] Integration test proves ClickHouse writes are queryable through Portal.
-- [ ] `make test-local-light TEST_NAME=TestGetFormStats` passes.
+- [x] Form stats endpoint is protected and rejects bad org/form IDs.
+- [x] Integration test proves time series writes are queryable through Portal.
+- [x] `make test-local-light TEST_NAME=TestGetFormStats` passes.
 
 ## Phase 4: Retention And Deletion
 

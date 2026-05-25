@@ -12,6 +12,13 @@ type PropertyStatsResponse struct {
 	Verified  []*PropertyStatsPoint `json:"verified"`
 }
 
+type FormStatsPoint = PropertyStatsPoint
+
+type FormStatsResponse struct {
+	Success []*FormStatsPoint `json:"success"`
+	Failure []*FormStatsPoint `json:"failure"`
+}
+
 //easyjson:json
 type AccountStatsPoint struct {
 	Date   int64 `json:"x"`

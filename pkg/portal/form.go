@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -275,4 +276,107 @@ func formsToUserForms(ctx context.Context, forms []*dbgen.Form, hasher common.Id
 	}
 
 	return result
+}
+
+func (s *Server) Form(org *dbgen.Organization, r *http.Request) (*dbgen.Form, error) {
+	ctx := r.Context()
+
+	formID, value, err := common.IntPathArg(r, common.ParamForm, s.IDHasher)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to parse form path parameter", "value", value, common.ErrAttr(err))
+		return nil, ErrInvalidPathArg
+	}
+
+	for offset := 0; ; offset += db.MaxOrgPropertiesPageSize {
+		forms, hasMore, err := s.Store.Impl().RetrieveOrgForms(ctx, org, offset, db.MaxOrgPropertiesPageSize)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, form := range forms {
+			if form.ID == int32(formID) {
+				return form, nil
+			}
+		}
+
+		if !hasMore {
+			break
+		}
+	}
+
+	return nil, db.ErrRecordNotFound
+}
+
+func periodFromPath(ctx context.Context, r *http.Request) common.TimePeriod {
+	periodStr := r.PathValue(common.ParamPeriod)
+	switch periodStr {
+	case PeriodEndpointToday:
+		return common.TimePeriodToday
+	case PeriodEndpointWeek:
+		return common.TimePeriodWeek
+	case PeriodEndpointMonth:
+		return common.TimePeriodMonth
+	case PeriodEndpointYear:
+		return common.TimePeriodYear
+	default:
+		slog.ErrorContext(ctx, "Incorrect period argument", "period", periodStr)
+		return common.TimePeriodToday
+	}
+}
+
+func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	period := periodFromPath(ctx, r)
+	etag := common.GenerateETag(strconv.Itoa(int(user.ID)), strconv.Itoa(int(org.ID)), strconv.Itoa(int(form.ID)), period.String())
+	if etagHeader := r.Header.Get(common.HeaderIfNoneMatch); len(etagHeader) > 0 && (etagHeader == etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+
+	success := []*FormStatsPoint{}
+	failure := []*FormStatsPoint{}
+
+	if stats, err := s.TimeSeries.RetrieveFormStatsByPeriod(ctx, org.ID, form.ID, period); err == nil {
+		anyNonZero := false
+		for _, st := range stats {
+			if (st.SuccessCount > 0) || (st.FailureCount > 0) {
+				anyNonZero = true
+			}
+			success = append(success, &FormStatsPoint{Date: st.Timestamp.Unix(), Value: st.SuccessCount})
+			failure = append(failure, &FormStatsPoint{Date: st.Timestamp.Unix(), Value: st.FailureCount})
+		}
+
+		if !anyNonZero {
+			success = []*FormStatsPoint{}
+			failure = []*FormStatsPoint{}
+		}
+	} else {
+		slog.ErrorContext(ctx, "Failed to retrieve form stats", common.ErrAttr(err))
+	}
+
+	cacheHeaders := map[string][]string{
+		common.HeaderETag:         []string{etag},
+		common.HeaderCacheControl: common.PrivateCacheControl1m,
+	}
+
+	common.SendJSONResponse(ctx, w, FormStatsResponse{Success: success, Failure: failure}, cacheHeaders)
 }

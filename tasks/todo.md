@@ -20,16 +20,16 @@
 - [x] Run `make test-unit`.
 
 ## Phase 3: Portal Read Path
-- [ ] Add form stats TimeSeries query usage in Portal handler.
-- [ ] Add form stats route and form authorization helper if needed.
-- [ ] Add form stats response type and regenerate easyjson if needed.
-- [ ] Add `cmd/viewportal` stub form stats handler.
-- [ ] Add integration test equivalent to `TestGetPropertyStats`.
+- [x] Add form stats TimeSeries query usage in Portal handler.
+- [x] Add form stats route and form authorization helper if needed.
+- [x] Add form stats response type and manual easyjson marshaler.
+- [x] Add `cmd/viewportal` stub form stats handler.
+- [x] Add integration test equivalent to `TestGetPropertyStats`.
 
 ## Checkpoint 3
-- [ ] Run `make generate-easyjson` if response structs changed.
-- [ ] Run `make test-unit`.
-- [ ] Run `make test-local-light TEST_NAME=TestGetFormStats`.
+- [x] Verify easyjson support for form stats response.
+- [x] Run `make test-unit`.
+- [x] Run `make test-local-light TEST_NAME=TestGetFormStats`.
 
 ## Phase 4: GC And Deletion
 - [ ] Add sqlc queries for soft-deleted forms and hard-delete forms.
