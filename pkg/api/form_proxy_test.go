@@ -135,7 +135,7 @@ func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 
 	select {
 	case record := <-server.FormSubmitLogChan:
-		if record.UserID != 7 || record.OrgID != 8 || record.PropertyID != 456 || record.FormID != 123 || record.Status != 0 {
+		if record.UserID != 7 || record.OrgID != 8 || record.FormID != 123 || record.Status != 0 {
 			t.Fatalf("unexpected success record: %+v", record)
 		}
 	default:
@@ -167,7 +167,7 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 
 	select {
 	case record := <-server.FormSubmitLogChan:
-		if record.UserID != 7 || record.OrgID != 8 || record.PropertyID != 456 || record.FormID != 123 || record.Status != 1 {
+		if record.UserID != 7 || record.OrgID != 8 || record.FormID != 123 || record.Status != 1 {
 			t.Fatalf("unexpected failure record: %+v", record)
 		}
 	default:

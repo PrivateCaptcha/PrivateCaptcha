@@ -256,7 +256,7 @@ func (ts *TimeSeriesDB) WriteFormSubmitBatch(ctx context.Context, records []*com
 	}
 
 	for i, r := range records {
-		_, err = batch.Exec(r.UserID, r.OrgID, r.PropertyID, r.FormID, r.Status, r.Timestamp.UTC())
+		_, err = batch.Exec(r.UserID, r.OrgID, r.FormID, r.Status, r.Timestamp.UTC())
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to exec insert for record", common.ErrAttr(err), "index", i)
 			return err
@@ -1262,14 +1262,6 @@ func (m *MemoryTimeSeries) DeletePropertiesData(ctx context.Context, propertyIDs
 		}
 	}
 	m.verifyLogs = newVerify
-
-	newFormSubmitLogs := m.formSubmitLogs[:0]
-	for _, log := range m.formSubmitLogs {
-		if _, ok := ids[log.PropertyID]; !ok {
-			newFormSubmitLogs = append(newFormSubmitLogs, log)
-		}
-	}
-	m.formSubmitLogs = newFormSubmitLogs
 
 	return nil
 }

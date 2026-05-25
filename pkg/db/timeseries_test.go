@@ -312,10 +312,10 @@ func TestMemoryTimeSeriesRetrieveFormStatsByPeriod(t *testing.T) {
 	now := time.Now().UTC()
 
 	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 1000, Timestamp: now.Add(-30 * time.Minute), Status: 0},
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 1000, Timestamp: now.Add(-20 * time.Minute), Status: 0},
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 1000, Timestamp: now.Add(-10 * time.Minute), Status: 1},
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 2000, Timestamp: now.Add(-10 * time.Minute), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-30 * time.Minute), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-20 * time.Minute), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-10 * time.Minute), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now.Add(-10 * time.Minute), Status: 0},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -346,8 +346,8 @@ func TestMemoryTimeSeriesDeleteFormsData(t *testing.T) {
 	now := time.Now().UTC()
 
 	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 1000, Timestamp: now, Status: 0},
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 2000, Timestamp: now, Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now, Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now, Status: 1},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -379,14 +379,14 @@ func TestMemoryTimeSeriesDeletesFormDataByOwner(t *testing.T) {
 	now := time.Now().UTC()
 
 	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: 1, OrgID: 10, PropertyID: 100, FormID: 1000, Timestamp: now, Status: 0},
-		{UserID: 2, OrgID: 20, PropertyID: 200, FormID: 2000, Timestamp: now, Status: 1},
-		{UserID: 3, OrgID: 30, PropertyID: 300, FormID: 3000, Timestamp: now, Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now, Status: 0},
+		{UserID: 2, OrgID: 20, FormID: 2000, Timestamp: now, Status: 1},
+		{UserID: 3, OrgID: 30, FormID: 3000, Timestamp: now, Status: 0},
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ts.DeletePropertiesData(ctx, []int32{100}); err != nil {
+	if err := ts.DeleteFormsData(ctx, []int32{1000}); err != nil {
 		t.Fatal(err)
 	}
 	if stats, err := ts.RetrieveFormStatsByPeriod(ctx, 10, 1000, common.TimePeriodToday); err != nil || len(stats) != 0 {

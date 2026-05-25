@@ -306,12 +306,11 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 
 	record := &common.FormSubmitRecord{
-		UserID:     form.OrgOwnerID.Int32,
-		OrgID:      form.OrgID.Int32,
-		PropertyID: form.PropertyID,
-		FormID:     form.ID,
-		Timestamp:  time.Now().UTC(),
-		Status:     status,
+		UserID:    form.OrgOwnerID.Int32,
+		OrgID:     form.OrgID.Int32,
+		FormID:    form.ID,
+		Timestamp: time.Now().UTC(),
+		Status:    status,
 	}
 
 	timeout := formQueueBackpressureTimeout

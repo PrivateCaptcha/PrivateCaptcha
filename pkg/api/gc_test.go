@@ -170,8 +170,8 @@ func TestGCFormData(t *testing.T) {
 
 	now := time.Now()
 	if err := timeSeries.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now, Status: 0},
-		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now, Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now, Status: 0},
+		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now, Status: 1},
 	}); err != nil {
 		t.Fatal(err)
 	}

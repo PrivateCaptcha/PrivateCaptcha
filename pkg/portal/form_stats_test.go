@@ -49,9 +49,9 @@ func TestGetFormStats(t *testing.T) {
 
 	now := time.Now()
 	if err := timeSeries.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
-		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now.Add(-1 * time.Hour), Status: 0},
-		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now.Add(-2 * time.Hour), Status: 0},
-		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now.Add(-1 * time.Hour), Status: 0},
+		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now.Add(-2 * time.Hour), Status: 0},
+		{UserID: user.ID, OrgID: org.ID, FormID: form.ID, Timestamp: now.Add(-3 * time.Hour), Status: 1},
 	}); err != nil {
 		t.Fatalf("Failed to write form submit batch: %v", err)
 	}

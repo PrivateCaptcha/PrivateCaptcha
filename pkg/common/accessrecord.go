@@ -21,10 +21,9 @@ type VerifyRecord struct {
 }
 
 type FormSubmitRecord struct {
-	UserID     int32
-	OrgID      int32
-	PropertyID int32
-	FormID     int32
-	Timestamp  time.Time
-	Status     int8
+	UserID    int32
+	OrgID     int32
+	FormID    int32
+	Timestamp time.Time
+	Status    int8
 }
