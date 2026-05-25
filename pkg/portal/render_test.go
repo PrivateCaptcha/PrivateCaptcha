@@ -780,3 +780,38 @@ func TestRenderFormWizardIntegrationStep(t *testing.T) {
 		t.Fatal("did not expect other integrations section")
 	}
 }
+
+func TestRenderFormDashboardReports(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/dashboard.html", &struct {
+		CsrfRenderContext
+		Form    *userForm
+		Org     *UserOrg
+		Tab     int
+		CanEdit bool
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", WebhookPrefix: "hooks.example.com/submit", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               0,
+		CanEdit:           true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	for _, label := range []string{"Reports", "Integrations", "Settings", "Audit logs"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected dashboard to contain %q tab", label)
+		}
+	}
+	if strings.Contains(body, "Rules") {
+		t.Fatal("did not expect rules tab in form dashboard")
+	}
+}

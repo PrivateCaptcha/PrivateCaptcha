@@ -239,6 +239,65 @@ func TestPostNewOrgForm(t *testing.T) {
 	}
 }
 
+func TestGetFormDashboard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "dashboard.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/dashboard",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s", orgID, formID), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	for _, label := range []string{"Reports", "Integrations", "Settings", "Audit logs"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected %q tab in dashboard", label)
+		}
+	}
+	if strings.Contains(body, "Rules") {
+		t.Fatal("did not expect rules tab in form dashboard")
+	}
+	if !strings.Contains(body, fmt.Sprintf("/org/%s/form/%s/stats/", orgID, formID)) {
+		t.Fatal("expected form stats endpoint in reports tab")
+	}
+}
+
 type rejectPortalFormURLVerifier struct {
 	err error
 }

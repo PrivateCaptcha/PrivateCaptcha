@@ -1,0 +1,307 @@
+{{define "scripts"}}
+<script defer src="{{$.Ctx.CDN}}/portal/js/d3.v7.min.js" type="text/javascript" charset="utf-8" crossorigin="anonymous"></script>
+{{template "default-scripts.html" .}}
+
+<script>
+    const BAR_MIN_HEIGHT_THRESHOLD = 1e-6;
+
+    function chartComponent() {
+        const yTicksCount = 7;
+        const maxBarWidth = 7;
+
+        const backgroundColor = '#e4e4e7';
+        const successColor = '#188B8B';
+        const failureColor = '#F45D5D';
+        const grayColor = '#6b7280';
+
+        const weekdayFormat = d3.timeFormat('%a');
+        const monthlyFormat = d3.timeFormat('%b');
+
+        const monthlyTicks = function(date) {
+            if (date.getDate() === 1 && date.getMonth() === 0) {
+                return date.getFullYear();
+            }
+            return monthlyFormat(date);
+        };
+
+        const hourlyTicks = function(date) {
+            if (date.getHours() === 0) {
+                return weekdayFormat(date);
+            }
+            return date.getHours();
+        };
+
+        const yTickFormat = function(d) {
+            if (d >= 1000000000) {
+                return (d / 1000000000) + 'B';
+            }
+            if (d >= 1000000) {
+                return (d / 1000000) + 'M';
+            }
+            if (d >= 1000) {
+                return (d / 1000) + 'K';
+            }
+            return d;
+        };
+
+        const periodLength = {
+            '24h': 1,
+            '7d': 7,
+            '30d': 30,
+            '1y': 365,
+        };
+
+        const oddTickFilter = function(d, i) { return !(i % 2); };
+        const evenTickFilter = function(d, i) { return i % 2; };
+
+        const tickFilter = {
+            '24h': evenTickFilter,
+            '7d': evenTickFilter,
+            '30d': evenTickFilter,
+            '1y': oddTickFilter,
+        };
+
+        const tickFunction = {
+            '24h': hourlyTicks,
+            '7d': hourlyTicks,
+            '30d': function(date) {
+                if (date.getDate() === 1) {
+                    return monthlyFormat(date);
+                }
+                return date.getDate();
+            },
+            '1y': monthlyTicks,
+        };
+
+        const drawNoData = function(element, periodLengthDays) {
+            const margin = {top: 20, right: 30, bottom: 60, left: 30};
+            const rect = element.getBoundingClientRect();
+
+            const width = rect.width - margin.left - margin.right;
+            const height = rect.height - margin.top - margin.bottom;
+
+            const d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
+
+            const svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            const chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+            const x = d3.scaleTime().range([0, width]);
+            x.domain([d3.timeDay.offset(new Date(), -periodLengthDays), new Date()]);
+
+            const y = d3.scaleLinear().range([height, 0]);
+
+            chartElement.append('g')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(d3.axisBottom(x))
+                .style('color', backgroundColor)
+                .style('stroke-width', 2)
+                .selectAll('text')
+                .style('text-anchor', 'end')
+                .style('color', '#000')
+                .attr('dx', '-.8em')
+                .attr('dy', '-.55em')
+                .attr('transform', 'rotate(-90)');
+
+            chartElement.append('g')
+                .call(d3.axisLeft(y).ticks(yTicksCount).tickSize(-width).tickFormat(''))
+                .style('color', backgroundColor)
+                .selectAll('.domain').remove();
+
+            chartElement.append('g')
+                .attr('transform', 'translate(' + (width / 2 - 80) + ',' + (height / 2 + 5) + ')')
+                .append('text')
+                .text('No data available')
+                .style('font-size', '20px')
+                .style('fill', grayColor);
+        };
+
+        const setBarAttributes = function(bars, x, y, height, color, sign) {
+            const barSpacing = 2;
+            bars.enter().append('rect')
+                .attr('class', 'bar')
+                .attr('x', function(d) {
+                    const barWidth = Math.min(x.bandwidth(), maxBarWidth) + sign * barSpacing / 2;
+                    return x(d.x) + (x.bandwidth() + sign * barWidth) / 2;
+                })
+                .attr('width', function() { return Math.min(x.bandwidth(), maxBarWidth) - barSpacing / 2; })
+                .attr('y', function(d) { return y(d.y); })
+                .attr('height', function(d) { return d.y > BAR_MIN_HEIGHT_THRESHOLD ? height - y(d.y) : 0; })
+                .attr('rx', 3)
+                .attr('ry', 3)
+                .attr('fill', color)
+                .attr('opacity', 1)
+                .on('mouseover', function() { d3.select(this).attr('opacity', 0.8); })
+                .on('mouseout', function() { d3.select(this).attr('opacity', 1); })
+                .append('title').text(function(d) { return d.y; });
+        };
+
+        const setLegend = function(legend, text, color) {
+            legend.append('circle')
+                .attr('cx', -16)
+                .attr('cy', 0)
+                .attr('r', 6)
+                .style('fill', color);
+
+            legend.append('text')
+                .attr('x', 0)
+                .attr('y', 0)
+                .attr('dy', '.35em')
+                .text(text)
+                .attr('class', 'textselected')
+                .style('text-anchor', 'start')
+                .style('font-size', '14px');
+        };
+
+        const setChartData = function(element, data, xTickFormat, xTickFilter) {
+            const success = data.success;
+            const failure = data.failure;
+
+            success.forEach(function(d) { d.x = new Date(d.x * 1000); });
+            failure.forEach(function(d) { d.x = new Date(d.x * 1000); });
+
+            const legendHeight = 50;
+            const margin = {top: 20, right: 30, bottom: 30, left: 30};
+            const rect = element.getBoundingClientRect();
+
+            const width = rect.width - margin.left - margin.right;
+            const height = rect.height - legendHeight - margin.top - margin.bottom;
+
+            const d3Selection = d3.select(element);
+            d3Selection.selectAll('svg').remove();
+
+            const svg = d3Selection
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + legendHeight + margin.top + margin.bottom);
+
+            const chartElement = svg.append('g')
+                .attr('class', 'charts')
+                .attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+
+            const x = d3.scaleBand().rangeRound([0, width]).padding(0.1);
+            const y = d3.scaleLinear().range([height, 0]);
+
+            x.domain(success.map(function(d) { return d.x; }));
+            const successMax = d3.max(success, function(d) { return d.y; });
+            const failureMax = d3.max(failure, function(d) { return d.y; });
+            y.domain([0, Math.max(successMax, failureMax) * 1.2]);
+
+            const xTickValues = x.domain().filter(xTickFilter);
+
+            const xAxis = d3.axisBottom(x)
+                .tickValues(xTickValues)
+                .tickFormat(xTickFormat);
+            const yAxis = d3.axisLeft(y).ticks(yTicksCount).tickFormat(yTickFormat).tickPadding(5);
+
+            const yGrid = chartElement.append('g')
+                .attr('class', 'grid')
+                .call(yAxis.tickSize(-width))
+                .style('color', backgroundColor);
+
+            yGrid.selectAll('text').style('color', grayColor);
+            yGrid.selectAll('.domain').remove();
+
+            setBarAttributes(chartElement.selectAll('bar-success').data(success), x, y, height, successColor, -1);
+            setBarAttributes(chartElement.selectAll('bar-failure').data(failure), x, y, height, failureColor, 1);
+
+            chartElement.append('g')
+                .attr('class', 'x axis')
+                .attr('transform', 'translate(0,' + height + ')')
+                .call(xAxis)
+                .style('color', backgroundColor)
+                .style('stroke-width', 2)
+                .selectAll('text')
+                .style('text-anchor', 'end')
+                .style('color', '#000')
+                .attr('dx', '-.8em')
+                .attr('dy', '-.55em')
+                .attr('transform', 'rotate(-90)');
+
+            const legendSpace = width / 3;
+            const legendItemSize = 100;
+            const xAxisHeight = 30;
+
+            const legendParent = chartElement.append('g')
+                .attr('class', 'legendParent')
+                .attr('transform', 'translate(' + (width / 2 - legendItemSize) + ',' + (xAxisHeight + height + legendHeight / 2) + ')');
+
+            const successLegend = legendParent.append('g').attr('class', 'legend-success');
+            setLegend(successLegend, 'Successful', successColor);
+
+            const failureLegend = legendParent.append('g')
+                .attr('class', 'legend-failure')
+                .attr('transform', 'translate(' + (legendSpace - legendItemSize) + ',0)');
+            setLegend(failureLegend, 'Failed', failureColor);
+        };
+
+        return {
+            isLoading: false,
+            period: '24h',
+            successfulSubmissions: 0,
+            failedSubmissions: 0,
+            successRate: 0.0,
+            async init() {
+                this.updateChart();
+            },
+            async fetchChartData(period, maxRetries = 3, baseDelay = 1000) {
+                const allowedPeriods = ['24h', '7d', '30d', '1y'];
+                const normalizedPeriod = allowedPeriods.includes(period) ? period : '24h';
+                const encodedPeriod = encodeURIComponent(normalizedPeriod);
+
+                this.isLoading = true;
+                try {
+                    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                        const response = await fetch('{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID $.Const.Stats }}/' + encodedPeriod);
+                        if (response.ok) {
+                            return await response.json();
+                        }
+
+                        if (response.status === 429 || response.status === 503) {
+                            const retryDelay = baseDelay * Math.pow(2, attempt - 1);
+                            await new Promise(function(resolve) { setTimeout(resolve, retryDelay); });
+                            continue;
+                        }
+
+                        const errorText = await response.text();
+                        throw new Error('Request failed (' + response.status + '): ' + (errorText || response.statusText));
+                    }
+                } catch (error) {
+                    console.error('Error fetching chart data:', error);
+                    return null;
+                } finally {
+                    this.isLoading = false;
+                }
+            },
+            async updateChart() {
+                const data = await this.fetchChartData(this.period);
+
+                if (data && data.success && data.failure && (data.success.length > 0 || data.failure.length > 0)) {
+                    setChartData(this.$refs.chart, data, tickFunction[this.period], tickFilter[this.period]);
+
+                    const successSum = data.success.reduce(function(sum, item) { return sum + item.y; }, 0);
+                    const failureSum = data.failure.reduce(function(sum, item) { return sum + item.y; }, 0);
+                    const total = successSum + failureSum;
+                    const rate = total === 0 ? 0 : successSum / total;
+                    const formatter = new Intl.NumberFormat('en', { notation: 'compact', compactDisplay: 'short' });
+
+                    this.successfulSubmissions = formatter.format(successSum);
+                    this.failedSubmissions = formatter.format(failureSum);
+                    this.successRate = total === 0 ? 'N/A' : (rate * 100).toFixed(2) + '%';
+                } else {
+                    drawNoData(this.$refs.chart, periodLength[this.period]);
+                    this.successfulSubmissions = 0;
+                    this.failedSubmissions = 0;
+                    this.successRate = 'N/A';
+                }
+            },
+        };
+    }
+</script>
+{{end}}

@@ -15,10 +15,16 @@ import (
 
 const (
 	webhookPrefixPathLimit         = 12
+	formDashboardTemplate          = "form/dashboard.html"
+	formDashboardReportsTemplate   = "form/reports.html"
 	formWizardTemplate             = "form-wizard/wizard.html"
 	formWizardNewTemplate          = "form-wizard/new.html"
 	formWizardSetupTemplate        = "form-wizard/client-setup.html"
 	activeSubscriptionForFormError = "You need an active subscription to create new forms."
+	formReportsTabIndex            = 0
+	formIntegrationsTabIndex       = 1
+	formSettingsTabIndex           = 2
+	formAuditLogsTabIndex          = 3
 )
 
 type formWizardRenderContext struct {
@@ -54,6 +60,15 @@ type formIntegrationRenderContext struct {
 	CurrentOrg *UserOrg
 	Form       *userForm
 	Sitekey    string
+}
+
+type formDashboardRenderContext struct {
+	AlertRenderContext
+	CsrfRenderContext
+	Form    *userForm
+	Org     *UserOrg
+	Tab     int
+	CanEdit bool
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
@@ -353,4 +368,67 @@ func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	common.SendJSONResponse(ctx, w, FormStatsResponse{Success: success, Failure: failure}, cacheHeaders)
+}
+
+func (s *Server) getOrgForm(w http.ResponseWriter, r *http.Request) (*formDashboardRenderContext, *dbgen.Form, error) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !form.Enabled {
+		slog.WarnContext(ctx, "Form is disabled", "formID", form.ID, "orgID", form.OrgID)
+		return nil, nil, db.ErrDisabled
+	}
+
+	renderCtx := &formDashboardRenderContext{
+		CsrfRenderContext: s.CreateCsrfContext(user),
+		Form:              formToUserForm(form, s.IDHasher),
+		Org:               orgToUserOrg(org, user.ID, s.IDHasher),
+		CanEdit:           (user.ID == org.UserID.Int32) || (user.ID == form.CreatorID.Int32),
+	}
+
+	return renderCtx, form, nil
+}
+
+func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	tabParam := r.URL.Query().Get(common.ParamTab)
+	slog.Log(ctx, common.LevelTrace, "Form tab was requested", "tab", tabParam)
+
+	renderCtx, _, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if (tabParam != "") && (tabParam != common.ReportsEndpoint) {
+		slog.ErrorContext(ctx, "Unknown form tab requested", "tab", tabParam)
+	}
+
+	renderCtx.Tab = formReportsTabIndex
+
+	return &ViewModel{Model: renderCtx, View: formDashboardTemplate}, nil
+}
+
+func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, _, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx.Tab = formReportsTabIndex
+
+	return &ViewModel{Model: renderCtx, View: formDashboardReportsTemplate}, nil
 }
