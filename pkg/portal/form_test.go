@@ -233,7 +233,7 @@ func TestPostNewOrgForm(t *testing.T) {
 	}
 
 	formGUID := db.UUIDToString(createdForm.ExternalID)
-	expectedFormURL := "https:" + config.AsURL(ctx, cfg.Get(common.APIBaseURLKey)).URL() + "/form/" + formGUID
+	expectedFormURL := server.APIURL + "/form/" + formGUID
 	if !strings.Contains(w.Body.String(), expectedFormURL) {
 		t.Fatal("expected integration step to include public form endpoint")
 	}
