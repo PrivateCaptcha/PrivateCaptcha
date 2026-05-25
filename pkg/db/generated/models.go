@@ -556,6 +556,7 @@ type Form struct {
 	RetryRequestCount int32              `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod         `db:"method" json:"method"`
 	Enabled           bool               `db:"enabled" json:"enabled"`
+	Active            bool               `db:"active" json:"active"`
 }
 
 type Lock struct {

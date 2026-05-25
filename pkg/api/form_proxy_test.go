@@ -94,7 +94,7 @@ func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
 
 	expectedErr := errors.New("unsafe form URL")
 	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
-	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true}
+	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
 	server := &Server{BusinessDB: store, FormURLVerifier: verifier, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
@@ -123,7 +123,7 @@ func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
 	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
@@ -151,7 +151,7 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
 	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 2)}

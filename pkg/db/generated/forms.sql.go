@@ -14,7 +14,7 @@ import (
 const createForm = `-- name: CreateForm :one
 INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
 `
 
 type CreateFormParams struct {
@@ -62,6 +62,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 		&i.PropertyID,
 		&i.Fields,
 		&i.Enabled,
+		&i.Active,
 		&i.RequestsPerSecond,
 		&i.RequestsBurst,
 		&i.RetryRequestCount,
@@ -83,7 +84,7 @@ func (q *Queries) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, err
 }
 
 const getFormByID = `-- name: GetFormByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = $1
 `
 
 func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
@@ -103,6 +104,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 		&i.PropertyID,
 		&i.Fields,
 		&i.Enabled,
+		&i.Active,
 		&i.RequestsPerSecond,
 		&i.RequestsBurst,
 		&i.RetryRequestCount,
@@ -112,7 +114,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 }
 
 const getFormsByExternalID = `-- name: GetFormsByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error) {
@@ -138,6 +140,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 			&i.PropertyID,
 			&i.Fields,
 			&i.Enabled,
+			&i.Active,
 			&i.RequestsPerSecond,
 			&i.RequestsBurst,
 			&i.RetryRequestCount,
@@ -154,7 +157,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 }
 
 const getOrgFormByName = `-- name: GetOrgFormByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgFormByNameParams struct {
@@ -179,6 +182,7 @@ func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNamePar
 		&i.PropertyID,
 		&i.Fields,
 		&i.Enabled,
+		&i.Active,
 		&i.RequestsPerSecond,
 		&i.RequestsBurst,
 		&i.RetryRequestCount,
@@ -188,7 +192,7 @@ func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNamePar
 }
 
 const getOrgForms = `-- name: GetOrgForms :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
 FROM backend.forms
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 ORDER BY created_at
@@ -225,6 +229,7 @@ func (q *Queries) GetOrgForms(ctx context.Context, arg *GetOrgFormsParams) ([]*F
 			&i.PropertyID,
 			&i.Fields,
 			&i.Enabled,
+			&i.Active,
 			&i.RequestsPerSecond,
 			&i.RequestsBurst,
 			&i.RetryRequestCount,
@@ -252,7 +257,7 @@ func (q *Queries) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int6
 }
 
 const getSoftDeletedForms = `-- name: GetSoftDeletedForms :many
-SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.requests_per_second, f.requests_burst, f.retry_request_count, f.method
+SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.active, f.requests_per_second, f.requests_burst, f.retry_request_count, f.method
 FROM backend.forms f
 JOIN backend.organizations o ON f.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
@@ -295,6 +300,7 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 			&i.Form.PropertyID,
 			&i.Form.Fields,
 			&i.Form.Enabled,
+			&i.Form.Active,
 			&i.Form.RequestsPerSecond,
 			&i.Form.RequestsBurst,
 			&i.Form.RetryRequestCount,

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS backend.forms(
     property_id INT NOT NULL REFERENCES backend.properties(id) ON DELETE CASCADE,
     fields JSONB NOT NULL DEFAULT '{}'::jsonb,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
     requests_per_second FLOAT NOT NULL DEFAULT 1,
     requests_burst INTEGER NOT NULL DEFAULT 5,
     retry_request_count INTEGER NOT NULL DEFAULT 0,

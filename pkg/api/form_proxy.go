@@ -201,9 +201,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 
 	formsByID := make(map[string]*dbgen.Form, len(forms))
 	for _, form := range forms {
-		if form.Enabled {
-			formsByID[db.UUIDToString(form.ExternalID)] = form
-		}
+		formsByID[db.UUIDToString(form.ExternalID)] = form
 	}
 
 	client := s.newFormHTTPClient()
@@ -212,6 +210,11 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		form, found := formsByID[submission.FormExternalID]
 		if !found || (form == nil) {
 			slog.ErrorContext(ctx, "Failed to find matching form for submission", "formID", submission.FormExternalID)
+			continue
+		}
+
+		if !form.Enabled || !form.Active {
+			slog.WarnContext(ctx, "Skipping inactive or disable form", "formID", form.ID)
 			continue
 		}
 
