@@ -141,3 +141,78 @@ func TestGCUserData(t *testing.T) {
 		return err
 	}, t)
 }
+
+func TestGCFormData(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, org, err := db_test.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://example.com/submit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	if err := timeSeries.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now, Status: 0},
+		{UserID: user.ID, OrgID: org.ID, PropertyID: form.PropertyID, FormID: form.ID, Timestamp: now, Status: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	stats, err := timeSeries.RetrieveFormStatsByPeriod(ctx, org.ID, form.ID, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) == 0 {
+		t.Fatal("There are no form stats found")
+	}
+
+	if _, err := store.Pool.Exec(ctx, "UPDATE backend.forms SET deleted_at = NOW() - INTERVAL '1 hour' WHERE id = $1", form.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	job := &maintenance.GarbageCollectDataJob{
+		Age:        0,
+		BusinessDB: store,
+		TimeSeries: timeSeries,
+	}
+
+	if err := job.RunOnce(ctx, job.NewParams()); err != nil {
+		t.Fatal(err)
+	}
+
+	stats, err = timeSeries.RetrieveFormStatsByPeriod(ctx, org.ID, form.ID, common.TimePeriodToday)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stats) > 0 {
+		t.Errorf("There are %v form stats found", len(stats))
+	}
+
+	var count int
+	if err := store.Pool.QueryRow(ctx, "SELECT COUNT(*) FROM backend.forms WHERE id = $1", form.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("Expected hard-deleted form, got count %d", count)
+	}
+}

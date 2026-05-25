@@ -70,6 +70,9 @@ func (s *QuerierStub) DeleteDifficultyRule(ctx context.Context, arg *dbgen.Delet
 func (s *QuerierStub) DeleteExpiredCache(ctx context.Context) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) DeleteLock(ctx context.Context, name string) (int64, error) {
 	return 0, s.Error
 }
@@ -206,6 +209,9 @@ func (s *QuerierStub) GetSoftDeletedOrganizations(ctx context.Context, arg *dbge
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedProperties(ctx context.Context, arg *dbgen.GetSoftDeletedPropertiesParams) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetSoftDeletedForms(ctx context.Context, arg *dbgen.GetSoftDeletedFormsParams) ([]*dbgen.GetSoftDeletedFormsRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedUsers(ctx context.Context, arg *dbgen.GetSoftDeletedUsersParams) ([]*dbgen.GetSoftDeletedUsersRow, error) {

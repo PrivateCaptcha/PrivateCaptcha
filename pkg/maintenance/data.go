@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	maxSoftDeletedForms         = 30
 	maxSoftDeletedProperties    = 30
 	maxSoftDeletedOrganizations = 30
 	maxSoftDeletedUsers         = 30
@@ -70,6 +71,22 @@ func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time
 	return nil
 }
 
+func (j *GarbageCollectDataJob) purgeForms(ctx context.Context, before time.Time) error {
+	// NOTE: we're processing forms that are soft-deleted, but property, org and user are not.
+	if forms, err := j.BusinessDB.Impl().RetrieveSoftDeletedForms(ctx, before, maxSoftDeletedForms); (err == nil) && (len(forms) > 0) {
+		ids := make([]int32, 0, len(forms))
+		for _, f := range forms {
+			ids = append(ids, f.Form.ID)
+		}
+
+		if err := j.TimeSeries.DeleteFormsData(ctx, ids); err == nil {
+			_ = j.BusinessDB.Impl().DeleteForms(ctx, ids)
+		}
+	}
+
+	return nil
+}
+
 func (j *GarbageCollectDataJob) purgeOrganizations(ctx context.Context, before time.Time) error {
 	// NOTE: we're processing organizations that are soft-deleted, but user is not
 	if organizations, err := j.BusinessDB.Impl().RetrieveSoftDeletedOrganizations(ctx, before, maxSoftDeletedOrganizations); (err == nil) && (len(organizations) > 0) {
@@ -111,6 +128,10 @@ func (j *GarbageCollectDataJob) RunOnce(ctx context.Context, params any) error {
 	}
 
 	before := time.Now().UTC().Add(-p.Age)
+	if err := j.purgeForms(ctx, before); err != nil {
+		return err
+	}
+
 	if err := j.purgeProperties(ctx, before); err != nil {
 		return err
 	}

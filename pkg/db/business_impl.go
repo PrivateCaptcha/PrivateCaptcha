@@ -2078,6 +2078,52 @@ func (impl *BusinessStoreImpl) DeleteProperties(ctx context.Context, ids []int32
 	return nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveSoftDeletedForms(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedFormsRow, error) {
+	if before.IsZero() {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	forms, err := impl.querier.GetSoftDeletedForms(ctx, &dbgen.GetSoftDeletedFormsParams{
+		DeletedAt: Timestampz(before),
+		Limit:     limit,
+	})
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve soft deleted forms", "before", before, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.DebugContext(ctx, "Fetched soft-deleted forms", "count", len(forms), "before", before)
+
+	return forms, nil
+}
+
+func (impl *BusinessStoreImpl) DeleteForms(ctx context.Context, ids []int32) error {
+	if len(ids) == 0 {
+		slog.WarnContext(ctx, "No forms to delete")
+		return nil
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteForms(ctx, ids)
+
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete forms", "count", len(ids), common.ErrAttr(err))
+		return err
+	}
+
+	slog.InfoContext(ctx, "Deleted forms", "count", len(ids), "affected", affected)
+
+	return nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveSoftDeletedOrganizations(ctx context.Context, before time.Time, limit int32) ([]*dbgen.GetSoftDeletedOrganizationsRow, error) {
 	if before.IsZero() {
 		return nil, ErrInvalidInput

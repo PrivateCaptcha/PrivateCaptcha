@@ -32,15 +32,15 @@
 - [x] Run `make test-local-light TEST_NAME=TestGetFormStats`.
 
 ## Phase 4: GC And Deletion
-- [ ] Add sqlc queries for soft-deleted forms and hard-delete forms.
-- [ ] Run `make sqlc`.
-- [ ] Add BusinessStoreImpl methods for retrieving/deleting soft-deleted forms.
-- [ ] Add form purge step to `GarbageCollectDataJob`.
-- [ ] Include form metrics tables in org/user deletion and add `DeleteFormsData`.
-- [ ] Add unit/integration coverage for form GC.
+- [x] Add sqlc queries for soft-deleted forms and hard-delete forms.
+- [x] Run `make sqlc`.
+- [x] Add BusinessStoreImpl methods for retrieving/deleting soft-deleted forms.
+- [x] Add form purge step to `GarbageCollectDataJob`.
+- [x] Include form metrics tables in org/user deletion and add `DeleteFormsData`.
+- [x] Add unit/integration coverage for form GC.
 
 ## Final Checkpoint
-- [ ] Run `make vet-sqlc-local`.
-- [ ] Run `make test-unit`.
-- [ ] Run `make test-local-light`.
+- [x] Run `make vet-sqlc-local`.
+- [x] Run `make test-unit`.
+- [x] Run `make test-local-light`.
 - [ ] Human review before implementation is marked complete.

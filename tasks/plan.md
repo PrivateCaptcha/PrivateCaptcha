@@ -147,17 +147,17 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Description:** Add Postgres queries and business methods for soft-deleted forms so `GarbageCollectDataJob` can purge form time-series data before hard-deleting form rows.
 
 **Acceptance criteria:**
-- [ ] `forms.sql` includes `GetSoftDeletedForms` and `DeleteForms`.
-- [ ] `BusinessStoreImpl` exposes `RetrieveSoftDeletedForms` and `DeleteForms`.
-- [ ] `GarbageCollectDataJob` retrieves soft-deleted forms, calls `TimeSeries.DeleteFormsData`, then hard-deletes forms.
-- [ ] `DeleteOrganizationsData` includes all form metrics tables.
-- [ ] `DeleteUsersData` includes form metrics tables for account deletion consistency.
+- [x] `forms.sql` includes `GetSoftDeletedForms` and `DeleteForms`.
+- [x] `BusinessStoreImpl` exposes `RetrieveSoftDeletedForms` and `DeleteForms`.
+- [x] `GarbageCollectDataJob` retrieves soft-deleted forms, calls `TimeSeries.DeleteFormsData`, then hard-deletes forms.
+- [x] `DeleteOrganizationsData` includes all form metrics tables.
+- [x] `DeleteUsersData` includes form metrics tables for account deletion consistency.
 
 **Verification:**
-- [ ] Run `make sqlc`.
-- [ ] Run `make vet-sqlc-local`.
-- [ ] Run `make test-unit`.
-- [ ] Add/extend GC tests to cover form metric deletion and hard delete after soft delete.
+- [x] Run `make sqlc`.
+- [x] Run `make vet-sqlc-local`.
+- [x] Run `make test-unit`.
+- [x] Add/extend GC tests to cover form metric deletion and hard delete after soft delete.
 
 **Dependencies:** Task 2.
 
@@ -173,10 +173,10 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Estimated scope:** M
 
 ## Checkpoint: Complete Feature
-- [ ] `make test-unit` passes.
-- [ ] `make vet-sqlc-local` passes.
-- [ ] `make test-local-light TEST_NAME=TestGetFormStats` passes.
-- [ ] Run broader `make test-local-light` before declaring done.
+- [x] `make test-unit` passes.
+- [x] `make vet-sqlc-local` passes.
+- [x] `make test-local-light TEST_NAME=TestGetFormStats` passes.
+- [x] Run broader `make test-local-light` before declaring done.
 - [ ] Human review confirms endpoint path, response JSON names, and deletion behavior.
 
 ## Risks and Mitigations
