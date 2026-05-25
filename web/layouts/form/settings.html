@@ -49,3 +49,14 @@
         {{template "settings-basic-form.html" .}}
     </form>
 </div>
+
+<div class="grid max-w-4xl grid-cols-1 gap-x-10 gap-y-10 px-4 py-16 sm:px-6 md:grid-cols-3 lg:px-8">
+    <div>
+        <h2 class="text-base font-semibold leading-7 text-gray-900">Manage property</h2>
+        <p class="mt-1 text-sm leading-6 text-gray-600">Open settings for the backing property attached to this form.</p>
+    </div>
+
+    <div class="flex items-start md:col-span-2">
+        <a href="{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Form.PropertyID }}?{{ $.Const.Tab }}={{$.Const.SettingsEndpoint}}" class="pc-internal-form-button pc-internal-form-button-secondary">Manage property</a>
+    </div>
+</div>

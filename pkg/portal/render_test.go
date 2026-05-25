@@ -871,6 +871,7 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		Form           *struct {
 			ID                string
 			OrgID             string
+			PropertyID        string
 			Name              string
 			URL               string
 			Active            bool
@@ -887,6 +888,7 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		Form: &struct {
 			ID                string
 			OrgID             string
+			PropertyID        string
 			Name              string
 			URL               string
 			Active            bool
@@ -895,6 +897,7 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		}{
 			ID:                "456",
 			OrgID:             "123",
+			PropertyID:        "789",
 			Name:              "Contact",
 			URL:               "https://hooks.example.com/contact",
 			Active:            true,
@@ -919,5 +922,8 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		if strings.Contains(body, removed) {
 			t.Fatalf("did not expect property-only setting %q", removed)
 		}
+	}
+	if !strings.Contains(body, "/org/123/property/789?tab=settings") {
+		t.Fatal("expected manage property link in form settings")
 	}
 }

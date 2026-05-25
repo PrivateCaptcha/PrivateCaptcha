@@ -46,6 +46,7 @@ type formWizardRenderContext struct {
 type userForm struct {
 	ID                string
 	OrgID             string
+	PropertyID        string
 	Name              string
 	URL               string
 	WebhookPrefix     string
@@ -287,6 +288,7 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 	return &userForm{
 		ID:                hasher.Encrypt(int(form.ID)),
 		OrgID:             hasher.Encrypt(int(form.OrgID.Int32)),
+		PropertyID:        hasher.Encrypt(int(form.PropertyID)),
 		Name:              form.Name,
 		URL:               form.URL,
 		WebhookPrefix:     webhookPrefixFromURL(form.URL),
