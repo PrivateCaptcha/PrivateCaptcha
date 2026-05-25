@@ -17,7 +17,7 @@
     </div>
 
     <div>
-        <label for="{{ .Const.Domain }}" class="pc-internal-form-label tooltip" data-tooltip="Address of the website where the CAPTCHA widget will be embedded"> Domain </label>
+        <label for="{{ .Const.Domain }}" class="pc-internal-form-label tooltip" data-tooltip="Address of the website where the CAPTCHA widget and form will be used"> Domain </label>
         <div class="mt-2 relative">
             {{- if .Params.DomainError -}}
             {{template "info-icon-red.html" .}}

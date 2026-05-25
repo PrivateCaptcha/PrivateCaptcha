@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -38,6 +37,7 @@ type userForm struct {
 	OrgID         string
 	Name          string
 	WebhookPrefix string
+	ExternalID    string
 	Enabled       bool
 }
 
@@ -49,9 +49,9 @@ type orgFormsRenderContext struct {
 
 type formIntegrationRenderContext struct {
 	CsrfRenderContext
-	CurrentOrg     *UserOrg
-	Sitekey        string
-	FormExternalID string
+	CurrentOrg *UserOrg
+	Form       *userForm
+	Sitekey    string
 }
 
 func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -99,6 +99,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
+	// Invited users cannot create properties - must join the org first
 	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
 		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
 		return nil, db.ErrPermissions
@@ -136,12 +137,6 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
 
-	if s.FormURLVerifier == nil {
-		slog.ErrorContext(ctx, "Form URL verifier is not configured")
-		renderCtx.URLError = "URL is not valid."
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
-	}
-
 	if err := s.FormURLVerifier.VerifyURL(ctx, renderCtx.URL); err != nil {
 		slog.WarnContext(ctx, "Failed to verify form URL", "url", renderCtx.URL, common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
@@ -153,16 +148,8 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
 
-	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, &dbgen.CreatePropertyParams{
-		CreatorID:        db.Int(user.ID),
-		Domain:           domain,
-		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
-		Growth:           dbgen.DifficultyGrowthMedium,
-		ValidityInterval: 6 * time.Hour,
-		AllowSubdomains:  false,
-		AllowLocalhost:   false,
-		MaxReplayCount:   1,
-	}, &dbgen.CreateFormParams{
+	propertyParams := db.NewDefaultPropertyParams("" /*name*/, domain, user.ID)
+	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, propertyParams, &dbgen.CreateFormParams{
 		Name:              renderCtx.Name,
 		URL:               renderCtx.URL,
 		Fields:            []byte(`{}`),
@@ -178,14 +165,16 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
 
-	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
-
-	return &ViewModel{Model: &formIntegrationRenderContext{
-		CsrfRenderContext: s.CreateCsrfContext(user),
-		CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
-		Sitekey:           db.UUIDToSiteKey(property.ExternalID),
-		FormExternalID:    db.UUIDToString(form.ExternalID),
-	}, View: formWizardSetupTemplate}, nil
+	return &ViewModel{
+		Model: &formIntegrationRenderContext{
+			CsrfRenderContext: s.CreateCsrfContext(user),
+			CurrentOrg:        orgToUserOrg(org, user.ID, s.IDHasher),
+			Form:              formToUserForm(form, s.IDHasher),
+			Sitekey:           db.UUIDToSiteKey(property.ExternalID),
+		},
+		View:       formWizardSetupTemplate,
+		AuditEvent: auditEvents[0],
+	}, nil
 }
 
 func webhookPrefixFromURL(rawURL string) string {
@@ -225,6 +214,7 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 		OrgID:         hasher.Encrypt(int(form.OrgID.Int32)),
 		Name:          form.Name,
 		WebhookPrefix: webhookPrefixFromURL(form.URL),
+		ExternalID:    db.UUIDToString(form.ExternalID),
 		Enabled:       form.Enabled,
 	}
 }

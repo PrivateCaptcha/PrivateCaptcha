@@ -27,7 +27,7 @@
 </nav>
 
 <div class="mx-auto w-full max-w-3xl py-10">
-    <div class="pb-10">{{template "info-link-message.html" (dict "Text" "See detailed website integration guide in the documentation." "Link" "https://docs.privatecaptcha.com/docs/integrations/client-side/" "LinkText" "Docs")}}</div>
+    <div class="pb-10">{{template "info-link-message.html" (dict "Text" "See detailed website integration guide in the documentation." "Link" "https://docs.privatecaptcha.com/docs/integrations/form-proxy/" "LinkText" "Docs")}}</div>
     <nav aria-label="Progress">
         <ol role="list" class="overflow-hidden">
             <li class="relative pb-10">
@@ -38,12 +38,16 @@
                             <span class="text-gray-400 group-hover:text-gray-500">1</span>
                         </span>
                     </span>
-                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
+                    <span class="ml-4 flex min-w-0 w-full flex-col gap-1.5">
                         <span class="text-base font-medium text-gray-900">Add Private Captcha script <i>inside</i> site <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<head>`}}</code>:</span>
-                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<script defer src="https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}</code></span>
+
+                        <div class="mt-2 flex flex-col items-start">
+                            <pre class="block w-full overflow-x-auto rounded-lg bg-gray-200 px-3 py-2 text-sm text-gray-800"><code class="font-mono">{{ `<script defer src="https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}</code></pre>
+                        </div>
                     </span>
                 </span>
             </li>
+
             <li class="relative pb-10">
                 <div aria-hidden="true" class="absolute left-4 top-4 -ml-px mt-0.5 h-full w-0.5 bg-gray-300"></div>
                 <span class="group relative flex items-start">
@@ -52,16 +56,19 @@
                             <span class="text-gray-400 group-hover:text-gray-500">2</span>
                         </span>
                     </span>
-                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
-                        <span class="text-base font-medium text-gray-900">Add captcha widget <i>inside</i> your <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<form>`}}</code> and submit it to the verified form endpoint:</span>
-                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<form method="POST" action="https://api.privatecaptcha.com/form/` }}{{ .Params.FormExternalID }}{{ `">
-  <input type="email" name="email" required />
+                    <span class="ml-4 flex min-w-0 w-full flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Put your existing form fields <i>inside</i> our <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<form>`}}</code> declaration with captcha widget:</span>
+
+                        <div class="mt-2 flex flex-col items-start">
+                            <pre class="block w-full overflow-x-auto rounded-lg bg-gray-200 px-4 py-2 py-2 text-sm text-gray-800"><code class="font-mono">{{ `<form method="POST" action="https://api.privatecaptcha.com/form/` }}{{ .Params.Form.ExternalID }}{{ `">
+  <!-- Existing form fields... -->
   <div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>
-  <button type="submit">Submit</button>
-</form>` }}</code></span>
+</form>` }}</code></pre>
+                        </div>
                     </span>
                 </span>
             </li>
+
             <li class="relative pb-10">
                 <span class="group relative flex items-start">
                     <span aria-hidden="true" class="flex h-9 items-center">
@@ -71,7 +78,7 @@
                     </span>
                     <span class="ml-4 flex min-w-0 flex-col gap-1.5">
                         <span class="text-base font-medium text-gray-900">Restrict form submission until captcha is solved</span>
-                        <span class="text-sm text-gray-500">For example, disable submit button by default (add attribute <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">disabled</code>) and enable it only inside <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">data-finished-callback</code> <i>or</i> after <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">privatecaptcha:finish</code> event.</span>
+                        <span class="text-sm text-gray-500">For example, disable submit button by default (add attribute <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">disabled</code>) and enable it only inside <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">data-finished-callback</code> <i>or</i> after <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">privatecaptcha:finish</code> event of captcha widget.</span>
                     </span>
                 </span>
             </li>
@@ -79,7 +86,7 @@
     </nav>
 
     <div class="flex items-center justify-end mt-20 space-x-6 border-t border-gray-200 pt-6">
-        <a href="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}?tab={{ .Const.FormsEndpoint }}" class="pc-internal-form-button pc-internal-form-button-secondary">
+        <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID }}" class="pc-internal-form-button pc-internal-form-button-secondary">
             Finish
         </a>
     </div>

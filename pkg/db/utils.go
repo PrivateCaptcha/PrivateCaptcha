@@ -581,3 +581,17 @@ func containsInvalidNameChars(name string, allowedPunctuation string) (int, rune
 	}
 	return -1, 0
 }
+
+func NewDefaultPropertyParams(name, domain string, userID int32) *dbgen.CreatePropertyParams {
+	return &dbgen.CreatePropertyParams{
+		Name:             name,
+		CreatorID:        Int(userID),
+		Domain:           domain,
+		Level:            Int2(int16(common.DifficultyLevelSmall)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	}
+}

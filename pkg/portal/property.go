@@ -446,17 +446,8 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
 	}
 
-	property, auditEvent, err := s.Store.Impl().CreateNewProperty(ctx, &dbgen.CreatePropertyParams{
-		Name:             renderCtx.Name,
-		CreatorID:        db.Int(user.ID),
-		Domain:           domain,
-		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
-		Growth:           dbgen.DifficultyGrowthMedium,
-		ValidityInterval: 6 * time.Hour,
-		AllowSubdomains:  false,
-		AllowLocalhost:   false,
-		MaxReplayCount:   1,
-	}, org)
+	params := db.NewDefaultPropertyParams(renderCtx.Name, domain, user.ID)
+	property, auditEvent, err := s.Store.Impl().CreateNewProperty(ctx, params, org)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the property. Please try again later."
