@@ -74,6 +74,11 @@ WHERE p.id = $1
   AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
 RETURNING *;
 
+-- name: SoftDeletePropertyWithForm :one
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = $1
+RETURNING *;
+
 -- name: SoftDeleteProperties :many
 UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
 WHERE p.id = ANY($1::INT[])

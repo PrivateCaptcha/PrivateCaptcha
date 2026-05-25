@@ -657,6 +657,39 @@ func (q *Queries) SoftDeleteProperty(ctx context.Context, id int32) (*Property, 
 	return &i, err
 }
 
+const softDeletePropertyWithForm = `-- name: SoftDeletePropertyWithForm :one
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = $1
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, domain, level, salt, growth, created_at, updated_at, deleted_at, validity_interval, allow_subdomains, allow_localhost, max_replay_count, enabled, show_notice
+`
+
+func (q *Queries) SoftDeletePropertyWithForm(ctx context.Context, id int32) (*Property, error) {
+	row := q.db.QueryRow(ctx, softDeletePropertyWithForm, id)
+	var i Property
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.Domain,
+		&i.Level,
+		&i.Salt,
+		&i.Growth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.ValidityInterval,
+		&i.AllowSubdomains,
+		&i.AllowLocalhost,
+		&i.MaxReplayCount,
+		&i.Enabled,
+		&i.ShowNotice,
+	)
+	return &i, err
+}
+
 const transferOrgProperties = `-- name: TransferOrgProperties :execrows
 UPDATE backend.properties SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3
 `

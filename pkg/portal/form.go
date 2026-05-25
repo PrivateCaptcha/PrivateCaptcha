@@ -682,3 +682,49 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 
 	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
+
+func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	property, err := s.Store.Impl().RetrieveOrgProperty(ctx, org, form.PropertyID)
+	if err != nil {
+		s.RedirectError(http.StatusBadRequest, w, r)
+		return
+	}
+
+	canDelete := (user.ID == org.UserID.Int32) || (user.ID == form.CreatorID.Int32)
+	if !canDelete {
+		slog.ErrorContext(ctx, "Not enough permissions to delete form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
+		s.RedirectError(http.StatusUnauthorized, w, r)
+		return
+	}
+
+	auditEvents, err := s.Store.WithTx(ctx, func(impl *db.BusinessStoreImpl) ([]*common.AuditLogEvent, error) {
+		return impl.SoftDeleteForm(ctx, form, property, org, user)
+	})
+	if err != nil {
+		s.RedirectError(http.StatusInternalServerError, w, r)
+		return
+	}
+
+	common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID)))+"?"+common.ParamTab+"="+common.FormsEndpoint, http.StatusOK, w, r)
+	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
+}

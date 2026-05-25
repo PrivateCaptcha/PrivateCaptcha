@@ -67,5 +67,11 @@ SET org_id = $2, org_owner_id = $3, updated_at = NOW()
 WHERE id = $1
 RETURNING *;
 
+-- name: SoftDeleteForm :one
+UPDATE backend.forms
+SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteForms :execrows
 DELETE FROM backend.forms WHERE id = ANY($1::INT[]);

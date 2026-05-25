@@ -903,6 +903,19 @@ func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) 
 	}
 }
 
+func (impl *BusinessStoreImpl) deleteCachedForm(ctx context.Context, form *dbgen.Form) {
+	if form == nil {
+		return
+	}
+
+	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
+		_ = impl.cache.SetMissing(ctx, FormByExternalIDCacheKey(externalID))
+	}
+	_ = impl.cache.SetMissing(ctx, formByIDCacheKey(form.ID))
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(form.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(form.OrgID.Int32))
+}
+
 func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
@@ -1280,6 +1293,40 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 	}
 
 	return updatedForm, updatedProperty, auditEvents, nil
+}
+
+func (impl *BusinessStoreImpl) SoftDeleteForm(ctx context.Context, form *dbgen.Form, property *dbgen.Property, org *dbgen.Organization, user *dbgen.User) ([]*common.AuditLogEvent, error) {
+	if (form == nil) || (property == nil) || (org == nil) || (user == nil) {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	deletedForm, err := impl.querier.SoftDeleteForm(ctx, form.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to mark form as deleted in DB", "formID", form.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	deletedProperty, err := impl.querier.SoftDeletePropertyWithForm(ctx, property.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to mark form property as deleted in DB", "formID", form.ID, "propertyID", property.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Soft-deleted form", "formID", form.ID, "propertyID", property.ID)
+
+	impl.deleteCachedForm(ctx, deletedForm)
+	impl.deleteCachedProperty(ctx, deletedProperty)
+
+	auditEvents := []*common.AuditLogEvent{
+		newDeleteFormAuditLogEvent(form, org, user),
+		newDeletePropertyAuditLogEvent(property, org, user),
+	}
+
+	return auditEvents, nil
 }
 
 func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {

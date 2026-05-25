@@ -280,6 +280,9 @@ func (s *QuerierStub) MovePropertyWithForm(ctx context.Context, arg *dbgen.MoveP
 func (s *QuerierStub) MoveForm(ctx context.Context, arg *dbgen.MoveFormParams) (*dbgen.Form, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) SoftDeleteForm(ctx context.Context, id int32) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) Ping(ctx context.Context) (int32, error) {
 	return 0, s.Error
 }
@@ -299,6 +302,9 @@ func (s *QuerierStub) SoftDeleteProperties(ctx context.Context, arg *dbgen.SoftD
 	return nil, s.Error
 }
 func (s *QuerierStub) SoftDeleteProperty(ctx context.Context, id int32) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) SoftDeletePropertyWithForm(ctx context.Context, id int32) (*dbgen.Property, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) SoftDeleteUser(ctx context.Context, id int32) (*dbgen.User, error) {

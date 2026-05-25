@@ -748,6 +748,126 @@ func TestMoveFormCannotMove(t *testing.T) {
 	}
 }
 
+func TestDeleteForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "delete-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/delete-form",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/org/%s/form/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 0 {
+		t.Fatal("form should have been deleted")
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != 0 {
+		t.Fatal("backing property should have been deleted")
+	}
+}
+
+func TestDeleteFormCannotDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "delete-form-restrict.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/delete-form-restrict",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/org/%s/form/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("Expected method not allowed (405), got %d", w.Code)
+	}
+}
+
 type rejectPortalFormURLVerifier struct {
 	err error
 }

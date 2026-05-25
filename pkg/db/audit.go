@@ -515,6 +515,17 @@ func newMoveFormAuditLogEvent(user *dbgen.User, form *dbgen.Form, oldOrgID int32
 	}
 }
 
+func newDeleteFormAuditLogEvent(form *dbgen.Form, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionSoftDelete,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  newAuditLogForm(form, org),
+		NewValue:  nil,
+	}
+}
+
 func newDeletePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    user.ID,

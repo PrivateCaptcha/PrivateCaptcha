@@ -933,4 +933,7 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 	if !strings.Contains(body, "Move form") {
 		t.Fatal("expected move form section in form settings")
 	}
+	if !strings.Contains(body, "Delete form") {
+		t.Fatal("expected delete form section in form settings")
+	}
 }

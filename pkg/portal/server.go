@@ -366,6 +366,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm)), privateRead, s.Handler(s.getFormDashboard))
 	rg.Handle(rg.Put(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.EditEndpoint), privateWrite, s.Handler(s.putForm))
+	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.ReportsEndpoint), privateRead, s.Handler(s.getFormReportsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getFormIntegrationsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getFormSettingsTab))
