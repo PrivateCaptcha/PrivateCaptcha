@@ -87,16 +87,16 @@ func TestMain(m *testing.M) {
 		panic(dberr)
 	}
 
-	if clickhouse != nil {
-		timeSeries = db.NewTimeSeries(clickhouse, cache)
-	} else {
-		timeSeries = db.NewMemoryTimeSeries()
-	}
-
 	var err error
 	cache, err = db.NewMemoryCache[db.CacheKey, any]("default", 100_000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
 	if err != nil {
 		panic(err)
+	}
+
+	if clickhouse != nil {
+		timeSeries = db.NewTimeSeries(clickhouse, cache)
+	} else {
+		timeSeries = db.NewMemoryTimeSeries()
 	}
 
 	store = db.NewBusinessEx(pool, cache)
