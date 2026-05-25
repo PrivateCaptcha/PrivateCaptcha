@@ -298,6 +298,66 @@ func TestGetFormDashboard(t *testing.T) {
 	}
 }
 
+func TestGetFormDashboardIntegrationsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "integrations.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/integrations",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", orgID, formID, common.IntegrationsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "https://api.privatecaptcha.com/form/"+db.UUIDToString(form.ExternalID)) {
+		t.Fatal("expected form action in integrations snippet")
+	}
+	if !strings.Contains(body, db.UUIDToSiteKey(property.ExternalID)) {
+		t.Fatal("expected property sitekey in integrations snippet")
+	}
+	if strings.Contains(body, "On the server") {
+		t.Fatal("did not expect server integrations section")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
+	}
+}
+
 type rejectPortalFormURLVerifier struct {
 	err error
 }

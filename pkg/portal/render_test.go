@@ -815,3 +815,44 @@ func TestRenderFormDashboardReports(t *testing.T) {
 		t.Fatal("did not expect rules tab in form dashboard")
 	}
 }
+
+func TestRenderFormDashboardIntegrations(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/integrations.html", &struct {
+		CsrfRenderContext
+		Form    *userForm
+		Org     *UserOrg
+		Tab     int
+		CanEdit bool
+		Sitekey string
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", WebhookPrefix: "hooks.example.com/submit", ExternalID: "guid-123", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               1,
+		CanEdit:           true,
+		Sitekey:           "sitekey123",
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=integrations")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "https://api.privatecaptcha.com/form/guid-123") {
+		t.Fatal("expected form action in integrations snippet")
+	}
+	if !strings.Contains(body, `data-sitekey=&#34;sitekey123&#34;`) {
+		t.Fatal("expected sitekey in integrations snippet")
+	}
+	if strings.Contains(body, "On the server") {
+		t.Fatal("did not expect server integrations section")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
+	}
+}

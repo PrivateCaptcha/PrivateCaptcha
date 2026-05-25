@@ -14,17 +14,18 @@ import (
 )
 
 const (
-	webhookPrefixPathLimit         = 12
-	formDashboardTemplate          = "form/dashboard.html"
-	formDashboardReportsTemplate   = "form/reports.html"
-	formWizardTemplate             = "form-wizard/wizard.html"
-	formWizardNewTemplate          = "form-wizard/new.html"
-	formWizardSetupTemplate        = "form-wizard/client-setup.html"
-	activeSubscriptionForFormError = "You need an active subscription to create new forms."
-	formReportsTabIndex            = 0
-	formIntegrationsTabIndex       = 1
-	formSettingsTabIndex           = 2
-	formAuditLogsTabIndex          = 3
+	webhookPrefixPathLimit            = 12
+	formDashboardTemplate             = "form/dashboard.html"
+	formDashboardReportsTemplate      = "form/reports.html"
+	formDashboardIntegrationsTemplate = "form/integrations.html"
+	formWizardTemplate                = "form-wizard/wizard.html"
+	formWizardNewTemplate             = "form-wizard/new.html"
+	formWizardSetupTemplate           = "form-wizard/client-setup.html"
+	activeSubscriptionForFormError    = "You need an active subscription to create new forms."
+	formReportsTabIndex               = 0
+	formIntegrationsTabIndex          = 1
+	formSettingsTabIndex              = 2
+	formAuditLogsTabIndex             = 3
 )
 
 type formWizardRenderContext struct {
@@ -69,6 +70,11 @@ type formDashboardRenderContext struct {
 	Org     *UserOrg
 	Tab     int
 	CanEdit bool
+}
+
+type formDashboardIntegrationsRenderContext struct {
+	formDashboardRenderContext
+	Sitekey string
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
@@ -408,18 +414,32 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 	tabParam := r.URL.Query().Get(common.ParamTab)
 	slog.Log(ctx, common.LevelTrace, "Form tab was requested", "tab", tabParam)
 
-	renderCtx, _, err := s.getOrgForm(w, r)
-	if err != nil {
-		return nil, err
-	}
-
-	if (tabParam != "") && (tabParam != common.ReportsEndpoint) {
+	var model Model
+	switch tabParam {
+	case common.IntegrationsEndpoint:
+		renderCtx, err := s.getFormIntegrations(w, r)
+		if err != nil {
+			return nil, err
+		}
+		model = renderCtx
+	case "", common.ReportsEndpoint:
+		renderCtx, _, err := s.getOrgForm(w, r)
+		if err != nil {
+			return nil, err
+		}
+		renderCtx.Tab = formReportsTabIndex
+		model = renderCtx
+	default:
 		slog.ErrorContext(ctx, "Unknown form tab requested", "tab", tabParam)
+		renderCtx, _, err := s.getOrgForm(w, r)
+		if err != nil {
+			return nil, err
+		}
+		renderCtx.Tab = formReportsTabIndex
+		model = renderCtx
 	}
 
-	renderCtx.Tab = formReportsTabIndex
-
-	return &ViewModel{Model: renderCtx, View: formDashboardTemplate}, nil
+	return &ViewModel{Model: model, View: formDashboardTemplate}, nil
 }
 
 func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -431,4 +451,45 @@ func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*Vie
 	renderCtx.Tab = formReportsTabIndex
 
 	return &ViewModel{Model: renderCtx, View: formDashboardReportsTemplate}, nil
+}
+
+func (s *Server) getFormIntegrations(w http.ResponseWriter, r *http.Request) (*formDashboardIntegrationsRenderContext, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	dashboardCtx, form, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	property, err := s.Store.Impl().RetrieveOrgProperty(ctx, org, form.PropertyID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve form property for integrations", "formID", form.ID, "propertyID", form.PropertyID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	renderCtx := &formDashboardIntegrationsRenderContext{
+		formDashboardRenderContext: *dashboardCtx,
+		Sitekey:                    db.UUIDToSiteKey(property.ExternalID),
+	}
+	renderCtx.Tab = formIntegrationsTabIndex
+
+	return renderCtx, nil
+}
+
+func (s *Server) getFormIntegrationsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, err := s.getFormIntegrations(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: formDashboardIntegrationsTemplate}, nil
 }
