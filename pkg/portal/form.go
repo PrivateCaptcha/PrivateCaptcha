@@ -86,6 +86,8 @@ type formDashboardIntegrationsRenderContext struct {
 
 type formSettingsRenderContext struct {
 	formDashboardRenderContext
+	Orgs    []*UserOrg
+	CanMove bool
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
@@ -555,12 +557,31 @@ func (s *Server) getFormIntegrationsTab(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, error) {
-	dashboardCtx, _, err := s.getOrgForm(w, r)
+	ctx := r.Context()
+	dashboardCtx, form, err := s.getOrgForm(w, r)
 	if err != nil {
 		return nil, err
 	}
 
-	renderCtx := &formSettingsRenderContext{formDashboardRenderContext: *dashboardCtx}
+	renderCtx := &formSettingsRenderContext{formDashboardRenderContext: *dashboardCtx, Orgs: []*UserOrg{}, CanMove: false}
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if user.ID == form.CreatorID.Int32 {
+		if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID); err == nil {
+			renderCtx.Orgs = orgsToUserOrgs(orgs, s.IDHasher)
+			for _, org := range orgs {
+				if (org.Organization.ID != form.OrgID.Int32) && (org.Level == dbgen.AccessLevelOwner) {
+					renderCtx.CanMove = true
+					break
+				}
+			}
+		}
+	}
+
 	renderCtx.Tab = formSettingsTabIndex
 
 	return renderCtx, nil

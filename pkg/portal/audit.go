@@ -209,7 +209,10 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 	ul.Resource = "Form"
 
 	if (oldValue != nil) && (newValue != nil) {
-		if oldValue.URL != newValue.URL {
+		if oldValue.OrgID != newValue.OrgID {
+			ul.Property = "Organization"
+			ul.Value = newValue.OrgName
+		} else if oldValue.URL != newValue.URL {
 			ul.Property = "URL"
 			ul.Value = newValue.URL
 		} else if oldValue.RetryRequestCount != newValue.RetryRequestCount {

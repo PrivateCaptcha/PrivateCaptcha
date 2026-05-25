@@ -49,6 +49,11 @@ WHERE p.id = $1
   AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
 RETURNING *;
 
+-- name: MovePropertyWithForm :one
+UPDATE backend.properties p SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE p.id = $1
+RETURNING *;
+
 -- name: GetOrgPropertyByName :one
 SELECT * from backend.properties WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL;
 

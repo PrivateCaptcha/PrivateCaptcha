@@ -61,5 +61,11 @@ SELECT
 FROM upd
 CROSS JOIN old;
 
+-- name: MoveForm :one
+UPDATE backend.forms
+SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
 -- name: DeleteForms :execrows
 DELETE FROM backend.forms WHERE id = ANY($1::INT[]);

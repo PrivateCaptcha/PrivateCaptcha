@@ -274,6 +274,12 @@ func (s *QuerierStub) MoveDifficultyRule(ctx context.Context, arg *dbgen.MoveDif
 func (s *QuerierStub) MoveProperty(ctx context.Context, arg *dbgen.MovePropertyParams) (*dbgen.Property, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) MovePropertyWithForm(ctx context.Context, arg *dbgen.MovePropertyWithFormParams) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) MoveForm(ctx context.Context, arg *dbgen.MoveFormParams) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) Ping(ctx context.Context) (int32, error) {
 	return 0, s.Error
 }

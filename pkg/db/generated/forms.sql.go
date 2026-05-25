@@ -316,6 +316,45 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 	return items, nil
 }
 
+const moveForm = `-- name: MoveForm :one
+UPDATE backend.forms
+SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+`
+
+type MoveFormParams struct {
+	ID         int32       `db:"id" json:"id"`
+	OrgID      pgtype.Int4 `db:"org_id" json:"org_id"`
+	OrgOwnerID pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+}
+
+func (q *Queries) MoveForm(ctx context.Context, arg *MoveFormParams) (*Form, error) {
+	row := q.db.QueryRow(ctx, moveForm, arg.ID, arg.OrgID, arg.OrgOwnerID)
+	var i Form
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.Active,
+		&i.RequestsPerSecond,
+		&i.RequestsBurst,
+		&i.RetryRequestCount,
+		&i.Method,
+	)
+	return &i, err
+}
+
 const updateForm = `-- name: UpdateForm :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms f

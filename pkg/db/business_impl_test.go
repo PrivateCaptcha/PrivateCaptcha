@@ -2118,6 +2118,33 @@ func TestBusinessStoreImplMoveProperty(t *testing.T) {
 	})
 }
 
+func TestBusinessStoreImplMoveForm(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{ID: 1}, &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.GetUserOrganizationsRow{})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{ID: 1}, &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.GetUserOrganizationsRow{})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{}, &dbgen.Form{}, &dbgen.Property{}, &dbgen.GetUserOrganizationsRow{})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
 func TestBusinessStoreImplTransferOrganization(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)

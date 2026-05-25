@@ -879,8 +879,10 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 			RequestsPerMinute int
 		}
 		Org     *UserOrg
+		Orgs    []*UserOrg
 		Tab     int
 		CanEdit bool
+		CanMove bool
 	}{
 		CsrfRenderContext: stubToken(),
 		ErrorMessage:      "",
@@ -905,8 +907,10 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 			RequestsPerMinute: 30,
 		},
 		Org:     stubOrg("123"),
+		Orgs:    []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner), stubOrgEx("999", dbgen.AccessLevelOwner)},
 		Tab:     2,
 		CanEdit: true,
+		CanMove: true,
 	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=settings")}, platformCtx)
 	if err != nil {
 		t.Fatal(err)
@@ -925,5 +929,8 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 	}
 	if !strings.Contains(body, "/org/123/property/789?tab=settings") {
 		t.Fatal("expected manage property link in form settings")
+	}
+	if !strings.Contains(body, "Move form") {
+		t.Fatal("expected move form section in form settings")
 	}
 }

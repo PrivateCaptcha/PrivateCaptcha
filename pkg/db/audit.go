@@ -504,6 +504,17 @@ func newUpdateFormAuditLogEvent(updatedForm *dbgen.Form, updateRow *dbgen.Update
 	}
 }
 
+func newMoveFormAuditLogEvent(user *dbgen.User, form *dbgen.Form, oldOrgID int32, orgName string) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  &AuditLogForm{OrgID: oldOrgID},
+		NewValue:  &AuditLogForm{OrgID: form.OrgID.Int32, OrgName: orgName},
+	}
+}
+
 func newDeletePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    user.ID,

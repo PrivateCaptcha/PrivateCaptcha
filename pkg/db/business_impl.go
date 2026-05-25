@@ -1224,6 +1224,64 @@ func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organi
 	return cacheForm, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, form *dbgen.Form, property *dbgen.Property, org *dbgen.GetUserOrganizationsRow) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, nil, nil, ErrMaintenance
+	}
+
+	if (user == nil) || (form == nil) || (property == nil) || (org == nil) {
+		return nil, nil, nil, ErrInvalidInput
+	}
+
+	if form.OrgID.Int32 == org.Organization.ID {
+		slog.WarnContext(ctx, "Form is already in the destination org", "formID", form.ID, "orgID", form.OrgID.Int32)
+		return nil, nil, nil, ErrInvalidInput
+	}
+
+	oldOrgID := form.OrgID.Int32
+
+	updatedForm, err := impl.querier.MoveForm(ctx, &dbgen.MoveFormParams{
+		ID:         form.ID,
+		OrgID:      Int(org.Organization.ID),
+		OrgOwnerID: org.Organization.UserID,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move form to another org", "formID", form.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
+		return nil, nil, nil, err
+	}
+
+	updatedProperty, err := impl.querier.MovePropertyWithForm(ctx, &dbgen.MovePropertyWithFormParams{
+		ID:         property.ID,
+		OrgID:      Int(org.Organization.ID),
+		OrgOwnerID: org.Organization.UserID,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move form property to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
+		return nil, nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Moved form to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID)
+
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(oldOrgID, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(oldOrgID))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(updatedForm.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
+
+	impl.cacheForm(ctx, updatedForm)
+	impl.cacheProperty(ctx, updatedProperty)
+
+	auditEvents := []*common.AuditLogEvent{
+		newMoveFormAuditLogEvent(user, updatedForm, oldOrgID, org.Organization.Name),
+		newMovePropertyAuditLogEvent(user, updatedProperty, oldOrgID, updatedProperty.OrgID.Int32),
+	}
+
+	return updatedForm, updatedProperty, auditEvents, nil
+}
+
 func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
 	if (params == nil) || (user == nil) {
 		return nil, nil, ErrInvalidInput
