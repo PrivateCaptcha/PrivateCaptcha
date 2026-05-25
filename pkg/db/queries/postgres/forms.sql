@@ -12,6 +12,9 @@ SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]);
 -- name: GetFormByPropertyID :one
 SELECT * FROM backend.forms WHERE property_id = $1;
 
+-- name: GetOrgFormByName :one
+SELECT * FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL;
+
 -- name: GetOrgForms :many
 SELECT *
 FROM backend.forms

@@ -170,6 +170,40 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 	return items, nil
 }
 
+const getOrgFormByName = `-- name: GetOrgFormByName :one
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+`
+
+type GetOrgFormByNameParams struct {
+	OrgID pgtype.Int4 `db:"org_id" json:"org_id"`
+	Name  string      `db:"name" json:"name"`
+}
+
+func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNameParams) (*Form, error) {
+	row := q.db.QueryRow(ctx, getOrgFormByName, arg.OrgID, arg.Name)
+	var i Form
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.RequestsPerSecond,
+		&i.RequestsBurst,
+		&i.RetryRequestCount,
+		&i.Method,
+	)
+	return &i, err
+}
+
 const getOrgForms = `-- name: GetOrgForms :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method
 FROM backend.forms

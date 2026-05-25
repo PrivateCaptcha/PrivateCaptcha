@@ -163,6 +163,9 @@ func (s *QuerierStub) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.In
 func (s *QuerierStub) GetOrgPropertyByName(ctx context.Context, arg *dbgen.GetOrgPropertyByNameParams) (*dbgen.Property, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetOrgFormByName(ctx context.Context, arg *dbgen.GetOrgFormByNameParams) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
 	return nil, s.Error
 }

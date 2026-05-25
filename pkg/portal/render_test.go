@@ -759,8 +759,8 @@ func TestRenderFormWizardIntegrationStep(t *testing.T) {
 	buf, err := server.RenderResponse(t.Context(), formWizardSetupTemplate, &formIntegrationRenderContext{
 		CsrfRenderContext: stubToken(),
 		CurrentOrg:        stubOrg("123"),
+		Form:              &userForm{ID: "1", OrgID: "123", ExternalID: "guid-123", Name: "Contact"},
 		Sitekey:           "sitekey123",
-		FormExternalID:    "guid-123",
 	}, &RequestContext{Path: server.RelURL("/org/123/form/new")}, platformCtx)
 	if err != nil {
 		t.Fatal(err)

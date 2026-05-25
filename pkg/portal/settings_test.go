@@ -322,8 +322,8 @@ func TestGetGeneralSettings(t *testing.T) {
 		t.Errorf("Expected Name to be %s, got %s", user.Name, renderCtx.Name)
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 
@@ -369,8 +369,8 @@ func TestGetAPIKeysSettings(t *testing.T) {
 		t.Error("Expected Keys to be initialized (even if empty)")
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 
@@ -638,8 +638,8 @@ func TestPutNotificationsSettings(t *testing.T) {
 		t.Error("Expected SuccessMessage to be populated")
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 
 	settings, err := store.Impl().RetrieveUserSettings(ctx, user.ID)

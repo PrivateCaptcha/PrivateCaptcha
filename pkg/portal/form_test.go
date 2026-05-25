@@ -242,12 +242,21 @@ type rejectPortalFormURLVerifier struct {
 	err error
 }
 
+type formsLimitSubscriptionStub struct {
+	db.StubSubscriptionLimits
+	err error
+}
+
 func (v rejectPortalFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
 	return v.err
 }
 
 func (v rejectPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+func (s formsLimitSubscriptionStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	return false, 1, s.err
 }
 
 func TestPostNewOrgFormInvalidInputs(t *testing.T) {
@@ -384,7 +393,27 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 			assertRedirect: true,
 		},
 		{
-			name: "DuplicateNameCreateFailure",
+			name: "FormsLimitExceeded",
+			setup: func(t *testing.T) (*dbgen.User, *dbgen.Organization, string, func()) {
+				ctx := t.Context()
+				user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+				if err != nil {
+					t.Fatalf("Failed to create account: %v", err)
+				}
+
+				originalLimits := server.SubscriptionLimits
+				server.SubscriptionLimits = formsLimitSubscriptionStub{}
+
+				return user, org, user.Email, func() {
+					server.SubscriptionLimits = originalLimits
+				}
+			},
+			expectedStatus: http.StatusOK,
+			expectedBody:   "Forms limit reached for current subscription plan.",
+			expectedCount:  0,
+		},
+		{
+			name: "DuplicateName",
 			setup: func(t *testing.T) (*dbgen.User, *dbgen.Organization, string, func()) {
 				ctx := t.Context()
 				user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
@@ -407,7 +436,7 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 				return user, org, user.Email, func() {}
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody:   "Failed to create the form. Please try again later.",
+			expectedBody:   common.StatusPropertyNameDuplicateError.String(),
 			expectedCount:  1,
 		},
 	}

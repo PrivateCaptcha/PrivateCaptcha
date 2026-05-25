@@ -644,9 +644,9 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgMembersTemplate,
-		AuditEvent: event,
+		Model:       renderCtx,
+		View:        orgMembersTemplate,
+		AuditEvents: singleAuditEvents(event),
 	}, nil
 }
 
@@ -699,9 +699,9 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgSettingsTemplate,
-		AuditEvent: event,
+		Model:       renderCtx,
+		View:        orgSettingsTemplate,
+		AuditEvents: singleAuditEvents(event),
 	}, nil
 }
 
@@ -745,9 +745,9 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgAuditLogsTemplate,
-		AuditEvent: auditEvent,
+		Model:       renderCtx,
+		View:        orgAuditLogsTemplate,
+		AuditEvents: singleAuditEvents(auditEvent),
 	}, nil
 }
 
@@ -779,9 +779,9 @@ func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgRulesTemplate,
-		AuditEvent: auditEvent,
+		Model:       renderCtx,
+		View:        orgRulesTemplate,
+		AuditEvents: singleAuditEvents(auditEvent),
 	}, nil
 }
 
@@ -831,5 +831,5 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }

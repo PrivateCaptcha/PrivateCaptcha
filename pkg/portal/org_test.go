@@ -434,8 +434,8 @@ func TestGetOrgSettings(t *testing.T) {
 		t.Error("Expected CanEdit to be true for org owner")
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 
@@ -540,8 +540,8 @@ func TestPutOrg(t *testing.T) {
 		t.Errorf("Expected org name to be %s, got %s", newName, renderCtx.CurrentOrg.Name)
 	}
 
-	if viewModel.AuditEvent == nil {
-		t.Error("Expected AuditEvent to be populated")
+	if len(viewModel.AuditEvents) == 0 {
+		t.Error("Expected AuditEvents to be populated")
 	}
 }
 

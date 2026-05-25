@@ -991,6 +991,32 @@ func (impl *BusinessStoreImpl) FindOrgProperty(ctx context.Context, name string,
 	return property, nil
 }
 
+func (impl *BusinessStoreImpl) FindOrgForm(ctx context.Context, name string, org *dbgen.Organization) (*dbgen.Form, error) {
+	if len(name) == 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	form, err := impl.querier.GetOrgFormByName(ctx, &dbgen.GetOrgFormByNameParams{
+		OrgID: Int(org.ID),
+		Name:  name,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrRecordNotFound
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve form by name", "name", name, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	return form, nil
+}
+
 func (impl *BusinessStoreImpl) FindOrg(ctx context.Context, name string, user *dbgen.User) (*dbgen.Organization, error) {
 	if len(name) == 0 {
 		return nil, ErrInvalidInput
@@ -2989,6 +3015,33 @@ func (impl *BusinessStoreImpl) ValidatePropertyName(ctx context.Context, name st
 	if org != nil {
 		if _, err := impl.FindOrgProperty(ctx, name, org); err != ErrRecordNotFound {
 			slog.WarnContext(ctx, "Property already exists", "name", name, common.ErrAttr(err))
+			return common.StatusPropertyNameDuplicateError
+		}
+	}
+
+	return common.StatusOK
+}
+
+func (impl *BusinessStoreImpl) ValidateFormName(ctx context.Context, name string, org *dbgen.Organization) common.StatusCode {
+	const maxFormNameLength = 255
+	if (len(name) == 0) || (len(name) > maxFormNameLength) {
+		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
+
+		if len(name) == 0 {
+			return common.StatusPropertyNameEmptyError
+		}
+
+		return common.StatusPropertyNameTooLongError
+	}
+
+	if pos, r := containsInvalidNameChars(name, "'-_.:()[]"); pos >= 0 {
+		slog.WarnContext(ctx, "Name contains invalid characters", "position", pos, "rune", r)
+		return common.StatusPropertyNameInvalidSymbolsError
+	}
+
+	if org != nil {
+		if _, err := impl.FindOrgForm(ctx, name, org); err != ErrRecordNotFound {
+			slog.WarnContext(ctx, "Form already exists", "name", name, common.ErrAttr(err))
 			return common.StatusPropertyNameDuplicateError
 		}
 	}

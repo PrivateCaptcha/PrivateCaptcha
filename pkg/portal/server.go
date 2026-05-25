@@ -57,9 +57,9 @@ type CsrfKeyFunc func(http.ResponseWriter, *http.Request) string
 
 type Model = any
 type ViewModel struct {
-	Model      Model
-	View       string
-	AuditEvent *common.AuditLogEvent
+	Model       Model
+	View        string
+	AuditEvents []*common.AuditLogEvent
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
@@ -137,6 +137,14 @@ func (ac *AlertRenderContext) ClearAlerts() {
 	ac.SuccessMessage = ""
 	ac.WarningMessage = ""
 	ac.InfoMessage = ""
+}
+
+func singleAuditEvents(event *common.AuditLogEvent) []*common.AuditLogEvent {
+	if event == nil {
+		return nil
+	}
+
+	return []*common.AuditLogEvent{event}
 }
 
 type Server struct {
@@ -450,8 +458,8 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 			s.render(w, r, mv.View, mv.Model)
 		}
 		// If tpl is empty, it means modelFunc handled the response (e.g., redirect, error, or manual write).
-		if mv.AuditEvent != nil {
-			s.Store.AuditLog().RecordEvent(ctx, mv.AuditEvent, common.AuditLogSourcePortal)
+		if len(mv.AuditEvents) > 0 {
+			s.Store.AuditLog().RecordEvents(ctx, mv.AuditEvents, common.AuditLogSourcePortal)
 		}
 	})
 }

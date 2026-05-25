@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
@@ -13,10 +14,11 @@ import (
 )
 
 const (
-	webhookPrefixPathLimit  = 12
-	formWizardTemplate      = "form-wizard/wizard.html"
-	formWizardNewTemplate   = "form-wizard/new.html"
-	formWizardSetupTemplate = "form-wizard/client-setup.html"
+	webhookPrefixPathLimit         = 12
+	formWizardTemplate             = "form-wizard/wizard.html"
+	formWizardNewTemplate          = "form-wizard/new.html"
+	formWizardSetupTemplate        = "form-wizard/client-setup.html"
+	activeSubscriptionForFormError = "You need an active subscription to create new forms."
 )
 
 type formWizardRenderContext struct {
@@ -52,6 +54,40 @@ type formIntegrationRenderContext struct {
 	CurrentOrg *UserOrg
 	Form       *userForm
 	Sitekey    string
+}
+
+func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser)
+	if err != nil {
+		return ""
+	}
+
+	isOrgOwner := org.UserID.Int32 == sessUser.ID
+
+	ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, org.ID, subscr)
+	if err != nil {
+		if err == db.ErrNoActiveSubscription {
+			if isOrgOwner {
+				return activeSubscriptionForFormError
+			}
+
+			return "Organization owner needs an active subscription to create new forms."
+		}
+		return ""
+	}
+
+	if !ok {
+		slog.WarnContext(ctx, "Forms limit check failed", "extra", extra, "userID", owner.ID, "subscriptionID", subscr.ID,
+			"orgOwner", isOrgOwner, "internal", db.IsInternalSubscription(subscr.Source))
+
+		if isOrgOwner {
+			return "Forms limit reached for current subscription plan."
+		}
+
+		return "Forms limit reached for this organization's owner, contact them to upgrade."
+	}
+
+	return ""
 }
 
 func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -112,7 +148,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
-	if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, renderCtx.Name, nil); !nameStatus.Success() {
+	if nameStatus := s.Store.Impl().ValidateFormName(ctx, renderCtx.Name, org); !nameStatus.Success() {
 		renderCtx.NameError = nameStatus.String()
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
@@ -148,7 +184,21 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
 
-	propertyParams := db.NewDefaultPropertyParams("" /*name*/, domain, user.ID)
+	if limitError := s.validateFormsLimit(ctx, org, user); len(limitError) > 0 {
+		renderCtx.ErrorMessage = limitError
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+	}
+
+	propertyParams := &dbgen.CreatePropertyParams{
+		CreatorID:        db.Int(user.ID),
+		Domain:           domain,
+		Level:            db.Int2(int16(common.DifficultyLevelSmall)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	}
 	form, property, auditEvents, err := s.Store.Impl().CreateNewForm(ctx, propertyParams, &dbgen.CreateFormParams{
 		Name:              renderCtx.Name,
 		URL:               renderCtx.URL,
@@ -172,8 +222,8 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 			Form:              formToUserForm(form, s.IDHasher),
 			Sitekey:           db.UUIDToSiteKey(property.ExternalID),
 		},
-		View:       formWizardSetupTemplate,
-		AuditEvent: auditEvents[0],
+		View:        formWizardSetupTemplate,
+		AuditEvents: auditEvents,
 	}, nil
 }
 
