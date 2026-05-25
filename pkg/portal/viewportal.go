@@ -30,12 +30,17 @@ func viewStubProperty(name, orgID string) *userProperty {
 
 func viewStubForm(name, orgID string) *userForm {
 	return &userForm{
-		ID:            "prop1",
-		OrgID:         orgID,
-		Name:          name,
-		WebhookPrefix: "https://example.com/api/...",
-		ExternalID:    "123e4567e89b12d3a456426614174000",
-		Enabled:       true,
+		ID:                "form1",
+		OrgID:             orgID,
+		PropertyID:        "prop1",
+		Name:              name,
+		URL:               "https://hooks.example.com/forms/contact",
+		WebhookPrefix:     "https://example.com/api/...",
+		ExternalID:        "123e4567e89b12d3a456426614174000",
+		Enabled:           true,
+		Active:            true,
+		RetryRequestCount: 2,
+		RequestsPerMinute: 30,
 	}
 }
 
@@ -101,6 +106,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 	org := viewStubOrg("org1")
 	orgs := []*UserOrg{org, {Name: "Other Org", ID: "org2", Level: string(dbgen.AccessLevelOwner)}}
 	prop := viewStubProperty("Main Site", "org1")
+	form := viewStubForm("Contact us", "org1")
 	token := CsrfRenderContext{Token: "stub-csrf-token"}
 	rules := viewStubRules()
 	auditLogs := viewStubAuditLogs()
@@ -125,6 +131,17 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			AlertRenderContext: alert, CsrfRenderContext: token,
 			CaptchaRenderContext: propCaptchaCtx, Property: prop, Org: org,
 			Tab: tab, CanEdit: true, IncludeRules: true,
+		}
+	}
+
+	formDash := func(tab int, alert AlertRenderContext) formDashboardRenderContext {
+		return formDashboardRenderContext{
+			AlertRenderContext: alert,
+			CsrfRenderContext:  token,
+			Form:               form,
+			Org:                org,
+			Tab:                tab,
+			CanEdit:            true,
 		}
 	}
 
@@ -165,6 +182,7 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 
 	orgArg := arg(common.ParamOrg)
 	propArg := arg(common.ParamProperty)
+	formArg := arg(common.ParamForm)
 	ruleArg := arg(common.ParamRule)
 
 	return []ViewPortalPage{
@@ -477,6 +495,55 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 						Sitekey:           db.TestPropertySitekey,
 					},
 					Step: 1,
+				}
+			},
+		},
+		{
+			Path:       p(common.OrgEndpoint, orgArg, common.FormEndpoint, formArg),
+			Template:   formDashboardTemplate,
+			ShowInList: true,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				c := formDash(formReportsTabIndex, a)
+				return &c
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.FormEndpoint, formArg, common.TabEndpoint, common.ReportsEndpoint),
+			Template: formDashboardReportsTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				c := formDash(formReportsTabIndex, a)
+				return &c
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.FormEndpoint, formArg, common.TabEndpoint, common.IntegrationsEndpoint),
+			Template: formDashboardIntegrationsTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &formDashboardIntegrationsRenderContext{
+					formDashboardRenderContext: formDash(formIntegrationsTabIndex, a),
+					Sitekey:                    db.TestPropertySitekey,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.FormEndpoint, formArg, common.TabEndpoint, common.SettingsEndpoint),
+			Template: formDashboardSettingsTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &formSettingsRenderContext{
+					formDashboardRenderContext: formDash(formSettingsTabIndex, a),
+					Orgs:                       orgs,
+					CanMove:                    true,
+				}
+			},
+		},
+		{
+			Path:     p(common.OrgEndpoint, orgArg, common.FormEndpoint, formArg, common.TabEndpoint, common.EventsEndpoint),
+			Template: formDashboardAuditLogsTemplate,
+			ModelFunc: func(a AlertRenderContext) interface{} {
+				return &formAuditLogsRenderContext{
+					formDashboardRenderContext: formDash(formAuditLogsTabIndex, a),
+					AuditLogsRenderContext:     auditLogsCtx,
+					CanView:                    true,
 				}
 			},
 		},

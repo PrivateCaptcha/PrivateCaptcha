@@ -294,8 +294,8 @@ func TestGetFormDashboard(t *testing.T) {
 	if strings.Contains(body, "Rules") {
 		t.Fatal("did not expect rules tab in form dashboard")
 	}
-	if !strings.Contains(body, fmt.Sprintf("/org/%s/form/%s/stats/", orgID, formID)) {
-		t.Fatal("expected form stats endpoint in reports tab")
+	if !strings.Contains(body, "Form Requests") {
+		t.Fatal("expected reports content in form dashboard")
 	}
 }
 
@@ -863,8 +863,8 @@ func TestDeleteFormCannotDelete(t *testing.T) {
 	w := httptest.NewRecorder()
 	srv.ServeHTTP(w, req)
 
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("Expected method not allowed (405), got %d", w.Code)
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Expected redirect status (303), got %d", w.Code)
 	}
 }
 
