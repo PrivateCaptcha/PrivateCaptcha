@@ -37,6 +37,68 @@ func (q *Queries) DeleteOldAuditLogs(ctx context.Context, createdAt pgtype.Times
 	return result.RowsAffected(), nil
 }
 
+const getFormAuditLogs = `-- name: GetFormAuditLogs :many
+SELECT a.id, a.user_id, a.action, a.entity_id, a.entity_table, a.session_id, a.old_value, a.new_value, a.created_at, a.source, a.ip_address, u.name, u.email
+FROM backend.audit_logs a
+LEFT JOIN backend.users u ON u.id = a.user_id
+WHERE a.entity_table = 'forms' AND a.entity_id = $1 AND a.created_at >= $2
+ORDER BY a.created_at DESC
+OFFSET $3
+LIMIT $4
+`
+
+type GetFormAuditLogsParams struct {
+	EntityID  pgtype.Int8        `db:"entity_id" json:"entity_id"`
+	CreatedAt pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	Offset    int32              `db:"offset" json:"offset"`
+	Limit     int32              `db:"limit" json:"limit"`
+}
+
+type GetFormAuditLogsRow struct {
+	AuditLog AuditLog    `db:"audit_log" json:"audit_log"`
+	Name     pgtype.Text `db:"name" json:"name"`
+	Email    pgtype.Text `db:"email" json:"email"`
+}
+
+func (q *Queries) GetFormAuditLogs(ctx context.Context, arg *GetFormAuditLogsParams) ([]*GetFormAuditLogsRow, error) {
+	rows, err := q.db.Query(ctx, getFormAuditLogs,
+		arg.EntityID,
+		arg.CreatedAt,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []*GetFormAuditLogsRow
+	for rows.Next() {
+		var i GetFormAuditLogsRow
+		if err := rows.Scan(
+			&i.AuditLog.ID,
+			&i.AuditLog.UserID,
+			&i.AuditLog.Action,
+			&i.AuditLog.EntityID,
+			&i.AuditLog.EntityTable,
+			&i.AuditLog.SessionID,
+			&i.AuditLog.OldValue,
+			&i.AuditLog.NewValue,
+			&i.AuditLog.CreatedAt,
+			&i.AuditLog.Source,
+			&i.AuditLog.IpAddress,
+			&i.Name,
+			&i.Email,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getOrgAuditLogs = `-- name: GetOrgAuditLogs :many
 SELECT a.id, a.user_id, a.action, a.entity_id, a.entity_table, a.session_id, a.old_value, a.new_value, a.created_at, a.source, a.ip_address, u.name, u.email
 FROM backend.audit_logs a

@@ -937,3 +937,49 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		t.Fatal("expected delete form section in form settings")
 	}
 }
+
+func TestRenderFormDashboardAuditLogs(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/auditlogs.html", &struct {
+		CsrfRenderContext
+		AlertRenderContext
+		Form      *userForm
+		Org       *UserOrg
+		Tab       int
+		CanEdit   bool
+		CanView   bool
+		AuditLogs []*UserAuditLog
+		Count     int
+		Page      int
+		PerPage   int
+		SeeMore   bool
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", PropertyID: "789", WebhookPrefix: "hooks.example.com/submit", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               3,
+		CanEdit:           true,
+		CanView:           true,
+		AuditLogs:         stubAuditLogs(),
+		Count:             len(stubAuditLogs()),
+		Page:              0,
+		PerPage:           25,
+		SeeMore:           true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=events")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "Audit logs") {
+		t.Fatal("expected audit logs tab in form dashboard")
+	}
+	if !strings.Contains(body, "See all Audit Logs") {
+		t.Fatal("expected see all audit logs action")
+	}
+}

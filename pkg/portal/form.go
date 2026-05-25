@@ -20,6 +20,7 @@ const (
 	formDashboardReportsTemplate      = "form/reports.html"
 	formDashboardIntegrationsTemplate = "form/integrations.html"
 	formDashboardSettingsTemplate     = "form/settings.html"
+	formDashboardAuditLogsTemplate    = "form/auditlogs.html"
 	formWizardTemplate                = "form-wizard/wizard.html"
 	formWizardNewTemplate             = "form-wizard/new.html"
 	formWizardSetupTemplate           = "form-wizard/client-setup.html"
@@ -88,6 +89,12 @@ type formSettingsRenderContext struct {
 	formDashboardRenderContext
 	Orgs    []*UserOrg
 	CanMove bool
+}
+
+type formAuditLogsRenderContext struct {
+	formDashboardRenderContext
+	AuditLogsRenderContext
+	CanView bool
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
@@ -484,6 +491,12 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 			return nil, err
 		}
 		model = renderCtx
+	case common.EventsEndpoint:
+		renderCtx, _, err := s.getFormAuditLogs(w, r)
+		if err != nil {
+			return nil, err
+		}
+		model = renderCtx
 	case "", common.ReportsEndpoint:
 		renderCtx, _, err := s.getOrgForm(w, r)
 		if err != nil {
@@ -554,6 +567,35 @@ func (s *Server) getFormIntegrationsTab(w http.ResponseWriter, r *http.Request) 
 	}
 
 	return &ViewModel{Model: renderCtx, View: formDashboardIntegrationsTemplate}, nil
+}
+
+func (s *Server) newFormAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetFormAuditLogsRow) []*UserAuditLog {
+	result := make([]*UserAuditLog, 0, len(logs))
+
+	for _, log := range logs {
+		if ul, err := s.NewUserAuditLog(ctx, &log.AuditLog); err == nil {
+			if log.Name.Valid && log.Email.Valid {
+				ul.UserName = log.Name.String
+				ul.UserEmail = common.MaskEmail(log.Email.String, '*')
+			} else {
+				ul.UserName = "Unknown User"
+				ul.UserEmail = "-"
+			}
+
+			result = append(result, ul)
+		}
+	}
+
+	return result
+}
+
+func (s *Server) getFormAuditLogsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	renderCtx, auditEvent, err := s.getFormAuditLogs(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ViewModel{Model: renderCtx, View: formDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, error) {

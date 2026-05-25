@@ -135,6 +135,37 @@ func (s *Server) getPropertyAuditLogs(w http.ResponseWriter, r *http.Request) (*
 	return renderCtx, nil, nil
 }
 
+func (s *Server) getFormAuditLogs(w http.ResponseWriter, r *http.Request) (*formAuditLogsRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, form, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &formAuditLogsRenderContext{
+		formDashboardRenderContext: *dashboardCtx,
+		AuditLogsRenderContext:     AuditLogsRenderContext{},
+		CanView:                    (form.CreatorID.Int32 == user.ID) || (form.OrgOwnerID.Int32 == user.ID),
+	}
+
+	renderCtx.Tab = formAuditLogsTabIndex
+
+	const maxFormAuditLogs = 5
+	for i := 0; i < maxFormAuditLogs; i++ {
+		renderCtx.AuditLogs = append(renderCtx.AuditLogs, newStubAuditLog())
+	}
+
+	renderCtx.Count = len(renderCtx.AuditLogs)
+
+	return renderCtx, nil, nil
+}
+
 func (s *Server) CreateAuditLogsContext(ctx context.Context, user *dbgen.User, days int, page int) (*MainAuditLogsRenderContext, error) {
 	logs := make([]*UserAuditLog, 0)
 	const maxAuditLogs = 8

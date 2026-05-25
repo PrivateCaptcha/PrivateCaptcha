@@ -3170,6 +3170,28 @@ func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, pr
 	return logs[0:min(len(logs), limit)], nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveFormAuditLogs(ctx context.Context, form *dbgen.Form, limit int) ([]*dbgen.GetFormAuditLogsRow, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	logs, err := impl.querier.GetFormAuditLogs(ctx, &dbgen.GetFormAuditLogsParams{
+		EntityID:  Int8(int64(form.ID)),
+		CreatedAt: form.CreatedAt,
+		Offset:    0,
+		Limit:     int32(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return logs[0:min(len(logs), limit)], nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveOrganizationAuditLogs(ctx context.Context, org *dbgen.Organization, limit int) ([]*dbgen.GetOrgAuditLogsRow, error) {
 	if limit <= 0 {
 		return nil, ErrInvalidInput

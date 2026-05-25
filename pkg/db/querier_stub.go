@@ -157,6 +157,9 @@ func (s *QuerierStub) GetNotificationTemplateByHash(ctx context.Context, externa
 func (s *QuerierStub) GetOrgAuditLogs(ctx context.Context, arg *dbgen.GetOrgAuditLogsParams) ([]*dbgen.GetOrgAuditLogsRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetFormAuditLogs(ctx context.Context, arg *dbgen.GetFormAuditLogsParams) ([]*dbgen.GetFormAuditLogsRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetOrgProperties(ctx context.Context, arg *dbgen.GetOrgPropertiesParams) ([]*dbgen.Property, error) {
 	return nil, s.Error
 }

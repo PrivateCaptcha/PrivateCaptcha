@@ -102,3 +102,48 @@ func (s *Server) moveForm(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(formDashboardURL, http.StatusOK, w, r)
 	s.Store.AuditLog().RecordEvents(ctx, auditEvents, common.AuditLogSourcePortal)
 }
+
+func (s *Server) getFormAuditLogs(w http.ResponseWriter, r *http.Request) (*formAuditLogsRenderContext, *common.AuditLogEvent, error) {
+	dashboardCtx, form, err := s.getOrgForm(w, r)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ctx := r.Context()
+
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	renderCtx := &formAuditLogsRenderContext{
+		formDashboardRenderContext: *dashboardCtx,
+		AuditLogsRenderContext: AuditLogsRenderContext{
+			AuditLogs: []*UserAuditLog{},
+			SeeMore:   true,
+		},
+		CanView: (form.CreatorID.Int32 == user.ID) || (form.OrgOwnerID.Int32 == user.ID),
+	}
+
+	renderCtx.Tab = formAuditLogsTabIndex
+
+	if !renderCtx.CanView {
+		renderCtx.WarningMessage = "You do not have permissions to view audit logs of this form."
+		return renderCtx, nil, nil
+	}
+
+	auditEvent := newAccessAuditLogEvent(user, db.TableNameForms, int64(form.ID), form.Name, common.AuditLogsEndpoint)
+
+	const maxFormAuditLogs = 5
+	logs, err := s.Store.Impl().RetrieveFormAuditLogs(ctx, form, maxFormAuditLogs)
+	if err != nil {
+		renderCtx.ErrorMessage = "Failed to retrieve form audit logs. Please try again later."
+		return renderCtx, auditEvent, nil
+	}
+	renderCtx.AuditLogs = s.newFormAuditLogs(ctx, user, logs)
+	renderCtx.PerPage = perPageEventLogs
+	renderCtx.Count = len(renderCtx.AuditLogs)
+	renderCtx.Page = 0
+
+	return renderCtx, auditEvent, nil
+}

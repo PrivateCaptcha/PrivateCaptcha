@@ -868,6 +868,58 @@ func TestDeleteFormCannotDelete(t *testing.T) {
 	}
 }
 
+func TestGetFormDashboardAuditLogs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/audit-form",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EventsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Audit logs") {
+		t.Fatal("expected audit logs view")
+	}
+	if !strings.Contains(body, "See all Audit Logs") {
+		t.Fatal("expected see all audit logs action")
+	}
+}
+
 type rejectPortalFormURLVerifier struct {
 	err error
 }

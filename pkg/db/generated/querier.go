@@ -50,6 +50,7 @@ type Querier interface {
 	GetDifficultyRulePositionNeighbors(ctx context.Context, arg *GetDifficultyRulePositionNeighborsParams) (*GetDifficultyRulePositionNeighborsRow, error)
 	GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
+	GetFormAuditLogs(ctx context.Context, arg *GetFormAuditLogsParams) ([]*GetFormAuditLogsRow, error)
 	GetFormByID(ctx context.Context, id int32) (*Form, error)
 	GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
