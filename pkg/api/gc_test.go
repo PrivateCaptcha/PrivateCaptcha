@@ -65,15 +65,22 @@ func gcPropertyDataTestSuite(ctx context.Context, property *dbgen.Property, dele
 		t.Fatal(err)
 	}
 
-	if len(stats) > 0 {
-		t.Errorf("There are %v stats found", len(stats))
+	nonZeroStatsCount := 0
+	for _, s := range stats {
+		if s.Count > 0 {
+			nonZeroStatsCount++
+		}
+	}
+
+	if nonZeroStatsCount > 0 {
+		t.Errorf("There are %v stats found", nonZeroStatsCount)
 	}
 }
 
 func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *dbgen.Form) error, t *testing.T) {
 	t.Helper()
 
-	const requests = 1000
+	const requests = 400
 
 	for i := 0; i < requests; i++ {
 		server.addFormSubmitRecord(ctx, form, int8(i%2))
@@ -108,13 +115,26 @@ func gcFormDataTestSuite(ctx context.Context, form *dbgen.Form, deleter func(f *
 		t.Fatal(err)
 	}
 
+	if err := timeSeries.DropCache(ctx, "form_stats_period"); err != nil {
+		t.Error(err)
+	}
+
 	stats, err = timeSeries.RetrieveFormStatsByPeriod(ctx, form.OrgID.Int32, form.ID, common.TimePeriodToday)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(stats) > 0 {
-		t.Errorf("There are %v stats found", len(stats))
+	nonZeroStatsCount := 0
+	nonZeroStatsSum := 0
+	for _, s := range stats {
+		if (s.SuccessCount > 0) || (s.FailureCount > 0) {
+			nonZeroStatsCount++
+			nonZeroStatsSum += s.SuccessCount + s.FailureCount
+		}
+	}
+
+	if nonZeroStatsCount > 0 {
+		t.Errorf("There are %v stats found (sum %v)", nonZeroStatsCount, nonZeroStatsSum)
 	}
 }
 

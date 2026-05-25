@@ -87,7 +87,7 @@ FROM requests
 LEFT OUTER JOIN verifies ON verifies.agg_time = requests.agg_time
 GROUP BY agg_time
 ORDER BY agg_time WITH FILL FROM toDateTime({{.FillFrom}}) TO now() STEP {{.Interval}}
-SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`
+SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'property_stats_period'`
 
 	return &TimeSeriesDB{
 		statsQueryTemplate: template.Must(template.New("stats").Parse(statsQuery)),
@@ -120,6 +120,15 @@ func (ts *TimeSeriesDB) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (ts *TimeSeriesDB) DropCache(ctx context.Context, tag string) error {
+	if len(tag) == 0 {
+		return ErrInvalidInput
+	}
+
+	_, err := ts.Clickhouse.Exec(fmt.Sprintf("SYSTEM DROP QUERY CACHE TAG '%s'", tag))
+	return err
 }
 
 func (ts *TimeSeriesDB) IsAvailable() bool {
@@ -619,7 +628,7 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 	WHERE org_id = {org_id:UInt32} AND form_id = {form_id:UInt32} AND timestamp >= {timestamp:DateTime}
 	GROUP BY agg_time
 	ORDER BY agg_time WITH FILL FROM toDateTime(%s) TO now() STEP %s
-	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save'`,
+	SETTINGS use_query_cache = true, query_cache_nondeterministic_function_handling = 'save', query_cache_tag = 'form_stats_period';`,
 		fmt.Sprintf(timeFunction, "timestamp"),
 		table,
 		fmt.Sprintf(timeFunction, "{timestamp:DateTime}"),
@@ -904,6 +913,10 @@ func NewMemoryTimeSeries() *MemoryTimeSeries {
 }
 
 func (m *MemoryTimeSeries) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (m *MemoryTimeSeries) DropCache(ctx context.Context, tag string) error {
 	return nil
 }
 

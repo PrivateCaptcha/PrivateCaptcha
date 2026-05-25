@@ -48,6 +48,7 @@ type ConfigStore interface {
 
 type TimeSeriesStore interface {
 	Ping(ctx context.Context) error
+	DropCache(ctx context.Context, tag string) error
 	WriteAccessLogBatch(ctx context.Context, records []*AccessRecord) error
 	WriteVerifyLogBatch(ctx context.Context, records []*VerifyRecord) error
 	WriteFormSubmitBatch(ctx context.Context, records []*FormSubmitRecord) error
