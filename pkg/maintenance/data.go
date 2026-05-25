@@ -72,7 +72,7 @@ func (j *GarbageCollectDataJob) purgeProperties(ctx context.Context, before time
 }
 
 func (j *GarbageCollectDataJob) purgeForms(ctx context.Context, before time.Time) error {
-	// NOTE: we're processing forms that are soft-deleted, but property, org and user are not.
+	// NOTE: we're processing forms that are soft-deleted, but org and user are not.
 	if forms, err := j.BusinessDB.Impl().RetrieveSoftDeletedForms(ctx, before, maxSoftDeletedForms); (err == nil) && (len(forms) > 0) {
 		ids := make([]int32, 0, len(forms))
 		for _, f := range forms {

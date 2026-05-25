@@ -26,12 +26,10 @@ SELECT COUNT(*) as count FROM backend.forms WHERE org_id = $1 AND deleted_at IS 
 -- name: GetSoftDeletedForms :many
 SELECT sqlc.embed(f)
 FROM backend.forms f
-JOIN backend.properties p ON f.property_id = p.id
 JOIN backend.organizations o ON f.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
 WHERE f.deleted_at IS NOT NULL
   AND f.deleted_at < $1
-  AND p.deleted_at IS NULL
   AND o.deleted_at IS NULL
   AND u.deleted_at IS NULL
 LIMIT $2;

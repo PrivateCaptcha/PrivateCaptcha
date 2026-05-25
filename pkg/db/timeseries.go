@@ -806,7 +806,6 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 	tables := []string{
 		AccessLogTableName5m, AccessLogTableName1h, AccessLogTableName1d,
 		VerifyLogTable1h, VerifyLogTable1d, RulesLogsTableName1d,
-		FormSubmitLogTableName1h, FormSubmitLogTableName1d, FormSubmitLogTableName1mo,
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
