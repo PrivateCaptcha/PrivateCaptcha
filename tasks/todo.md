@@ -2,14 +2,14 @@
 
 ## Phase 1: Storage Foundation
 - [x] Add ClickHouse migrations for `form_submit_logs` raw Null table and 1h/1d/1mo aggregate chain.
-- [ ] Add form metrics types and `TimeSeriesStore` methods.
-- [ ] Implement `TimeSeriesDB` form write/read/delete methods.
-- [ ] Implement `MemoryTimeSeries` form write/read/delete methods.
-- [ ] Add unit tests for in-memory form metrics.
+- [x] Add form metrics types and `TimeSeriesStore` methods.
+- [x] Implement `TimeSeriesDB` form write/read/delete methods.
+- [x] Implement `MemoryTimeSeries` form write/read/delete methods.
+- [x] Add unit tests for in-memory form metrics.
 
 ## Checkpoint 1
-- [ ] Run `make test-unit`.
-- [ ] Review ClickHouse schema and deletion keys.
+- [x] Run `make test-unit`.
+- [x] Review ClickHouse schema and deletion keys.
 
 ## Phase 2: API Write Path
 - [ ] Add API server form metrics channel/cancel lifecycle.

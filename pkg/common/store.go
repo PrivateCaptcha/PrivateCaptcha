@@ -50,13 +50,16 @@ type TimeSeriesStore interface {
 	Ping(ctx context.Context) error
 	WriteAccessLogBatch(ctx context.Context, records []*AccessRecord) error
 	WriteVerifyLogBatch(ctx context.Context, records []*VerifyRecord) error
+	WriteFormSubmitBatch(ctx context.Context, records []*FormSubmitRecord) error
 	RetrievePropertyStatsSince(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
 	RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*OrgTimeCount, error)
 	RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
 	RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
+	RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period TimePeriod) ([]*FormSubmitStat, error)
 	RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period TimePeriod) ([]*TimeCount, error)
 	RetrieveRecentTopProperties(ctx context.Context, limit int) (map[int32]uint, error)
+	DeleteFormsData(ctx context.Context, formIDs []int32) error
 	DeletePropertiesData(ctx context.Context, propertyIDs []int32) error
 	DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error
 	DeleteUsersData(ctx context.Context, userIDs []int32) error

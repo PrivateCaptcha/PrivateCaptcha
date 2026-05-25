@@ -32,6 +32,12 @@ type TimePeriodStat struct {
 	VerifiesCount int
 }
 
+type FormSubmitStat struct {
+	Timestamp    time.Time
+	SuccessCount int
+	FailureCount int
+}
+
 type TimeCount struct {
 	Timestamp time.Time
 	Count     uint32

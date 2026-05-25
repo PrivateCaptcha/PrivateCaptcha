@@ -49,14 +49,14 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Description:** Add form submission record types and implement write, stats retrieval, and deletion methods for both ClickHouse and in-memory stores.
 
 **Acceptance criteria:**
-- [ ] `common.TimeSeriesStore` includes `WriteFormSubmitBatch`, `RetrieveFormStatsByPeriod`, and `DeleteFormsData`.
-- [ ] `TimeSeriesDB` writes form metrics and retrieves period stats with Today/Week/Month/Year behavior matching property stats.
-- [ ] `DeletePropertiesData`, `DeleteOrganizationsData`, and `DeleteUsersData` remove form metrics where applicable.
-- [ ] `MemoryTimeSeries` mirrors the new behavior and is covered by unit tests.
+- [x] `common.TimeSeriesStore` includes `WriteFormSubmitBatch`, `RetrieveFormStatsByPeriod`, and `DeleteFormsData`.
+- [x] `TimeSeriesDB` writes form metrics and retrieves period stats with Today/Week/Month/Year behavior matching property stats.
+- [x] `DeletePropertiesData`, `DeleteOrganizationsData`, and `DeleteUsersData` remove form metrics where applicable.
+- [x] `MemoryTimeSeries` mirrors the new behavior and is covered by unit tests.
 
 **Verification:**
-- [ ] Run `make test-unit`.
-- [ ] Unit tests in `pkg/db/timeseries_test.go` cover write, retrieve, delete form data, org delete, and user delete.
+- [x] Run `make test-unit`.
+- [x] Unit tests in `pkg/db/timeseries_test.go` cover write, retrieve, delete form data, org delete, and user delete.
 
 **Dependencies:** Task 1.
 
@@ -69,9 +69,9 @@ Postgres form queries -> sqlc generation -> BusinessStoreImpl helpers -> Portal 
 **Estimated scope:** M
 
 ## Checkpoint: Storage Foundation
-- [ ] `make test-unit` passes.
-- [ ] The in-memory implementation proves the API contract before integration work.
-- [ ] Review ClickHouse table keys and retention before building callers.
+- [x] `make test-unit` passes.
+- [x] The in-memory implementation proves the API contract before integration work.
+- [x] Review ClickHouse table keys and retention before building callers.
 
 ## Phase 2: Write Path
 
