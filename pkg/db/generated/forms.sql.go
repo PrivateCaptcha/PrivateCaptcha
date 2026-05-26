@@ -406,7 +406,7 @@ upd AS (
     RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
 )
 SELECT
-    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_second, upd.requests_burst, upd.retry_request_count, upd.method, 
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_second, upd.requests_burst, upd.retry_request_count, upd.method,
     old.name AS old_name,
     old.url AS old_url,
     old.active AS old_active,

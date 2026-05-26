@@ -1283,6 +1283,8 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
 	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(updatedProperty.OrgOwnerID.Int32))
 
 	impl.cacheForm(ctx, updatedForm)
 	impl.cacheProperty(ctx, updatedProperty)

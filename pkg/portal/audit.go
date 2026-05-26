@@ -209,7 +209,12 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 	ul.Resource = "Form"
 
 	if (oldValue != nil) && (newValue != nil) {
-		if oldValue.OrgID != newValue.OrgID {
+		ul.Resource = fmt.Sprintf("Form '%s'", oldValue.Name)
+		if oldValue.Name != newValue.Name {
+			ul.Property = "Name"
+			ul.Value = newValue.Name
+			ul.Resource = fmt.Sprintf("Form '%s'", newValue.Name)
+		} else if oldValue.OrgID != newValue.OrgID {
 			ul.Property = "Organization"
 			ul.Value = newValue.OrgName
 		} else if oldValue.URL != newValue.URL {
@@ -225,6 +230,12 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 			ul.Property = "Active"
 			ul.Value = strconv.FormatBool(newValue.Active)
 		}
+	} else if (oldValue != nil) || (newValue != nil) {
+		form := newValue
+		if form == nil {
+			form = oldValue
+		}
+		ul.Resource = fmt.Sprintf("Form '%s'", form.Name)
 	}
 
 	return nil

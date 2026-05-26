@@ -89,8 +89,8 @@ type formDashboardIntegrationsRenderContext struct {
 type formSettingsRenderContext struct {
 	formDashboardRenderContext
 	Orgs     []*UserOrg
-	CanMove  bool
 	URLError string
+	CanMove  bool
 }
 
 type formAuditLogsRenderContext struct {
@@ -347,11 +347,11 @@ func periodFromPath(ctx context.Context, r *http.Request) common.TimePeriod {
 	}
 }
 
-func parseRequestsPerMinute(ctx context.Context, value string) float64 {
+func parseRequestsPerMinute(ctx context.Context, value string) (float64, error) {
 	i, err := strconv.ParseInt(value, 10, 32)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse requests per minute", "value", value, common.ErrAttr(err))
-		return 1.0 / 60.0
+		return 0, db.ErrInvalidInput
 	}
 
 	const maxValue = 60
@@ -359,10 +359,11 @@ func parseRequestsPerMinute(ctx context.Context, value string) float64 {
 
 	if (i < minValue) || (i > maxValue) {
 		slog.ErrorContext(ctx, "Invalid value of requests per minute", "value", value)
+		return 0, db.ErrInvalidInput
 	}
 
 	rpm := max(minValue, min(int32(i), maxValue))
-	return float64(rpm) / 60.0
+	return float64(rpm) / 60.0, nil
 }
 
 func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
@@ -657,10 +658,10 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
+	renderCtx.Form.Name = name
 	if name != form.Name {
 		if nameStatus := s.Store.Impl().ValidateFormName(ctx, name, org); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
-			renderCtx.Form.Name = name
 			renderCtx.Form.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
 			return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
 		}
@@ -669,7 +670,6 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	urlValue := strings.TrimSpace(r.FormValue(common.ParamURL))
 	if len(urlValue) == 0 {
 		renderCtx.URLError = "URL cannot be empty."
-		renderCtx.Form.Name = name
 		renderCtx.Form.URL = urlValue
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
 	}
@@ -677,7 +677,6 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
 		slog.WarnContext(ctx, "Failed to verify form URL", "url", urlValue, common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
-		renderCtx.Form.Name = name
 		renderCtx.Form.URL = urlValue
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
 	}
@@ -687,7 +686,13 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if _, retry := r.Form[common.ParamRetryRequestCount]; retry {
 		retryRequestCount = 1
 	}
-	requestsPerSecond := parseRequestsPerMinute(ctx, r.FormValue(common.ParamRequestsPerMinute))
+	rpmValue := r.FormValue(common.ParamRequestsPerMinute)
+	requestsPerSecond, err := parseRequestsPerMinute(ctx, rpmValue)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse RPM", "value", rpmValue, common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to update settings."
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	}
 
 	var auditEvent *common.AuditLogEvent
 	if (name != form.Name) || (urlValue != form.URL) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerSecond != form.RequestsPerSecond) {

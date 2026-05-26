@@ -189,9 +189,10 @@
             const y = d3.scaleLinear().range([height, 0]);
 
             x.domain(success.map(function(d) { return d.x; }));
-            const successMax = d3.max(success, function(d) { return d.y; });
-            const failureMax = d3.max(failure, function(d) { return d.y; });
-            y.domain([0, Math.max(successMax, failureMax) * 1.2]);
+            const successMax = d3.max(success, function(d) { return d.y; }) ?? 0;
+            const failureMax = d3.max(failure, function(d) { return d.y; }) ?? 0;
+            const yMax = Math.max(successMax, failureMax, 1);
+            y.domain([0, yMax * 1.2]);
 
             const xTickValues = x.domain().filter(xTickFilter);
 

@@ -10,7 +10,7 @@
     {{- end -}}
 
     <div class="col-span-full">
-        <label for="{{ .Const.Name }}" class="pc-internal-form-label tooltip" data-tooltip="Convenience name for this form" aria-label="Form name"> Name </label>
+        <label for="{{ .Const.Name }}" class="pc-internal-form-label" aria-label="Form name"> Name </label>
         <div class="mt-2 relative">
             {{- if .Params.NameError -}}
             {{template "info-icon-red.html" .}}

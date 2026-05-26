@@ -345,6 +345,7 @@ type AuditLogProperty struct {
 }
 
 type AuditLogForm struct {
+	Name              string  `json:"name,omitempty"`
 	URL               string  `json:"url,omitempty"`
 	OrgID             int32   `json:"org_id,omitempty"`
 	OrgOwnerID        int32   `json:"org_owner_id,omitempty"`
@@ -364,6 +365,7 @@ func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
 	}
 
 	event := &AuditLogForm{
+		Name:              form.Name,
 		URL:               form.URL,
 		OrgID:             form.OrgID.Int32,
 		OrgOwnerID:        form.OrgOwnerID.Int32,
@@ -389,6 +391,7 @@ func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *d
 	}
 
 	event := &AuditLogForm{
+		Name:              updateRow.OldName,
 		URL:               updateRow.OldURL,
 		OrgID:             form.OrgID.Int32,
 		OrgOwnerID:        form.OrgOwnerID.Int32,

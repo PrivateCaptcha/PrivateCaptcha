@@ -52,7 +52,7 @@ upd AS (
     RETURNING *
 )
 SELECT
-    upd.*, 
+    upd.*,
     old.name AS old_name,
     old.url AS old_url,
     old.active AS old_active,

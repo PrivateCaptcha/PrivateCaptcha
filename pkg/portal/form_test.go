@@ -510,6 +510,14 @@ func TestPutFormCannotEdit(t *testing.T) {
 	if renderCtx.ErrorMessage == "" {
 		t.Fatal("expected permission error message")
 	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 || forms[0].ID != form.ID {
+		t.Fatal("form state changed despite permission failure")
+	}
 }
 
 func TestMoveForm(t *testing.T) {
