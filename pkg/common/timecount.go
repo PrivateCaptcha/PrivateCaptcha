@@ -65,3 +65,20 @@ type UserReportStats struct {
 	TotalCurrentVerifies uint64
 	TotalPrevVerifies    uint64
 }
+
+type UserReportFormStat struct {
+	FormID             int32
+	OrgID              int32
+	CurrentSubmissions uint64
+	PrevSubmissions    uint64
+	CurrentErrors      uint64
+	PrevErrors         uint64
+}
+
+type UserFormsReportStats struct {
+	Forms                   []*UserReportFormStat
+	TotalCurrentSubmissions uint64
+	TotalPrevSubmissions    uint64
+	TotalCurrentErrors      uint64
+	TotalPrevErrors         uint64
+}

@@ -2,6 +2,7 @@ package email
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,76 @@ func TestTruncate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestUsageReportTemplateFormStatsSection(t *testing.T) {
+	ctx := t.Context()
+	data := struct {
+		UsageReportContext
+		PortalURL   string
+		CurrentYear int
+		CDNURL      string
+	}{
+		UsageReportContext: UsageReportContext{
+			Period:                 "weekly",
+			PeriodDate:             time.Now().Format("02 Jan 2006"),
+			TotalRequests:          100,
+			TotalVerifies:          50,
+			RequestsChange:         10,
+			VerifiesChange:         5,
+			VerificationRate:       50,
+			VerificationRateChange: 2,
+			DashboardPath:          "settings?tab=usage",
+		},
+		PortalURL:   "https://portal.privatecaptcha.com",
+		CurrentYear: time.Now().Year(),
+		CDNURL:      "https://cdn.privatecaptcha.com",
+	}
+
+	t.Run("HiddenWhenZero", func(t *testing.T) {
+		html, err := UsageReportTemplate.RenderHTML(ctx, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, err := UsageReportTemplate.RenderText(ctx, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if strings.Contains(html, "Total Submissions") {
+			t.Fatal("did not expect form stats section in html when form totals are zero")
+		}
+		if strings.Contains(text, "Total Submissions") {
+			t.Fatal("did not expect form stats section in text when form totals are zero")
+		}
+	})
+
+	t.Run("ShownWhenPresent", func(t *testing.T) {
+		data.TotalFormSubmissions = 20
+		data.PrevFormSubmissions = 10
+		data.TotalFormErrors = 4
+		data.PrevFormErrors = 2
+		data.FormSubmissionsChange = 100
+		data.FormErrorsChange = 100
+		data.FormErrorRate = 20
+		data.FormErrorRateChange = 0
+
+		html, err := UsageReportTemplate.RenderHTML(ctx, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text, err := UsageReportTemplate.RenderText(ctx, data)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(html, "Total Submissions") {
+			t.Fatal("expected form stats section in html when form totals are present")
+		}
+		if !strings.Contains(text, "Total Submissions") {
+			t.Fatal("expected form stats section in text when form totals are present")
+		}
+	})
 }
 
 func TestEmailTemplates(t *testing.T) {

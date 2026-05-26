@@ -464,6 +464,86 @@ func (ts *TimeSeriesDB) RetrieveMonthlyReportStats(ctx context.Context, userID i
 	return stats, nil
 }
 
+func (ts *TimeSeriesDB) retrieveFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time, table string) (*common.UserFormsReportStats, error) {
+	fromStr := from.Format(time.DateTime)
+	midStr := mid.Format(time.DateTime)
+	toStr := to.Format(time.DateTime)
+	userIDStr := strconv.Itoa(int(userID))
+
+	query := `SELECT form_id, org_id,
+    sumIf(success_count + failure_count, timestamp >= {mid_ts:DateTime}) as current_submissions,
+    sumIf(success_count + failure_count, timestamp < {mid_ts:DateTime}) as prev_submissions,
+    sumIf(failure_count, timestamp >= {mid_ts:DateTime}) as current_errors,
+    sumIf(failure_count, timestamp < {mid_ts:DateTime}) as prev_errors
+FROM %s FINAL
+WHERE user_id = {user_id:UInt32} AND timestamp >= {from_ts:DateTime} AND timestamp < {to_ts:DateTime}
+GROUP BY form_id, org_id
+ORDER BY current_submissions DESC`
+
+	rows, err := ts.Clickhouse.Query(fmt.Sprintf(query, table),
+		clickhouse.Named("user_id", userIDStr),
+		clickhouse.Named("from_ts", fromStr),
+		clickhouse.Named("mid_ts", midStr),
+		clickhouse.Named("to_ts", toStr))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to execute forms report stats query", "userID", userID, "table", table, common.ErrAttr(err))
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	stats := &common.UserFormsReportStats{}
+
+	for rows.Next() {
+		fs := &common.UserReportFormStat{}
+		if err := rows.Scan(&fs.FormID, &fs.OrgID, &fs.CurrentSubmissions, &fs.PrevSubmissions, &fs.CurrentErrors, &fs.PrevErrors); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from forms report stats query", common.ErrAttr(err))
+			return nil, err
+		}
+		stats.Forms = append(stats.Forms, fs)
+		stats.TotalCurrentSubmissions += fs.CurrentSubmissions
+		stats.TotalPrevSubmissions += fs.PrevSubmissions
+		stats.TotalCurrentErrors += fs.CurrentErrors
+		stats.TotalPrevErrors += fs.PrevErrors
+	}
+
+	return stats, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveWeeklyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserFormsReportStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	stats, err := ts.retrieveFormsReportStats(ctx, userID, from, mid, to, FormSubmitLogTableName1d)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched weekly forms report stats", "userID", userID, "forms", len(stats.Forms),
+		"currentSubmissions", stats.TotalCurrentSubmissions, "prevSubmissions", stats.TotalPrevSubmissions,
+		"currentErrors", stats.TotalCurrentErrors, "prevErrors", stats.TotalPrevErrors)
+
+	return stats, nil
+}
+
+func (ts *TimeSeriesDB) RetrieveMonthlyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserFormsReportStats, error) {
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	stats, err := ts.retrieveFormsReportStats(ctx, userID, from, mid, to, FormSubmitLogTableName1d)
+	if err != nil {
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched monthly forms report stats", "userID", userID, "forms", len(stats.Forms),
+		"currentSubmissions", stats.TotalCurrentSubmissions, "prevSubmissions", stats.TotalPrevSubmissions,
+		"currentErrors", stats.TotalCurrentErrors, "prevErrors", stats.TotalPrevErrors)
+
+	return stats, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -1097,6 +1177,80 @@ func (m *MemoryTimeSeries) RetrieveMonthlyReportStats(ctx context.Context, userI
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.memoryReportStats(userID, from, mid, to), nil
+}
+
+func (m *MemoryTimeSeries) memoryFormsReportStats(userID int32, from, mid, to time.Time) *common.UserFormsReportStats {
+	type formKey struct {
+		FormID int32
+		OrgID  int32
+	}
+
+	type formCounts struct {
+		CurrentSubmissions uint64
+		PrevSubmissions    uint64
+		CurrentErrors      uint64
+		PrevErrors         uint64
+	}
+
+	counts := make(map[formKey]*formCounts)
+
+	for _, log := range m.formSubmitLogs {
+		if log.UserID != userID || log.Timestamp.Before(from) || !log.Timestamp.Before(to) {
+			continue
+		}
+
+		key := formKey{FormID: log.FormID, OrgID: log.OrgID}
+		if counts[key] == nil {
+			counts[key] = &formCounts{}
+		}
+
+		isCurrent := !log.Timestamp.Before(mid)
+		if isCurrent {
+			counts[key].CurrentSubmissions++
+			if log.Status != 0 {
+				counts[key].CurrentErrors++
+			}
+		} else {
+			counts[key].PrevSubmissions++
+			if log.Status != 0 {
+				counts[key].PrevErrors++
+			}
+		}
+	}
+
+	stats := &common.UserFormsReportStats{}
+	for key, c := range counts {
+		stats.Forms = append(stats.Forms, &common.UserReportFormStat{
+			FormID:             key.FormID,
+			OrgID:              key.OrgID,
+			CurrentSubmissions: c.CurrentSubmissions,
+			PrevSubmissions:    c.PrevSubmissions,
+			CurrentErrors:      c.CurrentErrors,
+			PrevErrors:         c.PrevErrors,
+		})
+		stats.TotalCurrentSubmissions += c.CurrentSubmissions
+		stats.TotalPrevSubmissions += c.PrevSubmissions
+		stats.TotalCurrentErrors += c.CurrentErrors
+		stats.TotalPrevErrors += c.PrevErrors
+	}
+
+	sort.Slice(stats.Forms, func(i, j int) bool {
+		return stats.Forms[i].CurrentSubmissions > stats.Forms[j].CurrentSubmissions
+	})
+
+	return stats
+}
+
+func (m *MemoryTimeSeries) RetrieveWeeklyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserFormsReportStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryFormsReportStats(userID, from, mid, to), nil
+}
+
+func (m *MemoryTimeSeries) RetrieveMonthlyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserFormsReportStats, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.memoryFormsReportStats(userID, from, mid, to), nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimePeriodStat, error) {

@@ -389,6 +389,24 @@ func seedVerifyLogs(t *testing.T, ts *db.MemoryTimeSeries, userID int32, propID,
 	}
 }
 
+func seedFormSubmitLogs(t *testing.T, ts *db.MemoryTimeSeries, userID int32, formID, orgID int32, timestamp time.Time, status int8, count int) {
+	t.Helper()
+	ctx := context.Background()
+	records := make([]*common.FormSubmitRecord, count)
+	for i := range records {
+		records[i] = &common.FormSubmitRecord{
+			UserID:    userID,
+			FormID:    formID,
+			OrgID:     orgID,
+			Timestamp: timestamp.Add(time.Duration(i) * time.Minute),
+			Status:    status,
+		}
+	}
+	if err := ts.WriteFormSubmitBatch(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBuildWeeklyReport(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -424,6 +442,10 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
+		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, mid, 0, 20)
+		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, mid, 1, 5)
+		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, from, 0, 10)
+		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, from, 1, 2)
 
 		result, err := newWeeklyReport(ts).BuildWeeklyReport(ctx, user.ID, from, mid, now)
 		if err != nil {
@@ -454,6 +476,27 @@ func TestBuildWeeklyReport(t *testing.T) {
 		if result.VerificationRate == 0 {
 			t.Error("expected non-zero VerificationRate")
 		}
+		if result.TotalFormSubmissions != 25 {
+			t.Errorf("expected TotalFormSubmissions=25, got %d", result.TotalFormSubmissions)
+		}
+		if result.PrevFormSubmissions != 12 {
+			t.Errorf("expected PrevFormSubmissions=12, got %d", result.PrevFormSubmissions)
+		}
+		if result.TotalFormErrors != 5 {
+			t.Errorf("expected TotalFormErrors=5, got %d", result.TotalFormErrors)
+		}
+		if result.PrevFormErrors != 2 {
+			t.Errorf("expected PrevFormErrors=2, got %d", result.PrevFormErrors)
+		}
+		if result.FormSubmissionsChange <= 0 {
+			t.Errorf("expected positive FormSubmissionsChange, got %f", result.FormSubmissionsChange)
+		}
+		if result.FormErrorsChange <= 0 {
+			t.Errorf("expected positive FormErrorsChange, got %f", result.FormErrorsChange)
+		}
+		if result.FormErrorRate <= 0 {
+			t.Errorf("expected positive FormErrorRate, got %f", result.FormErrorRate)
+		}
 	})
 
 	t.Run("NoData", func(t *testing.T) {
@@ -480,6 +523,18 @@ func TestBuildWeeklyReport(t *testing.T) {
 		}
 		if result.RequestsChange != 0 {
 			t.Errorf("expected RequestsChange=0, got %f", result.RequestsChange)
+		}
+		if result.TotalFormSubmissions != 0 {
+			t.Errorf("expected TotalFormSubmissions=0, got %d", result.TotalFormSubmissions)
+		}
+		if result.TotalFormErrors != 0 {
+			t.Errorf("expected TotalFormErrors=0, got %d", result.TotalFormErrors)
+		}
+		if result.PrevFormSubmissions != 0 {
+			t.Errorf("expected PrevFormSubmissions=0, got %d", result.PrevFormSubmissions)
+		}
+		if result.FormErrorRate != 0 {
+			t.Errorf("expected FormErrorRate=0, got %f", result.FormErrorRate)
 		}
 	})
 

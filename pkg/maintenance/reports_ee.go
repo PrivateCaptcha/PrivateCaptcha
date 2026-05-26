@@ -325,6 +325,15 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
+	formStats, err := j.TimeSeries.RetrieveWeeklyFormsReportStats(ctx, userID, from, mid, to)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve weekly forms report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	fillFormTotals(report, formStats)
+	fillFormChanges(report, formStats)
+
 	return report, nil
 }
 
@@ -383,12 +392,44 @@ func verificationRate(totalRequests, totalVerifies uint64) float64 {
 	return float64(totalVerifies) / float64(totalRequests) * 100
 }
 
+func formErrorRate(totalSubmissions, totalErrors uint64) float64 {
+	if totalSubmissions == 0 {
+		return 0
+	}
+	return float64(totalErrors) / float64(totalSubmissions) * 100
+}
+
 func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
 	report.RequestsChange = percentChange(report.TotalRequests, report.PrevRequests)
 	report.VerifiesChange = percentChange(report.TotalVerifies, report.PrevVerifies)
 	report.VerificationRateChange = percentChangeFloat(
 		report.VerificationRate,
 		verificationRate(report.PrevRequests, report.PrevVerifies),
+	)
+}
+
+func fillFormTotals(report *email.UsageReportContext, stats *common.UserFormsReportStats) {
+	if stats == nil {
+		return
+	}
+
+	report.TotalFormSubmissions = stats.TotalCurrentSubmissions
+	report.PrevFormSubmissions = stats.TotalPrevSubmissions
+	report.TotalFormErrors = stats.TotalCurrentErrors
+	report.PrevFormErrors = stats.TotalPrevErrors
+	report.FormErrorRate = formErrorRate(report.TotalFormSubmissions, report.TotalFormErrors)
+}
+
+func fillFormChanges(report *email.UsageReportContext, stats *common.UserFormsReportStats) {
+	if stats == nil {
+		return
+	}
+
+	report.FormSubmissionsChange = percentChange(report.TotalFormSubmissions, report.PrevFormSubmissions)
+	report.FormErrorsChange = percentChange(report.TotalFormErrors, report.PrevFormErrors)
+	report.FormErrorRateChange = percentChangeFloat(
+		report.FormErrorRate,
+		formErrorRate(report.PrevFormSubmissions, report.PrevFormErrors),
 	)
 }
 
