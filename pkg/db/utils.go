@@ -287,6 +287,10 @@ func formExternalIDFunc(f *dbgen.Form) string {
 	return UUIDToString(f.ExternalID)
 }
 
+func formIDFunc(f *dbgen.Form) int32 {
+	return f.ID
+}
+
 func QueryKeyPgInt(key CacheKey) (pgtype.Int4, error) {
 	return Int(key.IntValue), nil
 }

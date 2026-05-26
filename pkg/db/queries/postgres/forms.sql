@@ -6,6 +6,9 @@ RETURNING *;
 -- name: GetFormByID :one
 SELECT * FROM backend.forms WHERE id = $1;
 
+-- name: GetFormsByID :many
+SELECT * FROM backend.forms WHERE id = ANY($1::INT[]);
+
 -- name: GetFormsByExternalID :many
 SELECT * FROM backend.forms WHERE external_id = ANY($1::UUID[]);
 

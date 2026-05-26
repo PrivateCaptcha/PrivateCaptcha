@@ -430,6 +430,38 @@ func TestBuildWeeklyReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create property 2: %v", err)
 	}
+	form1, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "contact.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Contact Us",
+			URL:               "https://hooks.reports-test.org/contact",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create form 1: %v", err)
+	}
+	form2, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "support.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Support",
+			URL:               "https://hooks.reports-test.org/support",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create form 2: %v", err)
+	}
 
 	now := time.Date(2025, 3, 17, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, 0, -7)
@@ -442,10 +474,10 @@ func TestBuildWeeklyReport(t *testing.T) {
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 50)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 80)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 40)
-		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, mid, 0, 20)
-		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, mid, 1, 5)
-		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, from, 0, 10)
-		seedFormSubmitLogs(t, ts, user.ID, 1001, org.ID, from, 1, 2)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 0, 20)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 1, 5)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 0, 10)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 1, 2)
 
 		result, err := newWeeklyReport(ts).BuildWeeklyReport(ctx, user.ID, from, mid, now)
 		if err != nil {
@@ -688,6 +720,67 @@ func TestBuildWeeklyReport(t *testing.T) {
 		}
 		if result.VerificationRateChange >= 0 {
 			t.Errorf("expected negative VerificationRateChange, got %f", result.VerificationRateChange)
+		}
+	})
+
+	t.Run("TopForms", func(t *testing.T) {
+		ts := db.NewMemoryTimeSeries()
+
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 0, 100)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 0, 50)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, mid, 0, 30)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, from, 0, 60)
+		seedFormSubmitLogs(t, ts, user.ID, 999999, org.ID, mid, 0, 200)
+
+		result, err := newWeeklyReport(ts).BuildWeeklyReport(ctx, user.ID, from, mid, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(result.TopForms) != 2 {
+			t.Fatalf("expected 2 TopForms, got %d", len(result.TopForms))
+		}
+
+		if result.TopForms[0].Count != 100 {
+			t.Errorf("expected first form count=100, got %d", result.TopForms[0].Count)
+		}
+		if result.TopForms[0].Name != form1.Name {
+			t.Errorf("expected first form name=%q, got %q", form1.Name, result.TopForms[0].Name)
+		}
+		expectedLink := reportPortalURL + "/org/" + server.IDHasher.Encrypt(int(org.ID)) + "/form/" + server.IDHasher.Encrypt(int(form1.ID))
+		if result.TopForms[0].Link != expectedLink {
+			t.Errorf("expected first form link=%q, got %q", expectedLink, result.TopForms[0].Link)
+		}
+		if result.TopForms[0].Alternate {
+			t.Error("expected first form row to be unstriped")
+		}
+		if !result.TopForms[1].Alternate {
+			t.Error("expected second form row to be striped")
+		}
+	})
+
+	t.Run("FormChangeDirection", func(t *testing.T) {
+		ts := db.NewMemoryTimeSeries()
+
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 0, 100)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 0, 50)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, mid, 0, 30)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, from, 0, 60)
+
+		result, err := newWeeklyReport(ts).BuildWeeklyReport(ctx, user.ID, from, mid, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(result.TopForms) != 2 {
+			t.Fatalf("expected 2 TopForms, got %d", len(result.TopForms))
+		}
+
+		if result.TopForms[0].Change <= 0 {
+			t.Errorf("expected positive Change for increasing form, got %f", result.TopForms[0].Change)
+		}
+		if result.TopForms[1].Change >= 0 {
+			t.Errorf("expected negative Change for decreasing form, got %f", result.TopForms[1].Change)
 		}
 	})
 }
