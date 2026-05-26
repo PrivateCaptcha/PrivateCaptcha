@@ -35,7 +35,10 @@ var (
 	templates = loadTemplates()
 )
 
-const stubPropertyURL = "https://portal.privatecaptcha.com/org/abc/property/123"
+const (
+	stubPropertyURL = "https://portal.privatecaptcha.com/org/abc/property/123"
+	stubFormURL     = "https://portal.privatecaptcha.com/org/abc/form/123"
+)
 
 func homepage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -110,12 +113,24 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			DashboardPath:          "settings?tab=usage",
 			VerificationRate:       66.8,
 			AccountLimit:           1000000,
+			TotalFormSubmissions:   1140,
+			TotalFormErrors:        124,
+			PrevFormSubmissions:    970,
+			PrevFormErrors:         140,
+			FormSubmissionsChange:  17.5,
+			FormErrorsChange:       -11.4,
+			FormErrorRate:          10.9,
+			FormErrorRateChange:    -24.1,
 			TopProperties: []*email.PropertyStat{
 				{Name: "Main Site with extremely long name", Domain: "*.example.com", Link: stubPropertyURL, Count: 5200, Percent: 41.8, Change: 8.3},
 				{Name: "Blog", Domain: "blog.example.com", Link: stubPropertyURL, Count: 3100, Percent: 24.9, Change: 6.9, Alternate: true},
 				{Name: "Shop", Domain: "shop.example.com", Link: stubPropertyURL, Count: 2050, Percent: 16.5, Change: -10.9},
 				{Name: "Forum", Domain: "suddomain.app.forum.example.com", Link: stubPropertyURL, Count: 1300, Percent: 10.4, Change: 62.5, Alternate: true},
 				{Name: "Docs", Domain: "docs.example.com", Link: stubPropertyURL, Count: 800, Percent: 6.4, Change: 100.0},
+			},
+			TopForms: []*email.FormStat{
+				{Name: "Contact", URL: "https://hooks.example.com/contact", Link: stubFormURL, Count: 520, Percent: 45.6, Change: 11.2},
+				{Name: "Support", URL: "https://hooks.example.com/support", Link: stubFormURL, Count: 380, Percent: 33.3, Change: -5.8, Alternate: true},
 			},
 		},
 		UserName:    "John Doe",

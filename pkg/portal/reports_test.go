@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 )
 
@@ -54,9 +56,25 @@ func TestScheduleWeeklyReport(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("failed to create new account: %v", err)
+	}
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "weekly-schedule.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Weekly Schedule Form",
+			URL:               "https://hooks.reports-test.org/weekly-schedule",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create weekly report form: %v", err)
 	}
 
 	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
@@ -71,6 +89,10 @@ func TestScheduleWeeklyReport(t *testing.T) {
 
 	// Monday so weekly reports trigger
 	tnow := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -7), 0, 20)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -7), 1, 5)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -14), 0, 10)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -14), 1, 2)
 
 	params := &maintenance.ScheduleReportsParams{
 		UsersLimit: 50,
@@ -91,15 +113,18 @@ func TestScheduleWeeklyReport(t *testing.T) {
 	year, week := tnow.ISOWeek()
 	expectedRef := fmt.Sprintf("%s%d/%d/%d", maintenance.WeeklyReferencePrefix, user.ID, year, week)
 
-	var found bool
-	for _, n := range notifications {
-		if n.UserNotification.UserID.Int32 == user.ID && n.UserNotification.ReferenceID == expectedRef {
-			found = true
-			break
-		}
+	payload := usageReportPayload(t, notifications, user.ID, expectedRef)
+	if payload.TotalFormSubmissions != 25 {
+		t.Errorf("expected TotalFormSubmissions=25, got %d", payload.TotalFormSubmissions)
 	}
-	if !found {
-		t.Errorf("weekly report notification not found for user %d with reference %q", user.ID, expectedRef)
+	if payload.TotalFormErrors != 5 {
+		t.Errorf("expected TotalFormErrors=5, got %d", payload.TotalFormErrors)
+	}
+	if len(payload.TopForms) != 1 {
+		t.Fatalf("expected 1 TopForms entry, got %d", len(payload.TopForms))
+	}
+	if payload.TopForms[0].Name != form.Name {
+		t.Errorf("expected top form name=%q, got %q", form.Name, payload.TopForms[0].Name)
 	}
 }
 
@@ -112,9 +137,25 @@ func TestScheduleMonthlyReport(t *testing.T) {
 
 	ctx := common.TraceContext(t.Context(), t.Name())
 
-	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("failed to create new account: %v", err)
+	}
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "monthly-schedule.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Monthly Schedule Form",
+			URL:               "https://hooks.reports-test.org/monthly-schedule",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create monthly report form: %v", err)
 	}
 
 	_, _, err = store.Impl().UpsertUserSettings(ctx, &dbgen.UpsertUserSettingsParams{
@@ -129,6 +170,10 @@ func TestScheduleMonthlyReport(t *testing.T) {
 
 	// 1st of month so monthly reports trigger
 	tnow := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -1, 0), 0, 40)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -1, 0), 1, 10)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -2, 0), 0, 20)
+	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -2, 0), 1, 5)
 
 	params := &maintenance.ScheduleReportsParams{
 		UsersLimit: 50,
@@ -148,15 +193,18 @@ func TestScheduleMonthlyReport(t *testing.T) {
 
 	expectedRef := fmt.Sprintf("%s%d/%d/%d", maintenance.MonthlyReferencePrefix, user.ID, tnow.Year(), int(tnow.Month()))
 
-	var found bool
-	for _, n := range notifications {
-		if n.UserNotification.UserID.Int32 == user.ID && n.UserNotification.ReferenceID == expectedRef {
-			found = true
-			break
-		}
+	payload := usageReportPayload(t, notifications, user.ID, expectedRef)
+	if payload.TotalFormSubmissions != 50 {
+		t.Errorf("expected TotalFormSubmissions=50, got %d", payload.TotalFormSubmissions)
 	}
-	if !found {
-		t.Errorf("monthly report notification not found for user %d with reference %q", user.ID, expectedRef)
+	if payload.TotalFormErrors != 10 {
+		t.Errorf("expected TotalFormErrors=10, got %d", payload.TotalFormErrors)
+	}
+	if len(payload.TopForms) != 1 {
+		t.Fatalf("expected 1 TopForms entry, got %d", len(payload.TopForms))
+	}
+	if payload.TopForms[0].Name != form.Name {
+		t.Errorf("expected top form name=%q, got %q", form.Name, payload.TopForms[0].Name)
 	}
 }
 
@@ -405,6 +453,42 @@ func seedFormSubmitLogs(t *testing.T, ts *db.MemoryTimeSeries, userID int32, for
 	if err := ts.WriteFormSubmitBatch(ctx, records); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func seedFormSubmitLogsToStore(t *testing.T, ts common.TimeSeriesStore, userID int32, formID, orgID int32, timestamp time.Time, status int8, count int) {
+	t.Helper()
+	ctx := context.Background()
+	records := make([]*common.FormSubmitRecord, count)
+	for i := range records {
+		records[i] = &common.FormSubmitRecord{
+			UserID:    userID,
+			FormID:    formID,
+			OrgID:     orgID,
+			Timestamp: timestamp.Add(time.Duration(i) * time.Minute),
+			Status:    status,
+		}
+	}
+	if err := ts.WriteFormSubmitBatch(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func usageReportPayload(t *testing.T, notifications []*dbgen.GetPendingUserNotificationsRow, userID int32, referenceID string) *email.UsageReportContext {
+	t.Helper()
+	for _, n := range notifications {
+		if n.UserNotification.UserID.Int32 != userID || n.UserNotification.ReferenceID != referenceID {
+			continue
+		}
+
+		payload := &email.UsageReportContext{}
+		if err := json.Unmarshal(n.UserNotification.Payload, payload); err != nil {
+			t.Fatalf("failed to unmarshal notification payload: %v", err)
+		}
+		return payload
+	}
+
+	t.Fatalf("notification not found for user %d with reference %q", userID, referenceID)
+	return nil
 }
 
 func TestBuildWeeklyReport(t *testing.T) {
