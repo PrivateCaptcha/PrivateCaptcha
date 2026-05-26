@@ -396,7 +396,7 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	values.Set(common.ParamName, form.Name+" updated")
 	values.Set(common.ParamURL, "https://hooks.example.com/submit/settings-updated")
-	values.Set(common.ParamRetryRequestCount, "3")
+	values.Set(common.ParamRetryRequestCount, "on")
 	values.Set(common.ParamRequestsPerMinute, "24")
 	values.Set(common.ParamActive, "true")
 
@@ -428,7 +428,7 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	if renderCtx.Form.URL != "https://hooks.example.com/submit/settings-updated" {
 		t.Fatal("expected updated form URL in render context")
 	}
-	if renderCtx.Form.RetryRequestCount != 3 {
+	if renderCtx.Form.RetryRequestCount != 1 {
 		t.Fatal("expected updated retry count in render context")
 	}
 	if renderCtx.Form.RequestsPerMinute != 24 {
@@ -484,7 +484,7 @@ func TestPutFormCannotEdit(t *testing.T) {
 	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
 	values.Set(common.ParamName, form.Name+" updated")
 	values.Set(common.ParamURL, "https://hooks.example.com/submit/member-edit")
-	values.Set(common.ParamRetryRequestCount, "1")
+	values.Set(common.ParamRetryRequestCount, "on")
 	values.Set(common.ParamRequestsPerMinute, "10")
 	values.Set(common.ParamActive, "true")
 

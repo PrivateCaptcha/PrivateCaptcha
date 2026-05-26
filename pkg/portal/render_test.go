@@ -868,6 +868,8 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 		CsrfRenderContext
 		ErrorMessage   string
 		SuccessMessage string
+		NameError      string
+		URLError       string
 		Form           *struct {
 			ID                string
 			OrgID             string
@@ -917,7 +919,7 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 	}
 
 	body := buf.String()
-	for _, label := range []string{"Active", "Retry count", "Requests per minute"} {
+	for _, label := range []string{"Active", "Retry", "Requests per minute"} {
 		if !strings.Contains(body, label) {
 			t.Fatalf("expected settings to contain %q", label)
 		}

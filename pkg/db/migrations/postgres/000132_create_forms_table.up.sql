@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS backend.forms(
     active BOOLEAN NOT NULL DEFAULT TRUE,
     requests_per_second FLOAT NOT NULL DEFAULT 1,
     requests_burst INTEGER NOT NULL DEFAULT 5,
-    retry_request_count INTEGER NOT NULL DEFAULT 0,
+    retry_request_count SMALLINT NOT NULL DEFAULT 0,
     method backend.form_method NOT NULL DEFAULT 'post'
 );
 

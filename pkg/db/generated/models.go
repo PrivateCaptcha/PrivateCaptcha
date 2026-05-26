@@ -553,7 +553,7 @@ type Form struct {
 	Fields            []byte             `db:"fields" json:"fields"`
 	RequestsPerSecond float64            `db:"requests_per_second" json:"requests_per_second"`
 	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
-	RetryRequestCount int32              `db:"retry_request_count" json:"retry_request_count"`
+	RetryRequestCount int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod         `db:"method" json:"method"`
 	Enabled           bool               `db:"enabled" json:"enabled"`
 	Active            bool               `db:"active" json:"active"`

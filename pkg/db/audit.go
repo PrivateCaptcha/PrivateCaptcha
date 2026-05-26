@@ -354,7 +354,7 @@ type AuditLogForm struct {
 	Active            bool    `json:"active"`
 	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
 	RequestsBurst     int32   `json:"requests_burst,omitempty"`
-	RetryRequestCount int32   `json:"retry_request_count,omitempty"`
+	RetryRequestCount int16   `json:"retry_request_count,omitempty"`
 	Method            string  `json:"method,omitempty"`
 }
 

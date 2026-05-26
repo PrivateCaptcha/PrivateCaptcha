@@ -28,7 +28,7 @@ type CreateFormParams struct {
 	Enabled           bool        `db:"enabled" json:"enabled"`
 	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
 	RequestsBurst     int32       `db:"requests_burst" json:"requests_burst"`
-	RetryRequestCount int32       `db:"retry_request_count" json:"retry_request_count"`
+	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod  `db:"method" json:"method"`
 }
 
@@ -421,7 +421,7 @@ type UpdateFormParams struct {
 	Name              string      `db:"name" json:"name"`
 	URL               string      `db:"url" json:"url"`
 	Active            bool        `db:"active" json:"active"`
-	RetryRequestCount int32       `db:"retry_request_count" json:"retry_request_count"`
+	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
@@ -444,12 +444,12 @@ type UpdateFormRow struct {
 	Active               bool               `db:"active" json:"active"`
 	RequestsPerSecond    float64            `db:"requests_per_second" json:"requests_per_second"`
 	RequestsBurst        int32              `db:"requests_burst" json:"requests_burst"`
-	RetryRequestCount    int32              `db:"retry_request_count" json:"retry_request_count"`
+	RetryRequestCount    int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method               FormMethod         `db:"method" json:"method"`
 	OldName              string             `db:"old_name" json:"old_name"`
 	OldURL               string             `db:"old_url" json:"old_url"`
 	OldActive            bool               `db:"old_active" json:"old_active"`
-	OldRetryRequestCount int32              `db:"old_retry_request_count" json:"old_retry_request_count"`
+	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
 	OldRequestsPerSecond float64            `db:"old_requests_per_second" json:"old_requests_per_second"`
 }
 
