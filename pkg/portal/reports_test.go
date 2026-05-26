@@ -803,6 +803,38 @@ func TestBuildMonthlyReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create property: %v", err)
 	}
+	form1, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "monthly-contact.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Monthly Contact",
+			URL:               "https://hooks.reports-test.org/monthly-contact",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create monthly form 1: %v", err)
+	}
+	form2, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "monthly-support.reports-test.org"),
+		&dbgen.CreateFormParams{
+			Name:              "Monthly Support",
+			URL:               "https://hooks.reports-test.org/monthly-support",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org)
+	if err != nil {
+		t.Fatalf("failed to create monthly form 2: %v", err)
+	}
 
 	now := time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC)
 	mid := now.AddDate(0, -1, 0)
@@ -815,6 +847,10 @@ func TestBuildMonthlyReport(t *testing.T) {
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, mid, 100)
 		seedTimeSeries(t, ts, user.ID, prop1.ID, org.ID, from, 150)
 		seedVerifyLogs(t, ts, user.ID, prop1.ID, org.ID, from, 80)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 0, 40)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 1, 10)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 0, 20)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 1, 5)
 
 		result, err := newMonthlyReport(ts).BuildMonthlyReport(ctx, user.ID, from, mid, now)
 		if err != nil {
@@ -830,6 +866,18 @@ func TestBuildMonthlyReport(t *testing.T) {
 		if result.PrevRequests != 150 {
 			t.Errorf("expected PrevRequests=150, got %d", result.PrevRequests)
 		}
+		if result.TotalFormSubmissions != 50 {
+			t.Errorf("expected TotalFormSubmissions=50, got %d", result.TotalFormSubmissions)
+		}
+		if result.PrevFormSubmissions != 25 {
+			t.Errorf("expected PrevFormSubmissions=25, got %d", result.PrevFormSubmissions)
+		}
+		if result.TotalFormErrors != 10 {
+			t.Errorf("expected TotalFormErrors=10, got %d", result.TotalFormErrors)
+		}
+		if result.PrevFormErrors != 5 {
+			t.Errorf("expected PrevFormErrors=5, got %d", result.PrevFormErrors)
+		}
 	})
 
 	t.Run("NoData", func(t *testing.T) {
@@ -844,6 +892,12 @@ func TestBuildMonthlyReport(t *testing.T) {
 		}
 		if result.Period != "monthly" {
 			t.Errorf("expected period 'monthly', got %q", result.Period)
+		}
+		if result.TotalFormSubmissions != 0 {
+			t.Errorf("expected TotalFormSubmissions=0, got %d", result.TotalFormSubmissions)
+		}
+		if len(result.TopForms) != 0 {
+			t.Errorf("expected no TopForms, got %d", len(result.TopForms))
 		}
 	})
 
@@ -865,6 +919,33 @@ func TestBuildMonthlyReport(t *testing.T) {
 		}
 		if result.RequestsChange != 100 {
 			t.Errorf("expected RequestsChange=100, got %f", result.RequestsChange)
+		}
+	})
+
+	t.Run("TopForms", func(t *testing.T) {
+		ts := db.NewMemoryTimeSeries()
+
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, mid, 0, 80)
+		seedFormSubmitLogs(t, ts, user.ID, form1.ID, org.ID, from, 0, 40)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, mid, 0, 30)
+		seedFormSubmitLogs(t, ts, user.ID, form2.ID, org.ID, from, 0, 50)
+
+		result, err := newMonthlyReport(ts).BuildMonthlyReport(ctx, user.ID, from, mid, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if len(result.TopForms) != 2 {
+			t.Fatalf("expected 2 TopForms, got %d", len(result.TopForms))
+		}
+		if result.TopForms[0].Count != 80 {
+			t.Errorf("expected first form count=80, got %d", result.TopForms[0].Count)
+		}
+		if result.TopForms[0].Change <= 0 {
+			t.Errorf("expected positive Change for increasing form, got %f", result.TopForms[0].Change)
+		}
+		if result.TopForms[1].Change >= 0 {
+			t.Errorf("expected negative Change for decreasing form, got %f", result.TopForms[1].Change)
 		}
 	})
 }

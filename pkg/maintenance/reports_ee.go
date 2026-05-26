@@ -355,6 +355,16 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
+	formStats, err := j.TimeSeries.RetrieveMonthlyFormsReportStats(ctx, userID, from, mid, to)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve monthly forms report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	fillFormTotals(report, formStats)
+	fillFormChanges(report, formStats)
+	fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
+
 	return report, nil
 }
 
