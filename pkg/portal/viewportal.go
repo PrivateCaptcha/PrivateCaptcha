@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	randv2 "math/rand/v2"
+
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -49,19 +51,22 @@ func viewStubAuditLogs() []*UserAuditLog {
 		dbgen.AuditLogActionCreate, dbgen.AuditLogActionUpdate,
 		dbgen.AuditLogActionDelete, dbgen.AuditLogActionAccess, dbgen.AuditLogActionLogin,
 	}
-	tables := []string{"properties", "organizations", "api_keys", "users", "org_users"}
+	tables := []string{"properties", "organizations", "api_keys", "users", "org_users", "forms"}
 	sources := []dbgen.AuditLogSource{dbgen.AuditLogSourcePortal, dbgen.AuditLogSourceApi}
 
 	result := make([]*UserAuditLog, 0, len(actions))
-	for i, action := range actions {
+	for i, table := range tables {
 		result = append(result, &UserAuditLog{
-			UserName: "Jane Doe", UserEmail: "jane@example.com",
-			Action: string(action), Source: string(sources[i%len(sources)]),
-			Property: "Main Site", Resource: "example.com",
-			TableName: tables[i%len(tables)],
+			UserName:  "Jane Doe",
+			UserEmail: "jane@example.com",
+			Action:    string(actions[randv2.IntN(len(actions))]),
+			Source:    string(sources[randv2.IntN(len(sources))]),
+			Property:  "Main Site", Resource: "example.com",
+			TableName: table,
 			Time:      time.Now().Add(-time.Duration(i*30) * time.Minute).Format(auditLogTimeFormat),
 		})
 	}
+
 	return result
 }
 

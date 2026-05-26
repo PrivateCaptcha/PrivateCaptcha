@@ -359,6 +359,7 @@ func init() {
 	gob.Register([]*common.OrgTimeCount{})
 	gob.Register([]*common.TimePeriodStat{})
 	gob.Register([]*common.FormSubmitStat{})
+	gob.Register([]*dbgen.GetFormAuditLogsRow{})
 }
 
 func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {
