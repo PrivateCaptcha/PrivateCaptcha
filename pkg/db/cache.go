@@ -269,6 +269,7 @@ const (
 	formByExternalIDCacheKeyPrefix
 	formCacheKeyPrefix
 	formStatsCacheKeyPrefix
+	formAuditLogsCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -320,6 +321,7 @@ func init() {
 	cachePrefixToStrings[formByExternalIDCacheKeyPrefix] = "formExternalID/"
 	cachePrefixToStrings[formCacheKeyPrefix] = "form/"
 	cachePrefixToStrings[formStatsCacheKeyPrefix] = "formStats/"
+	cachePrefixToStrings[formAuditLogsCacheKeyPrefix] = "formAuditLogs/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -507,4 +509,7 @@ func FormByExternalIDCacheKey(externalID string) CacheKey {
 }
 func formByIDCacheKey(formID int32) CacheKey {
 	return Int32CacheKey(formCacheKeyPrefix, formID)
+}
+func formAuditLogsCacheKey(propID int32) CacheKey {
+	return CacheKey{Prefix: formAuditLogsCacheKeyPrefix, IntValue: propID}
 }

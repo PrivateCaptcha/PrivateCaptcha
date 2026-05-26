@@ -36,6 +36,15 @@ ORDER BY a.created_at DESC
 OFFSET $3
 LIMIT $4;
 
+-- name: GetFormAuditLogs :many
+SELECT sqlc.embed(a), u.name, u.email
+FROM backend.audit_logs a
+LEFT JOIN backend.users u ON u.id = a.user_id
+WHERE a.entity_table = 'forms' AND a.entity_id = $1 AND a.created_at >= $2
+ORDER BY a.created_at DESC
+OFFSET $3
+LIMIT $4;
+
 
 -- name: GetOrgAuditLogs :many
 SELECT sqlc.embed(a), u.name, u.email

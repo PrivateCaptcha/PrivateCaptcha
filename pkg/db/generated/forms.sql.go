@@ -28,7 +28,7 @@ type CreateFormParams struct {
 	Enabled           bool        `db:"enabled" json:"enabled"`
 	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
 	RequestsBurst     int32       `db:"requests_burst" json:"requests_burst"`
-	RetryRequestCount int32       `db:"retry_request_count" json:"retry_request_count"`
+	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod  `db:"method" json:"method"`
 }
 
@@ -314,4 +314,181 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveForm = `-- name: MoveForm :one
+UPDATE backend.forms
+SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE id = $1
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+`
+
+type MoveFormParams struct {
+	ID         int32       `db:"id" json:"id"`
+	OrgID      pgtype.Int4 `db:"org_id" json:"org_id"`
+	OrgOwnerID pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+}
+
+func (q *Queries) MoveForm(ctx context.Context, arg *MoveFormParams) (*Form, error) {
+	row := q.db.QueryRow(ctx, moveForm, arg.ID, arg.OrgID, arg.OrgOwnerID)
+	var i Form
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.Active,
+		&i.RequestsPerSecond,
+		&i.RequestsBurst,
+		&i.RetryRequestCount,
+		&i.Method,
+	)
+	return &i, err
+}
+
+const softDeleteForm = `-- name: SoftDeleteForm :one
+UPDATE backend.forms
+SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE id = $1
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+`
+
+func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
+	row := q.db.QueryRow(ctx, softDeleteForm, id)
+	var i Form
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.Active,
+		&i.RequestsPerSecond,
+		&i.RequestsBurst,
+		&i.RetryRequestCount,
+		&i.Method,
+	)
+	return &i, err
+}
+
+const updateForm = `-- name: UpdateForm :one
+WITH old AS (
+    SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms f
+    WHERE f.id = $1 AND (f.creator_id = $7 OR f.org_owner_id = $7) AND (f.org_id = $8 OR $8 IS NULL) AND f.enabled = TRUE
+    FOR UPDATE
+),
+upd AS (
+    UPDATE backend.forms f
+    SET name = $2,
+        url = $3,
+        active = $4,
+        retry_request_count = $5,
+        requests_per_second = $6,
+        updated_at = NOW()
+    WHERE f.id = (SELECT id FROM old)
+    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+)
+SELECT
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_second, upd.requests_burst, upd.retry_request_count, upd.method,
+    old.name AS old_name,
+    old.url AS old_url,
+    old.active AS old_active,
+    old.retry_request_count AS old_retry_request_count,
+    old.requests_per_second AS old_requests_per_second
+FROM upd
+CROSS JOIN old
+`
+
+type UpdateFormParams struct {
+	ID                int32       `db:"id" json:"id"`
+	Name              string      `db:"name" json:"name"`
+	URL               string      `db:"url" json:"url"`
+	Active            bool        `db:"active" json:"active"`
+	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
+	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
+	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
+	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
+}
+
+type UpdateFormRow struct {
+	ID                   int32              `db:"id" json:"id"`
+	Name                 string             `db:"name" json:"name"`
+	ExternalID           pgtype.UUID        `db:"external_id" json:"external_id"`
+	OrgID                pgtype.Int4        `db:"org_id" json:"org_id"`
+	CreatorID            pgtype.Int4        `db:"creator_id" json:"creator_id"`
+	OrgOwnerID           pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
+	URL                  string             `db:"url" json:"url"`
+	CreatedAt            pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt            pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	PropertyID           int32              `db:"property_id" json:"property_id"`
+	Fields               []byte             `db:"fields" json:"fields"`
+	Enabled              bool               `db:"enabled" json:"enabled"`
+	Active               bool               `db:"active" json:"active"`
+	RequestsPerSecond    float64            `db:"requests_per_second" json:"requests_per_second"`
+	RequestsBurst        int32              `db:"requests_burst" json:"requests_burst"`
+	RetryRequestCount    int16              `db:"retry_request_count" json:"retry_request_count"`
+	Method               FormMethod         `db:"method" json:"method"`
+	OldName              string             `db:"old_name" json:"old_name"`
+	OldURL               string             `db:"old_url" json:"old_url"`
+	OldActive            bool               `db:"old_active" json:"old_active"`
+	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
+	OldRequestsPerSecond float64            `db:"old_requests_per_second" json:"old_requests_per_second"`
+}
+
+func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*UpdateFormRow, error) {
+	row := q.db.QueryRow(ctx, updateForm,
+		arg.ID,
+		arg.Name,
+		arg.URL,
+		arg.Active,
+		arg.RetryRequestCount,
+		arg.RequestsPerSecond,
+		arg.CreatorID,
+		arg.OrgID,
+	)
+	var i UpdateFormRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.Active,
+		&i.RequestsPerSecond,
+		&i.RequestsBurst,
+		&i.RetryRequestCount,
+		&i.Method,
+		&i.OldName,
+		&i.OldURL,
+		&i.OldActive,
+		&i.OldRetryRequestCount,
+		&i.OldRequestsPerSecond,
+	)
+	return &i, err
 }

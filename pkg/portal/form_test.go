@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -236,6 +237,694 @@ func TestPostNewOrgForm(t *testing.T) {
 	expectedFormURL := server.APIURL + "/form/" + formGUID
 	if !strings.Contains(w.Body.String(), expectedFormURL) {
 		t.Fatal("expected integration step to include public form endpoint")
+	}
+}
+
+func TestGetFormDashboard(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "dashboard.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/dashboard",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s", orgID, formID), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	for _, label := range []string{"Reports", "Integrations", "Settings", "Audit logs"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected %q tab in dashboard", label)
+		}
+	}
+	if strings.Contains(body, "Rules") {
+		t.Fatal("did not expect rules tab in form dashboard")
+	}
+	if !strings.Contains(body, "Form Requests") {
+		t.Fatal("expected reports content in form dashboard")
+	}
+}
+
+func TestGetFormDashboardIntegrationsTab(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "integrations.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/integrations",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", orgID, formID, common.IntegrationsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "https://api.privatecaptcha.com/form/"+db.UUIDToString(form.ExternalID)) {
+		t.Fatal("expected form action in integrations snippet")
+	}
+	if !strings.Contains(body, db.UUIDToSiteKey(property.ExternalID)) {
+		t.Fatal("expected property sitekey in integrations snippet")
+	}
+	if strings.Contains(body, "On the server") {
+		t.Fatal("did not expect server integrations section")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
+	}
+}
+
+func TestPutFormUpdatesSettings(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "settings.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/settings",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamName, form.Name+" updated")
+	values.Set(common.ParamURL, "https://hooks.example.com/submit/settings-updated")
+	values.Set(common.ParamRetryRequestCount, "on")
+	values.Set(common.ParamRequestsPerMinute, "24")
+	values.Set(common.ParamActive, "true")
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.putForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.SuccessMessage == "" {
+		t.Fatal("expected success message after updating form")
+	}
+	if renderCtx.Form.Name != form.Name+" updated" {
+		t.Fatal("expected updated form name in render context")
+	}
+	if renderCtx.Form.URL != "https://hooks.example.com/submit/settings-updated" {
+		t.Fatal("expected updated form URL in render context")
+	}
+	if renderCtx.Form.RetryRequestCount != 1 {
+		t.Fatal("expected updated retry count in render context")
+	}
+	if renderCtx.Form.RequestsPerMinute != 24 {
+		t.Fatal("expected updated requests per minute in render context")
+	}
+}
+
+func TestPutFormCannotEdit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "cannot-edit.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/cannot-edit",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, member); err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+	values.Set(common.ParamName, form.Name+" updated")
+	values.Set(common.ParamURL, "https://hooks.example.com/submit/member-edit")
+	values.Set(common.ParamRetryRequestCount, "on")
+	values.Set(common.ParamRequestsPerMinute, "10")
+	values.Set(common.ParamActive, "true")
+
+	req := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EditEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.putForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.ErrorMessage == "" {
+		t.Fatal("expected permission error message")
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 || forms[0].ID != form.ID {
+		t.Fatal("form state changed despite permission failure")
+	}
+}
+
+func TestMoveForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, property, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(org1.UserID.Int32, "move-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/move-form",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org1)
+	if err != nil {
+		t.Fatalf("Failed to create new form: %v", err)
+	}
+
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", user.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamOrg, server.IDHasher.Encrypt(int(org2.ID)))
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/move", server.IDHasher.Encrypt(int(org1.ID)), server.IDHasher.Encrypt(int(form.ID))), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+	location, err := resp.Location()
+	if err != nil {
+		t.Fatalf("Expected redirect location, got %v", err)
+	}
+	expectedLocation := fmt.Sprintf("/org/%s/form/%s", server.IDHasher.Encrypt(int(org2.ID)), server.IDHasher.Encrypt(int(form.ID)))
+	if location.String() != expectedLocation {
+		t.Fatalf("expected redirect to %q, got %q", expectedLocation, location.String())
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 || forms[0].ID != form.ID {
+		t.Fatal("form was not moved")
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org2, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != 1 || properties[0].ID != property.ID {
+		t.Fatal("backing property was not moved")
+	}
+}
+
+func TestMoveFormInvalidPathArgs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "move-form-invalid.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/move-form-invalid",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	csrfToken := server.XSRF.Token(strconv.Itoa(int(user.ID)))
+
+	tests := []struct {
+		name     string
+		path     string
+		formBody url.Values
+		wantCode int
+	}{
+		{
+			name: "MoveFormInvalidOrgParam",
+			path: fmt.Sprintf("/org/%s/form/%s/move", orgID, formID),
+			formBody: url.Values{
+				common.ParamOrg: {"invalid-org-id"},
+			},
+			wantCode: http.StatusSeeOther,
+		},
+		{
+			name: "MoveFormToSameOrg",
+			path: fmt.Sprintf("/org/%s/form/%s/move", orgID, formID),
+			formBody: url.Values{
+				common.ParamOrg: {orgID},
+			},
+			wantCode: http.StatusBadRequest,
+		},
+		{
+			name:     "MoveFormMissingOrgParam",
+			path:     fmt.Sprintf("/org/%s/form/%s/move", orgID, formID),
+			formBody: url.Values{},
+			wantCode: http.StatusSeeOther,
+		},
+		{
+			name: "MoveFormNonexistentOrg",
+			path: fmt.Sprintf("/org/%s/form/%s/move", orgID, formID),
+			formBody: url.Values{
+				common.ParamOrg: {server.IDHasher.Encrypt(999999)},
+			},
+			wantCode: http.StatusSeeOther,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.formBody.Set(common.ParamCSRFToken, csrfToken)
+
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.formBody.Encode()))
+			req.AddCookie(cookie)
+			req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Errorf("%s: got status %d, want %d", tc.name, w.Code, tc.wantCode)
+			}
+		})
+	}
+}
+
+func TestMoveFormCannotMove(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org1, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "move-form-perms.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/move-form-perms",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org1)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org1, member); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org1.ID, member); err != nil {
+		t.Fatal(err)
+	}
+	org2, _, err := store.Impl().CreateNewOrganization(ctx, t.Name()+"-another-org", owner.ID)
+	if err != nil {
+		t.Fatalf("Failed to create extra org: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+	values.Set(common.ParamOrg, server.IDHasher.Encrypt(int(org2.ID)))
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/move", server.IDHasher.Encrypt(int(org1.ID)), server.IDHasher.Encrypt(int(form.ID))), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", w.Code)
+	}
+}
+
+func TestDeleteForm(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "delete-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/delete-form",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/org/%s/form/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	resp := w.Result()
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("Unexpected status code %v", resp.StatusCode)
+	}
+
+	forms, _, err := store.Impl().RetrieveOrgForms(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 0 {
+		t.Fatal("form should have been deleted")
+	}
+
+	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(properties) != 0 {
+		t.Fatal("backing property should have been deleted")
+	}
+}
+
+func TestDeleteFormCannotDelete(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "delete-form-restrict.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/delete-form-restrict",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	_, err = store.Impl().InviteUserToOrg(ctx, owner, org, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = store.Impl().JoinOrg(ctx, org.ID, member)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/org/%s/form/%s/delete", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID))), nil)
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderCSRFToken, server.XSRF.Token(strconv.Itoa(int(member.ID))))
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Expected redirect status (303), got %d", w.Code)
+	}
+}
+
+func TestGetFormDashboardAuditLogs(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               "https://hooks.example.com/submit/audit-form",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/org/%s/form/%s?tab=%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.EventsEndpoint), nil)
+	req.AddCookie(cookie)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Unexpected status code %d", w.Code)
+	}
+
+	body := w.Body.String()
+	if !strings.Contains(body, "Audit logs") {
+		t.Fatal("expected audit logs view")
+	}
+	if !strings.Contains(body, "See all Audit Logs") {
+		t.Fatal("expected see all audit logs action")
 	}
 }
 

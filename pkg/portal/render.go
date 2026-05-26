@@ -104,6 +104,9 @@ type RenderConstants struct {
 	ActionPropertyHTTPRequest       string
 	ActionPropertyBreak             string
 	Enabled                         string
+	Active                          string
+	RetryRequestCount               string
+	RequestsPerMinute               string
 	ConditionNegated                string
 	RulesEndpoint                   string
 	RuleStatsEndpoint               string
@@ -208,6 +211,9 @@ func NewRenderConstants() *RenderConstants {
 		ConditionValue:                  common.ParamConditionValue,
 		ActionValue:                     common.ParamActionValue,
 		Enabled:                         common.ParamEnabled,
+		Active:                          common.ParamActive,
+		RetryRequestCount:               common.ParamRetryRequestCount,
+		RequestsPerMinute:               common.ParamRequestsPerMinute,
 		ConditionNegated:                common.ParamConditionNegated,
 		RulesEndpoint:                   common.RulesEndpoint,
 		RuleStatsEndpoint:               common.RuleStatsEndpoint,

@@ -903,6 +903,19 @@ func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) 
 	}
 }
 
+func (impl *BusinessStoreImpl) deleteCachedForm(ctx context.Context, form *dbgen.Form) {
+	if form == nil {
+		return
+	}
+
+	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
+		_ = impl.cache.SetMissing(ctx, FormByExternalIDCacheKey(externalID))
+	}
+	_ = impl.cache.SetMissing(ctx, formByIDCacheKey(form.ID))
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(form.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(form.OrgID.Int32))
+}
+
 func (impl *BusinessStoreImpl) deleteCachedProperty(ctx context.Context, property *dbgen.Property) {
 	if property == nil {
 		return
@@ -1158,6 +1171,164 @@ func createPropertyFromUpdate(row *dbgen.UpdatePropertyRow) *dbgen.Property {
 		MaxReplayCount:   row.MaxReplayCount,
 		Enabled:          row.Enabled,
 	}
+}
+
+func createFormFromUpdate(row *dbgen.UpdateFormRow) *dbgen.Form {
+	return &dbgen.Form{
+		ID:                row.ID,
+		Name:              row.Name,
+		ExternalID:        row.ExternalID,
+		OrgID:             row.OrgID,
+		CreatorID:         row.CreatorID,
+		OrgOwnerID:        row.OrgOwnerID,
+		URL:               row.URL,
+		CreatedAt:         row.CreatedAt,
+		UpdatedAt:         row.UpdatedAt,
+		DeletedAt:         row.DeletedAt,
+		PropertyID:        row.PropertyID,
+		Fields:            row.Fields,
+		RequestsPerSecond: row.RequestsPerSecond,
+		RequestsBurst:     row.RequestsBurst,
+		RetryRequestCount: row.RetryRequestCount,
+		Method:            row.Method,
+		Enabled:           row.Enabled,
+		Active:            row.Active,
+	}
+}
+
+func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdateFormParams) (*dbgen.Form, *common.AuditLogEvent, error) {
+	if (params == nil) || (user == nil) {
+		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, nil, ErrMaintenance
+	}
+
+	params.CreatorID = Int(user.ID)
+	if org != nil {
+		params.OrgID = Int(org.ID)
+	}
+
+	updatedForm, err := impl.querier.UpdateForm(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			flog := slog.With("formID", params.ID, "userID", user.ID)
+			if form, err := FetchCachedOne[dbgen.Form](ctx, impl.cache, formByIDCacheKey(params.ID)); err == nil {
+				flog = flog.With("orgOwnerID", form.OrgOwnerID.Int32, "creatorID", form.CreatorID.Int32)
+			}
+			flog.WarnContext(ctx, "Cannot update form in DB")
+
+			return nil, nil, ErrPermissions
+		}
+
+		slog.ErrorContext(ctx, "Failed to update form in DB", "name", params.Name, "formID", params.ID, "userID", user.ID, common.ErrAttr(err))
+		return nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Updated form", "name", updatedForm.Name, "formID", updatedForm.ID)
+
+	cacheForm := createFormFromUpdate(updatedForm)
+	impl.cacheForm(ctx, cacheForm)
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+
+	auditEvent := newUpdateFormAuditLogEvent(cacheForm, updatedForm, org, user)
+
+	return cacheForm, auditEvent, nil
+}
+
+func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, form *dbgen.Form, property *dbgen.Property, org *dbgen.GetUserOrganizationsRow) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
+	if impl.querier == nil {
+		return nil, nil, nil, ErrMaintenance
+	}
+
+	if (user == nil) || (form == nil) || (property == nil) || (org == nil) {
+		return nil, nil, nil, ErrInvalidInput
+	}
+
+	if form.OrgID.Int32 == org.Organization.ID {
+		slog.WarnContext(ctx, "Form is already in the destination org", "formID", form.ID, "orgID", form.OrgID.Int32)
+		return nil, nil, nil, ErrInvalidInput
+	}
+
+	oldOrgID := form.OrgID.Int32
+
+	updatedForm, err := impl.querier.MoveForm(ctx, &dbgen.MoveFormParams{
+		ID:         form.ID,
+		OrgID:      Int(org.Organization.ID),
+		OrgOwnerID: org.Organization.UserID,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move form to another org", "formID", form.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
+		return nil, nil, nil, err
+	}
+
+	updatedProperty, err := impl.querier.MovePropertyWithForm(ctx, &dbgen.MovePropertyWithFormParams{
+		ID:         property.ID,
+		OrgID:      Int(org.Organization.ID),
+		OrgOwnerID: org.Organization.UserID,
+	})
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to move form property to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
+		return nil, nil, nil, err
+	}
+
+	slog.InfoContext(ctx, "Moved form to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID)
+
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(oldOrgID, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(oldOrgID))
+	_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(updatedForm.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(oldOrgID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(updatedProperty.OrgID.Int32, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(oldOrgID))
+	_ = impl.cache.Delete(ctx, orgPropertiesCountCacheKey(updatedProperty.OrgID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(property.OrgOwnerID.Int32))
+	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(updatedProperty.OrgOwnerID.Int32))
+
+	impl.cacheForm(ctx, updatedForm)
+	impl.cacheProperty(ctx, updatedProperty)
+
+	auditEvents := []*common.AuditLogEvent{
+		newMoveFormAuditLogEvent(user, updatedForm, oldOrgID, org.Organization.Name),
+		newMovePropertyAuditLogEvent(user, updatedProperty, oldOrgID, updatedProperty.OrgID.Int32),
+	}
+
+	return updatedForm, updatedProperty, auditEvents, nil
+}
+
+func (impl *BusinessStoreImpl) SoftDeleteForm(ctx context.Context, form *dbgen.Form, property *dbgen.Property, org *dbgen.Organization, user *dbgen.User) ([]*common.AuditLogEvent, error) {
+	if (form == nil) || (property == nil) || (org == nil) || (user == nil) {
+		return nil, ErrInvalidInput
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	deletedForm, err := impl.querier.SoftDeleteForm(ctx, form.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to mark form as deleted in DB", "formID", form.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	deletedProperty, err := impl.querier.SoftDeletePropertyWithForm(ctx, property.ID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to mark form property as deleted in DB", "formID", form.ID, "propertyID", property.ID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Soft-deleted form", "formID", form.ID, "propertyID", property.ID)
+
+	impl.deleteCachedForm(ctx, deletedForm)
+	impl.deleteCachedProperty(ctx, deletedProperty)
+
+	auditEvents := []*common.AuditLogEvent{
+		newDeleteFormAuditLogEvent(form, org, user),
+		newDeletePropertyAuditLogEvent(property, org, user),
+	}
+
+	return auditEvents, nil
 }
 
 func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Organization, user *dbgen.User, params *dbgen.UpdatePropertyParams) (*dbgen.Property, *common.AuditLogEvent, error) {
@@ -2989,6 +3160,40 @@ func (impl *BusinessStoreImpl) RetrievePropertyAuditLogs(ctx context.Context, pr
 			}, nil
 		}
 		reader.QueryFunc = impl.querier.GetPropertyAuditLogs
+	}
+
+	logs, err := reader.Read(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// extra slice is due to possible caching in portal where for /auditlogs we can fetch and cache multiple entries
+	// but later for /property/auditlogs we will show only up to {limit}
+	return logs[0:min(len(logs), limit)], nil
+}
+
+func (impl *BusinessStoreImpl) RetrieveFormAuditLogs(ctx context.Context, form *dbgen.Form, limit int) ([]*dbgen.GetFormAuditLogsRow, error) {
+	if limit <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	reader := &StoreArrayReader[*dbgen.GetFormAuditLogsParams, dbgen.GetFormAuditLogsRow]{
+		CacheKey:    formAuditLogsCacheKey(form.ID),
+		Cache:       impl.cache,
+		TTL:         5 * time.Minute,
+		DropInvalid: true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryKeyFunc = func(ck CacheKey) (*dbgen.GetFormAuditLogsParams, error) {
+			return &dbgen.GetFormAuditLogsParams{
+				EntityID:  Int8(int64(form.ID)),
+				CreatedAt: form.CreatedAt,
+				Offset:    0,
+				Limit:     int32(limit),
+			}, nil
+		}
+		reader.QueryFunc = impl.querier.GetFormAuditLogs
 	}
 
 	logs, err := reader.Read(ctx)

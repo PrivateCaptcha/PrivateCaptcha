@@ -783,6 +783,33 @@ func TestBusinessStoreImplUpdateProperty(t *testing.T) {
 	})
 }
 
+func TestBusinessStoreImplUpdateForm(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, _, err := store.UpdateForm(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1}, &dbgen.UpdateFormParams{Name: "valid"})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, _, err := store.UpdateForm(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1}, &dbgen.UpdateFormParams{Name: "valid"})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, _, err := store.UpdateForm(context.Background(), nil, nil, nil)
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
 func TestBusinessStoreImplSoftDeleteProperty(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
@@ -2085,6 +2112,60 @@ func TestBusinessStoreImplMoveProperty(t *testing.T) {
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
 		_, _, err := store.MoveProperty(context.Background(), &dbgen.User{}, &dbgen.Property{}, &dbgen.GetUserOrganizationsRow{})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplMoveForm(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{ID: 1}, &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.GetUserOrganizationsRow{})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{ID: 1}, &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.GetUserOrganizationsRow{})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{}, &dbgen.Form{}, &dbgen.Property{}, &dbgen.GetUserOrganizationsRow{})
+		if !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("expected ErrInvalidInput, got %v", err)
+		}
+	})
+}
+
+func TestBusinessStoreImplSoftDeleteForm(t *testing.T) {
+	t.Run("ErrNoRows", func(t *testing.T) {
+		store := setupTestStore(t, pgx.ErrNoRows)
+		_, err := store.SoftDeleteForm(context.Background(), &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("GenericError", func(t *testing.T) {
+		expectedErr := errors.New("db error")
+		store := setupTestStore(t, expectedErr)
+		_, err := store.SoftDeleteForm(context.Background(), &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1})
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
+
+	t.Run("InvalidInput", func(t *testing.T) {
+		store := setupTestStore(t, nil)
+		_, err := store.SoftDeleteForm(context.Background(), nil, nil, nil, nil)
 		if !errors.Is(err, ErrInvalidInput) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}

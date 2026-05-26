@@ -780,3 +780,208 @@ func TestRenderFormWizardIntegrationStep(t *testing.T) {
 		t.Fatal("did not expect other integrations section")
 	}
 }
+
+func TestRenderFormDashboardReports(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/dashboard.html", &struct {
+		CsrfRenderContext
+		Form    *userForm
+		Org     *UserOrg
+		Tab     int
+		CanEdit bool
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", WebhookPrefix: "hooks.example.com/submit", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               0,
+		CanEdit:           true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	for _, label := range []string{"Reports", "Integrations", "Settings", "Audit logs"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected dashboard to contain %q tab", label)
+		}
+	}
+	if strings.Contains(body, "Rules") {
+		t.Fatal("did not expect rules tab in form dashboard")
+	}
+}
+
+func TestRenderFormDashboardIntegrations(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/integrations.html", &struct {
+		CsrfRenderContext
+		Form    *userForm
+		Org     *UserOrg
+		Tab     int
+		CanEdit bool
+		Sitekey string
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", WebhookPrefix: "hooks.example.com/submit", ExternalID: "guid-123", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               1,
+		CanEdit:           true,
+		Sitekey:           "sitekey123",
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=integrations")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "https://api.privatecaptcha.com/form/guid-123") {
+		t.Fatal("expected form action in integrations snippet")
+	}
+	if !strings.Contains(body, `data-sitekey=&#34;sitekey123&#34;`) {
+		t.Fatal("expected sitekey in integrations snippet")
+	}
+	if strings.Contains(body, "On the server") {
+		t.Fatal("did not expect server integrations section")
+	}
+	if strings.Contains(body, "Other") {
+		t.Fatal("did not expect other integrations section")
+	}
+}
+
+func TestRenderFormDashboardSettings(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/settings.html", &struct {
+		CsrfRenderContext
+		ErrorMessage   string
+		SuccessMessage string
+		NameError      string
+		URLError       string
+		Form           *struct {
+			ID                string
+			OrgID             string
+			PropertyID        string
+			Name              string
+			URL               string
+			Active            bool
+			RetryRequestCount int
+			RequestsPerMinute int
+		}
+		Org     *UserOrg
+		Orgs    []*UserOrg
+		Tab     int
+		CanEdit bool
+		CanMove bool
+	}{
+		CsrfRenderContext: stubToken(),
+		ErrorMessage:      "",
+		SuccessMessage:    "",
+		Form: &struct {
+			ID                string
+			OrgID             string
+			PropertyID        string
+			Name              string
+			URL               string
+			Active            bool
+			RetryRequestCount int
+			RequestsPerMinute int
+		}{
+			ID:                "456",
+			OrgID:             "123",
+			PropertyID:        "789",
+			Name:              "Contact",
+			URL:               "https://hooks.example.com/contact",
+			Active:            true,
+			RetryRequestCount: 2,
+			RequestsPerMinute: 30,
+		},
+		Org:     stubOrg("123"),
+		Orgs:    []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner), stubOrgEx("999", dbgen.AccessLevelOwner)},
+		Tab:     2,
+		CanEdit: true,
+		CanMove: true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=settings")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	for _, label := range []string{"Active", "Retry", "Requests per minute"} {
+		if !strings.Contains(body, label) {
+			t.Fatalf("expected settings to contain %q", label)
+		}
+	}
+	for _, removed := range []string{"Allow subdomains", "Allow localhost", "Difficulty growth", "Base difficulty", "Test widget here"} {
+		if strings.Contains(body, removed) {
+			t.Fatalf("did not expect property-only setting %q", removed)
+		}
+	}
+	if !strings.Contains(body, "/org/123/property/789?tab=settings") {
+		t.Fatal("expected manage property link in form settings")
+	}
+	if !strings.Contains(body, "Move form") {
+		t.Fatal("expected move form section in form settings")
+	}
+	if !strings.Contains(body, "Delete form") {
+		t.Fatal("expected delete form section in form settings")
+	}
+}
+
+func TestRenderFormDashboardAuditLogs(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/auditlogs.html", &struct {
+		CsrfRenderContext
+		AlertRenderContext
+		Form      *userForm
+		Org       *UserOrg
+		Tab       int
+		CanEdit   bool
+		CanView   bool
+		AuditLogs []*UserAuditLog
+		Count     int
+		Page      int
+		PerPage   int
+		SeeMore   bool
+	}{
+		CsrfRenderContext: stubToken(),
+		Form:              &userForm{ID: "456", OrgID: "123", Name: "Contact", PropertyID: "789", WebhookPrefix: "hooks.example.com/submit", Enabled: true},
+		Org:               stubOrg("123"),
+		Tab:               3,
+		CanEdit:           true,
+		CanView:           true,
+		AuditLogs:         stubAuditLogs(),
+		Count:             len(stubAuditLogs()),
+		Page:              0,
+		PerPage:           25,
+		SeeMore:           true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=events")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	body := buf.String()
+	if !strings.Contains(body, "Audit logs") {
+		t.Fatal("expected audit logs tab in form dashboard")
+	}
+	if !strings.Contains(body, "See all Audit Logs") {
+		t.Fatal("expected see all audit logs action")
+	}
+}
