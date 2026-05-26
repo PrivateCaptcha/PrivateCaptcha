@@ -74,10 +74,11 @@ type formIntegrationRenderContext struct {
 type formDashboardRenderContext struct {
 	AlertRenderContext
 	CsrfRenderContext
-	Form    *userForm
-	Org     *UserOrg
-	Tab     int
-	CanEdit bool
+	Form      *userForm
+	Org       *UserOrg
+	NameError string
+	Tab       int
+	CanEdit   bool
 }
 
 type formDashboardIntegrationsRenderContext struct {

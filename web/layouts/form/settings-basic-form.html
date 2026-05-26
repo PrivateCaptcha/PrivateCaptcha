@@ -12,18 +12,22 @@
     <div class="col-span-full">
         <label for="{{ .Const.Name }}" class="pc-internal-form-label" aria-label="Form name"> Name </label>
         <div class="mt-2 relative">
-            <input type="text" name="{{ .Const.Name }}" placeholder="Contact Form" maxlength="255" value="{{ $.Params.Form.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" required />
+            {{- if .Params.NameError -}}
+            {{template "info-icon-red.html" .}}
+            {{- end -}}
+            <input type="text" name="{{ .Const.Name }}" placeholder="Contact Form" maxlength="255" value="{{ $.Params.Form.Name }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.NameError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
         </div>
-    </div>
+        {{- if .Params.NameError -}}
+        <p class="pc-form-error-text">{{ .Params.NameError }}</p>
+        {{- end -}}
 
-    <div class="col-span-full">
-        <label for="{{ .Const.URL }}" class="pc-internal-form-label" aria-label="Form webhook URL"> URL </label>
-        <div class="mt-2 relative">
-            <input type="url" name="{{ .Const.URL }}" placeholder="https://hooks.example.com/contact" maxlength="2048" value="{{ $.Params.Form.URL }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" required />
+        <div class="mt-2">
+            <label for="{{ .Const.URL }}" class="pc-internal-form-label tooltip" data-tooltip="Webhook URL where verified form submissions will be forwarded" aria-label="Form webhook URL"> URL </label>
+            <div class="mt-2 relative">
+                <input type="url" name="{{ .Const.URL }}" placeholder="https://hooks.example.com/contact" maxlength="2048" value="{{ $.Params.Form.URL }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" required />
+            </div>
         </div>
-    </div>
 
-    <div class="col-span-full">
         <div class="mt-2 flex gap-3">
             <div class="flex h-6 shrink-0 items-center">
                 <div class="group grid size-4 grid-cols-1">
@@ -36,22 +40,22 @@
             </div>
             <div class="text-sm/6">
                 <label for="{{ .Const.Active }}" class="font-medium text-gray-900">Active</label>
-                <span id="{{ .Const.Active }}-description" class="text-gray-500"><span class="sr-only">Active</span>forward submissions to the configured webhook</span>
+                <span id="{{ .Const.Active }}-description" class="text-gray-500"><span class="sr-only">Active</span>forward submissions to this URL</span>
             </div>
         </div>
     </div>
 
     <div class="col-span-full">
-        <label for="{{ .Const.RetryRequestCount }}" class="pc-internal-form-label"> Retry count </label>
-        <div class="mt-2">
-            <input type="number" name="{{ .Const.RetryRequestCount }}" min="0" max="1000000" placeholder="0" value="{{ $.Params.Form.RetryRequestCount }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" />
-        </div>
-    </div>
-
-    <div class="col-span-full">
-        <label for="{{ .Const.RequestsPerMinute }}" class="pc-internal-form-label"> Requests per minute </label>
+        <label for="{{ .Const.RequestsPerMinute }}" class="pc-internal-form-label tooltip" data-tooltip="Maximum accepted form submissions per minute"> Requests per minute </label>
         <div class="mt-2">
             <input type="number" name="{{ .Const.RequestsPerMinute }}" min="1" max="60" placeholder="60" value="{{ $.Params.Form.RequestsPerMinute }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" />
+        </div>
+
+        <div class="mt-2">
+            <label for="{{ .Const.RetryRequestCount }}" class="mt-4 pc-internal-form-label tooltip" data-tooltip="Number of delivery retry attempts when the webhook request fails"> Retry count </label>
+            <div class="mt-2">
+                <input type="number" name="{{ .Const.RetryRequestCount }}" min="0" max="1000000" placeholder="0" value="{{ $.Params.Form.RetryRequestCount }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}pc-form-input-normal{{ else }}pc-form-input-disabled{{ end }}" />
+            </div>
         </div>
     </div>
 </div>
