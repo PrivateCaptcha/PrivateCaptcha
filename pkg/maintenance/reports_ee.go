@@ -315,7 +315,7 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := j.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveWeeklyPropertiesReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -345,7 +345,7 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := j.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveMonthlyPropertiesReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err

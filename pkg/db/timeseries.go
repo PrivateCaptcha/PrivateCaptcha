@@ -430,7 +430,7 @@ ORDER BY current_requests DESC`
 	return stats, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (ts *TimeSeriesDB) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -447,7 +447,7 @@ func (ts *TimeSeriesDB) RetrieveWeeklyReportStats(ctx context.Context, userID in
 	return stats, nil
 }
 
-func (ts *TimeSeriesDB) RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (ts *TimeSeriesDB) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
 	}
@@ -1167,13 +1167,13 @@ func (m *MemoryTimeSeries) memoryReportStats(userID int32, from, mid, to time.Ti
 	return stats
 }
 
-func (m *MemoryTimeSeries) RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (m *MemoryTimeSeries) RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.memoryReportStats(userID, from, mid, to), nil
 }
 
-func (m *MemoryTimeSeries) RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
+func (m *MemoryTimeSeries) RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*common.UserReportStats, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.memoryReportStats(userID, from, mid, to), nil
