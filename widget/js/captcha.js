@@ -7,6 +7,7 @@ window.privateCaptcha = {
     render: renderCaptchaWidget,
     getResponse: getCaptchaResponse,
     reset: resetCaptchaWidget,
+    autoWidget: null,
 };
 
 const RENDER_EXPLICIT = "explicit";
@@ -108,7 +109,7 @@ function renderCaptchaWidget(element, options) {
 function resetCaptchaWidget(widget) {
     if (widget) {
         widget.reset();
-    } else {
+    } else if (window.privateCaptcha.autoWidget) {
         window.privateCaptcha.autoWidget.reset();
     }
 }
@@ -121,8 +122,10 @@ function resetCaptchaWidget(widget) {
 function getCaptchaResponse(widget) {
     if (widget) {
         return widget.solution();
-    } else {
+    } else if (window.privateCaptcha.autoWidget) {
         return window.privateCaptcha.autoWidget.solution();
+    } else {
+        return null;
     }
 }
 
