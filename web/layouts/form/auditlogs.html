@@ -2,7 +2,10 @@
     <div class="sm:hidden">
         <label for="tabs" class="sr-only">Select a tab</label>
         <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
-            onchange="window.location = '{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID }}?{{ $.Const.Tab }}=' + this.value">
+            hx-target="#property-tabs"
+            hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID $.Const.TabEndpoint }}"
+            hx-on::config-request="event.detail.path += '/'+this.value"
+            hx-swap="innerHTML">
             <option value="{{ $.Const.ReportsEndpoint }}">Reports</option>
             <option value="{{ $.Const.IntegrationsEndpoint }}">Integrations</option>
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
