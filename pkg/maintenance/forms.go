@@ -16,8 +16,112 @@ import (
 
 const formDeactivationReferencePrefix = "forms/deactivated/"
 
+const (
+	defaultFailingFormsThreshold = 5
+	defaultFailingFormsMaxForms  = 50
+)
+
+type DeactivateFailingFormsJob struct {
+	Store      db.Implementor
+	TimeSeries common.TimeSeriesStore
+	PortalURL  string
+	IDHasher   common.IdentifierHasher
+	Threshold  int
+	MaxForms   int
+}
+
+type DeactivateFailingFormsParams struct {
+	Threshold int `json:"threshold"`
+	MaxForms  int `json:"max_forms"`
+}
+
+var _ common.PeriodicJob = (*DeactivateFailingFormsJob)(nil)
+
 type userNotificationCreator interface {
 	CreateUserNotification(context.Context, *common.ScheduledNotification) (*dbgen.UserNotification, error)
+}
+
+func (j *DeactivateFailingFormsJob) Name() string {
+	return "deactivate_failing_forms_job"
+}
+
+func (j *DeactivateFailingFormsJob) Interval() time.Duration {
+	return 1 * time.Hour
+}
+
+func (j *DeactivateFailingFormsJob) Timeout() time.Duration {
+	return 5 * time.Minute
+}
+
+func (j *DeactivateFailingFormsJob) Jitter() time.Duration {
+	return 10 * time.Minute
+}
+
+func (j *DeactivateFailingFormsJob) Trigger() <-chan struct{} {
+	return nil
+}
+
+func (j *DeactivateFailingFormsJob) NewParams() any {
+	threshold := j.Threshold
+	if threshold <= 0 {
+		threshold = defaultFailingFormsThreshold
+	}
+
+	maxForms := j.MaxForms
+	if maxForms <= 0 {
+		maxForms = defaultFailingFormsMaxForms
+	}
+
+	return &DeactivateFailingFormsParams{Threshold: threshold, MaxForms: maxForms}
+}
+
+func (j *DeactivateFailingFormsJob) RunOnce(ctx context.Context, params any) error {
+	p, ok := params.(*DeactivateFailingFormsParams)
+	if !ok || p == nil {
+		slog.ErrorContext(ctx, "Job parameter has incorrect type", "params", params, "job", j.Name())
+		p = j.NewParams().(*DeactivateFailingFormsParams)
+	}
+	if p.Threshold <= 0 || p.MaxForms <= 0 {
+		slog.ErrorContext(ctx, "Job parameters are invalid", "threshold", p.Threshold, "maxForms", p.MaxForms, "job", j.Name())
+		p = j.NewParams().(*DeactivateFailingFormsParams)
+	}
+
+	if j.Store == nil || j.TimeSeries == nil || j.IDHasher == nil {
+		return db.ErrInvalidInput
+	}
+
+	candidates, err := j.TimeSeries.RetrieveFailingForms(ctx, p.Threshold, p.MaxForms)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve failing forms", common.ErrAttr(err))
+		return err
+	}
+	if len(candidates) == 0 {
+		slog.DebugContext(ctx, "No failing forms found")
+		return nil
+	}
+
+	formIDs := make([]int32, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate == nil {
+			continue
+		}
+		formIDs = append(formIDs, candidate.FormID)
+	}
+	if len(formIDs) == 0 {
+		return nil
+	}
+
+	forms, err := j.Store.Impl().DeactivateForms(ctx, formIDs)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to deactivate failing forms", "count", len(formIDs), common.ErrAttr(err))
+		return err
+	}
+	if len(forms) == 0 {
+		slog.DebugContext(ctx, "No active failing forms were deactivated", "candidates", len(formIDs))
+		return nil
+	}
+
+	return scheduleFormDeactivationNotifications(ctx, j.Store.Impl(), forms, j.PortalURL, j.IDHasher, time.Now().UTC())
 }
 
 func formDeactivationReference(userID int32, t time.Time) string {
