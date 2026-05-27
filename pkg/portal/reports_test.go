@@ -87,8 +87,8 @@ func TestScheduleWeeklyReport(t *testing.T) {
 
 	job := newScheduleReportsJob(50)
 
-	// Monday so weekly reports trigger
-	tnow := time.Date(2025, 3, 17, 10, 0, 0, 0, time.UTC)
+	// Monday so weekly reports trigger. Keep it recent enough for ClickHouse TTLs.
+	tnow := recentWeeklyReportTime(time.Now().UTC())
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -7), 0, 20)
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -7), 1, 5)
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, 0, -14), 0, 10)
@@ -168,8 +168,8 @@ func TestScheduleMonthlyReport(t *testing.T) {
 
 	job := newScheduleReportsJob(50)
 
-	// 1st of month so monthly reports trigger
-	tnow := time.Date(2025, 4, 1, 10, 0, 0, 0, time.UTC)
+	// 1st of month so monthly reports trigger. Keep it recent enough for ClickHouse TTLs.
+	tnow := recentMonthlyReportTime(time.Now().UTC())
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -1, 0), 0, 40)
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -1, 0), 1, 10)
 	seedFormSubmitLogsToStore(t, timeSeries, user.ID, form.ID, org.ID, tnow.AddDate(0, -2, 0), 0, 20)
@@ -471,6 +471,24 @@ func seedFormSubmitLogsToStore(t *testing.T, ts common.TimeSeriesStore, userID i
 	if err := ts.WriteFormSubmitBatch(ctx, records); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func recentWeeklyReportTime(now time.Time) time.Time {
+	t := time.Date(now.Year(), now.Month(), now.Day(), 10, 0, 0, 0, time.UTC)
+	daysSinceMonday := (int(t.Weekday()) - int(time.Monday) + 7) % 7
+	t = t.AddDate(0, 0, -daysSinceMonday)
+	if t.After(now) {
+		t = t.AddDate(0, 0, -7)
+	}
+	return t
+}
+
+func recentMonthlyReportTime(now time.Time) time.Time {
+	t := time.Date(now.Year(), now.Month(), 1, 10, 0, 0, 0, time.UTC)
+	if t.After(now) {
+		t = t.AddDate(0, -1, 0)
+	}
+	return t
 }
 
 func usageReportPayload(t *testing.T, notifications []*dbgen.GetPendingUserNotificationsRow, userID int32, referenceID string) *email.UsageReportContext {
