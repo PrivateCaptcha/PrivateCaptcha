@@ -21,9 +21,14 @@
                     <div>
                         <label for="test-body" class="pc-internal-form-label"> Body </label>
                         <div class="mt-2">
-                            <textarea id="test-body" name="body" rows="4" placeholder="email=test@example.com&message=hello" class="w-full pc-internal-form-input-base pc-form-input-normal"></textarea>
+                            <textarea id="test-body" name="body" rows="4" placeholder="email=test@example.com&message=hello" class="w-full pc-internal-form-input-base pc-form-input-normal">{{ $.Params.TestBody }}</textarea>
                         </div>
                     </div>
+                    {{- if .Params.TestResult -}}
+                    <div>
+                        <p class="text-sm text-gray-700">{{ $.Params.TestResult }}</p>
+                    </div>
+                    {{- end -}}
                 </div>
             </div>
         </div>
@@ -31,7 +36,11 @@
 </div>
 
 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
-    <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
+    <button type="submit" hx-indicator="#spinner" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
+        <svg id="spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
         Test
     </button>
     <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary sm:w-auto" @click="testOpen = false">Close</button>

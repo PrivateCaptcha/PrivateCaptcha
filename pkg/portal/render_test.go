@@ -880,11 +880,13 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 			RetryRequestCount int
 			RequestsPerMinute int
 		}
-		Org     *UserOrg
-		Orgs    []*UserOrg
-		Tab     int
-		CanEdit bool
-		CanMove bool
+		Org        *UserOrg
+		Orgs       []*UserOrg
+		Tab        int
+		CanEdit    bool
+		CanMove    bool
+		TestBody   string
+		TestResult string
 	}{
 		CsrfRenderContext: stubToken(),
 		ErrorMessage:      "",
@@ -908,11 +910,13 @@ func TestRenderFormDashboardSettings(t *testing.T) {
 			RetryRequestCount: 2,
 			RequestsPerMinute: 30,
 		},
-		Org:     stubOrg("123"),
-		Orgs:    []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner), stubOrgEx("999", dbgen.AccessLevelOwner)},
-		Tab:     2,
-		CanEdit: true,
-		CanMove: true,
+		Org:        stubOrg("123"),
+		Orgs:       []*UserOrg{stubOrgEx("123", dbgen.AccessLevelOwner), stubOrgEx("999", dbgen.AccessLevelOwner)},
+		Tab:        2,
+		CanEdit:    true,
+		CanMove:    true,
+		TestBody:   "",
+		TestResult: "",
 	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=settings")}, platformCtx)
 	if err != nil {
 		t.Fatal(err)

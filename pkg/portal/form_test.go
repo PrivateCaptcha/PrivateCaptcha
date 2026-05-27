@@ -529,6 +529,129 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	}
 }
 
+func TestPostTestFormReturnsResult(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamBody, "email=test@example.com&message=hello")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postTestForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != "form/settings-test-form.html" {
+		t.Fatalf("Expected view %q, got %q", "form/settings-test-form.html", viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.TestBody != "email=test@example.com&message=hello" {
+		t.Fatalf("Expected test body preserved, got %q", renderCtx.TestBody)
+	}
+	if !strings.Contains(renderCtx.TestResult, "OK") {
+		t.Fatalf("Expected result to contain OK, got %q", renderCtx.TestResult)
+	}
+}
+
+func TestPostTestFormReturnsFailureResult(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-failure.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamBody, "email=test@example.com")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postTestForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if !strings.Contains(renderCtx.TestResult, "Failure") {
+		t.Fatalf("Expected result to contain Failure, got %q", renderCtx.TestResult)
+	}
+	if !strings.Contains(renderCtx.TestResult, "503") {
+		t.Fatalf("Expected result to contain status 503, got %q", renderCtx.TestResult)
+	}
+}
+
 func TestPutFormCannotEdit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

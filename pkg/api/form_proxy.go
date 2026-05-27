@@ -355,6 +355,18 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 }
 
+func (s *Server) SubmitFormDirectly(ctx context.Context, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
+	if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
+		return &FormSubmitResult{Success: false}
+	}
+
+	client := s.newFormHTTPClient()
+
+	formCopy := *form
+	formCopy.RetryRequestCount = 0
+	return s.submitForm(ctx, client, &formCopy, submission)
+}
+
 func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
 	result := &FormSubmitResult{}
 

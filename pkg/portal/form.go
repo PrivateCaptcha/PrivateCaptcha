@@ -2,13 +2,16 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -88,9 +91,11 @@ type formDashboardIntegrationsRenderContext struct {
 
 type formSettingsRenderContext struct {
 	formDashboardRenderContext
-	Orgs     []*UserOrg
-	URLError string
-	CanMove  bool
+	Orgs       []*UserOrg
+	URLError   string
+	CanMove    bool
+	TestBody   string
+	TestResult string
 }
 
 type formAuditLogsRenderContext struct {
@@ -716,6 +721,72 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+}
+
+func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx, err := s.getOrgFormSettings(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !renderCtx.CanEdit {
+		slog.WarnContext(ctx, "Insufficient permissions to test form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
+		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
+		return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
+	}
+
+	body := r.FormValue(common.ParamBody)
+	renderCtx.TestBody = body
+
+	values, err := url.ParseQuery(body)
+	if err != nil {
+		renderCtx.TestResult = "Failed to parse body: " + err.Error()
+		return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
+	}
+
+	submission := &api.FormSubmission{
+		FormExternalID: db.UUIDToString(form.ExternalID),
+		Values:         values,
+		UserAgent:      r.UserAgent(),
+		Referer:        r.Header.Get(common.HeaderReferer),
+		Time:           time.Now().UTC(),
+	}
+
+	if s.APIServer != nil {
+		result := s.APIServer.SubmitFormDirectly(ctx, form, submission)
+		if result.Success {
+			renderCtx.TestResult = fmt.Sprintf("OK (HTTP %d)", result.StatusCode)
+		} else if result.StatusCode > 0 {
+			renderCtx.TestResult = fmt.Sprintf("Failure (HTTP %d)", result.StatusCode)
+		} else {
+			renderCtx.TestResult = "Failure: could not submit form"
+		}
+	} else {
+		renderCtx.TestResult = "Failure: test server not configured"
+	}
+
+	return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
 }
 
 func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {

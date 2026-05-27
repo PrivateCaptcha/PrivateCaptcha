@@ -105,8 +105,13 @@ func TestMain(m *testing.M) {
 			SubscriptionLimits: &db.StubSubscriptionLimits{},
 			EmailVerifier:      &PortalEmailVerifier{},
 			FormURLVerifier:    allowAllPortalFormURLVerifier{},
-			IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
-			AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
+			APIServer: &api.Server{
+				FormURLVerifier:   allowAllPortalFormURLVerifier{},
+				Metrics:           monitoring.NewStub(),
+				FormSubmitLogChan: make(chan *common.FormSubmitRecord, 10),
+			},
+			IDHasher:   common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
+			AdminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
 		}
 
 		ctx := context.TODO()
@@ -182,7 +187,12 @@ func TestMain(m *testing.M) {
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
 		FormURLVerifier:    allowAllPortalFormURLVerifier{},
-		LicenseService:     &stubLicenseService{},
+		APIServer: &api.Server{
+			FormURLVerifier:   allowAllPortalFormURLVerifier{},
+			Metrics:           monitoring.NewStub(),
+			FormSubmitLogChan: make(chan *common.FormSubmitRecord, 10),
+		},
+		LicenseService: &stubLicenseService{},
 	}
 
 	templatesBuilder := NewTemplatesBuilder()

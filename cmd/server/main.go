@@ -296,6 +296,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		SubscriptionLimits: subscriptionLimits,
 		EmailVerifier:      emailVerifier,
 		FormURLVerifier:    apiServer.FormURLVerifier,
+		APIServer:          apiServer,
 		TwoFactorDuration:  10*time.Minute + 5*time.Minute,
 		LicenseService:     checkLicenseJob,
 	}

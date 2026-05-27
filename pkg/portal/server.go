@@ -174,6 +174,7 @@ type Server struct {
 	AdminEmail         common.ConfigItem
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
+	APIServer          *api.Server
 	AuditLogsFunc      AuditLogsConstructor
 	AuditLogParser     AuditLogParser
 	PropertyRulesFunc  PropertyRulesConstructor
@@ -371,6 +372,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.IntegrationsEndpoint), privateRead, s.Handler(s.getFormIntegrationsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.SettingsEndpoint), privateRead, s.Handler(s.getFormSettingsTab))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TabEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getFormAuditLogsTab))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.TestEndpoint), privateWrite, s.Handler(s.postTestForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertiesEndpoint), privateRead, s.Handler(s.getOrgProperties))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateRead, s.Handler(s.getNewOrgProperty))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, common.NewEndpoint), privateWrite, s.Handler(s.postNewOrgProperty))

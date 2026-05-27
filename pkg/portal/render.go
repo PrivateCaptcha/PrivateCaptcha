@@ -116,6 +116,8 @@ type RenderConstants struct {
 	MonthlyReport                   string
 	ClientSetupEndpoint             string
 	ServerSetupEndpoint             string
+	TestEndpoint                    string
+	Body                            string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -223,6 +225,8 @@ func NewRenderConstants() *RenderConstants {
 		MonthlyReport:                   common.ParamMonthlyReport,
 		ClientSetupEndpoint:             common.ClientSetupEndpoint,
 		ServerSetupEndpoint:             common.ServerSetupEndpoint,
+		TestEndpoint:                    common.TestEndpoint,
+		Body:                            common.ParamBody,
 	}
 }
 
