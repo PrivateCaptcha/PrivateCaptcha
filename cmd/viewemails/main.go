@@ -71,6 +71,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		email.APIKeyExpirationContext
 		email.TwoFactorEmailContext
 		email.UsageReportContext
+		email.FormDeactivationContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -131,6 +132,12 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 			TopForms: []*email.FormStat{
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Link: stubFormURL, Count: 520, Percent: 45.6, Change: 11.2},
 				{Name: "Support", URL: "https://hooks.example.com/support", Link: stubFormURL, Count: 380, Percent: 33.3, Change: -5.8, Alternate: true},
+			},
+		},
+		FormDeactivationContext: email.FormDeactivationContext{
+			Forms: []*email.DeactivatedForm{
+				&email.DeactivatedForm{Name: "Contact us", Link: "http://localhost"},
+				&email.DeactivatedForm{Name: "Support", Link: "http://localhost"},
 			},
 		},
 		UserName:    "John Doe",

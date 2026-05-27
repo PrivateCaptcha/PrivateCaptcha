@@ -162,6 +162,7 @@ func TestEmailTemplates(t *testing.T) {
 		APIKeyExpirationContext
 		TwoFactorEmailContext
 		UsageReportContext
+		FormDeactivationContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -211,6 +212,11 @@ func TestEmailTemplates(t *testing.T) {
 			TopForms: []*FormStat{
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Count: 80, Percent: 60.0, Change: 10.0},
 				{Name: "Support", URL: "https://hooks.example.com/support", Count: 54, Percent: 40.0, Change: -5.0, Alternate: true},
+			},
+		},
+		FormDeactivationContext: FormDeactivationContext{
+			Forms: []*DeactivatedForm{
+				{Name: "Contact", Link: "https://portal.privatecaptcha.com/org/abc/form/def"},
 			},
 		},
 		UserName:    "John Doe",

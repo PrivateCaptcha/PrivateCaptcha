@@ -15,6 +15,7 @@ var (
 		TwoFactorEmailTemplate,
 		OrgInvitationTemplate,
 		UsageReportTemplate,
+		FormDeactivationTemplate,
 	}
 	emailFuncs = template.FuncMap{
 		"truncate": func(s string, n int) string {

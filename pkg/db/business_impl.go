@@ -1265,6 +1265,30 @@ func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organi
 	return cacheForm, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) DeactivateForms(ctx context.Context, ids []int32) ([]*dbgen.Form, error) {
+	if len(ids) == 0 {
+		return []*dbgen.Form{}, nil
+	}
+
+	if impl.querier == nil {
+		return nil, ErrMaintenance
+	}
+
+	forms, err := impl.querier.DeactivateForms(ctx, ids)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to deactivate forms", "count", len(ids), common.ErrAttr(err))
+		return nil, err
+	}
+
+	for _, form := range forms {
+		impl.deleteCachedForm(ctx, form)
+	}
+
+	slog.InfoContext(ctx, "Deactivated forms", "requested", len(ids), "affected", len(forms))
+
+	return forms, nil
+}
+
 func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, form *dbgen.Form, property *dbgen.Property, org *dbgen.GetUserOrganizationsRow) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, nil, nil, ErrMaintenance

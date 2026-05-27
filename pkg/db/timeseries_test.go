@@ -340,6 +340,48 @@ func TestMemoryTimeSeriesRetrieveFormStatsByPeriod(t *testing.T) {
 	}
 }
 
+func TestMemoryTimeSeriesRetrieveFailingForms(t *testing.T) {
+	ts := NewMemoryTimeSeries()
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Hour)
+
+	if err := ts.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		// Qualifies: latest three non-empty hourly records are failures, even with older success.
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-5 * time.Hour), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-2 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 1000, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+		// Does not qualify: latest three include a success.
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now.Add(-2 * time.Hour), Status: 0},
+		{UserID: 1, OrgID: 10, FormID: 2000, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+		// Does not qualify: fewer than threshold records.
+		{UserID: 1, OrgID: 10, FormID: 3000, Timestamp: now.Add(-2 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 3000, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+		// Qualifies, used to verify max result limit.
+		{UserID: 1, OrgID: 10, FormID: 4000, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 4000, Timestamp: now.Add(-2 * time.Hour), Status: 1},
+		{UserID: 1, OrgID: 10, FormID: 4000, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := ts.RetrieveFailingForms(ctx, 3, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(candidates) != 1 {
+		t.Fatalf("RetrieveFailingForms() returned %d candidates, want 1", len(candidates))
+	}
+	if candidates[0].FormID != 1000 {
+		t.Errorf("RetrieveFailingForms() form ID = %d, want 1000", candidates[0].FormID)
+	}
+	if candidates[0].FailureCount != 3 {
+		t.Errorf("RetrieveFailingForms() failure count = %d, want 3", candidates[0].FailureCount)
+	}
+}
+
 func TestMemoryTimeSeriesDeleteFormsData(t *testing.T) {
 	ts := NewMemoryTimeSeries()
 	ctx := context.Background()

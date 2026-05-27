@@ -38,6 +38,11 @@ type FormSubmitStat struct {
 	FailureCount int
 }
 
+type FailingFormCandidate struct {
+	FormID       int32
+	FailureCount uint32
+}
+
 type TimeCount struct {
 	Timestamp time.Time
 	Count     uint32

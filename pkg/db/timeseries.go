@@ -747,6 +747,83 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 	return results, nil
 }
 
+func (ts *TimeSeriesDB) RetrieveFailingForms(ctx context.Context, threshold, limit int) ([]*common.FailingFormCandidate, error) {
+	if (threshold <= 0) || (limit <= 0) {
+		return nil, ErrInvalidInput
+	}
+
+	if !ts.IsAvailable() {
+		return nil, ErrMaintenance
+	}
+
+	query := fmt.Sprintf(`WITH hourly AS (
+    SELECT
+        form_id,
+        timestamp,
+        sum(success_count) AS hr_success,
+        sum(failure_count) AS hr_failure
+    FROM %s FINAL
+    WHERE timestamp >= {timestamp:DateTime}
+    GROUP BY form_id, timestamp
+    HAVING (hr_success + hr_failure) > 0
+), ranked AS (
+    SELECT
+        form_id,
+        timestamp,
+        hr_success,
+        hr_failure,
+        row_number() OVER (PARTITION BY form_id ORDER BY timestamp DESC) AS rn
+    FROM hourly
+), last_records AS (
+    SELECT
+        form_id,
+        count() AS record_count,
+        sum(hr_success) AS total_success,
+        sum(hr_failure) AS total_failure,
+        countIf(hr_success = 0 AND hr_failure > 0) AS failed_record_count
+    FROM ranked
+    WHERE rn <= {threshold:UInt32}
+    GROUP BY form_id
+)
+SELECT
+    form_id,
+    total_failure AS failure_count -- Aliased back so rows.Scan works
+FROM last_records
+WHERE record_count = {threshold:UInt32}
+    AND total_success = 0
+    AND failed_record_count = {threshold:UInt32}
+ORDER BY failure_count DESC, form_id ASC
+LIMIT {limit_val:UInt32};`, FormSubmitLogTableName1h)
+
+	rows, err := ts.Clickhouse.Query(query,
+		clickhouse.Named("timestamp", time.Now().UTC().Add(-24*time.Hour).Format(time.DateTime)),
+		clickhouse.Named("threshold", strconv.Itoa(threshold)),
+		clickhouse.Named("limit_val", strconv.Itoa(limit)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to query failing forms", common.ErrAttr(err))
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]*common.FailingFormCandidate, 0)
+	for rows.Next() {
+		candidate := &common.FailingFormCandidate{}
+		if err := rows.Scan(&candidate.FormID, &candidate.FailureCount); err != nil {
+			slog.ErrorContext(ctx, "Failed to read row from failing forms query", common.ErrAttr(err))
+			return nil, err
+		}
+		results = append(results, candidate)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	slog.InfoContext(ctx, "Fetched failing forms", "count", len(results), "threshold", threshold, "limit", limit)
+
+	return results, nil
+}
+
 func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {
 	if !ts.IsAvailable() {
 		return nil, ErrMaintenance
@@ -1366,6 +1443,81 @@ func (m *MemoryTimeSeries) RetrieveFormStatsByPeriod(ctx context.Context, orgID,
 	sort.Slice(result, func(i, j int) bool { return result[i].Timestamp.Before(result[j].Timestamp) })
 
 	return result, nil
+}
+
+func (m *MemoryTimeSeries) RetrieveFailingForms(ctx context.Context, threshold, limit int) ([]*common.FailingFormCandidate, error) {
+	if (threshold <= 0) || (limit <= 0) {
+		return nil, ErrInvalidInput
+	}
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	type formHourKey struct {
+		formID    int32
+		timestamp time.Time
+	}
+
+	from := time.Now().UTC().Add(-24 * time.Hour)
+	stats := make(map[formHourKey]*common.FormSubmitStat)
+	for _, log := range m.formSubmitLogs {
+		if log.Timestamp.UTC().Before(from) {
+			continue
+		}
+
+		key := formHourKey{formID: log.FormID, timestamp: log.Timestamp.UTC().Truncate(time.Hour)}
+		if stats[key] == nil {
+			stats[key] = &common.FormSubmitStat{Timestamp: key.timestamp}
+		}
+		if log.Status == 0 {
+			stats[key].SuccessCount++
+		} else {
+			stats[key].FailureCount++
+		}
+	}
+
+	byForm := make(map[int32][]*common.FormSubmitStat)
+	for key, stat := range stats {
+		if (stat.SuccessCount + stat.FailureCount) == 0 {
+			continue
+		}
+		byForm[key.formID] = append(byForm[key.formID], stat)
+	}
+
+	results := make([]*common.FailingFormCandidate, 0)
+	for formID, formStats := range byForm {
+		sort.Slice(formStats, func(i, j int) bool { return formStats[i].Timestamp.After(formStats[j].Timestamp) })
+		if len(formStats) < threshold {
+			continue
+		}
+
+		var failureCount uint32
+		qualified := true
+		for _, stat := range formStats[:threshold] {
+			if stat.SuccessCount != 0 || stat.FailureCount == 0 {
+				qualified = false
+				break
+			}
+			failureCount += uint32(stat.FailureCount)
+		}
+
+		if qualified {
+			results = append(results, &common.FailingFormCandidate{FormID: formID, FailureCount: failureCount})
+		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].FailureCount == results[j].FailureCount {
+			return results[i].FormID < results[j].FormID
+		}
+		return results[i].FailureCount > results[j].FailureCount
+	})
+
+	if len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
 }
 
 func (m *MemoryTimeSeries) RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period common.TimePeriod) ([]*common.TimeCount, error) {

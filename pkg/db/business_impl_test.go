@@ -46,6 +46,12 @@ type retrieveOrgFormsQuerierStub struct {
 	countCalls     int
 }
 
+type deactivateFormsQuerierStub struct {
+	*QuerierStub
+	forms []*dbgen.Form
+	ids   []int32
+}
+
 func (s *dummySessionStore) Start(ctx context.Context, interval time.Duration)        {}
 func (s *dummySessionStore) Init(ctx context.Context, session *session.Session) error { return nil }
 func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool) (*session.Session, error) {
@@ -78,6 +84,11 @@ func (s *retrieveOrgFormsQuerierStub) GetOrgForms(ctx context.Context, arg *dbge
 func (s *retrieveOrgFormsQuerierStub) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
 	s.countCalls++
 	return s.count, s.Error
+}
+
+func (s *deactivateFormsQuerierStub) DeactivateForms(ctx context.Context, ids []int32) ([]*dbgen.Form, error) {
+	s.ids = ids
+	return s.forms, s.Error
 }
 
 func setupTestStore(t *testing.T, expectedErr error) *BusinessStoreImpl {
@@ -2116,6 +2127,55 @@ func TestBusinessStoreImplMoveProperty(t *testing.T) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
 	})
+}
+
+func TestBusinessStoreImplDeactivateForms(t *testing.T) {
+	ctx := context.Background()
+	form := &dbgen.Form{
+		ID:         1,
+		ExternalID: testAPIKeyUUID,
+		OrgID:      Int(10),
+		Active:     false,
+		Enabled:    true,
+	}
+	stub := &deactivateFormsQuerierStub{
+		QuerierStub: &QuerierStub{},
+		forms:       []*dbgen.Form{form},
+	}
+	store := &BusinessStoreImpl{
+		querier: stub,
+		cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+	}
+	store.cacheForm(ctx, form)
+	if err := store.cache.Set(ctx, OrgFormsCacheKey(10, orgFormsCacheKeyStr), []*dbgen.Form{form}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.cache.Set(ctx, orgFormsCountCacheKey(10), int64(1)); err != nil {
+		t.Fatal(err)
+	}
+
+	forms, err := store.DeactivateForms(ctx, []int32{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(forms) != 1 {
+		t.Fatalf("DeactivateForms() returned %d forms, want 1", len(forms))
+	}
+	if len(stub.ids) != 1 || stub.ids[0] != 1 {
+		t.Fatalf("DeactivateForms() ids = %v, want [1]", stub.ids)
+	}
+	if _, _, err := store.GetCachedFormByExternalID(ctx, UUIDToString(form.ExternalID)); !errors.Is(err, ErrNegativeCacheHit) {
+		t.Fatalf("DeactivateForms() external ID cache err = %v, want ErrNegativeCacheHit", err)
+	}
+	if _, err := FetchCachedOne[dbgen.Form](ctx, store.cache, formByIDCacheKey(form.ID)); !errors.Is(err, ErrNegativeCacheHit) {
+		t.Fatalf("DeactivateForms() form ID cache err = %v, want ErrNegativeCacheHit", err)
+	}
+	if _, err := store.cache.Get(ctx, OrgFormsCacheKey(10, orgFormsCacheKeyStr)); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("DeactivateForms() org forms cache err = %v, want ErrCacheMiss", err)
+	}
+	if _, err := store.cache.Get(ctx, orgFormsCountCacheKey(10)); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("DeactivateForms() org forms count cache err = %v, want ErrCacheMiss", err)
+	}
 }
 
 func TestBusinessStoreImplMoveForm(t *testing.T) {
