@@ -483,6 +483,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		Stage:       stage,
 		UsersLimit:  50,
 	})
+	jobs.AddLocked(3*time.Hour, &maintenance.DeactivateFailingFormsJob{
+		Store:      businessDB,
+		TimeSeries: timeSeriesDB,
+		PortalURL:  mailer.PortalURL,
+		IDHasher:   idHasher,
+	})
 	jobs.AddLocked(10*time.Minute, asyncTasksJob)
 
 	jobs.RunAll()
