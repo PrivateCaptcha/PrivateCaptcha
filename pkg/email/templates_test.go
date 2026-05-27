@@ -41,6 +41,7 @@ func TestEmailTemplates(t *testing.T) {
 		APIKeyExpirationContext
 		TwoFactorEmailContext
 		UsageReportContext
+		FormDeactivationContext
 		// heap of everything else
 		PortalURL   string
 		CurrentYear int
@@ -86,6 +87,11 @@ func TestEmailTemplates(t *testing.T) {
 			TopProperties: []*PropertyStat{
 				{Name: "Main Site", Domain: "example.com", Count: 800, Percent: 64.8, Change: 14.3},
 				{Name: "Blog", Domain: "blog.example.com", Count: 434, Percent: 35.2, Change: 8.5, Alternate: true},
+			},
+		},
+		FormDeactivationContext: FormDeactivationContext{
+			Forms: []*DeactivatedForm{
+				{Name: "Contact", Link: "https://portal.privatecaptcha.com/org/abc/form/def"},
 			},
 		},
 		UserName:    "John Doe",
