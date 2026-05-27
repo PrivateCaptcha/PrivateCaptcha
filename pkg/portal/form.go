@@ -90,12 +90,12 @@ type formDashboardIntegrationsRenderContext struct {
 }
 
 type formSettingsRenderContext struct {
+	AlertRenderContext
 	formDashboardRenderContext
-	Orgs       []*UserOrg
-	URLError   string
-	CanMove    bool
-	TestBody   string
-	TestResult string
+	Orgs     []*UserOrg
+	URLError string
+	CanMove  bool
+	TestBody string
 }
 
 type formAuditLogsRenderContext struct {
@@ -761,7 +761,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 
 	values, err := url.ParseQuery(body)
 	if err != nil {
-		renderCtx.TestResult = "Failed to parse body: " + err.Error()
+		renderCtx.ErrorMessage = "Failed to parse body: " + err.Error()
 		return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
 	}
 
@@ -776,14 +776,14 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 	if s.APIServer != nil {
 		result := s.APIServer.SubmitFormDirectly(ctx, form, submission)
 		if result.Success {
-			renderCtx.TestResult = fmt.Sprintf("OK (HTTP %d)", result.StatusCode)
+			renderCtx.SuccessMessage = fmt.Sprintf("OK (HTTP %d)", result.StatusCode)
 		} else if result.StatusCode > 0 {
-			renderCtx.TestResult = fmt.Sprintf("Failure (HTTP %d)", result.StatusCode)
+			renderCtx.WarningMessage = fmt.Sprintf("Failure (HTTP %d)", result.StatusCode)
 		} else {
-			renderCtx.TestResult = "Failure: could not submit form"
+			renderCtx.ErrorMessage = "Failure: could not submit form"
 		}
 	} else {
-		renderCtx.TestResult = "Failure: test server not configured"
+		renderCtx.ErrorMessage = "Failure: test server not configured"
 	}
 
 	return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
