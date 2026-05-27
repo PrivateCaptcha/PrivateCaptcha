@@ -564,21 +564,3 @@ func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.I
 
 	return link
 }
-
-func formDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, form *dbgen.Form) string {
-	if (len(portalURL) == 0) || (hasher == nil) || (form == nil) || (!form.OrgID.Valid) {
-		return ""
-	}
-
-	link, err := url.JoinPath(portalURL,
-		common.OrgEndpoint,
-		hasher.Encrypt(int(form.OrgID.Int32)),
-		common.FormEndpoint,
-		hasher.Encrypt(int(form.ID)))
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to build form dashboard URL", "formID", form.ID, common.ErrAttr(err))
-		return ""
-	}
-
-	return link
-}

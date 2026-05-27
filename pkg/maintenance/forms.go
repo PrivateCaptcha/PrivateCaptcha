@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log/slog"
+	"net/url"
 	"slices"
 	"time"
 
@@ -138,6 +139,24 @@ func hashIDs(ids []int32) uint32 {
 	}
 
 	return h.Sum32()
+}
+
+func formDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, form *dbgen.Form) string {
+	if (len(portalURL) == 0) || (hasher == nil) || (form == nil) || (!form.OrgID.Valid) {
+		return ""
+	}
+
+	link, err := url.JoinPath(portalURL,
+		common.OrgEndpoint,
+		hasher.Encrypt(int(form.OrgID.Int32)),
+		common.FormEndpoint,
+		hasher.Encrypt(int(form.ID)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build form dashboard URL", "formID", form.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	return link
 }
 
 func scheduleFormDeactivationNotifications(ctx context.Context, creator userNotificationCreator, forms []*dbgen.Form, portalURL string, hasher common.IdentifierHasher, tnow time.Time) error {
