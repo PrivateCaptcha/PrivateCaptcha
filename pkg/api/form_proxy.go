@@ -46,6 +46,11 @@ type FormSubmission struct {
 	Time            time.Time
 }
 
+type FormSubmitResult struct {
+	Success    bool
+	StatusCode int
+}
+
 func (s *Server) formPreFlight(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -260,7 +265,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 				return
 			}
 
-			s.submitForm(ctx, client, f, sub)
+			_ = s.submitForm(ctx, client, f, sub)
 		}(form, submission)
 	}
 
@@ -350,7 +355,9 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 }
 
-func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) {
+func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
+	result := &FormSubmitResult{}
+
 	method := strings.ToUpper(string(form.Method))
 	if len(method) == 0 {
 		method = http.MethodPost
@@ -371,7 +378,7 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 			select {
 			case <-ctx.Done():
 				slog.WarnContext(ctx, "Job context cancelled while submitting form", common.ErrAttr(ctx.Err()))
-				return
+				return result
 			case <-time.After(b.Duration()):
 			}
 		}
@@ -379,7 +386,7 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 		req, err := http.NewRequestWithContext(ctx, method, form.URL, bytes.NewBufferString(body))
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, common.ErrAttr(err))
-			return
+			return result
 		}
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
@@ -407,15 +414,18 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 			continue
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
+		result.StatusCode = resp.StatusCode
 		_ = resp.Body.Close()
 
 		if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
 			s.addFormSubmitRecord(ctx, form, formSubmitStatusSuccess)
-			return
+			result.Success = true
+			return result
 		}
 
 		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
 
 	s.addFormSubmitRecord(ctx, form, formSubmitStatusFailure)
+	return result
 }

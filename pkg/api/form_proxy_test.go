@@ -18,6 +18,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -178,6 +179,85 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	case record := <-server.FormSubmitLogChan:
 		t.Fatalf("expected one final failure record, got extra %+v", record)
 	default:
+	}
+}
+
+func TestSubmitFormReturnsSuccessResult(t *testing.T) {
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
+	client := server.newFormHTTPClient()
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := server.submitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Success {
+		t.Fatal("expected success result")
+	}
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, result.StatusCode)
+	}
+}
+
+func TestSubmitFormReturnsFailureResult(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
+	client := server.newFormHTTPClient()
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := server.submitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected failure result")
+	}
+	if result.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, result.StatusCode)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt, got %d", attempts)
+	}
+}
+
+func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
+	client := server.newFormHTTPClient()
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := server.submitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected failure result")
+	}
+	if result.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, result.StatusCode)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
 	}
 }
 
