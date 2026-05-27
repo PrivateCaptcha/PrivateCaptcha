@@ -174,7 +174,6 @@ type Server struct {
 	AdminEmail         common.ConfigItem
 	CountryCodeHeader  common.ConfigItem
 	UserLimiter        api.UserLimiter
-	APIServer          *api.Server
 	AuditLogsFunc      AuditLogsConstructor
 	AuditLogParser     AuditLogParser
 	PropertyRulesFunc  PropertyRulesConstructor

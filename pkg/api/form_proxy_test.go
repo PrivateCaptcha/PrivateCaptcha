@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -18,7 +19,6 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
-	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/monitoring"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -34,6 +34,14 @@ func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string
 
 func (v *stubSubmitFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+func (v *stubSubmitFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 type formProxyQuerierStub struct {
@@ -189,11 +197,10 @@ func TestSubmitFormReturnsSuccessResult(t *testing.T) {
 	defer downstream.Close()
 
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
-	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
-	client := server.newFormHTTPClient()
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := server.submitForm(context.Background(), client, form, submission)
+	result := SubmitForm(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -214,11 +221,10 @@ func TestSubmitFormReturnsFailureResult(t *testing.T) {
 	defer downstream.Close()
 
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
-	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
-	client := server.newFormHTTPClient()
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := server.submitForm(context.Background(), client, form, submission)
+	result := SubmitForm(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -242,11 +248,10 @@ func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
 	defer downstream.Close()
 
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
-	server := &Server{FormURLVerifier: &stubSubmitFormURLVerifier{}, Metrics: monitoring.NewStub()}
-	client := server.newFormHTTPClient()
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := server.submitForm(context.Background(), client, form, submission)
+	result := SubmitForm(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -264,8 +269,7 @@ func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
 func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
 	expectedErr := errors.New("unsafe redirect URL")
 	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
-	server := &Server{FormURLVerifier: verifier}
-	client := server.newFormHTTPClient()
+	client := common.NewFormHTTPClient(verifier)
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
 
 	err := client.CheckRedirect(req, nil)
@@ -278,13 +282,13 @@ func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
 }
 
 func TestFormDialContextRejectsUnsafeResolvedAddress(t *testing.T) {
-	server := &Server{FormURLVerifier: NewFormURLVerifier()}
-	_, err := server.formDialContext(context.Background(), "tcp", "127.0.0.1:80")
+	verifier := NewFormURLVerifier()
+	_, err := verifier.DialContext(context.Background(), "tcp", "127.0.0.1:80")
 	if err == nil {
 		t.Fatal("expected localhost dial target to be rejected")
 	}
 
-	_, err = server.formDialContext(context.Background(), "tcp", "[::1]:80")
+	_, err = verifier.DialContext(context.Background(), "tcp", "[::1]:80")
 	if err == nil {
 		t.Fatal("expected IPv6 localhost dial target to be rejected")
 	}

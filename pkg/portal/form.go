@@ -27,6 +27,7 @@ const (
 	formWizardTemplate                = "form-wizard/wizard.html"
 	formWizardNewTemplate             = "form-wizard/new.html"
 	formWizardSetupTemplate           = "form-wizard/client-setup.html"
+	formTestTemplate                  = "form/settings-test-form.html"
 	activeSubscriptionForFormError    = "You need an active subscription to create new forms."
 	formReportsTabIndex               = 0
 	formIntegrationsTabIndex          = 1
@@ -723,6 +724,19 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
+func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submission *api.FormSubmission) *api.FormSubmitResult {
+	if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
+		return &api.FormSubmitResult{Success: false}
+	}
+
+	client := common.NewFormHTTPClient(s.FormURLVerifier)
+
+	formCopy := *form
+	formCopy.RetryRequestCount = 0
+
+	return api.SubmitForm(ctx, client, &formCopy, submission)
+}
+
 func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
 	ctx := r.Context()
 	user, err := s.SessionUser(ctx, s.Session(w, r))
@@ -750,19 +764,14 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		return nil, err
 	}
 
-	if !renderCtx.CanEdit {
-		slog.WarnContext(ctx, "Insufficient permissions to test form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
-		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
-	}
-
 	body := r.FormValue(common.ParamBody)
 	renderCtx.TestBody = body
 
 	values, err := url.ParseQuery(body)
 	if err != nil {
-		renderCtx.ErrorMessage = "Failed to parse body: " + err.Error()
-		return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
+		slog.WarnContext(ctx, "Failed to parse form body payload", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to parse body as url-encoded form."
+		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
 	}
 
 	submission := &api.FormSubmission{
@@ -773,20 +782,16 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		Time:           time.Now().UTC(),
 	}
 
-	if s.APIServer != nil {
-		result := s.APIServer.SubmitFormDirectly(ctx, form, submission)
-		if result.Success {
-			renderCtx.SuccessMessage = fmt.Sprintf("OK (HTTP %d)", result.StatusCode)
-		} else if result.StatusCode > 0 {
-			renderCtx.WarningMessage = fmt.Sprintf("Failure (HTTP %d)", result.StatusCode)
-		} else {
-			renderCtx.ErrorMessage = "Failure: could not submit form"
-		}
+	result := s.submitFormDirectly(ctx, form, submission)
+	if result.Success {
+		renderCtx.SuccessMessage = fmt.Sprintf("Test succeeded. (HTTP %d)", result.StatusCode)
+	} else if result.StatusCode > 0 {
+		renderCtx.WarningMessage = fmt.Sprintf("Test failed. (HTTP %d)", result.StatusCode)
 	} else {
-		renderCtx.ErrorMessage = "Failure: test server not configured"
+		renderCtx.ErrorMessage = "Cannot submit form. Please try again later."
 	}
 
-	return &ViewModel{Model: renderCtx, View: "form/settings-test-form.html"}, nil
+	return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
 }
 
 func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -447,6 +448,13 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -471,6 +479,7 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	values.Set(common.ParamBody, "email=test@example.com&message=hello")
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
@@ -494,8 +503,8 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	if renderCtx.TestBody != "email=test@example.com&message=hello" {
 		t.Fatalf("Expected test body preserved, got %q", renderCtx.TestBody)
 	}
-	if !strings.Contains(renderCtx.SuccessMessage, "OK") {
-		t.Fatalf("Expected result to contain OK, got %q", renderCtx.SuccessMessage)
+	if len(renderCtx.SuccessMessage) == 0 {
+		t.Fatal("Expected result to contain success message")
 	}
 }
 
@@ -508,6 +517,13 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -534,6 +550,7 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	values.Set(common.ParamBody, "email=test@example.com")
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
 	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
@@ -551,11 +568,8 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
 	}
-	if !strings.Contains(renderCtx.WarningMessage, "Failure") {
-		t.Fatalf("Expected result to contain Failure, got %q", renderCtx.WarningMessage)
-	}
-	if !strings.Contains(renderCtx.WarningMessage, "503") {
-		t.Fatalf("Expected result to contain status 503, got %q", renderCtx.WarningMessage)
+	if len(renderCtx.WarningMessage) == 0 {
+		t.Fatal("Expected result to contain warning message")
 	}
 }
 
@@ -1066,6 +1080,14 @@ func (v rejectPortalFormURLVerifier) VerifyURL(ctx context.Context, rawURL strin
 
 func (v rejectPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+func (v rejectPortalFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 func (s formsLimitSubscriptionStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {

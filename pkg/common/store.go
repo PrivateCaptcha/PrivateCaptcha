@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"time"
@@ -125,6 +126,7 @@ type EmailVerifier interface {
 type FormURLVerifier interface {
 	VerifyURL(ctx context.Context, rawURL string) error
 	VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 type LicenseService interface {

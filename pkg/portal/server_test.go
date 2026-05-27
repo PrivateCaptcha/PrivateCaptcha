@@ -2,6 +2,7 @@ package portal
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -59,6 +60,14 @@ func (allowAllPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, 
 	return nil
 }
 
+func (allowAllPortalFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
+}
+
 func (s *stubLicenseService) IsRegistered() bool {
 	return false
 }
@@ -105,13 +114,8 @@ func TestMain(m *testing.M) {
 			SubscriptionLimits: &db.StubSubscriptionLimits{},
 			EmailVerifier:      &PortalEmailVerifier{},
 			FormURLVerifier:    allowAllPortalFormURLVerifier{},
-			APIServer: &api.Server{
-				FormURLVerifier:   allowAllPortalFormURLVerifier{},
-				Metrics:           monitoring.NewStub(),
-				FormSubmitLogChan: make(chan *common.FormSubmitRecord, 10),
-			},
-			IDHasher:   common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
-			AdminEmail: config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
+			IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
+			AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
 		}
 
 		ctx := context.TODO()
@@ -187,12 +191,7 @@ func TestMain(m *testing.M) {
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
 		FormURLVerifier:    allowAllPortalFormURLVerifier{},
-		APIServer: &api.Server{
-			FormURLVerifier:   allowAllPortalFormURLVerifier{},
-			Metrics:           monitoring.NewStub(),
-			FormSubmitLogChan: make(chan *common.FormSubmitRecord, 10),
-		},
-		LicenseService: &stubLicenseService{},
+		LicenseService:     &stubLicenseService{},
 	}
 
 	templatesBuilder := NewTemplatesBuilder()

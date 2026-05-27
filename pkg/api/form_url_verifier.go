@@ -170,3 +170,45 @@ func (v *FormURLVerifierImpl) VerifyResolvedAddress(ctx context.Context, host st
 func normalizeFormURLHostname(host string) string {
 	return strings.TrimSuffix(strings.ToLower(host), ".")
 }
+
+func (v *FormURLVerifierImpl) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+
+	host = normalizeFormURLHostname(host)
+	if ip, err := netip.ParseAddr(host); err == nil {
+		if err := v.VerifyResolvedAddress(ctx, host, ip); err != nil {
+			return nil, err
+		}
+		return formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(host, port))
+	}
+
+	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("form dial hostname resolved no addresses: %s", host)
+	}
+
+	var lastErr error
+	for _, address := range addresses {
+		ip, ok := netip.AddrFromSlice(address.IP)
+		if !ok {
+			return nil, fmt.Errorf("form dial resolved invalid address: %s", address.IP.String())
+		}
+		if err := v.VerifyResolvedAddress(ctx, host, ip); err != nil {
+			return nil, err
+		}
+
+		conn, err := formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(ip.Unmap().String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		lastErr = err
+	}
+
+	return nil, lastErr
+}
