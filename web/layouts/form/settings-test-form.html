@@ -25,21 +25,20 @@
                                 class="block w-full rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-pclime-600 sm:text-sm sm:leading-6 resize-none">{{ $.Params.TestBody }}</textarea>
                         </div>
                     </div>
+                    {{if .Params.ErrorMessage}}
+                    <div>{{template "error-message.html" .Params.ErrorMessage}}</div>
+                    {{else if .Params.SuccessMessage}}
+                    <div>{{template "success-message.html" .Params.SuccessMessage}}</div>
+                    {{else if .Params.InfoMessage}}
+                    <div>{{template "info-message.html" .Params.InfoMessage}}</div>
+                    {{else if .Params.WarningMessage}}
+                    <div>{{template "warning-message.html" .Params.WarningMessage}}</div>
+                    {{end}}
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-{{if .Params.ErrorMessage}}
-    <div class="py-5">{{template "error-message.html" .Params.ErrorMessage}}</div>
-{{else if .Params.SuccessMessage}}
-    <div class="py-5">{{template "success-message.html" .Params.SuccessMessage}}</div>
-{{else if .Params.InfoMessage}}
-    <div class="py-5">{{template "info-message.html" .Params.InfoMessage}}</div>
-{{else if .Params.WarningMessage}}
-    <div class="py-5">{{template "warning-message.html" .Params.WarningMessage}}</div>
-{{end}}
 
 <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
     <button type="submit" hx-indicator="#spinner" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">

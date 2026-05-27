@@ -536,7 +536,6 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &formSettingsRenderContext{
 					formDashboardRenderContext: formDash(formSettingsTabIndex, a),
-					AlertRenderContext:         a,
 					Orgs:                       orgs,
 					CanMove:                    true,
 				}
