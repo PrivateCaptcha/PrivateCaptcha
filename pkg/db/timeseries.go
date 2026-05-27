@@ -677,46 +677,48 @@ func (ts *TimeSeriesDB) RetrieveFailingForms(ctx context.Context, threshold, lim
 	}
 
 	query := fmt.Sprintf(`WITH hourly AS (
-	SELECT
-		form_id,
-		timestamp,
-		sum(success_count) AS success_count,
-		sum(failure_count) AS failure_count
-	FROM %s FINAL
-	WHERE timestamp >= {timestamp:DateTime}
-	GROUP BY form_id, timestamp
-	HAVING (success_count + failure_count) > 0
+    SELECT
+        form_id,
+        timestamp,
+        sum(success_count) AS hr_success,
+        sum(failure_count) AS hr_failure
+    FROM %s FINAL
+    WHERE timestamp >= {timestamp:DateTime}
+    GROUP BY form_id, timestamp
+    HAVING (hr_success + hr_failure) > 0
 ), ranked AS (
-	SELECT
-		form_id,
-		timestamp,
-		success_count,
-		failure_count,
-		row_number() OVER (PARTITION BY form_id ORDER BY timestamp DESC) AS rn
-	FROM hourly
+    SELECT
+        form_id,
+        timestamp,
+        hr_success,
+        hr_failure,
+        row_number() OVER (PARTITION BY form_id ORDER BY timestamp DESC) AS rn
+    FROM hourly
 ), last_records AS (
-	SELECT
-		form_id,
-		count() AS record_count,
-		sum(success_count) AS success_count,
-		sum(failure_count) AS failure_count,
-		countIf(success_count = 0 AND failure_count > 0) AS failed_record_count
-	FROM ranked
-	WHERE rn <= {threshold:UInt32}
-	GROUP BY form_id
+    SELECT
+        form_id,
+        count() AS record_count,
+        sum(hr_success) AS total_success,
+        sum(hr_failure) AS total_failure,
+        countIf(hr_success = 0 AND hr_failure > 0) AS failed_record_count
+    FROM ranked
+    WHERE rn <= {threshold:UInt32}
+    GROUP BY form_id
 )
-SELECT form_id, failure_count
+SELECT
+    form_id,
+    total_failure AS failure_count -- Aliased back so rows.Scan works
 FROM last_records
 WHERE record_count = {threshold:UInt32}
-	AND success_count = 0
-	AND failed_record_count = {threshold:UInt32}
+    AND total_success = 0
+    AND failed_record_count = {threshold:UInt32}
 ORDER BY failure_count DESC, form_id ASC
-LIMIT {limit:UInt32};`, FormSubmitLogTableName1h)
+LIMIT {limit_val:UInt32};`, FormSubmitLogTableName1h)
 
 	rows, err := ts.Clickhouse.Query(query,
 		clickhouse.Named("timestamp", time.Now().UTC().Add(-24*time.Hour).Format(time.DateTime)),
 		clickhouse.Named("threshold", strconv.Itoa(threshold)),
-		clickhouse.Named("limit", strconv.Itoa(limit)))
+		clickhouse.Named("limit_val", strconv.Itoa(limit)))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to query failing forms", common.ErrAttr(err))
 		return nil, err

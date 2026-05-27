@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync/atomic"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
 	"github.com/rs/xid"
 )
@@ -347,5 +349,147 @@ func TestWarmupAPICacheJob(t *testing.T) {
 
 	if job.InitialPause() != 5*time.Second {
 		t.Errorf("Expected initial pause 5s, got %v", job.InitialPause())
+	}
+}
+
+func TestDeactivateFailingFormsJobEndToEnd(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	t.Parallel()
+
+	ctx := common.TraceContext(t.Context(), t.Name())
+	registerTemplatesJob := &maintenance.RegisterEmailTemplatesJob{
+		Templates: email.Templates(),
+		Store:     store,
+	}
+	if err := registerTemplatesJob.RunOnce(ctx, registerTemplatesJob.NewParams()); err != nil {
+		t.Fatalf("failed to register email templates: %v", err)
+	}
+
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create account: %v", err)
+	}
+
+	failingForm, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "deactivate-failing.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name() + " failing",
+		URL:               "https://example.com/failing",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("failed to create failing form: %v", err)
+	}
+
+	healthyForm, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "deactivate-healthy.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name() + " healthy",
+		URL:               "https://example.com/healthy",
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("failed to create healthy form: %v", err)
+	}
+
+	now := time.Now().UTC().Truncate(time.Hour)
+	if err := timeSeries.WriteFormSubmitBatch(ctx, []*common.FormSubmitRecord{
+		{UserID: user.ID, OrgID: org.ID, FormID: failingForm.ID, Timestamp: now.Add(-4 * time.Hour), Status: 0},
+		{UserID: user.ID, OrgID: org.ID, FormID: failingForm.ID, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: failingForm.ID, Timestamp: now.Add(-2 * time.Hour), Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: failingForm.ID, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: healthyForm.ID, Timestamp: now.Add(-3 * time.Hour), Status: 1},
+		{UserID: user.ID, OrgID: org.ID, FormID: healthyForm.ID, Timestamp: now.Add(-2 * time.Hour), Status: 0},
+		{UserID: user.ID, OrgID: org.ID, FormID: healthyForm.ID, Timestamp: now.Add(-1 * time.Hour), Status: 1},
+	}); err != nil {
+		t.Fatalf("failed to write form submit batch: %v", err)
+	}
+
+	for attempt := 0; attempt < 10; attempt++ {
+		candidates, err := timeSeries.RetrieveFailingForms(ctx, 3, 10)
+		if err != nil {
+			t.Fatalf("failed to retrieve failing forms: %v", err)
+		}
+		for _, candidate := range candidates {
+			if candidate != nil && candidate.FormID == failingForm.ID {
+				attempt = 10
+				break
+			}
+		}
+		if attempt < 10 {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+
+	job := &maintenance.DeactivateFailingFormsJob{
+		Store:      store,
+		TimeSeries: timeSeries,
+		PortalURL:  "https://portal.example",
+		IDHasher:   server.IDHasher,
+		Threshold:  3,
+		MaxForms:   10,
+	}
+	if err := job.RunOnce(ctx, job.NewParams()); err != nil {
+		t.Fatalf("job failed: %v", err)
+	}
+
+	querier := dbgen.New(store.Pool)
+	deactivatedForm, err := querier.GetFormByID(ctx, failingForm.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve failing form: %v", err)
+	}
+	if deactivatedForm.Active {
+		t.Fatalf("failing form should be inactive after job")
+	}
+
+	stillActiveForm, err := querier.GetFormByID(ctx, healthyForm.ID)
+	if err != nil {
+		t.Fatalf("failed to retrieve healthy form: %v", err)
+	}
+	if !stillActiveForm.Active {
+		t.Fatalf("healthy form should remain active")
+	}
+
+	notifications, err := store.Impl().RetrievePendingUserNotifications(ctx, time.Now().UTC().Add(-1*time.Minute), 100, 5)
+	if err != nil {
+		t.Fatalf("failed to retrieve pending notifications: %v", err)
+	}
+
+	var matched *dbgen.GetPendingUserNotificationsRow
+	for _, notification := range notifications {
+		if notification.UserNotification.UserID.Valid &&
+			notification.UserNotification.UserID.Int32 == user.ID &&
+			notification.UserNotification.TemplateID.Valid &&
+			notification.UserNotification.TemplateID.String == email.FormDeactivationTemplate.Hash() {
+			matched = notification
+			break
+		}
+	}
+	if matched == nil {
+		t.Fatalf("expected form deactivation notification for user %d", user.ID)
+	}
+
+	var payload email.FormDeactivationContext
+	if err := json.Unmarshal(matched.UserNotification.Payload, &payload); err != nil {
+		t.Fatalf("failed to unmarshal notification payload: %v", err)
+	}
+	if len(payload.Forms) != 1 {
+		t.Fatalf("payload form count = %d, want 1", len(payload.Forms))
+	}
+	if payload.Forms[0].Name != failingForm.Name {
+		t.Fatalf("payload form name = %q, want %q", payload.Forms[0].Name, failingForm.Name)
+	}
+	expectedLink := "https://portal.example/org/" + server.IDHasher.Encrypt(int(org.ID)) + "/form/" + server.IDHasher.Encrypt(int(failingForm.ID))
+	if payload.Forms[0].Link != expectedLink {
+		t.Fatalf("payload form link = %q, want %q", payload.Forms[0].Link, expectedLink)
 	}
 }
