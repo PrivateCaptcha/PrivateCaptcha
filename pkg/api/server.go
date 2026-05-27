@@ -401,7 +401,7 @@ func (s *Server) recaptchaVerifyHandler(w http.ResponseWriter, r *http.Request) 
 		propertyID := payloadPuzzle.PropertyID()
 		if propertyExternalID := db.UUIDFromSiteKey(sitekey); !bytes.Equal(propertyExternalID.Bytes[:], propertyID[:]) {
 			slog.WarnContext(ctx, "Expected property ID does not match", "expected", sitekey, "actual", hex.EncodeToString(propertyID[:]))
-			common.SendReponse(ctx, w, invalidPropertyRecaptchaResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
+			common.SendResponse(ctx, w, invalidPropertyRecaptchaResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
 			return
 		}
 		isExplicitTestSitekey = payloadPuzzle.IsZero() && bytes.Equal(propertyID[:], db.TestPropertyUUID.Bytes[:])
@@ -475,7 +475,7 @@ func (s *Server) pcVerifyHandler(w http.ResponseWriter, r *http.Request) {
 		propertyID := payloadPuzzle.PropertyID()
 		if propertyExternalID := db.UUIDFromSiteKey(sitekey); !bytes.Equal(propertyExternalID.Bytes[:], propertyID[:]) {
 			slog.WarnContext(ctx, "Expected property ID does not match", "expected", sitekey, "actual", hex.EncodeToString(propertyID[:]))
-			common.SendReponse(ctx, w, invalidPropertyResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
+			common.SendResponse(ctx, w, invalidPropertyResponse, common.JSONContentHeaders, common.NoCacheHeaders, s.APIHeaders)
 			return
 		}
 		isExplicitTestSitekey = payloadPuzzle.IsZero() && bytes.Equal(propertyID[:], db.TestPropertyUUID.Bytes[:])

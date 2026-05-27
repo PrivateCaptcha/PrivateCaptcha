@@ -73,7 +73,7 @@ func MaskEmail(email string, mask rune) string {
 	return prefix + xxx + suffix + "@" + parts[1]
 }
 
-func SendReponse(ctx context.Context, w http.ResponseWriter, response []byte, headers ...map[string][]string) {
+func SendResponse(ctx context.Context, w http.ResponseWriter, response []byte, headers ...map[string][]string) {
 	wHeader := w.Header()
 	for _, hh := range headers {
 		for key, value := range hh {

@@ -240,7 +240,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		}
 
 		if !form.Enabled || !form.Active {
-			slog.WarnContext(ctx, "Skipping inactive or disable form", "formID", form.ID)
+			slog.WarnContext(ctx, "Skipping inactive or disabled form", "formID", form.ID)
 			continue
 		}
 

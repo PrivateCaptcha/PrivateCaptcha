@@ -20,7 +20,7 @@ function findCaptchaElements(compatMode) {
     const selector = (compatMode === RECAPTCHA_COMPAT) ? '.g-recaptcha' : '.private-captcha';
     const elements = document.querySelectorAll(selector);
     if (elements.length === 0) {
-        console.warn(`'PrivateCaptcha: No element was found with ${selector} class`);
+        console.warn(`PrivateCaptcha: No element was found with ${selector} class`);
     }
     return elements;
 }
