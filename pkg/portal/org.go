@@ -327,13 +327,16 @@ func (s *Server) createOrgFormsRenderContext(ctx context.Context, baseCtx *porta
 	}
 
 	renderCtx.Forms = formsToUserForms(ctx, forms, s.IDHasher)
-	from := 1 + page*propertiesPerPage
 	renderCtx.PaginationRenderContext = PaginationRenderContext{
-		From:    from,
-		To:      from + len(renderCtx.Forms) - 1,
 		Count:   len(renderCtx.Forms),
 		Page:    page,
 		PerPage: propertiesPerPage,
+	}
+
+	if len(renderCtx.Forms) > 0 {
+		from := 1 + page*propertiesPerPage
+		renderCtx.From = from
+		renderCtx.To = from + len(renderCtx.Forms) - 1
 	}
 
 	if (page > 0) || hasMore {
@@ -476,18 +479,21 @@ func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Orga
 		return nil, err
 	}
 
-	from := 1 + page*propertiesPerPage
-
 	renderCtx := &orgPropertiesRenderContext{
 		PaginationRenderContext: PaginationRenderContext{
-			From:    from,
-			To:      from + len(properties) - 1,
+
 			Count:   len(properties),
 			Page:    page,
 			PerPage: propertiesPerPage,
 		},
 		CurrentOrg: orgToUserOrg(org, user.ID, s.IDHasher),
 		Properties: propertiesToUserProperties(ctx, properties, s.IDHasher),
+	}
+
+	if len(properties) > 0 {
+		from := 1 + page*propertiesPerPage
+		renderCtx.From = from
+		renderCtx.To = from + len(properties) - 1
 	}
 
 	if (page > 0) || hasMore {

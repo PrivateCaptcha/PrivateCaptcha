@@ -6,10 +6,16 @@ import (
 	"time"
 )
 
+const maxFormRedirects = 10
+
 func NewFormHTTPClient(verifier FormURLVerifier) *http.Client {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxFormRedirects {
+				return fmt.Errorf("stopped after %d redirects", maxFormRedirects)
+			}
+
 			if err := verifier.VerifyURL(req.Context(), req.URL.String()); err != nil {
 				return fmt.Errorf("unsafe form redirect: %w", err)
 			}

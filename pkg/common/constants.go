@@ -93,6 +93,7 @@ var (
 	HeaderSitekey             = http.CanonicalHeaderKey("X-PC-Sitekey")
 	HeaderWidgetNotice        = http.CanonicalHeaderKey("X-PC-Widget-Notice")
 	HeaderClientIP            = http.CanonicalHeaderKey("X-PC-Client-IP")
+	HeaderFormSubmissionID    = http.CanonicalHeaderKey("X-PC-Form-Submission-ID")
 	HeaderCacheControl        = http.CanonicalHeaderKey("Cache-Control")
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
 	HeaderOrigin              = http.CanonicalHeaderKey("Origin")

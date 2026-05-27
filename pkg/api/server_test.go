@@ -193,12 +193,14 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		NoticeProvider:      &db_tests.StubNoticeProvider{},
 	}
 
-	srv.Init(t.Context(), ServerConfig{
+	if err := srv.Init(t.Context(), ServerConfig{
 		VerifyFlushInterval: verifyFlushInterval,
 		AuthBackfillDelay:   authBackfillDelay,
 		FormFlushInterval:   formFlushInterval,
 		BackpressureTimeout: 100 * time.Millisecond,
-	})
+	}); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
 
 	srv.APIHeaders = make(map[string][]string)
 	rg := srv.Setup("/api", false, common.NoopMiddleware)

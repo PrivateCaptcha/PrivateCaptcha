@@ -513,8 +513,8 @@ func newMoveFormAuditLogEvent(user *dbgen.User, form *dbgen.Form, oldOrgID int32
 		Action:    common.AuditLogActionUpdate,
 		EntityID:  int64(form.ID),
 		TableName: TableNameForms,
-		OldValue:  &AuditLogForm{OrgID: oldOrgID},
-		NewValue:  &AuditLogForm{OrgID: form.OrgID.Int32, OrgName: orgName},
+		OldValue:  &AuditLogForm{Name: form.Name, OrgID: oldOrgID},
+		NewValue:  &AuditLogForm{Name: form.Name, OrgID: form.OrgID.Int32, OrgName: orgName},
 	}
 }
 

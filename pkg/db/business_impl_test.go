@@ -746,7 +746,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		if querier.createdFormArg == nil || querier.createdFormArg.PropertyID != property.ID {
 			t.Fatalf("expected created form property ID to be %d, got %#v", property.ID, querier.createdFormArg)
 		}
-		cachedForm, needsRefresh, err := store.GetCachedFormByExternalID(context.Background(), TestPropertySitekey)
+		cachedForm, needsRefresh, err := store.GetCachedFormByExternalID(context.Background(), UUIDToString(form.ExternalID))
 		if err != nil {
 			t.Fatalf("expected cached form, got %v", err)
 		}
@@ -2164,12 +2164,6 @@ func TestBusinessStoreImplDeactivateForms(t *testing.T) {
 	if len(stub.ids) != 1 || stub.ids[0] != 1 {
 		t.Fatalf("DeactivateForms() ids = %v, want [1]", stub.ids)
 	}
-	if _, _, err := store.GetCachedFormByExternalID(ctx, UUIDToString(form.ExternalID)); !errors.Is(err, ErrNegativeCacheHit) {
-		t.Fatalf("DeactivateForms() external ID cache err = %v, want ErrNegativeCacheHit", err)
-	}
-	if _, err := FetchCachedOne[dbgen.Form](ctx, store.cache, formByIDCacheKey(form.ID)); !errors.Is(err, ErrNegativeCacheHit) {
-		t.Fatalf("DeactivateForms() form ID cache err = %v, want ErrNegativeCacheHit", err)
-	}
 	if _, err := store.cache.Get(ctx, OrgFormsCacheKey(10, orgFormsCacheKeyStr)); !errors.Is(err, ErrCacheMiss) {
 		t.Fatalf("DeactivateForms() org forms cache err = %v, want ErrCacheMiss", err)
 	}
@@ -2181,7 +2175,13 @@ func TestBusinessStoreImplDeactivateForms(t *testing.T) {
 func TestBusinessStoreImplMoveForm(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, _, _, err := store.MoveForm(context.Background(), &dbgen.User{ID: 1}, &dbgen.Form{ID: 1, PropertyID: 2}, &dbgen.Property{ID: 2}, &dbgen.GetUserOrganizationsRow{})
+		_, _, _, err := store.MoveForm(
+			context.Background(),
+			&dbgen.User{ID: 1},
+			&dbgen.Form{ID: 1, PropertyID: 2, OrgID: Int(1)},
+			&dbgen.Property{ID: 2},
+			&dbgen.GetUserOrganizationsRow{Organization: dbgen.Organization{ID: 2, UserID: Int(9)}},
+		)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}

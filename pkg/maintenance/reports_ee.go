@@ -325,15 +325,13 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
-	formStats, err := j.TimeSeries.RetrieveWeeklyFormsReportStats(ctx, userID, from, mid, to)
-	if err != nil {
+	if formStats, err := j.TimeSeries.RetrieveWeeklyFormsReportStats(ctx, userID, from, mid, to); err == nil {
+		fillFormTotals(report, formStats)
+		fillFormChanges(report, formStats)
+		fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
+	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly forms report stats", "userID", userID, common.ErrAttr(err))
-		return nil, err
 	}
-
-	fillFormTotals(report, formStats)
-	fillFormChanges(report, formStats)
-	fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
@@ -355,15 +353,13 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
 
-	formStats, err := j.TimeSeries.RetrieveMonthlyFormsReportStats(ctx, userID, from, mid, to)
-	if err != nil {
+	if formStats, err := j.TimeSeries.RetrieveMonthlyFormsReportStats(ctx, userID, from, mid, to); err == nil {
+		fillFormTotals(report, formStats)
+		fillFormChanges(report, formStats)
+		fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
+	} else {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly forms report stats", "userID", userID, common.ErrAttr(err))
-		return nil, err
 	}
-
-	fillFormTotals(report, formStats)
-	fillFormChanges(report, formStats)
-	fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }

@@ -436,7 +436,7 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 				s.RedirectError(http.StatusBadRequest, w, r)
 			case errOrgSoftDeleted:
 				common.Redirect(s.RelURL("/"), http.StatusBadRequest, w, r)
-			case errPropertySoftDeleted:
+			case errPropertySoftDeleted, errFormSoftDeleted:
 				if orgID, err := s.OrgID(r); err == nil {
 					url := s.RelURL(fmt.Sprintf("/%s/%v", common.OrgEndpoint, orgID))
 					common.Redirect(url, http.StatusBadRequest, w, r)

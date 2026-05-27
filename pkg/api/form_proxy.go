@@ -19,6 +19,7 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jpillora/backoff"
+	"github.com/rs/xid"
 )
 
 const (
@@ -35,6 +36,7 @@ var formOutboundDialer = &net.Dialer{
 }
 
 type FormSubmission struct {
+	ID              string
 	FormExternalID  string
 	Values          url.Values
 	UserAgent       string
@@ -111,6 +113,7 @@ func sanitizedFormValues(values url.Values) url.Values {
 
 func (s *Server) createFormSubmission(ctx context.Context, r *http.Request, payload puzzle.SolutionPayload) *FormSubmission {
 	submission := &FormSubmission{
+		ID:              xid.New().String(),
 		UserAgent:       r.UserAgent(),
 		Referer:         r.Header.Get(common.HeaderReferer),
 		CaptchaSolution: payload,
@@ -189,6 +192,7 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case s.FormSubmissionChan <- submission:
+		slog.Log(ctx, common.LevelTrace, "Accepted form submission", "submitID", submission.ID)
 		w.WriteHeader(http.StatusAccepted)
 	case <-ctx.Done():
 		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
@@ -340,11 +344,14 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 
 		req, err := http.NewRequestWithContext(ctx, method, form.URL, bytes.NewBufferString(body))
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, common.ErrAttr(err))
+			slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, "submitID", submission.ID, common.ErrAttr(err))
 			return result
 		}
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+		if len(submission.ID) > 0 {
+			req.Header.Set(common.HeaderFormSubmissionID, submission.ID)
+		}
 		if len(submission.UserAgent) > 0 {
 			req.Header.Set(common.HeaderUserAgent, submission.UserAgent)
 		} else {
@@ -365,7 +372,7 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 
 		resp, err := client.Do(req)
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "attempt", attempt+1, common.ErrAttr(err))
+			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "submitID", submission.ID, "attempt", attempt+1, common.ErrAttr(err))
 			continue
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -377,8 +384,10 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 			return result
 		}
 
-		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "status", resp.StatusCode, "attempt", attempt+1)
+		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
+
+	slog.DebugContext(ctx, "Submitted form", "formID", form.ID, "submitID", submission.ID, "status", result.StatusCode)
 
 	return result
 }

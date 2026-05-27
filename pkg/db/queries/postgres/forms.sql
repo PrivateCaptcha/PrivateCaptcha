@@ -76,7 +76,7 @@ RETURNING *;
 -- name: MoveForm :one
 UPDATE backend.forms
 SET org_id = $2, org_owner_id = $3, updated_at = NOW()
-WHERE id = $1
+WHERE id = $1 AND (creator_id = @user_id OR org_owner_id = @user_id)
 RETURNING *;
 
 -- name: SoftDeleteForm :one

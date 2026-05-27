@@ -1002,9 +1002,13 @@ func (ts *TimeSeriesDB) DeletePropertiesData(ctx context.Context, propertyIDs []
 	tnow := time.Now().UTC()
 	timeFrom := tnow.AddDate(0, 0, -1).Truncate(1 * time.Hour)
 	strCacheKey := timeFrom.Format(time.DateTime)
+	weekCacheKey := tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour).Format(time.DateTime)
+	monthCacheKey := tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour).Format(time.DateTime)
 	for _, propertyID := range propertyIDs {
 		cacheKey := propertyStatsCacheKey(propertyID, strCacheKey)
 		_ = ts.Cache.Delete(ctx, cacheKey)
+		_ = ts.Cache.Delete(ctx, propertyRuleStatsCacheKey(propertyID, weekCacheKey))
+		_ = ts.Cache.Delete(ctx, propertyRuleStatsCacheKey(propertyID, monthCacheKey))
 	}
 
 	return ts.lightDelete(ctx, tables, "property_id", ids)
@@ -1399,19 +1403,29 @@ func (m *MemoryTimeSeries) RetrieveFormStatsByPeriod(ctx context.Context, orgID,
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	from := getStartTime(period).UTC()
+	tnow := time.Now().UTC()
+	var from time.Time
 	statsMap := make(map[time.Time]*common.FormSubmitStat)
 
 	var truncate func(time.Time) time.Time
 	switch period {
 	case common.TimePeriodToday:
+		from = tnow.AddDate(0, 0, -1).Truncate(time.Hour)
 		truncate = func(t time.Time) time.Time { return t.UTC().Truncate(time.Hour) }
-	case common.TimePeriodWeek, common.TimePeriodMonth:
+	case common.TimePeriodWeek:
+		from = tnow.AddDate(0, 0, -7).Truncate(24 * time.Hour)
+		truncate = func(t time.Time) time.Time {
+			y, m, d := t.UTC().Date()
+			return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+		}
+	case common.TimePeriodMonth:
+		from = tnow.AddDate(0, -1, 0).Truncate(24 * time.Hour)
 		truncate = func(t time.Time) time.Time {
 			y, m, d := t.UTC().Date()
 			return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 		}
 	case common.TimePeriodYear:
+		from = tnow.AddDate(-1, 0, 0).Truncate(24 * time.Hour)
 		truncate = func(t time.Time) time.Time {
 			y, m, _ := t.UTC().Date()
 			return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)

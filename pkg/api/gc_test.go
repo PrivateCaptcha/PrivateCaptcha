@@ -154,6 +154,9 @@ func TestGCPropertyData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteProperty(ctx, p, org, user)
@@ -177,6 +180,9 @@ func TestGCPropertyOrgData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gcPropertyDataTestSuite(ctx, property, func(p *dbgen.Property) error {
 		_, err := store.Impl().SoftDeleteOrganization(ctx, org, user)
@@ -197,6 +203,9 @@ func TestGCUserData(t *testing.T) {
 	}
 
 	property, err := db_test.CreatePropertyForOrg(ctx, store, org)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,6 +241,9 @@ func TestGCFormData(t *testing.T) {
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
 		_, err := store.Pool.Exec(ctx, "UPDATE backend.forms SET deleted_at = NOW() - INTERVAL '1 hour' WHERE id = $1", form.ID)
@@ -261,6 +273,9 @@ func TestGCFormOrgData(t *testing.T) {
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
 		tnow := time.Now().UTC()
@@ -296,6 +311,9 @@ func TestGCFormUserData(t *testing.T) {
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	gcFormDataTestSuite(ctx, form, func(f *dbgen.Form) error {
 		tnow := time.Now().UTC()

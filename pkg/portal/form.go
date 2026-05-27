@@ -15,6 +15,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/rs/xid"
 )
 
 const (
@@ -781,6 +782,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}
 
 	submission := &api.FormSubmission{
+		ID:             xid.New().String(),
 		FormExternalID: db.UUIDToString(form.ExternalID),
 		Values:         values,
 		UserAgent:      r.UserAgent(),

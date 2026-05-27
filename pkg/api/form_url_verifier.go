@@ -19,6 +19,10 @@ var (
 	errUnsafeFormURL = errors.New("unsafe form URL")
 )
 
+const (
+	maxFormURLCacheSize = 10_000
+)
+
 type formURLResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
@@ -54,20 +58,22 @@ type FormURLVerifierImpl struct {
 var _ common.FormURLVerifier = (*FormURLVerifierImpl)(nil)
 
 func NewFormURLVerifier() *FormURLVerifierImpl {
-	const maxCacheSize = 10_000
 	var cache common.Cache[string, *bool]
 	var err error
-	cache, err = db.NewMemoryCache[string, *bool]("form_url_verifier", maxCacheSize, nil, /*missing value*/
+	cache, err = db.NewMemoryCache[string, *bool]("form_url_verifier", maxFormURLCacheSize, nil, /*missing value*/
 		10*time.Minute /*expiry*/, 5*time.Minute /*refresh*/, time.Minute /*missing */)
 	if err != nil {
 		slog.Error("Failed to create memory cache", common.ErrAttr(err))
-		cache = db.NewStaticCache[string, *bool](maxCacheSize, nil)
+		cache = db.NewStaticCache[string, *bool](maxFormURLCacheSize, nil)
 	}
 
 	return NewFormURLVerifierEx(cache, &FormURLSafetyCheckerImpl{}, net.DefaultResolver)
 }
 
 func NewFormURLVerifierEx(cache common.Cache[string, *bool], checker FormURLSafetyChecker, resolver formURLResolver) *FormURLVerifierImpl {
+	if cache == nil {
+		cache = db.NewStaticCache[string, *bool](maxFormURLCacheSize, nil)
+	}
 	if checker == nil {
 		checker = &FormURLSafetyCheckerImpl{}
 	}

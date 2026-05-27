@@ -1137,7 +1137,7 @@ func (impl *BusinessStoreImpl) CreateNewProperty(ctx context.Context, params *db
 }
 
 func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams *dbgen.CreatePropertyParams, formParams *dbgen.CreateFormParams, org *dbgen.Organization) (*dbgen.Form, *dbgen.Property, []*common.AuditLogEvent, error) {
-	if (formParams == nil) || (len(formParams.Name) == 0) || (len(formParams.URL) == 0) {
+	if (propertyParams == nil) || (formParams == nil) || (len(formParams.Name) == 0) || (len(formParams.URL) == 0) {
 		return nil, nil, nil, ErrInvalidInput
 	}
 
@@ -1259,6 +1259,7 @@ func (impl *BusinessStoreImpl) UpdateForm(ctx context.Context, org *dbgen.Organi
 	cacheForm := createFormFromUpdate(updatedForm)
 	impl.cacheForm(ctx, cacheForm)
 	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(updatedForm.OrgID.Int32, orgFormsCacheKeyStr))
+	_ = impl.cache.Delete(ctx, formAuditLogsCacheKey(updatedForm.ID))
 
 	auditEvent := newUpdateFormAuditLogEvent(cacheForm, updatedForm, org, user)
 
@@ -1281,7 +1282,9 @@ func (impl *BusinessStoreImpl) DeactivateForms(ctx context.Context, ids []int32)
 	}
 
 	for _, form := range forms {
-		impl.deleteCachedForm(ctx, form)
+		impl.cacheForm(ctx, form)
+		_ = impl.cache.Delete(ctx, OrgFormsCacheKey(form.OrgID.Int32, orgFormsCacheKeyStr))
+		_ = impl.cache.Delete(ctx, orgFormsCountCacheKey(form.OrgID.Int32))
 	}
 
 	slog.InfoContext(ctx, "Deactivated forms", "requested", len(ids), "affected", len(forms))
@@ -1309,6 +1312,7 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 		ID:         form.ID,
 		OrgID:      Int(org.Organization.ID),
 		OrgOwnerID: org.Organization.UserID,
+		UserID:     Int(user.ID),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to move form to another org", "formID", form.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
@@ -1319,6 +1323,7 @@ func (impl *BusinessStoreImpl) MoveForm(ctx context.Context, user *dbgen.User, f
 		ID:         property.ID,
 		OrgID:      Int(org.Organization.ID),
 		OrgOwnerID: org.Organization.UserID,
+		UserID:     Int(user.ID),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to move form property to another org", "formID", form.ID, "propertyID", property.ID, "oldOrgID", oldOrgID, "newOrgID", org.Organization.ID, common.ErrAttr(err))
@@ -3022,6 +3027,7 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 		ID:         property.ID,
 		OrgID:      Int(org.Organization.ID),
 		OrgOwnerID: org.Organization.UserID,
+		UserID:     Int(user.ID),
 	})
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to move property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID, common.ErrAttr(err))
