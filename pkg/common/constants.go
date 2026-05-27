@@ -72,6 +72,7 @@ const (
 	ParamWeeklyReport           = "weekly_report"
 	ParamMonthlyReport          = "monthly_report"
 	ParamOnboarding             = "onboarding"
+	ParamBody                   = "body"
 	All                         = "all"
 )
 

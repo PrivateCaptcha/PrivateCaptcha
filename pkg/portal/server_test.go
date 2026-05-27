@@ -2,6 +2,7 @@ package portal
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -57,6 +58,14 @@ func (allowAllPortalFormURLVerifier) VerifyURL(ctx context.Context, rawURL strin
 
 func (allowAllPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return nil
+}
+
+func (allowAllPortalFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 func (s *stubLicenseService) IsRegistered() bool {

@@ -51,4 +51,5 @@ const (
 	NotificationsEndpoint = "notifications"
 	ClientSetupEndpoint   = "clientsetup"
 	ServerSetupEndpoint   = "serversetup"
+	TestEndpoint          = "test"
 )

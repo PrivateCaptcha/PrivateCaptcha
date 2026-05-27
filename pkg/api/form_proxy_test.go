@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -33,6 +34,14 @@ func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string
 
 func (v *stubSubmitFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+func (v *stubSubmitFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 type formProxyQuerierStub struct {
@@ -181,11 +190,86 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	}
 }
 
+func TestSubmitFormReturnsSuccessResult(t *testing.T) {
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Success {
+		t.Fatal("expected success result")
+	}
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, result.StatusCode)
+	}
+}
+
+func TestSubmitFormReturnsFailureResult(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected failure result")
+	}
+	if result.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("expected status %d, got %d", http.StatusServiceUnavailable, result.StatusCode)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt, got %d", attempts)
+	}
+}
+
+func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitForm(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected failure result")
+	}
+	if result.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status %d, got %d", http.StatusInternalServerError, result.StatusCode)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
 func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
 	expectedErr := errors.New("unsafe redirect URL")
 	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
-	server := &Server{FormURLVerifier: verifier}
-	client := server.newFormHTTPClient()
+	client := common.NewFormHTTPClient(verifier)
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
 
 	err := client.CheckRedirect(req, nil)
@@ -198,13 +282,13 @@ func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
 }
 
 func TestFormDialContextRejectsUnsafeResolvedAddress(t *testing.T) {
-	server := &Server{FormURLVerifier: NewFormURLVerifier()}
-	_, err := server.formDialContext(context.Background(), "tcp", "127.0.0.1:80")
+	verifier := NewFormURLVerifier()
+	_, err := verifier.DialContext(context.Background(), "tcp", "127.0.0.1:80")
 	if err == nil {
 		t.Fatal("expected localhost dial target to be rejected")
 	}
 
-	_, err = server.formDialContext(context.Background(), "tcp", "[::1]:80")
+	_, err = verifier.DialContext(context.Background(), "tcp", "[::1]:80")
 	if err == nil {
 		t.Fatal("expected IPv6 localhost dial target to be rejected")
 	}

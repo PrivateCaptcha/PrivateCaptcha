@@ -2,13 +2,16 @@ package portal
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/api"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
@@ -24,6 +27,7 @@ const (
 	formWizardTemplate                = "form-wizard/wizard.html"
 	formWizardNewTemplate             = "form-wizard/new.html"
 	formWizardSetupTemplate           = "form-wizard/client-setup.html"
+	formTestTemplate                  = "form/settings-test-form.html"
 	activeSubscriptionForFormError    = "You need an active subscription to create new forms."
 	formReportsTabIndex               = 0
 	formIntegrationsTabIndex          = 1
@@ -87,10 +91,12 @@ type formDashboardIntegrationsRenderContext struct {
 }
 
 type formSettingsRenderContext struct {
+	AlertRenderContext
 	formDashboardRenderContext
 	Orgs     []*UserOrg
 	URLError string
 	CanMove  bool
+	TestBody string
 }
 
 type formAuditLogsRenderContext struct {
@@ -716,6 +722,82 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+}
+
+func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submission *api.FormSubmission) *api.FormSubmitResult {
+	if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
+		return &api.FormSubmitResult{Success: false}
+	}
+
+	client := common.NewFormHTTPClient(s.FormURLVerifier)
+
+	formCopy := *form
+	formCopy.RetryRequestCount = 0
+
+	return api.SubmitForm(ctx, client, &formCopy, submission)
+}
+
+func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
+	ctx := r.Context()
+	user, err := s.SessionUser(ctx, s.Session(w, r))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = r.ParseForm(); err != nil {
+		slog.ErrorContext(ctx, "Failed to read request body", common.ErrAttr(err))
+		return nil, ErrInvalidRequestArg
+	}
+
+	org, _, err := s.Org(user, r)
+	if err != nil {
+		return nil, err
+	}
+
+	form, err := s.Form(org, r)
+	if err != nil {
+		return nil, err
+	}
+
+	renderCtx, err := s.getOrgFormSettings(w, r)
+	if err != nil {
+		return nil, err
+	}
+
+	if !renderCtx.CanEdit {
+		slog.WarnContext(ctx, "Insufficient permissions to test form", "userID", user.ID, "formID", form.ID, "orgID", org.ID)
+		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
+		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+	}
+
+	body := r.FormValue(common.ParamBody)
+	renderCtx.TestBody = body
+
+	values, err := url.ParseQuery(body)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse form body payload", common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Failed to parse body as url-encoded form."
+		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+	}
+
+	submission := &api.FormSubmission{
+		FormExternalID: db.UUIDToString(form.ExternalID),
+		Values:         values,
+		UserAgent:      r.UserAgent(),
+		Referer:        r.Header.Get(common.HeaderReferer),
+		Time:           time.Now().UTC(),
+	}
+
+	result := s.submitFormDirectly(ctx, form, submission)
+	if result.Success {
+		renderCtx.SuccessMessage = fmt.Sprintf("Test succeeded. (HTTP %d)", result.StatusCode)
+	} else if result.StatusCode > 0 {
+		renderCtx.WarningMessage = fmt.Sprintf("Test failed. (HTTP %d)", result.StatusCode)
+	} else {
+		renderCtx.ErrorMessage = "Cannot submit form. Please try again later."
+	}
+
+	return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
 }
 
 func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {

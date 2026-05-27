@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
@@ -433,6 +434,142 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	}
 	if renderCtx.Form.RequestsPerMinute != 24 {
 		t.Fatal("expected updated requests per minute in render context")
+	}
+}
+
+func TestPostTestFormReturnsResult(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-form.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamBody, "email=test@example.com&message=hello")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postTestForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+	if viewModel.View != "form/settings-test-form.html" {
+		t.Fatalf("Expected view %q, got %q", "form/settings-test-form.html", viewModel.View)
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if renderCtx.TestBody != "email=test@example.com&message=hello" {
+		t.Fatalf("Expected test body preserved, got %q", renderCtx.TestBody)
+	}
+	if len(renderCtx.SuccessMessage) == 0 {
+		t.Fatal("Expected result to contain success message")
+	}
+}
+
+func TestPostTestFormReturnsFailureResult(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-failure.example.com"), &dbgen.CreateFormParams{
+		Name:              t.Name(),
+		URL:               downstream.URL,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}, org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamBody, "email=test@example.com")
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postTestForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if len(renderCtx.WarningMessage) == 0 {
+		t.Fatal("Expected result to contain warning message")
 	}
 }
 
@@ -943,6 +1080,14 @@ func (v rejectPortalFormURLVerifier) VerifyURL(ctx context.Context, rawURL strin
 
 func (v rejectPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return v.err
+}
+
+func (v rejectPortalFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 func (s formsLimitSubscriptionStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {

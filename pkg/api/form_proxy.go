@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"mime"
@@ -44,6 +43,23 @@ type FormSubmission struct {
 	TraceID         string
 	CaptchaSolution puzzle.SolutionPayload
 	Time            time.Time
+}
+
+type FormSubmitResult struct {
+	Success    bool
+	StatusCode int
+}
+
+func (fsr *FormSubmitResult) Valid() bool {
+	return fsr.StatusCode > 0
+}
+
+func (fsr *FormSubmitResult) Code() int8 {
+	var code int8 = formSubmitStatusFailure
+	if fsr.Success {
+		code = formSubmitStatusSuccess
+	}
+	return code
 }
 
 func (s *Server) formPreFlight(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +221,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		formsByID[db.UUIDToString(form.ExternalID)] = form
 	}
 
-	client := s.newFormHTTPClient()
+	client := common.NewFormHTTPClient(s.FormURLVerifier)
 
 	concurrencyLimit := 4
 
@@ -260,71 +276,15 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 				return
 			}
 
-			s.submitForm(ctx, client, f, sub)
+			if result := SubmitForm(ctx, client, f, sub); result.Valid() {
+				s.addFormSubmitRecord(ctx, f, result.Code())
+			}
 		}(form, submission)
 	}
 
 	wg.Wait()
 
 	return nil
-}
-
-func (s *Server) newFormHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.DialContext = s.formDialContext
-
-	return &http.Client{
-		Timeout:   10 * time.Second,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if err := s.FormURLVerifier.VerifyURL(req.Context(), req.URL.String()); err != nil {
-				return fmt.Errorf("unsafe form redirect: %w", err)
-			}
-			return nil
-		},
-	}
-}
-
-func (s *Server) formDialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-
-	host = normalizeFormURLHostname(host)
-	if ip, err := netip.ParseAddr(host); err == nil {
-		if err := s.FormURLVerifier.VerifyResolvedAddress(ctx, host, ip); err != nil {
-			return nil, err
-		}
-		return formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(host, port))
-	}
-
-	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return nil, err
-	}
-	if len(addresses) == 0 {
-		return nil, fmt.Errorf("form dial hostname resolved no addresses: %s", host)
-	}
-
-	var lastErr error
-	for _, address := range addresses {
-		ip, ok := netip.AddrFromSlice(address.IP)
-		if !ok {
-			return nil, fmt.Errorf("form dial resolved invalid address: %s", address.IP.String())
-		}
-		if err := s.FormURLVerifier.VerifyResolvedAddress(ctx, host, ip); err != nil {
-			return nil, err
-		}
-
-		conn, err := formOutboundDialer.DialContext(ctx, network, net.JoinHostPort(ip.Unmap().String(), port))
-		if err == nil {
-			return conn, nil
-		}
-		lastErr = err
-	}
-
-	return nil, lastErr
 }
 
 func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
@@ -350,7 +310,9 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 }
 
-func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) {
+func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
+	result := &FormSubmitResult{}
+
 	method := strings.ToUpper(string(form.Method))
 	if len(method) == 0 {
 		method = http.MethodPost
@@ -371,7 +333,7 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 			select {
 			case <-ctx.Done():
 				slog.WarnContext(ctx, "Job context cancelled while submitting form", common.ErrAttr(ctx.Err()))
-				return
+				return result
 			case <-time.After(b.Duration()):
 			}
 		}
@@ -379,7 +341,7 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 		req, err := http.NewRequestWithContext(ctx, method, form.URL, bytes.NewBufferString(body))
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, common.ErrAttr(err))
-			return
+			return result
 		}
 
 		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
@@ -407,15 +369,16 @@ func (s *Server) submitForm(ctx context.Context, client *http.Client, form *dbge
 			continue
 		}
 		_, _ = io.Copy(io.Discard, resp.Body)
+		result.StatusCode = resp.StatusCode
 		_ = resp.Body.Close()
 
 		if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
-			s.addFormSubmitRecord(ctx, form, formSubmitStatusSuccess)
-			return
+			result.Success = true
+			return result
 		}
 
 		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
 
-	s.addFormSubmitRecord(ctx, form, formSubmitStatusFailure)
+	return result
 }

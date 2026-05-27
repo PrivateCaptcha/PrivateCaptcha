@@ -1,6 +1,7 @@
 package api
 
 import (
+	"net"
 	"runtime/debug"
 
 	"errors"
@@ -51,6 +52,14 @@ func (allowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) err
 
 func (allowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
 	return nil
+}
+
+func (allowAllFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }
 
 const (
