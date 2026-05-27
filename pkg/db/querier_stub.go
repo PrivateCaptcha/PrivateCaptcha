@@ -55,6 +55,9 @@ func (s *QuerierStub) CreateUser(ctx context.Context, arg *dbgen.CreateUserParam
 func (s *QuerierStub) CreateUserNotification(ctx context.Context, arg *dbgen.CreateUserNotificationParams) (*dbgen.UserNotification, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) DeleteAPIKey(ctx context.Context, arg *dbgen.DeleteAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }

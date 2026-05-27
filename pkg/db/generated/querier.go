@@ -25,6 +25,7 @@ type Querier interface {
 	CreateSystemNotification(ctx context.Context, arg *CreateSystemNotificationParams) (*SystemNotification, error)
 	CreateUser(ctx context.Context, arg *CreateUserParams) (*User, error)
 	CreateUserNotification(ctx context.Context, arg *CreateUserNotificationParams) (*UserNotification, error)
+	DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*Form, error)
 	DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*APIKey, error)
 	DeleteCachedByKey(ctx context.Context, key string) (int64, error)
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error)

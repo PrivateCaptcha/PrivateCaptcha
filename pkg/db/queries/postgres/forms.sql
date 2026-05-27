@@ -61,6 +61,15 @@ SELECT
 FROM upd
 CROSS JOIN old;
 
+-- name: DeactivateForms :many
+UPDATE backend.forms
+SET active = FALSE, updated_at = NOW()
+WHERE id = ANY($1::INT[])
+  AND active = TRUE
+  AND enabled = TRUE
+  AND deleted_at IS NULL
+RETURNING *;
+
 -- name: MoveForm :one
 UPDATE backend.forms
 SET org_id = $2, org_owner_id = $3, updated_at = NOW()
