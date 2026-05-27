@@ -51,6 +51,7 @@ func (p *basePlan) TrialDays() int                          { return p.trialDays
 func (p *basePlan) RequestsLimit(trial bool) int64          { return p.requestsLimit }
 func (p *basePlan) APIRequestsPerSecond(trial bool) float64 { return p.apiRequestsPerSecond }
 func (p *basePlan) PropertiesLimit(trial bool) int          { return 50 }
+func (p *basePlan) FormsLimit(trial bool) int               { return 50 }
 func (p *basePlan) OrgsLimit(trial bool) int                { return p.orgsLimit }
 func (p *basePlan) OrgMembersLimit(trial bool) int          { return 10 }
 func (p *basePlan) OrgRulesLimit(trial bool) int            { return p.rulesLimit }
@@ -75,6 +76,7 @@ type Plan interface {
 	TrialDays() int
 	RequestsLimit(trial bool) int64
 	PropertiesLimit(trial bool) int
+	FormsLimit(trial bool) int
 	OrgsLimit(trial bool) int
 	OrgMembersLimit(trial bool) int
 	OrgRulesLimit(trial bool) int

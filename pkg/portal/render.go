@@ -21,7 +21,9 @@ type RenderConstants struct {
 	LogoutEndpoint                  string
 	NewEndpoint                     string
 	OrgEndpoint                     string
+	FormEndpoint                    string
 	PropertyEndpoint                string
+	FormsEndpoint                   string
 	DashboardEndpoint               string
 	TabEndpoint                     string
 	ReportsEndpoint                 string
@@ -30,6 +32,7 @@ type RenderConstants struct {
 	Token                           string
 	Email                           string
 	Name                            string
+	URL                             string
 	Tab                             string
 	VerificationCode                string
 	Domain                          string
@@ -101,6 +104,9 @@ type RenderConstants struct {
 	ActionPropertyHTTPRequest       string
 	ActionPropertyBreak             string
 	Enabled                         string
+	Active                          string
+	RetryRequestCount               string
+	RequestsPerMinute               string
 	ConditionNegated                string
 	RulesEndpoint                   string
 	RuleStatsEndpoint               string
@@ -110,6 +116,8 @@ type RenderConstants struct {
 	MonthlyReport                   string
 	ClientSetupEndpoint             string
 	ServerSetupEndpoint             string
+	TestEndpoint                    string
+	Body                            string
 }
 
 func NewRenderConstants() *RenderConstants {
@@ -121,12 +129,15 @@ func NewRenderConstants() *RenderConstants {
 		SettingsEndpoint:                common.SettingsEndpoint,
 		LogoutEndpoint:                  common.LogoutEndpoint,
 		OrgEndpoint:                     common.OrgEndpoint,
+		FormEndpoint:                    common.FormEndpoint,
 		PropertyEndpoint:                common.PropertyEndpoint,
+		FormsEndpoint:                   common.FormsEndpoint,
 		DashboardEndpoint:               common.DashboardEndpoint,
 		NewEndpoint:                     common.NewEndpoint,
 		Token:                           common.ParamCSRFToken,
 		Email:                           common.ParamEmail,
 		Name:                            common.ParamName,
+		URL:                             common.ParamURL,
 		Tab:                             common.ParamTab,
 		VerificationCode:                common.ParamVerificationCode,
 		Domain:                          common.ParamDomain,
@@ -202,6 +213,9 @@ func NewRenderConstants() *RenderConstants {
 		ConditionValue:                  common.ParamConditionValue,
 		ActionValue:                     common.ParamActionValue,
 		Enabled:                         common.ParamEnabled,
+		Active:                          common.ParamActive,
+		RetryRequestCount:               common.ParamRetryRequestCount,
+		RequestsPerMinute:               common.ParamRequestsPerMinute,
 		ConditionNegated:                common.ParamConditionNegated,
 		RulesEndpoint:                   common.RulesEndpoint,
 		RuleStatsEndpoint:               common.RuleStatsEndpoint,
@@ -211,6 +225,8 @@ func NewRenderConstants() *RenderConstants {
 		MonthlyReport:                   common.ParamMonthlyReport,
 		ClientSetupEndpoint:             common.ClientSetupEndpoint,
 		ServerSetupEndpoint:             common.ServerSetupEndpoint,
+		TestEndpoint:                    common.TestEndpoint,
+		Body:                            common.ParamBody,
 	}
 }
 

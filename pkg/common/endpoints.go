@@ -5,6 +5,8 @@ const (
 	EchoPuzzleEndpoint    = "echopuzzle"
 	SiteVerifyEndpoint    = "siteverify"
 	VerifyEndpoint        = "verify"
+	FormEndpoint          = "form"
+	FormsEndpoint         = "forms"
 	LoginEndpoint         = "login"
 	TwoFactorEndpoint     = "2fa"
 	ResendEndpoint        = "resend"
@@ -49,4 +51,5 @@ const (
 	NotificationsEndpoint = "notifications"
 	ClientSetupEndpoint   = "clientsetup"
 	ServerSetupEndpoint   = "serversetup"
+	TestEndpoint          = "test"
 )

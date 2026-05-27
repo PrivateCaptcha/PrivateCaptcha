@@ -50,6 +50,7 @@ func (s *Server) setupEnterprise(rg *common.RouteGenerator, openRead, privateRea
 	rg.Handle(rg.Delete(common.OrgEndpoint, arg(common.ParamOrg), common.DeleteEndpoint), privateWrite, http.HandlerFunc(s.deleteOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.TransferEndpoint), privateWrite, http.HandlerFunc(s.transferOrg))
 	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.MoveEndpoint), privateWrite, http.HandlerFunc(s.moveProperty))
+	rg.Handle(rg.Post(common.OrgEndpoint, arg(common.ParamOrg), common.FormEndpoint, arg(common.ParamForm), common.MoveEndpoint), privateWrite, http.HandlerFunc(s.moveForm))
 	rg.Handle(rg.Get(common.OrgEndpoint, arg(common.ParamOrg), common.PropertyEndpoint, arg(common.ParamProperty), common.RuleStatsEndpoint, arg(common.ParamPeriod)), privateRead, http.HandlerFunc(s.getPropertyRuleStats))
 
 	rg.Handle(rg.Get(common.AuditLogsEndpoint, common.EventsEndpoint), privateRead, s.Handler(s.getAuditLogEvents))

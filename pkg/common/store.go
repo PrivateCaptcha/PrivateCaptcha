@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"time"
 )
 
@@ -47,15 +49,22 @@ type ConfigStore interface {
 
 type TimeSeriesStore interface {
 	Ping(ctx context.Context) error
+	DropCache(ctx context.Context, tag string) error
 	WriteAccessLogBatch(ctx context.Context, records []*AccessRecord) error
 	WriteVerifyLogBatch(ctx context.Context, records []*VerifyRecord) error
+	WriteFormSubmitBatch(ctx context.Context, records []*FormSubmitRecord) error
 	RetrievePropertyStatsSince(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
 	RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*OrgTimeCount, error)
-	RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
-	RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveWeeklyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
+	RetrieveMonthlyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
+	RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period TimePeriod) ([]*FormSubmitStat, error)
+	RetrieveFailingForms(ctx context.Context, threshold, limit int) ([]*FailingFormCandidate, error)
 	RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period TimePeriod) ([]*TimeCount, error)
 	RetrieveRecentTopProperties(ctx context.Context, limit int) (map[int32]uint, error)
+	DeleteFormsData(ctx context.Context, formIDs []int32) error
 	DeletePropertiesData(ctx context.Context, propertyIDs []int32) error
 	DeleteOrganizationsData(ctx context.Context, orgIDs []int32) error
 	DeleteUsersData(ctx context.Context, userIDs []int32) error
@@ -78,6 +87,8 @@ const (
 	SitekeyEventType       MetricEventType = "sitekey"
 	APIKeyEventType        MetricEventType = "apikey"
 	PropertyRulesEventType MetricEventType = "property_rules"
+	FormEventType          MetricEventType = "form"
+	FormLogEventType       MetricEventType = "form_log"
 )
 
 type BaseMetrics interface {
@@ -110,6 +121,12 @@ type AuditLog interface {
 
 type EmailVerifier interface {
 	VerifyEmail(ctx context.Context, email string) error
+}
+
+type FormURLVerifier interface {
+	VerifyURL(ctx context.Context, rawURL string) error
+	VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 type LicenseService interface {

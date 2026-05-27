@@ -31,6 +31,9 @@ func (s *QuerierStub) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCach
 func (s *QuerierStub) CreateDifficultyRule(ctx context.Context, arg *dbgen.CreateDifficultyRuleParams) (*dbgen.DifficultyRule, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) CreateForm(ctx context.Context, arg *dbgen.CreateFormParams) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) CreateNotificationTemplate(ctx context.Context, arg *dbgen.CreateNotificationTemplateParams) (*dbgen.NotificationTemplate, error) {
 	return nil, s.Error
 }
@@ -52,6 +55,9 @@ func (s *QuerierStub) CreateUser(ctx context.Context, arg *dbgen.CreateUserParam
 func (s *QuerierStub) CreateUserNotification(ctx context.Context, arg *dbgen.CreateUserNotificationParams) (*dbgen.UserNotification, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) DeleteAPIKey(ctx context.Context, arg *dbgen.DeleteAPIKeyParams) (*dbgen.APIKey, error) {
 	return nil, s.Error
 }
@@ -65,6 +71,9 @@ func (s *QuerierStub) DeleteDifficultyRule(ctx context.Context, arg *dbgen.Delet
 	return 0, s.Error
 }
 func (s *QuerierStub) DeleteExpiredCache(ctx context.Context) (int64, error) {
+	return 0, s.Error
+}
+func (s *QuerierStub) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, error) {
 	return 0, s.Error
 }
 func (s *QuerierStub) DeleteLock(ctx context.Context, name string) (int64, error) {
@@ -124,6 +133,24 @@ func (s *QuerierStub) GetDifficultyRulesByOrgIDs(ctx context.Context, dollar_1 [
 func (s *QuerierStub) GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*dbgen.DifficultyRule, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetFormByExternalID(ctx context.Context, externalID pgtype.UUID) (*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetFormByID(ctx context.Context, formID int32) (*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
+	return 0, s.Error
+}
+func (s *QuerierStub) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetLastActiveSystemNotification(ctx context.Context, arg *dbgen.GetLastActiveSystemNotificationParams) (*dbgen.SystemNotification, error) {
 	return nil, s.Error
 }
@@ -136,6 +163,9 @@ func (s *QuerierStub) GetNotificationTemplateByHash(ctx context.Context, externa
 func (s *QuerierStub) GetOrgAuditLogs(ctx context.Context, arg *dbgen.GetOrgAuditLogsParams) ([]*dbgen.GetOrgAuditLogsRow, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetFormAuditLogs(ctx context.Context, arg *dbgen.GetFormAuditLogsParams) ([]*dbgen.GetFormAuditLogsRow, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetOrgProperties(ctx context.Context, arg *dbgen.GetOrgPropertiesParams) ([]*dbgen.Property, error) {
 	return nil, s.Error
 }
@@ -143,6 +173,9 @@ func (s *QuerierStub) GetOrgPropertiesCount(ctx context.Context, orgID pgtype.In
 	return 0, s.Error
 }
 func (s *QuerierStub) GetOrgPropertyByName(ctx context.Context, arg *dbgen.GetOrgPropertyByNameParams) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetOrgFormByName(ctx context.Context, arg *dbgen.GetOrgFormByNameParams) (*dbgen.Form, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetOrganizationUsers(ctx context.Context, orgID int32) ([]*dbgen.GetOrganizationUsersRow, error) {
@@ -185,6 +218,9 @@ func (s *QuerierStub) GetSoftDeletedOrganizations(ctx context.Context, arg *dbge
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedProperties(ctx context.Context, arg *dbgen.GetSoftDeletedPropertiesParams) ([]*dbgen.GetSoftDeletedPropertiesRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) GetSoftDeletedForms(ctx context.Context, arg *dbgen.GetSoftDeletedFormsParams) ([]*dbgen.GetSoftDeletedFormsRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) GetSoftDeletedUsers(ctx context.Context, arg *dbgen.GetSoftDeletedUsersParams) ([]*dbgen.GetSoftDeletedUsersRow, error) {
@@ -247,6 +283,15 @@ func (s *QuerierStub) MoveDifficultyRule(ctx context.Context, arg *dbgen.MoveDif
 func (s *QuerierStub) MoveProperty(ctx context.Context, arg *dbgen.MovePropertyParams) (*dbgen.Property, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) MovePropertyWithForm(ctx context.Context, arg *dbgen.MovePropertyWithFormParams) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) MoveForm(ctx context.Context, arg *dbgen.MoveFormParams) (*dbgen.Form, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) SoftDeleteForm(ctx context.Context, id int32) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) Ping(ctx context.Context) (int32, error) {
 	return 0, s.Error
 }
@@ -266,6 +311,9 @@ func (s *QuerierStub) SoftDeleteProperties(ctx context.Context, arg *dbgen.SoftD
 	return nil, s.Error
 }
 func (s *QuerierStub) SoftDeleteProperty(ctx context.Context, id int32) (*dbgen.Property, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) SoftDeletePropertyWithForm(ctx context.Context, id int32) (*dbgen.Property, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) SoftDeleteUser(ctx context.Context, id int32) (*dbgen.User, error) {
@@ -302,6 +350,9 @@ func (s *QuerierStub) UpdateCacheExpiration(ctx context.Context, arg *dbgen.Upda
 	return 0, s.Error
 }
 func (s *QuerierStub) UpdateDifficultyRule(ctx context.Context, arg *dbgen.UpdateDifficultyRuleParams) (*dbgen.UpdateDifficultyRuleRow, error) {
+	return nil, s.Error
+}
+func (s *QuerierStub) UpdateForm(ctx context.Context, arg *dbgen.UpdateFormParams) (*dbgen.UpdateFormRow, error) {
 	return nil, s.Error
 }
 func (s *QuerierStub) UpdateInternalSubscriptions(ctx context.Context, arg *dbgen.UpdateInternalSubscriptionsParams) (int64, error) {

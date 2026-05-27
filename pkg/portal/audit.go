@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -204,6 +205,42 @@ func (ul *UserAuditLog) initFromProperty(oldValue, newValue *db.AuditLogProperty
 	return nil
 }
 
+func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error {
+	ul.Resource = "Form"
+
+	if (oldValue != nil) && (newValue != nil) {
+		ul.Resource = fmt.Sprintf("Form '%s'", oldValue.Name)
+		if oldValue.Name != newValue.Name {
+			ul.Property = "Name"
+			ul.Value = newValue.Name
+			ul.Resource = fmt.Sprintf("Form '%s'", newValue.Name)
+		} else if oldValue.OrgID != newValue.OrgID {
+			ul.Property = "Organization"
+			ul.Value = newValue.OrgName
+		} else if oldValue.URL != newValue.URL {
+			ul.Property = "URL"
+			ul.Value = newValue.URL
+		} else if oldValue.RetryRequestCount != newValue.RetryRequestCount {
+			ul.Property = "Retry count"
+			ul.Value = strconv.Itoa(int(newValue.RetryRequestCount))
+		} else if oldValue.RequestsPerSecond != newValue.RequestsPerSecond {
+			ul.Property = "Requests per minute"
+			ul.Value = strconv.Itoa(int(math.Round(newValue.RequestsPerSecond * 60.0)))
+		} else if oldValue.Active != newValue.Active {
+			ul.Property = "Active"
+			ul.Value = strconv.FormatBool(newValue.Active)
+		}
+	} else if (oldValue != nil) || (newValue != nil) {
+		form := newValue
+		if form == nil {
+			form = oldValue
+		}
+		ul.Resource = fmt.Sprintf("Form '%s'", form.Name)
+	}
+
+	return nil
+}
+
 func (ul *UserAuditLog) initFromUserSettings(oldValue, newValue *db.AuditLogUserSettings) error {
 	ul.Resource = "Notification Settings"
 
@@ -300,9 +337,9 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       auditLogsTemplate,
-		AuditEvent: newAccessAuditLogEvent(user, db.TableNameAuditLogs, int64(user.ID), "", ""),
+		Model:       renderCtx,
+		View:        auditLogsTemplate,
+		AuditEvents: singleAuditEvents(newAccessAuditLogEvent(user, db.TableNameAuditLogs, int64(user.ID), "", "")),
 	}, nil
 }
 
@@ -347,6 +384,11 @@ func (s *Server) NewUserAuditLog(ctx context.Context, log *dbgen.AuditLog) (*Use
 			var oldProperty, newProperty *db.AuditLogProperty
 			if oldProperty, newProperty, err = db.ParseAuditLogPayloads[db.AuditLogProperty](ctx, log); err == nil {
 				err = ul.initFromProperty(oldProperty, newProperty)
+			}
+		case db.TableNameForms:
+			var oldForm, newForm *db.AuditLogForm
+			if oldForm, newForm, err = db.ParseAuditLogPayloads[db.AuditLogForm](ctx, log); err == nil {
+				err = ul.initFromForm(oldForm, newForm)
 			}
 		case db.TableNameAPIKeys:
 			var oldAPIKey, newAPIKey *db.AuditLogAPIKey

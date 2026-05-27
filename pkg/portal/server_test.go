@@ -2,8 +2,10 @@ package portal
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 
 	"context"
@@ -47,6 +49,24 @@ func portalDomain() string {
 }
 
 type stubLicenseService struct{}
+
+type allowAllPortalFormURLVerifier struct{}
+
+func (allowAllPortalFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
+func (allowAllPortalFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
+	return nil
+}
+
+func (allowAllPortalFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
+}
 
 func (s *stubLicenseService) IsRegistered() bool {
 	return false
@@ -93,6 +113,7 @@ func TestMain(m *testing.M) {
 			PlatformCtx:        platformCtx,
 			SubscriptionLimits: &db.StubSubscriptionLimits{},
 			EmailVerifier:      &PortalEmailVerifier{},
+			FormURLVerifier:    allowAllPortalFormURLVerifier{},
 			IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt")),
 			AdminEmail:         config.NewStaticValue(common.AdminEmailKey, "admin@test.com"),
 		}
@@ -169,6 +190,7 @@ func TestMain(m *testing.M) {
 		UserLimiter:        api.NewUserLimiter(store),
 		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
 		EmailVerifier:      &PortalEmailVerifier{},
+		FormURLVerifier:    allowAllPortalFormURLVerifier{},
 		LicenseService:     &stubLicenseService{},
 	}
 

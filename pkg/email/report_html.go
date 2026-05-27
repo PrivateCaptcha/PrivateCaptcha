@@ -12,6 +12,16 @@ type PropertyStat struct {
 	Alternate bool
 }
 
+type FormStat struct {
+	Name      string
+	URL       string
+	Link      string
+	Count     uint64
+	Percent   float64
+	Change    float64
+	Alternate bool
+}
+
 type UsageReportContext struct {
 	Period                 string
 	PeriodDate             string
@@ -26,6 +36,15 @@ type UsageReportContext struct {
 	VerificationRate       float64
 	AccountLimit           uint64
 	TopProperties          []*PropertyStat
+	TotalFormSubmissions   uint64
+	TotalFormErrors        uint64
+	PrevFormSubmissions    uint64
+	PrevFormErrors         uint64
+	FormSubmissionsChange  float64
+	FormErrorsChange       float64
+	FormErrorRateChange    float64
+	FormErrorRate          float64
+	TopForms               []*FormStat
 }
 
 var (
@@ -85,7 +104,26 @@ const (
                 <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right"></td>
               </tr>
               {{- end}}{{end}}
+             </table>
+            {{- if or .TotalFormSubmissions .PrevFormSubmissions .TotalFormErrors .PrevFormErrors}}
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse">
+              <tr>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Submissions</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormSubmissions | humanize}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormSubmissionsChange 0.0}}color:#22883e{{else if lt .FormSubmissionsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormSubmissionsChange 0.0}}+{{end}}{{printf "%.1f" .FormSubmissionsChange}}%</span></td>
+              </tr>
+              <tr>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Total Errors</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.TotalFormErrors | humanize}}</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormErrorsChange 0.0}}color:#22883e{{else if lt .FormErrorsChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorsChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorsChange}}%</span></td>
+              </tr>
+              <tr>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;color:#000000;text-align:left">Error Rate</td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .FormErrorRate}}%</span></td>
+                <td style="padding:10px 20px;border:1px solid #dddddd;font-size:13px;text-align:right;{{if gt .FormErrorRateChange 0.0}}color:#22883e{{else if lt .FormErrorRateChange 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%</span></td>
+              </tr>
             </table>
+            {{- end}}
             {{- if .TopProperties}}
             <p style="font-size:16px;line-height:26px;margin:16px 0">Top {{len .TopProperties}} properties by requests:</p>
             <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
@@ -108,6 +146,35 @@ const (
                   {{end}}
                 </td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Domain}}">{{truncate .Domain 24}}</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
+              </tr>
+              {{- end}}
+            </table>
+            {{- end}}
+            {{- if .TopForms}}
+            <p style="font-size:16px;line-height:26px;margin:16px 0">Top {{len .TopForms}} forms by submissions:</p>
+            <table border="0" cellpadding="0" cellspacing="0" role="presentation" style="margin:16px 0 24px;border-collapse:collapse;width:100%">
+              <tr>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left;">Form</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:left">URL</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Submissions</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">%</td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;color:#000000;font-weight:bold;text-align:right">Change</td>
+              </tr>
+              {{- range .TopForms}}
+              <tr{{if .Alternate}} style="background-color:#f9f9f9"{{end}}>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.Name}}">
+                  {{if .Link}}
+                  <a href="{{.Link}}" style="color:#000000;text-decoration:none">
+                    {{truncate .Name 24}} <span style="font-size:12px">&#8599;</span>
+                  </a>
+                  {{else}}
+                  {{truncate .Name 24}}
+                  {{end}}
+                </td>
+                <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:left" title="{{.URL}}">{{truncate .URL 24}}</td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{.Count | humanize}}</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{printf "%.1f" .Percent}}%</span></td>
                 <td style="padding:12px 16px;border:1px solid #dddddd;font-size:14px;text-align:right;{{if gt .Change 0.0}}color:#22883e{{else if lt .Change 0.0}}color:#c53030{{else}}color:#888888{{end}}"><span style='font-family:Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace'>{{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%</span></td>
@@ -142,11 +209,24 @@ Verification Rate: {{printf "%.1f" .VerificationRate}}% ({{if gt .VerificationRa
 {{- if .AccountLimit}}{{if or (gt .TotalRequests .AccountLimit) (gt .TotalVerifies .AccountLimit)}}
 Account Limit: {{.AccountLimit}}
 {{- end}}{{end}}
+{{- if or .TotalFormSubmissions .PrevFormSubmissions .TotalFormErrors .PrevFormErrors}}
+
+Total Submissions: {{.TotalFormSubmissions}} ({{if gt .FormSubmissionsChange 0.0}}+{{end}}{{printf "%.1f" .FormSubmissionsChange}}%)
+Total Errors: {{.TotalFormErrors}} ({{if gt .FormErrorsChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorsChange}}%)
+Error Rate: {{printf "%.1f" .FormErrorRate}}% ({{if gt .FormErrorRateChange 0.0}}+{{end}}{{printf "%.1f" .FormErrorRateChange}}%)
+{{- end}}
 {{- if .TopProperties}}
 
 Top {{len .TopProperties}} properties by requests:
 {{- range .TopProperties}}
   - {{.Name}} ({{.Domain}}): {{.Count}} requests ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
+{{- end}}
+{{- end}}
+{{- if .TopForms}}
+
+Top {{len .TopForms}} forms by submissions:
+{{- range .TopForms}}
+  - {{.Name}} ({{.URL}}): {{.Count}} submissions ({{printf "%.1f" .Percent}}%, {{if gt .Change 0.0}}+{{end}}{{printf "%.1f" .Change}}%)
 {{- end}}
 {{- end}}
 

@@ -8,6 +8,7 @@
             hx-on::config-request="event.detail.path += '/'+this.value"
             hx-swap="innerHTML">
             <option value="{{ $.Const.DashboardEndpoint }}">Properties</option>
+            <option value="{{ $.Const.FormsEndpoint }}">Forms</option>
             <option value="{{ $.Const.MembersEndpoint }}" selected>Members</option>
             <option value="{{ $.Const.SettingsEndpoint }}">Settings</option>
             <option value="{{ $.Const.RulesEndpoint }}">Rules</option>
@@ -22,6 +23,11 @@
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
+                <a href="#"
+                    hx-target="#org-tabs"
+                    hx-swap="innerHTML"
+                    hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.FormsEndpoint }}"
+                    class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Forms</a>
                 <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Members</a>
                 <a href="#"
                     hx-target="#org-tabs"

@@ -1186,7 +1186,7 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvent: auditEvent}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
 }
 
 func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -1258,8 +1258,8 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 	}
 
 	return &ViewModel{
-		Model:      renderCtx,
-		View:       orgRulesTemplate,
-		AuditEvent: auditEvent,
+		Model:       renderCtx,
+		View:        orgRulesTemplate,
+		AuditEvents: singleAuditEvents(auditEvent),
 	}, nil
 }

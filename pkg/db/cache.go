@@ -256,6 +256,8 @@ const (
 	propertyStatsCacheKeyPrefix
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
+	orgFormsCacheKeyPrefix
+	orgFormsCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
 	compiledPropertyRulesCacheKeyPrefix
 	compiledOrgRulesCacheKeyPrefix
@@ -264,6 +266,10 @@ const (
 	difficultyRuleCacheKeyPrefix
 	propertyRuleStatsCacheKeyPrefix
 	userSettingsCacheKeyPrefix
+	formByExternalIDCacheKeyPrefix
+	formCacheKeyPrefix
+	formStatsCacheKeyPrefix
+	formAuditLogsCacheKeyPrefix
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
@@ -302,6 +308,8 @@ func init() {
 	cachePrefixToStrings[propertyStatsCacheKeyPrefix] = "propertyStats/"
 	cachePrefixToStrings[asyncTaskCacheKeyPrefix] = "asyncTask/"
 	cachePrefixToStrings[orgPropertiesCountCacheKeyPrefix] = "orgPropertiesCount/"
+	cachePrefixToStrings[orgFormsCacheKeyPrefix] = "orgForms/"
+	cachePrefixToStrings[orgFormsCountCacheKeyPrefix] = "orgFormsCount/"
 	cachePrefixToStrings[orgInviteCacheKeyPrefix] = "orgInvite/"
 	cachePrefixToStrings[compiledPropertyRulesCacheKeyPrefix] = "compiledPropRules/"
 	cachePrefixToStrings[compiledOrgRulesCacheKeyPrefix] = "compiledOrgRules/"
@@ -310,6 +318,10 @@ func init() {
 	cachePrefixToStrings[difficultyRuleCacheKeyPrefix] = "diffRule/"
 	cachePrefixToStrings[propertyRuleStatsCacheKeyPrefix] = "propertyRuleStats/"
 	cachePrefixToStrings[userSettingsCacheKeyPrefix] = "userSettings/"
+	cachePrefixToStrings[formByExternalIDCacheKeyPrefix] = "formExternalID/"
+	cachePrefixToStrings[formCacheKeyPrefix] = "form/"
+	cachePrefixToStrings[formStatsCacheKeyPrefix] = "formStats/"
+	cachePrefixToStrings[formAuditLogsCacheKeyPrefix] = "formAuditLogs/"
 
 	for i, v := range cachePrefixToStrings {
 		if len(v) == 0 {
@@ -326,6 +338,7 @@ func init() {
 	gob.Register(&dbgen.DifficultyRule{})
 	gob.Register(&session.SessionData{})
 	gob.Register(&dbgen.APIKey{})
+	gob.Register(&dbgen.Form{})
 	gob.Register(&dbgen.AsyncTask{})
 	gob.Register(&dbgen.SystemNotification{})
 	gob.Register(&dbgen.OrganizationUser{})
@@ -338,12 +351,15 @@ func init() {
 	gob.Register([]*dbgen.GetOrgAuditLogsRow{})
 	gob.Register([]*dbgen.GetUserAuditLogsRow{})
 	gob.Register([]*dbgen.Property{})
+	gob.Register([]*dbgen.Form{})
 	gob.Register([]*dbgen.APIKey{})
 	gob.Register(&struct{}{})
 	gob.Register(&CacheMissingValue{})
 	gob.Register([]*common.TimeCount{})
 	gob.Register([]*common.OrgTimeCount{})
 	gob.Register([]*common.TimePeriodStat{})
+	gob.Register([]*common.FormSubmitStat{})
+	gob.Register([]*dbgen.GetFormAuditLogsRow{})
 }
 
 func RegisterCachePrefixString(prefix CacheKeyPrefix, s string) error {
@@ -415,6 +431,9 @@ func orgCacheKey(orgID int32) CacheKey   { return Int32CacheKey(orgCacheKeyPrefi
 func OrgPropertiesCacheKey(orgID int32, key string) CacheKey {
 	return CacheKey{Prefix: orgPropertiesCacheKeyPrefix, IntValue: orgID, StrValue: key}
 }
+func OrgFormsCacheKey(orgID int32, key string) CacheKey {
+	return CacheKey{Prefix: orgFormsCacheKeyPrefix, IntValue: orgID, StrValue: key}
+}
 func propertyByIDCacheKey(propID int32) CacheKey {
 	return Int32CacheKey(propertyByIDCacheKeyPrefix, propID)
 }
@@ -450,11 +469,17 @@ func userAccountStatsCacheKey(userID int32, key string) CacheKey {
 func propertyStatsCacheKey(propertyID int32, key string) CacheKey {
 	return CacheKey{Prefix: propertyStatsCacheKeyPrefix, IntValue: propertyID, StrValue: key}
 }
+func FormStatsCacheKey(formID int32, key string) CacheKey {
+	return CacheKey{Prefix: formStatsCacheKeyPrefix, IntValue: formID, StrValue: key}
+}
 func asyncTaskCacheKey(key string) CacheKey {
 	return StringCacheKey(asyncTaskCacheKeyPrefix, key)
 }
 func orgPropertiesCountCacheKey(orgID int32) CacheKey {
 	return Int32CacheKey(orgPropertiesCountCacheKeyPrefix, orgID)
+}
+func orgFormsCountCacheKey(orgID int32) CacheKey {
+	return Int32CacheKey(orgFormsCountCacheKeyPrefix, orgID)
 }
 func orgInviteCacheKey(inviteID int32) CacheKey {
 	return Int32CacheKey(orgInviteCacheKeyPrefix, inviteID)
@@ -479,4 +504,13 @@ func propertyRuleStatsCacheKey(propertyID int32, key string) CacheKey {
 }
 func UserSettingsCacheKey(userID int32) CacheKey {
 	return Int32CacheKey(userSettingsCacheKeyPrefix, userID)
+}
+func FormByExternalIDCacheKey(externalID string) CacheKey {
+	return StringCacheKey(formByExternalIDCacheKeyPrefix, externalID)
+}
+func formByIDCacheKey(formID int32) CacheKey {
+	return Int32CacheKey(formCacheKeyPrefix, formID)
+}
+func formAuditLogsCacheKey(propID int32) CacheKey {
+	return CacheKey{Prefix: formAuditLogsCacheKeyPrefix, IntValue: propID}
 }

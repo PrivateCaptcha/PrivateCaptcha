@@ -32,6 +32,17 @@ type TimePeriodStat struct {
 	VerifiesCount int
 }
 
+type FormSubmitStat struct {
+	Timestamp    time.Time
+	SuccessCount int
+	FailureCount int
+}
+
+type FailingFormCandidate struct {
+	FormID       int32
+	FailureCount uint32
+}
+
 type TimeCount struct {
 	Timestamp time.Time
 	Count     uint32
@@ -58,4 +69,21 @@ type UserReportStats struct {
 	TotalPrevRequests    uint64
 	TotalCurrentVerifies uint64
 	TotalPrevVerifies    uint64
+}
+
+type UserReportFormStat struct {
+	FormID             int32
+	OrgID              int32
+	CurrentSubmissions uint64
+	PrevSubmissions    uint64
+	CurrentErrors      uint64
+	PrevErrors         uint64
+}
+
+type UserFormsReportStats struct {
+	Forms                   []*UserReportFormStat
+	TotalCurrentSubmissions uint64
+	TotalPrevSubmissions    uint64
+	TotalCurrentErrors      uint64
+	TotalPrevErrors         uint64
 }

@@ -234,6 +234,50 @@ func (ns NullDifficultyGrowth) Value() (driver.Value, error) {
 	return string(ns.DifficultyGrowth), nil
 }
 
+type FormMethod string
+
+const (
+	FormMethodPost   FormMethod = "post"
+	FormMethodPut    FormMethod = "put"
+	FormMethodDelete FormMethod = "delete"
+	FormMethodPatch  FormMethod = "patch"
+)
+
+func (e *FormMethod) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = FormMethod(s)
+	case string:
+		*e = FormMethod(s)
+	default:
+		return fmt.Errorf("unsupported scan type for FormMethod: %T", src)
+	}
+	return nil
+}
+
+type NullFormMethod struct {
+	FormMethod FormMethod `json:"backend_form_method"`
+	Valid      bool       `json:"valid"` // Valid is true if FormMethod is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullFormMethod) Scan(value interface{}) error {
+	if value == nil {
+		ns.FormMethod, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.FormMethod.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullFormMethod) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.FormMethod), nil
+}
+
 type RuleActionProperty string
 
 const (
@@ -492,6 +536,27 @@ type DifficultyRule struct {
 	Enabled                  bool                  `db:"enabled" json:"enabled"`
 	ConditionOperatorNegated bool                  `db:"condition_operator_negated" json:"condition_operator_negated"`
 	Terminal                 bool                  `db:"terminal" json:"terminal"`
+}
+
+type Form struct {
+	ID                int32              `db:"id" json:"id"`
+	Name              string             `db:"name" json:"name"`
+	ExternalID        pgtype.UUID        `db:"external_id" json:"external_id"`
+	OrgID             pgtype.Int4        `db:"org_id" json:"org_id"`
+	CreatorID         pgtype.Int4        `db:"creator_id" json:"creator_id"`
+	OrgOwnerID        pgtype.Int4        `db:"org_owner_id" json:"org_owner_id"`
+	URL               string             `db:"url" json:"url"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at" json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at" json:"updated_at"`
+	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
+	PropertyID        int32              `db:"property_id" json:"property_id"`
+	Fields            []byte             `db:"fields" json:"fields"`
+	RequestsPerSecond float64            `db:"requests_per_second" json:"requests_per_second"`
+	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
+	RetryRequestCount int16              `db:"retry_request_count" json:"retry_request_count"`
+	Method            FormMethod         `db:"method" json:"method"`
+	Enabled           bool               `db:"enabled" json:"enabled"`
+	Active            bool               `db:"active" json:"active"`
 }
 
 type Lock struct {

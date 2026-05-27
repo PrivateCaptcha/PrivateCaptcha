@@ -1,0 +1,93 @@
+<nav class="w-full" aria-label="Progress">
+    <ol role="list" class="divide-y divide-gray-300 rounded-md border border-gray-300 md:flex md:divide-y-0">
+        <li class="relative md:flex md:flex-1">
+            <span class="flex items-center px-6 py-4 text-sm font-medium">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-pclime-600 group-hover:bg-pclime-800">
+                    <svg viewBox="0 0 24 24" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-6 text-white">
+                        <path d="M19.916 4.626a.75.75 0 0 1 .208 1.04l-9 13.5a.75.75 0 0 1-1.154.114l-6-6a.75.75 0 0 1 1.06-1.06l5.353 5.353 8.493-12.74a.75.75 0 0 1 1.04-.207Z" clip-rule="evenodd" fill-rule="evenodd" />
+                    </svg>
+                </span>
+                <span class="ml-4 text-sm font-medium text-gray-900">Create new form</span>
+            </span>
+            <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
+                <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+                    <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+                </svg>
+            </div>
+        </li>
+        <li class="relative md:flex md:flex-1">
+            <span aria-current="step" class="flex items-center px-6 py-4 text-sm font-medium">
+                <span class="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-pclime-600">
+                    <span class="text-pclime-600">02</span>
+                </span>
+                <span class="ml-4 text-sm font-semibold text-pclime-600">Website integration</span>
+            </span>
+        </li>
+    </ol>
+</nav>
+
+<div class="mx-auto w-full max-w-3xl py-10">
+    <div class="pb-10">{{template "info-link-message.html" (dict "Text" "See detailed website integration guide in the documentation." "Link" "https://docs.privatecaptcha.com/docs/integrations/form-proxy/" "LinkText" "Docs")}}</div>
+    <nav aria-label="Progress">
+        <ol role="list" class="overflow-hidden">
+            <li class="relative pb-10">
+                <div aria-hidden="true" class="absolute left-4 top-4 -ml-px mt-0.5 h-full w-0.5 bg-gray-300"></div>
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">1</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 w-full flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Add Private Captcha script <i>inside</i> site <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<head>`}}</code>:</span>
+
+                        <div class="mt-2 flex flex-col items-start">
+                            <pre class="block w-full overflow-x-auto rounded-lg bg-gray-200 px-3 py-2 text-sm text-gray-800"><code class="font-mono">{{ `<script defer src="https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}</code></pre>
+                        </div>
+                    </span>
+                </span>
+            </li>
+
+            <li class="relative pb-10">
+                <div aria-hidden="true" class="absolute left-4 top-4 -ml-px mt-0.5 h-full w-0.5 bg-gray-300"></div>
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">2</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 w-full flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Put your existing form fields <i>inside</i> our <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<form>`}}</code> declaration with captcha widget:</span>
+
+                        <div class="mt-2 flex flex-col items-start">
+                            <pre class="block w-full overflow-x-auto rounded-lg bg-gray-200 px-4 py-2 py-2 text-sm text-gray-800"><code class="font-mono">{{ `<form method="POST" action="https://api.privatecaptcha.com/form/` }}{{ .Params.Form.ExternalID }}{{ `">
+  <!-- Existing form fields... -->
+  <div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>
+</form>` }}</code></pre>
+                        </div>
+                    </span>
+                </span>
+            </li>
+
+            <li class="relative pb-10">
+                <span class="group relative flex items-start">
+                    <span aria-hidden="true" class="flex h-9 items-center">
+                        <span class="relative z-10 flex size-8 items-center justify-center rounded-full border-2 border-gray-400 bg-white group-hover:border-gray-500">
+                            <span class="text-gray-400 group-hover:text-gray-500">3</span>
+                        </span>
+                    </span>
+                    <span class="ml-4 flex min-w-0 flex-col gap-1.5">
+                        <span class="text-base font-medium text-gray-900">Restrict form submission until captcha is solved</span>
+                        <span class="text-sm text-gray-500">For example, disable submit button by default (add attribute <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">disabled</code>) and enable it only inside <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">data-finished-callback</code> <i>or</i> after <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">privatecaptcha:finish</code> event of captcha widget.</span>
+                    </span>
+                </span>
+            </li>
+        </ol>
+    </nav>
+
+    <div class="flex items-center justify-end mt-20 space-x-6 border-t border-gray-200 pt-6">
+        <a href="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID }}" class="pc-internal-form-button pc-internal-form-button-secondary">
+            Finish
+        </a>
+    </div>
+</div>

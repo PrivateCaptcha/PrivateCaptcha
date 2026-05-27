@@ -1,0 +1,52 @@
+<div id="test-form" class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6 sm:flex-1 sm:flex">
+    <div class="sm:flex-1 sm:flex sm:items-start">
+        <div class="mt-3 text-center sm:mt-0 sm:text-left sm:flex-1">
+            <h3 class="text-base font-semibold leading-6 text-gray-900" id="test-modal-title">Test form</h3>
+            <div class="mt-2">
+                <div class="space-y-4">
+                    <div>
+                        <label for="test-url" class="pc-internal-form-label"> URL </label>
+                        <div class="mt-2">
+                            <input id="test-url" type="url" value="{{ $.Params.Form.URL }}" disabled class="w-full pc-internal-form-input-base pc-form-input-disabled" />
+                        </div>
+                    </div>
+                    <div>
+                        <label for="test-method" class="pc-internal-form-label"> Method </label>
+                        <div class="mt-2">
+                            <select id="test-method" disabled class="w-full pc-internal-form-select">
+                                <option>POST</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="test-body" class="pc-internal-form-label"> Body </label>
+                        <div class="mt-2">
+                            <textarea id="test-body" name="body" rows="4" placeholder="email=test@example.com&message=hello"
+                                class="block w-full rounded-md border-0 p-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-pclime-600 sm:text-sm sm:leading-6 resize-none">{{ $.Params.TestBody }}</textarea>
+                        </div>
+                    </div>
+                    {{if .Params.ErrorMessage}}
+                    <div>{{template "error-message.html" .Params.ErrorMessage}}</div>
+                    {{else if .Params.SuccessMessage}}
+                    <div>{{template "success-message.html" .Params.SuccessMessage}}</div>
+                    {{else if .Params.InfoMessage}}
+                    <div>{{template "info-message.html" .Params.InfoMessage}}</div>
+                    {{else if .Params.WarningMessage}}
+                    <div>{{template "warning-message.html" .Params.WarningMessage}}</div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+    <button type="submit" hx-indicator="#test-spinner" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
+        <svg id="test-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Test
+    </button>
+    <button type="button" class="pc-internal-form-button pc-internal-form-button-secondary sm:w-auto" @click="testOpen = false">Close</button>
+</div>

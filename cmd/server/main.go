@@ -184,25 +184,35 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 
 	apiURLConfig := config.AsURL(ctx, cfg.Get(common.APIBaseURLKey))
 	apiServer := &api.Server{
-		Stage:              stage,
-		Prefix:             apiURLConfig.Path(),
-		BusinessDB:         businessDB,
-		TimeSeries:         timeSeriesDB,
-		RateLimiter:        ipRateLimiter,
-		Auth:               api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
-		VerifyLogChan:      make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
-		Verifier:           puzzleVerifier,
-		Metrics:            metrics,
-		Mailer:             mailer,
-		Levels:             difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),
-		VerifyLogCancel:    func() {},
-		SubscriptionLimits: subscriptionLimits,
-		IDHasher:           idHasher,
-		AsyncTasks:         asyncTasksJob,
-		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
-		NoticeProvider:     noticeProvider,
+		Stage:               stage,
+		Prefix:              apiURLConfig.Path(),
+		BusinessDB:          businessDB,
+		TimeSeries:          timeSeriesDB,
+		RateLimiter:         ipRateLimiter,
+		Auth:                api.NewAuthMiddleware(businessDB, userLimiter, planService, metrics, rulesCompiler),
+		VerifyLogChan:       make(chan *common.VerifyRecord, 10*api.VerifyBatchSize),
+		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10*api.FormSubmitLogBatchSize),
+		FormSubmissionChan:  make(chan *api.FormSubmission, 10*api.FormBatchSize),
+		Verifier:            puzzleVerifier,
+		FormURLVerifier:     api.NewFormURLVerifier(),
+		Metrics:             metrics,
+		Mailer:              mailer,
+		Levels:              difficulty.NewLevels(timeSeriesDB, 100 /*levelsBatchSize*/, api.PropertyBucketSize),
+		VerifyLogCancel:     func() {},
+		FormSubmitLogCancel: func() {},
+		SubscriptionLimits:  subscriptionLimits,
+		IDHasher:            idHasher,
+		AsyncTasks:          asyncTasksJob,
+		CountryCodeHeader:   cfg.Get(common.CountryCodeHeaderKey),
+		NoticeProvider:      noticeProvider,
 	}
-	if err := apiServer.Init(ctx, 10*time.Second /*flush interval*/, 1*time.Second /*backfill duration*/, 50*time.Millisecond /*backpressure timeout*/); err != nil {
+	apiServerCfg := api.ServerConfig{
+		VerifyFlushInterval: 10 * time.Second,
+		AuthBackfillDelay:   1 * time.Second,
+		FormFlushInterval:   50 * time.Millisecond,
+		BackpressureTimeout: 5 * time.Second,
+	}
+	if err := apiServer.Init(ctx, apiServerCfg); err != nil {
 		return err
 	}
 
@@ -285,6 +295,7 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		UserLimiter:        userLimiter,
 		SubscriptionLimits: subscriptionLimits,
 		EmailVerifier:      emailVerifier,
+		FormURLVerifier:    apiServer.FormURLVerifier,
 		TwoFactorDuration:  10*time.Minute + 5*time.Minute,
 		LicenseService:     checkLicenseJob,
 	}
@@ -471,6 +482,12 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		IDHasher:    idHasher,
 		Stage:       stage,
 		UsersLimit:  50,
+	})
+	jobs.AddLocked(3*time.Hour, &maintenance.DeactivateFailingFormsJob{
+		Store:      businessDB,
+		TimeSeries: timeSeriesDB,
+		PortalURL:  mailer.PortalURL,
+		IDHasher:   idHasher,
 	})
 	jobs.AddLocked(10*time.Minute, asyncTasksJob)
 

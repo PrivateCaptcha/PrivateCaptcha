@@ -1,11 +1,13 @@
 package api
 
 import (
+	"net"
 	"runtime/debug"
 
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 
 	"context"
@@ -40,9 +42,30 @@ var (
 	testPlan   billing.Plan
 )
 
+type allowAllFormURLVerifier struct{}
+
+var _ common.FormURLVerifier = (*allowAllFormURLVerifier)(nil)
+
+func (allowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
+func (allowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
+	return nil
+}
+
+func (allowAllFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
+}
+
 const (
 	authBackfillDelay   = 100 * time.Millisecond
 	verifyFlushInterval = 1 * time.Second
+	formFlushInterval   = 500 * time.Millisecond
 )
 
 func testsConfigStore() common.ConfigStore {
@@ -73,16 +96,16 @@ func TestMain(m *testing.M) {
 		panic(dberr)
 	}
 
-	if clickhouse != nil {
-		timeSeries = db.NewTimeSeries(clickhouse, cache)
-	} else {
-		timeSeries = db.NewMemoryTimeSeries()
-	}
-
 	var err error
 	cache, err = db.NewMemoryCache[db.CacheKey, any]("default", 100_000, &struct{}{}, 1*time.Minute, 3*time.Minute, 30*time.Second)
 	if err != nil {
 		panic(err)
+	}
+
+	if clickhouse != nil {
+		timeSeries = db.NewTimeSeries(clickhouse, cache)
+	} else {
+		timeSeries = db.NewMemoryTimeSeries()
 	}
 
 	store = db.NewBusinessEx(pool, cache)
@@ -93,24 +116,36 @@ func TestMain(m *testing.M) {
 	testPlan = planService.GetInternalTrialPlan()
 
 	server = &Server{
-		Stage:              common.StageTest,
-		BusinessDB:         store,
-		TimeSeries:         timeSeries,
-		RateLimiter:        &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
-		VerifyLogChan:      make(chan *common.VerifyRecord, 10*VerifyBatchSize),
-		Verifier:           NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
-		Metrics:            metrics,
-		Mailer:             &email.StubMailer{},
-		Levels:             difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
-		VerifyLogCancel:    func() {},
-		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
-		IDHasher:           common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
-		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
-		CountryCodeHeader:  cfg.Get(common.CountryCodeHeaderKey),
-		NoticeProvider:     &db_tests.StubNoticeProvider{},
+		Stage:               common.StageTest,
+		BusinessDB:          store,
+		TimeSeries:          timeSeries,
+		RateLimiter:         &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()},
+		Auth:                NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
+		VerifyLogChan:       make(chan *common.VerifyRecord, 10*VerifyBatchSize),
+		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10*FormSubmitLogBatchSize),
+		FormSubmissionChan:  make(chan *FormSubmission, 10*FormBatchSize),
+		FormSubmitLogCancel: func() {},
+		FormSubmitCancel:    func() {},
+		Verifier:            NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
+		FormURLVerifier:     allowAllFormURLVerifier{},
+		Metrics:             metrics,
+		Mailer:              &email.StubMailer{},
+		Levels:              difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
+		VerifyLogCancel:     func() {},
+		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
+		IDHasher:            common.NewIDHasher(cfg.Get(common.IDHasherSaltKey)),
+		AsyncTasks:          maintenance.NewAsyncTasksJob(store),
+		CountryCodeHeader:   cfg.Get(common.CountryCodeHeaderKey),
+		NoticeProvider:      &db_tests.StubNoticeProvider{},
 	}
-	if err := server.Init(context.TODO(), verifyFlushInterval, authBackfillDelay, 100*time.Millisecond); err != nil {
+
+	serverCfg := ServerConfig{
+		VerifyFlushInterval: verifyFlushInterval,
+		AuthBackfillDelay:   authBackfillDelay,
+		FormFlushInterval:   formFlushInterval,
+		BackpressureTimeout: 100 * time.Millisecond,
+	}
+	if err := server.Init(context.TODO(), serverCfg); err != nil {
 		panic(err)
 	}
 	defer server.Shutdown()
@@ -136,22 +171,35 @@ func TestAPIServerStoreErrors(t *testing.T) {
 	planService := billing.NewPlanService(nil)
 
 	srv := &Server{
-		Stage:              common.StageTest,
-		BusinessDB:         store,
-		TimeSeries:         db.NewMemoryTimeSeries(),
-		RateLimiter:        &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"},
-		Auth:               NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
-		VerifyLogChan:      make(chan *common.VerifyRecord, 10),
-		Verifier:           NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
-		Metrics:            metrics,
-		Mailer:             &email.StubMailer{},
-		Levels:             difficulty.NewLevels(db.NewMemoryTimeSeries(), 100, PropertyBucketSize),
-		VerifyLogCancel:    func() {},
-		SubscriptionLimits: db.NewSubscriptionLimits(common.StageTest, store, planService),
-		IDHasher:           common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
-		AsyncTasks:         maintenance.NewAsyncTasksJob(store),
-		CountryCodeHeader:  config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),
-		NoticeProvider:     &db_tests.StubNoticeProvider{},
+		Stage:               common.StageTest,
+		BusinessDB:          store,
+		TimeSeries:          db.NewMemoryTimeSeries(),
+		RateLimiter:         &ratelimit.StubRateLimiter{Header: "X-Forwarded-For"},
+		Auth:                NewAuthMiddleware(store, NewUserLimiter(store), planService, metrics, rules.NewRulesCompiler(useragent.NewParser())),
+		VerifyLogChan:       make(chan *common.VerifyRecord, 10),
+		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10),
+		FormSubmissionChan:  make(chan *FormSubmission, 10),
+		FormSubmitLogCancel: func() {},
+		FormURLVerifier:     allowAllFormURLVerifier{},
+		Verifier:            NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
+		Metrics:             metrics,
+		Mailer:              &email.StubMailer{},
+		Levels:              difficulty.NewLevels(db.NewMemoryTimeSeries(), 100, PropertyBucketSize),
+		VerifyLogCancel:     func() {},
+		SubscriptionLimits:  db.NewSubscriptionLimits(common.StageTest, store, planService),
+		IDHasher:            common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "salt")),
+		AsyncTasks:          maintenance.NewAsyncTasksJob(store),
+		CountryCodeHeader:   config.NewStaticValue(common.CountryCodeHeaderKey, "CF"),
+		NoticeProvider:      &db_tests.StubNoticeProvider{},
+	}
+
+	if err := srv.Init(t.Context(), ServerConfig{
+		VerifyFlushInterval: verifyFlushInterval,
+		AuthBackfillDelay:   authBackfillDelay,
+		FormFlushInterval:   formFlushInterval,
+		BackpressureTimeout: 100 * time.Millisecond,
+	}); err != nil {
+		t.Fatalf("Init failed: %v", err)
 	}
 
 	srv.APIHeaders = make(map[string][]string)

@@ -38,7 +38,8 @@ services:
     volumes:
       - ./clickhouse-config.xml:/etc/clickhouse-server/config.d/myconfig.xml:ro
       - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/myusers.xml:ro
-      - ../pkg/db/migrations/init/clickhouse.sh:/docker-entrypoint-initdb.d/myinit.sh:ro
+      - ../pkg/db/migrations/init/clickhouse.sh:/docker-entrypoint-initdb.d/01-myinit.sh:ro
+      - ../pkg/db/migrations/tests/clickhouse.sh:/docker-entrypoint-initdb.d/02-testinit.sh:ro
       - test_clickhouse_data_volume:/var/lib/clickhouse
       # uncomment for debugging
       # - ./clickhouse-logs:/var/log/clickhouse-server/

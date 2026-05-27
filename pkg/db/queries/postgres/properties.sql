@@ -44,8 +44,14 @@ FROM upd
 CROSS JOIN old;
 
 -- name: MoveProperty :one
-UPDATE backend.properties SET org_id = $2, org_owner_id = $3, updated_at = NOW()
-WHERE id = $1
+UPDATE backend.properties p SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE p.id = $1 AND (p.creator_id = @user_id OR p.org_owner_id = @user_id)
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id)
+RETURNING *;
+
+-- name: MovePropertyWithForm :one
+UPDATE backend.properties p SET org_id = $2, org_owner_id = $3, updated_at = NOW()
+WHERE p.id = $1 AND (creator_id = @user_id OR org_owner_id = @user_id)
 RETURNING *;
 
 -- name: GetOrgPropertyByName :one
@@ -63,10 +69,25 @@ OFFSET $2
 LIMIT $3;
 
 -- name: SoftDeleteProperty :one
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = $1 RETURNING *;
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = $1
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id AND f.deleted_at IS NULL)
+RETURNING *;
+
+-- name: SoftDeletePropertyWithForm :one
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = $1
+RETURNING *;
 
 -- name: SoftDeleteProperties :many
-UPDATE backend.properties SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8) WHERE id = ANY($1::INT[]) AND (creator_id = $2 OR org_owner_id = $2) AND (org_id = $3 OR $3 IS NULL) AND deleted_at IS NULL AND enabled = TRUE RETURNING *;
+UPDATE backend.properties p SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
+WHERE p.id = ANY($1::INT[])
+  AND (p.creator_id = $2 OR p.org_owner_id = $2)
+  AND (p.org_id = $3 OR $3 IS NULL)
+  AND deleted_at IS NULL
+  AND enabled = TRUE
+  AND NOT EXISTS (SELECT 1 FROM backend.forms f WHERE f.property_id = p.id AND f.deleted_at IS NULL)
+RETURNING *;
 
 -- name: GetSoftDeletedProperties :many
 SELECT sqlc.embed(p)

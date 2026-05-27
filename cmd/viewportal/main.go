@@ -133,6 +133,31 @@ func stubPropertyStatsHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func stubFormStatsHandler(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	success := make([]*portal.FormStatsPoint, 0, 24)
+	for i := 23; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		success = append(success, &portal.FormStatsPoint{
+			Date:  t.Unix(),
+			Value: (24 - i) * 4,
+		})
+	}
+
+	failure := make([]*portal.FormStatsPoint, 0, len(success))
+	for _, pt := range success {
+		failure = append(failure, &portal.FormStatsPoint{
+			Date:  pt.Date,
+			Value: pt.Value / 4,
+		})
+	}
+
+	common.SendJSONResponse(r.Context(), w, &portal.FormStatsResponse{
+		Success: success,
+		Failure: failure,
+	})
+}
+
 func stubRuleStatsHandler(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	usage := make([]*portal.PropertyRuleStatsPoint, 0, 7)
@@ -248,6 +273,12 @@ func main() {
 		common.PropertyEndpoint, common.ParamProperty,
 		common.StatsEndpoint, common.ParamPeriod)
 	router.HandleFunc(statsPattern, stubPropertyStatsHandler)
+
+	formStatsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}/%s/{%s}",
+		common.OrgEndpoint, common.ParamOrg,
+		common.FormEndpoint, common.ParamForm,
+		common.StatsEndpoint, common.ParamPeriod)
+	router.HandleFunc(formStatsPattern, stubFormStatsHandler)
 
 	ruleStatsPattern := fmt.Sprintf("/portal/%s/{%s}/%s/{%s}/%s/{%s}",
 		common.OrgEndpoint, common.ParamOrg,

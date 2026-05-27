@@ -258,6 +258,15 @@ func stringKeySitekeyUUID(key string) (pgtype.UUID, error) {
 	return result, nil
 }
 
+func stringKeyUUID(key string) (pgtype.UUID, error) {
+	result := UUIDFromString(key)
+	if !result.Valid {
+		return result, ErrInvalidInput
+	}
+
+	return result, nil
+}
+
 func sessionIDFunc(sid string) (string, error) {
 	return sessionCachePrefix + sid, nil
 }
@@ -272,6 +281,14 @@ func propertySitekeyFunc(p *dbgen.Property) string {
 
 func propertyIDFunc(p *dbgen.Property) int32 {
 	return p.ID
+}
+
+func formExternalIDFunc(f *dbgen.Form) string {
+	return UUIDToString(f.ExternalID)
+}
+
+func formIDFunc(f *dbgen.Form) int32 {
+	return f.ID
 }
 
 func QueryKeyPgInt(key CacheKey) (pgtype.Int4, error) {
@@ -567,4 +584,18 @@ func containsInvalidNameChars(name string, allowedPunctuation string) (int, rune
 		}
 	}
 	return -1, 0
+}
+
+func NewDefaultPropertyParams(name, domain string, userID int32) *dbgen.CreatePropertyParams {
+	return &dbgen.CreatePropertyParams{
+		Name:             name,
+		CreatorID:        Int(userID),
+		Domain:           domain,
+		Level:            Int2(int16(common.DifficultyLevelSmall)),
+		Growth:           dbgen.DifficultyGrowthMedium,
+		ValidityInterval: 6 * time.Hour,
+		AllowSubdomains:  false,
+		AllowLocalhost:   false,
+		MaxReplayCount:   1,
+	}
 }

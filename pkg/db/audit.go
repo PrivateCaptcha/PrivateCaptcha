@@ -344,6 +344,73 @@ type AuditLogProperty struct {
 	AllowLocalhost      bool   `json:"allow_localhost,omitempty"`
 }
 
+type AuditLogForm struct {
+	Name              string  `json:"name,omitempty"`
+	URL               string  `json:"url,omitempty"`
+	OrgID             int32   `json:"org_id,omitempty"`
+	OrgOwnerID        int32   `json:"org_owner_id,omitempty"`
+	OrgName           string  `json:"org_name,omitempty"`
+	PropertyID        int32   `json:"property_id,omitempty"`
+	Enabled           bool    `json:"enabled"`
+	Active            bool    `json:"active"`
+	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
+	RequestsBurst     int32   `json:"requests_burst,omitempty"`
+	RetryRequestCount int16   `json:"retry_request_count,omitempty"`
+	Method            string  `json:"method,omitempty"`
+}
+
+func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
+	if form == nil {
+		return nil
+	}
+
+	event := &AuditLogForm{
+		Name:              form.Name,
+		URL:               form.URL,
+		OrgID:             form.OrgID.Int32,
+		OrgOwnerID:        form.OrgOwnerID.Int32,
+		PropertyID:        form.PropertyID,
+		Enabled:           form.Enabled,
+		Active:            form.Active,
+		RequestsPerSecond: form.RequestsPerSecond,
+		RequestsBurst:     form.RequestsBurst,
+		RetryRequestCount: form.RetryRequestCount,
+		Method:            string(form.Method),
+	}
+
+	if org != nil {
+		event.OrgName = org.Name
+	}
+
+	return event
+}
+
+func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *dbgen.Organization) *AuditLogForm {
+	if updateRow == nil {
+		return nil
+	}
+
+	event := &AuditLogForm{
+		Name:              updateRow.OldName,
+		URL:               updateRow.OldURL,
+		OrgID:             form.OrgID.Int32,
+		OrgOwnerID:        form.OrgOwnerID.Int32,
+		PropertyID:        form.PropertyID,
+		Enabled:           form.Enabled,
+		Active:            updateRow.OldActive,
+		RequestsPerSecond: updateRow.OldRequestsPerSecond,
+		RequestsBurst:     form.RequestsBurst,
+		RetryRequestCount: updateRow.OldRetryRequestCount,
+		Method:            string(form.Method),
+	}
+
+	if org != nil {
+		event.OrgName = org.Name
+	}
+
+	return event
+}
+
 func newAuditLogProperty(property *dbgen.Property, org *dbgen.Organization) *AuditLogProperty {
 	if property == nil {
 		return nil
@@ -407,6 +474,17 @@ func newCreatePropertyAuditLogEvent(property *dbgen.Property, org *dbgen.Organiz
 	}
 }
 
+func newCreateFormAuditLogEvent(form *dbgen.Form, org *dbgen.Organization) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    form.CreatorID.Int32,
+		Action:    common.AuditLogActionCreate,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  nil,
+		NewValue:  newAuditLogForm(form, org),
+	}
+}
+
 func newUpdatePropertyAuditLogEvent(updatedProperty *dbgen.Property, updateRow *dbgen.UpdatePropertyRow, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
 	return &common.AuditLogEvent{
 		UserID:    user.ID,
@@ -415,6 +493,39 @@ func newUpdatePropertyAuditLogEvent(updatedProperty *dbgen.Property, updateRow *
 		TableName: TableNameProperties,
 		OldValue:  newAuditLogOldProperty(updatedProperty, updateRow, org),
 		NewValue:  newAuditLogProperty(updatedProperty, org),
+	}
+}
+
+func newUpdateFormAuditLogEvent(updatedForm *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(updatedForm.ID),
+		TableName: TableNameForms,
+		OldValue:  newAuditLogOldForm(updatedForm, updateRow, org),
+		NewValue:  newAuditLogForm(updatedForm, org),
+	}
+}
+
+func newMoveFormAuditLogEvent(user *dbgen.User, form *dbgen.Form, oldOrgID int32, orgName string) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionUpdate,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  &AuditLogForm{Name: form.Name, OrgID: oldOrgID},
+		NewValue:  &AuditLogForm{Name: form.Name, OrgID: form.OrgID.Int32, OrgName: orgName},
+	}
+}
+
+func newDeleteFormAuditLogEvent(form *dbgen.Form, org *dbgen.Organization, user *dbgen.User) *common.AuditLogEvent {
+	return &common.AuditLogEvent{
+		UserID:    user.ID,
+		Action:    common.AuditLogActionSoftDelete,
+		EntityID:  int64(form.ID),
+		TableName: TableNameForms,
+		OldValue:  newAuditLogForm(form, org),
+		NewValue:  nil,
 	}
 }
 
