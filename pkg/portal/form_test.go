@@ -299,6 +299,99 @@ func TestGetFormDashboard(t *testing.T) {
 	}
 }
 
+func TestRenderFormDashboardShowsTestButton(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/dashboard.html", &formDashboardRenderContext{
+		CsrfRenderContext: server.CreateCsrfContext(&dbgen.User{ID: 1}),
+		Form:              stubForm("TestForm", "123"),
+		Org:               stubOrg("123"),
+		Tab:               formReportsTabIndex,
+		CanEdit:           true,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+	links := document.Find("a:contains('Test form')")
+	if links.Length() == 0 {
+		t.Fatal("expected Test form button in dashboard")
+	}
+	href := links.First().AttrOr("href", "")
+	if !strings.Contains(href, "tab=settings") {
+		t.Fatalf("expected Test form button to link to settings tab, got %q", href)
+	}
+}
+
+func TestRenderFormSettingsShowsTestDialog(t *testing.T) {
+	platformCtx := &PlatformRenderContext{
+		GitCommit:      "qwerty123",
+		Enterprise:     true,
+		licenseService: server.LicenseService,
+	}
+
+	testForm := &userForm{
+		ID:            "1",
+		OrgID:         "123",
+		Name:          "TestForm",
+		URL:           "https://hooks.example.com/submit/TestForm",
+		WebhookPrefix: "hooks.example.com/submit",
+		Enabled:       true,
+	}
+
+	buf, err := server.RenderResponse(t.Context(), "form/settings.html", &formSettingsRenderContext{
+		formDashboardRenderContext: formDashboardRenderContext{
+			CsrfRenderContext: server.CreateCsrfContext(&dbgen.User{ID: 1}),
+			Form:              testForm,
+			Org:               stubOrg("123"),
+			Tab:               formSettingsTabIndex,
+			CanEdit:           true,
+		},
+		Orgs:    []*UserOrg{},
+		CanMove: false,
+	}, &RequestContext{Path: server.RelURL("/org/123/form/456?tab=settings")}, platformCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	document := portal_tests.ParseHTML(t, buf)
+
+	// Check for Test button next to Save
+	testButtons := document.Find("button:contains('Test')")
+	if testButtons.Length() == 0 {
+		t.Fatal("expected Test button in settings")
+	}
+
+	// Check for form URL in the dialog
+	inputs := document.Find("input[value='https://hooks.example.com/submit/TestForm']")
+	if inputs.Length() == 0 {
+		t.Fatal("expected form URL input in test dialog")
+	}
+
+	// Check for POST method select
+	selects := document.Find("select")
+	foundPost := false
+	selects.Each(func(i int, s *goquery.Selection) {
+		if strings.Contains(s.Text(), "POST") {
+			foundPost = true
+		}
+	})
+	if !foundPost {
+		t.Fatal("expected POST method select in test dialog")
+	}
+
+	// Check for body textarea
+	textareas := document.Find("textarea")
+	if textareas.Length() == 0 {
+		t.Fatal("expected body textarea in test dialog")
+	}
+}
+
 func TestGetFormDashboardIntegrationsTab(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

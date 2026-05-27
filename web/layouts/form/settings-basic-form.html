@@ -75,6 +75,7 @@
     </div>
 </div>
 
-<div class="mt-8 flex">
+<div class="mt-8 flex flex-row gap-3">
     <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-primary{{ else }}pc-internal-form-button-disabled{{ end }}">Save</button>
+    <button type="button" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }}" @click="testOpen = true">Test</button>
 </div>
