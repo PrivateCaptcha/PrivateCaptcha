@@ -315,7 +315,7 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := j.TimeSeries.RetrieveWeeklyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveWeeklyPropertiesReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve weekly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -324,6 +324,16 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 	fillTotals(report, stats)
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
+
+	formStats, err := j.TimeSeries.RetrieveWeeklyFormsReportStats(ctx, userID, from, mid, to)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve weekly forms report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	fillFormTotals(report, formStats)
+	fillFormChanges(report, formStats)
+	fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
@@ -335,7 +345,7 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
 	}
 
-	stats, err := j.TimeSeries.RetrieveMonthlyReportStats(ctx, userID, from, mid, to)
+	stats, err := j.TimeSeries.RetrieveMonthlyPropertiesReportStats(ctx, userID, from, mid, to)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve monthly report stats", "userID", userID, common.ErrAttr(err))
 		return nil, err
@@ -344,6 +354,16 @@ func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int3
 	fillTotals(report, stats)
 	fillChanges(report, stats)
 	fillTopProperties(ctx, j.Store, report, stats, j.PortalURL, j.IDHasher)
+
+	formStats, err := j.TimeSeries.RetrieveMonthlyFormsReportStats(ctx, userID, from, mid, to)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve monthly forms report stats", "userID", userID, common.ErrAttr(err))
+		return nil, err
+	}
+
+	fillFormTotals(report, formStats)
+	fillFormChanges(report, formStats)
+	fillTopForms(ctx, j.Store, report, formStats, j.PortalURL, j.IDHasher)
 
 	return report, nil
 }
@@ -383,6 +403,13 @@ func verificationRate(totalRequests, totalVerifies uint64) float64 {
 	return float64(totalVerifies) / float64(totalRequests) * 100
 }
 
+func formErrorRate(totalSubmissions, totalErrors uint64) float64 {
+	if totalSubmissions == 0 {
+		return 0
+	}
+	return float64(totalErrors) / float64(totalSubmissions) * 100
+}
+
 func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats) {
 	report.RequestsChange = percentChange(report.TotalRequests, report.PrevRequests)
 	report.VerifiesChange = percentChange(report.TotalVerifies, report.PrevVerifies)
@@ -390,6 +417,82 @@ func fillChanges(report *email.UsageReportContext, stats *common.UserReportStats
 		report.VerificationRate,
 		verificationRate(report.PrevRequests, report.PrevVerifies),
 	)
+}
+
+func fillFormTotals(report *email.UsageReportContext, stats *common.UserFormsReportStats) {
+	if stats == nil {
+		return
+	}
+
+	report.TotalFormSubmissions = stats.TotalCurrentSubmissions
+	report.PrevFormSubmissions = stats.TotalPrevSubmissions
+	report.TotalFormErrors = stats.TotalCurrentErrors
+	report.PrevFormErrors = stats.TotalPrevErrors
+	report.FormErrorRate = formErrorRate(report.TotalFormSubmissions, report.TotalFormErrors)
+}
+
+func fillFormChanges(report *email.UsageReportContext, stats *common.UserFormsReportStats) {
+	if stats == nil {
+		return
+	}
+
+	report.FormSubmissionsChange = percentChange(report.TotalFormSubmissions, report.PrevFormSubmissions)
+	report.FormErrorsChange = percentChange(report.TotalFormErrors, report.PrevFormErrors)
+	report.FormErrorRateChange = percentChangeFloat(
+		report.FormErrorRate,
+		formErrorRate(report.PrevFormSubmissions, report.PrevFormErrors),
+	)
+}
+
+func fillTopForms(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserFormsReportStats, portalURL string, hasher common.IdentifierHasher) {
+	if (stats == nil) || (len(stats.Forms) == 0) || (report.TotalFormSubmissions == 0) {
+		return
+	}
+
+	formsStats := stats.Forms
+	if len(formsStats) > topPropertiesLimit {
+		formsStats = formsStats[:topPropertiesLimit]
+	}
+
+	batch := make(map[int32]uint, len(formsStats))
+	for _, fs := range formsStats {
+		batch[fs.FormID] = 0
+	}
+
+	forms, err := store.Impl().RetrieveFormsByID(ctx, batch)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to batch-retrieve forms for report", common.ErrAttr(err))
+		return
+	}
+
+	formMap := make(map[int32]*dbgen.Form, len(forms))
+	for _, form := range forms {
+		formMap[form.ID] = form
+	}
+
+	topForms := make([]*email.FormStat, 0, len(formsStats))
+	for _, fs := range formsStats {
+		form, ok := formMap[fs.FormID]
+		if !ok {
+			slog.DebugContext(ctx, "Skipping unknown form in report", "formID", fs.FormID)
+			continue
+		}
+
+		percent := float64(fs.CurrentSubmissions) / float64(report.TotalFormSubmissions) * 100
+		change := percentChange(fs.CurrentSubmissions, fs.PrevSubmissions)
+
+		topForms = append(topForms, &email.FormStat{
+			Name:      form.Name,
+			URL:       form.URL,
+			Link:      formDashboardURL(ctx, portalURL, hasher, form),
+			Count:     fs.CurrentSubmissions,
+			Percent:   percent,
+			Change:    change,
+			Alternate: len(topForms)%2 == 1,
+		})
+	}
+
+	report.TopForms = topForms
 }
 
 func fillTopProperties(ctx context.Context, store db.Implementor, report *email.UsageReportContext, stats *common.UserReportStats, portalURL string, hasher common.IdentifierHasher) {
@@ -456,6 +559,24 @@ func propertyDashboardURL(ctx context.Context, portalURL string, hasher common.I
 		hasher.Encrypt(int(property.ID)))
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to build property dashboard URL", "propID", property.ID, common.ErrAttr(err))
+		return ""
+	}
+
+	return link
+}
+
+func formDashboardURL(ctx context.Context, portalURL string, hasher common.IdentifierHasher, form *dbgen.Form) string {
+	if (len(portalURL) == 0) || (hasher == nil) || (form == nil) || (!form.OrgID.Valid) {
+		return ""
+	}
+
+	link, err := url.JoinPath(portalURL,
+		common.OrgEndpoint,
+		hasher.Encrypt(int(form.OrgID.Int32)),
+		common.FormEndpoint,
+		hasher.Encrypt(int(form.ID)))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to build form dashboard URL", "formID", form.ID, common.ErrAttr(err))
 		return ""
 	}
 

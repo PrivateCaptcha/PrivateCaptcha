@@ -640,6 +640,34 @@ func (impl *BusinessStoreImpl) RetrieveOrgForm(ctx context.Context, org *dbgen.O
 	return form, nil
 }
 
+// this is pretty much a copy paste of RetrievePropertiesByID
+func (impl *BusinessStoreImpl) RetrieveFormsByID(ctx context.Context, batch map[int32]uint) ([]*dbgen.Form, error) {
+	reader := &StoreBulkReader[int32, int32, dbgen.Form]{
+		ArgFunc:      formIDFunc,
+		Cache:        impl.cache,
+		CacheKeyFunc: formByIDCacheKey,
+		QueryKeyFunc: IdentityKeyFunc[int32],
+		DropInvalid:  true,
+	}
+
+	if impl.querier != nil {
+		reader.QueryFunc = impl.querier.GetFormsByID
+	}
+
+	cached, items, err := reader.Read(ctx, batch)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range items {
+		impl.cacheForm(ctx, item)
+	}
+
+	result := cached
+	result = append(result, items...)
+	return result, nil
+}
+
 func (impl *BusinessStoreImpl) RetrieveFormsByExternalID(ctx context.Context, externalIDs map[string]uint, minMissingCount uint) ([]*dbgen.Form, error) {
 	reader := &StoreBulkReader[string, pgtype.UUID, dbgen.Form]{
 		ArgFunc:         formExternalIDFunc,

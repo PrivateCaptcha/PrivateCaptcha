@@ -54,8 +54,10 @@ type TimeSeriesStore interface {
 	WriteFormSubmitBatch(ctx context.Context, records []*FormSubmitRecord) error
 	RetrievePropertyStatsSince(ctx context.Context, r *BackfillRequest, from time.Time) ([]*TimeCount, error)
 	RetrieveAccountStats(ctx context.Context, userID int32, from time.Time) ([]*OrgTimeCount, error)
-	RetrieveWeeklyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
-	RetrieveMonthlyReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveWeeklyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveMonthlyPropertiesReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserReportStats, error)
+	RetrieveWeeklyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
+	RetrieveMonthlyFormsReportStats(ctx context.Context, userID int32, from, mid, to time.Time) (*UserFormsReportStats, error)
 	RetrievePropertyStatsByPeriod(ctx context.Context, orgID, propertyID int32, period TimePeriod) ([]*TimePeriodStat, error)
 	RetrieveFormStatsByPeriod(ctx context.Context, orgID, formID int32, period TimePeriod) ([]*FormSubmitStat, error)
 	RetrievePropertyRuleStatsByPeriod(ctx context.Context, userID, orgID, propertyID int32, period TimePeriod) ([]*TimeCount, error)

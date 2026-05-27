@@ -53,6 +53,7 @@ type Querier interface {
 	GetFormAuditLogs(ctx context.Context, arg *GetFormAuditLogsParams) ([]*GetFormAuditLogsRow, error)
 	GetFormByID(ctx context.Context, id int32) (*Form, error)
 	GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error)
+	GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)
 	GetLock(ctx context.Context, name string) (*Lock, error)
 	GetNotificationTemplateByHash(ctx context.Context, externalID string) (*NotificationTemplate, error)
