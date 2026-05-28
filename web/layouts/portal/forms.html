@@ -11,7 +11,7 @@
             <div class="min-w-0 flex-1">
                 <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.FormEndpoint $form.ID }}" class="focus:outline-none">
                     <span class="absolute inset-0" aria-hidden="true"></span>
-                    <p class="form-name text-sm font-medium text-gray-900">{{ $form.Name }}</p>
+                    <p class="flex flex-row items-center gap-x-2 text-sm font-medium text-gray-900"><span class="form-name">{{ $form.Name }}</span><span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset {{ if $form.Active }}bg-green-50 text-green-700 ring-green-600/20{{else}}bg-yellow-50 text-yellow-800 ring-yellow-600/20{{end}}">{{ if $form.Active }}Active{{else}}Inactive{{ end }}</span></p>
                     <p class="truncate text-sm text-gray-500">{{ $form.WebhookPrefix }}</p>
                 </a>
             </div>

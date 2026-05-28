@@ -373,16 +373,18 @@ func TestDeactivateFailingFormsJobEndToEnd(t *testing.T) {
 		t.Fatalf("failed to create account: %v", err)
 	}
 
-	failingForm, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "deactivate-failing.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name() + " failing",
-		URL:               "https://example.com/failing",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	failingForm, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "deactivate-failing.example.com"),
+		&dbgen.CreateFormParams{
+			Name:              t.Name() + " failing",
+			URL:               "https://example.com/failing",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerSecond: 1,
+			RequestsBurst:     5,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		}, org)
 	if err != nil {
 		t.Fatalf("failed to create failing form: %v", err)
 	}

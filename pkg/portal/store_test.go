@@ -116,16 +116,10 @@ func TestBusinessStoreImplFormPropertyRestrictions(t *testing.T) {
 		t.Fatalf("Failed to create extra org: %v", err)
 	}
 
-	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "form-restrictions.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org1)
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "form-restrictions.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org1)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}

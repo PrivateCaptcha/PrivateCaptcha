@@ -57,10 +57,10 @@ type userForm struct {
 	URL               string
 	WebhookPrefix     string
 	ExternalID        string
-	Enabled           bool
-	Active            bool
 	RetryRequestCount int
 	RequestsPerMinute int
+	Enabled           bool
+	Active            bool
 }
 
 type orgFormsRenderContext struct {
@@ -311,10 +311,10 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 		URL:               form.URL,
 		WebhookPrefix:     webhookPrefixFromURL(form.URL),
 		ExternalID:        db.UUIDToString(form.ExternalID),
-		Enabled:           form.Enabled,
-		Active:            form.Active,
 		RetryRequestCount: int(form.RetryRequestCount),
 		RequestsPerMinute: requestsPerMinute,
+		Enabled:           form.Enabled,
+		Active:            form.Active,
 	}
 }
 

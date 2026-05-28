@@ -61,16 +61,10 @@ func createFormProxyForTest(ctx context.Context, t *testing.T, name, domain stri
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, domain), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, domain),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -322,16 +316,10 @@ func TestFormProxyRejectsWrongPropertyCaptcha(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
 	}
-	form1, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "wrong-property-one.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form1, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "wrong-property-one.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -384,16 +372,10 @@ func TestFormProxySubmitsForm(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create account: %v", err)
 	}
-	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "submit-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               downstream.URL,
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "submit-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}

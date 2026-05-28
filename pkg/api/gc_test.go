@@ -231,16 +231,10 @@ func TestGCFormData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"),
+		db_test.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,16 +257,10 @@ func TestGCFormOrgData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"),
+		db_test.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,16 +289,10 @@ func TestGCFormUserData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://example.com/submit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_test.CreateNewPropertyParams(user.ID, "gc-form.example.com"),
+		db_test.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatal(err)
 	}

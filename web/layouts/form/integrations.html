@@ -67,13 +67,14 @@
             <div class="bg-gray-200 px-6 py-5 sm:p-6 flex items-center sm:justify-between md:gap-6">
                 <div class="grow">
                     <code class="block rounded-md bg-gray-200 text-gray-800">
-                        <textarea id="snippet" class="h-40 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this inside the <head> of your website -->` }}
+                        <textarea id="snippet" class="h-48 text-sm font-mono transition overflow-hidden bg-gray-200 outline-none appearance-none border border-transparent rounded w-full p-2 focus:outline-none focus:bg-white focus:border-gray-300 resize-none" readonly>{{ `<!-- Add this inside the <head> of your website -->` }}
 {{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
 
-{{ `<!-- Add this inside your existing form -->` }}
+{{ `<!-- Use this instead of your existing form -->` }}
 {{ `<form method="POST" action="https://api.privatecaptcha.com/form/` }}{{ .Params.Form.ExternalID }}{{ `">
   <!-- Existing form fields... -->
   <div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>
+  <!-- <input type="submit" disabled /> -->
 </form>` }}</textarea>
                     </code>
                 </div>

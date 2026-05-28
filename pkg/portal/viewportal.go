@@ -40,7 +40,7 @@ func viewStubForm(name, orgID string) *userForm {
 		WebhookPrefix:     "https://example.com/api/...",
 		ExternalID:        "123e4567e89b12d3a456426614174000",
 		Enabled:           true,
-		Active:            true,
+		Active:            randv2.Int()%2 == 0,
 		RetryRequestCount: 2,
 		RequestsPerMinute: 30,
 	}

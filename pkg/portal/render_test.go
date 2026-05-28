@@ -33,6 +33,7 @@ func stubForm(name, orgID string) *userForm {
 		Name:          name,
 		WebhookPrefix: "hooks.example.com/submit",
 		Enabled:       true,
+		Active:        true,
 	}
 }
 
@@ -261,7 +262,7 @@ func TestRenderHTML(t *testing.T) {
 				},
 				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
 			},
-			selector: "p.form-name",
+			selector: "span.form-name",
 			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{
@@ -280,7 +281,7 @@ func TestRenderHTML(t *testing.T) {
 				},
 				Forms: []*userForm{stubForm("Newsletter Signup", "123"), stubForm("Contact Us", "123")},
 			},
-			selector: "p.form-name",
+			selector: "span.form-name",
 			matches:  []string{"Newsletter Signup", "Contact Us"},
 		},
 		{

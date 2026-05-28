@@ -81,6 +81,20 @@ func CreateNewPropertyParams(userID int32, domain string) *dbgen.CreatePropertyP
 	}
 }
 
+func CreateNewFormParams(userID int32, url string) *dbgen.CreateFormParams {
+	return &dbgen.CreateFormParams{
+		Name:              "Form " + xid.New().String(),
+		CreatorID:         db.Int(userID),
+		URL:               url,
+		Fields:            []byte(`{}`),
+		Enabled:           true,
+		RequestsPerSecond: 1,
+		RequestsBurst:     5,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+	}
+}
+
 func CreateNewAccountForTest(ctx context.Context, store db.Implementor, testName string, plan billing.Plan) (*dbgen.User, *dbgen.Organization, error) {
 	return CreateNewAccountForTestEx(ctx, store, testName, CreateNewSubscriptionParams(plan))
 }

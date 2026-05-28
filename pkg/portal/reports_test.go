@@ -62,16 +62,7 @@ func TestScheduleWeeklyReport(t *testing.T) {
 	}
 	form, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "weekly-schedule.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Weekly Schedule Form",
-			URL:               "https://hooks.reports-test.org/weekly-schedule",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create weekly report form: %v", err)
@@ -143,16 +134,7 @@ func TestScheduleMonthlyReport(t *testing.T) {
 	}
 	form, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "monthly-schedule.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Monthly Schedule Form",
-			URL:               "https://hooks.reports-test.org/monthly-schedule",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create monthly report form: %v", err)
@@ -541,32 +523,14 @@ func TestBuildWeeklyReport(t *testing.T) {
 	}
 	form1, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "contact.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Contact Us",
-			URL:               "https://hooks.reports-test.org/contact",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create form 1: %v", err)
 	}
 	form2, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "support.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Support",
-			URL:               "https://hooks.reports-test.org/support",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create form 2: %v", err)
@@ -914,32 +878,14 @@ func TestBuildMonthlyReport(t *testing.T) {
 	}
 	form1, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "monthly-contact.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Monthly Contact",
-			URL:               "https://hooks.reports-test.org/monthly-contact",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create monthly form 1: %v", err)
 	}
 	form2, _, _, err := store.Impl().CreateNewForm(ctx,
 		db_tests.CreateNewPropertyParams(user.ID, "monthly-support.reports-test.org"),
-		&dbgen.CreateFormParams{
-			Name:              "Monthly Support",
-			URL:               "https://hooks.reports-test.org/monthly-support",
-			Fields:            []byte(`{}`),
-			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
-			RetryRequestCount: 0,
-			Method:            dbgen.FormMethodPost,
-		},
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
 		org)
 	if err != nil {
 		t.Fatalf("failed to create monthly form 2: %v", err)

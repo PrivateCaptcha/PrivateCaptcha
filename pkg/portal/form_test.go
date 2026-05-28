@@ -252,16 +252,10 @@ func TestGetFormDashboard(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "dashboard.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/dashboard",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "dashboard.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -311,16 +305,10 @@ func TestGetFormDashboardIntegrationsTab(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, property, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "integrations.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/integrations",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "integrations.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -371,16 +359,10 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "settings.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/settings",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "settings.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -460,16 +442,10 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               downstream.URL,
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "test-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -531,16 +507,10 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	}))
 	defer downstream.Close()
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "test-failure.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               downstream.URL,
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "test-failure.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -584,16 +554,10 @@ func TestPutFormCannotEdit(t *testing.T) {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
-	form, _, _, err := store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "cannot-edit.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/cannot-edit",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, "cannot-edit.example.com"),
+		db_tests.CreateNewFormParams(owner.ID, "https://example.com/submit"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -668,16 +632,10 @@ func TestMoveForm(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, property, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(org1.UserID.Int32, "move-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/move-form",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org1)
+	form, property, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(org1.UserID.Int32, "move-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://example.com/submit"),
+		org1)
 	if err != nil {
 		t.Fatalf("Failed to create new form: %v", err)
 	}
@@ -747,16 +705,10 @@ func TestMoveFormInvalidPathArgs(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "move-form-invalid.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/move-form-invalid",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "move-form-invalid.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://hooks.example.com/submit/move-form-invalid"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -840,16 +792,10 @@ func TestMoveFormCannotMove(t *testing.T) {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
-	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "move-form-perms.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/move-form-perms",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org1)
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, "move-form-perms.example.com"),
+		db_tests.CreateNewFormParams(owner.ID, "https://hooks.example.com/submit/move-form-perms"),
+		org1)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -904,16 +850,10 @@ func TestDeleteForm(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "delete-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/delete-form",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "delete-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://hooks.example.com/submit/delete-form"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -966,16 +906,10 @@ func TestDeleteFormCannotDelete(t *testing.T) {
 		t.Fatalf("Failed to create owner account: %v", err)
 	}
 
-	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(owner.ID, "delete-form-restrict.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/delete-form-restrict",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, "delete-form-restrict.example.com"),
+		db_tests.CreateNewFormParams(owner.ID, "https://hooks.example.com/submit/delete-form-restrict"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
@@ -1024,16 +958,10 @@ func TestGetFormDashboardAuditLogs(t *testing.T) {
 		t.Fatalf("Failed to create account: %v", err)
 	}
 
-	form, _, _, err := server.Store.Impl().CreateNewForm(ctx, db_tests.CreateNewPropertyParams(user.ID, "audit-form.example.com"), &dbgen.CreateFormParams{
-		Name:              t.Name(),
-		URL:               "https://hooks.example.com/submit/audit-form",
-		Fields:            []byte(`{}`),
-		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
-		RetryRequestCount: 0,
-		Method:            dbgen.FormMethodPost,
-	}, org)
+	form, _, _, err := server.Store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "audit-form.example.com"),
+		db_tests.CreateNewFormParams(user.ID, "https://hooks.example.com/submit/audit-form"),
+		org)
 	if err != nil {
 		t.Fatalf("Failed to create form: %v", err)
 	}
