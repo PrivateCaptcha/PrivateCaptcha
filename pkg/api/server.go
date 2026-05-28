@@ -241,10 +241,11 @@ func (s *Server) Shutdown() {
 
 	slog.Debug("Shutting down API server routines")
 	s.VerifyLogCancel()
-	s.FormSubmitLogCancel()
+	// cancel producer before consumer
 	s.FormSubmitCancel()
-	close(s.VerifyLogChan)
-	// we have background works that call addFormSubmitRecord() which can panic so we don't close this channel here
+	s.FormSubmitLogCancel()
+	// background goroutines can call addFormSubmitRecord()/addVerifyRecord()  so we don't close channels here
+	//close(s.VerifyLogChan)
 	//close(s.FormSubmitLogChan)
 	close(s.FormSubmissionChan)
 }

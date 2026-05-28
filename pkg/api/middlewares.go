@@ -24,6 +24,7 @@ type UserLimiter interface {
 	CheckUsers(ctx context.Context, users map[int32]uint) error
 	// for properties we want to ensure they belong to an org owned by an active subscriber
 	EvaluatePropertyAccess(ctx context.Context, userID int32) (bool, error)
+	EvaluateFormAccess(ctx context.Context, userID int32) (bool, error)
 	// for API we want to check if user is accessing a resource owned by an active subscriber
 	// (but this check is more down the callstack inside Verifier)
 	EvaluateAPIAccess(ctx context.Context, userID int32) (bool, error)
@@ -118,6 +119,10 @@ func (ul *baseUserLimiter) EvaluateAPIAccess(ctx context.Context, userID int32) 
 }
 
 func (ul *baseUserLimiter) EvaluatePropertyAccess(ctx context.Context, userID int32) (bool, error) {
+	return ul.EvaluateAPIAccess(ctx, userID)
+}
+
+func (ul *baseUserLimiter) EvaluateFormAccess(ctx context.Context, userID int32) (bool, error) {
 	return ul.EvaluateAPIAccess(ctx, userID)
 }
 
@@ -664,20 +669,18 @@ func (am *AuthMiddleware) Form(next http.Handler) http.Handler {
 				return
 			}
 
-			if property, err := am.Store.Impl().GetCachedPropertyByID(ctx, form.PropertyID); err == nil {
-				if !property.Enabled {
-					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-					return
-				}
+			if property, err := am.Store.Impl().GetCachedPropertyByID(ctx, form.PropertyID); (err == nil) && !property.Enabled {
+				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				return
+			}
 
-				if softRestriction, err := am.Limiter.EvaluatePropertyAccess(ctx, property.OrgOwnerID.Int32); err == nil {
-					if !softRestriction {
-						http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
-					} else {
-						http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
-					}
-					return
+			if softRestriction, err := am.Limiter.EvaluateFormAccess(ctx, form.OrgOwnerID.Int32); err == nil {
+				if !softRestriction {
+					http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
+				} else {
+					http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 				}
+				return
 			}
 
 			ctx = context.WithValue(ctx, common.FormContextKey, form)

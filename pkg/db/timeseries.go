@@ -686,7 +686,7 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 		interval = "INTERVAL 1 DAY"
 	case common.TimePeriodYear:
 		timeFrom = tnow.AddDate(-1, 0, 0).Truncate(24 * time.Hour)
-		table = FormSubmitLogTableName1mo
+		table = FormSubmitLogTableName1d
 		timeFunction = "toStartOfMonth(%s)"
 		interval = "INTERVAL 1 MONTH"
 	default:

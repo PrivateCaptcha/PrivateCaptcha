@@ -48,15 +48,12 @@ type FormSubmission struct {
 }
 
 type FormSubmitResult struct {
-	Success    bool
 	StatusCode int
+	Success    bool
+	Valid      bool
 }
 
-func (fsr *FormSubmitResult) Valid() bool {
-	return fsr.StatusCode > 0
-}
-
-func (fsr *FormSubmitResult) Code() int8 {
+func (fsr *FormSubmitResult) ResultCode() int8 {
 	var code int8 = formSubmitStatusFailure
 	if fsr.Success {
 		code = formSubmitStatusSuccess
@@ -280,8 +277,8 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 				return
 			}
 
-			if result := SubmitForm(ctx, client, f, sub); result.Valid() {
-				s.addFormSubmitRecord(ctx, f, result.Code())
+			if result := SubmitForm(ctx, client, f, sub); result.Valid {
+				s.addFormSubmitRecord(ctx, f, result.ResultCode())
 			}
 		}(form, submission)
 	}
@@ -315,7 +312,7 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 }
 
 func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
-	result := &FormSubmitResult{}
+	var result *FormSubmitResult
 
 	method := strings.ToUpper(string(form.Method))
 	if len(method) == 0 {
@@ -333,6 +330,8 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 	body := submission.Values.Encode()
 
 	for attempt := 0; attempt < attempts; attempt++ {
+		result = &FormSubmitResult{}
+
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
@@ -370,6 +369,7 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 			req.Header.Set(common.HeaderTraceID, submission.TraceID)
 		}
 
+		result.Valid = true
 		resp, err := client.Do(req)
 		if err != nil {
 			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "submitID", submission.ID, "attempt", attempt+1, common.ErrAttr(err))
