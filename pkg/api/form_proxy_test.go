@@ -100,7 +100,12 @@ func TestSubmitFormBatchSkipsUnsafeFormURL(t *testing.T) {
 	form := &dbgen.Form{ID: 1, ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
-	server := &Server{BusinessDB: store, FormURLVerifier: verifier, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
+	server := &Server{
+		BusinessDB:        store,
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
@@ -129,7 +134,12 @@ func TestSubmitFormBatchRecordsFinalSuccess(t *testing.T) {
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
-	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1)}
+	server := &Server{
+		BusinessDB:        store,
+		FormURLVerifier:   &stubSubmitFormURLVerifier{},
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
@@ -157,7 +167,12 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
 	cache := db.NewStaticCache[db.CacheKey, any](1000, &db.CacheMissingValue{})
 	store := db.NewBusinessWithQuerier(nil, &formProxyQuerierStub{QuerierStub: &db.QuerierStub{}, forms: []*dbgen.Form{form}}, cache)
-	server := &Server{BusinessDB: store, FormURLVerifier: &stubSubmitFormURLVerifier{}, FormSubmitLogChan: make(chan *common.FormSubmitRecord, 2)}
+	server := &Server{
+		BusinessDB:        store,
+		FormURLVerifier:   &stubSubmitFormURLVerifier{},
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 2),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	if err := server.submitFormBatch(context.Background(), []*FormSubmission{submission}); err != nil {
