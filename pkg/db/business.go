@@ -36,7 +36,7 @@ const (
 	PortalLoginPropertyID    = "1ca8041a-5761-40a4-addf-f715a991bfea"
 	PortalRegisterPropertyID = "8981be7a-3a71-414d-bb74-e7b4456603fd"
 	TestPropertyID           = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-	defaultCacheTTL          = 15 * time.Minute
+	DefaultCacheTTL          = 15 * time.Minute
 	defaultCacheRefresh      = 30 * time.Minute
 	negativeCacheTTL         = 5 * time.Minute
 	auditBatchSize           = 100
@@ -73,7 +73,7 @@ func NewBusiness(pool *pgxpool.Pool) *BusinessStore {
 	const maxCacheSize = 10_000_000
 	var cache common.Cache[CacheKey, any]
 	var err error
-	cache, err = NewMemoryCache[CacheKey, any]("default", maxCacheSize, &CacheMissingValue{}, defaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
+	cache, err = NewMemoryCache[CacheKey, any]("default", maxCacheSize, &CacheMissingValue{}, DefaultCacheTTL, defaultCacheRefresh, negativeCacheTTL)
 	if err != nil {
 		slog.Error("Failed to create memory cache", common.ErrAttr(err))
 		cache = NewStaticCache[CacheKey, any](maxCacheSize, &CacheMissingValue{})
@@ -244,5 +244,5 @@ func (s *BusinessStore) LoadCache(ctx context.Context, dir string) error {
 		return nil
 	}
 
-	return common.LoadCacheFromFile(ctx, dir, cachePersistFile, defaultCacheTTL, mc.store)
+	return common.LoadCacheFromFile(ctx, dir, cachePersistFile, DefaultCacheTTL, mc.store)
 }

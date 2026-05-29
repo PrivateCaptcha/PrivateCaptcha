@@ -91,6 +91,7 @@ type Server struct {
 	FormSubmitLogCancel context.CancelFunc
 	FormSubmissionChan  chan *FormSubmission
 	FormSubmitCancel    context.CancelFunc
+	FailingForms        *common.ExpiringCounterMap[int32]
 	Cors                *cors.Cors
 	Metrics             common.APIMetrics
 	Mailer              common.Mailer
@@ -191,6 +192,10 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 	cancelVerifyCtx, s.VerifyLogCancel = context.WithCancel(context.WithValue(baseVerifyCtx, common.TraceIDContextKey, "flush_verify_log"))
 
 	go common.ProcessBatchArray(cancelVerifyCtx, s.VerifyLogChan, config.VerifyFlushInterval, VerifyBatchSize, maxVerifyBatchSize, s.TimeSeries.WriteVerifyLogBatch)
+
+	if s.FailingForms == nil {
+		s.FailingForms = common.NewExpiringCounterMap[int32]()
+	}
 
 	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)
 	var cancelFormSubmitLogCtx context.Context

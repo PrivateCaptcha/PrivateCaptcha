@@ -24,7 +24,7 @@ import (
 
 const (
 	maxFormBodySize                  = 1024 * 1024
-	formQueueBackpressureTimeout     = 400 * time.Millisecond
+	formQueueBackpressureTimeout     = 1 * time.Second
 	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
 	formSubmitStatusSuccess          = 0
 	formSubmitStatusFailure          = 1
@@ -224,7 +224,11 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 
 	client := common.NewFormHTTPClient(s.FormURLVerifier)
 
-	concurrencyLimit := 4
+	const concurrencyLimit = 4
+	// the logic is basically maxFormFailures during db.DefaultCacheTTL period leads to immediate form block
+	// NOTE: yes, we can get _very_ unlucky due to load balancing if all "bad" submissions for this form land here
+	// but this is considered acceptable due to extremely low probability
+	const maxFormFailures = FormBatchSize / 10
 
 	sem := make(chan struct{}, concurrencyLimit)
 	var wg sync.WaitGroup
@@ -254,6 +258,11 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		go func(f *dbgen.Form, sub *FormSubmission) {
 			defer wg.Done()
 			defer func() { <-sem }() // Free up a spot in the semaphore when finished
+
+			if count, ok := s.FailingForms.Get(f.ID); ok && (count > maxFormFailures) {
+				slog.WarnContext(ctx, "Skipping form with too many submit failures", "formID", f.ID, "count", count)
+				return
+			}
 
 			// delayed captcha check if original form was not cached at the time of request
 			if sub.CaptchaSolution != nil {
@@ -285,12 +294,21 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 
 	wg.Wait()
 
+	// we cleanup async, but we don't expect SO many bad forms out there
+	go s.FailingForms.ClearExpired(db.DefaultCacheTTL, FormBatchSize /*max items*/)
+
 	return nil
 }
 
 func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
 	if form == nil {
 		return
+	}
+
+	if status == 0 {
+		s.FailingForms.Delete(form.ID)
+	} else {
+		_ = s.FailingForms.Inc(form.ID)
 	}
 
 	record := &common.FormSubmitRecord{
