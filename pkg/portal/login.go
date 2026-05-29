@@ -137,7 +137,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 			s.render(w, r, loginContentsTemplate, data)
 			return
 		}
-		slog.WarnContext(ctx, "Failed to find user by email", "email", email, common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to find active user by email", "email", email, common.ErrAttr(err))
 		data.EmailError = "User with such email does not exist."
 		s.render(w, r, loginContentsTemplate, data)
 		return
