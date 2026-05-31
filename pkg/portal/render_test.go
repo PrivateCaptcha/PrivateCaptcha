@@ -31,6 +31,8 @@ func stubForm(name, orgID string) *userForm {
 		ID:            "1",
 		OrgID:         orgID,
 		Name:          name,
+		URL:           "https://hooks.example.com/submit/form",
+		Method:        http.MethodPost,
 		WebhookPrefix: "hooks.example.com/submit",
 		Enabled:       true,
 		Active:        true,

@@ -489,7 +489,7 @@ func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
 const updateForm = `-- name: UpdateForm :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms f
-    WHERE f.id = $1 AND (f.creator_id = $7 OR f.org_owner_id = $7) AND (f.org_id = $8 OR $8 IS NULL) AND f.enabled = TRUE
+    WHERE f.id = $1 AND (f.creator_id = $8 OR f.org_owner_id = $8) AND (f.org_id = $9 OR $9 IS NULL) AND f.enabled = TRUE
     FOR UPDATE
 ),
 upd AS (
@@ -499,6 +499,7 @@ upd AS (
         active = $4,
         retry_request_count = $5,
         requests_per_second = $6,
+        method = $7,
         updated_at = NOW()
     WHERE f.id = (SELECT id FROM old)
     RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
@@ -509,7 +510,8 @@ SELECT
     old.url AS old_url,
     old.active AS old_active,
     old.retry_request_count AS old_retry_request_count,
-    old.requests_per_second AS old_requests_per_second
+    old.requests_per_second AS old_requests_per_second,
+    old.method AS old_method
 FROM upd
 CROSS JOIN old
 `
@@ -521,6 +523,7 @@ type UpdateFormParams struct {
 	Active            bool        `db:"active" json:"active"`
 	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
+	Method            FormMethod  `db:"method" json:"method"`
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
 }
@@ -549,6 +552,7 @@ type UpdateFormRow struct {
 	OldActive            bool               `db:"old_active" json:"old_active"`
 	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
 	OldRequestsPerSecond float64            `db:"old_requests_per_second" json:"old_requests_per_second"`
+	OldMethod            FormMethod         `db:"old_method" json:"old_method"`
 }
 
 func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*UpdateFormRow, error) {
@@ -559,6 +563,7 @@ func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*Updat
 		arg.Active,
 		arg.RetryRequestCount,
 		arg.RequestsPerSecond,
+		arg.Method,
 		arg.CreatorID,
 		arg.OrgID,
 	)
@@ -587,6 +592,7 @@ func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*Updat
 		&i.OldActive,
 		&i.OldRetryRequestCount,
 		&i.OldRequestsPerSecond,
+		&i.OldMethod,
 	)
 	return &i, err
 }

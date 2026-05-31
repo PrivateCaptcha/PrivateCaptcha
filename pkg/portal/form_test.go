@@ -50,6 +50,7 @@ func TestFormToUserForm(t *testing.T) {
 		ID:      34,
 		OrgID:   pgtype.Int4{Int32: 56, Valid: true},
 		URL:     "https://hooks.example.com/submit/form",
+		Method:  dbgen.FormMethodPut,
 		Enabled: true,
 	}
 
@@ -68,6 +69,9 @@ func TestFormToUserForm(t *testing.T) {
 	}
 	if userForm.WebhookPrefix != "hooks.example.com/submit" {
 		t.Fatalf("expected webhook prefix %q, got %q", "hooks.example.com/submit", userForm.WebhookPrefix)
+	}
+	if userForm.Method != http.MethodPut {
+		t.Fatalf("expected method %q, got %q", http.MethodPut, userForm.Method)
 	}
 	if !userForm.Enabled {
 		t.Fatal("expected enabled form")
@@ -379,6 +383,7 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	values.Set(common.ParamName, form.Name+" updated")
 	values.Set(common.ParamURL, "https://hooks.example.com/submit/settings-updated")
+	values.Set(common.ParamMethod, http.MethodPut)
 	values.Set(common.ParamRetryRequestCount, "on")
 	values.Set(common.ParamRequestsPerMinute, "24")
 	values.Set(common.ParamActive, "true")
@@ -411,11 +416,22 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	if renderCtx.Form.URL != "https://hooks.example.com/submit/settings-updated" {
 		t.Fatal("expected updated form URL in render context")
 	}
+	if renderCtx.Form.Method != http.MethodPut {
+		t.Fatalf("expected updated form method %q in render context, got %q", http.MethodPut, renderCtx.Form.Method)
+	}
 	if renderCtx.Form.RetryRequestCount != 1 {
 		t.Fatal("expected updated retry count in render context")
 	}
 	if renderCtx.Form.RequestsPerMinute != 24 {
 		t.Fatal("expected updated requests per minute in render context")
+	}
+
+	updatedForm, err := store.Impl().RetrieveOrgForm(ctx, org, form.ID)
+	if err != nil {
+		t.Fatalf("Failed to retrieve updated form: %v", err)
+	}
+	if updatedForm.Method != dbgen.FormMethodPut {
+		t.Fatalf("expected persisted form method %q, got %q", dbgen.FormMethodPut, updatedForm.Method)
 	}
 }
 
@@ -437,7 +453,11 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	receivedMethod := ""
+	receivedPath := ""
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
+		receivedPath = r.URL.Path
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer downstream.Close()
@@ -453,6 +473,8 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	values := url.Values{}
 	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	values.Set(common.ParamBody, "email=test@example.com&message=hello")
+	values.Set(common.ParamURL, downstream.URL+"/override")
+	values.Set(common.ParamMethod, http.MethodDelete)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
 	req.AddCookie(cookie)
@@ -481,6 +503,12 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	}
 	if len(renderCtx.SuccessMessage) == 0 {
 		t.Fatal("Expected result to contain success message")
+	}
+	if receivedMethod != http.MethodDelete {
+		t.Fatalf("expected downstream method %q, got %q", http.MethodDelete, receivedMethod)
+	}
+	if receivedPath != "/override" {
+		t.Fatalf("expected downstream path %q, got %q", "/override", receivedPath)
 	}
 }
 
@@ -518,6 +546,8 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	values := url.Values{}
 	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
 	values.Set(common.ParamBody, "email=test@example.com")
+	values.Set(common.ParamURL, downstream.URL+"/failure")
+	values.Set(common.ParamMethod, http.MethodPatch)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
 	req.AddCookie(cookie)
@@ -540,6 +570,72 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	}
 	if len(renderCtx.WarningMessage) == 0 {
 		t.Fatal("Expected result to contain warning message")
+	}
+}
+
+func TestPostTestFormRejectsInvalidMethod(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+	cookie, err := portal_tests.AuthenticateSuite(ctx, user.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	called := 0
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer downstream.Close()
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "test-invalid-method.example.com"),
+		db_tests.CreateNewFormParams(user.ID, downstream.URL),
+		org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	values := url.Values{}
+	values.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(user.ID))))
+	values.Set(common.ParamBody, "email=test@example.com")
+	values.Set(common.ParamURL, downstream.URL+"/invalid")
+	values.Set(common.ParamMethod, http.MethodTrace)
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/form/%s/%s", server.IDHasher.Encrypt(int(org.ID)), server.IDHasher.Encrypt(int(form.ID)), common.TestEndpoint), strings.NewReader(values.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.SetPathValue(common.ParamOrg, server.IDHasher.Encrypt(int(org.ID)))
+	req.SetPathValue(common.ParamForm, server.IDHasher.Encrypt(int(form.ID)))
+
+	w := httptest.NewRecorder()
+	viewModel, err := server.postTestForm(w, req)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+	if viewModel == nil {
+		t.Fatal("Expected ViewModel, got nil")
+	}
+
+	renderCtx, ok := viewModel.Model.(*formSettingsRenderContext)
+	if !ok {
+		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
+	}
+	if len(renderCtx.ErrorMessage) == 0 {
+		t.Fatal("Expected invalid method error message")
+	}
+	if called != 0 {
+		t.Fatalf("expected downstream server not to be called, got %d requests", called)
 	}
 }
 

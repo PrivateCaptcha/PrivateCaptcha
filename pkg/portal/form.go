@@ -55,6 +55,7 @@ type userForm struct {
 	PropertyID        string
 	Name              string
 	URL               string
+	Method            string
 	WebhookPrefix     string
 	ExternalID        string
 	RetryRequestCount int
@@ -309,12 +310,43 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 		PropertyID:        hasher.Encrypt(int(form.PropertyID)),
 		Name:              form.Name,
 		URL:               form.URL,
+		Method:            formMethodToHTTPMethod(form.Method),
 		WebhookPrefix:     webhookPrefixFromURL(form.URL),
 		ExternalID:        db.UUIDToString(form.ExternalID),
 		RetryRequestCount: int(form.RetryRequestCount),
 		RequestsPerMinute: requestsPerMinute,
 		Enabled:           form.Enabled,
 		Active:            form.Active,
+	}
+}
+
+func formMethodToHTTPMethod(method dbgen.FormMethod) string {
+	switch method {
+	case dbgen.FormMethodPut:
+		return http.MethodPut
+	case dbgen.FormMethodDelete:
+		return http.MethodDelete
+	case dbgen.FormMethodPatch:
+		return http.MethodPatch
+	case dbgen.FormMethodPost, "":
+		return http.MethodPost
+	default:
+		return strings.ToUpper(string(method))
+	}
+}
+
+func parseFormMethod(value string) (dbgen.FormMethod, error) {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case http.MethodPost:
+		return dbgen.FormMethodPost, nil
+	case http.MethodPut:
+		return dbgen.FormMethodPut, nil
+	case http.MethodDelete:
+		return dbgen.FormMethodDelete, nil
+	case http.MethodPatch:
+		return dbgen.FormMethodPatch, nil
+	default:
+		return "", db.ErrInvalidInput
 	}
 }
 
@@ -680,6 +712,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		renderCtx.Form.URL = urlValue
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
 	}
+	renderCtx.Form.URL = urlValue
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
 		slog.WarnContext(ctx, "Failed to verify form URL", "url", urlValue, common.ErrAttr(err))
@@ -687,6 +720,16 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		renderCtx.Form.URL = urlValue
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
 	}
+
+	methodValue := strings.TrimSpace(r.FormValue(common.ParamMethod))
+	method, err := parseFormMethod(methodValue)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse form method", "value", methodValue, common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Method is not valid."
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	}
+
+	renderCtx.Form.Method = strings.ToUpper(methodValue)
 
 	_, active := r.Form[common.ParamActive]
 	var retryRequestCount int16
@@ -702,7 +745,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	var auditEvent *common.AuditLogEvent
-	if (name != form.Name) || (urlValue != form.URL) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerSecond != form.RequestsPerSecond) {
+	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerSecond != form.RequestsPerSecond) {
 		params := &dbgen.UpdateFormParams{
 			ID:                form.ID,
 			Name:              name,
@@ -710,6 +753,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 			Active:            active,
 			RetryRequestCount: retryRequestCount,
 			RequestsPerSecond: requestsPerSecond,
+			Method:            method,
 		}
 
 		var updatedForm *dbgen.Form
@@ -773,6 +817,26 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 
 	body := r.FormValue(common.ParamBody)
 	renderCtx.TestBody = body
+	urlValue := strings.TrimSpace(r.FormValue(common.ParamURL))
+	if urlValue == "" {
+		urlValue = form.URL
+	}
+	renderCtx.Form.URL = urlValue
+	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
+		slog.WarnContext(ctx, "Failed to verify test form URL", "url", urlValue, common.ErrAttr(err))
+		renderCtx.ErrorMessage = "URL is not valid."
+		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+	}
+
+	methodValue := strings.TrimSpace(r.FormValue(common.ParamMethod))
+	method, err := parseFormMethod(methodValue)
+	if err != nil {
+		slog.WarnContext(ctx, "Failed to parse test form method", "value", methodValue, common.ErrAttr(err))
+		renderCtx.ErrorMessage = "Method is not valid."
+		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+	}
+
+	renderCtx.Form.Method = strings.ToUpper(methodValue)
 
 	values, err := url.ParseQuery(body)
 	if err != nil {
@@ -790,7 +854,11 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		Time:           time.Now().UTC(),
 	}
 
-	result := s.submitFormDirectly(ctx, form, submission)
+	testForm := *form
+	testForm.URL = urlValue
+	testForm.Method = method
+
+	result := s.submitFormDirectly(ctx, &testForm, submission)
 	if result.Success {
 		renderCtx.SuccessMessage = fmt.Sprintf("Test succeeded. (HTTP %d)", result.StatusCode)
 	} else if result.StatusCode > 0 {

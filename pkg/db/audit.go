@@ -351,12 +351,12 @@ type AuditLogForm struct {
 	OrgOwnerID        int32   `json:"org_owner_id,omitempty"`
 	OrgName           string  `json:"org_name,omitempty"`
 	PropertyID        int32   `json:"property_id,omitempty"`
-	Enabled           bool    `json:"enabled"`
-	Active            bool    `json:"active"`
 	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
 	RequestsBurst     int32   `json:"requests_burst,omitempty"`
 	RetryRequestCount int16   `json:"retry_request_count,omitempty"`
 	Method            string  `json:"method,omitempty"`
+	Enabled           bool    `json:"enabled"`
+	Active            bool    `json:"active"`
 }
 
 func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
@@ -401,7 +401,7 @@ func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *d
 		RequestsPerSecond: updateRow.OldRequestsPerSecond,
 		RequestsBurst:     form.RequestsBurst,
 		RetryRequestCount: updateRow.OldRetryRequestCount,
-		Method:            string(form.Method),
+		Method:            string(updateRow.OldMethod),
 	}
 
 	if org != nil {

@@ -39,7 +39,7 @@
     </div>
 </div>
 
-<div class="divide-y divide-gray-200" x-data="{deleteOpen: false, moveOpen: false, testOpen: false}">
+<div class="divide-y divide-gray-200" x-data="{deleteOpen: false, moveOpen: false, testOpen: false, formURL: {{ printf "%q" .Params.Form.URL }}, formMethod: {{ printf "%q" .Params.Form.Method }}}">
     <div class="relative z-10" aria-labelledby="delete-modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="deleteOpen"
         x-transition:enter="ease-out duration-300"

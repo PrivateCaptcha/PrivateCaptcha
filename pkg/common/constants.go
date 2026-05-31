@@ -61,6 +61,7 @@ const (
 	ParamActive                 = "active"
 	ParamRetryRequestCount      = "retry_request_count"
 	ParamRequestsPerMinute      = "requests_per_minute"
+	ParamMethod                 = "method"
 	ParamConditionProperty      = "condition_property"
 	ParamConditionOperator      = "condition_operator"
 	ParamConditionValue         = "condition_value"
