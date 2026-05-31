@@ -29,6 +29,8 @@ const (
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
 	orgFormsCacheKeyStr      = "0"
+	maxPropertyNameLength    = 255
+	formPropertyNameSuffix   = " (form)"
 )
 
 var (
@@ -1142,7 +1144,10 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 	}
 
 	if len(propertyParams.Name) == 0 {
-		propertyParams.Name = formParams.Name + " (form)"
+		propertyParams.Name = formParams.Name
+		if len(propertyParams.Name)+len(formPropertyNameSuffix) <= maxPropertyNameLength {
+			propertyParams.Name += formPropertyNameSuffix
+		}
 	}
 
 	property, auditEvent, err := impl.CreateNewProperty(ctx, propertyParams, org)
@@ -3327,7 +3332,6 @@ func (impl *BusinessStoreImpl) ValidateOrgName(ctx context.Context, name string,
 }
 
 func (impl *BusinessStoreImpl) ValidatePropertyName(ctx context.Context, name string, org *dbgen.Organization) common.StatusCode {
-	const maxPropertyNameLength = 255
 	if (len(name) == 0) || (len(name) > maxPropertyNameLength) {
 		slog.WarnContext(ctx, "Name length is invalid", "length", len(name))
 

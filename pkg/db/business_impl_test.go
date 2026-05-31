@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -734,6 +735,18 @@ func TestBusinessStoreImplCreateNewProperty(t *testing.T) {
 
 func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 	t.Run("CreatesPropertyBeforeForm", func(t *testing.T) {
+		propertyParams := &dbgen.CreatePropertyParams{
+			CreatorID: Int(12),
+			Domain:    "example.com",
+		}
+		formParams := &dbgen.CreateFormParams{
+			Name:              t.Name(),
+			URL:               "https://example.com/submit",
+			Fields:            []byte(`{"email":"text"}`),
+			RequestsPerMinute: 60,
+			RetryRequestCount: 2,
+			Method:            dbgen.FormMethodPost,
+		}
 		property := &dbgen.Property{
 			ID:         123,
 			Name:       "form property",
@@ -759,19 +772,12 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
 		}
 
-		createdForm, createdProperty, auditEvents, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
-			CreatorID: Int(12),
-			Domain:    "example.com",
-		}, &dbgen.CreateFormParams{
-			Name:              t.Name(),
-			URL:               "https://example.com/submit",
-			Fields:            []byte(`{"email":"text"}`),
-			RequestsPerMinute: 60,
-			RetryRequestCount: 2,
-			Method:            dbgen.FormMethodPost,
-		}, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		createdForm, createdProperty, auditEvents, err := store.CreateNewForm(context.Background(), propertyParams, formParams, &dbgen.Organization{ID: 1, UserID: Int(99)})
 		if err != nil {
 			t.Fatalf("expected form creation to succeed, got %v", err)
+		}
+		if propertyParams.Name != formParams.Name+formPropertyNameSuffix {
+			t.Fatalf("expected generated property name %q, got %q", formParams.Name+formPropertyNameSuffix, propertyParams.Name)
 		}
 		if createdProperty != property {
 			t.Fatalf("expected created property to be returned")
@@ -800,6 +806,50 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		}
 		if cachedForm != form {
 			t.Fatalf("expected cached form to match created form")
+		}
+	})
+
+	t.Run("SkipsPropertyNameSuffixWhenItWouldOverflow", func(t *testing.T) {
+		formName := strings.Repeat("a", maxPropertyNameLength)
+		property := &dbgen.Property{
+			ID:         123,
+			Name:       formName,
+			CreatorID:  Int(12),
+			OrgID:      Int(1),
+			OrgOwnerID: Int(99),
+		}
+		querier := &createFormQuerierStub{
+			QuerierStub: &QuerierStub{},
+			property:    property,
+			form: &dbgen.Form{
+				ID:         456,
+				ExternalID: TestPropertyUUID,
+				URL:        "https://example.com/submit",
+				PropertyID: property.ID,
+				Enabled:    true,
+				Method:     dbgen.FormMethodPost,
+			},
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+		propertyParams := &dbgen.CreatePropertyParams{
+			CreatorID: Int(12),
+			Domain:    "example.com",
+		}
+		formParams := &dbgen.CreateFormParams{
+			Name:   formName,
+			URL:    "https://example.com/submit",
+			Fields: []byte(`{"email":"text"}`),
+		}
+
+		_, _, _, err := store.CreateNewForm(context.Background(), propertyParams, formParams, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		if err != nil {
+			t.Fatalf("expected form creation to succeed, got %v", err)
+		}
+		if propertyParams.Name != formName {
+			t.Fatalf("expected generated property name %q, got %q", formName, propertyParams.Name)
 		}
 	})
 
