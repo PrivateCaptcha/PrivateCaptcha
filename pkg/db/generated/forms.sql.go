@@ -12,9 +12,9 @@ import (
 )
 
 const createForm = `-- name: CreateForm :one
-INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_minute, retry_request_count, method)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 `
 
 type CreateFormParams struct {
@@ -26,8 +26,7 @@ type CreateFormParams struct {
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	Fields            []byte      `db:"fields" json:"fields"`
 	Enabled           bool        `db:"enabled" json:"enabled"`
-	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
-	RequestsBurst     int32       `db:"requests_burst" json:"requests_burst"`
+	RequestsPerMinute int16       `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod  `db:"method" json:"method"`
 }
@@ -42,8 +41,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 		arg.CreatorID,
 		arg.Fields,
 		arg.Enabled,
-		arg.RequestsPerSecond,
-		arg.RequestsBurst,
+		arg.RequestsPerMinute,
 		arg.RetryRequestCount,
 		arg.Method,
 	)
@@ -63,8 +61,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 	)
@@ -78,7 +75,7 @@ WHERE id = ANY($1::INT[])
   AND active = TRUE
   AND enabled = TRUE
   AND deleted_at IS NULL
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 `
 
 func (q *Queries) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*Form, error) {
@@ -105,8 +102,7 @@ func (q *Queries) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*For
 			&i.Fields,
 			&i.Enabled,
 			&i.Active,
-			&i.RequestsPerSecond,
-			&i.RequestsBurst,
+			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
 		); err != nil {
@@ -133,7 +129,7 @@ func (q *Queries) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, err
 }
 
 const getFormByID = `-- name: GetFormByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE id = $1
 `
 
 func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
@@ -154,8 +150,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 	)
@@ -163,7 +158,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 }
 
 const getFormsByExternalID = `-- name: GetFormsByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error) {
@@ -190,8 +185,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 			&i.Fields,
 			&i.Enabled,
 			&i.Active,
-			&i.RequestsPerSecond,
-			&i.RequestsBurst,
+			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
 		); err != nil {
@@ -206,7 +200,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 }
 
 const getFormsByID = `-- name: GetFormsByID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE id = ANY($1::INT[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, error) {
@@ -233,8 +227,7 @@ func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, 
 			&i.Fields,
 			&i.Enabled,
 			&i.Active,
-			&i.RequestsPerSecond,
-			&i.RequestsBurst,
+			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
 		); err != nil {
@@ -249,7 +242,7 @@ func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, 
 }
 
 const getOrgFormByName = `-- name: GetOrgFormByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgFormByNameParams struct {
@@ -275,8 +268,7 @@ func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNamePar
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 	)
@@ -284,7 +276,7 @@ func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNamePar
 }
 
 const getOrgForms = `-- name: GetOrgForms :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 FROM backend.forms
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 ORDER BY created_at
@@ -322,8 +314,7 @@ func (q *Queries) GetOrgForms(ctx context.Context, arg *GetOrgFormsParams) ([]*F
 			&i.Fields,
 			&i.Enabled,
 			&i.Active,
-			&i.RequestsPerSecond,
-			&i.RequestsBurst,
+			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
 		); err != nil {
@@ -349,7 +340,7 @@ func (q *Queries) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int6
 }
 
 const getSoftDeletedForms = `-- name: GetSoftDeletedForms :many
-SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.active, f.requests_per_second, f.requests_burst, f.retry_request_count, f.method
+SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.active, f.requests_per_minute, f.retry_request_count, f.method
 FROM backend.forms f
 JOIN backend.organizations o ON f.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
@@ -393,8 +384,7 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 			&i.Form.Fields,
 			&i.Form.Enabled,
 			&i.Form.Active,
-			&i.Form.RequestsPerSecond,
-			&i.Form.RequestsBurst,
+			&i.Form.RequestsPerMinute,
 			&i.Form.RetryRequestCount,
 			&i.Form.Method,
 		); err != nil {
@@ -412,7 +402,7 @@ const moveForm = `-- name: MoveForm :one
 UPDATE backend.forms
 SET org_id = $2, org_owner_id = $3, updated_at = NOW()
 WHERE id = $1 AND (creator_id = $4 OR org_owner_id = $4)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 `
 
 type MoveFormParams struct {
@@ -445,8 +435,7 @@ func (q *Queries) MoveForm(ctx context.Context, arg *MoveFormParams) (*Form, err
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 	)
@@ -457,7 +446,7 @@ const softDeleteForm = `-- name: SoftDeleteForm :one
 UPDATE backend.forms
 SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
 WHERE id = $1
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 `
 
 func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
@@ -478,8 +467,7 @@ func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 	)
@@ -488,7 +476,7 @@ func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
 
 const updateForm = `-- name: UpdateForm :one
 WITH old AS (
-    SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method FROM backend.forms f
+    SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms f
     WHERE f.id = $1 AND (f.creator_id = $8 OR f.org_owner_id = $8) AND (f.org_id = $9 OR $9 IS NULL) AND f.enabled = TRUE
     FOR UPDATE
 ),
@@ -498,19 +486,19 @@ upd AS (
         url = $3,
         active = $4,
         retry_request_count = $5,
-        requests_per_second = $6,
+        requests_per_minute = $6,
         method = $7,
         updated_at = NOW()
     WHERE f.id = (SELECT id FROM old)
-    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_second, requests_burst, retry_request_count, method
+    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method
 )
 SELECT
-    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_second, upd.requests_burst, upd.retry_request_count, upd.method,
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_minute, upd.retry_request_count, upd.method,
     old.name AS old_name,
     old.url AS old_url,
     old.active AS old_active,
     old.retry_request_count AS old_retry_request_count,
-    old.requests_per_second AS old_requests_per_second,
+    old.requests_per_minute AS old_requests_per_minute,
     old.method AS old_method
 FROM upd
 CROSS JOIN old
@@ -522,7 +510,7 @@ type UpdateFormParams struct {
 	URL               string      `db:"url" json:"url"`
 	Active            bool        `db:"active" json:"active"`
 	RetryRequestCount int16       `db:"retry_request_count" json:"retry_request_count"`
-	RequestsPerSecond float64     `db:"requests_per_second" json:"requests_per_second"`
+	RequestsPerMinute int16       `db:"requests_per_minute" json:"requests_per_minute"`
 	Method            FormMethod  `db:"method" json:"method"`
 	CreatorID         pgtype.Int4 `db:"creator_id" json:"creator_id"`
 	OrgID             pgtype.Int4 `db:"org_id" json:"org_id"`
@@ -543,15 +531,14 @@ type UpdateFormRow struct {
 	Fields               []byte             `db:"fields" json:"fields"`
 	Enabled              bool               `db:"enabled" json:"enabled"`
 	Active               bool               `db:"active" json:"active"`
-	RequestsPerSecond    float64            `db:"requests_per_second" json:"requests_per_second"`
-	RequestsBurst        int32              `db:"requests_burst" json:"requests_burst"`
+	RequestsPerMinute    int16              `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount    int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method               FormMethod         `db:"method" json:"method"`
 	OldName              string             `db:"old_name" json:"old_name"`
 	OldURL               string             `db:"old_url" json:"old_url"`
 	OldActive            bool               `db:"old_active" json:"old_active"`
 	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
-	OldRequestsPerSecond float64            `db:"old_requests_per_second" json:"old_requests_per_second"`
+	OldRequestsPerMinute int16              `db:"old_requests_per_minute" json:"old_requests_per_minute"`
 	OldMethod            FormMethod         `db:"old_method" json:"old_method"`
 }
 
@@ -562,7 +549,7 @@ func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*Updat
 		arg.URL,
 		arg.Active,
 		arg.RetryRequestCount,
-		arg.RequestsPerSecond,
+		arg.RequestsPerMinute,
 		arg.Method,
 		arg.CreatorID,
 		arg.OrgID,
@@ -583,15 +570,14 @@ func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*Updat
 		&i.Fields,
 		&i.Enabled,
 		&i.Active,
-		&i.RequestsPerSecond,
-		&i.RequestsBurst,
+		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
 		&i.OldName,
 		&i.OldURL,
 		&i.OldActive,
 		&i.OldRetryRequestCount,
-		&i.OldRequestsPerSecond,
+		&i.OldRequestsPerMinute,
 		&i.OldMethod,
 	)
 	return &i, err

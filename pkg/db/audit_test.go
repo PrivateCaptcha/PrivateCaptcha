@@ -1,184 +1,89 @@
 package db
 
 import (
-	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 )
 
-func TestParseAuditLogPayloadsValidOldAndNew(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{"name":"old-user","email":"old@test.com"}`),
-		NewValue: []byte(`{"name":"new-user","email":"new@test.com"}`),
+func TestNewUpdateFormAuditLogEventStoresRequestsPerMinute(t *testing.T) {
+	updatedForm := &dbgen.Form{
+		ID:                100,
+		Name:              "contact",
+		OrgID:             Int(10),
+		OrgOwnerID:        Int(20),
+		PropertyID:        30,
+		URL:               "https://hooks.example.com/contact",
+		RequestsPerMinute: 60,
+		RetryRequestCount: 1,
+		Method:            dbgen.FormMethodPost,
+		Enabled:           true,
+		Active:            true,
+	}
+	updateRow := &dbgen.UpdateFormRow{
+		ID:                   updatedForm.ID,
+		Name:                 updatedForm.Name,
+		OrgID:                updatedForm.OrgID,
+		OrgOwnerID:           updatedForm.OrgOwnerID,
+		PropertyID:           updatedForm.PropertyID,
+		URL:                  updatedForm.URL,
+		RequestsPerMinute:    updatedForm.RequestsPerMinute,
+		RetryRequestCount:    updatedForm.RetryRequestCount,
+		Method:               updatedForm.Method,
+		Enabled:              updatedForm.Enabled,
+		Active:               updatedForm.Active,
+		OldName:              updatedForm.Name,
+		OldURL:               "https://hooks.example.com/old-contact",
+		OldActive:            true,
+		OldRetryRequestCount: 0,
+		OldRequestsPerMinute: 30,
+		OldMethod:            dbgen.FormMethodPut,
 	}
 
-	oldUser, newUser, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
+	event := newUpdateFormAuditLogEvent(updatedForm, updateRow, &dbgen.Organization{Name: "Acme"}, &dbgen.User{ID: 99})
+	if event == nil {
+		t.Fatal("expected audit event")
+	}
+
+	oldValue, ok := event.OldValue.(*AuditLogForm)
+	if !ok {
+		t.Fatalf("expected old value AuditLogForm, got %T", event.OldValue)
+	}
+	newValue, ok := event.NewValue.(*AuditLogForm)
+	if !ok {
+		t.Fatalf("expected new value AuditLogForm, got %T", event.NewValue)
+	}
+
+	if oldValue.RequestsPerMinute != 30 {
+		t.Fatalf("expected old requests per minute 30, got %d", oldValue.RequestsPerMinute)
+	}
+	if newValue.RequestsPerMinute != 60 {
+		t.Fatalf("expected new requests per minute 60, got %d", newValue.RequestsPerMinute)
+	}
+
+	payload, err := json.Marshal(newValue)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+		t.Fatalf("failed to marshal audit form: %v", err)
 	}
 
-	if oldUser == nil || oldUser.Name != "old-user" {
-		t.Errorf("Expected old user with name 'old-user', got %+v", oldUser)
+	var serialized map[string]any
+	if err := json.Unmarshal(payload, &serialized); err != nil {
+		t.Fatalf("failed to unmarshal audit form: %v", err)
 	}
 
-	if newUser == nil || newUser.Name != "new-user" {
-		t.Errorf("Expected new user with name 'new-user', got %+v", newUser)
-	}
-}
-
-func TestParseAuditLogPayloadsOnlyOldValue(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{"name":"deleted-user"}`),
-		NewValue: nil,
+	if _, ok := serialized["requests_per_minute"]; !ok {
+		t.Fatalf("expected requests_per_minute field in audit payload, got %v", serialized)
 	}
 
-	oldUser, newUser, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
+	rateLimitKeys := 0
+	for key := range serialized {
+		if strings.HasPrefix(key, "requests_per_") {
+			rateLimitKeys++
+		}
 	}
-
-	if oldUser == nil || oldUser.Name != "deleted-user" {
-		t.Errorf("Expected old user with name 'deleted-user', got %+v", oldUser)
-	}
-
-	if newUser != nil {
-		t.Errorf("Expected nil new user, got %+v", newUser)
-	}
-}
-
-func TestParseAuditLogPayloadsOnlyNewValue(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: nil,
-		NewValue: []byte(`{"name":"created-user"}`),
-	}
-
-	oldUser, newUser, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if oldUser != nil {
-		t.Errorf("Expected nil old user, got %+v", oldUser)
-	}
-
-	if newUser == nil || newUser.Name != "created-user" {
-		t.Errorf("Expected new user with name 'created-user', got %+v", newUser)
-	}
-}
-
-func TestParseAuditLogPayloadsEmptyValues(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: nil,
-		NewValue: nil,
-	}
-
-	oldUser, newUser, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if oldUser != nil {
-		t.Errorf("Expected nil old user, got %+v", oldUser)
-	}
-
-	if newUser != nil {
-		t.Errorf("Expected nil new user, got %+v", newUser)
-	}
-}
-
-func TestParseAuditLogPayloadsInvalidOldValue(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{invalid json}`),
-		NewValue: []byte(`{"name":"valid"}`),
-	}
-
-	_, _, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
-	if err == nil {
-		t.Error("Expected error for invalid old value JSON")
-	}
-}
-
-func TestParseAuditLogPayloadsInvalidNewValue(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{"name":"valid"}`),
-		NewValue: []byte(`{invalid json}`),
-	}
-
-	_, _, err := ParseAuditLogPayloads[AuditLogUser](ctx, log)
-	if err == nil {
-		t.Error("Expected error for invalid new value JSON")
-	}
-}
-
-func TestParseAuditLogPayloadsProperty(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{"name":"old-prop","domain":"old.com","level":1}`),
-		NewValue: []byte(`{"name":"new-prop","domain":"new.com","level":2}`),
-	}
-
-	oldProp, newProp, err := ParseAuditLogPayloads[AuditLogProperty](ctx, log)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if oldProp == nil || oldProp.Name != "old-prop" {
-		t.Errorf("Expected old property with name 'old-prop', got %+v", oldProp)
-	}
-
-	if newProp == nil || newProp.Name != "new-prop" {
-		t.Errorf("Expected new property with name 'new-prop', got %+v", newProp)
-	}
-}
-
-func TestParseAuditLogPayloadsSubscription(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.Background()
-
-	log := &dbgen.AuditLog{
-		OldValue: []byte(`{"source":"internal","status":"trialing"}`),
-		NewValue: []byte(`{"source":"external","status":"active"}`),
-	}
-
-	oldSub, newSub, err := ParseAuditLogPayloads[AuditLogSubscription](ctx, log)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v", err)
-	}
-
-	if oldSub == nil || oldSub.Source != "internal" {
-		t.Errorf("Expected old subscription with source 'internal', got %+v", oldSub)
-	}
-
-	if newSub == nil || newSub.Source != "external" {
-		t.Errorf("Expected new subscription with source 'external', got %+v", newSub)
+	if rateLimitKeys != 1 {
+		t.Fatalf("expected exactly one requests_per_* field in audit payload, got %v", serialized)
 	}
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -246,8 +245,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		URL:               renderCtx.URL,
 		Fields:            []byte(`{}`),
 		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
+		RequestsPerMinute: 10,
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)
@@ -301,7 +299,7 @@ func formToUserForm(form *dbgen.Form, hasher common.IdentifierHasher) *userForm 
 		return nil
 	}
 
-	requestsPerMinute := int(math.Round(form.RequestsPerSecond * 60.0))
+	requestsPerMinute := int(form.RequestsPerMinute)
 	requestsPerMinute = max(1, min(requestsPerMinute, 60))
 
 	return &userForm{
@@ -386,8 +384,8 @@ func periodFromPath(ctx context.Context, r *http.Request) common.TimePeriod {
 	}
 }
 
-func parseRequestsPerMinute(ctx context.Context, value string) (float64, error) {
-	i, err := strconv.ParseInt(value, 10, 32)
+func parseRequestsPerMinute(ctx context.Context, value string) (int16, error) {
+	i, err := strconv.ParseInt(value, 10, 16)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse requests per minute", "value", value, common.ErrAttr(err))
 		return 0, db.ErrInvalidInput
@@ -401,8 +399,7 @@ func parseRequestsPerMinute(ctx context.Context, value string) (float64, error) 
 		return 0, db.ErrInvalidInput
 	}
 
-	rpm := max(minValue, min(int32(i), maxValue))
-	return float64(rpm) / 60.0, nil
+	return int16(i), nil
 }
 
 func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
@@ -737,7 +734,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		retryRequestCount = 1
 	}
 	rpmValue := r.FormValue(common.ParamRequestsPerMinute)
-	requestsPerSecond, err := parseRequestsPerMinute(ctx, rpmValue)
+	requestsPerMinute, err := parseRequestsPerMinute(ctx, rpmValue)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse RPM", "value", rpmValue, common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to update settings."
@@ -745,14 +742,14 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	}
 
 	var auditEvent *common.AuditLogEvent
-	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerSecond != form.RequestsPerSecond) {
+	if (name != form.Name) || (urlValue != form.URL) || (method != form.Method) || (active != form.Active) || (retryRequestCount != form.RetryRequestCount) || (requestsPerMinute != form.RequestsPerMinute) {
 		params := &dbgen.UpdateFormParams{
 			ID:                form.ID,
 			Name:              name,
 			URL:               urlValue,
 			Active:            active,
 			RetryRequestCount: retryRequestCount,
-			RequestsPerSecond: requestsPerSecond,
+			RequestsPerMinute: requestsPerMinute,
 			Method:            method,
 		}
 

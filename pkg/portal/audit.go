@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -223,9 +222,9 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 		} else if oldValue.RetryRequestCount != newValue.RetryRequestCount {
 			ul.Property = "Retry count"
 			ul.Value = strconv.Itoa(int(newValue.RetryRequestCount))
-		} else if oldValue.RequestsPerSecond != newValue.RequestsPerSecond {
+		} else if oldValue.RequestsPerMinute != newValue.RequestsPerMinute {
 			ul.Property = "Requests per minute"
-			ul.Value = strconv.Itoa(int(math.Round(newValue.RequestsPerSecond * 60.0)))
+			ul.Value = strconv.Itoa(int(newValue.RequestsPerMinute))
 		} else if oldValue.Active != newValue.Active {
 			ul.Property = "Active"
 			ul.Value = strconv.FormatBool(newValue.Active)

@@ -88,8 +88,7 @@ func CreateNewFormParams(userID int32, url string) *dbgen.CreateFormParams {
 		URL:               url,
 		Fields:            []byte(`{}`),
 		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
+		RequestsPerMinute: 60,
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}

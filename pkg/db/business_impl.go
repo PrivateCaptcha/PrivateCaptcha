@@ -1154,6 +1154,9 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 	if formParams.Method == "" {
 		formParams.Method = dbgen.FormMethodPost
 	}
+	if formParams.RequestsPerMinute <= 0 {
+		formParams.RequestsPerMinute = 10
+	}
 
 	formParams.CreatorID = property.CreatorID
 	formParams.OrgID = property.OrgID
@@ -1215,8 +1218,7 @@ func createFormFromUpdate(row *dbgen.UpdateFormRow) *dbgen.Form {
 		DeletedAt:         row.DeletedAt,
 		PropertyID:        row.PropertyID,
 		Fields:            row.Fields,
-		RequestsPerSecond: row.RequestsPerSecond,
-		RequestsBurst:     row.RequestsBurst,
+		RequestsPerMinute: row.RequestsPerMinute,
 		RetryRequestCount: row.RetryRequestCount,
 		Method:            row.Method,
 		Enabled:           row.Enabled,

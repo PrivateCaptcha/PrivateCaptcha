@@ -380,8 +380,7 @@ func TestDeactivateFailingFormsJobEndToEnd(t *testing.T) {
 			URL:               "https://example.com/failing",
 			Fields:            []byte(`{}`),
 			Enabled:           true,
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
+			RequestsPerMinute: 60,
 			RetryRequestCount: 0,
 			Method:            dbgen.FormMethodPost,
 		}, org)
@@ -394,8 +393,7 @@ func TestDeactivateFailingFormsJobEndToEnd(t *testing.T) {
 		URL:               "https://example.com/healthy",
 		Fields:            []byte(`{}`),
 		Enabled:           true,
-		RequestsPerSecond: 1,
-		RequestsBurst:     5,
+		RequestsPerMinute: 60,
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
 	}, org)

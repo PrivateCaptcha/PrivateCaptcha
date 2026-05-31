@@ -12,7 +12,10 @@ import (
 )
 
 type StubRateLimiter struct {
-	Header string
+	Header              string
+	UpdateCalls         int
+	UpdatedCapacity     leakybucket.TLevel
+	UpdatedLeakInterval time.Duration
 }
 
 var _ HTTPRateLimiter = (*StubRateLimiter)(nil)
@@ -47,7 +50,9 @@ func (srl *StubRateLimiter) RateLimitExFunc(leakybucket.TLevel, time.Duration) f
 	}
 }
 func (srl *StubRateLimiter) UpdateRequestLimits(r *http.Request, capacity leakybucket.TLevel, leakInterval time.Duration) {
-	// BUMP
+	srl.UpdateCalls++
+	srl.UpdatedCapacity = capacity
+	srl.UpdatedLeakInterval = leakInterval
 }
 func (srl *StubRateLimiter) UpdateLimits(capacity leakybucket.TLevel, leakInterval time.Duration) {
 	// BUMP

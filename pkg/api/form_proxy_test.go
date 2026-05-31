@@ -19,6 +19,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/ratelimit"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -196,6 +197,75 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	case record := <-server.FormSubmitLogChan:
 		t.Fatalf("expected one final failure record, got extra %+v", record)
 	default:
+	}
+}
+
+func TestFormProxyCachedFormUpdatesRateLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	user, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+	form, property, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(user.ID, "cached-form.example.com"),
+		&dbgen.CreateFormParams{
+			Name:              t.Name(),
+			URL:               "https://example.com/submit",
+			Fields:            []byte(`{}`),
+			Enabled:           true,
+			RequestsPerMinute: 24,
+			RetryRequestCount: 0,
+			Method:            dbgen.FormMethodPost,
+		},
+		org,
+	)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	sitekey := db.UUIDToSiteKey(property.ExternalID)
+	puzzleStr, solutionsStr, err := solutionsSuite(ctx, sitekey, property.Domain)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oldRateLimiter := server.RateLimiter
+	recordingRateLimiter := &ratelimit.StubRateLimiter{Header: cfg.Get(common.RateLimitHeaderKey).Value()}
+	server.RateLimiter = recordingRateLimiter
+	t.Cleanup(func() {
+		server.RateLimiter = oldRateLimiter
+	})
+
+	srv := http.NewServeMux()
+	server.Setup("", true /*verbose*/, common.NoopMiddleware).Register(srv)
+
+	body := url.Values{}
+	body.Set("email", "test@example.com")
+	body.Set(common.ParamPrivateCaptchaSolution, fmt.Sprintf("%s.%s", solutionsStr, puzzleStr))
+
+	req := httptest.NewRequest(http.MethodPost, "/"+common.FormEndpoint+"/"+db.UUIDToString(form.ExternalID), strings.NewReader(body.Encode()))
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	req.Header.Set(cfg.Get(common.RateLimitHeaderKey).Value(), common_test.GenerateRandomIPv4())
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("Unexpected submit status code %d", w.Code)
+	}
+	if recordingRateLimiter.UpdateCalls != 1 {
+		t.Fatalf("expected one rate limit update, got %d", recordingRateLimiter.UpdateCalls)
+	}
+	if recordingRateLimiter.UpdatedCapacity != 34 {
+		t.Fatalf("expected updated capacity 34, got %d", recordingRateLimiter.UpdatedCapacity)
+	}
+	expectedLeakInterval := time.Minute / 24
+	if recordingRateLimiter.UpdatedLeakInterval != expectedLeakInterval {
+		t.Fatalf("expected leak interval %s, got %s", expectedLeakInterval, recordingRateLimiter.UpdatedLeakInterval)
 	}
 }
 

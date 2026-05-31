@@ -551,8 +551,7 @@ type Form struct {
 	DeletedAt         pgtype.Timestamptz `db:"deleted_at" json:"deleted_at"`
 	PropertyID        int32              `db:"property_id" json:"property_id"`
 	Fields            []byte             `db:"fields" json:"fields"`
-	RequestsPerSecond float64            `db:"requests_per_second" json:"requests_per_second"`
-	RequestsBurst     int32              `db:"requests_burst" json:"requests_burst"`
+	RequestsPerMinute int16              `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod         `db:"method" json:"method"`
 	Enabled           bool               `db:"enabled" json:"enabled"`

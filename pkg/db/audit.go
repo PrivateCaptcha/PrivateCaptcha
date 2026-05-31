@@ -345,18 +345,17 @@ type AuditLogProperty struct {
 }
 
 type AuditLogForm struct {
-	Name              string  `json:"name,omitempty"`
-	URL               string  `json:"url,omitempty"`
-	OrgID             int32   `json:"org_id,omitempty"`
-	OrgOwnerID        int32   `json:"org_owner_id,omitempty"`
-	OrgName           string  `json:"org_name,omitempty"`
-	PropertyID        int32   `json:"property_id,omitempty"`
-	RequestsPerSecond float64 `json:"requests_per_second,omitempty"`
-	RequestsBurst     int32   `json:"requests_burst,omitempty"`
-	RetryRequestCount int16   `json:"retry_request_count,omitempty"`
-	Method            string  `json:"method,omitempty"`
-	Enabled           bool    `json:"enabled"`
-	Active            bool    `json:"active"`
+	Name              string `json:"name,omitempty"`
+	URL               string `json:"url,omitempty"`
+	OrgID             int32  `json:"org_id,omitempty"`
+	OrgOwnerID        int32  `json:"org_owner_id,omitempty"`
+	OrgName           string `json:"org_name,omitempty"`
+	PropertyID        int32  `json:"property_id,omitempty"`
+	RequestsPerMinute int16  `json:"requests_per_minute,omitempty"`
+	RetryRequestCount int16  `json:"retry_request_count,omitempty"`
+	Method            string `json:"method,omitempty"`
+	Enabled           bool   `json:"enabled"`
+	Active            bool   `json:"active"`
 }
 
 func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
@@ -372,8 +371,7 @@ func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
 		PropertyID:        form.PropertyID,
 		Enabled:           form.Enabled,
 		Active:            form.Active,
-		RequestsPerSecond: form.RequestsPerSecond,
-		RequestsBurst:     form.RequestsBurst,
+		RequestsPerMinute: form.RequestsPerMinute,
 		RetryRequestCount: form.RetryRequestCount,
 		Method:            string(form.Method),
 	}
@@ -398,8 +396,7 @@ func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *d
 		PropertyID:        form.PropertyID,
 		Enabled:           form.Enabled,
 		Active:            updateRow.OldActive,
-		RequestsPerSecond: updateRow.OldRequestsPerSecond,
-		RequestsBurst:     form.RequestsBurst,
+		RequestsPerMinute: updateRow.OldRequestsPerMinute,
 		RetryRequestCount: updateRow.OldRetryRequestCount,
 		Method:            string(updateRow.OldMethod),
 	}

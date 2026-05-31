@@ -118,6 +118,52 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 		}
 	})
 
+	t.Run("DefaultsRequestsPerMinuteWhenMissing", func(t *testing.T) {
+		property := &dbgen.Property{
+			ID:         123,
+			Name:       "form property",
+			CreatorID:  Int(12),
+			OrgID:      Int(1),
+			OrgOwnerID: Int(99),
+		}
+		form := &dbgen.Form{
+			ID:                456,
+			ExternalID:        TestPropertyUUID,
+			URL:               "https://example.com/submit",
+			PropertyID:        property.ID,
+			Enabled:           true,
+			RequestsPerMinute: 60,
+			Method:            dbgen.FormMethodPost,
+		}
+		querier := &createFormQuerierStub{
+			QuerierStub: &QuerierStub{},
+			property:    property,
+			form:        form,
+		}
+		store := &BusinessStoreImpl{
+			querier: querier,
+			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
+		}
+
+		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
+			CreatorID: Int(12),
+			Domain:    "example.com",
+		}, &dbgen.CreateFormParams{
+			Name:   t.Name(),
+			URL:    "https://example.com/submit",
+			Fields: []byte(`{"email":"text"}`),
+		}, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		if err != nil {
+			t.Fatalf("expected form creation to succeed, got %v", err)
+		}
+		if querier.createdFormArg == nil {
+			t.Fatal("expected form create args to be captured")
+		}
+		if querier.createdFormArg.RequestsPerMinute != 10 {
+			t.Fatalf("expected default requests per minute 60, got %d", querier.createdFormArg.RequestsPerMinute)
+		}
+	})
+
 	t.Run("InvalidInput", func(t *testing.T) {
 		store := setupTestStore(t, nil)
 		_, err := store.RetrieveFromCache(context.Background(), "")
@@ -720,8 +766,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			Name:              t.Name(),
 			URL:               "https://example.com/submit",
 			Fields:            []byte(`{"email":"text"}`),
-			RequestsPerSecond: 1,
-			RequestsBurst:     5,
+			RequestsPerMinute: 60,
 			RetryRequestCount: 2,
 			Method:            dbgen.FormMethodPost,
 		}, &dbgen.Organization{ID: 1, UserID: Int(99)})

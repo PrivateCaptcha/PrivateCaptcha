@@ -286,7 +286,7 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	// Private Captcha format
 	rg.Handle(rg.Post(common.VerifyEndpoint), verifyChain.Append(s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)), http.MaxBytesHandler(http.HandlerFunc(s.pcVerifyHandler), maxSolutionsBodySize))
 
-	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 12*time.Second)
+	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
 	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
 	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
 	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))

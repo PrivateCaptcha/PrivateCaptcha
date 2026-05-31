@@ -44,6 +44,16 @@ func TestWebhookPrefixFromURL(t *testing.T) {
 	}
 }
 
+func TestParseRequestsPerMinuteReturnsIntegerValue(t *testing.T) {
+	rpm, err := parseRequestsPerMinute(t.Context(), "24")
+	if err != nil {
+		t.Fatalf("expected parse to succeed, got %v", err)
+	}
+	if rpm != 24 {
+		t.Fatalf("expected requests per minute 24, got %d", rpm)
+	}
+}
+
 func TestFormToUserForm(t *testing.T) {
 	hasher := common.NewIDHasher(config.NewStaticValue(common.IDHasherSaltKey, "test-salt"))
 	form := &dbgen.Form{
@@ -217,11 +227,8 @@ func TestPostNewOrgForm(t *testing.T) {
 	if createdForm.Method != dbgen.FormMethodPost {
 		t.Fatalf("expected form method %q, got %q", dbgen.FormMethodPost, createdForm.Method)
 	}
-	if createdForm.RequestsPerSecond != 1 {
-		t.Fatalf("expected requests per second 1, got %v", createdForm.RequestsPerSecond)
-	}
-	if createdForm.RequestsBurst != 5 {
-		t.Fatalf("expected requests burst 5, got %d", createdForm.RequestsBurst)
+	if createdForm.RequestsPerMinute != 10 {
+		t.Fatalf("expected requests per minute 60, got %d", createdForm.RequestsPerMinute)
 	}
 	if createdForm.RetryRequestCount != 0 {
 		t.Fatalf("expected retry count 0, got %d", createdForm.RetryRequestCount)
@@ -432,6 +439,9 @@ func TestPutFormUpdatesSettings(t *testing.T) {
 	}
 	if updatedForm.Method != dbgen.FormMethodPut {
 		t.Fatalf("expected persisted form method %q, got %q", dbgen.FormMethodPut, updatedForm.Method)
+	}
+	if updatedForm.RequestsPerMinute != 24 {
+		t.Fatalf("expected persisted requests per minute 24, got %d", updatedForm.RequestsPerMinute)
 	}
 }
 
@@ -1284,8 +1294,7 @@ func TestPostNewOrgFormInvalidInputs(t *testing.T) {
 					URL:               "https://hooks.example.com/existing",
 					Fields:            []byte(`{}`),
 					Enabled:           true,
-					RequestsPerSecond: 1,
-					RequestsBurst:     5,
+					RequestsPerMinute: 60,
 					RetryRequestCount: 0,
 					Method:            dbgen.FormMethodPost,
 				}, org)

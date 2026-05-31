@@ -15,8 +15,7 @@ CREATE TABLE IF NOT EXISTS backend.forms(
     fields JSONB NOT NULL DEFAULT '{}'::jsonb,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     active BOOLEAN NOT NULL DEFAULT TRUE,
-    requests_per_second FLOAT NOT NULL DEFAULT 1,
-    requests_burst INTEGER NOT NULL DEFAULT 5,
+    requests_per_minute SMALLINT NOT NULL DEFAULT 10,
     retry_request_count SMALLINT NOT NULL DEFAULT 0,
     method backend.form_method NOT NULL DEFAULT 'post'
 );

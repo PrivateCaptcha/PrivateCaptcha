@@ -17,6 +17,7 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/db"
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 	"github.com/jpillora/backoff"
 	"github.com/rs/xid"
@@ -179,6 +180,13 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.addVerifyRecord(ctx, result)
+		if form.RequestsPerMinute > 0 {
+			capacity := leakybucket.TLevel(form.RequestsPerMinute) + 10
+			leakInterval := time.Minute / time.Duration(form.RequestsPerMinute)
+			s.RateLimiter.UpdateRequestLimits(r, capacity, leakInterval)
+		} else {
+			slog.WarnContext(ctx, "Skipping form rate limit update due to invalid RPM", "formID", form.ID, "requestsPerMinute", form.RequestsPerMinute)
+		}
 		payload = nil
 	}
 

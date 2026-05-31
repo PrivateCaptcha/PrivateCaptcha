@@ -1,6 +1,6 @@
 -- name: CreateForm :one
-INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_second, requests_burst, retry_request_count, method)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_minute, retry_request_count, method)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 RETURNING *;
 
 -- name: GetFormByID :one
@@ -49,7 +49,7 @@ upd AS (
         url = $3,
         active = $4,
         retry_request_count = $5,
-        requests_per_second = $6,
+        requests_per_minute = $6,
         method = $7,
         updated_at = NOW()
     WHERE f.id = (SELECT id FROM old)
@@ -61,7 +61,7 @@ SELECT
     old.url AS old_url,
     old.active AS old_active,
     old.retry_request_count AS old_retry_request_count,
-    old.requests_per_second AS old_requests_per_second,
+    old.requests_per_minute AS old_requests_per_minute,
     old.method AS old_method
 FROM upd
 CROSS JOIN old;
