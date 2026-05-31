@@ -195,7 +195,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	// see comment in postLogin() why we have to use persistent here (although "registered user" argument does not apply)
 	_ = sess.Set(ctx, session.KeyPersistent, true)
 
-	job := s.Jobs.CheckRegistration(sess)
+	job := s.Jobs.CheckRegistration(sess, r)
 	jobCtx := common.CopyTraceID(ctx, context.Background())
 	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
 		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)

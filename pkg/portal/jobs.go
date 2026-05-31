@@ -3,6 +3,7 @@ package portal
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/billing"
@@ -20,7 +21,7 @@ type Jobs interface {
 	OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob
 	OffboardUser(user *dbgen.User) common.OneOffJob
 	LoginUser(sess *session.Session) common.OneOffJob
-	CheckRegistration(sess *session.Session) common.OneOffJob
+	CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob
 }
 
 func (s *Server) OnboardUser(user *dbgen.User, plan billing.Plan, orgInviteID *int32) common.OneOffJob {
@@ -31,7 +32,7 @@ func (s *Server) OffboardUser(user *dbgen.User) common.OneOffJob {
 	return &common.StubOneOffJob{}
 }
 
-func (s *Server) CheckRegistration(sess *session.Session) common.OneOffJob {
+func (s *Server) CheckRegistration(sess *session.Session, r *http.Request) common.OneOffJob {
 	return &registrationCheckJob{Sess: sess}
 }
 
