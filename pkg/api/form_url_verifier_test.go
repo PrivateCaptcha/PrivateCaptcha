@@ -64,7 +64,7 @@ func newTestFormURLVerifier(t *testing.T) *FormURLVerifierImpl {
 	return newTestFormURLVerifierEx(t, &stubFormURLSafetyChecker{}, &stubFormURLResolver{})
 }
 
-func newTestFormURLVerifierEx(t *testing.T, checker FormURLSafetyChecker, resolver formURLResolver) *FormURLVerifierImpl {
+func newTestFormURLVerifierEx(t *testing.T, checker FormURLSafetyChecker, resolver FormURLResolver) *FormURLVerifierImpl {
 	t.Helper()
 
 	cache, err := db.NewMemoryCache[string, *bool]("test-form-url-verifier", 1000, nil, time.Minute, time.Minute, time.Second)

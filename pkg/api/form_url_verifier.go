@@ -24,7 +24,7 @@ const (
 	maxFormURLCacheSize = 10_000
 )
 
-type formURLResolver interface {
+type FormURLResolver interface {
 	LookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error)
 }
 
@@ -52,7 +52,7 @@ func (*FormURLSafetyCheckerImpl) IsSafeFormIP(ip netip.Addr) bool {
 
 type FormURLVerifierImpl struct {
 	Cache         common.Cache[string, *bool]
-	Resolver      formURLResolver
+	Resolver      FormURLResolver
 	SafetyChecker FormURLSafetyChecker
 }
 
@@ -71,7 +71,7 @@ func NewFormURLVerifier() *FormURLVerifierImpl {
 	return NewFormURLVerifierEx(cache, &FormURLSafetyCheckerImpl{}, net.DefaultResolver)
 }
 
-func NewFormURLVerifierEx(cache common.Cache[string, *bool], checker FormURLSafetyChecker, resolver formURLResolver) *FormURLVerifierImpl {
+func NewFormURLVerifierEx(cache common.Cache[string, *bool], checker FormURLSafetyChecker, resolver FormURLResolver) *FormURLVerifierImpl {
 	if cache == nil {
 		cache = db.NewStaticCache[string, *bool](maxFormURLCacheSize, nil)
 	}
