@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"strings"
@@ -217,4 +218,24 @@ func (v *FormURLVerifierImpl) DialContext(ctx context.Context, network, address 
 	}
 
 	return nil, lastErr
+}
+
+type AllowAllFormURLVerifier struct{}
+
+var _ common.FormURLVerifier = (*AllowAllFormURLVerifier)(nil)
+
+func (AllowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
+	return nil
+}
+
+func (AllowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
+	return nil
+}
+
+func (AllowAllFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
+		return transport.DialContext(ctx, network, address)
+	}
+
+	panic("not configured")
 }

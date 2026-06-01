@@ -1,13 +1,11 @@
 package api
 
 import (
-	"net"
 	"runtime/debug"
 
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/netip"
 	"strings"
 
 	"context"
@@ -41,26 +39,6 @@ var (
 	store      *db.BusinessStore
 	testPlan   billing.Plan
 )
-
-type allowAllFormURLVerifier struct{}
-
-var _ common.FormURLVerifier = (*allowAllFormURLVerifier)(nil)
-
-func (allowAllFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
-	return nil
-}
-
-func (allowAllFormURLVerifier) VerifyResolvedAddress(ctx context.Context, host string, ip netip.Addr) error {
-	return nil
-}
-
-func (allowAllFormURLVerifier) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
-		return transport.DialContext(ctx, network, address)
-	}
-
-	panic("not configured")
-}
 
 const (
 	authBackfillDelay   = 100 * time.Millisecond
@@ -127,7 +105,7 @@ func TestMain(m *testing.M) {
 		FormSubmitLogCancel: func() {},
 		FormSubmitCancel:    func() {},
 		Verifier:            NewVerifier(cfg, store, cfg.Get(common.FingerprintHeaderKey)),
-		FormURLVerifier:     allowAllFormURLVerifier{},
+		FormURLVerifier:     AllowAllFormURLVerifier{},
 		Metrics:             metrics,
 		Mailer:              &email.StubMailer{},
 		Levels:              difficulty.NewLevels(timeSeries, 100 /*levelsBatchSize*/, PropertyBucketSize),
@@ -180,7 +158,7 @@ func TestAPIServerStoreErrors(t *testing.T) {
 		FormSubmitLogChan:   make(chan *common.FormSubmitRecord, 10),
 		FormSubmissionChan:  make(chan *FormSubmission, 10),
 		FormSubmitLogCancel: func() {},
-		FormURLVerifier:     allowAllFormURLVerifier{},
+		FormURLVerifier:     AllowAllFormURLVerifier{},
 		Verifier:            NewVerifier(testsConfigStore(), store, config.NewStaticValue(common.FingerprintHeaderKey, "FP")),
 		Metrics:             metrics,
 		Mailer:              &email.StubMailer{},
