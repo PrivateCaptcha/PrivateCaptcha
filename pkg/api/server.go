@@ -92,7 +92,8 @@ type Server struct {
 	FormSubmissionChan  chan *FormSubmission
 	FormSubmitCancel    context.CancelFunc
 	FailingForms        *common.ExpiringCounterMap[int32]
-	Cors                *cors.Cors
+	APICors             *cors.Cors
+	FormsCors           *cors.Cors
 	Metrics             common.APIMetrics
 	Mailer              common.Mailer
 	RateLimiter         ratelimit.HTTPRateLimiter
@@ -211,7 +212,7 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 }
 
 func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) *common.RouteGenerator {
-	corsOpts := cors.Options{
+	apiCorsOpts := cors.Options{
 		// NOTE: due to the implementation of rs/cors, we need not to set "*" as AllowOrigin as this will ruin the response
 		// (in case of "*" allowed origin, response contains the same, while we want to restrict the response to domain)
 		AllowOriginVaryRequestFunc: s.Auth.originAllowed,
@@ -224,18 +225,32 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 		MaxAge:                     60 * 60, /*seconds*/
 	}
 
-	if corsOpts.Debug {
-		ctx := common.TraceContext(context.TODO(), "cors")
-		ctx = context.WithValue(ctx, common.ServiceContextKey, ApiService)
-		corsOpts.Logger = &common.FmtLogger{Ctx: ctx, Level: common.LevelTrace}
+	formCorsOpts := cors.Options{
+		AllowedOrigins:      []string{"*"},
+		AllowedHeaders:      []string{"*"},
+		AllowedMethods:      []string{http.MethodPost, http.MethodOptions},
+		AllowPrivateNetwork: true,
+		AllowCredentials:    false,
+		OptionsPassthrough:  true,
+		Debug:               verbose,
+		MaxAge:              60 * 60,
 	}
 
-	s.Cors = cors.New(corsOpts)
+	if verbose {
+		ctx := common.TraceContext(context.TODO(), "cors")
+		ctx = context.WithValue(ctx, common.ServiceContextKey, ApiService)
+		logger := &common.FmtLogger{Ctx: ctx, Level: common.LevelTrace}
+		apiCorsOpts.Logger = logger
+		formCorsOpts.Logger = logger
+	}
+
+	s.APICors = cors.New(apiCorsOpts)
+	s.FormsCors = cors.New(formCorsOpts)
 
 	prefix := domain + common.RelURL(s.Prefix, "/")
 	slog.Debug("Setting up the API routes", "prefix", prefix)
 	rg := &common.RouteGenerator{Prefix: prefix}
-	s.setupWithPrefix(rg, s.Cors.Handler, security)
+	s.setupWithPrefix(rg, s.APICors.Handler, s.FormsCors.Handler, security)
 
 	return rg
 }
@@ -255,7 +270,7 @@ func (s *Server) Shutdown() {
 	close(s.FormSubmissionChan)
 }
 
-func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, security alice.Constructor) {
+func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, formCorsHandler, security alice.Constructor) {
 	arg := func(s string) string {
 		return fmt.Sprintf("{%s}", s)
 	}
@@ -265,8 +280,8 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	publicChain := alice.New(svc, recovered, security)
 	// NOTE: auth middleware provides rate limiting internally
 	puzzleChain := publicChain.Append(s.Metrics.APIHandler, s.RateLimiter.RateLimit, monitoring.Traced, common.SoftTimeoutHandler(1*time.Second))
-	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(corsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))
-	rg.Handle(rg.Options(common.PuzzleEndpoint), puzzleChain.Append(common.Cached, corsHandler, s.Auth.SitekeyOptions), http.HandlerFunc(s.puzzlePreFlight))
+	rg.Handle(rg.Get(common.PuzzleEndpoint), puzzleChain.Append(apiCorsHandler, s.Auth.Sitekey), http.HandlerFunc(s.puzzleHandler))
+	rg.Handle(rg.Options(common.PuzzleEndpoint), puzzleChain.Append(common.Cached, apiCorsHandler, s.Auth.SitekeyOptions), http.HandlerFunc(s.puzzlePreFlight))
 
 	const (
 		// NOTE: these defaults will be adjusted per API key quota almost immediately after verifying API key
@@ -287,9 +302,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, corsHandler, securit
 	rg.Handle(rg.Post(common.VerifyEndpoint), verifyChain.Append(s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)), http.MaxBytesHandler(http.HandlerFunc(s.pcVerifyHandler), maxSolutionsBodySize))
 
 	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
-	formChain := publicChain.Append(s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
+	formChain := publicChain.Append(formCorsHandler, s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
 	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
-	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, corsHandler), http.HandlerFunc(s.formPreFlight))
+	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, formCorsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
