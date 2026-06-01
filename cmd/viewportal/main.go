@@ -89,6 +89,7 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 			UserName:    "Jane Doe",
 			UserEmail:   "jane@example.com",
 			LoggedIn:    true,
+			API:         "//api.privatecaptcha.local/",
 		}
 
 		platformCtx := &portal.PlatformRenderContext{

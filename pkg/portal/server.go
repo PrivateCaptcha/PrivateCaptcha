@@ -80,6 +80,7 @@ type RequestContext struct {
 	UserName     string
 	UserEmail    string
 	CDN          string
+	API          string
 	LoggedIn     bool
 	FirstSession bool
 }

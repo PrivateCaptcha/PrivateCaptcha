@@ -271,6 +271,7 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		LoggedIn:    ok && loggedIn,
 		CurrentYear: time.Now().Year(),
 		CDN:         s.CDNURL,
+		API:         s.APIURL,
 	}
 
 	if sess, found := s.Sessions.SessionGet(r); found {
