@@ -71,7 +71,7 @@
 {{ `<script defer src="https:` }}{{$.Ctx.CDN}}{{ `/widget/js/privatecaptcha.js"></script>` }}
 
 {{ `<!-- Use this instead of your existing form -->` }}
-{{ `<form method="POST" action="https:`}}{{$.Ctx.API}}{{ .Params.Form.ExternalID }}{{ `">
+{{ `<form method="POST" action="https:`}}{{$.Ctx.API}}{{ `/form/` }}{{ .Params.Form.ExternalID }}{{ `">
   <!-- Existing form fields... -->
   <div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>
   <!-- <input type="submit" disabled /> -->

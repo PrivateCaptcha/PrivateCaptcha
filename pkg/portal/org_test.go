@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,29 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
+
+type transferOrgSubscriptionLimitsStub struct {
+	db.StubSubscriptionLimits
+	propertiesLimit int
+	propertiesOK    bool
+	propertiesExtra int
+	propertiesErr   error
+	formsOK         bool
+	formsExtra      int
+	formsErr        error
+}
+
+func (s transferOrgSubscriptionLimitsStub) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	return s.propertiesOK, s.propertiesExtra, s.propertiesErr
+}
+
+func (s transferOrgSubscriptionLimitsStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	return s.formsOK, s.formsExtra, s.formsErr
+}
+
+func (s transferOrgSubscriptionLimitsStub) PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return s.propertiesLimit, s.propertiesErr
+}
 
 func TestGetAnotherUsersOrg(t *testing.T) {
 	if testing.Short() {
@@ -1037,6 +1061,280 @@ func TestTransferOrgToInvitedMember(t *testing.T) {
 	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
 		t.Errorf("Expected error redirect, got: %s", location.String())
 	}
+}
+
+func TestTransferOrgDestinationPropertyLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org); err != nil {
+		t.Fatalf("Failed to create org property: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+		t.Fatalf("Failed to invite target owner: %v", err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, newOwner); err != nil {
+		t.Fatalf("Failed to join target owner: %v", err)
+	}
+
+	originalLimits := server.SubscriptionLimits
+	server.SubscriptionLimits = transferOrgSubscriptionLimitsStub{
+		propertiesLimit: 1,
+		propertiesOK:    false,
+		propertiesExtra: 0,
+		formsOK:         true,
+	}
+	defer func() {
+		server.SubscriptionLimits = originalLimits
+	}()
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(newOwner.ID)))
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Expected redirect, got %d", w.Code)
+	}
+
+	location, _ := w.Result().Location()
+	if path := location.String(); path != "/"+common.ErrorEndpoint+"/"+strconv.Itoa(http.StatusPaymentRequired) {
+		t.Fatalf("Expected payment required redirect, got %s", path)
+	}
+
+	ownerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ownerStillOwnsOrg := false
+	for _, o := range ownerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			ownerStillOwnsOrg = true
+			break
+		}
+	}
+	if !ownerStillOwnsOrg {
+		t.Fatal("Expected original owner to keep organization")
+	}
+
+	newOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, newOwner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range newOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			t.Fatal("Did not expect destination user to become owner")
+		}
+	}
+}
+
+func TestTransferOrgDestinationFormLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"),
+		&dbgen.CreateFormParams{Name: t.Name(), URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	); err != nil {
+		t.Fatalf("Failed to create org form: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+		t.Fatalf("Failed to invite target owner: %v", err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, newOwner); err != nil {
+		t.Fatalf("Failed to join target owner: %v", err)
+	}
+
+	originalLimits := server.SubscriptionLimits
+	server.SubscriptionLimits = transferOrgSubscriptionLimitsStub{
+		propertiesOK: true,
+		formsOK:      false,
+		formsExtra:   1,
+	}
+	defer func() {
+		server.SubscriptionLimits = originalLimits
+	}()
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(newOwner.ID)))
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Expected redirect, got %d", w.Code)
+	}
+
+	location, _ := w.Result().Location()
+	if path := location.String(); path != "/"+common.ErrorEndpoint+"/"+strconv.Itoa(http.StatusPaymentRequired) {
+		t.Fatalf("Expected payment required redirect, got %s", path)
+	}
+
+	ownerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, owner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ownerStillOwnsOrg := false
+	for _, o := range ownerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			ownerStillOwnsOrg = true
+			break
+		}
+	}
+	if !ownerStillOwnsOrg {
+		t.Fatal("Expected original owner to keep organization")
+	}
+
+	newOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, newOwner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range newOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			t.Fatal("Did not expect destination user to become owner")
+		}
+	}
+}
+
+func TestTransferOrgDestinationExactFormLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"),
+		&dbgen.CreateFormParams{Name: t.Name(), URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	); err != nil {
+		t.Fatalf("Failed to create org form: %v", err)
+	}
+
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, newOwner); err != nil {
+		t.Fatalf("Failed to invite target owner: %v", err)
+	}
+	if _, err := store.Impl().JoinOrg(ctx, org.ID, newOwner); err != nil {
+		t.Fatalf("Failed to join target owner: %v", err)
+	}
+
+	originalLimits := server.SubscriptionLimits
+	server.SubscriptionLimits = transferOrgSubscriptionLimitsStub{
+		propertiesOK: true,
+		formsOK:      false,
+		formsExtra:   0,
+	}
+	defer func() {
+		server.SubscriptionLimits = originalLimits
+	}()
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, owner.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	form := url.Values{}
+	form.Set(common.ParamCSRFToken, server.XSRF.Token(strconv.Itoa(int(owner.ID))))
+	form.Set(common.ParamUser, server.IDHasher.Encrypt(int(newOwner.ID)))
+
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/org/%s/transfer", server.IDHasher.Encrypt(int(org.ID))), strings.NewReader(form.Encode()))
+	req.AddCookie(cookie)
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusSeeOther {
+		t.Fatalf("Expected redirect, got %d", w.Code)
+	}
+
+	location, _ := w.Result().Location()
+	if path := location.String(); path != "/" {
+		t.Fatalf("Expected successful redirect, got %s", path)
+	}
+
+	newOwnerOrgs, err := store.Impl().RetrieveUserOrganizations(ctx, newOwner.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, o := range newOwnerOrgs {
+		if o.Organization.ID == org.ID && o.Level == dbgen.AccessLevelOwner {
+			return
+		}
+	}
+
+	t.Fatal("Expected destination user to become owner at exact forms limit")
 }
 
 func TestOrgEndpointsInvalidPathArg(t *testing.T) {
