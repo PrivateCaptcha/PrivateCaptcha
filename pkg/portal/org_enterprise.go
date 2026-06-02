@@ -495,6 +495,72 @@ func (s *Server) deleteOrg(w http.ResponseWriter, r *http.Request) {
 	common.Redirect(s.RelURL("/"), http.StatusOK, w, r)
 }
 
+func (s *Server) validateTransferOrgLimits(ctx context.Context, org *dbgen.Organization, newOwner *dbgen.User) int {
+	var subscr *dbgen.Subscription
+	var err error
+
+	if newOwner.SubscriptionID.Valid {
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, newOwner.SubscriptionID.Int32)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve destination user subscription", "userID", newOwner.ID, common.ErrAttr(err))
+			return http.StatusInternalServerError
+		}
+	}
+
+	propertiesLimit, err := s.SubscriptionLimits.PropertiesLimit(ctx, subscr)
+	if err != nil {
+		if err == db.ErrNoActiveSubscription {
+			return http.StatusPaymentRequired
+		}
+
+		slog.ErrorContext(ctx, "Failed to retrieve destination user property limit", "userID", newOwner.ID, common.ErrAttr(err))
+		return http.StatusInternalServerError
+	}
+
+	if propertiesLimit > 0 {
+		ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, newOwner.ID, subscr)
+		if err != nil {
+			if err == db.ErrNoActiveSubscription {
+				return http.StatusPaymentRequired
+			}
+
+			slog.ErrorContext(ctx, "Failed to check destination user property limit", "userID", newOwner.ID, common.ErrAttr(err))
+			return http.StatusInternalServerError
+		}
+
+		if !ok && extra > 0 {
+			slog.WarnContext(ctx, "Destination user is already above properties limit", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
+			return http.StatusPaymentRequired
+		}
+
+		orgPropertiesCount, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, org.ID)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve organization properties count", "orgID", org.ID, common.ErrAttr(err))
+			return http.StatusInternalServerError
+		}
+
+		if int(orgPropertiesCount) > (-extra) {
+			slog.WarnContext(ctx, "Destination user would exceed properties limit after org transfer", "userID", newOwner.ID,
+				"orgID", org.ID, "orgPropertiesCount", orgPropertiesCount, "extra", extra)
+			return http.StatusPaymentRequired
+		}
+	}
+
+	if ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, org.ID, subscr); err != nil {
+		if err == db.ErrNoActiveSubscription {
+			return http.StatusPaymentRequired
+		}
+
+		slog.ErrorContext(ctx, "Failed to check destination org forms limit", "userID", newOwner.ID, "orgID", org.ID, common.ErrAttr(err))
+		return http.StatusInternalServerError
+	} else if !ok && extra > 0 {
+		slog.WarnContext(ctx, "Destination user would exceed forms limit after org transfer", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
+		return http.StatusPaymentRequired
+	}
+
+	return 0
+}
+
 func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -550,75 +616,8 @@ func (s *Server) transferOrg(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newOwner := &members[idx].User
-
-	var subscr *dbgen.Subscription
-	if newOwner.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, newOwner.SubscriptionID.Int32)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve destination user subscription", "userID", newOwner.ID, common.ErrAttr(err))
-			s.RedirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-	}
-
-	propertiesLimit, err := s.SubscriptionLimits.PropertiesLimit(ctx, subscr)
-	if err != nil {
-		if err == db.ErrNoActiveSubscription {
-			s.RedirectError(http.StatusPaymentRequired, w, r)
-			return
-		}
-
-		slog.ErrorContext(ctx, "Failed to retrieve destination user property limit", "userID", newOwner.ID, common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
-	}
-
-	if propertiesLimit > 0 {
-		ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, newOwner.ID, subscr)
-		if err != nil {
-			if err == db.ErrNoActiveSubscription {
-				s.RedirectError(http.StatusPaymentRequired, w, r)
-				return
-			}
-
-			slog.ErrorContext(ctx, "Failed to check destination user property limit", "userID", newOwner.ID, common.ErrAttr(err))
-			s.RedirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-
-		if !ok && extra > 0 {
-			slog.WarnContext(ctx, "Destination user is already above properties limit", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
-			s.RedirectError(http.StatusPaymentRequired, w, r)
-			return
-		}
-
-		orgPropertiesCount, err := s.Store.Impl().RetrieveOrgPropertiesCount(ctx, org.ID)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to retrieve organization properties count", "orgID", org.ID, common.ErrAttr(err))
-			s.RedirectError(http.StatusInternalServerError, w, r)
-			return
-		}
-
-		if int(orgPropertiesCount) > (-extra) {
-			slog.WarnContext(ctx, "Destination user would exceed properties limit after org transfer", "userID", newOwner.ID,
-				"orgID", org.ID, "orgPropertiesCount", orgPropertiesCount, "extra", extra)
-			s.RedirectError(http.StatusPaymentRequired, w, r)
-			return
-		}
-	}
-
-	if ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, org.ID, subscr); err != nil {
-		if err == db.ErrNoActiveSubscription {
-			s.RedirectError(http.StatusPaymentRequired, w, r)
-			return
-		}
-
-		slog.ErrorContext(ctx, "Failed to check destination org forms limit", "userID", newOwner.ID, "orgID", org.ID, common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
-	} else if !ok && extra > 0 {
-		slog.WarnContext(ctx, "Destination user would exceed forms limit after org transfer", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
-		s.RedirectError(http.StatusPaymentRequired, w, r)
+	if code := s.validateTransferOrgLimits(ctx, org, newOwner); code > 0 {
+		s.RedirectError(code, w, r)
 		return
 	}
 
