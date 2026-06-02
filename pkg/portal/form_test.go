@@ -345,7 +345,8 @@ func TestGetFormDashboardIntegrationsTab(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "/form/"+db.UUIDToString(form.ExternalID)) {
+	expectedFormURL := server.APIURL + "/form/" + db.UUIDToString(form.ExternalID)
+	if !strings.Contains(body, expectedFormURL) {
 		t.Fatal("expected form action in integrations snippet")
 	}
 	if !strings.Contains(body, db.UUIDToSiteKey(property.ExternalID)) {

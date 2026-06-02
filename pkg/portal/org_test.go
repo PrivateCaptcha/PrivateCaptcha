@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,29 @@ import (
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	portal_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/portal/tests"
 )
+
+type transferOrgSubscriptionLimitsStub struct {
+	db.StubSubscriptionLimits
+	propertiesLimit int
+	propertiesOK    bool
+	propertiesExtra int
+	propertiesErr   error
+	formsOK         bool
+	formsExtra      int
+	formsErr        error
+}
+
+func (s transferOrgSubscriptionLimitsStub) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	return s.propertiesOK, s.propertiesExtra, s.propertiesErr
+}
+
+func (s transferOrgSubscriptionLimitsStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+	return s.formsOK, s.formsExtra, s.formsErr
+}
+
+func (s transferOrgSubscriptionLimitsStub) PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return s.propertiesLimit, s.propertiesErr
+}
 
 func TestGetAnotherUsersOrg(t *testing.T) {
 	if testing.Short() {
@@ -1036,6 +1060,117 @@ func TestTransferOrgToInvitedMember(t *testing.T) {
 	location, _ := resp.Location()
 	if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
 		t.Errorf("Expected error redirect, got: %s", location.String())
+	}
+}
+
+func TestValidateTransferOrgLimitsDestinationPropertyLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"), org); err != nil {
+		t.Fatalf("Failed to create org property: %v", err)
+	}
+
+	srv := &Server{
+		Store: store,
+		SubscriptionLimits: transferOrgSubscriptionLimitsStub{
+			propertiesLimit: 1,
+			propertiesOK:    false,
+			propertiesExtra: 0,
+			formsOK:         true,
+		},
+	}
+
+	if code := srv.validateTransferOrgLimits(ctx, org, newOwner); code != http.StatusPaymentRequired {
+		t.Fatalf("Expected payment required status, got %d", code)
+	}
+}
+
+func TestValidateTransferOrgLimitsDestinationFormLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"),
+		&dbgen.CreateFormParams{Name: t.Name(), URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	); err != nil {
+		t.Fatalf("Failed to create org form: %v", err)
+	}
+
+	srv := &Server{
+		Store: store,
+		SubscriptionLimits: transferOrgSubscriptionLimitsStub{
+			propertiesOK: true,
+			formsOK:      false,
+			formsExtra:   1,
+		},
+	}
+
+	if code := srv.validateTransferOrgLimits(ctx, org, newOwner); code != http.StatusPaymentRequired {
+		t.Fatalf("Expected payment required status, got %d", code)
+	}
+}
+
+func TestValidateTransferOrgLimitsDestinationExactFormLimit(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	newOwner, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create target account: %v", err)
+	}
+
+	if _, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, t.Name()+".example.com"),
+		&dbgen.CreateFormParams{Name: t.Name(), URL: "https://hooks.example.com/submit/form", Fields: []byte(`{}`), Enabled: true},
+		org,
+	); err != nil {
+		t.Fatalf("Failed to create org form: %v", err)
+	}
+
+	srv := &Server{
+		Store: store,
+		SubscriptionLimits: transferOrgSubscriptionLimitsStub{
+			propertiesOK: true,
+			formsOK:      false,
+			formsExtra:   0,
+		},
+	}
+
+	if code := srv.validateTransferOrgLimits(ctx, org, newOwner); code != 0 {
+		t.Fatalf("Expected successful validation, got %d", code)
 	}
 }
 
