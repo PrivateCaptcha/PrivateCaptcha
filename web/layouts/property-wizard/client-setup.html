@@ -63,7 +63,7 @@
                     </span>
                     <span class="ml-4 flex min-w-0 flex-col gap-1.5">
                         <span class="text-base font-medium text-gray-900">Add Private Captcha script <i>inside</i> site <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<head>`}}</code>:</span>
-                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<script defer src="https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"></script>` }}</code></span>
+                        <span class="text-sm text-gray-500"><code class="pc-code-snippet max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1"><span class="pc-code-tag">&lt;script</span> <span class="pc-code-attr">defer</span> <span class="pc-code-attr">src</span>=<span class="pc-code-string">"https://cdn.privatecaptcha.com/widget/js/privatecaptcha.js"</span><span class="pc-code-tag">&gt;&lt;/script&gt;</span></code></span>
                     </span>
                 </span>
             </li>
@@ -77,7 +77,7 @@
                     </span>
                     <span class="ml-4 flex min-w-0 flex-col gap-1.5">
                         <span class="text-base font-medium text-gray-900">Add captcha widget <i>inside</i> your <code class="rounded-md bg-gray-200 text-gray-800 px-1 py-0.5">{{`<form>`}}</code>:</span>
-                        <span class="text-sm text-gray-500"><code class="max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1">{{ `<div class="private-captcha" data-sitekey="` }}{{ .Params.Sitekey }}{{ `"></div>` }}</code></span>
+                        <span class="text-sm text-gray-500"><code class="pc-code-snippet max-w-2xl rounded-md bg-gray-200 text-gray-800 px-1.5 py-1"><span class="pc-code-tag">&lt;div</span> <span class="pc-code-attr">class</span>=<span class="pc-code-string">"private-captcha"</span> <span class="pc-code-attr">data-sitekey</span>=<span class="pc-code-string">"{{ .Params.Sitekey }}"</span><span class="pc-code-tag">&gt;&lt;/div&gt;</span></code></span>
                     </span>
                 </span>
             </li>
