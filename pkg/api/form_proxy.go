@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"mime"
@@ -34,6 +35,11 @@ const (
 	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
 	formSubmitStatusSuccess          = 0
 	formSubmitStatusFailure          = 1
+)
+
+var (
+	errCaptchaVerificationFailed = errors.New("captcha verification failed")
+	errFormSubmitFailed          = errors.New("form submit failed")
 )
 
 var formOutboundDialer = &net.Dialer{
@@ -211,7 +217,11 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			// at this stage it also means we have verified the captcha earlier (above)
 			// we limit retries on the hot path as by definition here we are already quite busy
 			form.RetryRequestCount = 0
-			s.processFormSubmission(ctx, form, submission)
+			if err := s.processFormSubmission(ctx, form, submission); err == nil {
+				w.WriteHeader(http.StatusAccepted)
+			} else {
+				http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)
+			}
 		} else {
 			s.Metrics.ObserveEventDropped(common.FormEventType)
 			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
@@ -284,10 +294,10 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 	return nil
 }
 
-func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission) {
+func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission) error {
 	if count, ok := s.FailingForms.Get(f.ID); ok && (count > maxFormFailures) {
 		slog.WarnContext(ctx, "Skipping form with too many submit failures", "formID", f.ID, "count", count)
-		return
+		return nil
 	}
 
 	// delayed captcha check if original form was not cached at the time of request
@@ -296,12 +306,12 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		result, err := s.Verifier.Verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
-			return
+			return err
 		}
 
 		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
 			slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
-			return
+			return errCaptchaVerificationFailed
 		}
 
 		s.addVerifyRecord(ctx, result)
@@ -309,7 +319,7 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {
 		slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", f.ID, common.ErrAttr(err))
-		return
+		return err
 	}
 
 	client := s.FormsClient
@@ -319,7 +329,10 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 
 	if result := SubmitForm(ctx, client, f, sub); result.Valid {
 		s.addFormSubmitRecord(ctx, f, result.ResultCode())
+		return nil
 	}
+
+	return errFormSubmitFailed
 }
 
 func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
