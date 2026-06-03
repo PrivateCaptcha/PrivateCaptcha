@@ -43,7 +43,7 @@ RUN --mount=type=cache,target=/cache/widget,sharing=locked npm run build
 ################################################
 
 # Stage 2: Backend build
-FROM golang:1.26.3 AS backend-builder
+FROM golang:1.26.4 AS backend-builder
 
 # Copy the backend source code
 COPY ./go.mod ./go.sum /app/
