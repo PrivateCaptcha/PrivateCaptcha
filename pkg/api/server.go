@@ -94,6 +94,7 @@ type Server struct {
 	FailingForms        *common.ExpiringCounterMap[int32]
 	APICors             *cors.Cors
 	FormsCors           *cors.Cors
+	FormsClient         *http.Client
 	Metrics             common.APIMetrics
 	Mailer              common.Mailer
 	RateLimiter         ratelimit.HTTPRateLimiter
@@ -196,6 +197,10 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 
 	if s.FailingForms == nil {
 		s.FailingForms = common.NewExpiringCounterMap[int32]()
+	}
+
+	if (s.FormsClient == nil) && (s.FormURLVerifier != nil) {
+		s.FormsClient = common.NewFormHTTPClient(s.FormURLVerifier)
 	}
 
 	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)

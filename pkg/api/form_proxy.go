@@ -24,7 +24,12 @@ import (
 )
 
 const (
-	maxFormBodySize                  = 1024 * 1024
+	maxFormBodySize = 1024 * 1024
+	// the logic is basically maxFormFailures during db.DefaultCacheTTL period leads to immediate form block
+	// NOTE: yes, we can get _very_ unlucky due to load balancing if all "bad" submissions for this form land here
+	// but this is considered acceptable due to extremely low probability
+	maxFormFailures = FormBatchSize / 10
+
 	formQueueBackpressureTimeout     = 1 * time.Second
 	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
 	formSubmitStatusSuccess          = 0
@@ -202,8 +207,15 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
 	case <-timer.C:
-		s.Metrics.ObserveEventDropped(common.FormEventType)
-		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
+			// at this stage it also means we have verified the captcha earlier (above)
+			// we limit retries on the hot path as by definition here we are already quite busy
+			form.RetryRequestCount = 0
+			s.processFormSubmission(ctx, form, submission)
+		} else {
+			s.Metrics.ObserveEventDropped(common.FormEventType)
+			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		}
 	}
 }
 
@@ -230,13 +242,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		formsByID[db.UUIDToString(form.ExternalID)] = form
 	}
 
-	client := common.NewFormHTTPClient(s.FormURLVerifier)
-
 	const concurrencyLimit = 4
-	// the logic is basically maxFormFailures during db.DefaultCacheTTL period leads to immediate form block
-	// NOTE: yes, we can get _very_ unlucky due to load balancing if all "bad" submissions for this form land here
-	// but this is considered acceptable due to extremely low probability
-	const maxFormFailures = FormBatchSize / 10
 
 	sem := make(chan struct{}, concurrencyLimit)
 	var wg sync.WaitGroup
@@ -266,37 +272,7 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		go func(f *dbgen.Form, sub *FormSubmission) {
 			defer wg.Done()
 			defer func() { <-sem }() // Free up a spot in the semaphore when finished
-
-			if count, ok := s.FailingForms.Get(f.ID); ok && (count > maxFormFailures) {
-				slog.WarnContext(ctx, "Skipping form with too many submit failures", "formID", f.ID, "count", count)
-				return
-			}
-
-			// delayed captcha check if original form was not cached at the time of request
-			if sub.CaptchaSolution != nil {
-				ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: f}
-				result, err := s.Verifier.Verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
-				if err != nil {
-					slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
-					return
-				}
-
-				if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
-					slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
-					return
-				}
-
-				s.addVerifyRecord(ctx, result)
-			}
-
-			if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {
-				slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", f.ID, common.ErrAttr(err))
-				return
-			}
-
-			if result := SubmitForm(ctx, client, f, sub); result.Valid {
-				s.addFormSubmitRecord(ctx, f, result.ResultCode())
-			}
+			s.processFormSubmission(ctx, f, sub)
 		}(form, submission)
 	}
 
@@ -306,6 +282,44 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 	go s.FailingForms.ClearExpired(db.DefaultCacheTTL, FormBatchSize /*max items*/)
 
 	return nil
+}
+
+func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *FormSubmission) {
+	if count, ok := s.FailingForms.Get(f.ID); ok && (count > maxFormFailures) {
+		slog.WarnContext(ctx, "Skipping form with too many submit failures", "formID", f.ID, "count", count)
+		return
+	}
+
+	// delayed captcha check if original form was not cached at the time of request
+	if sub.CaptchaSolution != nil {
+		ownerSource := &formOwnerSource{Store: s.BusinessDB, Form: f}
+		result, err := s.Verifier.Verify(ctx, sub.CaptchaSolution, ownerSource, sub.Time)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
+			return
+		}
+
+		if !result.Success() || (result.PropertyID != ownerSource.Form.PropertyID) {
+			slog.WarnContext(ctx, "Skipping form submission due to captcha verification error", "result", result.Error.String())
+			return
+		}
+
+		s.addVerifyRecord(ctx, result)
+	}
+
+	if err := s.FormURLVerifier.VerifyURL(ctx, f.URL); err != nil {
+		slog.WarnContext(ctx, "Skipping unsafe form submission URL", "formID", f.ID, common.ErrAttr(err))
+		return
+	}
+
+	client := s.FormsClient
+	if client == nil {
+		client = common.NewFormHTTPClient(s.FormURLVerifier)
+	}
+
+	if result := SubmitForm(ctx, client, f, sub); result.Valid {
+		s.addFormSubmitRecord(ctx, f, result.ResultCode())
+	}
 }
 
 func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, status int8) {
