@@ -92,3 +92,6 @@ DELETE FROM backend.forms WHERE id = ANY($1::INT[]);
 
 -- name: GetUserFormsCount :one
 SELECT COUNT(*) as count FROM backend.forms WHERE org_owner_id = $1 AND deleted_at IS NULL;
+
+-- name: TransferOrgForms :execrows
+UPDATE backend.forms SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3;

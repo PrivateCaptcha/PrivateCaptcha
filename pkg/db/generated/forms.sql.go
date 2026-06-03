@@ -485,6 +485,24 @@ func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
 	return &i, err
 }
 
+const transferOrgForms = `-- name: TransferOrgForms :execrows
+UPDATE backend.forms SET org_owner_id = $2, updated_at = NOW() WHERE org_id = $1 AND org_owner_id = $3
+`
+
+type TransferOrgFormsParams struct {
+	OrgID        pgtype.Int4 `db:"org_id" json:"org_id"`
+	OrgOwnerID   pgtype.Int4 `db:"org_owner_id" json:"org_owner_id"`
+	OrgOwnerID_2 pgtype.Int4 `db:"org_owner_id_2" json:"org_owner_id_2"`
+}
+
+func (q *Queries) TransferOrgForms(ctx context.Context, arg *TransferOrgFormsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, transferOrgForms, arg.OrgID, arg.OrgOwnerID, arg.OrgOwnerID_2)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateForm = `-- name: UpdateForm :one
 WITH old AS (
     SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms f

@@ -331,6 +331,9 @@ func (s *QuerierStub) SwapOrgOwnership(ctx context.Context, arg *dbgen.SwapOrgOw
 func (s *QuerierStub) TransferOrgProperties(ctx context.Context, arg *dbgen.TransferOrgPropertiesParams) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) TransferOrgForms(ctx context.Context, arg *dbgen.TransferOrgFormsParams) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) TransferOrganization(ctx context.Context, arg *dbgen.TransferOrganizationParams) (int64, error) {
 	return 0, s.Error
 }

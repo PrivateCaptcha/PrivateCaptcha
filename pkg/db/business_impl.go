@@ -3121,6 +3121,18 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 		slog.InfoContext(ctx, "Transferred property ownerships", "orgID", org.ID, "affected", affected)
 	}
 
+	// Transfer all form ownerships in this organization
+	if affected, err := impl.querier.TransferOrgForms(ctx, &dbgen.TransferOrgFormsParams{
+		OrgID:        Int(org.ID),
+		OrgOwnerID:   Int(newOwner.ID),
+		OrgOwnerID_2: Int(user.ID),
+	}); err != nil {
+		slog.ErrorContext(ctx, "Failed to transfer form ownerships", "orgID", org.ID, "newUserID", newOwner.ID, common.ErrAttr(err))
+		return nil, err
+	} else {
+		slog.InfoContext(ctx, "Transferred form ownerships", "orgID", org.ID, "affected", affected)
+	}
+
 	// Swap organization membership: remove new owner's membership (they are owner now),
 	// add old owner as a confirmed member
 	if affected, err := impl.querier.SwapOrgOwnership(ctx, &dbgen.SwapOrgOwnershipParams{
@@ -3140,8 +3152,11 @@ func (impl *BusinessStoreImpl) TransferOrganization(ctx context.Context, user *d
 	_ = impl.cache.Delete(ctx, orgCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, orgUsersCacheKey(org.ID))
 	_ = impl.cache.Delete(ctx, OrgPropertiesCacheKey(org.ID, orgPropertiesCacheKeyStr))
+	_ = impl.cache.Delete(ctx, OrgFormsCacheKey(org.ID, orgFormsCacheKeyStr))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(user.ID))
 	_ = impl.cache.Delete(ctx, userPropertiesCountCacheKey(newOwner.ID))
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(user.ID))
+	_ = impl.cache.Delete(ctx, userFormsCountCacheKey(newOwner.ID))
 
 	auditEvents := []*common.AuditLogEvent{
 		newTransferOrgAuditLogEvent(user, org, newOwner),
