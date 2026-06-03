@@ -283,7 +283,9 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 		go func(f *dbgen.Form, sub *FormSubmission) {
 			defer wg.Done()
 			defer func() { <-sem }() // Free up a spot in the semaphore when finished
-			s.processFormSubmission(ctx, f, sub)
+			if err := s.processFormSubmission(ctx, f, sub); err != nil {
+				slog.WarnContext(ctx, "Failed to submit the form", "formID", f.ID, "submitID", sub.ID, common.ErrAttr(err))
+			}
 		}(form, submission)
 	}
 
