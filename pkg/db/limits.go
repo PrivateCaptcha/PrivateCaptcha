@@ -20,6 +20,7 @@ type SubscriptionLimits interface {
 	RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error)
 	PropertiesLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
 	OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
+	FormsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error)
 }
 
 var (
@@ -178,6 +179,22 @@ func (sl *SubscriptionLimitsImpl) PropertiesLimit(ctx context.Context, subscr *d
 	return plan.PropertiesLimit(isTrialing), nil
 }
 
+func (sl *SubscriptionLimitsImpl) FormsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
+		return 0, ErrNoActiveSubscription
+	}
+
+	plan, err := sl.planService.FindPlan(subscr.ExternalProductID, subscr.ExternalPriceID, sl.Stage,
+		IsInternalSubscription(subscr.Source))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to find billing plan", "productID", subscr.ExternalProductID, "priceID", subscr.ExternalPriceID, common.ErrAttr(err))
+		return 0, err
+
+	}
+	isTrialing := sl.planService.IsSubscriptionTrialing(subscr.Status)
+	return plan.FormsLimit(isTrialing), nil
+}
+
 func (sl *SubscriptionLimitsImpl) OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
 		return 0, ErrNoActiveSubscription
@@ -283,6 +300,9 @@ func (StubSubscriptionLimits) PropertiesLimit(ctx context.Context, subscr *dbgen
 	return 0, nil
 }
 func (StubSubscriptionLimits) OrgsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return 0, nil
+}
+func (StubSubscriptionLimits) FormsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
 	return 0, nil
 }
 

@@ -88,6 +88,7 @@ type Querier interface {
 	GetUserAuditLogs(ctx context.Context, arg *GetUserAuditLogsParams) ([]*GetUserAuditLogsRow, error)
 	GetUserByEmail(ctx context.Context, lower string) (*User, error)
 	GetUserByID(ctx context.Context, id int32) (*User, error)
+	GetUserFormsCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error)
 	GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*GetUserOrganizationsRow, error)
 	GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error)
 	GetUserSettings(ctx context.Context, userID int32) (*UserSettings, error)

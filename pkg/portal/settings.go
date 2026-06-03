@@ -83,8 +83,10 @@ type settingsUsageRenderContext struct {
 	SettingsCommonRenderContext
 	PropertiesCount         int
 	OrgsCount               int
+	FormsCount              int
 	IncludedPropertiesCount int
 	IncludedOrgsCount       int
+	IncludedFormsCount      int
 	Limit                   int64
 }
 
@@ -992,6 +994,10 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 		renderCtx.PropertiesCount = int(count)
 	}
 
+	if count, err := s.Store.Impl().RetrieveUserFormsCount(ctx, user.ID); err == nil {
+		renderCtx.FormsCount = int(count)
+	}
+
 	if user.SubscriptionID.Valid {
 		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
 		if err != nil {
@@ -1001,6 +1007,7 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 			renderCtx.Limit, _ = s.SubscriptionLimits.RequestsLimit(ctx, subscription)
 			renderCtx.IncludedPropertiesCount, _ = s.SubscriptionLimits.PropertiesLimit(ctx, subscription)
 			renderCtx.IncludedOrgsCount, _ = s.SubscriptionLimits.OrgsLimit(ctx, subscription)
+			renderCtx.IncludedFormsCount, _ = s.SubscriptionLimits.FormsLimit(ctx, subscription)
 		}
 	} else {
 		slog.DebugContext(ctx, "User does not have a subscription", "tab", "usage", "userID", user.ID)
@@ -1008,11 +1015,12 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 	}
 
 	slog.DebugContext(ctx, "Retrieved user limits", "limit", renderCtx.Limit, "properties", renderCtx.IncludedPropertiesCount,
-		"orgs", renderCtx.IncludedOrgsCount)
+		"orgs", renderCtx.IncludedOrgsCount, "forms", renderCtx.IncludedFormsCount)
 
 	if (renderCtx.Limit == 0) ||
 		(renderCtx.IncludedOrgsCount == 0) ||
-		(renderCtx.IncludedPropertiesCount == 0) {
+		(renderCtx.IncludedPropertiesCount == 0) ||
+		(renderCtx.IncludedFormsCount == 0) {
 		if len(renderCtx.WarningMessage) == 0 {
 			renderCtx.WarningMessage = "Could not determine usage limits from your plan."
 		}

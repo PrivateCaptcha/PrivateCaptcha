@@ -2596,6 +2596,32 @@ func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, 
 	return count, nil
 }
 
+func (impl *BusinessStoreImpl) RetrieveUserFormsCount(ctx context.Context, userID int32) (int64, error) {
+	if impl.querier == nil {
+		return 0, ErrMaintenance
+	}
+
+	cacheKey := userFormsCountCacheKey(userID)
+	if count, err := FetchCachedOne[int64](ctx, impl.cache, cacheKey); err == nil {
+		return *count, nil
+	}
+
+	count, err := impl.querier.GetUserFormsCount(ctx, Int(userID))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to retrieve user forms count", "userID", userID, common.ErrAttr(err))
+		return 0, err
+	}
+
+	slog.DebugContext(ctx, "Fetched user forms count", "userID", userID, "count", count)
+
+	const formsCountTTL = 5 * time.Minute
+	c := new(int64)
+	*c = count
+	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, formsCountTTL)
+
+	return count, nil
+}
+
 func (impl *BusinessStoreImpl) GetCachedPropertyBySitekey(ctx context.Context, sitekey string) (*dbgen.Property, bool, error) {
 	if sitekey == TestPropertySitekey {
 		return nil, false, ErrTestProperty

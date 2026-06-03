@@ -398,6 +398,17 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 	return items, nil
 }
 
+const getUserFormsCount = `-- name: GetUserFormsCount :one
+SELECT COUNT(*) as count FROM backend.forms WHERE org_owner_id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetUserFormsCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error) {
+	row := q.db.QueryRow(ctx, getUserFormsCount, orgOwnerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const moveForm = `-- name: MoveForm :one
 UPDATE backend.forms
 SET org_id = $2, org_owner_id = $3, updated_at = NOW()

@@ -89,3 +89,6 @@ RETURNING *;
 
 -- name: DeleteForms :execrows
 DELETE FROM backend.forms WHERE id = ANY($1::INT[]);
+
+-- name: GetUserFormsCount :one
+SELECT COUNT(*) as count FROM backend.forms WHERE org_owner_id = $1 AND deleted_at IS NULL;

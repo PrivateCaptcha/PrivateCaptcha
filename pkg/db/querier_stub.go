@@ -250,7 +250,7 @@ func (s *QuerierStub) GetUserByID(ctx context.Context, id int32) (*dbgen.User, e
 func (s *QuerierStub) GetUserOrganizations(ctx context.Context, userID pgtype.Int4) ([]*dbgen.GetUserOrganizationsRow, error) {
 	return nil, s.Error
 }
-func (s *QuerierStub) GetUserPropertiesCount(ctx context.Context, orgOwnerID pgtype.Int4) (int64, error) {
+func (s *QuerierStub) GetUserPropertiesCount(ctx context.Context, userID pgtype.Int4) (int64, error) {
 	return 0, s.Error
 }
 func (s *QuerierStub) GetUserSettings(ctx context.Context, userID int32) (*dbgen.UserSettings, error) {
@@ -379,7 +379,9 @@ func (s *QuerierStub) UpdateUserSubscription(ctx context.Context, arg *dbgen.Upd
 func (s *QuerierStub) UpsertUserSettings(ctx context.Context, arg *dbgen.UpsertUserSettingsParams) (*dbgen.UserSettings, error) {
 	return nil, s.Error
 }
-
 func (s *QuerierStub) GetPropertyEditViolations(ctx context.Context, arg *dbgen.GetPropertyAccessViolationsParams) ([]int32, error) {
 	return nil, s.Error
+}
+func (s *QuerierStub) GetUserFormsCount(ctx context.Context, userID pgtype.Int4) (int64, error) {
+	return 0, s.Error
 }

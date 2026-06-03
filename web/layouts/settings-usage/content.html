@@ -14,7 +14,7 @@
         </div>
 
         <div class="mt-5">
-            <dl class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+            <dl class="grid grid-cols-1 gap-5 sm:grid-cols-4">
                 <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
                     <dt class="truncate text-sm font-medium text-gray-500">Organizations</dt>
                     <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedOrgsCount}}<span class="text-gray-900">{{.Params.OrgsCount}}</span> / {{.Params.IncludedOrgsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
@@ -22,6 +22,10 @@
                 <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
                     <dt class="truncate text-sm font-medium text-gray-500">Properties</dt>
                     <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedPropertiesCount}}<span class="text-gray-900">{{.Params.PropertiesCount}}</span> / {{.Params.IncludedPropertiesCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
+                </div>
+                <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
+                    <dt class="truncate text-sm font-medium text-gray-500">Forms</dt>
+                    <dd class="mt-1 text-3xl font-semibold tracking-tight text-gray-500">{{if .Params.IncludedFormsCount}}<span class="text-gray-900">{{.Params.FormsCount}}</span> / {{.Params.IncludedFormsCount}}{{else}}<span class="text-xl">Calculating...</span>{{end}}</dd>
                 </div>
                 <div class="overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:p-6">
                     <dt class="truncate text-sm font-medium text-gray-500">Captcha requests</dt>

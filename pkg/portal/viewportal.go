@@ -281,8 +281,13 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			ModelFunc: func(a AlertRenderContext) interface{} {
 				return &settingsUsageRenderContext{
 					SettingsCommonRenderContext: settingsCommon(common.UsageEndpoint, a),
-					PropertiesCount:             5, OrgsCount: 2, IncludedPropertiesCount: 50,
-					IncludedOrgsCount: 10, Limit: 1000000,
+					PropertiesCount:             5,
+					OrgsCount:                   2,
+					FormsCount:                  5,
+					IncludedPropertiesCount:     50,
+					IncludedOrgsCount:           10,
+					IncludedFormsCount:          10,
+					Limit:                       1000000,
 				}
 			},
 		},
