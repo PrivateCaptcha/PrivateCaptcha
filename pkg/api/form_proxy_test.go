@@ -28,6 +28,12 @@ type stubSubmitFormURLVerifier struct {
 	urls []string
 }
 
+type submitFormRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f submitFormRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
+	return f(r)
+}
+
 func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
 	v.urls = append(v.urls, rawURL)
 	return v.err
@@ -269,7 +275,7 @@ func TestFormProxyCachedFormUpdatesRateLimit(t *testing.T) {
 	}
 }
 
-func TestSubmitFormReturnsSuccessResult(t *testing.T) {
+func TestSubmitFormWithRetryReturnsSuccessResult(t *testing.T) {
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -279,7 +285,7 @@ func TestSubmitFormReturnsSuccessResult(t *testing.T) {
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := SubmitForm(context.Background(), client, form, submission)
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -291,7 +297,7 @@ func TestSubmitFormReturnsSuccessResult(t *testing.T) {
 	}
 }
 
-func TestSubmitFormReturnsFailureResult(t *testing.T) {
+func TestSubmitFormWithRetryReturnsFailureResult(t *testing.T) {
 	var attempts int
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -303,7 +309,7 @@ func TestSubmitFormReturnsFailureResult(t *testing.T) {
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := SubmitForm(context.Background(), client, form, submission)
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -318,7 +324,7 @@ func TestSubmitFormReturnsFailureResult(t *testing.T) {
 	}
 }
 
-func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
+func TestSubmitFormWithRetryReturnsFailureResultAfterRetries(t *testing.T) {
 	var attempts int
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		attempts++
@@ -330,7 +336,7 @@ func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
 	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
-	result := SubmitForm(context.Background(), client, form, submission)
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
 	if result == nil {
 		t.Fatal("expected result")
 	}
@@ -342,6 +348,97 @@ func TestSubmitFormReturnsFailureResultAfterRetries(t *testing.T) {
 	}
 	if attempts != 3 {
 		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestSubmitFormWithRetryRetriesSelectedHttpStatuses(t *testing.T) {
+	testCases := []struct {
+		name       string
+		statusCode int
+	}{
+		{name: "InternalServerError", statusCode: http.StatusInternalServerError},
+		{name: "TooManyRequests", statusCode: http.StatusTooManyRequests},
+		{name: "RequestTimeout", statusCode: http.StatusRequestTimeout},
+		{name: "TooEarly", statusCode: http.StatusTooEarly},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var attempts int
+			downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				attempts++
+				w.WriteHeader(tc.statusCode)
+			}))
+			defer downstream.Close()
+
+			form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true}
+			client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+			submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+			result := SubmitFormWithRetry(context.Background(), client, form, submission)
+			if result == nil {
+				t.Fatal("expected result")
+			}
+			if result.StatusCode != tc.statusCode {
+				t.Fatalf("expected status %d, got %d", tc.statusCode, result.StatusCode)
+			}
+			if attempts != 2 {
+				t.Fatalf("expected 2 attempts, got %d", attempts)
+			}
+		})
+	}
+}
+
+func TestSubmitFormWithRetryRetriesTransportError(t *testing.T) {
+	var attempts int
+	expectedErr := errors.New("transport error")
+	client := &http.Client{Transport: submitFormRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		attempts++
+		return nil, expectedErr
+	})}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Valid {
+		t.Fatal("expected valid result")
+	}
+	if result.StatusCode != 0 {
+		t.Fatalf("expected empty status, got %d", result.StatusCode)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts)
+	}
+}
+
+func TestSubmitFormWithRetryDoesNotRetryBadRequest(t *testing.T) {
+	var attempts int
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("invalid request body that should only be logged once"))
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL, Method: dbgen.FormMethodPost, RetryRequestCount: 2, Enabled: true, Active: true}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected failure result")
+	}
+	if result.StatusCode != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, result.StatusCode)
+	}
+	if attempts != 1 {
+		t.Fatalf("expected 1 attempt, got %d", attempts)
 	}
 }
 

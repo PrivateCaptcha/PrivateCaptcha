@@ -776,7 +776,7 @@ func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submi
 	formCopy := *form
 	formCopy.RetryRequestCount = 0
 
-	return api.SubmitForm(ctx, client, &formCopy, submission)
+	return api.SubmitFormWithRetry(ctx, client, &formCopy, submission)
 }
 
 func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {

@@ -35,6 +35,7 @@ const (
 	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
 	formSubmitStatusSuccess          = 0
 	formSubmitStatusFailure          = 1
+	maxFormSubmitErrorResponseBytes  = 100
 )
 
 var (
@@ -327,7 +328,7 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 		client = common.NewFormHTTPClient(s.FormURLVerifier)
 	}
 
-	if result := SubmitForm(ctx, client, f, sub); result.Valid {
+	if result := SubmitFormWithRetry(ctx, client, f, sub); result.Valid {
 		s.addFormSubmitRecord(ctx, f, result.ResultCode())
 		return nil
 	}
@@ -364,14 +365,7 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 }
 
-func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
-	var result *FormSubmitResult
-
-	method := strings.ToUpper(string(form.Method))
-	if len(method) == 0 {
-		method = http.MethodPost
-	}
-
+func SubmitFormWithRetry(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
 	b := &backoff.Backoff{
 		Min:    100 * time.Millisecond,
 		Max:    2 * time.Second,
@@ -380,11 +374,9 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 	}
 
 	attempts := int(form.RetryRequestCount) + 1
-	body := submission.Values.Encode()
+	result := &FormSubmitResult{}
 
 	for attempt := 0; attempt < attempts; attempt++ {
-		result = &FormSubmitResult{}
-
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
@@ -394,53 +386,88 @@ func SubmitForm(ctx context.Context, client *http.Client, form *dbgen.Form, subm
 			}
 		}
 
-		req, err := http.NewRequestWithContext(ctx, method, form.URL, bytes.NewBufferString(body))
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, "submitID", submission.ID, common.ErrAttr(err))
-			return result
-		}
-
-		req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
-		if len(submission.ID) > 0 {
-			req.Header.Set(common.HeaderFormSubmissionID, submission.ID)
-		}
-		if len(submission.UserAgent) > 0 {
-			req.Header.Set(common.HeaderUserAgent, submission.UserAgent)
-		} else {
-			req.Header.Set(common.HeaderUserAgent, "private-captcha/1.0")
-		}
-
-		if len(submission.Referer) > 0 {
-			req.Header.Set(common.HeaderReferer, submission.Referer)
-		}
-
-		if len(submission.ClientIP) > 0 {
-			req.Header.Set(common.HeaderClientIP, submission.ClientIP)
-		}
-
-		if len(submission.TraceID) > 0 {
-			req.Header.Set(common.HeaderTraceID, submission.TraceID)
-		}
-
-		result.Valid = true
-		resp, err := client.Do(req)
-		if err != nil {
-			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "submitID", submission.ID, "attempt", attempt+1, common.ErrAttr(err))
+		var err error
+		result, err = submitFormOnce(ctx, client, form, submission)
+		var rerr common.RetriableError
+		if err != nil && errors.As(err, &rerr) {
+			err = rerr.Unwrap()
+			slog.WarnContext(ctx, "Failed to submit form", "formID", form.ID, "submitID", submission.ID, "attempt", attempt+1, "status", result.StatusCode, common.ErrAttr(err))
 			continue
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
-		result.StatusCode = resp.StatusCode
-		_ = resp.Body.Close()
 
-		if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
-			result.Success = true
+		if err != nil || result.Success {
 			return result
 		}
-
-		slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, "attempt", attempt+1)
 	}
 
 	slog.DebugContext(ctx, "Submitted form", "formID", form.ID, "submitID", submission.ID, "status", result.StatusCode)
 
 	return result
+}
+
+func submitFormOnce(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) (*FormSubmitResult, error) {
+	result := &FormSubmitResult{}
+	method := strings.ToUpper(string(form.Method))
+	if len(method) == 0 {
+		method = http.MethodPost
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, form.URL, bytes.NewBufferString(submission.Values.Encode()))
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to create form submission request", "formID", form.ID, "submitID", submission.ID, common.ErrAttr(err))
+		return result, err
+	}
+
+	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
+	if len(submission.ID) > 0 {
+		req.Header.Set(common.HeaderFormSubmissionID, submission.ID)
+	}
+	if len(submission.UserAgent) > 0 {
+		req.Header.Set(common.HeaderUserAgent, submission.UserAgent)
+	} else {
+		req.Header.Set(common.HeaderUserAgent, "private-captcha/1.0")
+	}
+
+	if len(submission.Referer) > 0 {
+		req.Header.Set(common.HeaderReferer, submission.Referer)
+	}
+
+	if len(submission.ClientIP) > 0 {
+		req.Header.Set(common.HeaderClientIP, submission.ClientIP)
+	}
+
+	if len(submission.TraceID) > 0 {
+		req.Header.Set(common.HeaderTraceID, submission.TraceID)
+	}
+
+	result.Valid = true
+	resp, err := client.Do(req)
+	if err != nil {
+		return result, common.NewRetriableError(err)
+	}
+	defer resp.Body.Close()
+
+	result.StatusCode = resp.StatusCode
+	if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		result.Success = true
+		return result, nil
+	}
+
+	if (resp.StatusCode >= http.StatusInternalServerError) ||
+		(resp.StatusCode == http.StatusTooManyRequests) ||
+		(resp.StatusCode == http.StatusRequestTimeout) ||
+		(resp.StatusCode == http.StatusTooEarly) {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		return result, common.NewRetriableError(errFormSubmitFailed)
+	}
+
+	responseData, responseErr := io.ReadAll(io.LimitReader(resp.Body, maxFormSubmitErrorResponseBytes))
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if responseErr != nil {
+		slog.WarnContext(ctx, "Failed to read form submission error response", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, common.ErrAttr(responseErr))
+	}
+	slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, "response", string(responseData))
+
+	return result, errFormSubmitFailed
 }
