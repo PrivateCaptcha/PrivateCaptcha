@@ -357,12 +357,15 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 		Status:    status,
 	}
 
+	timer := time.NewTimer(formSubmitLogBackpressureTimeout)
+	defer timer.Stop()
+
 	select {
 	case s.FormSubmitLogChan <- record:
 		// nothing
 	case <-ctx.Done():
 		slog.WarnContext(ctx, "Context cancelled for adding form submit record", common.ErrAttr(ctx.Err()))
-	case <-time.After(formSubmitLogBackpressureTimeout):
+	case <-timer.C:
 		s.Metrics.ObserveEventDropped(common.FormLogEventType)
 	}
 }

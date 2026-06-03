@@ -638,7 +638,7 @@ func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*fo
 		if orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID); err == nil {
 			renderCtx.Orgs = orgsToUserOrgs(orgs, s.IDHasher)
 			for _, org := range orgs {
-				if (org.Organization.ID != form.OrgID.Int32) && (org.Level == dbgen.AccessLevelOwner) {
+				if form.OrgID.Valid && (org.Organization.ID != form.OrgID.Int32) && (org.Level == dbgen.AccessLevelOwner) {
 					renderCtx.CanMove = true
 					break
 				}

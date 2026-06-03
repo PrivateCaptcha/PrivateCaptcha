@@ -222,7 +222,7 @@ func TestPostNewOrgForm(t *testing.T) {
 		t.Fatalf("expected form method %q, got %q", dbgen.FormMethodPost, createdForm.Method)
 	}
 	if createdForm.RequestsPerMinute != 10 {
-		t.Fatalf("expected requests per minute 60, got %d", createdForm.RequestsPerMinute)
+		t.Fatalf("expected requests per minute 10, got %d", createdForm.RequestsPerMinute)
 	}
 	if createdForm.RetryRequestCount != 0 {
 		t.Fatalf("expected retry count 0, got %d", createdForm.RetryRequestCount)
