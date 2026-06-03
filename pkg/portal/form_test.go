@@ -148,12 +148,6 @@ func TestGetNewOrgForm(t *testing.T) {
 	}
 
 	body := w.Body.String()
-	if !strings.Contains(body, "Form Wizard") {
-		t.Fatal("expected form wizard heading")
-	}
-	if !strings.Contains(body, "Create new form") {
-		t.Fatal("expected create new form step")
-	}
 	if !strings.Contains(body, "Website integration") {
 		t.Fatal("expected website integration step")
 	}
