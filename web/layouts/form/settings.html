@@ -200,7 +200,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" {{ if not .Params.CanMove }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanMove }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }}" @click="moveOpen = true">Move</button>
+            <button type="button" {{ if not .Params.CanMove }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanMove }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }}" @click="moveOpen = true">Move</button>
         </div>
     </div>
     {{ end }}
@@ -211,7 +211,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
+            <button type="button" {{ if not .Params.CanEdit }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanEdit }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
         </div>
     </div>
 </div>

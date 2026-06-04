@@ -64,7 +64,6 @@ func TestSoftDeleteProperty(t *testing.T) {
 	}
 
 	prop, _, err := store.Impl().CreateNewProperty(ctx, db_tests.CreateNewPropertyParams(org.UserID.Int32, "example.com"), org)
-	//propName, org.ID, org.UserID.Int32, domain, level, growth)
 	if err != nil {
 		t.Fatalf("Failed to create property: %v", err)
 	}
@@ -242,7 +241,7 @@ func TestLockUnlock(t *testing.T) {
 	// this time it should succeed as we just released the lock
 	_, err = acquireLock(ctx, store, lockName, expiration)
 	if err != nil {
-		t.Fatal("Was able to acquire a lock again right away")
+		t.Fatal("Failed to acquire lock after release")
 	}
 }
 
@@ -561,7 +560,7 @@ func TestRetrieveSoftDeletedUser(t *testing.T) {
 		t.Errorf("Expected ErrSoftDeleted, got: %v", err)
 	}
 
-	// FindUserByEmail should also return ErrDisabled
+	// FindUserByEmail should also return ErrSoftDeleted
 	// Clear cache again
 	cache.Delete(ctx, db.UserCacheKey(user.ID))
 	_, err = store.Impl().FindUserByEmail(ctx, user.Email)

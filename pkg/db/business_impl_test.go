@@ -161,7 +161,7 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 			t.Fatal("expected form create args to be captured")
 		}
 		if querier.createdFormArg.RequestsPerMinute != 10 {
-			t.Fatalf("expected default requests per minute 60, got %d", querier.createdFormArg.RequestsPerMinute)
+			t.Fatalf("expected default requests per minute 10, got %d", querier.createdFormArg.RequestsPerMinute)
 		}
 	})
 
