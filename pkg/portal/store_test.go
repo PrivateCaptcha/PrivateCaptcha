@@ -179,13 +179,18 @@ func TestLockTwice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const iterations = 100
-	i := 0
+	if lock, err := acquireLock(ctx, store, lockName, time.Now().UTC().Add(lockDuration)); err == nil {
+		t.Fatalf("Was able to acquire a lock again right away. expires_at=%v", lock.ExpiresAt.Time)
+	}
 
-	for i = 0; i < iterations; i++ {
+	const iterations = 100
+	// PostgreSQL decides lock expiry with its own NOW(), so avoid asserting at the clock boundary.
+	const expirationBoundaryMargin = 200 * time.Millisecond
+	reacquireDeadline := initialExpiration.Add(-expirationBoundaryMargin)
+
+	for i := 0; i < iterations; i++ {
 		tnow := time.Now().UTC().Truncate(time.Millisecond)
-		if tnow.Equal(initialExpiration) || tnow.After(initialExpiration) {
-			// lock is actually not active anymore so it's not an error
+		if !tnow.Before(reacquireDeadline) {
 			break
 		}
 
@@ -196,8 +201,8 @@ func TestLockTwice(t *testing.T) {
 		time.Sleep(lockDuration / iterations)
 	}
 
-	if i < 75 {
-		t.Errorf("Lock was released too soon. i=%v", i)
+	if sleepDuration := time.Until(initialExpiration.Add(expirationBoundaryMargin)); sleepDuration > 0 {
+		time.Sleep(sleepDuration)
 	}
 
 	// now it should succeed after the lock TTL
