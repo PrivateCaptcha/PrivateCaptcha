@@ -214,7 +214,7 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 	case <-ctx.Done():
 		http.Error(w, http.StatusText(http.StatusRequestTimeout), http.StatusRequestTimeout)
 	case <-timer.C:
-		if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && form != nil {
+		if form, ok := getRequestedForm(ctx, s.BusinessDB); ok {
 			// at this stage it also means we have verified the captcha earlier (above)
 			// we limit retries on the hot path as by definition here we are already quite busy
 			form.RetryRequestCount = 0
@@ -228,6 +228,22 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
 		}
 	}
+}
+
+func getRequestedForm(ctx context.Context, store db.Implementor) (*dbgen.Form, bool) {
+	if form, ok := ctx.Value(common.FormContextKey).(*dbgen.Form); ok && (form != nil) {
+		return form, ok
+	}
+
+	// we try to fetch from cache again because when this method is called, we waited for `formQueueBackpressureTimeout`
+	// already and it's likely that form was backfilled in Auth middleware meanwhile
+	if formUUID, ok := ctx.Value(common.FormIDContextKey).(string); ok && len(formUUID) > 0 {
+		if form, _, err := store.Impl().GetCachedFormByExternalID(ctx, formUUID); (err == nil) && (form != nil) {
+			return form, true
+		}
+	}
+
+	return nil, false
 }
 
 func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) error {
