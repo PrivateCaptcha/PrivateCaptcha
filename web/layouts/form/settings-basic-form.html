@@ -27,7 +27,7 @@
                 {{- if .Params.URLError -}}
                 {{template "info-icon-red.html" .}}
                 {{- end -}}
-                <input type="url" name="{{ .Const.URL }}" x-model="formURL" placeholder="https://hooks.example.com/contact" maxlength="2048" value="{{ $.Params.Form.URL }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.URLError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
+                <input type="url" name="{{ .Const.URL }}" placeholder="https://hooks.example.com/contact" maxlength="1024" value="{{ $.Params.Form.URL }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-input-base {{ if .Params.CanEdit }}{{ if .Params.URLError }}pc-form-input-error{{ else }}pc-form-input-normal{{ end }}{{ else }}pc-form-input-disabled{{ end }}" required />
             </div>
             {{- if .Params.URLError -}}
             <p class="pc-form-error-text">{{ .Params.URLError }}</p>
@@ -80,7 +80,7 @@
         <div class="mt-2">
             <label for="{{ .Const.Method }}" class="pc-internal-form-label tooltip" data-tooltip="HTTP method used when forwarding verified submissions"> Method </label>
             <div class="mt-2">
-                <select name="{{ .Const.Method }}" x-model="formMethod" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
+                <select name="{{ .Const.Method }}" {{ if not .Params.CanEdit }}disabled{{ end }} class="w-full pc-internal-form-select {{ if not .Params.CanEdit }}pc-internal-form-select-disabled{{ end }}">
                     <option value="POST" {{ if eq $.Params.Form.Method "POST" }}selected="selected"{{end}}>POST</option>
                     <option value="PUT" {{ if eq $.Params.Form.Method "PUT" }}selected="selected"{{end}}>PUT</option>
                     <option value="PATCH" {{ if eq $.Params.Form.Method "PATCH" }}selected="selected"{{end}}>PATCH</option>

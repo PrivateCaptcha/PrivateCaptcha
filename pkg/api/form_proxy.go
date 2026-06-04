@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"log/slog"
 	"mime"
 	"net"
@@ -35,7 +34,6 @@ const (
 	formSubmitLogBackpressureTimeout = 400 * time.Millisecond
 	formSubmitStatusSuccess          = 0
 	formSubmitStatusFailure          = 1
-	maxFormSubmitErrorResponseBytes  = 100
 )
 
 var (
@@ -287,6 +285,13 @@ func (s *Server) submitFormBatch(ctx context.Context, batch []*FormSubmission) e
 			continue
 		}
 
+		if (s.Auth != nil) && (s.Auth.Limiter != nil) && (form.OrgOwnerID.Valid) {
+			if softRestriction, err := s.Auth.Limiter.EvaluateFormAccess(ctx, form.OrgOwnerID.Int32); (err == nil) && !softRestriction {
+				slog.WarnContext(ctx, "Skipping submission due to user access", "formID", form.ID, "userID", form.OrgOwnerID.Int32)
+				continue
+			}
+		}
+
 		select {
 		case <-ctx.Done():
 			slog.WarnContext(ctx, "Batch processing aborted due to context cancellation")
@@ -440,6 +445,8 @@ func submitFormOnce(ctx context.Context, client *http.Client, form *dbgen.Form, 
 		return result, err
 	}
 
+	req.Close = true
+
 	req.Header.Set(common.HeaderContentType, common.ContentTypeURLEncoded)
 	if len(submission.ID) > 0 {
 		req.Header.Set(common.HeaderFormSubmissionID, submission.ID)
@@ -471,7 +478,6 @@ func submitFormOnce(ctx context.Context, client *http.Client, form *dbgen.Form, 
 
 	result.StatusCode = resp.StatusCode
 	if (resp.StatusCode >= http.StatusOK) && (resp.StatusCode < http.StatusMultipleChoices) {
-		_, _ = io.Copy(io.Discard, resp.Body)
 		result.Success = true
 		return result, nil
 	}
@@ -480,16 +486,10 @@ func submitFormOnce(ctx context.Context, client *http.Client, form *dbgen.Form, 
 		(resp.StatusCode == http.StatusTooManyRequests) ||
 		(resp.StatusCode == http.StatusRequestTimeout) ||
 		(resp.StatusCode == http.StatusTooEarly) {
-		_, _ = io.Copy(io.Discard, resp.Body)
 		return result, common.NewRetriableError(errFormSubmitFailed)
 	}
 
-	responseData, responseErr := io.ReadAll(io.LimitReader(resp.Body, maxFormSubmitErrorResponseBytes))
-	_, _ = io.Copy(io.Discard, resp.Body)
-	if responseErr != nil {
-		slog.WarnContext(ctx, "Failed to read form submission error response", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, common.ErrAttr(responseErr))
-	}
-	slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode, "response", string(responseData))
+	slog.WarnContext(ctx, "Form submission endpoint returned non-success status", "formID", form.ID, "submitID", submission.ID, "status", resp.StatusCode)
 
 	return result, errFormSubmitFailed
 }

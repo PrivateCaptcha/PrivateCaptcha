@@ -31,6 +31,7 @@ const (
 	orgFormsCacheKeyStr      = "0"
 	maxPropertyNameLength    = 255
 	formPropertyNameSuffix   = " (form)"
+	MaxFormURLLength         = 1024
 )
 
 var (
@@ -1148,6 +1149,10 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 		return nil, nil, nil, ErrInvalidInput
 	}
 
+	if len(formParams.URL) > MaxFormURLLength {
+		return nil, nil, nil, ErrInvalidInput
+	}
+
 	if len(propertyParams.Name) == 0 {
 		propertyParams.Name = formParams.Name
 		if len(propertyParams.Name)+len(formPropertyNameSuffix) <= maxPropertyNameLength {
@@ -1164,9 +1169,7 @@ func (impl *BusinessStoreImpl) CreateNewForm(ctx context.Context, propertyParams
 	if formParams.Method == "" {
 		formParams.Method = dbgen.FormMethodPost
 	}
-	if formParams.RequestsPerMinute <= 0 {
-		formParams.RequestsPerMinute = 10
-	}
+	formParams.RequestsPerMinute = max(10, min(60, formParams.RequestsPerMinute))
 
 	formParams.CreatorID = property.CreatorID
 	formParams.OrgID = property.OrgID

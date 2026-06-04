@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS backend.forms(
     org_id INT REFERENCES backend.organizations(id) ON DELETE CASCADE,
     creator_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
     org_owner_id INT REFERENCES backend.users(id) ON DELETE CASCADE,
-    url TEXT NOT NULL,
+    url VARCHAR(1024) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     deleted_at TIMESTAMPTZ NULL DEFAULT NULL,

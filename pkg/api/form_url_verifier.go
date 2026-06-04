@@ -90,13 +90,17 @@ func NewFormURLVerifierEx(cache common.Cache[string, *bool], checker FormURLSafe
 }
 
 func (v *FormURLVerifierImpl) VerifyURL(ctx context.Context, rawURL string) error {
+	if size := len(rawURL); (size == 0) || (size > db.MaxFormURLLength) {
+		return fmt.Errorf("%w: length problem", errUnsafeFormURL)
+	}
+
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return fmt.Errorf("%w: malformed URL", errUnsafeFormURL)
 	}
 
 	scheme := strings.ToLower(parsedURL.Scheme)
-	if (scheme != "http") && (scheme != "https") {
+	if scheme != "https" {
 		return fmt.Errorf("%w: unsupported scheme: %v", errUnsafeFormURL, scheme)
 	}
 
@@ -107,6 +111,9 @@ func (v *FormURLVerifierImpl) VerifyURL(ctx context.Context, rawURL string) erro
 	host := normalizeFormURLHostname(parsedURL.Hostname())
 	if len(host) == 0 {
 		return fmt.Errorf("%w: missing hostname", errUnsafeFormURL)
+	}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return fmt.Errorf("%w: IP address hostname is not allowed", errUnsafeFormURL)
 	}
 
 	if verified, err := v.Cache.Get(ctx, host); (err == nil) && (verified != nil) {
@@ -122,15 +129,6 @@ func (v *FormURLVerifierImpl) VerifyURL(ctx context.Context, rawURL string) erro
 	if !v.SafetyChecker.IsSafeFormHostname(host) {
 		_ = v.Cache.Set(ctx, host, safe)
 		return fmt.Errorf("%w: blocked hostname", errUnsafeFormURL)
-	}
-
-	if ip, err := netip.ParseAddr(host); err == nil {
-		if !v.SafetyChecker.IsSafeFormIP(ip) {
-			_ = v.Cache.Set(ctx, host, safe)
-			return fmt.Errorf("%w: blocked IP address", errUnsafeFormURL)
-		}
-
-		return nil
 	}
 
 	resolver := v.Resolver
@@ -164,6 +162,9 @@ func (v *FormURLVerifierImpl) VerifyResolvedAddress(ctx context.Context, host st
 	host = normalizeFormURLHostname(host)
 	if len(host) == 0 {
 		return fmt.Errorf("%w: missing hostname", errUnsafeFormURL)
+	}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return fmt.Errorf("%w: IP address hostname is not allowed", errUnsafeFormURL)
 	}
 	if !v.SafetyChecker.IsSafeFormHostname(host) {
 		return fmt.Errorf("%w: blocked hostname", errUnsafeFormURL)
