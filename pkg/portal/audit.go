@@ -225,6 +225,9 @@ func (ul *UserAuditLog) initFromForm(oldValue, newValue *db.AuditLogForm) error 
 		} else if oldValue.RequestsPerMinute != newValue.RequestsPerMinute {
 			ul.Property = "Requests per minute"
 			ul.Value = strconv.Itoa(int(newValue.RequestsPerMinute))
+		} else if oldValue.Method != newValue.Method {
+			ul.Property = "Method"
+			ul.Value = newValue.Method
 		} else if oldValue.Active != newValue.Active {
 			ul.Property = "Active"
 			ul.Value = strconv.FormatBool(newValue.Active)

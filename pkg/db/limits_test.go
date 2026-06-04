@@ -23,7 +23,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 	}
 
 	t.Run("BelowLimit", func(t *testing.T) {
-		querier := &retrieveOrgFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true) - 1)}
+		querier := &retrieveUserFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true) - 1)}
 		store := NewBusinessWithQuerier(nil, querier, NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}))
 		limits := NewSubscriptionLimits(common.StageTest, store, planService)
 
@@ -32,7 +32,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		if !ok {
-			t.Fatalf("expected below-limit org to be allowed, extra=%d", extra)
+			t.Fatalf("expected below-limit account to be allowed, extra=%d", extra)
 		}
 		if extra != -1 {
 			t.Fatalf("expected extra -1 one below limit, got %d", extra)
@@ -40,7 +40,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 	})
 
 	t.Run("AtLimit", func(t *testing.T) {
-		querier := &retrieveOrgFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true))}
+		querier := &retrieveUserFormsQuerierStub{QuerierStub: &QuerierStub{}, count: int64(plan.FormsLimit(true))}
 		store := NewBusinessWithQuerier(nil, querier, NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}))
 		limits := NewSubscriptionLimits(common.StageTest, store, planService)
 
@@ -49,7 +49,7 @@ func TestSubscriptionLimitsCheckFormsLimit(t *testing.T) {
 			t.Fatalf("expected no error, got %v", err)
 		}
 		if ok {
-			t.Fatalf("expected at-limit org to be rejected")
+			t.Fatalf("expected at-limit account to be rejected")
 		}
 		if extra != 0 {
 			t.Fatalf("expected extra 0 at exact limit, got %d", extra)

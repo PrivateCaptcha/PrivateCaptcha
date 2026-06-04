@@ -123,7 +123,7 @@ func (sl *SubscriptionLimitsImpl) CheckPropertiesLimit(ctx context.Context, user
 	return ok, int(count) - plan.PropertiesLimit(isTrialing), nil
 }
 
-func (sl *SubscriptionLimitsImpl) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
+func (sl *SubscriptionLimitsImpl) CheckFormsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
 	if (subscr == nil) || !sl.planService.IsSubscriptionActive(subscr.Status) {
 		return false, 0, ErrNoActiveSubscription
 	}
@@ -135,9 +135,9 @@ func (sl *SubscriptionLimitsImpl) CheckFormsLimit(ctx context.Context, orgID int
 		return false, 0, err
 	}
 
-	count, err := sl.store.Impl().RetrieveOrgFormsCount(ctx, orgID)
+	count, err := sl.store.Impl().RetrieveUserFormsCount(ctx, userID)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to retrieve forms count", "orgID", orgID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve forms count", "userID", userID, common.ErrAttr(err))
 		return false, 0, err
 	}
 

@@ -217,8 +217,9 @@ func (s *Server) formProxyHandler(w http.ResponseWriter, r *http.Request) {
 		if form, ok := getRequestedForm(ctx, s.BusinessDB); ok {
 			// at this stage it also means we have verified the captcha earlier (above)
 			// we limit retries on the hot path as by definition here we are already quite busy
-			form.RetryRequestCount = 0
-			if err := s.processFormSubmission(ctx, form, submission); err == nil {
+			formCopy := *form
+			formCopy.RetryRequestCount = 0
+			if err := s.processFormSubmission(ctx, &formCopy, submission); err == nil {
 				w.WriteHeader(http.StatusAccepted)
 			} else {
 				http.Error(w, http.StatusText(http.StatusNotAcceptable), http.StatusNotAcceptable)

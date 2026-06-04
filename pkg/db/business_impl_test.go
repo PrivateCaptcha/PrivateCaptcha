@@ -38,7 +38,7 @@ type createFormQuerierStub struct {
 	calls          []string
 }
 
-type retrieveOrgFormsQuerierStub struct {
+type retrieveUserFormsQuerierStub struct {
 	*QuerierStub
 	forms          []*dbgen.Form
 	count          int64
@@ -76,13 +76,13 @@ func (s *createFormQuerierStub) CreateForm(ctx context.Context, arg *dbgen.Creat
 	return s.form, s.Error
 }
 
-func (s *retrieveOrgFormsQuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
+func (s *retrieveUserFormsQuerierStub) GetOrgForms(ctx context.Context, arg *dbgen.GetOrgFormsParams) ([]*dbgen.Form, error) {
 	s.getOrgFormsArg = arg
 	s.formsCalls++
 	return s.forms, s.Error
 }
 
-func (s *retrieveOrgFormsQuerierStub) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
+func (s *retrieveUserFormsQuerierStub) GetUserFormsCount(ctx context.Context, orgID pgtype.Int4) (int64, error) {
 	s.countCalls++
 	return s.count, s.Error
 }
@@ -1016,7 +1016,7 @@ func TestBusinessStoreImplRetrieveOrgForms(t *testing.T) {
 	})
 
 	t.Run("FirstPageReturnsLimitedResultsAndHasMore", func(t *testing.T) {
-		querier := &retrieveOrgFormsQuerierStub{
+		querier := &retrieveUserFormsQuerierStub{
 			QuerierStub: &QuerierStub{},
 			forms: []*dbgen.Form{
 				{ID: 1, URL: "https://one.example/submit", Enabled: true},
@@ -2605,7 +2605,7 @@ func TestBusinessStoreImplRetrieveOrgFormsCount(t *testing.T) {
 	})
 
 	t.Run("CachesCount", func(t *testing.T) {
-		querier := &retrieveOrgFormsQuerierStub{
+		querier := &retrieveUserFormsQuerierStub{
 			QuerierStub: &QuerierStub{},
 			count:       7,
 		}
@@ -2615,7 +2615,7 @@ func TestBusinessStoreImplRetrieveOrgFormsCount(t *testing.T) {
 			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
 		}
 
-		count, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		count, err := store.RetrieveUserFormsCount(context.Background(), 1)
 		if err != nil {
 			t.Fatalf("expected no error, got %v", err)
 		}
@@ -2625,7 +2625,7 @@ func TestBusinessStoreImplRetrieveOrgFormsCount(t *testing.T) {
 
 		querier.count = 13
 
-		cachedCount, err := store.RetrieveOrgFormsCount(context.Background(), 1)
+		cachedCount, err := store.RetrieveUserFormsCount(context.Background(), 1)
 		if err != nil {
 			t.Fatalf("expected cached count without error, got %v", err)
 		}

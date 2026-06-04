@@ -826,14 +826,16 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 	}
 
 	methodValue := strings.TrimSpace(r.FormValue(common.ParamMethod))
+	if methodValue == "" {
+		methodValue = formMethodToHTTPMethod(form.Method)
+	}
+	renderCtx.Form.Method = strings.ToUpper(methodValue)
 	method, err := parseFormMethod(methodValue)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse test form method", "value", methodValue, common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Method is not valid."
 		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
 	}
-
-	renderCtx.Form.Method = strings.ToUpper(methodValue)
 
 	values, err := url.ParseQuery(body)
 	if err != nil {
