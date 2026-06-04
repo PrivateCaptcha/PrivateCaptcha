@@ -224,7 +224,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, renderCtx.URL); err != nil {
-		slog.WarnContext(ctx, "Failed to verify form URL", "url", renderCtx.URL, common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to verify form URL", "url", common.SafeURL(renderCtx.URL), common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
 		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
 	}
@@ -712,7 +712,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	renderCtx.Form.URL = urlValue
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
-		slog.WarnContext(ctx, "Failed to verify form URL", "url", urlValue, common.ErrAttr(err))
+		slog.WarnContext(ctx, "Failed to verify form URL", "url", common.SafeURL(urlValue), common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
 		renderCtx.Form.URL = urlValue
 		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
@@ -814,26 +814,9 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 
 	body := r.FormValue(common.ParamBody)
 	renderCtx.TestBody = body
-	urlValue := strings.TrimSpace(r.FormValue(common.ParamURL))
-	if urlValue == "" {
-		urlValue = form.URL
-	}
-	renderCtx.Form.URL = urlValue
-	if err := s.FormURLVerifier.VerifyURL(ctx, urlValue); err != nil {
-		slog.WarnContext(ctx, "Failed to verify test form URL", "url", urlValue, common.ErrAttr(err))
+	if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
+		slog.WarnContext(ctx, "Failed to verify test form URL", "url", common.SafeURL(form.URL), common.ErrAttr(err))
 		renderCtx.ErrorMessage = "URL is not valid."
-		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
-	}
-
-	methodValue := strings.TrimSpace(r.FormValue(common.ParamMethod))
-	if methodValue == "" {
-		methodValue = formMethodToHTTPMethod(form.Method)
-	}
-	renderCtx.Form.Method = strings.ToUpper(methodValue)
-	method, err := parseFormMethod(methodValue)
-	if err != nil {
-		slog.WarnContext(ctx, "Failed to parse test form method", "value", methodValue, common.ErrAttr(err))
-		renderCtx.ErrorMessage = "Method is not valid."
 		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
 	}
 
@@ -853,11 +836,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		Time:           time.Now().UTC(),
 	}
 
-	testForm := *form
-	testForm.URL = urlValue
-	testForm.Method = method
-
-	result := s.submitFormDirectly(ctx, &testForm, submission)
+	result := s.submitFormDirectly(ctx, form, submission)
 	if result.Success {
 		renderCtx.SuccessMessage = fmt.Sprintf("Test succeeded. (HTTP %d)", result.StatusCode)
 	} else if result.StatusCode > 0 {

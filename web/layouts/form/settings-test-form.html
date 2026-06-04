@@ -7,19 +7,17 @@
                     <div>
                         <label for="test-url" class="pc-internal-form-label"> URL </label>
                         <div class="mt-2">
-                            <input type="hidden" name="{{ .Const.URL }}" x-bind:value="formURL" />
-                            <input id="test-url" type="url" x-bind:value="formURL" disabled class="w-full pc-internal-form-input-base pc-form-input-disabled" />
+                            <input id="test-url" type="url" value="{{ $.Params.Form.URL }}" disabled class="w-full pc-internal-form-input-base pc-form-input-disabled" />
                         </div>
                     </div>
                     <div>
                         <label for="test-method" class="pc-internal-form-label"> Method </label>
                         <div class="mt-2">
-                            <input type="hidden" name="{{ .Const.Method }}" x-bind:value="formMethod" />
-                            <select id="test-method" x-model="formMethod" disabled class="w-full pc-internal-form-select pc-internal-form-select-disabled">
-                                <option value="POST">POST</option>
-                                <option value="PUT">PUT</option>
-                                <option value="PATCH">PATCH</option>
-                                <option value="DELETE">DELETE</option>
+                            <select id="test-method" disabled class="w-full pc-internal-form-select pc-internal-form-select-disabled">
+                                <option value="POST" {{ if eq $.Params.Form.Method "POST" }}selected="selected"{{end}}>POST</option>
+                                <option value="PUT" {{ if eq $.Params.Form.Method "PUT" }}selected="selected"{{end}}>PUT</option>
+                                <option value="PATCH" {{ if eq $.Params.Form.Method "PATCH" }}selected="selected"{{end}}>PATCH</option>
+                                <option value="DELETE" {{ if eq $.Params.Form.Method "DELETE" }}selected="selected"{{end}}>DELETE</option>
                             </select>
                         </div>
                     </div>

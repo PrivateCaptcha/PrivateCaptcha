@@ -509,11 +509,17 @@ func TestPostTestFormReturnsResult(t *testing.T) {
 	if len(renderCtx.SuccessMessage) == 0 {
 		t.Fatal("Expected result to contain success message")
 	}
-	if receivedMethod != http.MethodDelete {
-		t.Fatalf("expected downstream method %q, got %q", http.MethodDelete, receivedMethod)
+	if receivedMethod != http.MethodPost {
+		t.Fatalf("expected downstream method %q, got %q", http.MethodPost, receivedMethod)
 	}
-	if receivedPath != "/override" {
-		t.Fatalf("expected downstream path %q, got %q", "/override", receivedPath)
+	if receivedPath != "/" {
+		t.Fatalf("expected downstream path %q, got %q", "/", receivedPath)
+	}
+	if renderCtx.Form.URL != downstream.URL {
+		t.Fatalf("expected rendered test URL %q, got %q", downstream.URL, renderCtx.Form.URL)
+	}
+	if renderCtx.Form.Method != http.MethodPost {
+		t.Fatalf("expected rendered test method %q, got %q", http.MethodPost, renderCtx.Form.Method)
 	}
 }
 
@@ -578,7 +584,7 @@ func TestPostTestFormReturnsFailureResult(t *testing.T) {
 	}
 }
 
-func TestPostTestFormRejectsInvalidMethod(t *testing.T) {
+func TestPostTestFormIgnoresPostedMethodOverride(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
@@ -596,9 +602,9 @@ func TestPostTestFormRejectsInvalidMethod(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	called := 0
+	receivedMethod := ""
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		called++
+		receivedMethod = r.Method
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer downstream.Close()
@@ -636,11 +642,11 @@ func TestPostTestFormRejectsInvalidMethod(t *testing.T) {
 	if !ok {
 		t.Fatalf("Expected Model to be *formSettingsRenderContext, got %T", viewModel.Model)
 	}
-	if len(renderCtx.ErrorMessage) == 0 {
-		t.Fatal("Expected invalid method error message")
+	if len(renderCtx.SuccessMessage) == 0 {
+		t.Fatal("Expected success message")
 	}
-	if called != 0 {
-		t.Fatalf("expected downstream server not to be called, got %d requests", called)
+	if receivedMethod != http.MethodPost {
+		t.Fatalf("expected downstream method %q, got %q", http.MethodPost, receivedMethod)
 	}
 }
 

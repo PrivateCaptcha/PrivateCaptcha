@@ -87,9 +87,7 @@ func TestPublicFormURLVerifierAllowsPublicURLs(t *testing.T) {
 
 	for _, rawURL := range []string{
 		"https://example.com/form",
-		"http://Example.COM./form",
-		"https://93.184.216.34/form",
-		"https://[2606:2800:220:1:248:1893:25c8:1946]/form",
+		"https://Example.COM./form",
 	} {
 		t.Run(rawURL, func(t *testing.T) {
 			if err := verifier.VerifyURL(ctx, rawURL); err != nil {
@@ -136,6 +134,10 @@ func TestPublicFormURLVerifierBlocksUnsafeURLs(t *testing.T) {
 	verifier := newTestFormURLVerifierEx(t, &FormURLSafetyCheckerImpl{}, resolver)
 
 	for _, rawURL := range []string{
+		"https://127.0.0.1/form",
+		"https://[::1]/form",
+		"https://93.184.216.34/form",
+		"https://[2606:2800:220:1:248:1893:25c8:1946]/form",
 		"http://localhost/form",
 		"http://app.localhost/form",
 		"http://printer.local/form",

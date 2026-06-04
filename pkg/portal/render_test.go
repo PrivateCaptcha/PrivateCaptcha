@@ -325,6 +325,21 @@ func TestRenderHTML(t *testing.T) {
 			model:    &formWizardRenderContext{CurrentOrg: stubOrg("123"), CsrfRenderContext: stubToken(), NameError: "Name error"},
 		},
 		{
+			path:     []string{common.OrgEndpoint, "123", common.FormEndpoint, "456", common.TestEndpoint},
+			template: formTestTemplate,
+			model: &formSettingsRenderContext{
+				formDashboardRenderContext: formDashboardRenderContext{
+					CsrfRenderContext: stubToken(),
+					Form:              stubForm("Contact", "123"),
+					Org:               stubOrg("123"),
+					CanEdit:           true,
+				},
+				TestBody: "email=test@example.com",
+			},
+			selector: "input[type=\"hidden\"][name=\"url\"], input[type=\"hidden\"][name=\"method\"]",
+			matches:  []string{},
+		},
+		{
 			path:     []string{common.OrgEndpoint, "123", common.PropertyEndpoint, "456"},
 			template: propertyDashboardTemplate,
 			model: &propertyDashboardRenderContext{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,21 @@ type submitFormRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f submitFormRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 	return f(r)
+}
+
+type trackingReadCloser struct {
+	reads  int
+	closed bool
+}
+
+func (r *trackingReadCloser) Read(p []byte) (int, error) {
+	r.reads++
+	return 0, io.EOF
+}
+
+func (r *trackingReadCloser) Close() error {
+	r.closed = true
+	return nil
 }
 
 func (v *stubSubmitFormURLVerifier) VerifyURL(ctx context.Context, rawURL string) error {
@@ -439,6 +455,60 @@ func TestSubmitFormWithRetryDoesNotRetryBadRequest(t *testing.T) {
 	}
 	if attempts != 1 {
 		t.Fatalf("expected 1 attempt, got %d", attempts)
+	}
+}
+
+func TestSubmitFormOnceDoesNotReadSuccessfulResponseBody(t *testing.T) {
+	body := &trackingReadCloser{}
+	client := &http.Client{Transport: submitFormRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       body,
+			Header:     make(http.Header),
+		}, nil
+	})}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	submission := &FormSubmission{ID: "sub-1", FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result, err := submitFormOnce(context.Background(), client, form, submission)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if result == nil || !result.Success {
+		t.Fatal("expected success result")
+	}
+	if body.reads != 0 {
+		t.Fatalf("expected response body not to be read, got %d reads", body.reads)
+	}
+	if !body.closed {
+		t.Fatal("expected response body to be closed")
+	}
+}
+
+func TestSubmitFormOnceDoesNotReadBadRequestBody(t *testing.T) {
+	body := &trackingReadCloser{}
+	client := &http.Client{Transport: submitFormRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       body,
+			Header:     make(http.Header),
+		}, nil
+	})}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: "https://example.com/submit", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true}
+	submission := &FormSubmission{ID: "sub-1", FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result, err := submitFormOnce(context.Background(), client, form, submission)
+	if !errors.Is(err, errFormSubmitFailed) {
+		t.Fatalf("expected form submit failure, got %v", err)
+	}
+	if result == nil || result.Success {
+		t.Fatal("expected failure result")
+	}
+	if body.reads != 0 {
+		t.Fatalf("expected response body not to be read, got %d reads", body.reads)
+	}
+	if !body.closed {
+		t.Fatal("expected response body to be closed")
 	}
 }
 
