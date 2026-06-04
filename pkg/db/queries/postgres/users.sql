@@ -2,7 +2,7 @@
 SELECT * FROM backend.users WHERE id = $1;
 
 -- name: GetUserByEmail :one
-SELECT * FROM backend.users WHERE LOWER(email) = LOWER($1) AND deleted_at IS NULL;
+SELECT * FROM backend.users WHERE LOWER(email) = LOWER($1);
 
 -- name: CreateUser :one
 INSERT INTO backend.users (name, email, subscription_id) VALUES ($1, $2, $3) RETURNING *;

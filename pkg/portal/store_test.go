@@ -528,6 +528,43 @@ func TestRetrieveDisabledUser(t *testing.T) {
 	}
 }
 
+func TestRetrieveSoftDeletedUser(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create account: %v", err)
+	}
+
+	// Soft-delete the user
+	if _, err := store.Impl().SoftDeleteUser(ctx, user); err != nil {
+		t.Fatalf("Failed to soft-delete user: %v", err)
+	}
+
+	// Clear user cache to ensure soft-deleted status is fetched from DB
+	if deleted := cache.Delete(ctx, db.UserCacheKey(user.ID)); !deleted {
+		t.Log("User cache entry not found")
+	}
+
+	// RetrieveUser should return ErrSoftDeleted
+	_, err = store.Impl().RetrieveUser(ctx, user.ID)
+	if err != db.ErrSoftDeleted {
+		t.Errorf("Expected ErrSoftDeleted, got: %v", err)
+	}
+
+	// FindUserByEmail should also return ErrDisabled
+	// Clear cache again
+	cache.Delete(ctx, db.UserCacheKey(user.ID))
+	_, err = store.Impl().FindUserByEmail(ctx, user.Email)
+	if err != db.ErrSoftDeleted {
+		t.Errorf("Expected ErrSoftDeleted from FindUserByEmail, got: %v", err)
+	}
+}
+
 func TestRetrievePropertiesAll(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

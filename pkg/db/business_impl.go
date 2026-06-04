@@ -812,6 +812,11 @@ func (impl *BusinessStoreImpl) FindUserByEmail(ctx context.Context, email string
 			slog.WarnContext(ctx, "User is disabled", "userID", user.ID, "email", email)
 			return user, ErrDisabled
 		}
+
+		if user.DeletedAt.Valid {
+			slog.WarnContext(ctx, "User is soft-deleted", "userID", user.ID, "deletedAt", user.DeletedAt.Time)
+			return user, ErrSoftDeleted
+		}
 	}
 
 	return user, nil
@@ -2747,6 +2752,9 @@ func (impl *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbg
 			slog.ErrorContext(ctx, "Cannot update existing user with same email", "existingUserID", existingUser.ID,
 				"expectedUserID", expectedUserID, "subscribed", existingUser.SubscriptionID.Valid, "email", email)
 
+			return nil, nil, nil, ErrDuplicateAccount
+		} else if errors.Is(err, ErrDisabled) || errors.Is(err, ErrSoftDeleted) {
+			slog.WarnContext(ctx, "Email belongs to an unavailable account", "email", email, common.ErrAttr(err))
 			return nil, nil, nil, ErrDuplicateAccount
 		}
 	}

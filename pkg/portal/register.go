@@ -26,6 +26,7 @@ const (
 	registerContentsTemplate    = "login/register-contents.html"
 	userNameErrorMessage        = "Name contains invalid characters."
 	emailAlreadyRegisteredError = "Such email is already registered. Login instead?"
+	accountUnavailableError     = "Such email already belongs to an inactive account."
 	accountVerifyTemplate       = "account-verify/verification.html"
 )
 
@@ -169,6 +170,12 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.Email = ""
 		data.EmailError = emailAlreadyRegisteredError
+		s.render(w, r, registerContentsTemplate, data)
+		return
+	} else if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) {
+		slog.WarnContext(ctx, "User is already registered but unavailable", "email", email, common.ErrAttr(err))
+		data.Email = ""
+		data.EmailError = accountUnavailableError
 		s.render(w, r, registerContentsTemplate, data)
 		return
 	}

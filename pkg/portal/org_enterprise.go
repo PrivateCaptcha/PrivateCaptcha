@@ -4,6 +4,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -239,8 +240,8 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 			// Invite by email
 			return s.inviteEmailToOrg(ctx, user, org, inviteEmail, renderCtx)
 		}
-		if err == db.ErrDisabled {
-			slog.WarnContext(ctx, "Cannot invite disabled user to org", "email", inviteEmail)
+		if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) {
+			slog.WarnContext(ctx, "Cannot invite unavailable user to org", "email", inviteEmail, common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Cannot invite this user to the organization."
 			return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
 		}
