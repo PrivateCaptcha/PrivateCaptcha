@@ -63,11 +63,15 @@
 
             <form
                 id="general-form"
+                x-init="window.portalUnsavedChanges.registerForm($el)"
                 hx-put='{{ partsURL .Const.SettingsEndpoint .Const.TabEndpoint .Const.GeneralEndpoint }}'
                 hx-target="this"
                 hx-swap="innerHTML"
                 hx-indicator="#general-form-spinner"
                 hx-disabled-elt="input, button"
+                data-unsaved-changes-key="settings-general"
+                data-unsaved-changes-scope="settings"
+                data-unsaved-changes-initial="{{ if or .Params.ErrorMessage .Params.NameError .Params.EmailError .Params.TwoFactorError }}dirty{{ else }}clean{{ end }}"
                 class="md:col-span-2"
                 >
                     {{template "form.html" .}}

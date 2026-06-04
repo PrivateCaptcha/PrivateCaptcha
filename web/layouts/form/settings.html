@@ -2,6 +2,7 @@
     <div class="sm:hidden">
         <label for="tabs" class="sr-only">Select a tab</label>
         <select id="tabs" name="tabs" class="block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-base focus:border-pclime-500 focus:outline-none focus:ring-pclime-500 sm:text-sm"
+            data-unsaved-changes-scope="form-settings"
             hx-target="#form-tabs"
             hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID $.Const.TabEndpoint }}"
             hx-on::config-request="event.detail.path += '/'+this.value"
@@ -14,7 +15,7 @@
     </div>
     <div class="hidden sm:block">
         <div class="border-b border-gray-200">
-            <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+            <nav class="-mb-px flex space-x-8" aria-label="Tabs" data-unsaved-changes-scope="form-settings">
                 <a href="#"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID $.Const.TabEndpoint $.Const.ReportsEndpoint }}"
                     hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.Form.OrgID $.Const.FormEndpoint $.Params.Form.ID }}?{{ $.Const.Tab }}={{$.Const.ReportsEndpoint}}"
@@ -167,10 +168,14 @@
             </p>
         </div>
         <form
+            x-init="window.portalUnsavedChanges.registerForm($el)"
             hx-put='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.FormEndpoint .Params.Form.ID .Const.EditEndpoint }}'
             hx-target="#form-tabs"
             hx-swap="innerHTML"
             hx-disabled-elt="input, button"
+            data-unsaved-changes-key="form-settings"
+            data-unsaved-changes-scope="form-settings"
+            data-unsaved-changes-initial="{{ if or .Params.ErrorMessage .Params.NameError .Params.URLError }}dirty{{ else }}clean{{ end }}"
             class="md:col-span-2 sm:max-w-lg">
             {{template "settings-basic-form.html" .}}
         </form>

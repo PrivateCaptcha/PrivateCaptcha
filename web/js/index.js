@@ -124,3 +124,190 @@ function loadScript(url, callback) {
     document.head.appendChild(script);
 }
 
+const portalUnsavedChanges = {
+    initialized: false,
+    forms: new Map(),
+    states: new Map(),
+
+    init() {
+        if (this.initialized) {
+            return;
+        }
+
+        this.initialized = true;
+
+        window.addEventListener('beforeunload', (event) => {
+            if (!this.hasDirtyForms()) {
+                return;
+            }
+
+            event.preventDefault();
+            event.returnValue = true;
+        });
+
+        document.addEventListener('htmx:beforeRequest', (event) => {
+            const trigger = event.detail && event.detail.elt;
+            if (!(trigger instanceof Element)) {
+                return;
+            }
+
+            const scoped = trigger.closest('[data-unsaved-changes-scope]');
+            if (!scoped) {
+                return;
+            }
+
+            const scope = scoped.dataset.unsavedChangesScope;
+            if (!scope || !this.isScopeDirty(scope)) {
+                return;
+            }
+
+            const form = trigger.closest('form[data-unsaved-changes-key]');
+            if (form && (form.dataset.unsavedChangesScope === scope)) {
+                return;
+            }
+
+            if (!window.confirm('You have unsaved changes. Leave without saving?')) {
+                event.preventDefault();
+                return;
+            }
+
+            this.clearScope(scope);
+        });
+    },
+
+    registerForm(form) {
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+
+        this.init();
+        this.pruneForms();
+
+        const key = form.dataset.unsavedChangesKey;
+        const scope = form.dataset.unsavedChangesScope;
+        if (!key || !scope) {
+            return;
+        }
+
+        const currentSnapshot = this.snapshotForm(form);
+        const initialState = form.dataset.unsavedChangesInitial || 'clean';
+        const previous = this.states.get(key);
+
+        let baseline = currentSnapshot;
+        let dirty = false;
+        if (initialState === 'dirty') {
+            if (previous) {
+                baseline = previous.baseline;
+                dirty = currentSnapshot !== baseline;
+            } else {
+                dirty = true;
+            }
+        }
+
+        this.states.set(key, { baseline, dirty, scope });
+        this.forms.set(form, key);
+
+        const syncFormState = () => {
+            const state = this.states.get(key);
+            if (!state || !document.body.contains(form)) {
+                return;
+            }
+
+            state.dirty = this.snapshotForm(form) !== state.baseline;
+        };
+
+        form.addEventListener('input', syncFormState);
+        form.addEventListener('change', syncFormState);
+    },
+
+    snapshotForm(form) {
+        const values = [];
+
+        for (const element of form.elements) {
+            if (!(element instanceof HTMLElement) || element.disabled || !element.name) {
+                continue;
+            }
+
+            if (element instanceof HTMLInputElement) {
+                if ((element.type === 'checkbox') || (element.type === 'radio')) {
+                    values.push(`${element.name}:${element.checked}`);
+                } else {
+                    values.push(`${element.name}:${element.value}`);
+                }
+                continue;
+            }
+
+            if ((element instanceof HTMLTextAreaElement) || (element instanceof HTMLSelectElement)) {
+                values.push(`${element.name}:${element.value}`);
+            }
+        }
+
+        return values.join('|');
+    },
+
+    pruneForms() {
+        for (const [form, key] of this.forms.entries()) {
+            if (!document.body.contains(form)) {
+                this.forms.delete(form);
+
+                if (!this.hasFormForKey(key)) {
+                    const state = this.states.get(key);
+                    if (state && !state.dirty) {
+                        this.states.delete(key);
+                    }
+                }
+            }
+        }
+    },
+
+    hasFormForKey(key) {
+        for (const registeredKey of this.forms.values()) {
+            if (registeredKey === key) {
+                return true;
+            }
+        }
+
+        return false;
+    },
+
+    hasDirtyForms() {
+        this.pruneForms();
+
+        for (const state of this.states.values()) {
+            if (state.dirty) {
+                return true;
+            }
+        }
+
+        return false;
+    },
+
+    isScopeDirty(scope) {
+        this.pruneForms();
+
+        for (const state of this.states.values()) {
+            if ((state.scope === scope) && state.dirty) {
+                return true;
+            }
+        }
+
+        return false;
+    },
+
+    clearScope(scope) {
+        for (const [key, state] of this.states.entries()) {
+            if (state.scope === scope) {
+                this.states.delete(key);
+            }
+        }
+
+        for (const [form, key] of this.forms.entries()) {
+            const state = this.states.get(key);
+            if (!state || (state.scope === scope)) {
+                this.forms.delete(form);
+            }
+        }
+    },
+};
+
+window.portalUnsavedChanges = portalUnsavedChanges;
