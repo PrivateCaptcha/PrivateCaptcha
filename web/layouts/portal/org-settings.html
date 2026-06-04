@@ -27,17 +27,20 @@
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.DashboardEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.DashboardEndpoint}}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Properties</a>
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.FormsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.FormsEndpoint}}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Forms</a>
                 {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.MembersEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.MembersEndpoint}}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Members</a>
                 {{ end }}
                 <a href="#" class="border-pclime-500 text-pclime-600 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium" aria-current="page">Settings</a>
@@ -45,12 +48,14 @@
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.RulesEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Rules</a>
                 {{ if eq .Params.CurrentOrg.Level .Const.OrgLevelOwner }}
                 <a href="#"
                     hx-target="#org-tabs"
                     hx-swap="innerHTML"
                     hx-get="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.TabEndpoint $.Const.EventsEndpoint }}"
+                    hx-push-url="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.EventsEndpoint}}"
                     class="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium">Audit logs</a>
                 {{ end }}
             </nav>
