@@ -284,7 +284,7 @@ func webhookPrefixFromURL(rawURL string) string {
 	}
 
 	if len(segment) > webhookPrefixPathLimit {
-		segment = segment[:webhookPrefixPathLimit]
+		segment = segment[:webhookPrefixPathLimit] + "..."
 	}
 
 	if segment == "" {

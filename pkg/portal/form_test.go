@@ -30,7 +30,7 @@ func TestWebhookPrefixFromURL(t *testing.T) {
 		want string
 	}{
 		{name: "FirstPathSegment", url: "https://hooks.example.com/submit/form", want: "hooks.example.com/submit"},
-		{name: "LongSegmentTrimmed", url: "https://hooks.example.com/abcdefghijklmnop/rest", want: "hooks.example.com/abcdefghijkl"},
+		{name: "LongSegmentTrimmed", url: "https://hooks.example.com/abcdefghijklmnop/rest", want: "hooks.example.com/abcdefghijkl..."},
 		{name: "NoPath", url: "https://hooks.example.com", want: "hooks.example.com"},
 		{name: "InvalidURLFallsBack", url: "not a valid url", want: "not a valid url"},
 	}
