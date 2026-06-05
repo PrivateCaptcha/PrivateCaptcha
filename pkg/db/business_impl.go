@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -1446,9 +1447,28 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	return cacheProperty, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) hasAttachedForm(ctx context.Context, orgID, propertyID int32, propertyName string) bool {
+	if strings.HasSuffix(propertyName, formPropertyNameSuffix) {
+		if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)); err == nil {
+			if index := slices.IndexFunc(forms, func(f *dbgen.Form) bool { return f.PropertyID == propertyID }); index != -1 {
+				return true
+			}
+		}
+		if _, err := impl.querier.GetFormByPropertyID(ctx, propertyID); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbgen.Property, org *dbgen.Organization, user *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
+	}
+
+	if impl.hasAttachedForm(ctx, prop.OrgID.Int32, prop.ID, prop.Name) {
+		slog.WarnContext(ctx, "Cannot delete property attached to form", "propID", prop.ID)
+		return nil, ErrPropertyAttachedToForm
 	}
 
 	property, err := impl.querier.SoftDeleteProperty(ctx, prop.ID)
@@ -3067,6 +3087,11 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 	if property.OrgID.Int32 == org.Organization.ID {
 		slog.WarnContext(ctx, "Property is already in the destination org", "propID", property.ID, "orgID", property.OrgID.Int32)
 		return nil, nil, ErrInvalidInput
+	}
+
+	if impl.hasAttachedForm(ctx, property.OrgID.Int32, property.ID, property.Name) {
+		slog.WarnContext(ctx, "Cannot move property attached to form", "propID", property.ID)
+		return nil, nil, ErrPropertyAttachedToForm
 	}
 
 	oldOrgID := property.OrgID.Int32

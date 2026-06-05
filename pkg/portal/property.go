@@ -902,7 +902,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	if !canDelete {
 		slog.ErrorContext(ctx, "Not enough permissions to delete property", "userID", user.ID,
 			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
@@ -913,6 +913,7 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "Delete property blocked: attached to form", "propID", property.ID)
 		w.WriteHeader(http.StatusConflict)
 	} else {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		slog.ErrorContext(ctx, "Failed to delete property", "propID", property.ID, common.ErrAttr(err))
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
