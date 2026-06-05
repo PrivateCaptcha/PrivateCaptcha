@@ -25,7 +25,7 @@ require (
 	github.com/slok/go-http-metrics v0.13.0
 	github.com/speps/go-hashids/v2 v2.0.1
 	github.com/tsenart/vegeta/v12 v12.13.0
-	golang.org/x/crypto v0.51.0
+	golang.org/x/crypto v0.52.0
 	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.20.0
 	golang.org/x/text v0.37.0
