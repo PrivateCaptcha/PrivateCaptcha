@@ -524,10 +524,10 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 		defer wg.Done()
 		<-quit
 		slog.DebugContext(ctx, "Shutting down gracefully")
-		jobs.Shutdown()
-		sessionStore.Shutdown()
-		apiServer.Shutdown()
-		businessDB.Shutdown()
+		jobs.Stop()
+		sessionStore.Stop()
+		apiServer.Stop()
+		businessDB.Stop()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), _shutdownPeriod)
 		defer cancel()
 		httpServer.SetKeepAlivesEnabled(false)
@@ -538,6 +538,9 @@ func run(ctx context.Context, cfg common.ConfigStore, stderr io.Writer, listener
 			fmt.Fprintf(stderr, "error shutting down http server gracefully: %s\n", serr)
 			time.Sleep(_shutdownHardPeriod)
 		}
+		sessionStore.Shutdown()
+		apiServer.Shutdown()
+		businessDB.Shutdown()
 		if localServer != nil {
 			if lerr := localServer.Close(); lerr != nil {
 				slog.ErrorContext(ctx, "Failed to shutdown local server", common.ErrAttr(lerr))

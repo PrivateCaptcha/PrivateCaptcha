@@ -219,13 +219,16 @@ func (am *AuthMiddleware) StartBackfill(backfillDelay, backpressureTimeout time.
 	go common.ProcessBatchMap(rulesBackfillCtx, am.RulesChan, backfillDelay, am.BatchSize, am.BatchSize*10, am.backfillRulesImpl)
 }
 
-func (am *AuthMiddleware) Shutdown() {
-	slog.Debug("Shutting down auth middleware")
+func (am *AuthMiddleware) Stop() {
 	am.SitekeyBackfillCancel()
 	am.FormBackfillCancel()
 	am.UsersBackfillCancel()
 	am.APIKeyLastUsedCancel()
 	am.RulesBackfillCancel()
+}
+
+func (am *AuthMiddleware) Shutdown() {
+	slog.Debug("Shutting down auth middleware")
 	close(am.SitekeyChan)
 	close(am.FormChan)
 	close(am.UsersChan)

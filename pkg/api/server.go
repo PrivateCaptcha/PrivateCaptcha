@@ -260,18 +260,24 @@ func (s *Server) Setup(domain string, verbose bool, security alice.Constructor) 
 	return rg
 }
 
+func (s *Server) Stop() {
+	s.Levels.Stop()
+	s.Auth.Stop()
+
+	s.VerifyLogCancel()
+	// cancel producer before consumer
+	s.FormSubmitCancel()
+	s.FormSubmitLogCancel()
+}
+
 func (s *Server) Shutdown() {
 	s.Levels.Shutdown()
 	s.Auth.Shutdown()
 
 	slog.Debug("Shutting down API server routines")
-	s.VerifyLogCancel()
-	// cancel producer before consumer
-	s.FormSubmitCancel()
-	s.FormSubmitLogCancel()
 	// background goroutines can call addFormSubmitRecord()/addVerifyRecord()  so we don't close channels here
-	//close(s.VerifyLogChan)
-	//close(s.FormSubmitLogChan)
+	close(s.VerifyLogChan)
+	close(s.FormSubmitLogChan)
 	close(s.FormSubmissionChan)
 }
 

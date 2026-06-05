@@ -123,9 +123,12 @@ func (levels *Levels) Init(accessLogInterval, backfillInterval, backpressureTime
 		backfillInterval)
 }
 
-func (l *Levels) Shutdown() {
+func (l *Levels) Stop() {
 	slog.Debug("Shutting down levels routines")
 	l.accessLogCancel()
+}
+
+func (l *Levels) Shutdown() {
 	close(l.accessChan)
 	close(l.backfillChan)
 }

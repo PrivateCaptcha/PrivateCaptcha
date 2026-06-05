@@ -128,6 +128,10 @@ func (s *BusinessStore) Start(ctx context.Context, auditLogInterval time.Duratio
 	s.auditLog.Start(ctx, auditLogInterval)
 }
 
+func (s *BusinessStore) Stop() {
+	s.auditLog.Stop()
+}
+
 func (s *BusinessStore) Shutdown() {
 	s.auditLog.Shutdown()
 }

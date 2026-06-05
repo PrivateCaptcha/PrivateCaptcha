@@ -171,7 +171,7 @@ func (j *jobs) handleOneoffJob(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("started"))
 }
 
-func (j *jobs) Shutdown() {
+func (j *jobs) Stop() {
 	slog.Debug("Shutting down maintenance jobs")
 
 	if j.maintenanceCancel != nil {

@@ -36,9 +36,12 @@ func (al *AuditLog) Start(ctx context.Context, interval time.Duration) {
 	go common.ProcessBatchArray(cancelCtx, al.persistChan, interval, al.batchSize, al.batchSize*10, al.PersistAuditLog)
 }
 
+func (al *AuditLog) Stop() {
+	al.persistCancel()
+}
+
 func (al *AuditLog) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
-	al.persistCancel()
 	close(al.persistChan)
 }
 

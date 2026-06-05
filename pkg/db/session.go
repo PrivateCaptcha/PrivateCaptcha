@@ -45,9 +45,12 @@ func (ss *SessionStore) Start(ctx context.Context, interval time.Duration) {
 
 var _ session.Store = (*SessionStore)(nil)
 
+func (ss *SessionStore) Stop() {
+	ss.processCancel()
+}
+
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
-	ss.processCancel()
 	close(ss.persistChan)
 }
 

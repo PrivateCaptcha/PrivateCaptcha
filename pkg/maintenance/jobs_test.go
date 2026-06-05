@@ -82,7 +82,7 @@ func (j *stubPeriodicJob) wasExecuted() bool {
 
 func TestOneOffJobExecution(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	stubJob := &stubOneOffJob{}
 
@@ -99,7 +99,7 @@ func TestOneOffJobExecution(t *testing.T) {
 
 func TestPeriodicJobExecution(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
 		interval: 10 * time.Millisecond,
@@ -118,7 +118,7 @@ func TestPeriodicJobExecution(t *testing.T) {
 
 func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
 		interval: 10 * time.Millisecond,
@@ -144,7 +144,7 @@ func TestHandlePeriodicJobWithAPIKey(t *testing.T) {
 
 func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
 	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
@@ -160,7 +160,7 @@ func TestHandlePeriodicJobNoAPIKey(t *testing.T) {
 
 func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
 	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
@@ -177,7 +177,7 @@ func TestHandlePeriodicJobWrongAPIKey(t *testing.T) {
 
 func TestHandlePeriodicJobNotFound(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
 	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
@@ -194,7 +194,7 @@ func TestHandlePeriodicJobNotFound(t *testing.T) {
 
 func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	stubJob := &stubOneOffJob{}
 	jobsManager.AddOneOff(stubJob)
@@ -220,7 +220,7 @@ func TestHandleOneOffJobWithAPIKey(t *testing.T) {
 
 func TestHandleOneOffJobNotFound(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
 	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("test-api-key")))
@@ -237,7 +237,7 @@ func TestHandleOneOffJobNotFound(t *testing.T) {
 
 func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	mux := http.NewServeMux()
 	jobsManager.Setup(mux, alice.New(common.APIKeyMiddleware("")))
@@ -254,7 +254,7 @@ func TestSecurityMiddlewareNoConfiguredKey(t *testing.T) {
 
 func TestJobsSpawn(t *testing.T) {
 	jobsManager := NewJobs(nil, 2)
-	defer jobsManager.Shutdown()
+	defer jobsManager.Stop()
 
 	stubJob := &stubPeriodicJob{
 		interval: 10 * time.Millisecond,
