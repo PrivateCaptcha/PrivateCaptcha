@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -901,14 +902,18 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	if !canDelete {
 		slog.ErrorContext(ctx, "Not enough permissions to delete property", "userID", user.ID,
 			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
 	if auditEvent, err := s.Store.Impl().SoftDeleteProperty(ctx, property, org, user); err == nil {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	} else if errors.Is(err, db.ErrPropertyAttachedToForm) {
+		slog.WarnContext(ctx, "Delete property blocked: attached to form", "propID", property.ID)
+		w.WriteHeader(http.StatusConflict)
 	} else {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		slog.ErrorContext(ctx, "Failed to delete property", "propID", property.ID, common.ErrAttr(err))
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }

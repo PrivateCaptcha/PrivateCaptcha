@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -1446,13 +1447,38 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	return cacheProperty, auditEvent, nil
 }
 
+func (impl *BusinessStoreImpl) checkAttachedFormLazy(ctx context.Context, orgID, propertyID int32, propertyName string) bool {
+	if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)); err == nil {
+		if index := slices.IndexFunc(forms, func(f *dbgen.Form) bool { return f.PropertyID == propertyID }); index != -1 {
+			return true
+		}
+	}
+
+	if strings.HasSuffix(propertyName, formPropertyNameSuffix) && (impl.querier != nil) {
+		if _, err := impl.querier.GetFormByPropertyID(ctx, propertyID); err == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbgen.Property, org *dbgen.Organization, user *dbgen.User) (*common.AuditLogEvent, error) {
 	if impl.querier == nil {
 		return nil, ErrMaintenance
 	}
 
+	if impl.checkAttachedFormLazy(ctx, prop.OrgID.Int32, prop.ID, prop.Name) {
+		slog.WarnContext(ctx, "Cannot delete property attached to form", "propID", prop.ID)
+		return nil, ErrPropertyAttachedToForm
+	}
+
 	property, err := impl.querier.SoftDeleteProperty(ctx, prop.ID)
 	if err != nil {
+		if _, formErr := impl.querier.GetFormByPropertyID(ctx, prop.ID); formErr == nil {
+			slog.WarnContext(ctx, "Cannot delete property attached to form", "propID", prop.ID)
+			return nil, ErrPropertyAttachedToForm
+		}
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", prop.ID, common.ErrAttr(err))
 		return nil, err
 	}
@@ -3065,6 +3091,11 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 		return nil, nil, ErrInvalidInput
 	}
 
+	if impl.checkAttachedFormLazy(ctx, property.OrgID.Int32, property.ID, property.Name) {
+		slog.WarnContext(ctx, "Cannot move property attached to form", "propID", property.ID)
+		return nil, nil, ErrPropertyAttachedToForm
+	}
+
 	oldOrgID := property.OrgID.Int32
 
 	updatedProperty, err := impl.querier.MoveProperty(ctx, &dbgen.MovePropertyParams{
@@ -3074,6 +3105,10 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 		UserID:     Int(user.ID),
 	})
 	if err != nil {
+		if _, formErr := impl.querier.GetFormByPropertyID(ctx, property.ID); formErr == nil {
+			slog.WarnContext(ctx, "Cannot move property attached to form", "propID", property.ID)
+			return nil, nil, ErrPropertyAttachedToForm
+		}
 		slog.ErrorContext(ctx, "Failed to move property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID, common.ErrAttr(err))
 		return nil, nil, err
 	}

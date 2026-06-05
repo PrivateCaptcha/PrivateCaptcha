@@ -157,6 +157,35 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 	return &i, err
 }
 
+const getFormByPropertyID = `-- name: GetFormByPropertyID :one
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE property_id = $1
+`
+
+func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
+	row := q.db.QueryRow(ctx, getFormByPropertyID, propertyID)
+	var i Form
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.ExternalID,
+		&i.OrgID,
+		&i.CreatorID,
+		&i.OrgOwnerID,
+		&i.URL,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+		&i.PropertyID,
+		&i.Fields,
+		&i.Enabled,
+		&i.Active,
+		&i.RequestsPerMinute,
+		&i.RetryRequestCount,
+		&i.Method,
+	)
+	return &i, err
+}
+
 const getFormsByExternalID = `-- name: GetFormsByExternalID :many
 SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE external_id = ANY($1::UUID[])
 `

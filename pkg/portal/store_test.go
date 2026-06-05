@@ -12,7 +12,6 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	db_tests "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/tests"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/maintenance"
-	"github.com/jackc/pgx/v5"
 )
 
 func TestSoftDeleteOrganization(t *testing.T) {
@@ -123,8 +122,8 @@ func TestBusinessStoreImplFormPropertyRestrictions(t *testing.T) {
 		t.Fatalf("Failed to create form: %v", err)
 	}
 
-	if _, err := store.Impl().SoftDeleteProperty(ctx, property, org1, user); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("expected single soft delete to reject form-owned property with no rows, got %v", err)
+	if _, err := store.Impl().SoftDeleteProperty(ctx, property, org1, user); !errors.Is(err, db.ErrPropertyAttachedToForm) {
+		t.Fatalf("expected single soft delete to reject form-owned property with attached form error, got %v", err)
 	}
 
 	deletedIDs, _, err := store.Impl().SoftDeleteProperties(ctx, []int32{property.ID}, user, org1)
@@ -135,8 +134,8 @@ func TestBusinessStoreImplFormPropertyRestrictions(t *testing.T) {
 		t.Fatalf("expected bulk soft delete not to delete form-owned property")
 	}
 
-	if _, _, err := store.Impl().MoveProperty(ctx, user, property, &dbgen.GetUserOrganizationsRow{Organization: *org2, Level: dbgen.AccessLevelOwner}); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("expected move to reject form-owned property with no rows, got %v", err)
+	if _, _, err := store.Impl().MoveProperty(ctx, user, property, &dbgen.GetUserOrganizationsRow{Organization: *org2, Level: dbgen.AccessLevelOwner}); !errors.Is(err, db.ErrPropertyAttachedToForm) {
+		t.Fatalf("expected move to reject form-owned property with attached form error, got %v", err)
 	}
 
 	if err := store.Impl().DeleteProperties(ctx, []int32{property.ID}); err != nil {

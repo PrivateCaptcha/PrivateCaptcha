@@ -89,6 +89,12 @@
                     <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
                         <button
                             hx-delete='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.DeleteEndpoint }}'
+                            hx-on::response-error="const status = event.detail.xhr.status;
+                            const msg = status === 403 ? 'You do not have permission to delete this property.' :
+                                        status === 409 ? 'This property is attached to a form and cannot be deleted separately.' :
+                                        status === 400 ? 'Invalid request. Please refresh and try again.' :
+                                        'Failed to delete the property. Please try again later.';
+                            alert(msg);"
                             hx-indicator="#spinner"
                             type="button"
                             class="pc-internal-form-button pc-internal-form-button-danger sm:ml-3 sm:w-auto">
@@ -128,6 +134,13 @@
                 <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:w-full sm:max-w-lg sm:flex">
                     <form class="sm:flex-1 sm:flex sm:flex-col"
                         hx-disabled-elt="input, button"
+                        hx-on::response-error="const status = event.detail.xhr.status;
+                        const msg = status === 403 ? 'You do not have permission to move this property.' :
+                                    status === 409 ? 'This property is attached to a form and cannot be moved separately.' :
+                                    status === 400 ? 'Invalid organization. Please refresh and try again.' :
+                                    'Failed to move the property. Please try again later.';
+                        alert(msg);"
+                        hx-on::response-error="alert('Failed to move the property. Please try again later.')"
                         hx-post="{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.MoveEndpoint }}">
                         {{template "settings-move-form.html" .}}
                     </form>

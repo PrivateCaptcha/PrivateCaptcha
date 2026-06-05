@@ -4,6 +4,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -64,14 +65,14 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 	if !canMove {
 		slog.ErrorContext(ctx, "Not enough permissions to move property", "userID", user.ID,
 			"orgUserID", org.UserID.Int32, "propertyUserID", property.CreatorID.Int32)
-		s.RedirectError(http.StatusUnauthorized, w, r)
+		w.WriteHeader(http.StatusForbidden)
 		return
 	}
 
 	orgs, err := s.Store.Impl().RetrieveUserOrganizations(ctx, user.ID)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve user orgs", common.ErrAttr(err))
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -80,7 +81,7 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 	})
 	if idx == -1 {
 		slog.ErrorContext(ctx, "Org is not found in user owned orgs", "orgID", newOrgID, "userID", user.ID)
-		s.RedirectError(http.StatusBadRequest, w, r)
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
@@ -90,8 +91,12 @@ func (s *Server) moveProperty(w http.ResponseWriter, r *http.Request) {
 		propertyDashboardURL := s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(updatedProperty.OrgID.Int32)), common.PropertyEndpoint, s.IDHasher.Encrypt(int(updatedProperty.ID)))
 		common.Redirect(propertyDashboardURL, http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	} else if errors.Is(err, db.ErrPropertyAttachedToForm) {
+		slog.WarnContext(ctx, "Move property blocked: attached to form", "propID", property.ID)
+		w.WriteHeader(http.StatusConflict)
 	} else {
-		s.RedirectError(http.StatusInternalServerError, w, r)
+		slog.ErrorContext(ctx, "Failed to move property", "propID", property.ID, common.ErrAttr(err))
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 }
 
