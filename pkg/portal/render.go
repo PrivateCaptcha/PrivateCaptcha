@@ -274,6 +274,10 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		API:         s.APIURL,
 	}
 
+	if pathPattern, ok := ctx.Value(common.PathPatternContextKey).(string); ok && len(pathPattern) > 0 {
+		reqCtx.Pattern = pathPattern
+	}
+
 	if sess, found := s.Sessions.SessionGet(r); found {
 		if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
 			reqCtx.UserName = username

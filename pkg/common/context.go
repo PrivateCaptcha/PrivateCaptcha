@@ -16,6 +16,7 @@ const (
 	TimeContextKey
 	FormContextKey
 	FormIDContextKey
+	PathPatternContextKey
 	// Add new fields _above_
 	CONTEXT_KEYS_COUNT
 )

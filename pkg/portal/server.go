@@ -76,6 +76,7 @@ type AuditLogParser func(ctx context.Context, log *dbgen.AuditLog, ul *UserAudit
 
 type RequestContext struct {
 	Path         string
+	Pattern      string
 	CurrentYear  int
 	UserName     string
 	UserEmail    string

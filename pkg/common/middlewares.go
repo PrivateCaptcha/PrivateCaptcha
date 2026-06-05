@@ -241,6 +241,13 @@ type Route struct {
 	Prefix string
 }
 
+func (route *Route) Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(context.WithValue(r.Context(), PathPatternContextKey, route.Path))
+		next.ServeHTTP(w, r)
+	})
+}
+
 type RouteAndHandler struct {
 	Route
 	chain   alice.Chain
@@ -306,7 +313,11 @@ func (rg *RouteGenerator) Handler(r *Route) (*RouteAndHandler, bool) {
 
 func (rg *RouteGenerator) Handle(route *Route, chain alice.Chain, handler http.Handler) {
 	if rh, ok := rg.Handler(route); ok {
-		rh.chain = chain
+		if len(route.Path) > 0 {
+			rh.chain = chain.Append(route.Middleware)
+		} else {
+			rh.chain = chain
+		}
 		rh.handler = handler
 		return
 	}
