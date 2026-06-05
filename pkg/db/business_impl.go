@@ -1447,17 +1447,19 @@ func (impl *BusinessStoreImpl) UpdateProperty(ctx context.Context, org *dbgen.Or
 	return cacheProperty, auditEvent, nil
 }
 
-func (impl *BusinessStoreImpl) hasAttachedForm(ctx context.Context, orgID, propertyID int32, propertyName string) bool {
-	if strings.HasSuffix(propertyName, formPropertyNameSuffix) {
-		if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)); err == nil {
-			if index := slices.IndexFunc(forms, func(f *dbgen.Form) bool { return f.PropertyID == propertyID }); index != -1 {
-				return true
-			}
+func (impl *BusinessStoreImpl) checkAttachedForm(ctx context.Context, orgID, propertyID int32, propertyName string) bool {
+	if forms, err := FetchCachedArray[dbgen.Form](ctx, impl.cache, OrgFormsCacheKey(orgID, orgFormsCacheKeyStr)); err == nil {
+		if index := slices.IndexFunc(forms, func(f *dbgen.Form) bool { return f.PropertyID == propertyID }); index != -1 {
+			return true
 		}
+	}
+
+	if strings.HasSuffix(propertyName, formPropertyNameSuffix) {
 		if _, err := impl.querier.GetFormByPropertyID(ctx, propertyID); err == nil {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -1466,7 +1468,7 @@ func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbg
 		return nil, ErrMaintenance
 	}
 
-	if impl.hasAttachedForm(ctx, prop.OrgID.Int32, prop.ID, prop.Name) {
+	if impl.checkAttachedForm(ctx, prop.OrgID.Int32, prop.ID, prop.Name) {
 		slog.WarnContext(ctx, "Cannot delete property attached to form", "propID", prop.ID)
 		return nil, ErrPropertyAttachedToForm
 	}
@@ -3089,7 +3091,7 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 		return nil, nil, ErrInvalidInput
 	}
 
-	if impl.hasAttachedForm(ctx, property.OrgID.Int32, property.ID, property.Name) {
+	if impl.checkAttachedForm(ctx, property.OrgID.Int32, property.ID, property.Name) {
 		slog.WarnContext(ctx, "Cannot move property attached to form", "propID", property.ID)
 		return nil, nil, ErrPropertyAttachedToForm
 	}

@@ -158,7 +158,7 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 }
 
 const getFormByPropertyID = `-- name: GetFormByPropertyID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE property_id = $1 AND deleted_at IS NULL LIMIT 1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method FROM backend.forms WHERE property_id = $1
 `
 
 func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
