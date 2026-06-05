@@ -2,6 +2,8 @@ package portal
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -908,6 +910,11 @@ func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {
 	if auditEvent, err := s.Store.Impl().SoftDeleteProperty(ctx, property, org, user); err == nil {
 		common.Redirect(s.PartsURL(common.OrgEndpoint, s.IDHasher.Encrypt(int(org.ID))), http.StatusOK, w, r)
 		s.Store.AuditLog().RecordEvent(ctx, auditEvent, common.AuditLogSourcePortal)
+	} else if errors.Is(err, db.ErrPropertyAttachedToForm) {
+		slog.WarnContext(ctx, "Delete property blocked: attached to form", "propID", property.ID)
+		w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
+		w.WriteHeader(http.StatusConflict)
+		fmt.Fprintf(w, `<div id="property-settings-alert"><div class="rounded-md bg-red-50 p-4"><div class="flex"><div class="flex-shrink-0"><svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg></div><div class="ml-3"><h3 class="text-sm font-medium text-red-800">Cannot delete property</h3><div class="mt-2 text-sm text-red-700"><p>This property is attached to a form. Delete or move the form first.</p></div></div></div></div></div>`)
 	} else {
 		s.RedirectError(http.StatusInternalServerError, w, r)
 	}

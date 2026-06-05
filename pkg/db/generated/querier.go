@@ -53,6 +53,7 @@ type Querier interface {
 	GetDifficultyRulesByPropertyIDs(ctx context.Context, dollar_1 []int32) ([]*DifficultyRule, error)
 	GetFormAuditLogs(ctx context.Context, arg *GetFormAuditLogsParams) ([]*GetFormAuditLogsRow, error)
 	GetFormByID(ctx context.Context, id int32) (*Form, error)
+	GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error)
 	GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error)
 	GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, error)
 	GetLastActiveSystemNotification(ctx context.Context, arg *GetLastActiveSystemNotificationParams) (*SystemNotification, error)

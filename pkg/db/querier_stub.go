@@ -139,6 +139,9 @@ func (s *QuerierStub) GetFormByExternalID(ctx context.Context, externalID pgtype
 func (s *QuerierStub) GetFormByID(ctx context.Context, formID int32) (*dbgen.Form, error) {
 	return nil, s.Error
 }
+func (s *QuerierStub) GetFormByPropertyID(ctx context.Context, propertyID int32) (*dbgen.Form, error) {
+	return nil, s.Error
+}
 func (s *QuerierStub) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*dbgen.Form, error) {
 	return nil, s.Error
 }

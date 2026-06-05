@@ -1453,6 +1453,10 @@ func (impl *BusinessStoreImpl) SoftDeleteProperty(ctx context.Context, prop *dbg
 
 	property, err := impl.querier.SoftDeleteProperty(ctx, prop.ID)
 	if err != nil {
+		if _, formErr := impl.querier.GetFormByPropertyID(ctx, prop.ID); formErr == nil {
+			slog.WarnContext(ctx, "Cannot delete property attached to form", "propID", prop.ID)
+			return nil, ErrPropertyAttachedToForm
+		}
 		slog.ErrorContext(ctx, "Failed to mark property as deleted in DB", "propID", prop.ID, common.ErrAttr(err))
 		return nil, err
 	}
@@ -3074,6 +3078,10 @@ func (impl *BusinessStoreImpl) MoveProperty(ctx context.Context, user *dbgen.Use
 		UserID:     Int(user.ID),
 	})
 	if err != nil {
+		if _, formErr := impl.querier.GetFormByPropertyID(ctx, property.ID); formErr == nil {
+			slog.WarnContext(ctx, "Cannot move property attached to form", "propID", property.ID)
+			return nil, nil, ErrPropertyAttachedToForm
+		}
 		slog.ErrorContext(ctx, "Failed to move property to another org", "propID", property.ID, "oldOrgID", property.OrgID.Int32, "newOrgID", org.Organization.ID, common.ErrAttr(err))
 		return nil, nil, err
 	}
