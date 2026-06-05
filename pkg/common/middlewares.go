@@ -312,19 +312,15 @@ func (rg *RouteGenerator) Handler(r *Route) (*RouteAndHandler, bool) {
 }
 
 func (rg *RouteGenerator) Handle(route *Route, chain alice.Chain, handler http.Handler) {
-	if rh, ok := rg.Handler(route); ok {
-		if len(route.Path) > 0 {
-			rh.chain = chain.Append(route.Middleware)
-		} else {
-			rh.chain = chain
-		}
-		rh.handler = handler
-		return
-	}
-
 	finalChain := chain
 	if len(route.Path) > 0 {
 		finalChain = chain.Append(route.Middleware)
+	}
+
+	if rh, ok := rg.Handler(route); ok {
+		rh.chain = finalChain
+		rh.handler = handler
+		return
 	}
 
 	rg.routes = append(rg.routes, &RouteAndHandler{
