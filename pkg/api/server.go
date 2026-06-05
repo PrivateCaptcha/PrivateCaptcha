@@ -307,9 +307,9 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, apiCorsHandler, form
 	rg.Handle(rg.Post(common.VerifyEndpoint), verifyChain.Append(s.Auth.APIKey(headerAPIKey, dbgen.ApiKeyScopePuzzle)), http.MaxBytesHandler(http.HandlerFunc(s.pcVerifyHandler), maxSolutionsBodySize))
 
 	formRateLimiter := s.RateLimiter.RateLimitExFunc(10, 2*time.Second)
-	formChain := publicChain.Append(formCorsHandler, s.Metrics.APIHandler, formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
+	formChain := publicChain.Append(formCorsHandler, s.Metrics.APIHandlerIDFunc(rg.LastPath), formRateLimiter, monitoring.Traced, common.SoftTimeoutHandler(5*time.Second), s.Auth.Form)
 	rg.Handle(rg.Post(common.FormEndpoint, arg(common.ParamForm)), formChain, http.MaxBytesHandler(http.HandlerFunc(s.formProxyHandler), maxFormBodySize))
-	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(common.Cached, formCorsHandler), http.HandlerFunc(s.formPreFlight))
+	rg.Handle(rg.Options(common.FormEndpoint, arg(common.ParamForm)), publicChain.Append(s.Metrics.APIHandler, common.Cached, formCorsHandler), http.HandlerFunc(s.formPreFlight))
 
 	s.setupEnterprise(rg, publicChain, apiRateLimiter)
 
