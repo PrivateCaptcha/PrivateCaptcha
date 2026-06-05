@@ -322,9 +322,14 @@ func (rg *RouteGenerator) Handle(route *Route, chain alice.Chain, handler http.H
 		return
 	}
 
+	finalChain := chain
+	if len(route.Path) > 0 {
+		finalChain = chain.Append(route.Middleware)
+	}
+
 	rg.routes = append(rg.routes, &RouteAndHandler{
 		Route:   *route,
-		chain:   chain,
+		chain:   finalChain,
 		handler: handler,
 	})
 }
