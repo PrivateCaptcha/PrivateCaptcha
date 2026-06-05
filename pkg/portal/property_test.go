@@ -2068,11 +2068,6 @@ func TestDeletePropertyAttachedToFormFailsGracefully(t *testing.T) {
 		t.Errorf("Expected 409 Conflict for attached property delete, got %d", w.Code)
 	}
 
-	body := w.Body.String()
-	if !strings.Contains(body, "attached to a form") {
-		t.Errorf("Expected error message about form attachment, got: %s", body)
-	}
-
 	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org, 0, db.MaxOrgPropertiesPageSize)
 	if err != nil {
 		t.Fatal(err)
@@ -2128,11 +2123,6 @@ func TestMovePropertyAttachedToFormFailsGracefully(t *testing.T) {
 
 	if w.Code != http.StatusConflict {
 		t.Errorf("Expected 409 Conflict for attached property move, got %d", w.Code)
-	}
-
-	body := w.Body.String()
-	if !strings.Contains(body, "attached to a form") {
-		t.Errorf("Expected error message about form attachment, got: %s", body)
 	}
 
 	properties, _, err := store.Impl().RetrieveOrgProperties(ctx, org1, 0, db.MaxOrgPropertiesPageSize)

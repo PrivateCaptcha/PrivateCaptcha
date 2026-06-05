@@ -50,7 +50,6 @@
 </div>
 
 <div class="divide-y divide-gray-200" x-data="{deleteOpen: false, moveOpen: false}">
-    <div id="property-settings-alert" class="col-span-full"></div>
     <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="deleteOpen"
         x-transition:enter="ease-out duration-300"
@@ -90,9 +89,7 @@
                     <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
                         <button
                             hx-delete='{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.DeleteEndpoint }}'
-                            hx-target="#property-settings-alert"
-                            hx-swap="innerHTML"
-                            hx-on::before-swap="if(event.detail.xhr.status === 409){event.detail.shouldSwap=true;event.detail.isError=false;}"
+                            hx-on::response-error="if(event.detail.xhr.status === 409) { alert('This property is attached to a form. Delete or move the form first.'); }"
                             hx-indicator="#spinner"
                             type="button"
                             class="pc-internal-form-button pc-internal-form-button-danger sm:ml-3 sm:w-auto">
@@ -132,9 +129,7 @@
                 <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:w-full sm:max-w-lg sm:flex">
                     <form class="sm:flex-1 sm:flex sm:flex-col"
                         hx-disabled-elt="input, button"
-                        hx-target="#property-settings-alert"
-                        hx-swap="innerHTML"
-                        hx-on::before-swap="if(event.detail.xhr.status === 409){event.detail.shouldSwap=true;event.detail.isError=false;}"
+                        hx-on::response-error="if(event.detail.xhr.status === 409) { alert('This property is attached to a form. Delete or move the form first.'); }"
                         hx-post="{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.MoveEndpoint }}">
                         {{template "settings-move-form.html" .}}
                     </form>
