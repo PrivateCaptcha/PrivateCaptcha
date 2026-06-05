@@ -1479,7 +1479,7 @@ func TestMovePropertyInvalidForm(t *testing.T) {
 			formBody: url.Values{
 				common.ParamOrg: {server.IDHasher.Encrypt(999999)},
 			},
-			wantCode: http.StatusSeeOther,
+			wantCode: http.StatusBadRequest,
 		},
 	}
 
