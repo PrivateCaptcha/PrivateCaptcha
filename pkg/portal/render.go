@@ -294,6 +294,13 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 	if err == nil {
 		common.WriteHeaders(w, common.SecurityHeaders)
 		common.WriteHeaders(w, common.HtmlContentHeaders)
+
+		if len(reqCtx.Pattern) > 0 {
+			if _, ok := r.Header[common.HeaderHtmxRequest]; ok {
+				w.Header().Set(common.HeaderRequestPathPattern, reqCtx.Pattern)
+			}
+		}
+
 		w.WriteHeader(http.StatusOK)
 		if _, werr := out.WriteTo(w); werr != nil {
 			slog.ErrorContext(ctx, "Failed to write response", common.ErrAttr(werr))
