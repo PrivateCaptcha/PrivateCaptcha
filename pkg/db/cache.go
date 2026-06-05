@@ -235,6 +235,7 @@ func (c *memcache[TKey, TValue]) LoadFrom(ctx context.Context, r io.Reader, ttl 
 type CacheKeyPrefix byte
 
 const (
+	// IMPORTANT: add new fields ONLY to the end
 	userCacheKeyPrefix CacheKeyPrefix = iota
 	apiKeyCacheKeyPrefix
 	orgCacheKeyPrefix
@@ -256,8 +257,6 @@ const (
 	propertyStatsCacheKeyPrefix
 	asyncTaskCacheKeyPrefix
 	orgPropertiesCountCacheKeyPrefix
-	orgFormsCacheKeyPrefix
-	orgFormsCountCacheKeyPrefix
 	orgInviteCacheKeyPrefix
 	compiledPropertyRulesCacheKeyPrefix
 	compiledOrgRulesCacheKeyPrefix
@@ -266,11 +265,14 @@ const (
 	difficultyRuleCacheKeyPrefix
 	propertyRuleStatsCacheKeyPrefix
 	userSettingsCacheKeyPrefix
+	orgFormsCacheKeyPrefix
+	orgFormsCountCacheKeyPrefix
 	formByExternalIDCacheKeyPrefix
 	formCacheKeyPrefix
 	formStatsCacheKeyPrefix
 	formAuditLogsCacheKeyPrefix
 	userFormsCountCacheKeyPrefix
+	// IMPORTANT: add new fields ONLY to the end
 	// Add new fields _above_
 	CACHE_KEY_PREFIXES_COUNT
 )
