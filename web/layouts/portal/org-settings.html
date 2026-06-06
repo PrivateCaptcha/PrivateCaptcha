@@ -205,7 +205,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" {{ if not .Params.CanTransfer }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanTransfer }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }}" @click="transferOpen = true">Transfer</button>
+            <button type="submit" {{ if not .Params.CanTransfer }}disabled{{ end }} class="pc-internal-form-button {{ if .Params.CanTransfer }}pc-internal-form-button-secondary{{ else }}pc-internal-form-button-disabled{{ end }}" @click="transferOpen = true; pcTrackEvent('Move');">Transfer</button>
         </div>
     </div>
     {{ end }}
@@ -218,7 +218,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" {{ if (not (and .Params.CanEdit $.Platform.Enterprise )) }}disabled{{ end }} class="pc-internal-form-button {{ if (and .Params.CanEdit $.Platform.Enterprise) }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true">Delete</button>
+            <button type="submit" {{ if (not (and .Params.CanEdit $.Platform.Enterprise )) }}disabled{{ end }} class="pc-internal-form-button {{ if (and .Params.CanEdit $.Platform.Enterprise) }}pc-internal-form-button-danger{{ else }}pc-internal-form-button-disabled{{ end }}" @click="deleteOpen = true; pcTrackEvent('Delete');">Delete</button>
         </div>
     </div>
     {{ else }}
@@ -231,6 +231,7 @@
         <div class="flex items-start md:col-span-2">
             <button type="submit" class="pc-internal-form-button pc-internal-form-button-danger"
                 hx-confirm="Are you sure?"
+                @click="pcTrackEvent('Leave')"
                 hx-delete="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}">
                 Leave
             </button>

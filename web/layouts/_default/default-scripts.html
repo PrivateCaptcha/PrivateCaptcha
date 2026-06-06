@@ -1,6 +1,9 @@
 <script defer src="{{$.Ctx.CDN}}/portal/js/alpine.min.js" crossorigin="anonymous"></script>
 <script defer src="{{$.Ctx.CDN}}/portal/js/htmx.min.js" crossorigin="anonymous"></script>
 <script src="{{$.Ctx.CDN}}/portal/js/bundle.js" crossorigin="anonymous"></script>
+<script type="text/javascript">
+window.pcTrackEvent = function(eventName) { };
+</script>
 {{ if $.Ctx.LoggedIn }}
 <script type="text/javascript">
 ErrorTracker.init({

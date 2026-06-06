@@ -26,7 +26,7 @@
                             {{ if $rule.CanEdit }}
                             {{ if gt (len $.Params.Rules) 1 }}
                             <button type="button"
-                                @click="moveRuleIndex = {{ $index }}; moveRuleID = {{ printf "%q" $rule.ID }}; moveRuleName = {{ printf "%q" $rule.Name }}; newPosition = {{ $index }}; moveOpen = true"
+                                @click="moveRuleIndex = {{ $index }}; moveRuleID = {{ printf "%q" $rule.ID }}; moveRuleName = {{ printf "%q" $rule.Name }}; newPosition = {{ $index }}; moveOpen = true; pcTrackEvent('Move');"
                                 class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
                                 Reorder<span class="sr-only">, difficulty rule</span>
                             </button>

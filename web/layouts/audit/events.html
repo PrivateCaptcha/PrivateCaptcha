@@ -53,6 +53,7 @@
     </div>
     <div class="flex flex-1 justify-between sm:justify-end">
         <button
+            @click="pcTrackEvent('Previous')"
             hx-get="{{ partsURL $.Const.AuditLogsEndpoint $.Const.EventsEndpoint }}"
             hx-target="#auditlogs"
             hx-vals='{"{{$.Const.Days}}": {{ .Params.Days }}, "{{$.Const.Page}}": {{if gt .Params.Page 0}}{{sub .Params.Page 1}}{{else}}0{{end}}}'
@@ -61,6 +62,7 @@
             Previous
         </button>
         <button
+            @click="pcTrackEvent('Next')"
             hx-get="{{ partsURL $.Const.AuditLogsEndpoint $.Const.EventsEndpoint }}"
             hx-target="#auditlogs"
             hx-vals='{"{{$.Const.Days}}": {{ .Params.Days }}, "{{$.Const.Page}}": {{if lt .Params.To .Params.Count}}{{plus1 .Params.Page}}{{else}}{{.Params.Page}}{{end}}}'

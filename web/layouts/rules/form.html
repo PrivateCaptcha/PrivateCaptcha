@@ -213,6 +213,7 @@
         hx-confirm="Are you sure you want to delete this rule?"
         hx-delete='{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Params.Property.ID .Const.RulesEndpoint .Params.RuleID .Const.DeleteEndpoint }}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.RulesEndpoint .Params.RuleID .Const.DeleteEndpoint }}{{ end }}'
         class="pc-internal-form-button pc-internal-form-button-danger"
+        @click="pcTrackEvent('Delete')"
         >
         Delete
     </button>

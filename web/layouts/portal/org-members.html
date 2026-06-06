@@ -73,7 +73,7 @@
                 class="mt-6 flex">
                 <label for="{{ .Const.Email }}" class="sr-only">Email address</label>
                 <input type="email" name="{{ .Const.Email }}" class="w-full self-center pc-internal-form-input-base {{ if $.Platform.Enterprise }}pc-form-input-normal{{else}}pc-form-input-disabled{{end}}" placeholder="Enter an email" required>
-                <button type="submit" class="ml-4 flex-shrink-0 self-center pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-primary{{else}}pc-internal-form-button-disabled{{end}}" {{ if not $.Platform.Enterprise }}disabled{{end}}>Send invite</button>
+                <button type="submit" @click="pcTrackEvent('Invite');" class="ml-4 flex-shrink-0 self-center pc-internal-form-button {{ if $.Platform.Enterprise }}pc-internal-form-button-primary{{else}}pc-internal-form-button-disabled{{end}}" {{ if not $.Platform.Enterprise }}disabled{{end}}>Send invite</button>
             </form>
         </div>
         {{- if .Params.ErrorMessage -}}
@@ -120,6 +120,7 @@
                         <button type="button"
                             {{ if not $.Platform.Enterprise }}disabled{{ end }}
                             class="inline-flex items-center gap-x-1.5 text-sm font-semibold leading-6 text-gray-900"
+                            @click="pcTrackEvent('Delete');"
                             hx-delete='{{ if $member.IsEmailInvite }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.OrgInviteEndpoint $member.ID }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.MembersEndpoint $member.ID }}{{ end }}'
                             hx-disabled-elt="this">
                             <svg class="h-5 w-5 text-gray-400" viewBox="0 0 18 18" fill="currentColor" aria-hidden="true">
