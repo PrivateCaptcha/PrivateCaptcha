@@ -12,6 +12,10 @@
         demoWidget.onDifficultyChange(endpoint);
     }
 
+    function onCaptchaStarted() {
+        pcTrackEvent('Captcha Click');
+    }
+
     function onCaptchaReset() {
         demoWidget.onCaptchaReset();
     }

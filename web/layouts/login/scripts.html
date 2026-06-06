@@ -9,6 +9,10 @@
         }
     }
 
+    function onCaptchaStarted() {
+        pcTrackEvent('Captcha Click');
+    }
+
     function resendTimer() {
         return {
             countdown: 30,

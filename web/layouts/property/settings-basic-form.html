@@ -141,6 +141,7 @@
                         data-sitekey="{{.Params.CaptchaSitekey}}"
                         data-solution-field="{{.Params.CaptchaSolutionField}}"
                         data-start-mode="click"
+                        data-started-callback="onCaptchaStarted"
                         data-finished-callback="onCaptchaReset"
                         data-puzzle-endpoint="{{ .Params.CaptchaEndpoint }}/{{$.Params.Property.Level}}"
                         data-styles="--border-radius: .375rem;"
