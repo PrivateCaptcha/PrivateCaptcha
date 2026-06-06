@@ -69,7 +69,8 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) (*ViewModel, e
 			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalLoginSitekey),
 			CanRegister:          s.canRegister.Load(),
 		},
-		View: loginTemplate,
+		View:  loginTemplate,
+		IsNew: true,
 	}, nil
 }
 
@@ -95,14 +96,14 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if len(captchaSolution) == 0 {
 		slog.WarnContext(ctx, "Captcha solution field is empty")
 		data.CaptchaError = "You need to solve captcha to login."
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 
 	payload, err := s.PuzzleEngine.ParseSolutionPayload(ctx, []byte(captchaSolution))
 	if err != nil {
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -111,13 +112,13 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 	if !verifyResult.Success() {
 		slog.ErrorContext(ctx, "Failed to verify captcha", "errors", verifyResult.Error.String())
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -125,7 +126,7 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	if err = checkmail.ValidateFormat(email); err != nil {
 		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		data.EmailError = "Email address is not valid."
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -134,18 +135,18 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		if err == db.ErrDisabled {
 			slog.WarnContext(ctx, "Disabled user attempted to login", "email", email)
 			data.EmailError = "This account has been disabled."
-			s.render(w, r, loginContentsTemplate, data)
+			s.render(w, r, loginContentsTemplate, data, false /*new*/)
 			return
 		}
 		if err == db.ErrSoftDeleted {
 			slog.WarnContext(ctx, "Soft-deleted user attempted to login", "email", email)
 			data.EmailError = "This account has been deleted."
-			s.render(w, r, loginContentsTemplate, data)
+			s.render(w, r, loginContentsTemplate, data, false /*new*/)
 			return
 		}
 		slog.WarnContext(ctx, "Failed to find active user by email", "email", email, common.ErrAttr(err))
 		data.EmailError = "User with such email does not exist."
-		s.render(w, r, loginContentsTemplate, data)
+		s.render(w, r, loginContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -185,5 +186,5 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	data.Token = s.XSRF.Token(user.Email)
 	data.Email = common.MaskEmail(user.Email, '*')
 
-	s.render(w, r, twofactorContentsTemplate, data)
+	s.render(w, r, twofactorContentsTemplate, data, true /*new*/)
 }

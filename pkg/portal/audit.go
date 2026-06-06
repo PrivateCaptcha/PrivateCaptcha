@@ -342,6 +342,7 @@ func (s *Server) getAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewMode
 		Model:       renderCtx,
 		View:        auditLogsTemplate,
 		AuditEvents: singleAuditEvents(newAccessAuditLogEvent(user, db.TableNameAuditLogs, int64(user.ID), "", "")),
+		IsNew:       true,
 	}, nil
 }
 

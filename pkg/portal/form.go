@@ -165,7 +165,7 @@ func (s *Server) getNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMod
 		data.ErrorMessage = activeSubscriptionForFormError
 	}
 
-	return &ViewModel{Model: data, View: formWizardTemplate}, nil
+	return &ViewModel{Model: data, View: formWizardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -200,7 +200,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
 	if nameStatus := s.Store.Impl().ValidateFormName(ctx, renderCtx.Name, org); !nameStatus.Success() {
 		renderCtx.NameError = nameStatus.String()
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
@@ -208,35 +208,35 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
 		renderCtx.DomainError = common.StatusPropertyDomainFormatError.String()
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
 	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	renderCtx.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
 	if len(renderCtx.URL) == 0 {
 		renderCtx.URLError = "URL cannot be empty."
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	if err := s.FormURLVerifier.VerifyURL(ctx, renderCtx.URL); err != nil {
 		slog.WarnContext(ctx, "Failed to verify form URL", "url", common.SafeURL(renderCtx.URL), common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	if limitError := s.validateFormsLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	propertyParams := db.NewDefaultPropertyParams("" /*name*/, domain, user.ID)
@@ -252,7 +252,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the form", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the form. Please try again later."
-		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formWizardNewTemplate, IsNew: false}, nil
 	}
 
 	return &ViewModel{
@@ -264,6 +264,7 @@ func (s *Server) postNewOrgForm(w http.ResponseWriter, r *http.Request) (*ViewMo
 		},
 		View:        formWizardSetupTemplate,
 		AuditEvents: auditEvents,
+		IsNew:       true,
 	}, nil
 }
 
@@ -536,7 +537,7 @@ func (s *Server) getFormDashboard(w http.ResponseWriter, r *http.Request) (*View
 		model = renderCtx
 	}
 
-	return &ViewModel{Model: model, View: formDashboardTemplate}, nil
+	return &ViewModel{Model: model, View: formDashboardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -547,7 +548,7 @@ func (s *Server) getFormReportsTab(w http.ResponseWriter, r *http.Request) (*Vie
 
 	renderCtx.Tab = formReportsTabIndex
 
-	return &ViewModel{Model: renderCtx, View: formDashboardReportsTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: formDashboardReportsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getFormIntegrations(w http.ResponseWriter, r *http.Request) (*formDashboardIntegrationsRenderContext, error) {
@@ -588,7 +589,7 @@ func (s *Server) getFormIntegrationsTab(w http.ResponseWriter, r *http.Request) 
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: formDashboardIntegrationsTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: formDashboardIntegrationsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) newFormAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetFormAuditLogsRow) []*UserAuditLog {
@@ -617,7 +618,7 @@ func (s *Server) getFormAuditLogsTab(w http.ResponseWriter, r *http.Request) (*V
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: formDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: formDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) getOrgFormSettings(w http.ResponseWriter, r *http.Request) (*formSettingsRenderContext, error) {
@@ -657,7 +658,7 @@ func (s *Server) getFormSettingsTab(w http.ResponseWriter, r *http.Request) (*Vi
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -690,7 +691,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if !renderCtx.CanEdit {
 		slog.WarnContext(ctx, "Insufficient permissions to edit form", "userID", user.ID, "orgUserID", org.UserID.Int32, "formUserID", form.CreatorID.Int32)
 		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
@@ -699,7 +700,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		if nameStatus := s.Store.Impl().ValidateFormName(ctx, name, org); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
 			renderCtx.Form.URL = strings.TrimSpace(r.FormValue(common.ParamURL))
-			return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 		}
 	}
 
@@ -707,7 +708,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if len(urlValue) == 0 {
 		renderCtx.URLError = "URL cannot be empty."
 		renderCtx.Form.URL = urlValue
-		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
 	renderCtx.Form.URL = urlValue
 
@@ -715,7 +716,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		slog.WarnContext(ctx, "Failed to verify form URL", "url", common.SafeURL(urlValue), common.ErrAttr(err))
 		renderCtx.URLError = "URL is not valid."
 		renderCtx.Form.URL = urlValue
-		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
 	methodValue := strings.TrimSpace(r.FormValue(common.ParamMethod))
@@ -723,7 +724,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse form method", "value", methodValue, common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Method is not valid."
-		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
 	renderCtx.Form.Method = strings.ToUpper(methodValue)
@@ -738,7 +739,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse RPM", "value", rpmValue, common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to update settings."
-		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
 	var auditEvent *common.AuditLogEvent
@@ -763,7 +764,7 @@ func (s *Server) putForm(w http.ResponseWriter, r *http.Request) (*ViewModel, er
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: formDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submission *api.FormSubmission) *api.FormSubmitResult {
@@ -809,7 +810,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 	if !renderCtx.CanEdit {
 		slog.WarnContext(ctx, "Insufficient permissions to test form", "userID", user.ID, "formID", form.ID, "orgID", org.ID)
 		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formTestTemplate, IsNew: false}, nil
 	}
 
 	body := r.FormValue(common.ParamBody)
@@ -817,14 +818,14 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 	if err := s.FormURLVerifier.VerifyURL(ctx, form.URL); err != nil {
 		slog.WarnContext(ctx, "Failed to verify test form URL", "url", common.SafeURL(form.URL), common.ErrAttr(err))
 		renderCtx.ErrorMessage = "URL is not valid."
-		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formTestTemplate, IsNew: false}, nil
 	}
 
 	values, err := url.ParseQuery(body)
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse form body payload", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to parse body as url-encoded form."
-		return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: formTestTemplate, IsNew: false}, nil
 	}
 
 	submission := &api.FormSubmission{
@@ -845,7 +846,7 @@ func (s *Server) postTestForm(w http.ResponseWriter, r *http.Request) (*ViewMode
 		renderCtx.ErrorMessage = "Cannot submit form. Please try again later."
 	}
 
-	return &ViewModel{Model: renderCtx, View: formTestTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: formTestTemplate, IsNew: false}, nil
 }
 
 func (s *Server) deleteForm(w http.ResponseWriter, r *http.Request) {

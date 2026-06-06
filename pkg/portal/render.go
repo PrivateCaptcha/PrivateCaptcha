@@ -261,17 +261,18 @@ func (s *Server) RenderResponse(ctx context.Context, name string, data interface
 	return out, err
 }
 
-func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}) {
+func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, data interface{}, isNew bool) {
 	ctx := r.Context()
-
-	loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool)
 
 	reqCtx := &RequestContext{
 		Path:        r.URL.Path,
-		LoggedIn:    ok && loggedIn,
 		CurrentYear: time.Now().Year(),
 		CDN:         s.CDNURL,
 		API:         s.APIURL,
+	}
+
+	if loggedIn, ok := ctx.Value(common.LoggedInContextKey).(bool); ok && loggedIn {
+		reqCtx.LoggedIn = true
 	}
 
 	if pathPattern, ok := ctx.Value(common.PathPatternContextKey).(string); ok && len(pathPattern) > 0 {
@@ -295,9 +296,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, dat
 		common.WriteHeaders(w, common.SecurityHeaders)
 		common.WriteHeaders(w, common.HtmlContentHeaders)
 
-		if len(reqCtx.Pattern) > 0 {
+		if isNew && (len(reqCtx.Pattern) > 0) {
 			if _, ok := r.Header[common.HeaderHtmxRequest]; ok {
-				w.Header().Set(common.HeaderRequestPathPattern, reqCtx.Pattern)
+				w.Header().Set(common.HeaderCaptchaPushURL, reqCtx.Pattern)
 			}
 		}
 

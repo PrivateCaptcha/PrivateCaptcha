@@ -110,7 +110,7 @@ func (s *Server) expired(w http.ResponseWriter, r *http.Request) {
 
 	common.WriteHeaders(w, common.CachedHeaders)
 
-	s.render(w, r, errorTemplate, data)
+	s.render(w, r, errorTemplate, data, true /*is new*/)
 }
 
 func (s *Server) postClientSideError(w http.ResponseWriter, r *http.Request) {

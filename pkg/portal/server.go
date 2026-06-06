@@ -61,6 +61,7 @@ type ViewModel struct {
 	Model       Model
 	View        string
 	AuditEvents []*common.AuditLogEvent
+	IsNew       bool
 }
 type ViewModelHandler func(http.ResponseWriter, *http.Request) (*ViewModel, error)
 type AuditLogsConstructor func(context.Context, *dbgen.User, int, int) (*MainAuditLogsRenderContext, error)
@@ -334,9 +335,10 @@ func (s *Server) setupWithPrefix(rg *common.RouteGenerator, security alice.Const
 	public := s.MiddlewarePublicChain(rg, security)
 	publicReadTimeout := common.SoftTimeoutHandler(2 * time.Second)
 	openRead := public.Append(s.Maintenance, publicReadTimeout)
-	rg.Handle(rg.Get(common.LoginEndpoint), openRead.Append(common.Cached), s.Handler(s.getLogin))
-	rg.Handle(rg.Get(common.RegisterEndpoint), openRead.Append(common.Cached), s.Handler(s.getRegister))
-	rg.Handle(rg.Get(common.AccountVerifyEndpoint), openRead.Append(common.Cached), s.Handler(s.getAccountVerify))
+	cachedOpenRead := openRead.Append(common.Cached)
+	rg.Handle(rg.Get(common.LoginEndpoint), cachedOpenRead, s.Handler(s.getLogin))
+	rg.Handle(rg.Get(common.RegisterEndpoint), cachedOpenRead, s.Handler(s.getRegister))
+	rg.Handle(rg.Get(common.AccountVerifyEndpoint), cachedOpenRead, s.Handler(s.getAccountVerify))
 	rg.Handle(rg.Get(common.ErrorEndpoint, arg(common.ParamCode)), public, http.HandlerFunc(s.error))
 	rg.Handle(rg.Get(common.ExpiredEndpoint), public, http.HandlerFunc(s.expired))
 	rg.Handle(rg.Get(common.LogoutEndpoint), public, http.HandlerFunc(s.logout))
@@ -468,7 +470,7 @@ func (s *Server) Handler(modelFunc ViewModelHandler) http.Handler {
 		}
 		// If tpl is not empty, render the template with the model.
 		if mv.View != "" {
-			s.render(w, r, mv.View, mv.Model)
+			s.render(w, r, mv.View, mv.Model, mv.IsNew)
 		}
 		// If tpl is empty, it means modelFunc handled the response (e.g., redirect, error, or manual write).
 		if len(mv.AuditEvents) > 0 {

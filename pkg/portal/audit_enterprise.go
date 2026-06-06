@@ -62,6 +62,7 @@ func (s *Server) getAuditLogEvents(w http.ResponseWriter, r *http.Request) (*Vie
 	return &ViewModel{
 		Model: renderCtx,
 		View:  auditLogsEventsTemplate,
+		IsNew: false,
 	}, nil
 }
 

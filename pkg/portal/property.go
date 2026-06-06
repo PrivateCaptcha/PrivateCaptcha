@@ -278,7 +278,7 @@ func (s *Server) getNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vie
 		data.ErrorMessage = activeSubscriptionForPropertyError
 	}
 
-	return &ViewModel{Model: data, View: propertyWizardTemplate}, nil
+	return &ViewModel{Model: data, View: propertyWizardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreResolveError bool) common.StatusCode {
@@ -429,7 +429,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	renderCtx.Name = strings.TrimSpace(r.FormValue(common.ParamName))
 	if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, renderCtx.Name, org); !nameStatus.Success() {
 		renderCtx.NameError = nameStatus.String()
-		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
 
 	renderCtx.Domain = strings.TrimSpace(r.FormValue(common.ParamDomain))
@@ -437,18 +437,18 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	if err != nil {
 		slog.WarnContext(ctx, "Failed to parse domain name", "domain", renderCtx.Domain, common.ErrAttr(err))
 		renderCtx.DomainError = common.StatusPropertyDomainFormatError.String()
-		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
 
 	_, ignoreError := r.Form[common.ParamIgnoreError]
 	if domainStatus := s.validateDomainName(ctx, domain, ignoreError); !domainStatus.Success() {
 		renderCtx.DomainError = domainStatus.String()
-		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
 
 	if limitError := s.validatePropertiesLimit(ctx, org, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
-		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
 
 	params := db.NewDefaultPropertyParams(renderCtx.Name, domain, user.ID)
@@ -456,7 +456,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the property", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the property. Please try again later."
-		return &ViewModel{Model: renderCtx, View: createPropertyTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: createPropertyTemplate, IsNew: false}, nil
 	}
 
 	integrationsCtx := &propertyIntegrationsRenderContext{
@@ -472,7 +472,7 @@ func (s *Server) postNewOrgProperty(w http.ResponseWriter, r *http.Request) (*Vi
 	}
 	integrationsCtx.Tab = -1
 
-	return &ViewModel{Model: integrationsCtx, View: propertyWizardClientSetupTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: integrationsCtx, View: propertyWizardClientSetupTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) getPropertyWizardClientStep(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -481,7 +481,7 @@ func (s *Server) getPropertyWizardClientStep(w http.ResponseWriter, r *http.Requ
 		return nil, err
 	}
 
-	return &ViewModel{Model: ctx, View: propertyWizardClientSetupTemplate}, nil
+	return &ViewModel{Model: ctx, View: propertyWizardClientSetupTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getPropertyWizardServerStep(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -490,7 +490,7 @@ func (s *Server) getPropertyWizardServerStep(w http.ResponseWriter, r *http.Requ
 		return nil, err
 	}
 
-	return &ViewModel{Model: ctx, View: propertyWizardServerSetupTemplate}, nil
+	return &ViewModel{Model: ctx, View: propertyWizardServerSetupTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getPropertyStats(w http.ResponseWriter, r *http.Request) {
@@ -704,7 +704,7 @@ func (s *Server) getPropertyDashboard(w http.ResponseWriter, r *http.Request) (*
 		return nil, derr
 	}
 
-	return &ViewModel{Model: model, View: propertyDashboardTemplate, AuditEvents: singleAuditEvents(event)}, nil
+	return &ViewModel{Model: model, View: propertyDashboardTemplate, AuditEvents: singleAuditEvents(event), IsNew: true}, nil
 }
 
 func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -713,7 +713,7 @@ func (s *Server) getPropertyReportsTab(w http.ResponseWriter, r *http.Request) (
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardReportsTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardReportsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -722,7 +722,7 @@ func (s *Server) getPropertySettingsTab(w http.ResponseWriter, r *http.Request) 
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) getPropertyIntegrations(w http.ResponseWriter, r *http.Request) (*propertyIntegrationsRenderContext, error) {
@@ -747,7 +747,7 @@ func (s *Server) getPropertyIntegrationsTab(w http.ResponseWriter, r *http.Reque
 		return nil, err
 	}
 
-	return &ViewModel{Model: ctx, View: propertyDashboardIntegrationsTemplate}, nil
+	return &ViewModel{Model: ctx, View: propertyDashboardIntegrationsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) newPropertyAuditLogs(ctx context.Context, user *dbgen.User, logs []*dbgen.GetPropertyAuditLogsRow) []*UserAuditLog {
@@ -776,7 +776,7 @@ func (s *Server) getPropertyAuditLogsTab(w http.ResponseWriter, r *http.Request)
 		return nil, err
 	}
 
-	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: ctx, View: propertyDashboardAuditLogsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -785,7 +785,7 @@ func (s *Server) getPropertyRulesTab(w http.ResponseWriter, r *http.Request) (*V
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: true}, nil
 }
 
 func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -821,7 +821,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		slog.WarnContext(ctx, "Insufficient permissions to edit property", "userID", user.ID, "orgUserID", org.UserID.Int32,
 			"propUserID", property.CreatorID.Int32)
 		renderCtx.ErrorMessage = common.StatusPropertyPermissionsError.String()
-		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
 	}
 
 	name := r.FormValue(common.ParamName)
@@ -829,7 +829,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		if nameStatus := s.Store.Impl().ValidatePropertyName(ctx, name, org); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
 			renderCtx.Property.Name = name
-			return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, IsNew: false}, nil
 		}
 	}
 
@@ -874,7 +874,7 @@ func (s *Server) putProperty(w http.ResponseWriter, r *http.Request) (*ViewModel
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) deleteProperty(w http.ResponseWriter, r *http.Request) {

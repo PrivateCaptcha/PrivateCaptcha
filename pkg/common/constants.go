@@ -99,5 +99,5 @@ var (
 	HeaderReferer             = http.CanonicalHeaderKey("Referer")
 	HeaderOrigin              = http.CanonicalHeaderKey("Origin")
 	HeaderUserAgent           = http.CanonicalHeaderKey("User-Agent")
-	HeaderRequestPathPattern  = http.CanonicalHeaderKey("X-PC-Path-Pattern")
+	HeaderCaptchaPushURL      = http.CanonicalHeaderKey("X-PC-Push-Url")
 )

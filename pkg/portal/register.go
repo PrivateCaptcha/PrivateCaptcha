@@ -43,7 +43,8 @@ func (s *Server) getRegister(w http.ResponseWriter, r *http.Request) (*ViewModel
 			CaptchaRenderContext: s.CreateCaptchaRenderContext(db.PortalRegisterSitekey),
 			IsRegister:           true,
 		},
-		View: loginTemplate,
+		View:  loginTemplate,
+		IsNew: true,
 	}, nil
 }
 
@@ -55,6 +56,7 @@ func (s *Server) getAccountVerify(w http.ResponseWriter, r *http.Request) (*View
 	return &ViewModel{
 		Model: &loginRenderContext{},
 		View:  accountVerifyTemplate,
+		IsNew: true,
 	}, nil
 }
 
@@ -119,14 +121,14 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if len(captchaSolution) == 0 {
 		slog.WarnContext(ctx, "Captcha solution field is empty")
 		data.CaptchaError = "You need to solve captcha to register."
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
 	payload, err := s.PuzzleEngine.ParseSolutionPayload(ctx, []byte(captchaSolution))
 	if err != nil {
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -135,26 +137,26 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to verify captcha due to internal error", common.ErrAttr(err))
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 	if !verifyResult.Success() {
 		slog.ErrorContext(ctx, "Failed to verify captcha", "errors", verifyResult.Error.String())
 		data.CaptchaError = captchaVerificationFailed
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if len(name) < 3 {
 		data.NameError = "Please use a longer name."
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
 	if !isUserNameValid(name) {
 		data.NameError = userNameErrorMessage
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -162,7 +164,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 		data.Email = ""
 		data.EmailError = "Email address is not valid."
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -170,13 +172,13 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "User with such email already exists", "email", email)
 		data.Email = ""
 		data.EmailError = emailAlreadyRegisteredError
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	} else if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) {
 		slog.WarnContext(ctx, "User is already registered but unavailable", "email", email, common.ErrAttr(err))
 		data.Email = ""
 		data.EmailError = accountUnavailableError
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -186,7 +188,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, true); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
 		data.EmailError = "Failed to send a confirmation email. Please try again."
-		s.render(w, r, registerContentsTemplate, data)
+		s.render(w, r, registerContentsTemplate, data, false /*new*/)
 		return
 	}
 
@@ -214,7 +216,7 @@ func (s *Server) postRegister(w http.ResponseWriter, r *http.Request) {
 
 	slog.DebugContext(ctx, "Started 2FA registration flow", "email", email)
 
-	s.render(w, r, twofactorContentsTemplate, data)
+	s.render(w, r, twofactorContentsTemplate, data, true /*new*/)
 }
 
 func createInternalTrial(plan billing.Plan, status string) *dbgen.CreateSubscriptionParams {

@@ -195,7 +195,7 @@ func (s *Server) getNewOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 		renderCtx.WarningMessage = enterpriseOrgError
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgWizardTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: orgWizardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) createPortalTabBaseContext(org *dbgen.Organization, user *dbgen.User, tab int) *portalBaseRenderContext {
@@ -393,7 +393,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 			s.render(w, r, portalTemplate, &orgDashboardRenderContext{
 				portalBaseRenderContext: *baseCtx,
 				Properties:              []*userProperty{},
-			})
+			}, true /*new*/)
 			return
 		}
 	}
@@ -466,7 +466,7 @@ func (s *Server) getPortal(w http.ResponseWriter, r *http.Request) {
 		s.Store.AuditLog().RecordEvent(ctx, event, common.AuditLogSourcePortal)
 	}
 
-	s.render(w, r, portalTemplate, model)
+	s.render(w, r, portalTemplate, model, true /*new*/)
 }
 
 func (s *Server) createOrgPropertiesContext(ctx context.Context, org *dbgen.Organization, user *dbgen.User, page int) (*orgPropertiesRenderContext, error) {
@@ -522,7 +522,7 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: orgDashboardTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -543,7 +543,7 @@ func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgFormsTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: orgFormsTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getOrgForms(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -573,7 +573,7 @@ func (s *Server) getOrgForms(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgFormsListTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: orgFormsListTemplate, IsNew: false}, nil
 }
 
 func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -602,7 +602,7 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: orgPropertiesTemplate, IsNew: false}, nil
 }
 
 func (s *Server) createOrgMembersRenderContext(ctx context.Context, baseCtx *portalBaseRenderContext, org *dbgen.Organization, user *dbgen.User) (*orgMemberRenderContext, *common.AuditLogEvent, error) {
@@ -653,6 +653,7 @@ func (s *Server) getOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMod
 		Model:       renderCtx,
 		View:        orgMembersTemplate,
 		AuditEvents: singleAuditEvents(event),
+		IsNew:       true,
 	}, nil
 }
 
@@ -708,6 +709,7 @@ func (s *Server) getOrgSettings(w http.ResponseWriter, r *http.Request) (*ViewMo
 		Model:       renderCtx,
 		View:        orgSettingsTemplate,
 		AuditEvents: singleAuditEvents(event),
+		IsNew:       true,
 	}, nil
 }
 
@@ -754,6 +756,7 @@ func (s *Server) getOrgAuditLogs(w http.ResponseWriter, r *http.Request) (*ViewM
 		Model:       renderCtx,
 		View:        orgAuditLogsTemplate,
 		AuditEvents: singleAuditEvents(auditEvent),
+		IsNew:       true,
 	}, nil
 }
 
@@ -788,6 +791,7 @@ func (s *Server) getOrgRules(w http.ResponseWriter, r *http.Request) (*ViewModel
 		Model:       renderCtx,
 		View:        orgRulesTemplate,
 		AuditEvents: singleAuditEvents(auditEvent),
+		IsNew:       true,
 	}, nil
 }
 
@@ -817,7 +821,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 
 	if !renderCtx.CanEdit {
 		renderCtx.ErrorMessage = "Insufficient permissions to update settings."
-		return &ViewModel{Model: renderCtx, View: orgSettingsTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, IsNew: false}, nil
 	}
 
 	var auditEvent *common.AuditLogEvent
@@ -825,7 +829,7 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 	if name != org.Name {
 		if nameStatus := s.Store.Impl().ValidateOrgName(ctx, name, user); !nameStatus.Success() {
 			renderCtx.NameError = nameStatus.String()
-			return &ViewModel{Model: renderCtx, View: orgSettingsTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, IsNew: false}, nil
 		}
 
 		var updatedOrg *dbgen.Organization
@@ -837,5 +841,5 @@ func (s *Server) putOrg(w http.ResponseWriter, r *http.Request) (*ViewModel, err
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: orgSettingsTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }

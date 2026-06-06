@@ -208,6 +208,7 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) (*ViewModel
 	}
 
 	modelView.View = tab.TemplatePrefix + "page.html"
+	modelView.IsNew = true
 
 	return modelView, nil
 }
@@ -232,6 +233,7 @@ func (s *Server) getSettingsTab(w http.ResponseWriter, r *http.Request) (*ViewMo
 	}
 
 	modelView.View = tab.TemplatePrefix + "tab.html"
+	modelView.IsNew = true
 
 	return modelView, nil
 }
@@ -335,7 +337,7 @@ func (s *Server) editEmail(w http.ResponseWriter, r *http.Request) (*ViewModel, 
 		_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
 	}
 
-	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 }
 
 func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -369,7 +371,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if err := checkmail.ValidateFormat(formEmail); err != nil {
 			slog.WarnContext(ctx, "Failed to validate email format", common.ErrAttr(err))
 			renderCtx.EmailError = "Email address is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 
 		sentCode, hasSentCode := sess.Get(ctx, session.KeyTwoFactorCode).(int)
@@ -377,7 +379,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if !ok {
 			slog.ErrorContext(ctx, "Failed to get verification code timestamp")
 			renderCtx.TwoFactorError = "Code is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 		formCode := r.FormValue(common.ParamVerificationCode)
 
@@ -388,7 +390,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if enteredCode, err := strconv.Atoi(formCode); !hasSentCode || (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
 			slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
 			renderCtx.TwoFactorError = "Code is not valid."
-			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 		}
 
 		anyChange = (len(formEmail) > 0) && (formEmail != user.Email)
@@ -398,12 +400,12 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		if formName != user.Name {
 			if (len(formName) > 0) && (len(formName) < 3) {
 				renderCtx.NameError = "Please use a longer name."
-				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 			}
 
 			if !isUserNameValid(formName) {
 				renderCtx.NameError = userNameErrorMessage
-				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate}, nil
+				return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, IsNew: false}, nil
 			}
 		}
 
@@ -429,7 +431,7 @@ func (s *Server) putGeneralSettings(w http.ResponseWriter, r *http.Request) (*Vi
 		}
 	}
 
-	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: settingsGeneralFormTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
@@ -657,19 +659,19 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 	if len(formName) < 3 {
 		renderCtx.NameError = "Name is too short."
 		renderCtx.CreateOpen = true
-		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 	}
 
 	if !checkAPIKeyNameValid(ctx, formName) {
 		renderCtx.NameError = "Name contains invalid characters."
 		renderCtx.CreateOpen = true
-		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 	}
 
 	if _, err := s.Store.Impl().FindUserAPIKeyByName(ctx, user, formName); err == nil {
 		renderCtx.NameError = "API key with such name already exists."
 		renderCtx.CreateOpen = true
-		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 	}
 
 	scopeStr := strings.TrimSpace(r.FormValue(common.ParamScope))
@@ -677,7 +679,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to parse API Key scope", "scope", scopeStr, common.ErrAttr(err))
 		renderCtx.WarningMessage = "Failed to create API key with invalid scope."
-		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 	}
 
 	daysParam := strings.ToLower(strings.TrimSpace(r.FormValue(common.ParamDays)))
@@ -685,7 +687,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		slog.ErrorContext(ctx, "Never expiration is not allowed for portal API keys", "scope", scopeStr)
 		renderCtx.WarningMessage = "Never expiration is only allowed for captcha verification keys."
 		renderCtx.CreateOpen = true
-		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 	}
 
 	apiKeyRequestsPerSecond := 1.0
@@ -722,7 +724,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 			slog.ErrorContext(ctx, "Failed to retrieve user org", "orgID", orgIDStr, common.ErrAttr(oerr))
 			renderCtx.OrgError = "Selected organization does not exist."
 			renderCtx.CreateOpen = true
-			return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, IsNew: false}, nil
 		}
 	}
 
@@ -757,7 +759,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 		renderCtx.ErrorMessage = "Failed to create API key. Please try again."
 	}
 
-	return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: settingsAPIKeysContentTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) createAPIKeyExpiryNotifications(ctx context.Context, key *dbgen.APIKey, userKey *userAPIKey) error {
@@ -824,7 +826,7 @@ func (s *Server) rotateAPIKey(w http.ResponseWriter, r *http.Request) (*ViewMode
 		return anyError
 	})
 
-	return &ViewModel{Model: userKey, View: apiKeyRowTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: userKey, View: apiKeyRowTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) deleteAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -1115,6 +1117,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 			return &ViewModel{
 				Model: renderCtx,
 				View:  settingsNotificationsFormTemplate,
+				IsNew: false,
 			}, nil
 		}
 	}
@@ -1133,6 +1136,7 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		return &ViewModel{
 			Model: renderCtx,
 			View:  settingsNotificationsFormTemplate,
+			IsNew: false,
 		}, nil
 	}
 
@@ -1142,5 +1146,6 @@ func (s *Server) putNotificationsSettings(w http.ResponseWriter, r *http.Request
 		Model:       renderCtx,
 		View:        settingsNotificationsFormTemplate,
 		AuditEvents: singleAuditEvents(auditEvent),
+		IsNew:       false,
 	}, nil
 }

@@ -77,13 +77,13 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue(common.ParamName))
 	if nameStatus := s.Store.Impl().ValidateOrgName(ctx, name, user); !nameStatus.Success() {
 		renderCtx.NameError = nameStatus.String()
-		s.render(w, r, createOrgFormTemplate, renderCtx)
+		s.render(w, r, createOrgFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
 	if limitError := s.validateOrgsLimit(ctx, user); len(limitError) > 0 {
 		renderCtx.ErrorMessage = limitError
-		s.render(w, r, createOrgFormTemplate, renderCtx)
+		s.render(w, r, createOrgFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -91,7 +91,7 @@ func (s *Server) postNewOrg(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create the organization", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to create the organization. Please try again later."
-		s.render(w, r, createOrgFormTemplate, renderCtx)
+		s.render(w, r, createOrgFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -217,13 +217,13 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 
 	if !renderCtx.CanEdit {
 		renderCtx.ErrorMessage = "Only organization owner can invite other members."
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 	}
 
 	inviteEmail := strings.TrimSpace(r.FormValue(common.ParamEmail))
 	if errorMsg := s.validateAddOrgMemberEmail(ctx, user, org, members, inviteEmail); len(errorMsg) > 0 {
 		renderCtx.ErrorMessage = errorMsg
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 	}
 
 	inviteUser, err := s.Store.Impl().FindUserByEmail(ctx, inviteEmail)
@@ -234,7 +234,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 			if err := s.EmailVerifier.VerifyEmail(ctx, inviteEmail); err != nil {
 				slog.WarnContext(ctx, "Failed to validate email format for invite", common.ErrAttr(err))
 				renderCtx.ErrorMessage = "Email address is not valid."
-				return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+				return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 			}
 
 			// Invite by email
@@ -243,16 +243,16 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		if errors.Is(err, db.ErrDisabled) || errors.Is(err, db.ErrSoftDeleted) {
 			slog.WarnContext(ctx, "Cannot invite unavailable user to org", "email", inviteEmail, common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Cannot invite this user to the organization."
-			return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+			return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 		}
 		slog.ErrorContext(ctx, "Error finding user by email", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 	}
 
 	if errorMsg := s.validateAddOrgMemberID(ctx, user, org, members, inviteUser.ID); len(errorMsg) > 0 {
 		renderCtx.ErrorMessage = errorMsg
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 	}
 
 	var auditEvent *common.AuditLogEvent
@@ -270,7 +270,7 @@ func (s *Server) postOrgMembers(w http.ResponseWriter, r *http.Request) (*ViewMo
 		})
 	}
 
-	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 // inviteEmailToOrg handles inviting a non-existing user by email
@@ -279,7 +279,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to create email invite", common.ErrAttr(err))
 		renderCtx.ErrorMessage = "Failed to invite user. Please try again."
-		return &ViewModel{Model: renderCtx, View: orgMembersTemplate}, nil
+		return &ViewModel{Model: renderCtx, View: orgMembersTemplate, IsNew: false}, nil
 	}
 
 	// Add pending invite to the list (with email only, no user info)
@@ -297,7 +297,7 @@ func (s *Server) inviteEmailToOrg(ctx context.Context, user *dbgen.User, org *db
 		return s.Mailer.SendOrgInvite(bctx, email, "" /*user name*/, org.Name, user.Email, common.GuessFirstName(user.Name, user.Email), registerInviteURL, true /*register*/)
 	})
 
-	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: orgMembersTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) deleteOrgMembers(w http.ResponseWriter, r *http.Request) {
@@ -732,7 +732,7 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 			model.CaptchaRenderContext = s.CreateCaptchaRenderContext(db.PortalLoginSitekey)
 			model.IsRegister = false
 			model.CanRegister = s.canRegister.Load()
-			return &ViewModel{Model: model, View: loginTemplate}, nil
+			return &ViewModel{Model: model, View: loginTemplate, IsNew: true}, nil
 		}
 
 		model.Email = invite.Email.String
@@ -744,5 +744,5 @@ func (s *Server) getOrgInviteRegister(w http.ResponseWriter, r *http.Request) (*
 	}
 
 	// Return the register page view (same as regular register)
-	return &ViewModel{Model: model, View: loginTemplate}, nil
+	return &ViewModel{Model: model, View: loginTemplate, IsNew: true}, nil
 }

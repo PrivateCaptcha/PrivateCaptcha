@@ -84,7 +84,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	if enteredCode, err := strconv.Atoi(formCode); (err != nil) || (enteredCode != sentCode) || (!codeTimestamp.IsZero() && tnow.After(codeTimestamp.Add(s.TwoFactorDuration))) {
 		data.CodeError = "Code is not valid."
 		slog.WarnContext(ctx, "Code verification failed", "actual", formCode, "timestamp", codeTimestamp, common.ErrAttr(err))
-		s.render(w, r, "login/twofactor-form.html", data)
+		s.render(w, r, "login/twofactor-form.html", data, false /*new*/)
 		return
 	}
 
@@ -176,13 +176,13 @@ func (s *Server) resend2fa(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.Mailer.SendTwoFactor(ctx, email, code, r.UserAgent(), location, false); err != nil {
 		slog.ErrorContext(ctx, "Failed to send email message", common.ErrAttr(err))
-		s.render(w, r, "login/resend-error.html", renderContextNothing)
+		s.render(w, r, "login/resend-error.html", renderContextNothing, false /*new*/)
 		return
 	}
 
 	_ = sess.Set(ctx, session.KeyTwoFactorCode, code)
 	_ = sess.Set(ctx, session.KeyTwoFactorCodeTimestamp, time.Now().UTC())
-	s.render(w, r, "login/resend.html", renderContextNothing)
+	s.render(w, r, "login/resend.html", renderContextNothing, false /*new*/)
 }
 
 // parseOrgInviteIDFromURL extracts org invite ID from a URL path like /orginvite/{id}/signup

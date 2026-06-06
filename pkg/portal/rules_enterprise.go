@@ -427,7 +427,7 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, property)
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -448,7 +448,7 @@ func (s *Server) getOrgNewRule(w http.ResponseWriter, r *http.Request) (*ViewMod
 
 	renderCtx := s.NewRuleWizardRenderContext(user, org, nil /*property*/)
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
 }
 
 func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
@@ -491,13 +491,13 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 		if len(renderCtx.ErrorMessage) == 0 {
 			renderCtx.ErrorMessage = statusCode.String()
 		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
 	if limitStatus := s.validatePropertyRulesLimit(ctx, org, property, user); !limitStatus.Success() {
 		renderCtx.ErrorMessage = limitStatus.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -508,7 +508,7 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -553,13 +553,13 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 		if len(renderCtx.ErrorMessage) == 0 {
 			renderCtx.ErrorMessage = statusCode.String()
 		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
 	if limitStatus := s.validateOrgRulesLimit(ctx, org, user); !limitStatus.Success() {
 		renderCtx.ErrorMessage = limitStatus.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -570,7 +570,7 @@ func (s *Server) postOrgNewRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to insert difficulty rule", common.ErrAttr(err))
 		renderCtx.ErrorMessage = common.StatusFailure.String()
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -800,7 +800,7 @@ func (s *Server) getPropertyEditRule(w http.ResponseWriter, r *http.Request) (*V
 	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
 }
 
 func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -835,7 +835,7 @@ func (s *Server) getOrgEditRule(w http.ResponseWriter, r *http.Request) (*ViewMo
 	renderCtx.RuleID = s.IDHasher.Encrypt(int(rule.ID))
 	renderCtx.IsEdit = true
 
-	return &ViewModel{Model: renderCtx, View: ruleTemplate}, nil
+	return &ViewModel{Model: renderCtx, View: ruleTemplate, IsNew: true}, nil
 }
 
 func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
@@ -894,7 +894,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		if len(renderCtx.ErrorMessage) == 0 {
 			renderCtx.ErrorMessage = statusCode.String()
 		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -902,7 +902,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 		if limitStatus := s.validatePropertyRulesLimit(ctx, org, property, user); !limitStatus.Success() {
 			slog.WarnContext(ctx, "Cannot enable property rule due to rules limit", "ruleID", rule.ID, "propertyID", property.ID)
 			renderCtx.ErrorMessage = limitStatus.String()
-			s.render(w, r, ruleFormTemplate, renderCtx)
+			s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 			return
 		}
 	}
@@ -926,7 +926,7 @@ func (s *Server) postPropertyEditRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "propertyID", property.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -986,7 +986,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		if len(renderCtx.ErrorMessage) == 0 {
 			renderCtx.ErrorMessage = statusCode.String()
 		}
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -994,7 +994,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 		if limitStatus := s.validateOrgRulesLimit(ctx, org, user); !limitStatus.Success() {
 			slog.WarnContext(ctx, "Cannot enable org rule due to rules limit", "ruleID", rule.ID, "orgID", org.ID)
 			renderCtx.ErrorMessage = limitStatus.String()
-			s.render(w, r, ruleFormTemplate, renderCtx)
+			s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 			return
 		}
 	}
@@ -1018,7 +1018,7 @@ func (s *Server) postOrgEditRule(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to update difficulty rule", "ruleID", rule.ID, "orgID", org.ID, common.ErrAttr(err))
 		renderCtx.ErrorMessage = errUpdateRuleMessage
-		s.render(w, r, ruleFormTemplate, renderCtx)
+		s.render(w, r, ruleFormTemplate, renderCtx, false /*new*/)
 		return
 	}
 
@@ -1186,7 +1186,7 @@ func (s *Server) postMovePropertyRule(w http.ResponseWriter, r *http.Request) (*
 		return nil, err
 	}
 
-	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvents: singleAuditEvents(auditEvent)}, nil
+	return &ViewModel{Model: renderCtx, View: propertyDashboardRulesTemplate, AuditEvents: singleAuditEvents(auditEvent), IsNew: false}, nil
 }
 
 func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewModel, error) {
@@ -1261,5 +1261,6 @@ func (s *Server) postMoveOrgRule(w http.ResponseWriter, r *http.Request) (*ViewM
 		Model:       renderCtx,
 		View:        orgRulesTemplate,
 		AuditEvents: singleAuditEvents(auditEvent),
+		IsNew:       false,
 	}, nil
 }
