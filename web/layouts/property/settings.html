@@ -140,7 +140,6 @@
                                     status === 400 ? 'Invalid organization. Please refresh and try again.' :
                                     'Failed to move the property. Please try again later.';
                         alert(msg);"
-                        hx-on::response-error="alert('Failed to move the property. Please try again later.')"
                         hx-post="{{ partsURL .Const.OrgEndpoint .Params.Org.ID .Const.PropertyEndpoint .Params.Property.ID .Const.MoveEndpoint }}">
                         {{template "settings-move-form.html" .}}
                     </form>
