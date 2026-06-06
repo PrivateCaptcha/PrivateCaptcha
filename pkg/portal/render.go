@@ -3,6 +3,7 @@ package portal
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"time"
@@ -232,7 +233,7 @@ func NewRenderConstants() *RenderConstants {
 	}
 }
 
-func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext, platformCtx interface{}) (bytes.Buffer, error) {
+func (s *Server) RenderResponse(ctx context.Context, name string, data interface{}, reqCtx *RequestContext, platformCtx interface{}) (*bytes.Buffer, error) {
 	actualData := struct {
 		Params   interface{}
 		Const    interface{}
@@ -247,13 +248,13 @@ func (s *Server) RenderResponse(ctx context.Context, name string, data interface
 		Data:     s.DataCtx,
 	}
 
-	var out bytes.Buffer
+	out := &bytes.Buffer{}
 
-	if err := ctx.Err(); err == context.DeadlineExceeded {
+	if err := ctx.Err(); errors.Is(err, context.DeadlineExceeded) {
 		return out, err
 	}
 
-	err := s.template.Render(ctx, &out, name, actualData)
+	err := s.template.Render(ctx, out, name, actualData)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to render template", "name", name, common.ErrAttr(err))
 	}

@@ -73,7 +73,7 @@ func wrapScriptContentsWithCDATA(input []byte) []byte {
 }
 
 // courtesy of https://martinfowler.com/articles/tdd-html-templates.html
-func AssertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
+func AssertWellFormedHTML(t *testing.T, buf *bytes.Buffer) {
 	data := buf.Bytes()
 	// '<=' (e.g. in for loops) in <script> breaks XML parser
 	data = wrapScriptContentsWithCDATA(data)
@@ -103,7 +103,7 @@ func AssertWellFormedHTML(t *testing.T, buf bytes.Buffer) {
 	}
 }
 
-func ParseHTML(t *testing.T, buf bytes.Buffer) *goquery.Document {
+func ParseHTML(t *testing.T, buf *bytes.Buffer) *goquery.Document {
 	AssertWellFormedHTML(t, buf)
 	document, err := goquery.NewDocumentFromReader(bytes.NewReader(buf.Bytes()))
 	if err != nil {
