@@ -229,7 +229,7 @@
         </div>
 
         <div class="flex items-start md:col-span-2">
-            <button type="submit" class="pc-internal-form-button pc-internal-form-button-danger"
+            <button type="button" class="pc-internal-form-button pc-internal-form-button-danger"
                 hx-confirm="Are you sure?"
                 @click="pcTrackEvent('Leave')"
                 hx-delete="{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.MembersEndpoint }}">
