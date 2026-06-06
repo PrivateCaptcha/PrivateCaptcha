@@ -354,6 +354,82 @@ func TestGetFormDashboardIntegrationsTab(t *testing.T) {
 	}
 }
 
+func TestInvitedUserCannotAccessDirectFormRoutes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	ctx := t.Context()
+	owner, org, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_owner", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create owner account: %v", err)
+	}
+
+	form, _, _, err := store.Impl().CreateNewForm(ctx,
+		db_tests.CreateNewPropertyParams(owner.ID, "invited-direct-form.example.com"),
+		db_tests.CreateNewFormParams(owner.ID, "https://example.com/submit"),
+		org)
+	if err != nil {
+		t.Fatalf("Failed to create form: %v", err)
+	}
+
+	member, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name()+"_member", testPlan)
+	if err != nil {
+		t.Fatalf("Failed to create member account: %v", err)
+	}
+	if _, err := store.Impl().InviteUserToOrg(ctx, owner, org, member); err != nil {
+		t.Fatalf("Failed to invite member: %v", err)
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	cookie, err := portal_tests.AuthenticateSuite(ctx, member.Email, srv, server.XSRF, server.Sessions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := server.IDHasher.Encrypt(int(org.ID))
+	formID := server.IDHasher.Encrypt(int(form.ID))
+	tests := []struct {
+		name           string
+		path           string
+		wantCode       int
+		wantErrorRoute bool
+	}{
+		{name: "Dashboard", path: fmt.Sprintf("/org/%s/form/%s", orgID, formID), wantCode: http.StatusSeeOther, wantErrorRoute: true},
+		{name: "ReportsTab", path: fmt.Sprintf("/org/%s/form/%s/tab/%s", orgID, formID, common.ReportsEndpoint), wantCode: http.StatusSeeOther, wantErrorRoute: true},
+		{name: "IntegrationsTab", path: fmt.Sprintf("/org/%s/form/%s/tab/%s", orgID, formID, common.IntegrationsEndpoint), wantCode: http.StatusSeeOther, wantErrorRoute: true},
+		{name: "SettingsTab", path: fmt.Sprintf("/org/%s/form/%s/tab/%s", orgID, formID, common.SettingsEndpoint), wantCode: http.StatusSeeOther, wantErrorRoute: true},
+		{name: "AuditLogsTab", path: fmt.Sprintf("/org/%s/form/%s/tab/%s", orgID, formID, common.EventsEndpoint), wantCode: http.StatusSeeOther, wantErrorRoute: true},
+		{name: "Stats", path: fmt.Sprintf("/org/%s/form/%s/stats/%s", orgID, formID, PeriodEndpointToday), wantCode: http.StatusForbidden},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.AddCookie(cookie)
+
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			if w.Code != tc.wantCode {
+				t.Fatalf("expected status %d, got %d", tc.wantCode, w.Code)
+			}
+
+			if tc.wantErrorRoute {
+				location, err := w.Result().Location()
+				if err != nil {
+					t.Fatalf("expected redirect location, got %v", err)
+				}
+				if !strings.HasPrefix(location.String(), "/"+common.ErrorEndpoint) {
+					t.Fatalf("expected error redirect, got %q", location.String())
+				}
+			}
+		})
+	}
+}
+
 func TestPutFormUpdatesSettings(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

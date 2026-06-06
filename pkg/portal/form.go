@@ -412,9 +412,15 @@ func (s *Server) getFormStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 		return
 	}
 
@@ -470,9 +476,14 @@ func (s *Server) getOrgForm(w http.ResponseWriter, r *http.Request) (*formDashbo
 		return nil, nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		slog.WarnContext(ctx, "User is only invited, not a member of this org", "orgID", org.ID, "userID", user.ID)
+		return nil, nil, db.ErrPermissions
 	}
 
 	form, err := s.Form(org, r)
