@@ -313,6 +313,84 @@ func TestSubmitFormWithRetryReturnsSuccessResult(t *testing.T) {
 	}
 }
 
+func TestSubmitFormWithRetryTreatsRedirectAsFailureWhenDisabled(t *testing.T) {
+	redirectHits := 0
+	successHits := 0
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			redirectHits++
+			http.Redirect(w, r, "/success", http.StatusFound)
+		case "/success":
+			successHits++
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true, SupportsRedirects: false}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Success {
+		t.Fatal("expected redirect response to be treated as failure")
+	}
+	if result.StatusCode != http.StatusFound {
+		t.Fatalf("expected status %d, got %d", http.StatusFound, result.StatusCode)
+	}
+	if redirectHits != 1 {
+		t.Fatalf("expected one redirect attempt, got %d", redirectHits)
+	}
+	if successHits != 0 {
+		t.Fatalf("expected redirect target not to be hit, got %d", successHits)
+	}
+}
+
+func TestSubmitFormWithRetryFollowsRedirectWhenEnabled(t *testing.T) {
+	redirectHits := 0
+	successHits := 0
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			redirectHits++
+			http.Redirect(w, r, "/success", http.StatusFound)
+		case "/success":
+			successHits++
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer downstream.Close()
+
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true, SupportsRedirects: true}
+	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	result := SubmitFormWithRetry(context.Background(), client, form, submission)
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Success {
+		t.Fatal("expected redirect to be followed")
+	}
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, result.StatusCode)
+	}
+	if redirectHits != 1 {
+		t.Fatalf("expected one redirect response, got %d", redirectHits)
+	}
+	if successHits != 1 {
+		t.Fatalf("expected redirect target to be hit once, got %d", successHits)
+	}
+}
+
 func TestSubmitFormWithRetryReturnsFailureResult(t *testing.T) {
 	var attempts int
 	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
