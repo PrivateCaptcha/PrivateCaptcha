@@ -190,8 +190,9 @@ export class CaptchaWidget {
             this._errorCode = errors.ERROR_FETCH_PUZZLE;
             this._internalError = e.internalError || e.message;
             this.setState(STATE_ERROR);
-            this.setProgressState((this._userStarted || this._apiTriggered) ? STATE_VERIFIED : STATE_EMPTY);
-            if (this._userStarted || this._apiTriggered) {
+            const shouldFinalize = this.shouldFinalizeWork();
+            this.setProgressState(shouldFinalize ? STATE_VERIFIED : STATE_EMPTY);
+            if (shouldFinalize) {
                 this.saveSolutions();
                 this.signalErrored();
             }
@@ -447,6 +448,10 @@ export class CaptchaWidget {
         }
     }
 
+    shouldFinalizeWork() {
+        return this._userStarted || (this._apiTriggered && ('auto' === this._options.startMode));
+    }
+
     /**
      * @param {boolean} autoStart
      */
@@ -485,11 +490,12 @@ export class CaptchaWidget {
         }
 
         this.setState(STATE_VERIFIED);
-        if (this._userStarted || this._apiTriggered) {
+        const shouldFinalize = this.shouldFinalizeWork();
+        if (shouldFinalize) {
             this.setProgressState(STATE_VERIFIED);
         }
 
-        if (this._userStarted || this._apiTriggered) {
+        if (shouldFinalize) {
             this.saveSolutions();
 
             // give time for checkbox animation to complete

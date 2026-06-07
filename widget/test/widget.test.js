@@ -114,6 +114,87 @@ test('CaptchaWidget execute() fires finished event and callback', async (t) => {
     console.log('✓ Widget execute test passed');
 });
 
+test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until user clicks', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <div class="private-captcha-anchor">
+                <div class="private-captcha"
+                     data-display-mode="popup"
+                     data-start-mode="click"
+                     data-finished-callback="testClickModeFinishedCallback">
+                </div>
+            </div>
+        </form>
+    `;
+
+    let callbackCalled = false;
+    global.window.testClickModeFinishedCallback = (widget) => {
+        callbackCalled = true;
+    };
+
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    assert.ok(element, 'Should find captcha element');
+
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    let finishEventFired = false;
+    element.addEventListener('privatecaptcha:finish', () => {
+        finishEventFired = true;
+    });
+
+    const startedEvent = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Started event timeout after 5000ms'));
+        }, 5000);
+
+        element.addEventListener('privatecaptcha:start', () => {
+            clearTimeout(timeout);
+            resolve();
+        }, { once: true });
+    });
+
+    widget.execute();
+    await startedEvent;
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    const pcElement = element.querySelector('private-captcha');
+    assert.ok(pcElement, 'Should find private-captcha element');
+    const checkboxEl = pcElement.shadowRoot.querySelector('input[type="checkbox"]');
+    assert.ok(checkboxEl, 'Should still show an unchecked checkbox');
+    assert.strictEqual(checkboxEl.checked, false, 'Checkbox should remain unchecked');
+    assert.strictEqual(finishEventFired, false, 'Finish event should not fire before user clicks');
+    assert.strictEqual(callbackCalled, false, 'Finished callback should not run before user clicks');
+    assert.strictEqual(widget.solution(), null, 'Solution should not be exposed before user clicks');
+
+    const finishAfterClick = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Finish event timeout after user click'));
+        }, 5000);
+
+        element.addEventListener('privatecaptcha:finish', () => {
+            clearTimeout(timeout);
+            resolve();
+        }, { once: true });
+    });
+
+    checkboxEl.checked = true;
+    checkboxEl.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    await finishAfterClick;
+
+    assert.strictEqual(finishEventFired, true, 'Finish event should fire after user clicks');
+    assert.strictEqual(callbackCalled, true, 'Finished callback should run after user clicks');
+    assert.ok(widget.solution(), 'Solution should be exposed after user clicks');
+
+    console.log('✓ Widget click popup execute test passed');
+});
+
 test('CaptchaWidget init() fires init event and callback', async (t) => {
     document.body.innerHTML = `
         <form>
