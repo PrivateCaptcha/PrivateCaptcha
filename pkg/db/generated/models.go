@@ -556,6 +556,7 @@ type Form struct {
 	Method            FormMethod         `db:"method" json:"method"`
 	Enabled           bool               `db:"enabled" json:"enabled"`
 	Active            bool               `db:"active" json:"active"`
+	SupportsRedirects bool               `db:"supports_redirects" json:"supports_redirects"`
 }
 
 type Lock struct {

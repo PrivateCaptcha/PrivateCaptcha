@@ -65,7 +65,8 @@ SELECT
     old.active AS old_active,
     old.retry_request_count AS old_retry_request_count,
     old.requests_per_minute AS old_requests_per_minute,
-    old.method AS old_method
+    old.method AS old_method,
+    old.supports_redirects AS old_supports_redirects
 FROM upd
 CROSS JOIN old;
 
