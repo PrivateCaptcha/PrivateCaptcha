@@ -356,6 +356,7 @@ type AuditLogForm struct {
 	PropertyID        int32  `json:"property_id,omitempty"`
 	RequestsPerMinute int16  `json:"requests_per_minute,omitempty"`
 	RetryRequestCount int16  `json:"retry_request_count,omitempty"`
+	RedirectCount     int16  `json:"redirect_count,omitempty"`
 	Method            string `json:"method,omitempty"`
 	Enabled           bool   `json:"enabled"`
 	Active            bool   `json:"active"`
@@ -376,6 +377,7 @@ func newAuditLogForm(form *dbgen.Form, org *dbgen.Organization) *AuditLogForm {
 		Active:            form.Active,
 		RequestsPerMinute: form.RequestsPerMinute,
 		RetryRequestCount: form.RetryRequestCount,
+		RedirectCount:     form.RedirectCount,
 		Method:            string(form.Method),
 	}
 
@@ -398,6 +400,7 @@ func newAuditLogOldForm(form *dbgen.Form, updateRow *dbgen.UpdateFormRow, org *d
 		OrgOwnerID:        form.OrgOwnerID.Int32,
 		PropertyID:        form.PropertyID,
 		Enabled:           form.Enabled,
+		RedirectCount:     form.RedirectCount,
 		Active:            updateRow.OldActive,
 		RequestsPerMinute: updateRow.OldRequestsPerMinute,
 		RetryRequestCount: updateRow.OldRetryRequestCount,
