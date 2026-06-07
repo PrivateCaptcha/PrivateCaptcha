@@ -146,7 +146,7 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 			cache:   NewStaticCache[CacheKey, any](1000, &CacheMissingValue{}),
 		}
 
-		_, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
+		createdForm, _, _, err := store.CreateNewForm(context.Background(), &dbgen.CreatePropertyParams{
 			CreatorID: Int(12),
 			Domain:    "example.com",
 		}, &dbgen.CreateFormParams{
@@ -162,6 +162,9 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 		}
 		if querier.createdFormArg.RequestsPerMinute != 10 {
 			t.Fatalf("expected default requests per minute 10, got %d", querier.createdFormArg.RequestsPerMinute)
+		}
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected redirect count to default to 0, got %d", createdForm.RedirectCount)
 		}
 	})
 
@@ -797,6 +800,9 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		if querier.createdFormArg == nil || querier.createdFormArg.PropertyID != property.ID {
 			t.Fatalf("expected created form property ID to be %d, got %#v", property.ID, querier.createdFormArg)
 		}
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected created form redirect count 0, got %d", createdForm.RedirectCount)
+		}
 		cachedForm, needsRefresh, err := store.GetCachedFormByExternalID(context.Background(), UUIDToString(form.ExternalID))
 		if err != nil {
 			t.Fatalf("expected cached form, got %v", err)
@@ -806,6 +812,9 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		}
 		if cachedForm != form {
 			t.Fatalf("expected cached form to match created form")
+		}
+		if cachedForm.RedirectCount != 0 {
+			t.Fatalf("expected cached form redirect count 0, got %d", cachedForm.RedirectCount)
 		}
 	})
 
@@ -844,12 +853,15 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			Fields: []byte(`{"email":"text"}`),
 		}
 
-		_, _, _, err := store.CreateNewForm(context.Background(), propertyParams, formParams, &dbgen.Organization{ID: 1, UserID: Int(99)})
+		createdForm, _, _, err := store.CreateNewForm(context.Background(), propertyParams, formParams, &dbgen.Organization{ID: 1, UserID: Int(99)})
 		if err != nil {
 			t.Fatalf("expected form creation to succeed, got %v", err)
 		}
 		if propertyParams.Name != formName {
 			t.Fatalf("expected generated property name %q, got %q", formName, propertyParams.Name)
+		}
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected created form redirect count 0, got %d", createdForm.RedirectCount)
 		}
 	})
 
@@ -860,6 +872,33 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 			t.Errorf("expected ErrInvalidInput, got %v", err)
 		}
 	})
+}
+
+func TestCreateFormFromUpdatePreservesRedirectCount(t *testing.T) {
+	updated := createFormFromUpdate(&dbgen.UpdateFormRow{
+		ID:                123,
+		Name:              "contact",
+		ExternalID:        TestPropertyUUID,
+		OrgID:             Int(10),
+		CreatorID:         Int(11),
+		OrgOwnerID:        Int(12),
+		URL:               "https://example.com/submit",
+		PropertyID:        13,
+		Fields:            []byte(`{}`),
+		RequestsPerMinute: 10,
+		RetryRequestCount: 0,
+		Method:            dbgen.FormMethodPost,
+		RedirectCount:     3,
+		Enabled:           true,
+		Active:            true,
+	})
+
+	if updated == nil {
+		t.Fatal("expected form")
+	}
+	if updated.RedirectCount != 3 {
+		t.Fatalf("expected redirect count to be preserved, got %d", updated.RedirectCount)
+	}
 }
 
 func TestBusinessStoreImplUpdateProperty(t *testing.T) {

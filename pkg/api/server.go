@@ -199,8 +199,8 @@ func (s *Server) Init(ctx context.Context, config ServerConfig) error {
 		s.FailingForms = common.NewExpiringCounterMap[int32]()
 	}
 
-	if (s.FormsClient == nil) && (s.FormURLVerifier != nil) {
-		s.FormsClient = common.NewFormHTTPClient(s.FormURLVerifier)
+	if s.FormsClient == nil {
+		s.FormsClient = common.NewFormHTTPClient()
 	}
 
 	baseFormSubmitLogCtx := context.WithValue(context.Background(), common.ServiceContextKey, ApiService)

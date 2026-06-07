@@ -348,8 +348,10 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 	}
 
 	client := s.FormsClient
-	if client == nil {
-		client = common.NewFormHTTPClient(s.FormURLVerifier)
+	if f.RedirectCount > 0 {
+		client = common.NewFormRedirectHTTPClient(s.FormURLVerifier, f.RedirectCount)
+	} else if client == nil {
+		client = common.NewFormHTTPClient()
 	}
 
 	if result := SubmitFormWithRetry(ctx, client, f, sub); result.Valid {
