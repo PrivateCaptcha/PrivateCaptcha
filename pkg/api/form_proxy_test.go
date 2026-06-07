@@ -222,6 +222,44 @@ func TestSubmitFormBatchRecordsOneFinalFailureAfterRetries(t *testing.T) {
 	}
 }
 
+func TestProcessFormSubmissionClonesClientWhenRedirectsEnabled(t *testing.T) {
+	redirectHits := 0
+	successHits := 0
+	downstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/redirect":
+			redirectHits++
+			http.Redirect(w, r, "/success", http.StatusFound)
+		case "/success":
+			successHits++
+			w.WriteHeader(http.StatusOK)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer downstream.Close()
+
+	verifier := &stubSubmitFormURLVerifier{}
+	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 0, Enabled: true, Active: true, SupportsRedirects: true}
+	server := &Server{
+		FormsClient:       common.NewFormHTTPClient(verifier),
+		FormURLVerifier:   verifier,
+		FormSubmitLogChan: make(chan *common.FormSubmitRecord, 1),
+		FailingForms:      common.NewExpiringCounterMap[int32](),
+	}
+	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
+
+	if err := server.processFormSubmission(context.Background(), form, submission); err != nil {
+		t.Fatalf("expected redirect-enabled submission to succeed, got %v", err)
+	}
+	if redirectHits != 1 {
+		t.Fatalf("expected one redirect response, got %d", redirectHits)
+	}
+	if successHits != 1 {
+		t.Fatalf("expected redirect target to be hit once, got %d", successHits)
+	}
+}
+
 func TestFormProxyCachedFormUpdatesRateLimit(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
@@ -370,7 +408,8 @@ func TestSubmitFormWithRetryFollowsRedirectWhenEnabled(t *testing.T) {
 	defer downstream.Close()
 
 	form := &dbgen.Form{ID: 123, PropertyID: 456, OrgOwnerID: db.Int(7), OrgID: db.Int(8), ExternalID: db.TestPropertyUUID, URL: downstream.URL + "/redirect", Method: dbgen.FormMethodPost, RetryRequestCount: 1, Enabled: true, Active: true, SupportsRedirects: true}
-	client := common.NewFormHTTPClient(&stubSubmitFormURLVerifier{})
+	verifier := &stubSubmitFormURLVerifier{}
+	client := common.CloneFormHTTPClientWithRedirects(common.NewFormHTTPClient(verifier), verifier)
 	submission := &FormSubmission{FormExternalID: db.UUIDToString(form.ExternalID), Values: url.Values{"email": {"test@example.com"}}}
 
 	result := SubmitFormWithRetry(context.Background(), client, form, submission)
@@ -590,10 +629,24 @@ func TestSubmitFormOnceDoesNotReadBadRequestBody(t *testing.T) {
 	}
 }
 
-func TestFormHTTPClientRejectsUnsafeRedirect(t *testing.T) {
+func TestFormHTTPClientDoesNotFollowRedirectsByDefault(t *testing.T) {
+	verifier := &stubSubmitFormURLVerifier{}
+	client := common.NewFormHTTPClient(verifier)
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
+
+	err := client.CheckRedirect(req, nil)
+	if !errors.Is(err, http.ErrUseLastResponse) {
+		t.Fatalf("expected redirect response to be returned, got %v", err)
+	}
+	if len(verifier.urls) != 0 {
+		t.Fatalf("expected default client not to verify redirect URL, got %v", verifier.urls)
+	}
+}
+
+func TestFormRedirectClientRejectsUnsafeRedirect(t *testing.T) {
 	expectedErr := errors.New("unsafe redirect URL")
 	verifier := &stubSubmitFormURLVerifier{err: expectedErr}
-	client := common.NewFormHTTPClient(verifier)
+	client := common.CloneFormHTTPClientWithRedirects(common.NewFormHTTPClient(verifier), verifier)
 	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/form", nil)
 
 	err := client.CheckRedirect(req, nil)

@@ -351,6 +351,9 @@ func (s *Server) processFormSubmission(ctx context.Context, f *dbgen.Form, sub *
 	if client == nil {
 		client = common.NewFormHTTPClient(s.FormURLVerifier)
 	}
+	if f.SupportsRedirects {
+		client = common.CloneFormHTTPClientWithRedirects(client, s.FormURLVerifier)
+	}
 
 	if result := SubmitFormWithRetry(ctx, client, f, sub); result.Valid {
 		s.addFormSubmitRecord(ctx, f, result.ResultCode())
@@ -392,19 +395,6 @@ func (s *Server) addFormSubmitRecord(ctx context.Context, form *dbgen.Form, stat
 	}
 }
 
-func formSubmissionClient(client *http.Client, form *dbgen.Form) *http.Client {
-	if (client == nil) || (form == nil) || form.SupportsRedirects {
-		return client
-	}
-
-	clientCopy := *client
-	clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-
-	return &clientCopy
-}
-
 func SubmitFormWithRetry(ctx context.Context, client *http.Client, form *dbgen.Form, submission *FormSubmission) *FormSubmitResult {
 	b := &backoff.Backoff{
 		Min:    100 * time.Millisecond,
@@ -415,7 +405,6 @@ func SubmitFormWithRetry(ctx context.Context, client *http.Client, form *dbgen.F
 
 	attempts := int(form.RetryRequestCount) + 1
 	result := &FormSubmitResult{}
-	submitClient := formSubmissionClient(client, form)
 
 	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
@@ -428,7 +417,7 @@ func SubmitFormWithRetry(ctx context.Context, client *http.Client, form *dbgen.F
 		}
 
 		var err error
-		result, err = submitFormOnce(ctx, submitClient, form, submission)
+		result, err = submitFormOnce(ctx, client, form, submission)
 		var rerr common.RetriableError
 		if err != nil && errors.As(err, &rerr) {
 			err = rerr.Unwrap()
