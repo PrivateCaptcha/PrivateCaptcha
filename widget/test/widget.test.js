@@ -195,6 +195,57 @@ test('CaptchaWidget execute() in click popup mode keeps checkbox unchecked until
     console.log('✓ Widget click popup execute test passed');
 });
 
+test('CaptchaWidget execute() during hidden click-mode loading starts and finishes solving', async (t) => {
+    document.body.innerHTML = `
+        <form>
+            <button type="button" id="submit-button">Submit</button>
+            <div class="private-captcha"
+                 data-display-mode="hidden"
+                 data-start-mode="click"
+                 data-finished-callback="testHiddenLoadingFinishedCallback">
+            </div>
+        </form>
+    `;
+
+    let callbackCalled = false;
+    global.window.testHiddenLoadingFinishedCallback = (widget) => {
+        callbackCalled = true;
+    };
+
+    const { CaptchaWidget } = await import('../js/widget.js');
+
+    const element = document.querySelector('.private-captcha');
+    assert.ok(element, 'Should find captcha element');
+
+    const widget = new CaptchaWidget(element, {
+        sitekey: testSitekey,
+        debug: true
+    });
+
+    const finishedEvent = new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+            reject(new Error('Finish event timeout after execute during loading'));
+        }, 5000);
+
+        element.addEventListener('privatecaptcha:finish', () => {
+            clearTimeout(timeout);
+            resolve();
+        }, { once: true });
+    });
+
+    widget.onFocusIn({ target: document.getElementById('submit-button') });
+    assert.strictEqual(widget._state, 'loading', 'Widget should be loading after focus starts init');
+
+    widget.execute();
+
+    await finishedEvent;
+
+    assert.strictEqual(callbackCalled, true, 'Finished callback should run');
+    assert.ok(widget.solution(), 'Solution should be exposed after execute finishes');
+
+    console.log('✓ Widget hidden loading execute test passed');
+});
+
 test('CaptchaWidget init() fires init event and callback', async (t) => {
     document.body.innerHTML = `
         <form>

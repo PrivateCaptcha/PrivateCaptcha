@@ -449,7 +449,9 @@ export class CaptchaWidget {
     }
 
     shouldFinalizeWork() {
-        return this._userStarted || (this._apiTriggered && ('auto' === this._options.startMode));
+        return this._userStarted || (this._apiTriggered && (
+            ('auto' === this._options.startMode) || ('hidden' === this._options.displayMode)
+        ));
     }
 
     /**
@@ -464,7 +466,7 @@ export class CaptchaWidget {
             this.setProgressState(STATE_READY);
         }
 
-        if (autoStart || this._userStarted) {
+        if (autoStart || this._userStarted || this._apiTriggered) {
             this.start();
         }
     }
