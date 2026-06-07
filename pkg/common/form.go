@@ -9,7 +9,7 @@ import (
 
 const maxFormRedirects = 10
 
-func NewFormHTTPClient(verifier FormURLVerifier) *http.Client {
+func NewFormHTTPClient() *http.Client {
 	client := &http.Client{
 		Timeout:       10 * time.Second,
 		CheckRedirect: noFormRedirects,
@@ -17,7 +17,6 @@ func NewFormHTTPClient(verifier FormURLVerifier) *http.Client {
 
 	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
 		clone := transport.Clone()
-		clone.DialContext = verifier.DialContext
 		client.Transport = clone
 		clone.DisableKeepAlives = true
 	}
@@ -25,15 +24,17 @@ func NewFormHTTPClient(verifier FormURLVerifier) *http.Client {
 	return client
 }
 
-func CloneFormHTTPClientWithRedirects(client *http.Client, verifier FormURLVerifier) *http.Client {
-	if client == nil {
-		client = NewFormHTTPClient(verifier)
+func NewFormRedirectHTTPClient(verifier FormURLVerifier, redirectCount int16) *http.Client {
+	client := NewFormHTTPClient()
+
+	if transport, ok := client.Transport.(*http.Transport); ok && (transport != nil) {
+		transport.DialContext = verifier.DialContext
 	}
 
-	clientCopy := *client
-	clientCopy.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxFormRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxFormRedirects)
+	allowedRedirects := min(int(redirectCount), maxFormRedirects)
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) > allowedRedirects {
+			return fmt.Errorf("stopped after %d redirects", allowedRedirects)
 		}
 
 		if err := verifier.VerifyURL(req.Context(), req.URL.String()); err != nil {
@@ -42,7 +43,7 @@ func CloneFormHTTPClientWithRedirects(client *http.Client, verifier FormURLVerif
 		return nil
 	}
 
-	return &clientCopy
+	return client
 }
 
 func noFormRedirects(req *http.Request, via []*http.Request) error {

@@ -1235,7 +1235,7 @@ func createFormFromUpdate(row *dbgen.UpdateFormRow) *dbgen.Form {
 		RequestsPerMinute: row.RequestsPerMinute,
 		RetryRequestCount: row.RetryRequestCount,
 		Method:            row.Method,
-		SupportsRedirects: row.SupportsRedirects,
+		RedirectCount:     row.RedirectCount,
 		Enabled:           row.Enabled,
 		Active:            row.Active,
 	}

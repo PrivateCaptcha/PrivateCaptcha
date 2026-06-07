@@ -554,9 +554,9 @@ type Form struct {
 	RequestsPerMinute int16              `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method            FormMethod         `db:"method" json:"method"`
+	RedirectCount     int16              `db:"redirect_count" json:"redirect_count"`
 	Enabled           bool               `db:"enabled" json:"enabled"`
 	Active            bool               `db:"active" json:"active"`
-	SupportsRedirects bool               `db:"supports_redirects" json:"supports_redirects"`
 }
 
 type Lock struct {

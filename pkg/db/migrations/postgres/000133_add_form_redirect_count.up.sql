@@ -1,0 +1,2 @@
+ALTER TABLE backend.forms
+ADD COLUMN redirect_count SMALLINT NOT NULL DEFAULT 0;

@@ -1,2 +1,0 @@
-ALTER TABLE backend.forms
-ADD COLUMN supports_redirects BOOLEAN NOT NULL DEFAULT FALSE;

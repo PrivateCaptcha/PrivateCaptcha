@@ -14,7 +14,7 @@ import (
 const createForm = `-- name: CreateForm :one
 INSERT INTO backend.forms (name, url, property_id, org_id, org_owner_id, creator_id, fields, enabled, requests_per_minute, retry_request_count, method)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 `
 
 type CreateFormParams struct {
@@ -64,7 +64,7 @@ func (q *Queries) CreateForm(ctx context.Context, arg *CreateFormParams) (*Form,
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
@@ -76,7 +76,7 @@ WHERE id = ANY($1::INT[])
   AND active = TRUE
   AND enabled = TRUE
   AND deleted_at IS NULL
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 `
 
 func (q *Queries) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*Form, error) {
@@ -106,7 +106,7 @@ func (q *Queries) DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*For
 			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
-			&i.SupportsRedirects,
+			&i.RedirectCount,
 		); err != nil {
 			return nil, err
 		}
@@ -131,7 +131,7 @@ func (q *Queries) DeleteForms(ctx context.Context, dollar_1 []int32) (int64, err
 }
 
 const getFormByID = `-- name: GetFormByID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms WHERE id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms WHERE id = $1
 `
 
 func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
@@ -155,13 +155,13 @@ func (q *Queries) GetFormByID(ctx context.Context, id int32) (*Form, error) {
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
 
 const getFormByPropertyID = `-- name: GetFormByPropertyID :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms WHERE property_id = $1
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms WHERE property_id = $1
 `
 
 func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*Form, error) {
@@ -185,13 +185,13 @@ func (q *Queries) GetFormByPropertyID(ctx context.Context, propertyID int32) (*F
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
 
 const getFormsByExternalID = `-- name: GetFormsByExternalID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms WHERE external_id = ANY($1::UUID[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms WHERE external_id = ANY($1::UUID[])
 `
 
 func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UUID) ([]*Form, error) {
@@ -221,7 +221,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
-			&i.SupportsRedirects,
+			&i.RedirectCount,
 		); err != nil {
 			return nil, err
 		}
@@ -234,7 +234,7 @@ func (q *Queries) GetFormsByExternalID(ctx context.Context, dollar_1 []pgtype.UU
 }
 
 const getFormsByID = `-- name: GetFormsByID :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms WHERE id = ANY($1::INT[])
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms WHERE id = ANY($1::INT[])
 `
 
 func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, error) {
@@ -264,7 +264,7 @@ func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, 
 			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
-			&i.SupportsRedirects,
+			&i.RedirectCount,
 		); err != nil {
 			return nil, err
 		}
@@ -277,7 +277,7 @@ func (q *Queries) GetFormsByID(ctx context.Context, dollar_1 []int32) ([]*Form, 
 }
 
 const getOrgFormByName = `-- name: GetOrgFormByName :one
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms WHERE org_id = $1 AND name = $2 AND deleted_at IS NULL
 `
 
 type GetOrgFormByNameParams struct {
@@ -306,13 +306,13 @@ func (q *Queries) GetOrgFormByName(ctx context.Context, arg *GetOrgFormByNamePar
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
 
 const getOrgForms = `-- name: GetOrgForms :many
-SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 FROM backend.forms
 WHERE org_id = $1 AND deleted_at IS NULL AND enabled = TRUE
 ORDER BY created_at
@@ -353,7 +353,7 @@ func (q *Queries) GetOrgForms(ctx context.Context, arg *GetOrgFormsParams) ([]*F
 			&i.RequestsPerMinute,
 			&i.RetryRequestCount,
 			&i.Method,
-			&i.SupportsRedirects,
+			&i.RedirectCount,
 		); err != nil {
 			return nil, err
 		}
@@ -377,7 +377,7 @@ func (q *Queries) GetOrgFormsCount(ctx context.Context, orgID pgtype.Int4) (int6
 }
 
 const getSoftDeletedForms = `-- name: GetSoftDeletedForms :many
-SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.active, f.requests_per_minute, f.retry_request_count, f.method, f.supports_redirects
+SELECT f.id, f.name, f.external_id, f.org_id, f.creator_id, f.org_owner_id, f.url, f.created_at, f.updated_at, f.deleted_at, f.property_id, f.fields, f.enabled, f.active, f.requests_per_minute, f.retry_request_count, f.method, f.redirect_count
 FROM backend.forms f
 JOIN backend.organizations o ON f.org_id = o.id
 JOIN backend.users u ON o.user_id = u.id
@@ -424,7 +424,7 @@ func (q *Queries) GetSoftDeletedForms(ctx context.Context, arg *GetSoftDeletedFo
 			&i.Form.RequestsPerMinute,
 			&i.Form.RetryRequestCount,
 			&i.Form.Method,
-			&i.Form.SupportsRedirects,
+			&i.Form.RedirectCount,
 		); err != nil {
 			return nil, err
 		}
@@ -451,7 +451,7 @@ const moveForm = `-- name: MoveForm :one
 UPDATE backend.forms
 SET org_id = $2, org_owner_id = $3, updated_at = NOW()
 WHERE id = $1 AND (creator_id = $4 OR org_owner_id = $4)
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 `
 
 type MoveFormParams struct {
@@ -487,7 +487,7 @@ func (q *Queries) MoveForm(ctx context.Context, arg *MoveFormParams) (*Form, err
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
@@ -496,7 +496,7 @@ const softDeleteForm = `-- name: SoftDeleteForm :one
 UPDATE backend.forms
 SET deleted_at = NOW(), updated_at = NOW(), name = name || ' deleted_' || substr(md5(random()::text), 1, 8)
 WHERE id = $1
-RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 `
 
 func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
@@ -520,7 +520,7 @@ func (q *Queries) SoftDeleteForm(ctx context.Context, id int32) (*Form, error) {
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 	)
 	return &i, err
 }
@@ -545,7 +545,7 @@ func (q *Queries) TransferOrgForms(ctx context.Context, arg *TransferOrgFormsPar
 
 const updateForm = `-- name: UpdateForm :one
 WITH old AS (
-    SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects FROM backend.forms f
+    SELECT id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count FROM backend.forms f
     WHERE f.id = $1 AND (f.creator_id = $8 OR f.org_owner_id = $8) AND (f.org_id = $9 OR $9 IS NULL) AND f.enabled = TRUE
     FOR UPDATE
 ),
@@ -559,17 +559,17 @@ upd AS (
         method = $7,
         updated_at = NOW()
     WHERE f.id = (SELECT id FROM old)
-    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, supports_redirects
+    RETURNING id, name, external_id, org_id, creator_id, org_owner_id, url, created_at, updated_at, deleted_at, property_id, fields, enabled, active, requests_per_minute, retry_request_count, method, redirect_count
 )
 SELECT
-    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_minute, upd.retry_request_count, upd.method, upd.supports_redirects,
+    upd.id, upd.name, upd.external_id, upd.org_id, upd.creator_id, upd.org_owner_id, upd.url, upd.created_at, upd.updated_at, upd.deleted_at, upd.property_id, upd.fields, upd.enabled, upd.active, upd.requests_per_minute, upd.retry_request_count, upd.method, upd.redirect_count,
     old.name AS old_name,
     old.url AS old_url,
     old.active AS old_active,
     old.retry_request_count AS old_retry_request_count,
     old.requests_per_minute AS old_requests_per_minute,
     old.method AS old_method,
-    old.supports_redirects AS old_supports_redirects
+    old.redirect_count AS old_redirect_count
 FROM upd
 CROSS JOIN old
 `
@@ -604,14 +604,14 @@ type UpdateFormRow struct {
 	RequestsPerMinute    int16              `db:"requests_per_minute" json:"requests_per_minute"`
 	RetryRequestCount    int16              `db:"retry_request_count" json:"retry_request_count"`
 	Method               FormMethod         `db:"method" json:"method"`
-	SupportsRedirects    bool               `db:"supports_redirects" json:"supports_redirects"`
+	RedirectCount        int16              `db:"redirect_count" json:"redirect_count"`
 	OldName              string             `db:"old_name" json:"old_name"`
 	OldURL               string             `db:"old_url" json:"old_url"`
 	OldActive            bool               `db:"old_active" json:"old_active"`
 	OldRetryRequestCount int16              `db:"old_retry_request_count" json:"old_retry_request_count"`
 	OldRequestsPerMinute int16              `db:"old_requests_per_minute" json:"old_requests_per_minute"`
 	OldMethod            FormMethod         `db:"old_method" json:"old_method"`
-	OldSupportsRedirects bool               `db:"old_supports_redirects" json:"old_supports_redirects"`
+	OldRedirectCount     int16              `db:"old_redirect_count" json:"old_redirect_count"`
 }
 
 func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*UpdateFormRow, error) {
@@ -645,14 +645,14 @@ func (q *Queries) UpdateForm(ctx context.Context, arg *UpdateFormParams) (*Updat
 		&i.RequestsPerMinute,
 		&i.RetryRequestCount,
 		&i.Method,
-		&i.SupportsRedirects,
+		&i.RedirectCount,
 		&i.OldName,
 		&i.OldURL,
 		&i.OldActive,
 		&i.OldRetryRequestCount,
 		&i.OldRequestsPerMinute,
 		&i.OldMethod,
-		&i.OldSupportsRedirects,
+		&i.OldRedirectCount,
 	)
 	return &i, err
 }

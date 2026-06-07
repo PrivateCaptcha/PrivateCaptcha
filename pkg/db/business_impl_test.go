@@ -163,8 +163,8 @@ func TestBusinessStoreImplRetrieveFromCache(t *testing.T) {
 		if querier.createdFormArg.RequestsPerMinute != 10 {
 			t.Fatalf("expected default requests per minute 10, got %d", querier.createdFormArg.RequestsPerMinute)
 		}
-		if createdForm.SupportsRedirects {
-			t.Fatal("expected supports redirects to default to false")
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected redirect count to default to 0, got %d", createdForm.RedirectCount)
 		}
 	})
 
@@ -800,8 +800,8 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		if querier.createdFormArg == nil || querier.createdFormArg.PropertyID != property.ID {
 			t.Fatalf("expected created form property ID to be %d, got %#v", property.ID, querier.createdFormArg)
 		}
-		if createdForm.SupportsRedirects {
-			t.Fatal("expected created form supports redirects false")
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected created form redirect count 0, got %d", createdForm.RedirectCount)
 		}
 		cachedForm, needsRefresh, err := store.GetCachedFormByExternalID(context.Background(), UUIDToString(form.ExternalID))
 		if err != nil {
@@ -813,8 +813,8 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		if cachedForm != form {
 			t.Fatalf("expected cached form to match created form")
 		}
-		if cachedForm.SupportsRedirects {
-			t.Fatal("expected cached form supports redirects false")
+		if cachedForm.RedirectCount != 0 {
+			t.Fatalf("expected cached form redirect count 0, got %d", cachedForm.RedirectCount)
 		}
 	})
 
@@ -860,8 +860,8 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 		if propertyParams.Name != formName {
 			t.Fatalf("expected generated property name %q, got %q", formName, propertyParams.Name)
 		}
-		if createdForm.SupportsRedirects {
-			t.Fatal("expected supports redirects false on created form")
+		if createdForm.RedirectCount != 0 {
+			t.Fatalf("expected created form redirect count 0, got %d", createdForm.RedirectCount)
 		}
 	})
 
@@ -874,7 +874,7 @@ func TestBusinessStoreImplCreateNewForm(t *testing.T) {
 	})
 }
 
-func TestCreateFormFromUpdatePreservesSupportsRedirects(t *testing.T) {
+func TestCreateFormFromUpdatePreservesRedirectCount(t *testing.T) {
 	updated := createFormFromUpdate(&dbgen.UpdateFormRow{
 		ID:                123,
 		Name:              "contact",
@@ -888,16 +888,16 @@ func TestCreateFormFromUpdatePreservesSupportsRedirects(t *testing.T) {
 		RequestsPerMinute: 10,
 		RetryRequestCount: 0,
 		Method:            dbgen.FormMethodPost,
+		RedirectCount:     3,
 		Enabled:           true,
 		Active:            true,
-		SupportsRedirects: true,
 	})
 
 	if updated == nil {
 		t.Fatal("expected form")
 	}
-	if !updated.SupportsRedirects {
-		t.Fatal("expected supports redirects to be preserved")
+	if updated.RedirectCount != 3 {
+		t.Fatalf("expected redirect count to be preserved, got %d", updated.RedirectCount)
 	}
 }
 
