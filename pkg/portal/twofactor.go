@@ -115,7 +115,7 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sess, err = s.Sessions.SessionRenew(w, r, sess, map[session.SessionKey]session.SessionValue{
+	sess = s.Sessions.SessionRenew(w, r, sess, map[session.SessionKey]session.SessionValue{
 		session.KeyLoginStep:  loginStepCompleted,
 		session.KeyPersistent: true,
 	}, []session.SessionKey{
@@ -124,10 +124,6 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		session.KeyUserEmail,
 		session.KeyVerifyRegistration,
 	})
-	if err != nil {
-		s.RedirectError(http.StatusInternalServerError, w, r)
-		return
-	}
 	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
 
 	job := s.Jobs.LoginUser(sess)

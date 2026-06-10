@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -56,6 +57,14 @@ func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session
 func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
 	delete(s.sessions, sid)
 	return nil
+}
+
+type failingRenewStore struct {
+	*memoryStore
+}
+
+func (s *failingRenewStore) Renew(ctx context.Context, oldSID string, session *Session) error {
+	return errors.New("renew failed")
 }
 
 func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
@@ -115,12 +124,9 @@ func TestSessionRenewRotatesCookieAndDestroysOldSession(t *testing.T) {
 	}
 
 	renewW := httptest.NewRecorder()
-	renewed, err := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
+	renewed := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
 		KeyLoginStep: 2,
 	}, []SessionKey{KeyUserID})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	if renewed.ID() == sess.ID() {
 		t.Fatal("session ID was not rotated")
@@ -146,6 +152,44 @@ func TestSessionRenewRotatesCookieAndDestroysOldSession(t *testing.T) {
 	}
 	if cookie.SameSite != http.SameSiteLaxMode {
 		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+}
+
+func TestSessionRenewFallsBackWhenStoreRenewFails(t *testing.T) {
+	store := &failingRenewStore{memoryStore: newMemoryStore()}
+	manager := &Manager{
+		CookieName:  "pcsid",
+		Store:       store,
+		MaxLifetime: 10 * time.Minute,
+		Path:        "/",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/portal/twofactor", nil)
+	w := httptest.NewRecorder()
+	sess := manager.SessionStart(w, req)
+	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Set(req.Context(), KeyTwoFactorCode, 456789); err != nil {
+		t.Fatal(err)
+	}
+
+	renewW := httptest.NewRecorder()
+	renewed := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
+		KeyLoginStep: 2,
+	}, []SessionKey{KeyTwoFactorCode})
+
+	if renewed.ID() != sess.ID() {
+		t.Fatal("renew failure should keep using the existing session")
+	}
+	if step, ok := renewed.Get(req.Context(), KeyLoginStep).(int); !ok || step != 2 {
+		t.Fatalf("fallback session did not get final login step: %v", step)
+	}
+	if _, ok := renewed.Get(req.Context(), KeyTwoFactorCode).(int); ok {
+		t.Fatal("fallback session kept 2FA code")
+	}
+	if len(renewW.Result().Cookies()) != 0 {
+		t.Fatal("fallback renewal should not replace the session cookie")
 	}
 }
 
