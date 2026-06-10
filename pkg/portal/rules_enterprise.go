@@ -421,7 +421,7 @@ func (s *Server) getPropertyNewRule(w http.ResponseWriter, r *http.Request) (*Vi
 		return nil, err
 	}
 
-	if !s.checkUserOrgAccess(user, org) {
+	if !s.checkUserOrgAccess(user, org) || !canEditProperty(user, org, property) {
 		return nil, db.ErrPermissions
 	}
 
@@ -473,6 +473,12 @@ func (s *Server) postPropertyNewRule(w http.ResponseWriter, r *http.Request) {
 
 	property, err := s.Property(org, r)
 	if err != nil {
+		s.RedirectError(http.StatusForbidden, w, r)
+		return
+	}
+
+	if !canEditProperty(user, org, property) {
+		slog.WarnContext(ctx, "User cannot create property rule", "orgID", org.ID, "propertyID", property.ID, "userID", user.ID)
 		s.RedirectError(http.StatusForbidden, w, r)
 		return
 	}

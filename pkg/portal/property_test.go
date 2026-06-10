@@ -58,6 +58,30 @@ func TestPropertyToUserPropertyDisplayDomain(t *testing.T) {
 	}
 }
 
+func TestCanEditProperty(t *testing.T) {
+	org := &dbgen.Organization{UserID: db.Int(1)}
+	property := &dbgen.Property{CreatorID: db.Int(2)}
+
+	tests := []struct {
+		name string
+		user *dbgen.User
+		want bool
+	}{
+		{name: "org owner can edit", user: &dbgen.User{ID: 1}, want: true},
+		{name: "property creator can edit", user: &dbgen.User{ID: 2}, want: true},
+		{name: "org member cannot edit", user: &dbgen.User{ID: 3}, want: false},
+		{name: "nil user cannot edit", user: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := canEditProperty(tt.user, org, property); got != tt.want {
+				t.Fatalf("canEditProperty() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestGetNewOrgProperty(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")

@@ -133,6 +133,11 @@ type PropertyRulesRenderContext struct {
 	rulesRenderContext
 }
 
+func canEditProperty(user *dbgen.User, org *dbgen.Organization, property *dbgen.Property) bool {
+	return user != nil && org != nil && property != nil &&
+		((org.UserID.Valid && user.ID == org.UserID.Int32) || (property.CreatorID.Valid && user.ID == property.CreatorID.Int32))
+}
+
 func createDifficultyLevelsRenderContext() difficultyLevelsRenderContext {
 	return difficultyLevelsRenderContext{
 		EasyLevel:   int(common.DifficultyLevelSmall),
@@ -602,7 +607,7 @@ func (s *Server) getOrgProperty(w http.ResponseWriter, r *http.Request) (*proper
 		CaptchaRenderContext: s.createDemoCaptchaRenderContext(strings.ReplaceAll(propertySettingsPropertyID, "-", "")),
 		Property:             propertyToUserProperty(property, s.IDHasher),
 		Org:                  orgToUserOrg(org, user.ID, s.IDHasher),
-		CanEdit:              (user.ID == org.UserID.Int32) || (user.ID == property.CreatorID.Int32),
+		CanEdit:              canEditProperty(user, org, property),
 		IncludeRules:         s.shouldIncludeRulesChart(ctx, org, property),
 	}
 

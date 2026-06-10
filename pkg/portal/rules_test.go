@@ -3476,7 +3476,7 @@ func TestMemberRuleCreation(t *testing.T) {
 				}
 				return len(rulesMap[prop.ID])
 			},
-			afterJoinSucceeds: true,
+			afterJoinSucceeds: false,
 		})
 	})
 

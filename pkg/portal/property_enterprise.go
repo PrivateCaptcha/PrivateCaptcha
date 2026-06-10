@@ -171,7 +171,7 @@ func (s *Server) CreatePropertyRulesContext(w http.ResponseWriter, r *http.Reque
 		propertyDashboardRenderContext: *dashboardCtx,
 		rulesRenderContext: rulesRenderContext{
 			Rules:     []*DifficultyRuleModel{},
-			CanAddNew: true,
+			CanAddNew: canEditProperty(user, org, property),
 		},
 	}
 
