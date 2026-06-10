@@ -407,20 +407,40 @@ func (impl *BusinessStoreImpl) DeleteUserSession(ctx context.Context, sid string
 	return err
 }
 
+func (impl *BusinessStoreImpl) DeleteUserSessions(ctx context.Context, sids []string) error {
+	if len(sids) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(sids))
+	for _, sid := range sids {
+		if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
+			slog.WarnContext(ctx, "User session was not found in memory cache to delete")
+		}
+		sessionID, _ := sessionIDFunc(sid)
+		keys = append(keys, sessionID)
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteCachedByKeys(ctx, keys)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete cached sessions from DB", "count", len(keys), common.ErrAttr(err))
+	} else {
+		slog.Log(ctx, common.LevelTrace, "Deleted cached sessions from DB", "count", len(keys), "affected", affected)
+	}
+
+	return err
+}
+
 func (impl *BusinessStoreImpl) CacheUserSession(ctx context.Context, data *session.SessionData) error {
 	if data == nil {
 		return ErrInvalidInput
 	}
 
 	return impl.cache.Set(ctx, SessionCacheKey(data.ID()), data)
-}
-
-func (impl *BusinessStoreImpl) TombstoneUserSession(ctx context.Context, sid string) error {
-	if len(sid) == 0 {
-		return ErrInvalidInput
-	}
-
-	return impl.CacheUserSession(ctx, session.NewTombstoneSessionData(sid))
 }
 
 func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid string, skipCache bool) (*session.SessionData, error) {
@@ -447,7 +467,7 @@ func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid stri
 	return reader.Read(ctx)
 }
 
-func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
+func (impl *BusinessStoreImpl) RetrieveCachedUserSessions(ctx context.Context, batch map[string]uint) ([]*session.SessionData, error) {
 	reader := &StoreBulkReader[string, string, session.SessionData]{
 		ArgFunc:      nil, // we shouldn't be using it as we read from cache only
 		Cache:        impl.cache,
@@ -462,6 +482,14 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 	cached, _, err := reader.Read(ctx, batch)
 	if (err != nil) && (err != ErrMaintenance) {
 		slog.Log(ctx, common.LevelTrace, "Failed to read cached sessions", common.ErrAttr(err))
+		return nil, err
+	}
+	return cached, nil
+}
+
+func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
+	cached, err := impl.RetrieveCachedUserSessions(ctx, batch)
+	if err != nil {
 		return err
 	}
 
@@ -475,14 +503,8 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 	keys := make([]string, 0, len(batch))
 	values := make([][]byte, 0, len(batch))
 	intervals := make([]time.Duration, 0, len(batch))
-	tombstones := make([]string, 0)
 
 	for _, sd := range cached {
-		if sd.Has(session.KeyTombstone) {
-			tombstones = append(tombstones, sd.ID())
-			continue
-		}
-
 		if !sd.Has(persistKey) {
 			slog.Log(ctx, common.LevelTrace, "Skipping persisting session without persist key", common.SessionIDAttr(sd.ID()))
 			continue
@@ -502,7 +524,7 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		intervals = append(intervals, ttl)
 	}
 
-	if len(keys) == 0 && len(tombstones) == 0 {
+	if len(keys) == 0 {
 		slog.WarnContext(ctx, "No persistent sessions to save")
 		return nil
 	}
@@ -511,23 +533,11 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 		return ErrMaintenance
 	}
 
-	var affected int64
-	for _, sid := range tombstones {
-		err = impl.DeleteUserSession(ctx, sid)
-		if err != nil {
-			slog.ErrorContext(ctx, "Failed to delete tombstoned session", common.SessionIDAttr(sid), common.ErrAttr(err))
-		} else {
-			slog.Log(ctx, common.LevelTrace, "Deleted tombstoned session", common.SessionIDAttr(sid))
-		}
-	}
-
-	if len(keys) > 0 {
-		affected, err = impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
-			Keys:      keys,
-			Values:    values,
-			Intervals: intervals,
-		})
-	}
+	affected, err := impl.querier.CreateCacheMany(ctx, &dbgen.CreateCacheManyParams{
+		Keys:      keys,
+		Values:    values,
+		Intervals: intervals,
+	})
 
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to cache sessions", "count", len(keys), common.ErrAttr(err))

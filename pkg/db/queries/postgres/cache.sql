@@ -22,5 +22,8 @@ UPDATE backend.cache SET expires_at = NOW() + $2::INTERVAL WHERE key = $1;
 -- name: DeleteCachedByKey :execrows
 DELETE FROM backend.cache WHERE key = $1;
 
+-- name: DeleteCachedByKeys :execrows
+DELETE FROM backend.cache WHERE key = ANY(@keys::TEXT[]);
+
 -- name: DeleteExpiredCache :execrows
 DELETE FROM backend.cache WHERE expires_at < NOW();

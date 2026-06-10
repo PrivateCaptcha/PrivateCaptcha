@@ -98,7 +98,8 @@ func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.
 		return err
 	}
 
-	if err := ss.store.Impl().TombstoneUserSession(ctx, oldSID); err != nil {
+	oldSession := session.NewSession(session.NewTombstoneSessionData(oldSID), ss)
+	if err := ss.Init(ctx, oldSession); err != nil {
 		return err
 	}
 
@@ -120,7 +121,25 @@ func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]uint) error {
-	// we actually do not care if we failed to save sessions to cache
-	_ = ss.store.Impl().StoreUserSessions(ctx, batch, ss.persistKey, sessionCacheTTL)
+	impl := ss.store.Impl()
+	cached, err := impl.RetrieveCachedUserSessions(ctx, batch)
+	if err != nil {
+		slog.Log(ctx, common.LevelTrace, "Failed to read cached sessions for persistence", common.ErrAttr(err))
+		return nil
+	}
+
+	toStore := make(map[string]uint, len(cached))
+	toDelete := make([]string, 0)
+	for _, sd := range cached {
+		if sd.Has(session.KeyTombstone) {
+			toDelete = append(toDelete, sd.ID())
+			continue
+		}
+		toStore[sd.ID()] = batch[sd.ID()]
+	}
+
+	// we actually do not care if we failed to save or delete sessions in the DB cache
+	_ = impl.StoreUserSessions(ctx, toStore, ss.persistKey, sessionCacheTTL)
+	_ = impl.DeleteUserSessions(ctx, toDelete)
 	return nil
 }
