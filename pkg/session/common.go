@@ -37,6 +37,7 @@ const (
 	KeyFirstSession
 	KeyAdhocNotification
 	KeyVerifyRegistration
+	KeyTombstone
 	// Add new fields _above_
 	SESSION_KEYS_COUNT
 )
@@ -67,6 +68,8 @@ func (key SessionKey) String() string {
 		return "FirstSession"
 	case KeyVerifyRegistration:
 		return "VerifyRegistration"
+	case KeyTombstone:
+		return "Tombstone"
 	default:
 		return "SessionKey"
 	}
@@ -85,6 +88,12 @@ func NewSessionData(sid string) *SessionData {
 		sid:    sid,
 		values: make(map[SessionKey]SessionValue),
 	}
+}
+
+func NewTombstoneSessionData(sid string) *SessionData {
+	sd := NewSessionData(sid)
+	sd.values[KeyTombstone] = true
+	return sd
 }
 
 func (sd *SessionData) Size() int {

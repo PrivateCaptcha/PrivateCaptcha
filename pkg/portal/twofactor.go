@@ -115,15 +115,15 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sess = s.Sessions.SessionRenew(w, r, sess, map[session.SessionKey]session.SessionValue{
-		session.KeyLoginStep:  loginStepCompleted,
-		session.KeyPersistent: true,
-	}, []session.SessionKey{
-		session.KeyTwoFactorCode,
-		session.KeyTwoFactorCodeTimestamp,
-		session.KeyUserEmail,
-		session.KeyVerifyRegistration,
-	})
+	_ = sess.Set(ctx, session.KeyLoginStep, loginStepCompleted)
+	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
+	_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
+	_ = sess.Delete(ctx, session.KeyUserEmail)
+	// at this point it's safe to remove because we check that session does not have the flag prior to this
+	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
+	_ = sess.Set(ctx, session.KeyPersistent, true)
+
+	sess = s.Sessions.SessionRenew(w, r, sess)
 	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
 
 	job := s.Jobs.LoginUser(sess)

@@ -103,36 +103,16 @@ func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session 
 	return
 }
 
-func (m *Manager) applySessionChanges(ctx context.Context, sess *Session, set map[SessionKey]SessionValue, deleteKeys []SessionKey) {
-	for key, value := range set {
-		if err := sess.Set(ctx, key, value); err != nil {
-			slog.ErrorContext(ctx, "Failed to set session value", "key", key.String(), common.ErrAttr(err))
-		}
-	}
-	for _, key := range deleteKeys {
-		if err := sess.Delete(ctx, key); err != nil {
-			slog.ErrorContext(ctx, "Failed to delete session value", "key", key.String(), common.ErrAttr(err))
-		}
-	}
-}
-
-func (m *Manager) SessionRenew(w http.ResponseWriter, r *http.Request, sess *Session, set map[SessionKey]SessionValue, deleteKeys []SessionKey) *Session {
+func (m *Manager) SessionRenew(w http.ResponseWriter, r *http.Request, sess *Session) *Session {
 	ctx := r.Context()
 	sid := m.sessionID()
 	sslog := slog.With(common.SessionIDAttr(sid))
 	renewed := NewSession(NewSessionData(sid), m.Store)
 	renewed.Merge(sess)
-	for key, value := range set {
-		renewed.data.set(key, value)
-	}
-	for _, key := range deleteKeys {
-		renewed.data.delete(key)
-	}
 
 	sslog.DebugContext(ctx, "Renewing session", "oldSessionID", sess.ID(), "path", r.URL.Path, "method", r.Method)
 	if err := m.Store.Renew(ctx, sess.ID(), renewed); err != nil {
 		sslog.ErrorContext(ctx, "Failed to register renewed session, continuing with current session", common.ErrAttr(err))
-		m.applySessionChanges(ctx, sess, set, deleteKeys)
 		return sess
 	}
 	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))

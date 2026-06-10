@@ -19,7 +19,6 @@ const (
 type SessionStore struct {
 	store         Implementor
 	persistChan   chan string
-	deleteChan    chan string
 	batchSize     int
 	processCancel context.CancelFunc
 	persistKey    session.SessionKey
@@ -30,7 +29,6 @@ func NewSessionStore(store Implementor, persistKey session.SessionKey, metrics c
 	return &SessionStore{
 		store:         store,
 		persistChan:   make(chan string, sessionBatchSize),
-		deleteChan:    make(chan string, sessionBatchSize),
 		batchSize:     sessionBatchSize,
 		persistKey:    persistKey,
 		metrics:       metrics,
@@ -43,7 +41,6 @@ func (ss *SessionStore) Start(ctx context.Context, interval time.Duration) {
 	cancelCtx, ss.processCancel = context.WithCancel(
 		context.WithValue(ctx, common.TraceIDContextKey, "persist_session"))
 	go common.ProcessBatchMap(cancelCtx, ss.persistChan, interval, ss.batchSize, ss.batchSize*100, ss.persistSessions)
-	go common.ProcessBatchMap(cancelCtx, ss.deleteChan, interval, ss.batchSize, ss.batchSize*100, ss.deleteSessions)
 }
 
 var _ session.Store = (*SessionStore)(nil)
@@ -55,7 +52,6 @@ func (ss *SessionStore) Stop() {
 func (ss *SessionStore) Shutdown() {
 	slog.Debug("Shutting down persisting sessions")
 	close(ss.persistChan)
-	close(ss.deleteChan)
 }
 
 func (ss *SessionStore) Init(ctx context.Context, session *session.Session) error {
@@ -70,6 +66,9 @@ func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*
 		}
 
 		return nil, err
+	}
+	if sd.Has(session.KeyTombstone) {
+		return nil, session.ErrSessionMissing
 	}
 
 	return session.NewSession(sd, ss), nil
@@ -99,15 +98,15 @@ func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.
 		return err
 	}
 
-	if found := ss.store.Impl().cache.Delete(ctx, SessionCacheKey(oldSID)); !found {
-		slog.WarnContext(ctx, "User session was not found in memory cache to delete")
+	if err := ss.store.Impl().TombstoneUserSession(ctx, oldSID); err != nil {
+		return err
 	}
 
 	if err := ss.enqueueSessionEvent(ctx, ss.persistChan, sess.ID()); err != nil {
 		slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
 	}
-	if err := ss.enqueueSessionEvent(ctx, ss.deleteChan, oldSID); err != nil {
-		slog.ErrorContext(ctx, "Failed to queue old session for async deletion", common.SessionIDAttr(oldSID), common.ErrAttr(err))
+	if err := ss.enqueueSessionEvent(ctx, ss.persistChan, oldSID); err != nil {
+		slog.ErrorContext(ctx, "Failed to queue old session tombstone for persistence", common.SessionIDAttr(oldSID), common.ErrAttr(err))
 	}
 	return nil
 }
@@ -123,14 +122,5 @@ func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]uint) error {
 	// we actually do not care if we failed to save sessions to cache
 	_ = ss.store.Impl().StoreUserSessions(ctx, batch, ss.persistKey, sessionCacheTTL)
-	return nil
-}
-
-func (ss *SessionStore) deleteSessions(ctx context.Context, batch map[string]uint) error {
-	for sid := range batch {
-		if err := ss.store.Impl().DeleteUserSession(ctx, sid); err != nil {
-			slog.ErrorContext(ctx, "Failed to delete renewed session from storage", common.SessionIDAttr(sid), common.ErrAttr(err))
-		}
-	}
 	return nil
 }

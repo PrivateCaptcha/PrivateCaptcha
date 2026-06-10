@@ -52,7 +52,8 @@ func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session
 	if err := s.Init(ctx, session); err != nil {
 		return err
 	}
-	return s.Destroy(ctx, oldSID)
+	s.sessions[oldSID] = NewSession(NewTombstoneSessionData(oldSID), s)
+	return nil
 }
 func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
 	delete(s.sessions, sid)
@@ -107,7 +108,7 @@ func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
 	}
 }
 
-func TestSessionRenewRotatesCookieAndDestroysOldSession(t *testing.T) {
+func TestSessionRenewRotatesCookieAndTombstonesOldSession(t *testing.T) {
 	store := newMemoryStore()
 	manager := &Manager{
 		CookieName:  "pcsid",
@@ -122,17 +123,21 @@ func TestSessionRenewRotatesCookieAndDestroysOldSession(t *testing.T) {
 	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
 		t.Fatal(err)
 	}
+	if err := sess.Delete(req.Context(), KeyUserID); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Set(req.Context(), KeyLoginStep, 2); err != nil {
+		t.Fatal(err)
+	}
 
 	renewW := httptest.NewRecorder()
-	renewed := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
-		KeyLoginStep: 2,
-	}, []SessionKey{KeyUserID})
+	renewed := manager.SessionRenew(renewW, req, sess)
 
 	if renewed.ID() == sess.ID() {
 		t.Fatal("session ID was not rotated")
 	}
-	if _, ok := store.sessions[sess.ID()]; ok {
-		t.Fatal("old session was not destroyed")
+	if oldSession, ok := store.sessions[sess.ID()]; !ok || !oldSession.Data().Has(KeyTombstone) {
+		t.Fatal("old session was not tombstoned")
 	}
 	if _, ok := renewed.Get(req.Context(), KeyUserID).(int32); ok {
 		t.Fatal("renewed session did not delete requested key")
@@ -173,11 +178,15 @@ func TestSessionRenewFallsBackWhenStoreRenewFails(t *testing.T) {
 	if err := sess.Set(req.Context(), KeyTwoFactorCode, 456789); err != nil {
 		t.Fatal(err)
 	}
+	if err := sess.Set(req.Context(), KeyLoginStep, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := sess.Delete(req.Context(), KeyTwoFactorCode); err != nil {
+		t.Fatal(err)
+	}
 
 	renewW := httptest.NewRecorder()
-	renewed := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
-		KeyLoginStep: 2,
-	}, []SessionKey{KeyTwoFactorCode})
+	renewed := manager.SessionRenew(renewW, req, sess)
 
 	if renewed.ID() != sess.ID() {
 		t.Fatal("renew failure should keep using the existing session")
@@ -205,6 +214,7 @@ func TestSessionKeyString(t *testing.T) {
 		KeyReturnURL,
 		KeyTwoFactorCodeTimestamp,
 		KeyOrgInviteID,
+		KeyTombstone,
 	}
 
 	expectedStrings := []string{
@@ -218,6 +228,7 @@ func TestSessionKeyString(t *testing.T) {
 		"ReturnURL",
 		"TwoFactorCodeTimestamp",
 		"OrgInviteID",
+		"Tombstone",
 	}
 
 	for i, key := range sessionKeys {

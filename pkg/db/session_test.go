@@ -19,6 +19,7 @@ type countingSessionQuerier struct {
 	*QuerierStub
 	createCacheManyCalls   int
 	deleteCachedByKeyCalls int
+	deletedKeys            []string
 }
 
 func (q *countingSessionQuerier) CreateCacheMany(ctx context.Context, arg *dbgen.CreateCacheManyParams) (int64, error) {
@@ -28,6 +29,7 @@ func (q *countingSessionQuerier) CreateCacheMany(ctx context.Context, arg *dbgen
 
 func (q *countingSessionQuerier) DeleteCachedByKey(ctx context.Context, key string) (int64, error) {
 	q.deleteCachedByKeyCalls++
+	q.deletedKeys = append(q.deletedKeys, key)
 	return 0, nil
 }
 
@@ -67,25 +69,46 @@ func TestSessionStoreRenewDoesNotCallDBInline(t *testing.T) {
 	if _, err := store.Read(ctx, newSess.ID(), false); err != nil {
 		t.Fatalf("renewed session was not cached locally: %v", err)
 	}
-	if _, err := cache.Get(ctx, SessionCacheKey(oldSess.ID())); err != ErrCacheMiss {
-		t.Fatalf("old session was not evicted locally: %v", err)
+	oldData, err := cache.Get(ctx, SessionCacheKey(oldSess.ID()))
+	if err != nil {
+		t.Fatalf("old session tombstone was not cached locally: %v", err)
+	}
+	oldSessionData, ok := oldData.(*session.SessionData)
+	if !ok || !oldSessionData.Has(session.KeyTombstone) {
+		t.Fatalf("old session was not tombstoned locally: %v", oldData)
+	}
+
+	queued := make(map[string]bool)
+	select {
+	case sid := <-store.persistChan:
+		queued[sid] = true
+	case <-time.After(time.Second):
+		t.Fatal("first renewed session persistence event was not queued")
 	}
 
 	select {
 	case sid := <-store.persistChan:
-		if sid != newSess.ID() {
-			t.Fatalf("queued persist SID %q, want %q", sid, newSess.ID())
-		}
+		queued[sid] = true
 	case <-time.After(time.Second):
-		t.Fatal("renewed session was not queued for async persistence")
+		t.Fatal("second renewed session persistence event was not queued")
+	}
+	if !queued[newSess.ID()] || !queued[oldSess.ID()] {
+		t.Fatalf("queued SIDs = %v, want old and new", queued)
 	}
 
-	select {
-	case sid := <-store.deleteChan:
-		if sid != oldSess.ID() {
-			t.Fatalf("queued delete SID %q, want %q", sid, oldSess.ID())
-		}
-	case <-time.After(time.Second):
-		t.Fatal("old session was not queued for async deletion")
+	if err := store.persistSessions(ctx, map[string]uint{oldSess.ID(): 1, newSess.ID(): 1}); err != nil {
+		t.Fatal(err)
+	}
+	if querier.createCacheManyCalls != 1 {
+		t.Fatalf("persistSessions called CreateCacheMany %d time(s)", querier.createCacheManyCalls)
+	}
+	if querier.deleteCachedByKeyCalls != 1 {
+		t.Fatalf("persistSessions called DeleteCachedByKey %d time(s)", querier.deleteCachedByKeyCalls)
+	}
+	if len(querier.deletedKeys) != 1 || querier.deletedKeys[0] != SessionCacheKey(oldSess.ID()).String() {
+		t.Fatalf("deleted keys = %v", querier.deletedKeys)
+	}
+	if _, err := cache.Get(ctx, SessionCacheKey(oldSess.ID())); err != ErrCacheMiss {
+		t.Fatalf("old session tombstone was not removed locally: %v", err)
 	}
 }
