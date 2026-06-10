@@ -41,7 +41,10 @@ func (s *stubSessionStore) Read(_ context.Context, _ string, _ bool) (*session.S
 	return nil, fmt.Errorf("not found")
 }
 func (s *stubSessionStore) Update(_ context.Context, _ *session.Session) error { return nil }
-func (s *stubSessionStore) Destroy(_ context.Context, _ string) error          { return nil }
+func (s *stubSessionStore) Renew(_ context.Context, _ string, _ *session.Session) error {
+	return nil
+}
+func (s *stubSessionStore) Destroy(_ context.Context, _ string) error { return nil }
 
 var (
 	srv   *portal.Server

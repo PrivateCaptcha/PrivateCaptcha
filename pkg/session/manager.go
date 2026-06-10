@@ -23,6 +23,33 @@ func (m *Manager) sessionID() string {
 	return xid.New().String()
 }
 
+func (m *Manager) setSessionCookie(w http.ResponseWriter, r *http.Request, sid string, maxAge int) {
+	cookie := http.Cookie{
+		Name:     m.CookieName,
+		Value:    url.QueryEscape(sid),
+		Path:     m.Path,
+		HttpOnly: true,
+		Secure:   m.SecureCookie || (r.TLS != nil) || (r.Header.Get("X-Forwarded-Proto") == "https"),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   maxAge,
+	}
+	http.SetCookie(w, &cookie)
+	w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
+}
+
+func (m *Manager) newSession(w http.ResponseWriter, r *http.Request) *Session {
+	ctx := r.Context()
+	sid := m.sessionID()
+	sslog := slog.With(common.SessionIDAttr(sid))
+	session := NewSession(NewSessionData(sid), m.Store)
+	sslog.DebugContext(ctx, "Registering new session", "path", r.URL.Path, "method", r.Method)
+	if err := m.Store.Init(ctx, session); err != nil {
+		sslog.ErrorContext(ctx, "Failed to register session", common.ErrAttr(err))
+	}
+	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))
+	return session
+}
+
 func (m *Manager) Init(svc string, path string, interval time.Duration) {
 	m.Path = path
 	m.Store.Start(context.WithValue(context.Background(), common.ServiceContextKey, svc), interval)
@@ -58,23 +85,7 @@ func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session 
 	ctx := r.Context()
 	if err != nil || cookie.Value == "" {
 		slog.Log(ctx, common.LevelTrace, "Session cookie not found in the request for start", "path", r.URL.Path, "method", r.Method)
-		sid := m.sessionID()
-		sslog := slog.With(common.SessionIDAttr(sid))
-		session = NewSession(NewSessionData(sid), m.Store)
-		sslog.DebugContext(ctx, "Registering new session", "path", r.URL.Path, "method", r.Method)
-		if err = m.Store.Init(ctx, session); err != nil {
-			sslog.ErrorContext(ctx, "Failed to register session", common.SessionIDAttr(sid), common.ErrAttr(err))
-		}
-		cookie := http.Cookie{
-			Name:     m.CookieName,
-			Value:    url.QueryEscape(sid),
-			Path:     m.Path,
-			HttpOnly: true,
-			Secure:   m.SecureCookie || (r.TLS != nil) || (r.Header.Get("X-Forwarded-Proto") == "https"),
-			MaxAge:   int(m.MaxLifetime.Seconds()),
-		}
-		http.SetCookie(w, &cookie)
-		w.Header().Add("Cache-Control", `no-cache="Set-Cookie"`)
+		session = m.newSession(w, r)
 	} else {
 		sid, _ := url.QueryUnescape(cookie.Value)
 		sslog := slog.With(common.SessionIDAttr(sid))
@@ -86,14 +97,32 @@ func (m *Manager) SessionStart(w http.ResponseWriter, r *http.Request) (session 
 				level = slog.LevelError
 			}
 			sslog.Log(ctx, level, "Failed to read session from store", common.ErrAttr(err))
-			session = NewSession(NewSessionData(sid), m.Store)
-			sslog.DebugContext(ctx, "Registering new session", "path", r.URL.Path, "method", r.Method)
-			if err = m.Store.Init(ctx, session); err != nil {
-				sslog.ErrorContext(ctx, "Failed to register session with existing cookie", common.ErrAttr(err))
-			}
+			session = m.newSession(w, r)
 		}
 	}
 	return
+}
+
+func (m *Manager) SessionRenew(w http.ResponseWriter, r *http.Request, sess *Session, set map[SessionKey]SessionValue, deleteKeys []SessionKey) (*Session, error) {
+	ctx := r.Context()
+	sid := m.sessionID()
+	sslog := slog.With(common.SessionIDAttr(sid))
+	renewed := NewSession(NewSessionData(sid), m.Store)
+	renewed.Merge(sess)
+	for key, value := range set {
+		renewed.data.set(key, value)
+	}
+	for _, key := range deleteKeys {
+		renewed.data.delete(key)
+	}
+
+	sslog.DebugContext(ctx, "Renewing session", "oldSessionID", sess.ID(), "path", r.URL.Path, "method", r.Method)
+	if err := m.Store.Renew(ctx, sess.ID(), renewed); err != nil {
+		sslog.ErrorContext(ctx, "Failed to register renewed session", common.ErrAttr(err))
+		return nil, err
+	}
+	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))
+	return renewed, nil
 }
 
 func (m *Manager) RecoverSession(ctx context.Context, sess *Session) {
@@ -123,6 +152,7 @@ func (m *Manager) SessionDestroy(w http.ResponseWriter, r *http.Request) {
 			HttpOnly: true,
 			Expires:  expiration,
 			Secure:   m.SecureCookie || (r.TLS != nil) || (r.Header.Get("X-Forwarded-Proto") == "https"),
+			SameSite: http.SameSiteLaxMode,
 			MaxAge:   -1,
 		}
 		http.SetCookie(w, &cookie)

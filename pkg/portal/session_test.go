@@ -125,8 +125,8 @@ func TestDeleteSession(t *testing.T) {
 	w3 := httptest.NewRecorder()
 	sess2 := manager.SessionStart(w3, req3)
 
-	if sess1.ID() != sess2.ID() {
-		t.Errorf("New session ID (%v) is different from original (%v)", sess2.ID(), sess1.ID())
+	if sess1.ID() == sess2.ID() {
+		t.Errorf("Destroyed session ID (%v) was reused", sess2.ID())
 	}
 
 	if name, ok := sess2.Get(ctx, session.KeyUserName).(string); ok {

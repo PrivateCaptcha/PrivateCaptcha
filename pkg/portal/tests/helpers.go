@@ -187,6 +187,11 @@ func AuthenticateSuite(ctx context.Context, email string, srv *http.ServeMux, xs
 	if location, _ := resp.Location(); location.String() != "/" {
 		return nil, fmt.Errorf("unexpected redirect: %v", location)
 	}
+	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == sessions.CookieName })
+	if idx == -1 {
+		return nil, errors.New("cannot find rotated session cookie in response")
+	}
+	cookie = resp.Cookies()[idx]
 
 	slog.Log(ctx, common.LevelTrace, "Looks like we are authenticated", "code", resp.StatusCode)
 

@@ -86,6 +86,24 @@ func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
 	}
 }
 
+func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.Session) error {
+	if err := ss.Init(ctx, sess); err != nil {
+		return err
+	}
+
+	if err := ss.store.Impl().StoreUserSessions(ctx, map[string]uint{sess.ID(): 1}, ss.persistKey, sessionCacheTTL); err != nil {
+		_ = ss.Destroy(ctx, sess.ID())
+		return err
+	}
+
+	if err := ss.Destroy(ctx, oldSID); err != nil {
+		_ = ss.Destroy(ctx, sess.ID())
+		return err
+	}
+
+	return nil
+}
+
 func (ss *SessionStore) TTL() time.Duration {
 	return sessionCacheTTL
 }

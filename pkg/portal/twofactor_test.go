@@ -138,6 +138,71 @@ func TestPostTwoFactorOtherServer(t *testing.T) {
 	}
 }
 
+func TestPostTwoFactorRotatesSession(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	srv := http.NewServeMux()
+	server.Setup(portalDomain(), common.NoopMiddleware).Register(srv)
+
+	ctx := t.Context()
+
+	user, _, err := db_tests.CreateNewAccountForTest(ctx, store, t.Name(), testPlan)
+	if err != nil {
+		t.Fatalf("failed to create new account: %v", err)
+	}
+
+	resp := loginSuite(srv, user.Email, server.XSRF.Token(""))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Unexpected login status code: %v", resp.StatusCode)
+	}
+
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find session cookie in response")
+	}
+	oldCookie := resp.Cookies()[idx]
+
+	code, err := portal_tests.TwoFactorCodeFromSession(ctx, oldCookie.Value, server.Sessions.Store)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp = twoFactorSuite(srv, user.Email, server.XSRF.Token(user.Email), code, oldCookie)
+	if resp.StatusCode != http.StatusSeeOther {
+		t.Fatalf("unexpected post twofactor code: %v", resp.StatusCode)
+	}
+
+	idx = slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == server.Sessions.CookieName })
+	if idx == -1 {
+		t.Fatal("cannot find rotated session cookie in response")
+	}
+	newCookie := resp.Cookies()[idx]
+	if newCookie.Value == oldCookie.Value {
+		t.Fatal("session ID was not rotated after successful 2FA")
+	}
+	if newCookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected SameSite=Lax, got %v", newCookie.SameSite)
+	}
+
+	oldReq := httptest.NewRequest("GET", "/", nil)
+	oldReq.AddCookie(oldCookie)
+	oldW := httptest.NewRecorder()
+	srv.ServeHTTP(oldW, oldReq)
+	if oldW.Code == http.StatusOK {
+		t.Fatal("pre-2FA session cookie still authenticated after rotation")
+	}
+
+	newReq := httptest.NewRequest("GET", "/", nil)
+	newReq.AddCookie(newCookie)
+	newW := httptest.NewRecorder()
+	srv.ServeHTTP(newW, newReq)
+	if newW.Code != http.StatusOK {
+		t.Fatalf("rotated session cookie was not authenticated: %v", newW.Code)
+	}
+}
+
 func resend2faSuite(srv *http.ServeMux, email, token string, cookie *http.Cookie) *http.Response {
 	form := url.Values{}
 	form.Add(common.ParamCSRFToken, token)

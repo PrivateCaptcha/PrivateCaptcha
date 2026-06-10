@@ -2,6 +2,10 @@ package session
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"slices"
 	"testing"
 	"time"
 )
@@ -14,7 +18,136 @@ func (s *stubStore) Read(ctx context.Context, sid string, skipCache bool) (*Sess
 	return nil, ErrSessionMissing
 }
 func (s *stubStore) Update(ctx context.Context, session *Session) error { return nil }
-func (s *stubStore) Destroy(ctx context.Context, sid string) error      { return nil }
+func (s *stubStore) Renew(ctx context.Context, oldSID string, session *Session) error {
+	return nil
+}
+func (s *stubStore) Destroy(ctx context.Context, sid string) error { return nil }
+
+type memoryStore struct {
+	sessions map[string]*Session
+}
+
+func newMemoryStore() *memoryStore {
+	return &memoryStore{sessions: make(map[string]*Session)}
+}
+
+func (s *memoryStore) Start(ctx context.Context, interval time.Duration) {}
+func (s *memoryStore) Init(ctx context.Context, session *Session) error {
+	s.sessions[session.ID()] = session
+	return nil
+}
+func (s *memoryStore) Read(ctx context.Context, sid string, skipCache bool) (*Session, error) {
+	sess, ok := s.sessions[sid]
+	if !ok {
+		return nil, ErrSessionMissing
+	}
+	return sess, nil
+}
+func (s *memoryStore) Update(ctx context.Context, session *Session) error {
+	s.sessions[session.ID()] = session
+	return nil
+}
+func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session) error {
+	if err := s.Init(ctx, session); err != nil {
+		return err
+	}
+	return s.Destroy(ctx, oldSID)
+}
+func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
+	delete(s.sessions, sid)
+	return nil
+}
+
+func TestSessionStartRejectsUnknownCookieID(t *testing.T) {
+	store := newMemoryStore()
+	manager := &Manager{
+		CookieName:  "pcsid",
+		Store:       store,
+		MaxLifetime: 10 * time.Minute,
+		Path:        "/",
+	}
+
+	attackerID := "attacker-known-session"
+	req := httptest.NewRequest(http.MethodGet, "/portal/login", nil)
+	req.AddCookie(&http.Cookie{Name: manager.CookieName, Value: url.QueryEscape(attackerID)})
+	w := httptest.NewRecorder()
+
+	sess := manager.SessionStart(w, req)
+
+	if sess.ID() == attackerID {
+		t.Fatal("unknown client supplied session ID was reused")
+	}
+	if _, ok := store.sessions[attackerID]; ok {
+		t.Fatal("unknown client supplied session ID was initialized")
+	}
+	if _, ok := store.sessions[sess.ID()]; !ok {
+		t.Fatal("fresh session ID was not initialized")
+	}
+
+	resp := w.Result()
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
+	if idx == -1 {
+		t.Fatal("fresh session cookie was not returned")
+	}
+	cookie := resp.Cookies()[idx]
+	if cookie.Value == url.QueryEscape(attackerID) {
+		t.Fatal("fresh session cookie reused unknown client supplied value")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+}
+
+func TestSessionRenewRotatesCookieAndDestroysOldSession(t *testing.T) {
+	store := newMemoryStore()
+	manager := &Manager{
+		CookieName:  "pcsid",
+		Store:       store,
+		MaxLifetime: 10 * time.Minute,
+		Path:        "/",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/portal/twofactor", nil)
+	w := httptest.NewRecorder()
+	sess := manager.SessionStart(w, req)
+	if err := sess.Set(req.Context(), KeyUserID, int32(123)); err != nil {
+		t.Fatal(err)
+	}
+
+	renewW := httptest.NewRecorder()
+	renewed, err := manager.SessionRenew(renewW, req, sess, map[SessionKey]SessionValue{
+		KeyLoginStep: 2,
+	}, []SessionKey{KeyUserID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if renewed.ID() == sess.ID() {
+		t.Fatal("session ID was not rotated")
+	}
+	if _, ok := store.sessions[sess.ID()]; ok {
+		t.Fatal("old session was not destroyed")
+	}
+	if _, ok := renewed.Get(req.Context(), KeyUserID).(int32); ok {
+		t.Fatal("renewed session did not delete requested key")
+	}
+	if step, ok := renewed.Get(req.Context(), KeyLoginStep).(int); !ok || step != 2 {
+		t.Fatalf("renewed session did not set requested key: %v", step)
+	}
+
+	resp := renewW.Result()
+	idx := slices.IndexFunc(resp.Cookies(), func(c *http.Cookie) bool { return c.Name == manager.CookieName })
+	if idx == -1 {
+		t.Fatal("rotated session cookie was not returned")
+	}
+	cookie := resp.Cookies()[idx]
+	if cookie.Value == url.QueryEscape(sess.ID()) {
+		t.Fatal("rotated session cookie reused old session ID")
+	}
+	if cookie.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("expected SameSite=Lax, got %v", cookie.SameSite)
+	}
+}
 
 func TestSessionKeyString(t *testing.T) {
 	sessionKeys := []SessionKey{
