@@ -115,13 +115,6 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	job := s.Jobs.LoginUser(sess)
-	jobCtx := common.CopyTraceID(ctx, context.Background())
-	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
-		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
-	}
-	go common.RunOneOffJob(jobCtx, job, job.NewParams())
-
 	_ = sess.Set(ctx, session.KeyLoginStep, loginStepCompleted)
 	_ = sess.Delete(ctx, session.KeyTwoFactorCode)
 	_ = sess.Delete(ctx, session.KeyTwoFactorCodeTimestamp)
@@ -129,6 +122,16 @@ func (s *Server) postTwoFactor(w http.ResponseWriter, r *http.Request) {
 	// at this point it's safe to remove because we check that session does not have the flag prior to this
 	_ = sess.Delete(ctx, session.KeyVerifyRegistration)
 	_ = sess.Set(ctx, session.KeyPersistent, true)
+
+	sess = s.Sessions.SessionRenew(w, r, sess)
+	ctx = context.WithValue(ctx, common.SessionIDContextKey, sess.ID())
+
+	job := s.Jobs.LoginUser(sess)
+	jobCtx := common.CopyTraceID(ctx, context.Background())
+	if ip := ctx.Value(common.RateLimitKeyContextKey); ip != nil {
+		jobCtx = context.WithValue(jobCtx, common.RateLimitKeyContextKey, ip)
+	}
+	go common.RunOneOffJob(jobCtx, job, job.NewParams())
 
 	if orgInviteID, ok := sess.Get(ctx, session.KeyOrgInviteID).(int32); ok && (orgInviteID > 0) {
 		slog.DebugContext(ctx, "Found org invite ID in session, redirecting to org", "inviteID", orgInviteID)

@@ -64,6 +64,9 @@ func (s *QuerierStub) DeleteAPIKey(ctx context.Context, arg *dbgen.DeleteAPIKeyP
 func (s *QuerierStub) DeleteCachedByKey(ctx context.Context, key string) (int64, error) {
 	return 0, s.Error
 }
+func (s *QuerierStub) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
+	return 0, s.Error
+}
 func (s *QuerierStub) DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error) {
 	return 0, s.Error
 }

@@ -68,6 +68,18 @@ func (q *Queries) DeleteCachedByKey(ctx context.Context, key string) (int64, err
 	return result.RowsAffected(), nil
 }
 
+const deleteCachedByKeys = `-- name: DeleteCachedByKeys :execrows
+DELETE FROM backend.cache WHERE key = ANY($1::TEXT[])
+`
+
+func (q *Queries) DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteCachedByKeys, keys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredCache = `-- name: DeleteExpiredCache :execrows
 DELETE FROM backend.cache WHERE expires_at < NOW()
 `

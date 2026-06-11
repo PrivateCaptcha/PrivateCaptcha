@@ -28,6 +28,7 @@ type Querier interface {
 	DeactivateForms(ctx context.Context, dollar_1 []int32) ([]*Form, error)
 	DeleteAPIKey(ctx context.Context, arg *DeleteAPIKeyParams) (*APIKey, error)
 	DeleteCachedByKey(ctx context.Context, key string) (int64, error)
+	DeleteCachedByKeys(ctx context.Context, keys []string) (int64, error)
 	DeleteDeletedRecords(ctx context.Context, deletedAt pgtype.Timestamptz) (int64, error)
 	DeleteDifficultyRule(ctx context.Context, arg *DeleteDifficultyRuleParams) (int64, error)
 	DeleteExpiredCache(ctx context.Context) (int64, error)

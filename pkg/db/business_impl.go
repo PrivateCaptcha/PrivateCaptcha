@@ -407,6 +407,34 @@ func (impl *BusinessStoreImpl) DeleteUserSession(ctx context.Context, sid string
 	return err
 }
 
+func (impl *BusinessStoreImpl) DeleteUserSessions(ctx context.Context, sids []string) error {
+	if len(sids) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(sids))
+	for _, sid := range sids {
+		if found := impl.cache.Delete(ctx, SessionCacheKey(sid)); !found {
+			slog.WarnContext(ctx, "User session was not found in memory cache to delete")
+		}
+		sessionID, _ := sessionIDFunc(sid)
+		keys = append(keys, sessionID)
+	}
+
+	if impl.querier == nil {
+		return ErrMaintenance
+	}
+
+	affected, err := impl.querier.DeleteCachedByKeys(ctx, keys)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to delete cached sessions from DB", "count", len(keys), common.ErrAttr(err))
+	} else {
+		slog.Log(ctx, common.LevelTrace, "Deleted cached sessions from DB", "count", len(keys), "affected", affected)
+	}
+
+	return err
+}
+
 func (impl *BusinessStoreImpl) CacheUserSession(ctx context.Context, data *session.SessionData) error {
 	if data == nil {
 		return ErrInvalidInput
@@ -439,7 +467,7 @@ func (impl *BusinessStoreImpl) RetrieveUserSession(ctx context.Context, sid stri
 	return reader.Read(ctx)
 }
 
-func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
+func (impl *BusinessStoreImpl) GetCachedUserSessions(ctx context.Context, batch map[string]uint) ([]*session.SessionData, error) {
 	reader := &StoreBulkReader[string, string, session.SessionData]{
 		ArgFunc:      nil, // we shouldn't be using it as we read from cache only
 		Cache:        impl.cache,
@@ -454,6 +482,14 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 	cached, _, err := reader.Read(ctx, batch)
 	if (err != nil) && (err != ErrMaintenance) {
 		slog.Log(ctx, common.LevelTrace, "Failed to read cached sessions", common.ErrAttr(err))
+		return nil, err
+	}
+	return cached, nil
+}
+
+func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[string]uint, persistKey session.SessionKey, ttl time.Duration) error {
+	cached, err := impl.GetCachedUserSessions(ctx, batch)
+	if err != nil {
 		return err
 	}
 
@@ -469,6 +505,10 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 	intervals := make([]time.Duration, 0, len(batch))
 
 	for _, sd := range cached {
+		if sd.Has(session.KeyTombstone) {
+			continue
+		}
+
 		if !sd.Has(persistKey) {
 			slog.Log(ctx, common.LevelTrace, "Skipping persisting session without persist key", common.SessionIDAttr(sd.ID()))
 			continue

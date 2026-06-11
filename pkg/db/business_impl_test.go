@@ -59,7 +59,10 @@ func (s *dummySessionStore) Read(ctx context.Context, sid string, skipCache bool
 	return nil, nil
 }
 func (s *dummySessionStore) Update(ctx context.Context, session *session.Session) error { return nil }
-func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error              { return nil }
+func (s *dummySessionStore) Renew(ctx context.Context, oldSID string, session *session.Session) error {
+	return nil
+}
+func (s *dummySessionStore) Destroy(ctx context.Context, sid string) error { return nil }
 
 func (s *createPropertyQuerierStub) CreateProperty(ctx context.Context, arg *dbgen.CreatePropertyParams) (*dbgen.Property, error) {
 	return s.property, s.Error
