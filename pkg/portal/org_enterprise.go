@@ -548,7 +548,7 @@ func (s *Server) validateTransferOrgLimits(ctx context.Context, org *dbgen.Organ
 		}
 	}
 
-	if ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, org.ID, subscr); err != nil {
+	if ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, newOwner.ID, subscr); err != nil {
 		if err == db.ErrNoActiveSubscription {
 			return http.StatusPaymentRequired
 		}

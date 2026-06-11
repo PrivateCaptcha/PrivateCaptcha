@@ -114,7 +114,7 @@ func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization
 
 	isOrgOwner := org.UserID.Int32 == sessUser.ID
 
-	ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, org.ID, subscr)
+	ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, owner.ID, subscr)
 	if err != nil {
 		if err == db.ErrNoActiveSubscription {
 			if isOrgOwner {
