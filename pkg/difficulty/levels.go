@@ -63,42 +63,103 @@ func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time
 	return levels
 }
 
-func requestsToDifficulty(requests float64, minDifficulty float64, level dbgen.DifficultyGrowth) uint8 {
-	if (requests < 1.0) || (level == dbgen.DifficultyGrowthConstant) || (minDifficulty >= 255.0) {
-		return uint8(min(minDifficulty, 255.0))
+/*
+* On the client side, difficulty is the logarithmic encoding of work. So work(d) = 2^(d/8)
+* (1 step of difficulty change incurrs 2^(1/8) jump in computations => for +100% computations we do +8 difficulty)
+* Generally, work multiplier = 2^(delta_D / 8), where (delta_D is change in difficulty) => (solving for delta_D)
+* delta_D = 8 * log2(work multiplier)
+*
+* So to generalize, we will have
+* final_difficulty = base_difficulty + 8 * log2(extra work multiplier)
+*
+* In our calculations:
+* - user bucket level (u) is "requests above the leak target (that have not yet decayed)"
+* - property bucket level (p) is "accumulated deviation" from the running mean
+*
+* To add `u + p` directly for our calculation we need to normalize them. (u/U8) and (p/P8), where
+* U8/P8 - how many user/property requests (over the limit) produce +100% computations.
+* e.g. If (u == U8), then each user request contributs one "doubling" unit of difficulty
+*
+* To encode difficulty growth we use multiplier `g`: delta_D = 8 * g * log2(work multiplier)
+*
+* Finally, "The Model" for `work multiplier` is:
+* F(u,p) = (1 + u/U8)^(g * wu) * (1 + p/P8)^(g * wp)
+* where `wp` and `wu` are respective weights of how much user and property levels measure
+* Both are mulplied to make user and property levels cross-dependent (e.g. a suspicious user during a property-wide spike affects more)
+* so if you "open" logarithm, it results in `wu*(1 + u/U8) + wp*(1 + p/P8)`
+*
+* In terms of "slow" growth, we currently select y=log2(1+x) function
+*
+* Knobs:
+* P8 is kind of the most imporant one. We define P8 = K * LeakRate, where
+* LeakRate is expected number of requests per interval, K is the "model" constant - number of normal bucket equivalents
+* that our leaky bucket accumulates. So K*LeakRate is kind of "accumulated excess measured in normal property buckets".
+* e.g. 4*LeakRate => "property has accumulated excess equal to about 4 normal buckets of traffic during leak interval"
+* Also: we have to cap P8 from below because new properties don't yet have good learned data.
+ */
+func requestsToDifficulty(
+	userLevel leakybucket.TLevel,
+	propertyLevel leakybucket.TLevel,
+	propertyLeakRate float64,
+	propertyBucketSize time.Duration,
+	baseDifficulty float64,
+	growth dbgen.DifficultyGrowth,
+) uint8 {
+	if baseDifficulty >= 255.0 {
+		return 255
 	}
 
-	// full formula is
-	// y = log2(log2(x**a)) * x**b
-	// parameter "a" affects sensitivity to growth
-
-	a := 0.3
-	switch level {
-	case dbgen.DifficultyGrowthSlow:
-		a = 0.2
-	case dbgen.DifficultyGrowthMedium:
-		a = 0.3
-	case dbgen.DifficultyGrowthFast:
-		a = 0.5
+	g := growthMultiplier(growth)
+	if g <= 0 {
+		return uint8(min(baseDifficulty, 255.0))
 	}
 
-	log2A := math.Log2(a)
+	const (
+		userRef            = 8.0  // U8
+		propertyMinRPS     = 0.25 // P8 cap utility
+		propertyRefBuckets = 4    // default value for `K` in the formula - number of accumulated "normal buckets" in excess
+		userWeight         = 1.0  // requester user contributes each data point
+		propertyWeight     = 0.5  // property anomaly has moderate immediate effect on particular user
+	)
 
-	m := log2A
-	if requests > 1.0 {
-		m += math.Log10(requests)
-	}
-	m = math.Max(m, 0.0)
+	propertyRefMin := propertyMinRPS * propertyBucketSize.Seconds()
+	propertyRefLeak := propertyRefBuckets * propertyLeakRate
+	// we use sqrt to make max(propertyRefMin, propertyRefLeak) smoother
+	propertyRef := math.Sqrt(propertyRefMin*propertyRefMin + propertyRefLeak*propertyRefLeak)
 
-	b := math.Log2((256.0-minDifficulty)/(5.0+log2A)) / 32.0
-	fx := m * math.Pow(requests, b)
-	difficulty := minDifficulty + math.Round(fx)
+	u := float64(userLevel)
+	p := float64(propertyLevel)
+
+	userPressure := userWeight * log2p(u/userRef)
+	propertyPressure := propertyWeight * log2p(p/propertyRef)
+
+	delta := 8.0 * g * (userPressure + propertyPressure)
+	difficulty := baseDifficulty + math.Round(delta)
 
 	if difficulty >= 255.0 {
 		return 255
 	}
 
 	return uint8(difficulty)
+}
+
+func log2p(x float64) float64 {
+	return math.Log1p(x) / math.Ln2
+}
+
+func growthMultiplier(level dbgen.DifficultyGrowth) float64 {
+	switch level {
+	case dbgen.DifficultyGrowthSlow:
+		return 0.70710678
+	case dbgen.DifficultyGrowthMedium:
+		return 1.0
+	case dbgen.DifficultyGrowthFast:
+		return 1.41421356
+	case dbgen.DifficultyGrowthConstant:
+		return 0.0
+	default:
+		return 1.0
+	}
 }
 
 func (levels *Levels) BackfillTimeout() time.Duration {
@@ -148,12 +209,15 @@ func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerpri
 
 	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
 
-	level := int64(userAddResult.CurrLevel)
-	level += int64(propertyAddResult.CurrLevel)
+	difficulty := requestsToDifficulty(userAddResult.CurrLevel,
+		propertyAddResult.CurrLevel,
+		propertyAddResult.LeakRate,
+		l.propertyBuckets.LeakInterval(),
+		minDifficulty,
+		p.Growth(),
+	)
 
-	// just as bucket's level is the measure of deviation of requests
-	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth()), propertyAddResult.CurrLevel, err
+	return difficulty, propertyAddResult.CurrLevel, err
 }
 
 func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {

@@ -31,7 +31,7 @@ done < <(
     | sort -u \
     | sed 's|^|./|'
 )
-if ! go vet -tags 'enterprise' $PACKAGES; then
+if ! go vet -tags 'enterprise simulation' $PACKAGES; then
     echo "'go vet' failed"
     exit 1
 fi

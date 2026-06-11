@@ -30,6 +30,7 @@ type AddResult struct {
 	Capacity   TLevel
 	ResetAfter time.Duration
 	RetryAfter time.Duration
+	LeakRate   float64
 	Found      bool
 }
 
@@ -115,6 +116,7 @@ func (bl *bucketUpdater[TKey, T, TBucket]) ComputeFunc(oldValue TBucket, found b
 		bucket.Init(bl.key, bl.capacity, bl.leakInterval, bl.tnow)
 	}
 
+	result.LeakRate = bucket.LeakRate()
 	result.CurrLevel, result.Added = bucket.Add(bl.tnow, bl.n)
 	// 1 level each leakInterval
 	leakInterval := bucket.LeakInterval()

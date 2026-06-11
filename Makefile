@@ -14,6 +14,8 @@ POSTGRES_TEST_DOCKER_COMPOSE_FILES ?= -f docker/docker-compose.postgres-test.yml
 GOPATH := $(shell go env GOPATH)
 OPEN ?= printf "file://%s\n"
 TEST_PG_PORT ?= 15432
+SIMULATION_OUT ?= /tmp/difficulty-sim.tsv
+SIMULATION_ARGS ?= --scenario=both-burst
 
 setup-git:
 	git config core.hooksPath scripts/hooks
@@ -34,14 +36,14 @@ init-web:
 	cd web && env STAGE="$(STAGE)" npm install
 
 test-unit:
-	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags enterprise -short ./...
+	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags "enterprise simulation" -short ./...
 
 test-unit-race: EXTRA_TEST_FLAGS = -race
 test-unit-race: CGO_TEST_ENABLED = 1
 test-unit-race: test-unit
 
 test-unit-cover:
-	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags enterprise -short -coverprofile=coverage_unit.cov -coverpkg=$(shell go list ./... | paste -sd, -) ./...
+	@env GOFLAGS="-mod=vendor" CGO_ENABLED=$(CGO_TEST_ENABLED) go test $(EXTRA_TEST_FLAGS) -tags "enterprise simulation" -short -coverprofile=coverage_unit.cov -coverpkg=$(shell go list ./... | paste -sd, -) ./...
 
 test-unit-cover-race: EXTRA_TEST_FLAGS = -race
 test-unit-cover-race: CGO_TEST_ENABLED = 1
@@ -135,6 +137,9 @@ build-view-portal:
 
 build-view-widget:
 	env GOFLAGS="-mod=vendor" go build -o bin/viewwidget cmd/viewwidget/*.go
+
+build-difficulty-sim:
+	env GOFLAGS="-mod=vendor" go build -tags simulation -o bin/difficulty-sim cmd/difficulty-sim/*.go
 
 generate-easyjson:
 	# NOTE: api package has to be first because portal imports it
@@ -230,3 +235,11 @@ run-view-widget:
 	reflex -r '^(widget|web|cmd\/viewwidget)/' \
 		-R '^(web/static/js|widget/static/js|widget/node_modules|web/node_modules)' \
 		-s -- sh -c 'make view-widget'
+
+difficulty-sim-data: build-difficulty-sim
+	bin/difficulty-sim $(SIMULATION_ARGS) > $(SIMULATION_OUT)
+	@echo "wrote $(SIMULATION_OUT)"
+
+run-difficulty-sim: SIM_GNUPLOT_DEBUG := $(if $(findstring --debug,$(SIMULATION_ARGS)),1,0)
+run-difficulty-sim: difficulty-sim-data
+	gnuplot -e "data='$(SIMULATION_OUT)'; debug=$(SIM_GNUPLOT_DEBUG)" cmd/difficulty-sim/difficulty-sim.gnuplot
