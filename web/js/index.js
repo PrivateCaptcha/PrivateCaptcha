@@ -216,6 +216,7 @@ const portalUnsavedChanges = {
             state.dirty = this.snapshotForm(form) !== state.baseline;
         };
 
+        form._syncFormState = syncFormState; // Store for cleanup
         form.addEventListener('input', syncFormState);
         form.addEventListener('change', syncFormState);
     },
@@ -300,16 +301,19 @@ const portalUnsavedChanges = {
     },
 
     clearScope(scope) {
-        for (const [key, state] of this.states.entries()) {
-            if (state.scope === scope) {
-                this.states.delete(key);
-            }
-        }
-
         for (const [form, key] of this.forms.entries()) {
             const state = this.states.get(key);
             if (!state || (state.scope === scope)) {
+                // Remove listeners before deleting mapping
+                form.removeEventListener('input', form._syncFormState);
+                form.removeEventListener('change', form._syncFormState);
                 this.forms.delete(form);
+            }
+        }
+
+        for (const [key, state] of this.states.entries()) {
+            if (state.scope === scope) {
+                this.states.delete(key);
             }
         }
     },
