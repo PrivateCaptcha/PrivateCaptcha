@@ -170,7 +170,12 @@ func (al *AuditLog) RecordEvent(ctx context.Context, event *common.AuditLogEvent
 	event.Source = source
 
 	slog.DebugContext(ctx, "Queueing audit log event", "action", event.Action.String(), "table", event.TableName, "userID", event.UserID, "source", source.String())
-	al.persistChan <- event
+	select {
+	case al.persistChan <- event:
+		// sent
+	case <-ctx.Done():
+		slog.WarnContext(ctx, "Context cancelled, discarding audit event", "table", event.TableName, "entityID", event.EntityID, common.ErrAttr(ctx.Err()))
+	}
 }
 
 type DiscardAuditLog struct{}
