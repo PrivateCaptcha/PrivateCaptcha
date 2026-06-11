@@ -67,6 +67,7 @@ func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*
 
 		return nil, err
 	}
+
 	if sd.Has(session.KeyTombstone) {
 		return nil, session.ErrSessionMissing
 	}
@@ -75,15 +76,19 @@ func (ss *SessionStore) Read(ctx context.Context, sid string, skipCache bool) (*
 }
 
 func (ss *SessionStore) Update(ctx context.Context, sd *session.Session) error {
-	return ss.enqueueSessionEvent(ctx, ss.persistChan, sd.ID())
+	if sd == nil {
+		return nil
+	}
+
+	return ss.enqueuePersistSession(ctx, sd.ID())
 }
 
-func (ss *SessionStore) enqueueSessionEvent(ctx context.Context, ch chan<- string, sid string) error {
+func (ss *SessionStore) enqueuePersistSession(ctx context.Context, sid string) error {
 	timer := time.NewTimer(sessionBackpressureTimeout)
 	defer timer.Stop()
 
 	select {
-	case ch <- sid:
+	case ss.persistChan <- sid:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -103,12 +108,14 @@ func (ss *SessionStore) Renew(ctx context.Context, oldSID string, sess *session.
 		return err
 	}
 
-	if err := ss.enqueueSessionEvent(ctx, ss.persistChan, sess.ID()); err != nil {
-		slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
-	}
-	if err := ss.enqueueSessionEvent(ctx, ss.persistChan, oldSID); err != nil {
+	if err := ss.enqueuePersistSession(ctx, oldSID); err != nil {
 		slog.ErrorContext(ctx, "Failed to queue old session tombstone for persistence", common.SessionIDAttr(oldSID), common.ErrAttr(err))
 	}
+
+	if err := ss.enqueuePersistSession(ctx, sess.ID()); err != nil {
+		slog.ErrorContext(ctx, "Failed to queue renewed session for persistence", common.SessionIDAttr(sess.ID()), common.ErrAttr(err))
+	}
+
 	return nil
 }
 
@@ -121,25 +128,28 @@ func (ss *SessionStore) Destroy(ctx context.Context, sid string) error {
 }
 
 func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]uint) error {
-	impl := ss.store.Impl()
-	cached, err := impl.RetrieveCachedUserSessions(ctx, batch)
-	if err != nil {
-		slog.Log(ctx, common.LevelTrace, "Failed to read cached sessions for persistence", common.ErrAttr(err))
-		return nil
-	}
-
-	toStore := make(map[string]uint, len(cached))
+	toStore := make(map[string]uint, len(batch))
 	toDelete := make([]string, 0)
-	for _, sd := range cached {
-		if sd.Has(session.KeyTombstone) {
-			toDelete = append(toDelete, sd.ID())
-			continue
+
+	impl := ss.store.Impl()
+	if cached, err := impl.RetrieveCachedUserSessions(ctx, batch); err == nil {
+		for _, sd := range cached {
+			sid := sd.ID()
+			if sd.Has(session.KeyTombstone) {
+				toDelete = append(toDelete, sid)
+				continue
+			}
+			toStore[sid] = batch[sid]
 		}
-		toStore[sd.ID()] = batch[sd.ID()]
+
+		// we actually do not care if we failed to save or delete sessions in the DB cache
+		_ = impl.StoreUserSessions(ctx, toStore, ss.persistKey, sessionCacheTTL)
+		_ = impl.DeleteUserSessions(ctx, toDelete)
+	} else {
+		slog.ErrorContext(ctx, "Failed to read cached sessions for persistence", common.ErrAttr(err))
+		// best effort is to store as before (we skip tombstones on DB layer)
+		_ = impl.StoreUserSessions(ctx, batch, ss.persistKey, sessionCacheTTL)
 	}
 
-	// we actually do not care if we failed to save or delete sessions in the DB cache
-	_ = impl.StoreUserSessions(ctx, toStore, ss.persistKey, sessionCacheTTL)
-	_ = impl.DeleteUserSessions(ctx, toDelete)
 	return nil
 }

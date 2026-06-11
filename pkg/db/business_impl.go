@@ -505,6 +505,10 @@ func (impl *BusinessStoreImpl) StoreUserSessions(ctx context.Context, batch map[
 	intervals := make([]time.Duration, 0, len(batch))
 
 	for _, sd := range cached {
+		if sd.Has(session.KeyTombstone) {
+			continue
+		}
+
 		if !sd.Has(persistKey) {
 			slog.Log(ctx, common.LevelTrace, "Skipping persisting session without persist key", common.SessionIDAttr(sd.ID()))
 			continue
