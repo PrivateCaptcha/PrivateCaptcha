@@ -303,7 +303,7 @@ const portalUnsavedChanges = {
     clearScope(scope) {
         for (const [form, key] of this.forms.entries()) {
             const state = this.states.get(key);
-            if (!state || (state.scope === scope)) {
+            if (state && (state.scope === scope)) {
                 // Remove listeners before deleting mapping
                 form.removeEventListener('input', form._syncFormState);
                 form.removeEventListener('change', form._syncFormState);

@@ -7,10 +7,10 @@ import (
 	"time"
 )
 
-const maxFormRedirects = 10
-
 func NewFormHTTPClient(verifier FormURLVerifier, redirectCount int16) *http.Client {
-	allowedRedirects := max(0, min(int(redirectCount), maxFormRedirects))
+	const maxFormRedirects int16 = 10
+
+	allowedRedirects := int(max(0, min(redirectCount, maxFormRedirects)))
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {

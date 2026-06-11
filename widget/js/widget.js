@@ -266,7 +266,7 @@ export class CaptchaWidget {
     }
 
     signalErrored() {
-        this.dispatchEvent('error', "erroredCallback");
+        this.signalEvent('error', "erroredCallback");
     }
 
     signalReset() {

@@ -41,7 +41,7 @@ func (al *AuditLog) Stop() {
 }
 
 func (al *AuditLog) Shutdown() {
-	slog.Debug("Shutting down persisting sessions")
+	slog.Debug("Shutting down audit log persistence")
 	close(al.persistChan)
 }
 
@@ -208,7 +208,7 @@ func ParseAuditLogPayloads[T any](ctx context.Context, log *dbgen.AuditLog) (*T,
 		tNew = new(T)
 		if err := json.Unmarshal(log.NewValue, tNew); err != nil {
 			slog.ErrorContext(ctx, "Failed to parse audit log new value", "table", log.EntityTable, "action", log.Action,
-				"length", len(log.OldValue), common.ErrAttr(err))
+				"length", len(log.NewValue), common.ErrAttr(err))
 			return nil, nil, err
 		}
 	}
