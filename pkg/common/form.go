@@ -9,33 +9,23 @@ import (
 
 const maxFormRedirects = 10
 
-func NewFormHTTPClient() *http.Client {
-	client := &http.Client{
-		Timeout:       10 * time.Second,
-		CheckRedirect: noFormRedirects,
-	}
-
-	if transport, ok := http.DefaultTransport.(*http.Transport); ok && (transport != nil) {
-		clone := transport.Clone()
-		client.Transport = clone
-		clone.DisableKeepAlives = true
-	}
-
-	return client
-}
-
-func NewFormRedirectHTTPClient(verifier FormURLVerifier, redirectCount int16) *http.Client {
-	allowedRedirects := min(int(redirectCount), maxFormRedirects)
+func NewFormHTTPClient(verifier FormURLVerifier, redirectCount int16) *http.Client {
+	allowedRedirects := max(0, min(int(redirectCount), maxFormRedirects))
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > allowedRedirects {
-				return fmt.Errorf("stopped after %d redirects", maxFormRedirects)
+				if allowedRedirects == 0 {
+					return http.ErrUseLastResponse
+				}
+
+				return fmt.Errorf("stopped after %d redirects", allowedRedirects)
 			}
 
 			if err := verifier.VerifyURL(req.Context(), req.URL.String()); err != nil {
 				return fmt.Errorf("unsafe form redirect: %w", err)
 			}
+
 			return nil
 		},
 	}
@@ -48,10 +38,6 @@ func NewFormRedirectHTTPClient(verifier FormURLVerifier, redirectCount int16) *h
 	}
 
 	return client
-}
-
-func noFormRedirects(req *http.Request, via []*http.Request) error {
-	return http.ErrUseLastResponse
 }
 
 func SafeURL(raw string) string {

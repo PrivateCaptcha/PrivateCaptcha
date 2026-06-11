@@ -786,12 +786,7 @@ func (s *Server) submitFormDirectly(ctx context.Context, form *dbgen.Form, submi
 	formCopy := *form
 	formCopy.RetryRequestCount = 0
 
-	var client *http.Client
-	if formCopy.RedirectCount > 0 {
-		client = common.NewFormRedirectHTTPClient(s.FormURLVerifier, formCopy.RedirectCount)
-	} else {
-		client = common.NewFormHTTPClient()
-	}
+	client := common.NewFormHTTPClient(s.FormURLVerifier, max(0, formCopy.RedirectCount))
 
 	return api.SubmitFormWithRetry(ctx, client, &formCopy, submission)
 }
