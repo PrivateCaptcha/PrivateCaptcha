@@ -139,15 +139,15 @@ func (hc *HealthCheckJob) checkPostgres(ctx context.Context) int32 {
 	return int32(FlagFalse)
 }
 
-func (hc *HealthCheckJob) isPostgresHealthy() bool {
+func (hc *HealthCheckJob) IsPostgresHealthy() bool {
 	return hc.postgresFlag.Load() == FlagTrue
 }
 
-func (hc *HealthCheckJob) isClickHouseHealthy() bool {
+func (hc *HealthCheckJob) IsClickHouseHealthy() bool {
 	return hc.clickhouseFlag.Load() == FlagTrue
 }
 
-func (hc *HealthCheckJob) isShuttingDown() bool {
+func (hc *HealthCheckJob) IsShuttingDown() bool {
 	return hc.shuttingDownFlag.Load() == FlagTrue
 }
 
@@ -163,8 +163,8 @@ func (hc *HealthCheckJob) LiveHandler(w http.ResponseWriter, r *http.Request) {
 func (hc *HealthCheckJob) ReadyHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set(common.HeaderContentType, common.ContentTypeHTML)
 
-	shuttingDown := hc.isShuttingDown()
-	healthy := hc.isPostgresHealthy() && hc.isClickHouseHealthy()
+	shuttingDown := hc.IsShuttingDown()
+	healthy := hc.IsPostgresHealthy() && hc.IsClickHouseHealthy()
 	maintenanceMode := config.AsBool(hc.MaintenanceMode)
 
 	if !shuttingDown && (healthy || !hc.StrictReadiness || maintenanceMode) {

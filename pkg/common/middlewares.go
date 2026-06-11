@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/subtle"
 	"encoding/hex"
 	"errors"
 	"log/slog"
@@ -364,7 +365,7 @@ func APIKeyMiddleware(apiKey string) alice.Constructor {
 				return
 			}
 
-			if secret != apiKey {
+			if subtle.ConstantTimeCompare([]byte(secret), []byte(apiKey)) != 1 {
 				slog.WarnContext(ctx, "Request API key does not match")
 				http.Error(w, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 				return
