@@ -338,6 +338,7 @@ export class CaptchaWidget {
         this.setState(STATE_EMPTY);
         this.setProgressState(STATE_EMPTY);
         this.ensureNoSolutionField();
+        this._apiTriggered = false;
         this.init(this._userStarted);
     }
 

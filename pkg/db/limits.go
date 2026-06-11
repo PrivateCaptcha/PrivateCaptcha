@@ -14,7 +14,7 @@ type SubscriptionLimits interface {
 	CheckOrgsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckOrgMembersLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
-	CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
+	CheckFormsLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckOrgRulesLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error)
 	CheckPropertyRulesLimit(ctx context.Context, propertyID int32, subscr *dbgen.Subscription) (bool, int, error)
 	RequestsLimit(ctx context.Context, subscr *dbgen.Subscription) (int64, error)
