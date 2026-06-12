@@ -512,9 +512,13 @@ func (s *Server) getOrgDashboard(w http.ResponseWriter, r *http.Request) (*ViewM
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	renderCtx, err := s.createOrgPropertiesContext(ctx, org, user, 0 /*page*/)
@@ -532,9 +536,13 @@ func (s *Server) getOrgFormsTab(w http.ResponseWriter, r *http.Request) (*ViewMo
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	baseCtx := s.createPortalTabBaseContext(org, user, portalFormsTabIndex)
@@ -553,9 +561,13 @@ func (s *Server) getOrgForms(w http.ResponseWriter, r *http.Request) (*ViewModel
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	pageParam := r.URL.Query().Get(common.ParamPage)
@@ -583,9 +595,13 @@ func (s *Server) getOrgProperties(w http.ResponseWriter, r *http.Request) (*View
 		return nil, err
 	}
 
-	org, _, err := s.Org(user, r)
+	org, level, err := s.Org(user, r)
 	if err != nil {
 		return nil, err
+	}
+
+	if level.Valid && level.AccessLevel == dbgen.AccessLevelInvited {
+		return nil, db.ErrPermissions
 	}
 
 	pageParam := r.URL.Query().Get(common.ParamPage)
