@@ -24,12 +24,17 @@ type transferOrgSubscriptionLimitsStub struct {
 	propertiesExtra int
 	propertiesErr   error
 	formsOK         bool
+	formsLimit      int
 	formsExtra      int
 	formsErr        error
 }
 
 func (s transferOrgSubscriptionLimitsStub) CheckPropertiesLimit(ctx context.Context, userID int32, subscr *dbgen.Subscription) (bool, int, error) {
 	return s.propertiesOK, s.propertiesExtra, s.propertiesErr
+}
+
+func (s transferOrgSubscriptionLimitsStub) FormsLimit(ctx context.Context, subscr *dbgen.Subscription) (int, error) {
+	return s.formsLimit, nil
 }
 
 func (s transferOrgSubscriptionLimitsStub) CheckFormsLimit(ctx context.Context, orgID int32, subscr *dbgen.Subscription) (bool, int, error) {
@@ -1127,6 +1132,7 @@ func TestValidateTransferOrgLimitsDestinationFormLimit(t *testing.T) {
 		SubscriptionLimits: transferOrgSubscriptionLimitsStub{
 			propertiesOK: true,
 			formsOK:      false,
+			formsLimit:   1,
 			formsExtra:   1,
 		},
 	}

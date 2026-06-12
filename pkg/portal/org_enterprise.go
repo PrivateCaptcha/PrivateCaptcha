@@ -548,16 +548,41 @@ func (s *Server) validateTransferOrgLimits(ctx context.Context, org *dbgen.Organ
 		}
 	}
 
-	if ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, newOwner.ID, subscr); err != nil {
+	formsLimit, err := s.SubscriptionLimits.FormsLimit(ctx, subscr)
+	if err != nil {
 		if err == db.ErrNoActiveSubscription {
 			return http.StatusPaymentRequired
 		}
-
-		slog.ErrorContext(ctx, "Failed to check destination org forms limit", "userID", newOwner.ID, "orgID", org.ID, common.ErrAttr(err))
+		slog.ErrorContext(ctx, "Failed to retrieve destination user forms limit", "userID", newOwner.ID, common.ErrAttr(err))
 		return http.StatusInternalServerError
-	} else if !ok && extra > 0 {
-		slog.WarnContext(ctx, "Destination user would exceed forms limit after org transfer", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
-		return http.StatusPaymentRequired
+	}
+
+	if formsLimit > 0 {
+		ok, extra, err := s.SubscriptionLimits.CheckFormsLimit(ctx, newOwner.ID, subscr)
+		if err != nil {
+			if err == db.ErrNoActiveSubscription {
+				return http.StatusPaymentRequired
+			}
+			slog.ErrorContext(ctx, "Failed to check destination user forms limit", "userID", newOwner.ID, "orgID", org.ID, common.ErrAttr(err))
+			return http.StatusInternalServerError
+		}
+
+		if !ok && extra > 0 {
+			slog.WarnContext(ctx, "Destination user is already above forms limit", "userID", newOwner.ID, "orgID", org.ID, "extra", extra)
+			return http.StatusPaymentRequired
+		}
+
+		orgFormsCount, err := s.Store.Impl().RetrieveOrgFormsCount(ctx, org.ID)
+		if err != nil {
+			slog.ErrorContext(ctx, "Failed to retrieve organization forms count", "orgID", org.ID, common.ErrAttr(err))
+			return http.StatusInternalServerError
+		}
+
+		if int(orgFormsCount) > (-extra) {
+			slog.WarnContext(ctx, "Destination user would exceed forms limit after org transfer", "userID", newOwner.ID,
+				"orgID", org.ID, "orgFormsCount", orgFormsCount, "extra", extra)
+			return http.StatusPaymentRequired
+		}
 	}
 
 	return 0
