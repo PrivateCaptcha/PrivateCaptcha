@@ -164,3 +164,17 @@ func TestEmailTemplateEnsureParsedOnlyOnce(t *testing.T) {
 
 	// No panic or error means parseOnce is working correctly
 }
+
+func TestEmailTemplateHashCollisionWithDifferentText(t *testing.T) {
+	t.Parallel()
+
+	tpl1 := NewEmailTemplate("test", "<html>same html content</html>", "text version 1", nil)
+	tpl2 := NewEmailTemplate("test", "<html>same html content</html>", "text version 2 with different content", nil)
+
+	hash1 := tpl1.Hash()
+	hash2 := tpl2.Hash()
+
+	if hash1 == hash2 {
+		t.Errorf("Hash collision: different text content produced same hash.\nHash1: %s\nHash2: %s\nText1: %q\nText2: %q", hash1, hash2, "text version 1", "text version 2 with different content")
+	}
+}

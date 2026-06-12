@@ -73,11 +73,16 @@ func (et *EmailTemplate) Hash() string {
 
 	if len(et.hash) == 0 {
 		h := sha1.New()
+		hasContent := false
 		if len(et.contentHTML) > 0 {
 			h.Write([]byte(et.contentHTML))
-		} else if len(et.contentText) > 0 {
+			hasContent = true
+		}
+		if len(et.contentText) > 0 {
 			h.Write([]byte(et.contentText))
-		} else {
+			hasContent = true
+		}
+		if !hasContent {
 			h.Write([]byte(et.name))
 		}
 		et.hash = hex.EncodeToString(h.Sum(nil))
