@@ -39,9 +39,8 @@ var (
 	errTransactionCache     = errors.New("cache is not supported during transaction")
 	errRulesNeedRebalancing = errors.New("rules need rebalancing")
 	// shortcuts for nullable access levels
-	nullAccessLevelNull   = dbgen.NullAccessLevel{Valid: false}
-	nullAccessLevelOwner  = dbgen.NullAccessLevel{Valid: true, AccessLevel: dbgen.AccessLevelOwner}
-	nullAccessLevelMember = dbgen.NullAccessLevel{Valid: true, AccessLevel: dbgen.AccessLevelMember}
+	nullAccessLevelNull  = dbgen.NullAccessLevel{Valid: false}
+	nullAccessLevelOwner = dbgen.NullAccessLevel{Valid: true, AccessLevel: dbgen.AccessLevelOwner}
 )
 
 type txCacheArg struct {
