@@ -66,6 +66,15 @@ func ProcessBatchArray[T any](ctx context.Context, channel <-chan T, delay time.
 		}
 	}
 
+	if len(batch) > 0 {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		slog.InfoContext(ctx, "Processing remaining batch items before shutdown", "count", len(batch))
+		if err := sp.Process(flushCtx, batch); err != nil {
+			slog.ErrorContext(ctx, "Failed to process remaining batch", "count", len(batch), "error", err)
+		}
+	}
+
 	slog.InfoContext(ctx, "Finished processing batch")
 }
 
@@ -113,6 +122,15 @@ func ProcessBatchMap[T comparable](ctx context.Context, channel <-chan T, delay 
 					batch = make(map[T]uint, triggerSize)
 				}
 			}
+		}
+	}
+
+	if len(batch) > 0 {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		slog.InfoContext(ctx, "Processing remaining batch items before shutdown", "count", len(batch))
+		if err := sp.Process(flushCtx, batch); err != nil {
+			slog.ErrorContext(ctx, "Failed to process remaining batch", "count", len(batch), "error", err)
 		}
 	}
 

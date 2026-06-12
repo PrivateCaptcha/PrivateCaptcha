@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestSafeProcessorRecoverFromPanic(t *testing.T) {
@@ -93,5 +95,75 @@ func TestSafeProcessorMapPanic(t *testing.T) {
 
 	if err != errProcessorPanic {
 		t.Errorf("Expected errProcessorPanic, got %v", err)
+	}
+}
+
+func TestProcessBatchArrayChannelCloseLosesData(t *testing.T) {
+	var mu sync.Mutex
+	var processedItems []int
+
+	processor := func(ctx context.Context, batch []int) error {
+		mu.Lock()
+		defer mu.Unlock()
+		processedItems = append(processedItems, batch...)
+		return nil
+	}
+
+	ch := make(chan int, 100)
+	ctx := context.Background()
+
+	go ProcessBatchArray(ctx, ch, 10*time.Second, 100, 1000, processor)
+	time.Sleep(50 * time.Millisecond)
+
+	for i := 1; i <= 50; i++ {
+		ch <- i
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	close(ch) // <-- Channel close instead of context cancel
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	count := len(processedItems)
+	mu.Unlock()
+
+	if count != 50 {
+		t.Errorf("Expected 50 items, got %d. Lost: %d", count, 50-count)
+	}
+}
+
+func TestProcessBatchMapChannelCloseLosesData(t *testing.T) {
+	var mu sync.Mutex
+	var processedItems []int
+
+	processor := func(ctx context.Context, batch map[int]uint) error {
+		mu.Lock()
+		defer mu.Unlock()
+		for b := range batch {
+			processedItems = append(processedItems, b)
+		}
+		return nil
+	}
+
+	ch := make(chan int, 100)
+	ctx := context.Background()
+
+	go ProcessBatchMap(ctx, ch, 10*time.Second, 100, 1000, processor)
+	time.Sleep(50 * time.Millisecond)
+
+	for i := 1; i <= 50; i++ {
+		ch <- i
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	close(ch) // <-- Channel close instead of context cancel
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	count := len(processedItems)
+	mu.Unlock()
+
+	if count != 50 {
+		t.Errorf("Expected 50 items, got %d. Lost: %d", count, 50-count)
 	}
 }
