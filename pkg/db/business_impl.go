@@ -903,9 +903,14 @@ func (impl *BusinessStoreImpl) retrieveOrganizationWithAccess(ctx context.Contex
 
 		// this value should be in cache if user opens "Members" tab in the org
 		if users, err := FetchCachedArray[dbgen.GetOrganizationUsersRow](ctx, impl.cache, orgUsersCacheKey(orgID)); err == nil {
-			if hasUser := slices.ContainsFunc(users, func(u *dbgen.GetOrganizationUsersRow) bool { return u.User.ID == userID }); hasUser {
-				slog.Log(ctx, common.LevelTrace, "Found cached org from organization users", "orgID", orgID, "userID", userID)
-				return org, nullAccessLevelMember, nil
+			for _, u := range users {
+				if u.User.ID == userID {
+					slog.Log(ctx, common.LevelTrace, "Found cached org from organization users", "orgID", orgID, "userID", userID, "level", u.Level)
+					if u.Level == dbgen.AccessLevelMember || u.Level == dbgen.AccessLevelOwner {
+						return org, dbgen.NullAccessLevel{Valid: true, AccessLevel: u.Level}, nil
+					}
+					break
+				}
 			}
 		}
 	} else if err == ErrNegativeCacheHit {
