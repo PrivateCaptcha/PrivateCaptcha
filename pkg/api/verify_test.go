@@ -700,7 +700,7 @@ func TestVerifyMaintenanceMode(t *testing.T) {
 		t.Errorf("Unexpected submit status code %d", resp.StatusCode)
 	}
 
-	if err := checkVerifyError(resp, puzzle.MaintenanceModeError); err != nil {
+	if err := checkVerifyError(resp, puzzle.IntegrityError); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -148,6 +148,10 @@ func (v *Verifier) verifyPuzzleValid(ctx context.Context, payload puzzle.Solutio
 		case db.ErrNegativeCacheHit, db.ErrRecordNotFound, db.ErrSoftDeleted:
 			return p, nil, puzzle.InvalidPropertyError
 		case db.ErrMaintenance:
+			if payload.NeedsExtraSalt() {
+				// Cannot verify signature without property salt - reject to prevent forgery attacks
+				return p, nil, puzzle.IntegrityError
+			}
 			return p, nil, puzzle.MaintenanceModeError
 		default:
 			slog.ErrorContext(ctx, "Failed to find property by sitekey", "sitekey", sitekey, common.PuzzleIDAttr(p.PuzzleID()), common.ErrAttr(err))
