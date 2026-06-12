@@ -154,3 +154,9 @@ func (ss *SessionStore) persistSessions(ctx context.Context, batch map[string]ui
 
 	return nil
 }
+
+// rollback tombstone when renew fails
+func (ss *SessionStore) RollbackRenew(ctx context.Context, oldSID string) {
+	impl := ss.store.Impl()
+	_ = impl.DeleteUserSession(ctx, oldSID)
+}

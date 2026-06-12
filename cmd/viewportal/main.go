@@ -44,7 +44,8 @@ func (s *stubSessionStore) Update(_ context.Context, _ *session.Session) error {
 func (s *stubSessionStore) Renew(_ context.Context, _ string, _ *session.Session) error {
 	return nil
 }
-func (s *stubSessionStore) Destroy(_ context.Context, _ string) error { return nil }
+func (s *stubSessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
+func (s *stubSessionStore) Destroy(_ context.Context, _ string) error        { return nil }
 
 var (
 	srv   *portal.Server

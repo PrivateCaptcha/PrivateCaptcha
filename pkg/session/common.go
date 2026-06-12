@@ -282,5 +282,6 @@ type Store interface {
 	Read(ctx context.Context, sid string, skipCache bool) (*Session, error)
 	Update(ctx context.Context, session *Session) error
 	Renew(ctx context.Context, oldSID string, session *Session) error
+	RollbackRenew(ctx context.Context, oldSID string)
 	Destroy(ctx context.Context, sid string) error
 }

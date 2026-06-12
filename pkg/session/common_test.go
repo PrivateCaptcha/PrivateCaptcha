@@ -22,7 +22,8 @@ func (s *stubStore) Update(ctx context.Context, session *Session) error { return
 func (s *stubStore) Renew(ctx context.Context, oldSID string, session *Session) error {
 	return nil
 }
-func (s *stubStore) Destroy(ctx context.Context, sid string) error { return nil }
+func (s *stubStore) RollbackRenew(ctx context.Context, oldSID string) {}
+func (s *stubStore) Destroy(ctx context.Context, sid string) error    { return nil }
 
 type memoryStore struct {
 	sessions map[string]*Session
@@ -55,6 +56,7 @@ func (s *memoryStore) Renew(ctx context.Context, oldSID string, session *Session
 	s.sessions[oldSID] = NewSession(NewTombstoneSessionData(oldSID), s)
 	return nil
 }
+func (s *memoryStore) RollbackRenew(ctx context.Context, oldSID string) {}
 func (s *memoryStore) Destroy(ctx context.Context, sid string) error {
 	delete(s.sessions, sid)
 	return nil

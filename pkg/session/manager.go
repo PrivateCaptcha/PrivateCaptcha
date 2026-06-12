@@ -113,6 +113,7 @@ func (m *Manager) SessionRenew(w http.ResponseWriter, r *http.Request, sess *Ses
 	sslog.DebugContext(ctx, "Renewing session", "oldSessionID", sess.ID(), "path", r.URL.Path, "method", r.Method)
 	if err := m.Store.Renew(ctx, sess.ID(), renewed); err != nil {
 		sslog.ErrorContext(ctx, "Failed to register renewed session, continuing with current session", common.ErrAttr(err))
+		m.Store.RollbackRenew(ctx, sess.ID())
 		return sess
 	}
 	m.setSessionCookie(w, r, sid, int(m.MaxLifetime.Seconds()))
