@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
-	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/leakybucket"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/puzzle"
 )
@@ -25,6 +24,7 @@ const (
 
 type Levels struct {
 	timeSeries          common.TimeSeriesStore
+	algorithm           Algorithm
 	propertyBuckets     *leakybucket.Manager[int32, leakybucket.VarLeakyBucket[int32], *leakybucket.VarLeakyBucket[int32]]
 	userBuckets         *leakybucket.Manager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint], *leakybucket.ConstLeakyBucket[common.TFingerprint]]
 	accessChan          chan *common.AccessRecord
@@ -35,6 +35,11 @@ type Levels struct {
 }
 
 func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time.Duration) *Levels {
+	algorithm := NewDifficultyAlgorithm(bucketSize)
+	return NewLevelsEx(timeSeries, algorithm, batchSize, bucketSize)
+}
+
+func NewLevelsEx(timeSeries common.TimeSeriesStore, algorithm Algorithm, batchSize int, bucketSize time.Duration) *Levels {
 	const (
 		propertyBucketCap = math.MaxUint32
 		// below numbers are rather arbitrary as we can support "many"
@@ -51,6 +56,7 @@ func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time
 
 	levels := &Levels{
 		timeSeries:          timeSeries,
+		algorithm:           algorithm,
 		propertyBuckets:     leakybucket.NewManager[int32, leakybucket.VarLeakyBucket[int32]](maxPropertyBuckets, propertyBucketCap, bucketSize),
 		userBuckets:         leakybucket.NewManager[common.TFingerprint, leakybucket.ConstLeakyBucket[common.TFingerprint]](maxUserBuckets, userBucketCap, userBucketSize),
 		accessChan:          make(chan *common.AccessRecord, 10*batchSize),
@@ -61,44 +67,6 @@ func NewLevels(timeSeries common.TimeSeriesStore, batchSize int, bucketSize time
 	}
 
 	return levels
-}
-
-func requestsToDifficulty(requests float64, minDifficulty float64, level dbgen.DifficultyGrowth) uint8 {
-	if (requests < 1.0) || (level == dbgen.DifficultyGrowthConstant) || (minDifficulty >= 255.0) {
-		return uint8(min(minDifficulty, 255.0))
-	}
-
-	// full formula is
-	// y = log2(log2(x**a)) * x**b
-	// parameter "a" affects sensitivity to growth
-
-	a := 0.3
-	switch level {
-	case dbgen.DifficultyGrowthSlow:
-		a = 0.2
-	case dbgen.DifficultyGrowthMedium:
-		a = 0.3
-	case dbgen.DifficultyGrowthFast:
-		a = 0.5
-	}
-
-	log2A := math.Log2(a)
-
-	m := log2A
-	if requests > 1.0 {
-		m += math.Log10(requests)
-	}
-	m = math.Max(m, 0.0)
-
-	b := math.Log2((256.0-minDifficulty)/(5.0+log2A)) / 32.0
-	fx := m * math.Pow(requests, b)
-	difficulty := minDifficulty + math.Round(fx)
-
-	if difficulty >= 255.0 {
-		return 255
-	}
-
-	return uint8(difficulty)
 }
 
 func (levels *Levels) BackfillTimeout() time.Duration {
@@ -136,8 +104,6 @@ func (l *Levels) Shutdown() {
 func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) (uint8, leakybucket.TLevel, error) {
 	err := l.recordAccess(ctx, fingerprint, p, tnow)
 
-	minDifficulty := float64(max(int16(common.MinDifficultyLevel), min(p.Level(), int16(common.MaxDifficultyLevel))))
-
 	propertyAddResult := l.propertyBuckets.Add(p.ID(), 1, tnow)
 	if !propertyAddResult.Found {
 		if perr := l.backfillProperty(ctx, p); perr != nil {
@@ -148,12 +114,9 @@ func (l *Levels) DifficultyEx(ctx context.Context, fingerprint common.TFingerpri
 
 	userAddResult := l.userBuckets.Add(fingerprint, 1, tnow)
 
-	level := int64(userAddResult.CurrLevel)
-	level += int64(propertyAddResult.CurrLevel)
+	difficulty := l.algorithm.Difficulty(&propertyAddResult, &userAddResult, p)
 
-	// just as bucket's level is the measure of deviation of requests
-	// difficulty is the scaled deviation from minDifficulty
-	return requestsToDifficulty(float64(level), minDifficulty, p.Growth()), propertyAddResult.CurrLevel, err
+	return difficulty, propertyAddResult.CurrLevel, err
 }
 
 func (l *Levels) Difficulty(ctx context.Context, fingerprint common.TFingerprint, p Property, tnow time.Time) uint8 {

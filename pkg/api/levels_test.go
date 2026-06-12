@@ -82,29 +82,35 @@ func TestBackfillLevels(t *testing.T) {
 	levels.Reset()
 
 	// now this should cause the backfill request to be fired
-	if d, l, _ := levels.DifficultyEx(ctx, fingerprint, prop, tnow); d != uint8(common.DifficultyLevelSmall) {
-		t.Errorf("Unexpected difficulty after stats reset: %v (level %v)", d, l)
+	resetDifficulty, resetLevel, _ := levels.DifficultyEx(ctx, fingerprint, prop, tnow)
+	if resetLevel != 1 {
+		t.Errorf("Unexpected level after stats reset: %v", resetLevel)
+	}
+	if resetDifficulty >= diff {
+		t.Errorf("Difficulty did not drop after stats reset: reset=%v before=%v", resetDifficulty, diff)
 	}
 
 	backfilled := false
 	var actualDifficulty uint8
 	var actualLevel leakybucket.TLevel
+	// The retry loop can add only a few live requests, so this proves historical stats were loaded.
+	minBackfilledLevel := leakybucket.TLevel(iterations)
 
 	for attempt := 0; attempt < 5; attempt++ {
 		// give time to backfill difficulty
 		time.Sleep(1 * time.Second)
 		actualDifficulty, actualLevel, _ = levels.DifficultyEx(ctx, fingerprint, prop, tnow)
-		if (actualDifficulty >= diff) && (actualDifficulty-diff < 5) {
+		if actualLevel > minBackfilledLevel {
 			backfilled = true
 			break
 		}
 
-		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "level", actualLevel)
+		slog.Debug("Waiting for backfill...", "difficulty", actualDifficulty, "level", actualLevel, "minLevel", minBackfilledLevel)
 	}
 
 	slog.Debug("Backfill waiting finished", "difficulty", actualDifficulty, "level", actualLevel)
 
 	if !backfilled {
-		t.Errorf("Difficulty was not backfilled. actual=%v expected=%v", actualDifficulty, diff)
+		t.Errorf("Property level was not backfilled. actualDifficulty=%v actualLevel=%v minLevel=%v preResetDifficulty=%v preResetLevel=%v", actualDifficulty, actualLevel, minBackfilledLevel, diff, level)
 	}
 }

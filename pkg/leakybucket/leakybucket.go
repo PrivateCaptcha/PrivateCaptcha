@@ -18,6 +18,7 @@ type LeakyBucket[TKey comparable] interface {
 	LastAccessTime() time.Time
 	LeakInterval() time.Duration
 	Capacity() TLevel
+	LeakRate() float64
 	Init(key TKey, capacity TLevel, leakInterval time.Duration, t time.Time)
 }
 
@@ -93,6 +94,10 @@ func (lb *ConstLeakyBucket[TKey]) Capacity() TLevel {
 
 func (lb *ConstLeakyBucket[TKey]) Key() TKey {
 	return lb.key
+}
+
+func (lb *ConstLeakyBucket[TKey]) LeakRate() float64 {
+	return 1.0
 }
 
 func (lb *ConstLeakyBucket[TKey]) LastAccessTime() time.Time {
@@ -208,6 +213,10 @@ func (lb *VarLeakyBucket[TKey]) Init(key TKey, capacity TLevel, leakInterval tim
 func (lb *VarLeakyBucket[TKey]) LeakInterval() time.Duration {
 	nanoseconds := float64(lb.leakInterval.Nanoseconds()) / lb.leakRate
 	return time.Duration(nanoseconds) * time.Nanosecond
+}
+
+func (lb *VarLeakyBucket[TKey]) LeakRate() float64 {
+	return lb.leakRate
 }
 
 func (lb *VarLeakyBucket[TKey]) Level(tnow time.Time) TLevel {

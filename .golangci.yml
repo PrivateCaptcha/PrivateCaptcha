@@ -20,7 +20,7 @@ linters:
       - pkg/db/generated/
 
 run:
-  build-tags: 
+  build-tags:
     - enterprise
   timeout: 5m
   tests: false
