@@ -107,9 +107,11 @@ func isBlockedByRules(rules []rule, ri *RequestInfo) (blocked bool, terminal boo
 		if _, ok := r.(*blockRequestRule); ok {
 			return true, true
 		}
-		return false, true
+		if _, ok := r.(*breakRule); ok {
+			return false, true // Only break prevents block checking
+		}
+		// Terminal difficulty: continue checking for blocks
 	}
-
 	return false, false
 }
 
