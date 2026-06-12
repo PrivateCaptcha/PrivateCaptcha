@@ -16,14 +16,14 @@ type Algorithm interface {
 // Unlike SaaS version, self-hosting installation has no privilege of having enriched (or even aggregated) global
 // data on requesters at large, so we weight property patterns more than users. SaaS version is waay more nuanced.
 type SelfHostingAlgorithm struct {
-	PropertyRefMin float64
+	propertyRefMin float64
 }
 
 func NewDifficultyAlgorithm(propertyBucketSize time.Duration) *SelfHostingAlgorithm {
 	// TODO: Make a self-hosting env config for algorithm tuning
 	const propertyMinRPS = 0.25 /*average rps for self-hosting?*/
 	return &SelfHostingAlgorithm{
-		PropertyRefMin: propertyMinRPS * propertyBucketSize.Seconds(),
+		propertyRefMin: propertyMinRPS * propertyBucketSize.Seconds(),
 	}
 }
 
@@ -78,7 +78,6 @@ func (a *SelfHostingAlgorithm) Difficulty(propertyData *leakybucket.AddResult, u
 * e.g. 4*LeakRate => "property has accumulated excess equal to about 4 normal buckets of traffic during leak interval"
 * Also: we have to cap P8 from below because fresh properties don't yet have good learned data (leak rate), but choosing
 * good lower cap is not obvious either. We ground it with "expected" minimal RPS for the property (x property bucket size).
-* This property expected RPS might become a configuration value in future.
  */
 
 func (a *SelfHostingAlgorithm) requestsToDifficulty(
@@ -106,7 +105,7 @@ func (a *SelfHostingAlgorithm) requestsToDifficulty(
 	)
 
 	propertyRefLeak := propertyRefBuckets * propertyLeakRate
-	propertyRef := max(a.PropertyRefMin, propertyRefLeak)
+	propertyRef := max(a.propertyRefMin, propertyRefLeak)
 
 	u := float64(userLevel)
 	p := float64(propertyLevel)
