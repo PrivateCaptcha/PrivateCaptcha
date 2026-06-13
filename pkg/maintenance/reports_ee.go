@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"math"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
@@ -16,6 +17,10 @@ import (
 	dbgen "github.com/PrivateCaptcha/PrivateCaptcha/pkg/db/generated"
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 	"github.com/jpillora/backoff"
+)
+
+const (
+	reportEmailUTM = "utm_medium=email&utm_source=report"
 )
 
 func (j *ScheduleReportsJob) RunOnceAt(ctx context.Context, params any, tnow time.Time) error {
@@ -309,10 +314,13 @@ func (j *ScheduleReportsJob) scheduleMonthlyReportForUser(ctx context.Context, u
 }
 
 func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	utm := fmt.Sprintf("%s&utm_campaign=weekly_%s", reportEmailUTM, strings.ToLower(to.Format("02_Jan_2006")))
+
 	report := &email.UsageReportContext{
 		Period:        "weekly",
 		PeriodDate:    to.Format("02 Jan 2006"),
-		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
+		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
+		UTM:           utm,
 	}
 
 	stats, err := j.TimeSeries.RetrieveWeeklyPropertiesReportStats(ctx, userID, from, mid, to)
@@ -337,10 +345,13 @@ func (j *ScheduleReportsJob) BuildWeeklyReport(ctx context.Context, userID int32
 }
 
 func (j *ScheduleReportsJob) BuildMonthlyReport(ctx context.Context, userID int32, from, mid, to time.Time) (*email.UsageReportContext, error) {
+	utm := fmt.Sprintf("%s&utm_campaign=monthly_%s", reportEmailUTM, strings.ToLower(to.Format("Jan_2006")))
+
 	report := &email.UsageReportContext{
 		Period:        "monthly",
 		PeriodDate:    to.Format("Jan 2006"),
-		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint,
+		DashboardPath: common.SettingsEndpoint + "?tab=" + common.UsageEndpoint + "&" + utm,
+		UTM:           utm,
 	}
 
 	stats, err := j.TimeSeries.RetrieveMonthlyPropertiesReportStats(ctx, userID, from, mid, to)
@@ -531,7 +542,7 @@ func fillTopProperties(ctx context.Context, store db.Implementor, report *email.
 		pStat := &email.PropertyStat{
 			Name:      prop.Name,
 			Domain:    common.DisplayPropertyDomain(prop.Domain, prop.AllowSubdomains),
-			Link:      propertyDashboardURL(ctx, portalURL, hasher, prop),
+			Link:      propertyDashboardURL(ctx, portalURL, hasher, prop) + "?" + report.UTM,
 			Count:     ps.CurrentRequests,
 			Percent:   percent,
 			Change:    change,

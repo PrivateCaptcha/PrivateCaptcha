@@ -90,6 +90,7 @@ func (pm *PortalMailer) SendTwoFactor(ctx context.Context, email string, code in
 		OS:          agent.OS().String(),
 		Location:    location,
 		ShowDetails: !isRegistration,
+		UTM:         "utm_medium=email&utm_source=2fa",
 	}
 
 	htmlBody, err := pm.TwofactorTemplate.RenderHTML(ctx, data)
@@ -137,11 +138,13 @@ func (pm *PortalMailer) SendWelcome(ctx context.Context, email, name string) err
 		CurrentYear int
 		CDNURL      string
 		UserName    string
+		UTM         string
 	}{
 		CDNURL:      pm.CDNURL,
 		PortalURL:   pm.PortalURL,
 		CurrentYear: time.Now().Year(),
 		UserName:    name,
+		UTM:         "utm_medium=email&utm_source=welcome",
 	}
 
 	htmlBody, err := pm.WelcomeTemplate.RenderHTML(ctx, data)
@@ -193,7 +196,14 @@ func (pm *PortalMailer) SendOrgInvite(ctx context.Context, email, name string, o
 			OrgOwnerEmail:    orgOwnerEmail,
 			OrgURL:           pm.PortalURL + orgURLPath,
 			RequiresRegister: requiresRegister,
+			UTM:              "utm_medium=email&utm_source=org",
 		},
+	}
+
+	if strings.Contains(data.OrgURL, "?") {
+		data.OrgURL += "&" + data.UTM
+	} else {
+		data.OrgURL += "?" + data.UTM
 	}
 
 	htmlBody, err := pm.OrgInviteItemplate.RenderHTML(ctx, data)

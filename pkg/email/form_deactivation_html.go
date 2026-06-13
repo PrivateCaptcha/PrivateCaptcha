@@ -9,6 +9,7 @@ type DeactivatedForm struct {
 
 type FormDeactivationContext struct {
 	Forms []*DeactivatedForm
+	UTM   string
 }
 
 var (
@@ -24,6 +25,7 @@ const (
     <meta name="x-apple-disable-message-reformatting" />
   </head>
   <body style='background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif'>
+    {{ $utm := .UTM | default "utm_medium=email&utm_source=form" }}
     <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="max-width:37.5em;margin:0 auto;padding:20px 0 48px">
       <tbody>
         <tr style="width:100%">
@@ -39,7 +41,7 @@ const (
             <p style="font-size:16px;line-height:26px;margin:16px 0">Warmly,<br />The Private Captcha team</p>
             <hr style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:#cccccc;margin:20px 0" />
             <p style="font-size:14px;line-height:24px;margin:16px 0;color:#9ca299;margin-bottom:10px">
-              <a href="https://privatecaptcha.com" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> (c) {{.CurrentYear}} Intmaker OU
+              <a href="https://privatecaptcha.com?{{$utm}}" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> (c) {{.CurrentYear}} Intmaker OU
             </p>
           </td>
         </tr>

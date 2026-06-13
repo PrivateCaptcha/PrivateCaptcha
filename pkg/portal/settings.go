@@ -46,6 +46,8 @@ const (
 	apiKeyScopePortal = "portal"
 
 	unknownOrgNameFormat = "Unknown Organization #%d"
+
+	apiKeyEmailUTM = "utm_medium=email&utm_source=apikey"
 )
 
 var (
@@ -572,7 +574,8 @@ func createAPIKeyExpirationNotification(key *dbgen.APIKey, userKey *userAPIKey) 
 			APIKeyContext: email.APIKeyContext{
 				APIKeyName:         key.Name,
 				APIKeyPrefix:       userKey.Secret[0:min(prefixLen, len(userKey.Secret))],
-				APIKeySettingsPath: fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.APIKeysEndpoint),
+				APIKeySettingsPath: fmt.Sprintf("%s?%s=%s&%s", common.SettingsEndpoint, common.ParamTab, common.APIKeysEndpoint, apiKeyEmailUTM),
+				UTM:                apiKeyEmailUTM,
 			},
 			ExpireDays: apiKeyExpirationNotificationDays,
 		},
@@ -597,7 +600,8 @@ func createAPIKeyExpiredNotification(key *dbgen.APIKey, userKey *userAPIKey) *co
 		Data: email.APIKeyContext{
 			APIKeyName:         key.Name,
 			APIKeyPrefix:       userKey.Secret[0:min(prefixLen, len(userKey.Secret))],
-			APIKeySettingsPath: fmt.Sprintf("%s?%s=%s", common.SettingsEndpoint, common.ParamTab, common.APIKeysEndpoint),
+			APIKeySettingsPath: fmt.Sprintf("%s?%s=%s&%s", common.SettingsEndpoint, common.ParamTab, common.APIKeysEndpoint, apiKeyEmailUTM),
+			UTM:                apiKeyEmailUTM,
 		},
 		DateTime:     key.ExpiresAt.Time,
 		TemplateHash: email.APIKeyExpiredTemplate.Hash(),

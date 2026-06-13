@@ -38,6 +38,7 @@ var (
 const (
 	stubPropertyURL = "https://portal.privatecaptcha.com/org/abc/property/123"
 	stubFormURL     = "https://portal.privatecaptcha.com/org/abc/form/123"
+	stubUTM         = "utm_medium=email&utm_source=dev"
 )
 
 func homepage(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +78,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		CurrentYear int
 		CDNURL      string
 		UserName    string
+		UTM         string
 	}{
 		APIKeyExpirationContext: email.APIKeyExpirationContext{
 			APIKeyContext: email.APIKeyContext{
@@ -144,6 +146,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 		CDNURL:      "https://cdn.privatecaptcha.com",
 		PortalURL:   "https://portal.privatecaptcha.com",
 		CurrentYear: time.Now().Year(),
+		UTM:         stubUTM,
 	}
 
 	var htmlBodyTpl bytes.Buffer

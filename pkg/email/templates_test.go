@@ -168,12 +168,14 @@ func TestEmailTemplates(t *testing.T) {
 		CurrentYear int
 		CDNURL      string
 		UserName    string
+		UTM         string
 	}{
 		APIKeyExpirationContext: APIKeyExpirationContext{
 			APIKeyContext: APIKeyContext{
 				APIKeyName:         "My API Key",
 				APIKeyPrefix:       db.APIKeyPrefix + "abcd",
 				APIKeySettingsPath: "settings?tab=apikeys",
+				UTM:                "utm_medium=email&utm_source=test",
 			},
 			ExpireDays: 7,
 		},
@@ -223,6 +225,7 @@ func TestEmailTemplates(t *testing.T) {
 		CDNURL:      "https://cdn.privatecaptcha.com",
 		PortalURL:   "https://portal.privatecaptcha.com",
 		CurrentYear: time.Now().Year(),
+		UTM:         "utm_medium=email&utm_source=test",
 	}
 
 	for _, tpl := range templates {

@@ -54,6 +54,12 @@ var (
 
 			return common.FormatMagnitude(v)
 		},
+		"default": func(def, val any) any {
+			if (val == nil) || (val == "") || (val == 0) || (val == false) {
+				return def
+			}
+			return val
+		},
 	}
 )
 
