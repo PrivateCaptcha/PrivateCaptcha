@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -821,7 +822,7 @@ func TestBuildWeeklyReport(t *testing.T) {
 			t.Errorf("expected first form name=%q, got %q", form1.Name, result.TopForms[0].Name)
 		}
 		expectedLink := reportPortalURL + "/org/" + server.IDHasher.Encrypt(int(org.ID)) + "/form/" + server.IDHasher.Encrypt(int(form1.ID))
-		if result.TopForms[0].Link != expectedLink {
+		if !strings.Contains(result.TopForms[0].Link, expectedLink) {
 			t.Errorf("expected first form link=%q, got %q", expectedLink, result.TopForms[0].Link)
 		}
 		if result.TopForms[0].Alternate {

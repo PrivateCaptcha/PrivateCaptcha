@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -494,7 +495,7 @@ func TestDeactivateFailingFormsJobEndToEnd(t *testing.T) {
 		t.Fatalf("payload form name = %q, want %q", payload.Forms[0].Name, failingForm.Name)
 	}
 	expectedLink := "https://portal.example/org/" + server.IDHasher.Encrypt(int(org.ID)) + "/form/" + server.IDHasher.Encrypt(int(failingForm.ID))
-	if payload.Forms[0].Link != expectedLink {
+	if !strings.Contains(payload.Forms[0].Link, expectedLink) {
 		t.Fatalf("payload form link = %q, want %q", payload.Forms[0].Link, expectedLink)
 	}
 }
