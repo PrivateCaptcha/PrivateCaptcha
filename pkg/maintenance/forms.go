@@ -17,7 +17,10 @@ import (
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/email"
 )
 
-const formDeactivationReferencePrefix = "forms/deactivated/"
+const (
+	formDeactivationReferencePrefix = "forms/deactivated/"
+	formEmailUTM                    = "utm_medium=email&utm_source=form"
+)
 
 const (
 	defaultFailingFormsThreshold = 5
@@ -156,7 +159,7 @@ func formDashboardURL(ctx context.Context, portalURL string, hasher common.Ident
 		return ""
 	}
 
-	return link
+	return link + "&" + formEmailUTM
 }
 
 func scheduleFormDeactivationNotifications(ctx context.Context, creator userNotificationCreator, forms []*dbgen.Form, portalURL string, hasher common.IdentifierHasher, tnow time.Time) error {
@@ -203,7 +206,7 @@ func scheduleFormDeactivationNotifications(ctx context.Context, creator userNoti
 			ReferenceID:  referenceID,
 			UserID:       ownerID,
 			Subject:      fmt.Sprintf("[%s] Forms were deactivated", common.PrivateCaptcha),
-			Data:         &email.FormDeactivationContext{Forms: group.forms},
+			Data:         &email.FormDeactivationContext{Forms: group.forms, UTM: formEmailUTM},
 			DateTime:     tnow,
 			TemplateHash: email.FormDeactivationTemplate.Hash(),
 			PersistUntil: &persistUntil,

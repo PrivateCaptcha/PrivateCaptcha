@@ -38,6 +38,7 @@ var (
 const (
 	stubPropertyURL = "https://portal.privatecaptcha.com/org/abc/property/123"
 	stubFormURL     = "https://portal.privatecaptcha.com/org/abc/form/123"
+	stubUTM         = "utm_medium=email&utm_source=dev"
 )
 
 func homepage(w http.ResponseWriter, r *http.Request) {
@@ -133,6 +134,7 @@ func serveExecute(templateBody string, r *http.Request, w http.ResponseWriter) e
 				{Name: "Contact", URL: "https://hooks.example.com/contact", Link: stubFormURL, Count: 520, Percent: 45.6, Change: 11.2},
 				{Name: "Support", URL: "https://hooks.example.com/support", Link: stubFormURL, Count: 380, Percent: 33.3, Change: -5.8, Alternate: true},
 			},
+			UTM: stubUTM,
 		},
 		FormDeactivationContext: email.FormDeactivationContext{
 			Forms: []*email.DeactivatedForm{

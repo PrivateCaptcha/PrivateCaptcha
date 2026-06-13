@@ -17,6 +17,7 @@ const (
   <body
     style='background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif'
   >
+    {{ $utm := .UTM | default "utm_medium=email&utm_source=welcome" }}
     <table
       align="center"
       width="100%"
@@ -36,15 +37,15 @@ const (
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Welcome to Private Captcha, a privacy- and user-friendly protection from bots and spam.
             </p>
-            <p style="font-size:16px;line-height:26px;margin:16px 0">If this is your first time integrating captcha, our <a href="https://docs.privatecaptcha.com/docs/tutorials/complete-example/">example tutorial</a> will help to learn how it works end-to-end.</p>
-            <p style="font-size:16px;line-height:26px;margin:16px 0">For those migrating from Google reCAPTCHA or similar services, our <a href="https://docs.privatecaptcha.com/docs/tutorials/migrate-from-recaptcha/">migration guide</a> can be useful.</p>
-            <p style="font-size:16px;line-height:26px;margin:16px 0">Already familiar with all this? The <a href="https://docs.privatecaptcha.com/docs/reference/">reference docs</a> are ready whenever you are. And of course, our team is here to help if you have any questions.</p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0">If this is your first time integrating captcha, our <a href="https://docs.privatecaptcha.com/docs/tutorials/complete-example/?{{$utm}}">example tutorial</a> will help to learn how it works end-to-end.</p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0">For those migrating from Google reCAPTCHA or similar services, our <a href="https://docs.privatecaptcha.com/docs/tutorials/migrate-from-recaptcha/?{{$utm}}">migration guide</a> can be useful.</p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0">Already familiar with all this? The <a href="https://docs.privatecaptcha.com/docs/reference/?{{$utm}}">reference docs</a> are ready whenever you are. And of course, our team is here to help if you have any questions.</p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Warmly,<br />The Private Captcha team
             </p>
             <hr style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:#cccccc;margin:20px 0" />
             <p style="font-size:14px;line-height:24px;margin:16px 0;color:#9ca299;margin-bottom:10px">
-            <a href="https://privatecaptcha.com" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> © {{.CurrentYear}} Intmaker OÜ
+            <a href="https://privatecaptcha.com?{{$utm}}" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> © {{.CurrentYear}} Intmaker OÜ
             </p>
           </td>
         </tr>

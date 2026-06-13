@@ -45,6 +45,7 @@ type UsageReportContext struct {
 	FormErrorRateChange    float64
 	FormErrorRate          float64
 	TopForms               []*FormStat
+	UTM                    string
 }
 
 var (
@@ -62,6 +63,7 @@ const (
   <body
     style='background-color:#ffffff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif'
   >
+    {{ $utm := .UTM | default "utm_medium=email&utm_source=report" }}
     <table
       align="center"
       width="100%"
@@ -182,16 +184,16 @@ const (
               {{- end}}
             </table>
             {{- end}}
-            <p style="font-size:16px;line-height:26px;margin:16px 0">View detailed statistics in your <a href="{{.PortalURL}}/{{.DashboardPath}}">dashboard</a>.</p>
+            <p style="font-size:16px;line-height:26px;margin:16px 0">View detailed statistics in your <a href="{{.PortalURL}}/{{.DashboardPath}}?{{$utm}}">dashboard</a>.</p>
             <p style="font-size:16px;line-height:26px;margin:16px 0">
               Warmly,<br />The Private Captcha team
             </p>
             <hr style="width:100%;border:none;border-top:1px solid #eaeaea;border-color:#cccccc;margin:20px 0" />
             <p style="font-size:12px;line-height:24px;margin:16px 0;color:#9ca299">
-              You can manage your report preferences in the <a href="{{.PortalURL}}/settings?tab=notifications" style="text-decoration:underline;color:#9ca299;">portal</a>.
+              You can manage your report preferences in the <a href="{{.PortalURL}}/settings?tab=notifications&{{$utm}}" style="text-decoration:underline;color:#9ca299;">portal</a>.
             </p>
             <p style="font-size:14px;line-height:24px;margin:16px 0;color:#9ca299;margin-bottom:10px">
-              <a href="https://privatecaptcha.com" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> © {{.CurrentYear}} Intmaker OÜ
+              <a href="https://privatecaptcha.com?{{$utm}}" style="text-decoration:underline;color:#9ca299;">PrivateCaptcha</a> © {{.CurrentYear}} Intmaker OÜ
             </p>
           </td>
         </tr>
