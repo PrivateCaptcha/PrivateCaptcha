@@ -504,7 +504,7 @@ func (sf *StoreArrayReader[TKey, T]) Query(ctx context.Context) ([]*T, error) {
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			tt = []*T{}
-			err = nil
+			// err = nil
 		} else {
 			slog.ErrorContext(ctx, "Failed to query value from DB", "cacheKey", sf.CacheKey, common.ErrAttr(err))
 			return nil, err
