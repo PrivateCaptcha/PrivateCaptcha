@@ -243,17 +243,9 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 
 	// extra == (count - plan.limit()) so negative "extra" means we have left (-extra) space for new properties
 	if ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, owner.ID, subscr); (err != nil) || !ok || (len(inputs) > (-extra)) {
-		var needsRefresh bool
-		if (err == nil) && owner.SubscriptionID.Valid {
-			_, needsRefresh, err = s.BusinessDB.Impl().GetCachedSubscription(ctx, owner.SubscriptionID.Int32)
-		}
-		if (err != nil) || !needsRefresh {
-			slog.WarnContext(ctx, "User hit subscription limits", "count", len(inputs), "ok", ok, "extra", extra, common.ErrAttr(err))
-			s.sendAPIErrorResponse(ctx, common.StatusSubscriptionPropertyLimitError, r, w)
-			return
-		} else {
-			slog.WarnContext(ctx, "Postponing subscription limit re-check to background job", "count", len(inputs), "ok", ok, "extra", extra)
-		}
+		slog.WarnContext(ctx, "User hit subscription limits", "count", len(inputs), "ok", ok, "extra", extra, common.ErrAttr(err))
+		s.sendAPIErrorResponse(ctx, common.StatusSubscriptionPropertyLimitError, r, w)
+		return
 	}
 
 	referenceID := db.UUIDToSecret(apiKey.ExternalID)

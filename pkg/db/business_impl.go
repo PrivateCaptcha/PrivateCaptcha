@@ -1101,16 +1101,6 @@ func (impl *BusinessStoreImpl) RetrieveSubscription(ctx context.Context, sID int
 	}
 }
 
-func (impl *BusinessStoreImpl) GetCachedSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, bool, error) {
-	reader := &CachedRefreshReader[int32, dbgen.Subscription]{
-		Key:          sID,
-		Cache:        impl.cache,
-		CacheKeyFunc: SubscriptionCacheKey,
-	}
-
-	return reader.Read(ctx)
-}
-
 func (impl *BusinessStoreImpl) FindOrgProperty(ctx context.Context, name string, org *dbgen.Organization) (*dbgen.Property, error) {
 	if (org == nil) || (len(name) == 0) {
 		return nil, ErrInvalidInput
