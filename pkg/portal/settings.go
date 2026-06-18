@@ -451,7 +451,7 @@ func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if user.SubscriptionID.Valid {
-		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, true /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve a subscription", common.ErrAttr(err))
 			s.RedirectError(http.StatusInternalServerError, w, r)
@@ -698,7 +698,7 @@ func (s *Server) postAPIKeySettings(w http.ResponseWriter, r *http.Request) (*Vi
 	var minAPIKeyRequestsBurst int32 = 5
 	if user.SubscriptionID.Valid {
 		minAPIKeyRequestsBurst = 20
-		if subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
+		if subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/); err == nil {
 			if plan, err := s.PlanService.FindPlan(subscription.ExternalProductID, subscription.ExternalPriceID, s.Stage,
 				db.IsInternalSubscription(subscription.Source)); err == nil {
 				isTrialing := s.PlanService.IsSubscriptionTrialing(subscription.Status)
@@ -1005,7 +1005,7 @@ func (s *Server) createUsageSettingsModel(ctx context.Context, user *dbgen.User)
 	}
 
 	if user.SubscriptionID.Valid {
-		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscription, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription for usage tab", common.ErrAttr(err))
 			renderCtx.ErrorMessage = "Could not load subscription details for usage limits."

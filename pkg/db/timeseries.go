@@ -33,6 +33,8 @@ const (
 	FormSubmitLogTableName1h  = "privatecaptcha.form_submit_logs_1h"
 	FormSubmitLogTableName1d  = "privatecaptcha.form_submit_logs_1d"
 	FormSubmitLogTableName1mo = "privatecaptcha.form_submit_logs_1mo"
+
+	statsRefresh = 15 * time.Minute
 )
 
 var (
@@ -647,7 +649,7 @@ func (ts *TimeSeriesDB) RetrievePropertyStatsByPeriod(ctx context.Context, orgID
 	if cacheKey != nil {
 		const propertyStatsCacheTTL = 5 * time.Minute
 		// we have 5 min buffers for updates and we do NOT delete this cache item
-		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, propertyStatsCacheTTL)
+		_ = ts.Cache.SetEx(ctx, *cacheKey, results, propertyStatsCacheTTL, statsRefresh)
 	}
 
 	return results, nil
@@ -741,7 +743,7 @@ func (ts *TimeSeriesDB) RetrieveFormStatsByPeriod(ctx context.Context, orgID, fo
 	if cacheKey != nil {
 		const formStatsCacheTTL = 5 * time.Minute
 		// we have 5 min buffers for updates and we do NOT delete this cache item
-		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, formStatsCacheTTL)
+		_ = ts.Cache.SetEx(ctx, *cacheKey, results, formStatsCacheTTL, statsRefresh)
 	}
 
 	return results, nil
@@ -903,7 +905,7 @@ func (ts *TimeSeriesDB) RetrievePropertyRuleStatsByPeriod(ctx context.Context, u
 
 	if cacheKey != nil {
 		const propertyRuleStatsCacheTTL = 5 * time.Minute
-		_ = ts.Cache.SetWithTTL(ctx, *cacheKey, results, propertyRuleStatsCacheTTL)
+		_ = ts.Cache.SetEx(ctx, *cacheKey, results, propertyRuleStatsCacheTTL, statsRefresh)
 	}
 
 	return results, nil

@@ -41,7 +41,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) (bool,
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.BusinessDB.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.BusinessDB.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return false, err

@@ -315,7 +315,7 @@ func TestUpdateUserSubscription(t *testing.T) {
 		t.Errorf("Subscription ID was not updated: %v", oldSubscriptionID)
 	}
 
-	subscr, err := store.Impl().RetrieveSubscription(ctx, newUser.SubscriptionID.Int32)
+	subscr, err := store.Impl().RetrieveSubscription(ctx, newUser.SubscriptionID.Int32, false /*skip cache*/)
 	if err != nil {
 		t.Fatalf("Failed to fetch subscription: %v", err)
 	}

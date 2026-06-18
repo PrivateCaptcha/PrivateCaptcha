@@ -107,7 +107,7 @@ type formAuditLogsRenderContext struct {
 }
 
 func (s *Server) validateFormsLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
-	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser)
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser, false /*skip cache*/)
 	if err != nil {
 		return ""
 	}
