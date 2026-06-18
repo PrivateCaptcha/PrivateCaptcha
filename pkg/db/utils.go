@@ -301,6 +301,7 @@ type StoreOneReader[TKey any, T any] struct {
 	QueryKeyFunc func(CacheKey) (TKey, error)
 	Cache        common.Cache[CacheKey, any]
 	TTL          time.Duration
+	Refresh      time.Duration
 	readFlag     int32
 	DropInvalid  bool
 }
@@ -352,8 +353,14 @@ func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 	if t, ok := data.(*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", sf.CacheKey)
 
-		if (sf.TTL > 0) && (atomic.LoadInt32(&sf.readFlag) == 1) {
-			_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
+		if atomic.LoadInt32(&sf.readFlag) == 1 {
+			if sf.TTL > 0 {
+				_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
+			}
+
+			if sf.Refresh > 0 {
+				_ = sf.Cache.SetRefresh(ctx, sf.CacheKey, sf.Refresh)
+			}
 		}
 
 		return t, nil
@@ -369,12 +376,45 @@ func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 	return nil, errInvalidCacheType
 }
 
+func (sf *StoreOneReader[TKey, T]) Query(ctx context.Context) (*T, error) {
+	if sf.QueryFunc == nil {
+		return nil, ErrMaintenance
+	}
+
+	queryKey, err := sf.QueryKeyFunc(sf.CacheKey)
+	if err != nil {
+		return nil, err
+	}
+
+	t, err := sf.QueryFunc(ctx, queryKey)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			sf.Cache.SetMissing(ctx, sf.CacheKey)
+		}
+
+		slog.ErrorContext(ctx, "Failed to query value from DB", "cacheKey", sf.CacheKey, common.ErrAttr(err))
+
+		return nil, err
+	}
+
+	atomic.StoreInt32(&sf.readFlag, 1)
+	slog.Log(ctx, common.LevelTrace, "Retrieved entity from DB", "cacheKey", sf.CacheKey)
+
+	_ = sf.Cache.Set(ctx, sf.CacheKey, t)
+	if sf.TTL > 0 {
+		_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
+	}
+
+	return t, nil
+}
+
 type StoreArrayReader[TKey any, T any] struct {
 	CacheKey     CacheKey
 	QueryFunc    func(context.Context, TKey) ([]*T, error)
 	QueryKeyFunc func(CacheKey) (TKey, error)
 	Cache        common.Cache[CacheKey, any]
 	TTL          time.Duration
+	Refresh      time.Duration
 	readFlag     int32
 	DropInvalid  bool
 }
@@ -426,8 +466,14 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 	if t, ok := data.([]*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read array through cache", "cacheKey", sf.CacheKey, "count", len(t))
 
-		if (sf.TTL > 0) && (atomic.LoadInt32(&sf.readFlag) == 1) {
-			_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
+		if atomic.LoadInt32(&sf.readFlag) == 1 {
+			if sf.TTL > 0 {
+				_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
+			}
+
+			if sf.Refresh > 0 {
+				_ = sf.Cache.SetRefresh(ctx, sf.CacheKey, sf.Refresh)
+			}
 		}
 
 		return t, nil

@@ -579,7 +579,7 @@ func TestBusinessStoreImplGetCachedOrgProperties(t *testing.T) {
 func TestBusinessStoreImplRetrieveSubscription(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, err := store.RetrieveSubscription(context.Background(), 1)
+		_, err := store.RetrieveSubscription(context.Background(), 1, false /*skip cache*/)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -588,7 +588,7 @@ func TestBusinessStoreImplRetrieveSubscription(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
-		_, err := store.RetrieveSubscription(context.Background(), 1)
+		_, err := store.RetrieveSubscription(context.Background(), 1, false /*skip cache*/)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -2594,7 +2594,7 @@ func TestBusinessStoreImplUpdateAsyncTask(t *testing.T) {
 func TestBusinessStoreImplRetrieveOrgOwnerWithSubscription(t *testing.T) {
 	t.Run("ErrNoRows", func(t *testing.T) {
 		store := setupTestStore(t, pgx.ErrNoRows)
-		_, _, err := store.RetrieveOrgOwnerWithSubscription(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1})
+		_, _, err := store.RetrieveOrgOwnerWithSubscription(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1}, false /*skip cache*/)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}
@@ -2603,7 +2603,7 @@ func TestBusinessStoreImplRetrieveOrgOwnerWithSubscription(t *testing.T) {
 	t.Run("GenericError", func(t *testing.T) {
 		expectedErr := errors.New("db error")
 		store := setupTestStore(t, expectedErr)
-		_, _, err := store.RetrieveOrgOwnerWithSubscription(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1})
+		_, _, err := store.RetrieveOrgOwnerWithSubscription(context.Background(), &dbgen.Organization{ID: 1}, &dbgen.User{ID: 1}, false /*skip cache*/)
 		if err == nil {
 			t.Errorf("expected error, got nil")
 		}

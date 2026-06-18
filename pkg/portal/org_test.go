@@ -2374,7 +2374,7 @@ func TestRetrieveOrgOwnerWithSubscriptionNonOwner(t *testing.T) {
 	}
 
 	// Try to retrieve org owner with subscription using non-owner as session user
-	retrievedOwner, subscription, err := store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, nonOwner)
+	retrievedOwner, subscription, err := store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, nonOwner, false /*skip cache*/)
 	if err != nil {
 		t.Fatalf("RetrieveOrgOwnerWithSubscription failed: %v", err)
 	}

@@ -27,6 +27,7 @@ const (
 	formTTL                  = 1 * time.Hour
 	apiKeyTTL                = 12 * time.Hour
 	asyncTaskTTL             = 1 * time.Minute
+	SubscriptionRefresh      = 10 * time.Minute
 	MaxOrgPropertiesPageSize = 50
 	orgPropertiesCacheKeyStr = "0" // "0" as in "first page"
 	orgFormsCacheKeyStr      = "0"
@@ -86,17 +87,22 @@ func (c *TxCache) Set(ctx context.Context, key CacheKey, t any) error {
 	c.set[key] = &txCacheArg{item: t}
 	return nil
 }
-func (c *TxCache) SetWithTTL(ctx context.Context, key CacheKey, t any, ttl time.Duration) error {
+func (c *TxCache) SetEx(ctx context.Context, key CacheKey, t any, ttl, _ time.Duration) error {
 	c.set[key] = &txCacheArg{item: t, ttl: ttl}
 	return nil
 }
-
 func (c *TxCache) SetTTL(ctx context.Context, key CacheKey, ttl time.Duration) error {
 	if item, ok := c.set[key]; ok {
 		item.ttl = ttl
 		return nil
 	}
 	return ErrRecordNotFound
+}
+func (c *TxCache) SetRefresh(ctx context.Context, key CacheKey, ttl time.Duration) error {
+	if _, ok := c.set[key]; !ok {
+		return ErrRecordNotFound
+	}
+	return nil
 }
 func (c *TxCache) Delete(ctx context.Context, key CacheKey) bool {
 	c.del[key] = struct{}{}
@@ -119,7 +125,7 @@ func (c *TxCache) Commit(ctx context.Context, cache common.Cache[CacheKey, any])
 	for key, value := range c.set {
 		var err error
 		if value.ttl > 0 {
-			err = cache.SetWithTTL(ctx, key, value.item, value.ttl)
+			err = cache.SetEx(ctx, key, value.item, value.ttl, defaultCacheRefresh)
 		} else {
 			err = cache.Set(ctx, key, value.item)
 		}
@@ -223,7 +229,7 @@ func (impl *BusinessStoreImpl) CreateNewSubscription(ctx context.Context, params
 			"externalSubscriptionID", subscription.ExternalSubscriptionID.String)
 
 		cacheKey := SubscriptionCacheKey(subscription.ID)
-		_ = impl.cache.Set(ctx, cacheKey, subscription)
+		_ = impl.cache.SetEx(ctx, cacheKey, subscription, DefaultCacheTTL, SubscriptionRefresh)
 	}
 
 	return subscription, nil
@@ -588,7 +594,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesBySitekey(ctx context.Context, 
 	for _, item := range items {
 		sitekey := UUIDToSiteKey(item.ExternalID)
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, item, propertyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, item, propertyTTL, defaultCacheRefresh)
 	}
 
 	result := cached
@@ -618,7 +624,7 @@ func (impl *BusinessStoreImpl) RetrievePropertiesByID(ctx context.Context, batch
 	for _, item := range items {
 		sitekey := UUIDToSiteKey(item.ExternalID)
 		cacheKey := PropertyBySitekeyCacheKey(sitekey)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, item, propertyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, item, propertyTTL, defaultCacheRefresh)
 	}
 
 	result := cached
@@ -788,7 +794,7 @@ func (impl *BusinessStoreImpl) FindUserAPIKeyByName(ctx context.Context, user *d
 	if key != nil {
 		secret := UUIDToSecret(key.ExternalID)
 		cacheKey := APIKeyCacheKey(secret)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, key, apiKeyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, key, apiKeyTTL, defaultCacheRefresh)
 	}
 
 	return key, nil
@@ -970,7 +976,7 @@ func (impl *BusinessStoreImpl) cacheProperty(ctx context.Context, property *dbge
 	key := propertyByIDCacheKey(property.ID)
 	_ = impl.cache.Set(ctx, key, property)
 	sitekey := UUIDToSiteKey(property.ExternalID)
-	_ = impl.cache.SetWithTTL(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL)
+	_ = impl.cache.SetEx(ctx, PropertyBySitekeyCacheKey(sitekey), property, propertyTTL, defaultCacheRefresh)
 }
 
 func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) {
@@ -980,7 +986,7 @@ func (impl *BusinessStoreImpl) cacheForm(ctx context.Context, form *dbgen.Form) 
 
 	_ = impl.cache.Set(ctx, formByIDCacheKey(form.ID), form)
 	if externalID := UUIDToString(form.ExternalID); len(externalID) > 0 {
-		_ = impl.cache.SetWithTTL(ctx, FormByExternalIDCacheKey(externalID), form, formTTL)
+		_ = impl.cache.SetEx(ctx, FormByExternalIDCacheKey(externalID), form, formTTL, defaultCacheRefresh)
 	}
 }
 
@@ -1064,16 +1070,32 @@ func (impl *BusinessStoreImpl) retrieveOrgProperty(ctx context.Context, orgID, p
 	return property, nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, error) {
+func (impl *BusinessStoreImpl) RetrieveSubscription(ctx context.Context, sID int32, skipCache bool) (*dbgen.Subscription, error) {
 	reader := &StoreOneReader[int32, dbgen.Subscription]{
 		CacheKey:    SubscriptionCacheKey(sID),
 		Cache:       impl.cache,
+		TTL:         DefaultCacheTTL,
+		Refresh:     SubscriptionRefresh,
 		DropInvalid: true,
 	}
 
 	if impl.querier != nil {
 		reader.QueryKeyFunc = QueryKeyInt
 		reader.QueryFunc = impl.querier.GetSubscriptionByID
+	}
+
+	if skipCache {
+		return reader.Query(ctx)
+	} else {
+		return reader.Read(ctx)
+	}
+}
+
+func (impl *BusinessStoreImpl) GetCachedSubscription(ctx context.Context, sID int32) (*dbgen.Subscription, bool, error) {
+	reader := &CachedRefreshReader[int32, dbgen.Subscription]{
+		Key:          sID,
+		Cache:        impl.cache,
+		CacheKeyFunc: SubscriptionCacheKey,
 	}
 
 	return reader.Read(ctx)
@@ -2060,7 +2082,7 @@ func (impl *BusinessStoreImpl) RetrieveUserAPIKeys(ctx context.Context, userID i
 		for _, key := range keys {
 			secret := UUIDToSecret(key.ExternalID)
 			cacheKey := APIKeyCacheKey(secret)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, key, apiKeyTTL)
+			_ = impl.cache.SetEx(ctx, cacheKey, key, apiKeyTTL, defaultCacheRefresh)
 		}
 	}
 
@@ -2094,7 +2116,7 @@ func (impl *BusinessStoreImpl) UpdateAPIKey(ctx context.Context, user *dbgen.Use
 	if updatedKey != nil {
 		secret := UUIDToSecret(updatedKey.ExternalID)
 		cacheKey := APIKeyCacheKey(secret)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, updatedKey, apiKeyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, updatedKey, apiKeyTTL, defaultCacheRefresh)
 
 		// invalidate keys cache
 		_ = impl.cache.Delete(ctx, UserAPIKeysCacheKey(updatedKey.UserID.Int32))
@@ -2129,7 +2151,7 @@ func (impl *BusinessStoreImpl) CreateAPIKey(ctx context.Context, user *dbgen.Use
 
 		secret := UUIDToSecret(key.ExternalID)
 		cacheKey := APIKeyCacheKey(secret)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, key, apiKeyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, key, apiKeyTTL, defaultCacheRefresh)
 
 		// invalidate keys cache
 		_ = impl.cache.Delete(ctx, UserAPIKeysCacheKey(user.ID))
@@ -2190,7 +2212,7 @@ func (impl *BusinessStoreImpl) RotateAPIKey(ctx context.Context, user *dbgen.Use
 	if key != nil {
 		secret := UUIDToSecret(key.ExternalID)
 		cacheKey := APIKeyCacheKey(secret)
-		_ = impl.cache.SetWithTTL(ctx, cacheKey, key, apiKeyTTL)
+		_ = impl.cache.SetEx(ctx, cacheKey, key, apiKeyTTL, defaultCacheRefresh)
 
 		auditEvent = newUpdateAPIKeyAuditLogEvent(user, oldKey, key)
 	}
@@ -2670,7 +2692,7 @@ func (impl *BusinessStoreImpl) RetrieveUserPropertiesCount(ctx context.Context, 
 	const propertiesCountTTL = 5 * time.Minute
 	c := new(int64)
 	*c = count
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, propertiesCountTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, c, propertiesCountTTL, defaultCacheRefresh)
 
 	return count, nil
 }
@@ -2696,7 +2718,7 @@ func (impl *BusinessStoreImpl) RetrieveUserFormsCount(ctx context.Context, userI
 	const formsCountTTL = 5 * time.Minute
 	c := new(int64)
 	*c = count
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, formsCountTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, c, formsCountTTL, defaultCacheRefresh)
 
 	return count, nil
 }
@@ -2802,7 +2824,7 @@ func (impl *BusinessStoreImpl) CreateNewAccount(ctx context.Context, params *dbg
 
 			if (existingUser.ID == expectedUserID) || (expectedUserID == -1) {
 				if existingUser.SubscriptionID.Valid {
-					if existingSubscription, err := impl.RetrieveSubscription(ctx, existingUser.SubscriptionID.Int32); (err == nil) && !IsInternalSubscription(existingSubscription.Source) {
+					if existingSubscription, err := impl.RetrieveSubscription(ctx, existingUser.SubscriptionID.Int32, true /*skip cache*/); (err == nil) && !IsInternalSubscription(existingSubscription.Source) {
 						slog.ErrorContext(ctx, "Existing user already has external subscription",
 							"existingUserID", existingUser.ID, "subscriptionID", existingSubscription.ID)
 						return nil, nil, nil, ErrDuplicateAccount
@@ -3571,7 +3593,7 @@ func (impl *BusinessStoreImpl) CreateNewAsyncTask(ctx context.Context, data inte
 	}
 
 	cacheKey := asyncTaskCacheKey(taskIDStr)
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, task, asyncTaskTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, task, asyncTaskTTL, defaultCacheRefresh)
 
 	return task, nil
 }
@@ -3674,13 +3696,13 @@ func (impl *BusinessStoreImpl) UpdateAsyncTask(ctx context.Context, uuid pgtype.
 	return nil
 }
 
-func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Context, org *dbgen.Organization, activeUser *dbgen.User) (owner *dbgen.User, subscr *dbgen.Subscription, err error) {
+func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Context, org *dbgen.Organization, activeUser *dbgen.User, skipCache bool) (owner *dbgen.User, subscr *dbgen.Subscription, err error) {
 	isUserOrgOwner := org.UserID.Valid && (org.UserID.Int32 == activeUser.ID)
 
 	if isUserOrgOwner {
 		owner = activeUser
 		if activeUser.SubscriptionID.Valid {
-			subscr, err = impl.RetrieveSubscription(ctx, activeUser.SubscriptionID.Int32)
+			subscr, err = impl.RetrieveSubscription(ctx, activeUser.SubscriptionID.Int32, skipCache)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to retrieve active user subscription", "userID", activeUser.ID, common.ErrAttr(err))
 				return nil, nil, err
@@ -3699,7 +3721,7 @@ func (impl *BusinessStoreImpl) RetrieveOrgOwnerWithSubscription(ctx context.Cont
 		subscr = nil
 
 		if orgUser.SubscriptionID.Valid {
-			subscr, err = impl.RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32)
+			subscr, err = impl.RetrieveSubscription(ctx, orgUser.SubscriptionID.Int32, skipCache)
 			if err != nil {
 				slog.ErrorContext(ctx, "Failed to retrieve org owner's subscription", "userID", org.UserID.Int32, common.ErrAttr(err))
 				return nil, nil, err
@@ -3731,7 +3753,7 @@ func (impl *BusinessStoreImpl) RetrieveOrgPropertiesCount(ctx context.Context, o
 	const propertiesCountTTL = 5 * time.Minute
 	c := new(int64)
 	*c = count
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, propertiesCountTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, c, propertiesCountTTL, defaultCacheRefresh)
 
 	return count, nil
 }
@@ -3757,7 +3779,7 @@ func (impl *BusinessStoreImpl) RetrieveOrgFormsCount(ctx context.Context, orgID 
 	const formsCountTTL = 5 * time.Minute
 	c := new(int64)
 	*c = count
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, c, formsCountTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, c, formsCountTTL, defaultCacheRefresh)
 
 	return count, nil
 }
@@ -3834,7 +3856,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByPropertyIDs(ctx context.
 			// Sort by position
 			slices.SortFunc(propertyRules, compareDifficultyRules)
 			cacheKey := RawPropertyRulesCacheKey(propertyID)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, propertyRules, propertyTTL)
+			_ = impl.cache.SetEx(ctx, cacheKey, propertyRules, propertyTTL, defaultCacheRefresh)
 			result[propertyID] = propertyRules
 		}
 
@@ -3898,7 +3920,7 @@ func (impl *BusinessStoreImpl) RetrieveDifficultyRulesByOrgIDs(ctx context.Conte
 			// Sort by position
 			slices.SortFunc(orgRules, compareDifficultyRules)
 			cacheKey := RawOrgRulesCacheKey(orgID)
-			_ = impl.cache.SetWithTTL(ctx, cacheKey, orgRules, propertyTTL)
+			_ = impl.cache.SetEx(ctx, cacheKey, orgRules, propertyTTL, defaultCacheRefresh)
 			result[orgID] = orgRules
 		}
 
@@ -3992,7 +4014,7 @@ func (impl *BusinessStoreImpl) CacheCompiledPropertyRules(ctx context.Context, p
 		_ = impl.cache.SetMissing(ctx, cacheKey)
 		return
 	}
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, compiled, propertyTTL, defaultCacheRefresh)
 }
 
 func (impl *BusinessStoreImpl) GetCachedCompiledOrgRules(ctx context.Context, orgID int32) (*rules.CompiledRules, bool, error) {
@@ -4011,7 +4033,7 @@ func (impl *BusinessStoreImpl) CacheCompiledOrgRules(ctx context.Context, orgID 
 		_ = impl.cache.SetMissing(ctx, cacheKey)
 		return
 	}
-	_ = impl.cache.SetWithTTL(ctx, cacheKey, compiled, propertyTTL)
+	_ = impl.cache.SetEx(ctx, cacheKey, compiled, propertyTTL, defaultCacheRefresh)
 }
 
 func (impl *BusinessStoreImpl) RetrieveDifficultyRule(ctx context.Context, ruleID int32) (*dbgen.DifficultyRule, error) {

@@ -194,15 +194,16 @@ func (c *memcache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue) er
 	return nil
 }
 
-func (c *memcache[TKey, TValue]) SetWithTTL(ctx context.Context, key TKey, t TValue, ttl time.Duration) error {
+func (c *memcache[TKey, TValue]) SetEx(ctx context.Context, key TKey, t TValue, ttl, refresh time.Duration) error {
 	if t == c.missingValue {
 		return ErrSetMissing
 	}
 
 	c.store.Set(key, t)
 	c.store.SetExpiresAfter(key, ttl)
+	c.store.SetRefreshableAfter(key, refresh)
 
-	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "cache", c.name, "key", key, "ttl", ttl)
+	slog.Log(ctx, common.LevelTrace, "Saved item to memory cache", "cache", c.name, "key", key, "ttl", ttl, "refresh", refresh)
 
 	return nil
 }
@@ -211,6 +212,14 @@ func (c *memcache[TKey, TValue]) SetTTL(ctx context.Context, key TKey, ttl time.
 	c.store.SetExpiresAfter(key, ttl)
 
 	slog.Log(ctx, common.LevelTrace, "Set item TTL", "cache", c.name, "key", key, "ttl", ttl)
+
+	return nil
+}
+
+func (c *memcache[TKey, TValue]) SetRefresh(ctx context.Context, key TKey, ttl time.Duration) error {
+	c.store.SetRefreshableAfter(key, ttl)
+
+	slog.Log(ctx, common.LevelTrace, "Set item refresh", "cache", c.name, "key", key, "ttl", ttl)
 
 	return nil
 }

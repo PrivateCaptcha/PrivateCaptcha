@@ -29,7 +29,7 @@ func (s *Server) validateOrgsLimit(ctx context.Context, user *dbgen.User) string
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
@@ -122,7 +122,7 @@ func (s *Server) validateAddOrgMemberEmail(ctx context.Context, user *dbgen.User
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
@@ -163,7 +163,7 @@ func (s *Server) validateAddOrgMemberID(ctx context.Context, user *dbgen.User, o
 	var err error
 
 	if user.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve user subscription", "userID", user.ID, common.ErrAttr(err))
 			return ""
@@ -403,7 +403,7 @@ func (s *Server) joinOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ownerSubscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user)
+	_, ownerSubscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user, false /*skip cache*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
 		// NOTE: we intentionally allow this to happen as a safe fallback
@@ -501,7 +501,7 @@ func (s *Server) validateTransferOrgLimits(ctx context.Context, org *dbgen.Organ
 	var err error
 
 	if newOwner.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, newOwner.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, newOwner.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve destination user subscription", "userID", newOwner.ID, common.ErrAttr(err))
 			return http.StatusInternalServerError

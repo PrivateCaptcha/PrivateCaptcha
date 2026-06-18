@@ -98,7 +98,7 @@ func TestStaticCacheSetWithTTL(t *testing.T) {
 	cache := NewStaticCache[string, int](100, -1)
 
 	// SetWithTTL should work like Set (TTL is ignored in static cache)
-	err := cache.SetWithTTL(ctx, "ttl_key", 200, 1*time.Hour)
+	err := cache.SetEx(ctx, "ttl_key", 200, 1*time.Hour, 10*time.Minute)
 	if err != nil {
 		t.Fatalf("Failed to SetWithTTL: %v", err)
 	}
@@ -120,6 +120,17 @@ func TestStaticCacheSetTTL(t *testing.T) {
 	err := cache.SetTTL(ctx, "key1", 1*time.Hour)
 	if err != ErrInvalidInput {
 		t.Errorf("Expected ErrInvalidInput from SetTTL, got %v", err)
+	}
+}
+
+func TestStaticCacheSetRefresh(t *testing.T) {
+	ctx := context.Background()
+	cache := NewStaticCache[string, int](100, -1)
+
+	// SetRefresh should return ErrInvalidInput (not supported)
+	err := cache.SetRefresh(ctx, "key1", 1*time.Hour)
+	if err != ErrInvalidInput {
+		t.Errorf("Expected ErrInvalidInput from SetRefresh, got %v", err)
 	}
 }
 

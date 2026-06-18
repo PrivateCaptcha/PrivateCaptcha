@@ -42,7 +42,7 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 	}
 
 	if owner.SubscriptionID.Valid {
-		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, owner.SubscriptionID.Int32)
+		subscr, err = s.Store.Impl().RetrieveSubscription(ctx, owner.SubscriptionID.Int32, false /*skip cache*/)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to retrieve owner subscription", "userID", owner.ID, common.ErrAttr(err))
 			return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use
@@ -70,7 +70,7 @@ func (s *Server) validateOrgRulesLimit(ctx context.Context, org *dbgen.Organizat
 
 func (s *Server) validatePropertyRulesLimit(ctx context.Context, org *dbgen.Organization, property *dbgen.Property, user *dbgen.User) common.StatusCode {
 	// For properties, check limits of org owner (like validatePropertiesLimit)
-	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user)
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, user, false /*skip cache*/)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to retrieve org owner subscription", "orgID", org.ID, common.ErrAttr(err))
 		return common.StatusOK // Allow rule creation on error to avoid blocking legitimate use

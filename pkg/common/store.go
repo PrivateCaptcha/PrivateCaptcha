@@ -28,8 +28,9 @@ type Cache[TKey comparable, TValue any] interface {
 	GetWithRefresh(ctx context.Context, key TKey) (TValue, bool, error)
 	SetMissing(ctx context.Context, key TKey) error
 	Set(ctx context.Context, key TKey, t TValue) error
-	SetWithTTL(ctx context.Context, key TKey, t TValue, ttl time.Duration) error
+	SetEx(ctx context.Context, key TKey, t TValue, ttl, refresh time.Duration) error
 	SetTTL(ctx context.Context, key TKey, ttl time.Duration) error
+	SetRefresh(ctx context.Context, key TKey, refresh time.Duration) error
 	Delete(ctx context.Context, key TKey) bool
 	SaveTo(ctx context.Context, w io.Writer, maxItems int) error
 	LoadFrom(ctx context.Context, r io.Reader, ttl time.Duration) error

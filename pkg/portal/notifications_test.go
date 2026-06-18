@@ -491,7 +491,7 @@ func TestRequireSubscription(t *testing.T) {
 		t.Errorf("Unexpected number of sent emails: %v", sender.Count)
 	}
 
-	subscr, err := store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	subscr, err := store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 	if err != nil {
 		t.Fatal(err)
 	}

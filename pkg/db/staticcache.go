@@ -121,12 +121,17 @@ func (c *StaticCache[TKey, TValue]) Set(ctx context.Context, key TKey, t TValue)
 	return nil
 }
 
-func (c *StaticCache[TKey, TValue]) SetWithTTL(ctx context.Context, key TKey, t TValue, _ time.Duration) error {
+func (c *StaticCache[TKey, TValue]) SetEx(ctx context.Context, key TKey, t TValue, _, _ time.Duration) error {
 	// ttl is not supported here
 	return c.Set(ctx, key, t)
 }
 
 func (c *StaticCache[TKey, TValue]) SetTTL(ctx context.Context, key TKey, _ time.Duration) error {
+	// ttl is not supported here
+	return ErrInvalidInput
+}
+
+func (c *StaticCache[TKey, TValue]) SetRefresh(ctx context.Context, key TKey, _ time.Duration) error {
 	// ttl is not supported here
 	return ErrInvalidInput
 }

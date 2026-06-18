@@ -140,7 +140,7 @@ func TestTxCacheSetWithTTL(t *testing.T) {
 	value := "test-value"
 	ttl := 5 * time.Minute
 
-	err := cache.SetWithTTL(ctx, key, value, ttl)
+	err := cache.SetEx(ctx, key, value, ttl, 15*time.Minute)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -257,12 +257,15 @@ func (m *mockCache) Set(ctx context.Context, key CacheKey, t any) error {
 	m.setValues[key] = t
 	return nil
 }
-func (m *mockCache) SetWithTTL(ctx context.Context, key CacheKey, t any, ttl time.Duration) error {
+func (m *mockCache) SetEx(ctx context.Context, key CacheKey, t any, ttl, _ time.Duration) error {
 	m.setValues[key] = t
 	m.setTTLs[key] = ttl
 	return nil
 }
 func (m *mockCache) SetTTL(ctx context.Context, key CacheKey, ttl time.Duration) error {
+	return nil
+}
+func (m *mockCache) SetRefresh(ctx context.Context, key CacheKey, ttl time.Duration) error {
 	return nil
 }
 func (m *mockCache) Delete(ctx context.Context, key CacheKey) bool {
@@ -284,7 +287,7 @@ func TestTxCacheCommit(t *testing.T) {
 	missingKey := UserCacheKey(4)
 
 	_ = txCache.Set(ctx, setKey, "value1")
-	_ = txCache.SetWithTTL(ctx, setTTLKey, "value2", 10*time.Minute)
+	_ = txCache.SetEx(ctx, setTTLKey, "value2", 10*time.Minute, 15*time.Minute)
 	txCache.Delete(ctx, deleteKey)
 	_ = txCache.SetMissing(ctx, missingKey)
 

@@ -26,7 +26,7 @@ func TestExpireInternalTrials(t *testing.T) {
 		t.Fatalf("failed to create new account: %v", err)
 	}
 
-	subscr, err := store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	subscr, err := store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestExpireInternalTrials(t *testing.T) {
 	cacheKey := db.SubscriptionCacheKey(subscr.ID)
 	cache.Delete(ctx, cacheKey)
 
-	subscr, err = store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32)
+	subscr, err = store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/)
 	if err != nil {
 		t.Fatal(err)
 	}

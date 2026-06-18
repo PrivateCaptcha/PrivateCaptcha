@@ -341,7 +341,7 @@ func (s *Server) validateDomainName(ctx context.Context, domain string, ignoreRe
 }
 
 func (s *Server) validatePropertiesLimit(ctx context.Context, org *dbgen.Organization, sessUser *dbgen.User) string {
-	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser)
+	owner, subscr, err := s.Store.Impl().RetrieveOrgOwnerWithSubscription(ctx, org, sessUser, false /*skip cache*/)
 	if err != nil {
 		return ""
 	}
