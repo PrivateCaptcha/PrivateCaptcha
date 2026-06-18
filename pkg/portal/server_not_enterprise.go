@@ -33,7 +33,7 @@ func (s *Server) checkUserOrgsLimit(ctx context.Context, user *dbgen.User, count
 	}
 
 	if user.SubscriptionID.Valid {
-		if subscr, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32); err == nil {
+		if subscr, err := s.Store.Impl().RetrieveSubscription(ctx, user.SubscriptionID.Int32, false /*skip cache*/); err == nil {
 			if ok, _, err := s.SubscriptionLimits.CheckOrgsLimit(ctx, user.ID, subscr); err == nil {
 				return ok
 			}
