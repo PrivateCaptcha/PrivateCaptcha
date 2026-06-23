@@ -243,7 +243,7 @@ func (s *Server) postNewProperties(w http.ResponseWriter, r *http.Request) {
 
 	// extra == (count - plan.limit()) so negative "extra" means we have left (-extra) space for new properties
 	// if we have any allowance left, we will sort out the rest inside the background task
-	if ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, owner.ID, subscr); (err != nil) || !ok || ((-extra) > 0) {
+	if ok, extra, err := s.SubscriptionLimits.CheckPropertiesLimit(ctx, owner.ID, subscr); (err != nil) || !ok || (extra > 0) {
 		slog.WarnContext(ctx, "User hit subscription limits", "count", len(inputs), "ok", ok, "extra", extra, common.ErrAttr(err))
 		s.sendAPIErrorResponse(ctx, common.StatusSubscriptionPropertyLimitError, r, w)
 		return
