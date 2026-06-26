@@ -487,7 +487,7 @@ func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 	if t, ok := data.([]*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read array through cache", "cacheKey", sf.CacheKey, "count", len(t))
 
-		if wasRead {
+		if atomic.LoadInt32(&sf.readFlag) == 1 {
 			if sf.TTL > 0 {
 				_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
 			}
