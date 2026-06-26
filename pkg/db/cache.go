@@ -50,10 +50,48 @@ func (pcOtterLogger) Error(ctx context.Context, msg string, err error) {
 
 type OtterCacheOption[TKey comparable, TValue comparable] func(*otter.Options[TKey, TValue])
 
+type memoryCacheExpiryCalculator[TKey comparable, TValue comparable] struct {
+	expiryTTL    time.Duration
+	missingTTL   time.Duration
+	missingValue TValue
+}
+
+func newMemoryCacheExpiryCalculator[TKey comparable, TValue comparable](expiryTTL, missingTTL time.Duration, missingValue TValue) otter.ExpiryCalculator[TKey, TValue] {
+	return memoryCacheExpiryCalculator[TKey, TValue]{
+		expiryTTL:    expiryTTL,
+		missingTTL:   missingTTL,
+		missingValue: missingValue,
+	}
+}
+
+func (c memoryCacheExpiryCalculator[TKey, TValue]) ExpireAfterCreate(entry otter.Entry[TKey, TValue]) time.Duration {
+	if entry.Value == c.missingValue {
+		return c.missingTTL
+	}
+
+	return c.expiryTTL
+}
+
+func (c memoryCacheExpiryCalculator[TKey, TValue]) ExpireAfterUpdate(entry otter.Entry[TKey, TValue], _ TValue) time.Duration {
+	if entry.Value == c.missingValue {
+		return entry.ExpiresAfter()
+	}
+
+	return c.expiryTTL
+}
+
+func (c memoryCacheExpiryCalculator[TKey, TValue]) ExpireAfterRead(entry otter.Entry[TKey, TValue]) time.Duration {
+	if entry.Value == c.missingValue {
+		return entry.ExpiresAfter()
+	}
+
+	return c.expiryTTL
+}
+
 func NewMemoryCache[TKey comparable, TValue comparable](name string, maxCacheSize int, missingValue TValue, expiryTTL, refreshTTL, missingTTL time.Duration) (*memcache[TKey, TValue], error) {
 	return NewMemoryCacheEx[TKey, TValue](name, maxCacheSize, missingValue, missingTTL,
 		func(o *otter.Options[TKey, TValue]) {
-			o.ExpiryCalculator = otter.ExpiryAccessing[TKey, TValue](expiryTTL)
+			o.ExpiryCalculator = newMemoryCacheExpiryCalculator[TKey, TValue](expiryTTL, missingTTL, missingValue)
 			o.RefreshCalculator = otter.RefreshWriting[TKey, TValue](refreshTTL)
 		})
 }

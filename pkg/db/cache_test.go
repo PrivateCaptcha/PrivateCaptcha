@@ -3,11 +3,28 @@ package db
 import (
 	"bytes"
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/maypok86/otter/v2"
 )
+
+type manualCacheClock struct {
+	now atomic.Int64
+}
+
+func (c *manualCacheClock) NowNano() int64 {
+	return c.now.Load()
+}
+
+func (c *manualCacheClock) Tick(time.Duration) <-chan time.Time {
+	return nil
+}
+
+func (c *manualCacheClock) Advance(d time.Duration) {
+	c.now.Add(int64(d))
+}
 
 func TestRegisterCachePrefixString(t *testing.T) {
 	if err := RegisterCachePrefixString(CACHE_KEY_PREFIXES_COUNT, "count"); err != nil {
@@ -111,6 +128,50 @@ func TestGetWithRefreshStaleEntry(t *testing.T) {
 	}
 	if !needsRefresh {
 		t.Fatal("expected needsRefresh=true for a stale entry")
+	}
+}
+
+func TestMemoryCacheMissingExpiryIsNotRenewedOnRead(t *testing.T) {
+	ctx := context.Background()
+	clock := &manualCacheClock{}
+	missingValue := "missing"
+	missingTTL := time.Minute
+	expiryTTL := 10 * time.Minute
+
+	cache, err := NewMemoryCacheEx[string, string]("test-missing-expiry", 100, missingValue, missingTTL,
+		func(o *otter.Options[string, string]) {
+			o.ExpiryCalculator = newMemoryCacheExpiryCalculator[string, string](expiryTTL, missingTTL, missingValue)
+			o.RefreshCalculator = otter.RefreshWriting[string, string](expiryTTL)
+			o.Clock = clock
+		},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cache.Set(ctx, "normal", "value"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetMissing(ctx, "missing"); err != nil {
+		t.Fatal(err)
+	}
+
+	clock.Advance(missingTTL / 2)
+
+	if _, err := cache.Get(ctx, "normal"); err != nil {
+		t.Fatalf("expected normal cache hit before expiry, got %v", err)
+	}
+	if _, err := cache.Get(ctx, "missing"); err != ErrNegativeCacheHit {
+		t.Fatalf("expected negative cache hit before expiry, got %v", err)
+	}
+
+	clock.Advance(missingTTL/2 + time.Nanosecond)
+
+	if _, err := cache.Get(ctx, "normal"); err != nil {
+		t.Fatalf("expected normal cache hit after read renewed expiry, got %v", err)
+	}
+	if _, err := cache.Get(ctx, "missing"); err != ErrCacheMiss {
+		t.Fatalf("expected missing cache entry to expire without renewal, got %v", err)
 	}
 }
 
