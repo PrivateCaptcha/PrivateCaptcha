@@ -161,6 +161,8 @@ func (c *memcache[TKey, TValue]) GetEx(ctx context.Context, key TKey, loader com
 	}
 
 	if data == c.missingValue {
+		// we force-set TTL as it means loader function returned missing value, in contrast to using function SetMission()
+		c.store.SetExpiresAfter(key, c.missingTTL)
 		slog.Log(ctx, common.LevelTrace, "Item set as missing in memory cache", "cache", c.name, "key", key)
 		var zero TValue
 		return zero, ErrNegativeCacheHit

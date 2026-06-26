@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -326,8 +325,6 @@ func (sf *StoreOneReader[TKey, T]) Load(ctx context.Context, key CacheKey) (any,
 	t, err := sf.QueryFunc(ctx, queryKey)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			slog.Log(ctx, common.LevelTrace, "Entity was not found in DB", "cacheKey", key)
-			atomic.StoreInt32(&sf.readFlag, 1)
 			// this will cause cache to store this missing value and ultimately return ErrNegativeCacheHit
 			// we do not return otter.ErrNotFound (as per docs), because in such case item will be purged from cache
 			return sf.Cache.Missing(), nil
@@ -349,21 +346,14 @@ func (sf *StoreOneReader[TKey, T]) Load(ctx context.Context, key CacheKey) (any,
 func (sf *StoreOneReader[TKey, T]) Read(ctx context.Context) (*T, error) {
 	// GetEx should not return errTransactionCache
 	data, err := sf.Cache.GetEx(ctx, sf.CacheKey, sf)
-	wasRead := atomic.LoadInt32(&sf.readFlag) == 1
-
 	if err != nil {
-		if errors.Is(err, ErrNegativeCacheHit) && wasRead {
-			// we force-set TTL as it means loader function returned missing value, in contrast to using function SetMissing()
-			sf.Cache.SetMissing(ctx, sf.CacheKey)
-		}
-
 		return nil, err
 	}
 
 	if t, ok := data.(*T); ok {
 		slog.Log(ctx, common.LevelTrace, "Read object through cache", "cacheKey", sf.CacheKey)
 
-		if wasRead {
+		if atomic.LoadInt32(&sf.readFlag) == 1 {
 			if sf.TTL > 0 {
 				_ = sf.Cache.SetTTL(ctx, sf.CacheKey, sf.TTL)
 			}
@@ -399,7 +389,6 @@ func (sf *StoreOneReader[TKey, T]) Query(ctx context.Context) (*T, error) {
 	t, err := sf.QueryFunc(ctx, queryKey)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			slog.Log(ctx, common.LevelTrace, "Entity was not found in DB", "queryKey", queryKey)
 			_ = sf.Cache.SetMissing(ctx, sf.CacheKey)
 		}
 
@@ -450,8 +439,6 @@ func (sf *StoreArrayReader[TKey, T]) Load(ctx context.Context, key CacheKey) (an
 	t, err := sf.QueryFunc(ctx, queryKey)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			slog.Log(ctx, common.LevelTrace, "Entities were not found in DB", "cacheKey", key, "count", 0)
-			atomic.StoreInt32(&sf.readFlag, 1)
 			// unlike in case of one, we want to store empty array here and not "missing" value
 			// because "no rows" is a valid result for "WHERE" query
 			return []*T{}, nil
@@ -473,14 +460,7 @@ func (sf *StoreArrayReader[TKey, T]) Load(ctx context.Context, key CacheKey) (an
 func (sf *StoreArrayReader[TKey, T]) Read(ctx context.Context) ([]*T, error) {
 	// GetEx should not return errTransactionCache
 	data, err := sf.Cache.GetEx(ctx, sf.CacheKey, sf)
-	wasRead := atomic.LoadInt32(&sf.readFlag) == 1
-
 	if err != nil {
-		if errors.Is(err, ErrNegativeCacheHit) && wasRead {
-			// we force-set TTL as it means loader function returned missing value, in contrast to using function SetMissing()
-			sf.Cache.SetMissing(ctx, sf.CacheKey)
-		}
-
 		return nil, err
 	}
 
@@ -523,9 +503,7 @@ func (sf *StoreArrayReader[TKey, T]) Query(ctx context.Context) ([]*T, error) {
 	tt, err := sf.QueryFunc(ctx, queryKey)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			slog.Log(ctx, common.LevelTrace, "Entities were not found in DB", "queryKey", queryKey)
 			tt = []*T{}
-			sf.Cache.SetMissing(ctx, sf.CacheKey)
 			// err = nil
 		} else {
 			slog.ErrorContext(ctx, "Failed to query value from DB", "cacheKey", sf.CacheKey, common.ErrAttr(err))
