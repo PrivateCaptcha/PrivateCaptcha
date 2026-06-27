@@ -302,6 +302,8 @@ func TestGuessFirstNameWithEmail(t *testing.T) {
 		{"john doe", "", "John"},
 		{"example john", "user@example.com", "John"},
 		{"EXAMPLE john", "user@example.com", "John"},
+		{"johnsmith", "john@mycompany.com", "John"},
+		{"johnsmith", "smith@mycompany.com", "John"},
 	}
 
 	for _, tt := range tests {

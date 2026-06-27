@@ -148,19 +148,20 @@ func isLowerCase(s string) bool {
 	return true
 }
 
-func emailDomain(email string) string {
+func emailDomain(email string) (string, string) {
 	atIdx := strings.LastIndex(email, "@")
 	if atIdx < 0 || atIdx >= len(email)-1 {
-		return ""
+		return "", ""
 	}
 
+	username := email[:atIdx]
 	domain := email[atIdx+1:]
 	dotIdx := strings.Index(domain, ".")
 	if dotIdx > 0 {
-		return domain[:dotIdx]
+		return username, domain[:dotIdx]
 	}
 
-	return domain
+	return username, domain
 }
 
 func isAllCaps(s string) bool {
@@ -221,7 +222,7 @@ func shouldSkipPart(p string, domain string) bool {
 
 func GuessFirstName(username string, email string) string {
 	parts := strings.Fields(username)
-	domain := emailDomain(email)
+	emailUsername, domain := emailDomain(email)
 
 	for _, p := range parts {
 		if !containsAlphabetic(p) {
@@ -233,7 +234,16 @@ func GuessFirstName(username string, email string) string {
 		}
 
 		if onlyAlphabetic(p) && isLowerCase(p) {
-			runes := []rune(p)
+			firstName := p
+			if len(emailUsername) > 0 && len(emailUsername) < len(p) {
+				if strings.HasPrefix(p, emailUsername) {
+					firstName = emailUsername
+				} else if strings.HasSuffix(p, emailUsername) {
+					firstName = p[:len(p)-len(emailUsername)]
+				}
+			}
+
+			runes := []rune(firstName)
 			runes[0] = unicode.ToUpper(runes[0])
 			return string(runes)
 		}
