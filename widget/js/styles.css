@@ -40,7 +40,7 @@
 
     @media (min-width: 30em) {
         :host {
-            min-width: 20em;
+            min-width: min(20em, 100%);
         }
     }
 }
