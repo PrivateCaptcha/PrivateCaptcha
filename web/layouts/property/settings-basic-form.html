@@ -32,15 +32,15 @@
             <div class="flex h-6 shrink-0 items-center">
                 <div class="group grid size-4 grid-cols-1">
                     <input id="{{ .Const.AllowSubdomains }}" aria-describedby="{{ .Const.AllowSubdomains }}-description" name="{{ .Const.AllowSubdomains }}" type="checkbox" {{ if not .Params.CanEdit }}disabled{{ end }} {{ if $.Params.Property.AllowSubdomains }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
                         <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </div>
             </div>
             <div class="text-sm/6">
-                <label for="{{ .Const.AllowSubdomains }}" class="font-medium text-gray-900">Allow subdomains</label>
-                <span id="{{ .Const.AllowSubdomains }}-description" class="text-gray-500"><span class="sr-only">Allow subdomains </span>to access captcha widget</span>
+                <label for="{{ .Const.AllowSubdomains }}" class="pc-checkbox-label">Allow subdomains</label>
+                <span id="{{ .Const.AllowSubdomains }}-description" class="pc-checkbox-desc"><span class="sr-only">Allow subdomains </span>to access captcha widget</span>
             </div>
         </div>
 
@@ -48,18 +48,18 @@
             <div class="flex h-6 shrink-0 items-center">
                 <div class="group grid size-4 grid-cols-1">
                     <input id="{{ .Const.AllowLocalhost }}" aria-describedby="{{ .Const.AllowLocalhost }}-description" name="{{ .Const.AllowLocalhost }}" type="checkbox" {{ if not .Params.CanEdit }}disabled{{ end }} {{ if $.Params.Property.AllowLocalhost }}checked{{ end }} class="col-start-1 row-start-1 pc-internal-form-checkbox">
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
                         <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </div>
             </div>
             <div class="text-sm/6">
-                <label for="{{ .Const.AllowLocalhost }}" class="font-medium text-gray-900">Allow localhost</label>
+                <label for="{{ .Const.AllowLocalhost }}" class="pc-checkbox-label">Allow localhost</label>
                 {{ if $.Params.Property.AllowLocalhost -}}
-                <span class="ml-3 inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Testing</span>
+                <span class="pc-badge pc-badge-warn ml-3">Testing</span>
                 {{- else -}}
-                <span id="{{ .Const.AllowLocalhost }}-description" class="text-gray-500"><span class="sr-only">Allow localhost</span>for testing</span>
+                <span id="{{ .Const.AllowLocalhost }}-description" class="pc-checkbox-desc"><span class="sr-only">Allow localhost</span>for testing</span>
                 {{- end }}
             </div>
         </div>
@@ -85,18 +85,18 @@
             <div class="flex h-6 shrink-0 items-center">
                 <div class="group grid size-4 grid-cols-1">
                     <input id="{{ .Const.AllowReplay }}" x-model="replayEnabled" aria-describedby="{{ .Const.AllowReplay }}-description" name="{{ .Const.AllowReplay }}" type="checkbox" class="col-start-1 row-start-1 pc-internal-form-checkbox">
-                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25" viewBox="0 0 14 14" fill="none">
+                    <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-pc-grey-950/25" viewBox="0 0 14 14" fill="none">
                         <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                         <path class="opacity-0 group-has-[:indeterminate]:opacity-100" d="M3 7H11" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                     </svg>
                 </div>
             </div>
             <div class="text-sm/6">
-                <label for="{{ .Const.AllowReplay }}" class="font-medium text-gray-900">Accept repeated solutions</label>
+                <label for="{{ .Const.AllowReplay }}" class="pc-checkbox-label">Accept repeated solutions</label>
                 {{ if $.Params.Property.AllowReplay -}}
-                <span class="ml-3 inline-flex items-center rounded-md bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Security trade-off</span>
+                <span class="pc-badge pc-badge-warn ml-3">Security trade-off</span>
                 {{- else -}}
-                <span id="{{ .Const.AllowReplay }}-description" class="text-gray-500"><span class="sr-only">Accept repeated solutions</span>during verification window</span>
+                <span id="{{ .Const.AllowReplay }}-description" class="pc-checkbox-desc"><span class="sr-only">Accept repeated solutions</span>during verification window</span>
                 {{- end }}
             </div>
         </div>
@@ -122,7 +122,7 @@
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request before auto scaling. Every 8 steps requires 100% more resources."> Base difficulty </label>
         <div class="mt-2">
             <div class="flex flex-col space-y-2 py-2">
-                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-pclime-600" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" title="{{$.Params.Property.Level}}" oninput="this.title = this.value" {{ if not .Params.CanEdit }}disabled{{ end }}/>
+                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-pc-green" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" title="{{$.Params.Property.Level}}" oninput="this.title = this.value" {{ if not .Params.CanEdit }}disabled{{ end }}/>
                 <datalist id="steplist" class="flex justify-evenly w-full">
                     <option value="{{$.Params.EasyLevel}}" label="Easy" class="translate-x-1/2"></option>
                     <option value="{{$.Params.NormalLevel}}" label="Normal"></option>
@@ -133,20 +133,19 @@
     </div>
 
     <div class="col-span-full">
-        <div class="bg-pcslate-50 sm:rounded-lg">
-            <div class="px-4 py-5 sm:p-6">
-                <h3 class="text-base font-semibold text-gray-900">Test widget here</h3>
-                <div class="mt-2 max-w-xl text-sm text-gray-500">
-                    <div class="private-captcha mt-2"
-                        data-sitekey="{{.Params.CaptchaSitekey}}"
-                        data-solution-field="{{.Params.CaptchaSolutionField}}"
-                        data-start-mode="click"
-                        data-started-callback="onCaptchaStarted"
-                        data-finished-callback="onCaptchaReset"
-                        data-puzzle-endpoint="{{ .Params.CaptchaEndpoint }}/{{$.Params.Property.Level}}"
-                        data-styles="--border-radius: .375rem;"
-                        {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
-                    </div>
+        <div class="pc-widget-preview">
+            <h3 class="font-heading text-base font-medium text-pc-grey-950">Test widget here</h3>
+            <div class="pc-widget-host">
+                <div class="private-captcha"
+                    data-sitekey="{{.Params.CaptchaSitekey}}"
+                    data-solution-field="{{.Params.CaptchaSolutionField}}"
+                    data-start-mode="click"
+                    data-started-callback="onCaptchaStarted"
+                    data-finished-callback="onCaptchaReset"
+                    data-puzzle-endpoint="{{ .Params.CaptchaEndpoint }}/{{$.Params.Property.Level}}"
+                    data-theme="light"
+                    data-styles="--border-radius: 2px; --border: 1px solid transparent; --dark-color: #0e0f0e; --accent-color: #437540; --background-color: transparent; --gray-color: #bfbebc; --pie-color: #d9e1cf; --checkbox-background-color: #ffffff; --checkbox-hover-color: #ecf0e7; --warn-color: #c33030; --label-spacing: 0.5rem; font-size: 18px; min-width: 0;"
+                    {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
                 </div>
             </div>
         </div>

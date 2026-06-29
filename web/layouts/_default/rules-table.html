@@ -4,30 +4,30 @@
     <div class="mt-4 flow-root{{block "rules-blocker-style" . }}{{ if not $.Platform.Enterprise }} relative sm:px-6{{ end }}{{ end }}">
         <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div class="inline-block min-w-full align-middle sm:px-6 lg:px-8">
-                <ul role="list" class="divide-y divide-gray-100">
+                <ul role="list" class="pc-section-divide">
                     {{ range $index, $rule := .Params.Rules }}
                     <li class="flex items-center justify-between gap-x-6 py-5">
                         <div class="min-w-0 flex flex-row items-start gap-x-2">
-                            <p class="text-sm/6 text-gray-900 {{if $rule.Enabled }} font-semibold{{ end }}">{{ plus1 $index }}.</p>
+                            <p class="text-sm/6 text-pc-grey-950 {{if $rule.Enabled }} font-semibold{{ end }}">{{ plus1 $index }}.</p>
                             <div>
-                                <p class="rule-name text-sm/6 text-gray-900 {{if $rule.Enabled }} font-semibold{{ end }}">{{ $rule.Name }}</p>
-                                <div class="mt-2.5 flex items-center gap-x-2 text-xs/5 {{if $rule.Enabled }}text-gray-500{{else}}text-gray-400{{end}}">
-                                    <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pcteal-100 text-pcteal-700{{else}}bg-pcslate-50 text-pcslate-300{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ConditionProperty}}</span> <strong>{{$rule.ConditionOperator}}</strong>{{ if $rule.ConditionValue}} <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pcteal-100 text-pcteal-700{{else}}bg-pcslate-50 text-pcslate-300{{end}} px-1.5 py-0.5 text-xs font-medium max-w-48 truncate">{{$rule.ConditionValue}}</span>{{end}}, then <strong>{{$rule.ActionAction}}</strong> <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pcred-50 text-pcred-600{{else}}bg-pcred-50/50 text-pcred-200{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionProperty}}</span>{{ if $rule.ActionValue }} to <span class="inline-flex items-center rounded-md {{if $rule.Enabled}}bg-pcred-50 text-pcred-600{{else}}bg-pcred-50/50 text-pcred-200{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionValue}}</span>{{ end }}{{ if and $rule.Enabled $rule.Terminal }} and <span class="inline-flex items-center rounded-md bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-800">stop</span> processing{{ end }}</p>
+                                <p class="rule-name text-sm/6 text-pc-grey-950 {{if $rule.Enabled }} font-semibold{{ end }}">{{ $rule.Name }}</p>
+                                <div class="mt-2.5 flex items-center gap-x-2 text-xs/5 {{if $rule.Enabled }}text-pc-grey-600{{else}}text-pc-grey-600/60{{end}}">
+                                    <p class="whitespace-nowrap">If <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-pastel-80 text-pc-green{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ConditionProperty}}</span> <strong>{{$rule.ConditionOperator}}</strong>{{ if $rule.ConditionValue}} <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-pastel-80 text-pc-green{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium max-w-48 truncate">{{$rule.ConditionValue}}</span>{{end}}, then <strong>{{$rule.ActionAction}}</strong> <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-blue/10 text-pc-blue{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionProperty}}</span>{{ if $rule.ActionValue }} to <span class="inline-flex items-center rounded-pc {{if $rule.Enabled}}bg-pc-blue/10 text-pc-blue{{else}}bg-pc-pastel-50 text-pc-grey-600{{end}} px-1.5 py-0.5 text-xs font-medium">{{$rule.ActionValue}}</span>{{ end }}{{ if and $rule.Enabled $rule.Terminal }} and <span class="pc-badge pc-badge-warn px-1.5 py-0.5">stop</span> processing{{ end }}</p>
                                 </div>
                             </div>
                         </div>
                         <div class="flex flex-none items-center gap-x-4">
                             {{- if $rule.Enabled }}
-                            <p class="mt-0.5 rounded-md bg-green-50 px-1.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20">Enabled</p>
+                            <p class="pc-badge pc-badge-green mt-0.5">Enabled</p>
                             {{- else }}
-                            <p class="mt-0.5 rounded-md bg-gray-50 px-1.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10">Disabled</p>
+                            <p class="pc-badge pc-badge-muted mt-0.5">Disabled</p>
                             {{- end }}
 
                             {{ if $rule.CanEdit }}
                             {{ if gt (len $.Params.Rules) 1 }}
                             <button type="button"
                                 @click="moveRuleIndex = {{ $index }}; moveRuleID = {{ printf "%q" $rule.ID }}; moveRuleName = {{ printf "%q" $rule.Name }}; newPosition = {{ $index }}; moveOpen = true; pcTrackEvent('Move');"
-                                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">
+                                class="hidden pc-setup-button px-2.5 py-1.5 sm:block">
                                 Reorder<span class="sr-only">, difficulty rule</span>
                             </button>
                             {{ end }}
@@ -36,7 +36,7 @@
                             {{ else }}
                             <a href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $rule.ID $.Const.EditEndpoint }}"
                             {{ end }}
-                                class="hidden rounded-md bg-white px-2.5 py-1.5 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
+                                class="hidden pc-setup-button px-2.5 py-1.5 sm:block">Edit<span class="sr-only">, difficulty rule</span></a>
                             {{ end }}
                         </div>
                     </li>
@@ -46,7 +46,7 @@
         </div>
         {{ block "rules-blocker" . }}
         {{ if not $.Platform.Enterprise }}
-        <div class="absolute inset-0 bg-pcpalegreen opacity-50 rounded-lg" aria-hidden="true"></div>
+        <div class="pc-enterprise-overlay" aria-hidden="true"></div>
 
         <div class="absolute inset-0 z-10">
             {{ template "enterprise.html" "Difficulty rules are only available in the enterprise edition of Private Captcha." }}
@@ -56,10 +56,10 @@
     </div>
     {{ if $.Platform.Enterprise }}
     <div class="relative z-10" x-cloak x-show="moveOpen" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-        <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+        <div class="pc-modal-overlay" aria-hidden="true"></div>
         <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-                <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg" @click.away="moveOpen = false">
+                <div class="pc-modal-panel sm:my-8 sm:w-full sm:max-w-lg" @click.away="moveOpen = false">
                     <form x-bind:hx-post="'{{ if $.Params.Property }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint }}{{ end }}/' + moveRuleID + '/{{ $.Const.MoveEndpoint }}'"
                         x-effect="moveRuleID;window.htmx && htmx.process($el)"
                         hx-target="{{ if $.Params.Property }}#property-tabs{{ else }}#org-tabs{{ end }}"
@@ -69,9 +69,9 @@
                         <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-6">
                             <div class="sm:flex sm:items-start">
                                 <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                                    <h3 class="text-base font-semibold leading-6 text-gray-900 truncate" id="modal-title">Reorder rule</h3>
+                                    <h3 class="text-base font-semibold leading-6 text-pc-grey-950 truncate" id="modal-title">Reorder rule</h3>
                                     <div class="mt-2">
-                                        <p class="text-sm text-gray-800">Rule &quot;<span x-text="moveRuleName"></span>&quot; is currently at position <span class="italic" x-text="moveRuleIndex + 1"></span>.</p>
+                                        <p class="pc-text-body">Rule &quot;<span x-text="moveRuleName"></span>&quot; is currently at position <span class="italic" x-text="moveRuleIndex + 1"></span>.</p>
                                     </div>
                                     <div class="mt-4">
                                         <label for="position" class="pc-internal-form-label">New Position</label>
@@ -86,7 +86,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="bg-gray-50 px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6">
+                        <div class="pc-modal-footer sm:flex sm:flex-row-reverse sm:px-6">
                             <button type="submit" class="pc-internal-form-button pc-internal-form-button-primary sm:ml-4 sm:w-auto">
                                Save
                             </button>
@@ -101,10 +101,10 @@
 </div>
 {{ else }}
 <div class="flex-1 flex items-center">
-    <div class="text-center mx-auto px-44 py-28 mt-12 border-2 border-dashed rounded-xl hover:border-gray-600">
-        <h1 class="mt-6 text-xl font-bold tracking-tight text-gray-600">No rules</h1>
+    <div class="pc-empty-state">
+        <h1 class="mt-6 text-xl font-bold tracking-tight text-pc-grey-600">No rules</h1>
         {{ if and $.Params.CanAddNew $.Platform.Enterprise }}
-        <p class="mt-4 text-base leading-7 text-gray-600">Get started by creating a new rule</p>
+        <p class="mt-4 text-base leading-7 text-pc-grey-600">Get started by creating a new rule</p>
         <div class="mt-6 flex items-center justify-center gap-x-6">
             <a
                 {{ if $.Params.Property }}
@@ -113,7 +113,7 @@
                 href="{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint $.Const.NewEndpoint }}"
                 {{ end }}
                 type="button"
-                class="inline-flex items-center justify-center px-5 py-2.5 text-sm leading-4 rounded-md border border-transparent transition-all duration-200 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pclime-600 bg-pclime-600 hover:bg-pclime-500 font-semibold"
+                class="pc-internal-form-button pc-internal-form-button-primary"
                 >
                 <svg class="w-5 h-5 mr-2 -ml-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

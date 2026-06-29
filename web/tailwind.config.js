@@ -3,7 +3,36 @@ module.exports = {
     content: ['layouts/**/*.html'],
     theme: {
         extend: {
+            fontFamily: {
+                sans: ['"DM Sans"', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                heading: ['Erode', 'serif'],
+            },
             colors: {
+                'pc-bg': '#faf8f5',
+                'pc-black': '#000000',
+                'pc-white': '#ffffff',
+                'pc-green': {
+                    DEFAULT: '#437540',
+                    hover: '#2f522d',
+                },
+                'pc-success': '#009901',
+                'pc-error': '#c33030',
+                'pc-grey': {
+                    950: '#0e0f0e',
+                    800: '#464646',
+                    600: '#686868',
+                    250: '#bfbebc',
+                    10: '#fffffc',
+                },
+                'pc-pastel': {
+                    50: '#f5f7f0',
+                    80: '#ecf0e7',
+                    250: '#c5d1b7',
+                },
+                'pc-blue': {
+                    DEFAULT: '#709ecc',
+                    200: '#b3cae1',
+                },
                 'pcteal': {
                     50: "#E5FBFB",
                     100: "#CFF7F7",
@@ -70,6 +99,13 @@ module.exports = {
                     950: "#151313"
                 },
                 'pcpalegreen': '#EFF1EF',
+            },
+            borderRadius: {
+                'pc': '2px',
+                'pc-hover': '4px',
+            },
+            boxShadow: {
+                'pc-hard': '2px 2px 0 #000',
             },
         },
     },
