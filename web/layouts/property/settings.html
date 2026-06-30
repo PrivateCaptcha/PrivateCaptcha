@@ -1,7 +1,7 @@
 {{template "property-tabs.html" (dict "Root" . "ActiveTab" "settings")}}
 
 <div class="pc-section-divide" x-data="{deleteOpen: false, moveOpen: false}">
-    <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+    <div class="pc-modal-root" aria-labelledby="modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="deleteOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
@@ -12,7 +12,7 @@
         >
         <div class="pc-modal-overlay"></div>
 
-        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="pc-modal-layer">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                 <div class="pc-modal-panel sm:my-8 sm:w-full sm:max-w-lg"
                     x-cloak x-show="deleteOpen"
@@ -62,7 +62,7 @@
         </div>
     </div>
     {{ if $.Platform.Enterprise }}
-    <div class="relative z-10" aria-labelledby="modal-title" role="dialog" aria-modal="true"
+    <div class="pc-modal-root" aria-labelledby="modal-title" role="dialog" aria-modal="true"
         x-cloak x-show="moveOpen"
         x-transition:enter="ease-out duration-300"
         x-transition:enter-start="opacity-0"
@@ -73,7 +73,7 @@
         >
         <div class="pc-modal-overlay"></div>
 
-        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="pc-modal-layer">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0"
                 x-cloak x-show="moveOpen"
                 x-transition:enter="ease-out duration-300"
@@ -104,7 +104,7 @@
             <h2 class="pc-section-heading">Basic settings</h2>
             <p class="pc-section-desc">Change property's difficulty configuration or property name. To change the domain, you need to create another property.</p>
             <p class="mt-1">
-              <a href="https://docs.privatecaptcha.com/docs/reference/property-settings/" target="_blank" class="text-sm/6 font-semibold text-pc-green hover:text-pc-green-hover">Docs <span aria-hidden="true">&rarr;</span></a>
+              <a href="https://docs.privatecaptcha.com/docs/reference/property-settings/" target="_blank" class="pc-docs-link">Docs</a>
             </p>
         </div>
         <form

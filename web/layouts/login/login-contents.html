@@ -1,10 +1,8 @@
-<div class="flex items-center justify-between">
+<div class="pc-auth-header">
     <h1 class="pc-form-caption">Sign in</h1>
-    {{ if .Params.CanRegister }}<p class="pc-form-text">Don’t have an account? <a href="{{ relURL .Const.RegisterEndpoint }}" title="" class="pc-form-link">Join now</a></p>{{ end }}
+    {{ if .Params.CanRegister }}<p class="pc-form-text pc-auth-header-aside">Don’t have an account? <a href="{{ relURL .Const.RegisterEndpoint }}" title="" class="pc-form-link">Join now</a></p>{{ end }}
 </div>
 
 <form hx-post='{{ relURL .Const.LoginEndpoint }}' hx-indicator="#spinner" hx-disabled-elt="input, button" class="mt-12" hx-target="#login-container" hx-swap="innerHTML">
     {{template "login-form.html" .}}
 </form>
-
-{{ template "dashes.html" . }}

@@ -1,59 +1,53 @@
-<nav class="w-full" aria-label="Progress">
-    <ol role="list" class="divide-y divide-gray-300 rounded-md border border-gray-300 md:flex md:divide-y-0">
-        <li class="relative md:flex md:flex-1">
-            <!-- Current Step -->
-            <span aria-current="step" class="flex items-center px-6 py-4 text-sm font-medium">
-                <span class="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-pclime-600">
-                    <span class="text-pclime-600">01</span>
+<nav class="pc-wizard-progress w-full" aria-label="Progress">
+    <ol role="list">
+        <li class="pc-wizard-step">
+            <span aria-current="step" class="pc-wizard-step-body">
+                <span class="pc-wizard-step-marker pc-wizard-step-marker-current">
+                    <span>01</span>
                 </span>
-                <span class="ml-4 text-sm font-medium font-semibold text-pclime-600">Create new property</span>
+                <span class="pc-wizard-step-label-current">Create new property</span>
             </span>
-            <!-- Arrow separator for lg screens and up -->
-            <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
-                <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+            <div aria-hidden="true" class="pc-wizard-step-separator">
+                <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full">
                     <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
                 </svg>
             </div>
         </li>
-        <li class="relative md:flex md:flex-1">
-            <!-- Upcoming Step -->
+        <li class="pc-wizard-step">
             <span class="group flex items-center">
-                <span class="flex items-center px-6 py-4 text-sm font-medium">
-                    <span class="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
-                        <span class="text-gray-500 group-hover:text-gray-900">02</span>
+                <span class="pc-wizard-step-body">
+                    <span class="pc-wizard-step-marker pc-wizard-step-marker-upcoming">
+                        <span>02</span>
                     </span>
-                    <span class="ml-4 text-sm font-medium text-gray-500">Website integration</span>
+                    <span class="pc-wizard-step-label-upcoming">Website integration</span>
                 </span>
             </span>
-            <!-- Arrow separator for lg screens and up -->
-            <div aria-hidden="true" class="absolute right-0 top-0 hidden h-full w-5 md:block">
-                <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full text-gray-300">
+            <div aria-hidden="true" class="pc-wizard-step-separator">
+                <svg viewBox="0 0 22 80" fill="none" preserveAspectRatio="none" class="size-full">
                     <path d="M0 -2L20 40L0 82" stroke="currentcolor" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
                 </svg>
             </div>
         </li>
-        <li class="relative md:flex md:flex-1">
-            <!-- Upcoming Step -->
+        <li class="pc-wizard-step">
             <span class="group flex items-center">
-                <span class="flex items-center px-6 py-4 text-sm font-medium">
-                    <span class="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400">
-                        <span class="text-gray-500 group-hover:text-gray-900">03</span>
+                <span class="pc-wizard-step-body">
+                    <span class="pc-wizard-step-marker pc-wizard-step-marker-upcoming">
+                        <span>03</span>
                     </span>
-                    <span class="ml-4 text-sm font-medium text-gray-500">Server integration</span>
+                    <span class="pc-wizard-step-label-upcoming">Server integration</span>
                 </span>
             </span>
         </li>
     </ol>
 </nav>
 
-<div class="mx-auto w-full max-w-md flex-1 flex flex-col justify-center">
+<div class="mx-auto flex w-full max-w-md flex-1 flex-col justify-center pt-8">
     <form
         hx-post='{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID .Const.PropertyEndpoint .Const.NewEndpoint }}'
         hx-target="#property-wizard"
         hx-swap="innerHTML"
         hx-indicator="#spinner"
-        hx-disabled-elt="input, button"
-        class="-mt-6">
+        hx-disabled-elt="input, button">
         {{template "form.html" .}}
     </form>
 </div>

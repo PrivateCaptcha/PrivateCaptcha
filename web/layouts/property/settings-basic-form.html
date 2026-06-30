@@ -122,7 +122,7 @@
         <label for="{{ .Const.Difficulty }}" class="pc-internal-form-label tooltip" data-tooltip="Initial difficulty for any captcha request before auto scaling. Every 8 steps requires 100% more resources."> Base difficulty </label>
         <div class="mt-2">
             <div class="flex flex-col space-y-2 py-2">
-                <input name="{{ .Const.Difficulty }}" type="range" class="w-full accent-pc-green" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" onchange="onDifficultyChange(this)" title="{{$.Params.Property.Level}}" oninput="this.title = this.value" {{ if not .Params.CanEdit }}disabled{{ end }}/>
+                <input id="property-difficulty-input" name="{{ .Const.Difficulty }}" type="range" class="pc-difficulty-range w-full pc-difficulty-range-accent-green" min="{{$.Params.MinLevel}}" max="{{$.Params.MaxLevel}}" step="1" value="{{$.Params.Property.Level}}" list="steplist" style="--range-progress: {{ $.Params.DifficultyRangeProgress }}" onchange="onDifficultyChange(this)" oninput="this.title = this.value; updatePropertyRangeProgress(this)" title="{{$.Params.Property.Level}}" {{ if not .Params.CanEdit }}disabled{{ end }}/>
                 <datalist id="steplist" class="flex justify-evenly w-full">
                     <option value="{{$.Params.EasyLevel}}" label="Easy" class="translate-x-1/2"></option>
                     <option value="{{$.Params.NormalLevel}}" label="Normal"></option>
@@ -144,7 +144,7 @@
                     data-finished-callback="onCaptchaReset"
                     data-puzzle-endpoint="{{ .Params.CaptchaEndpoint }}/{{$.Params.Property.Level}}"
                     data-theme="light"
-                    data-styles="--border-radius: 2px; --border: 1px solid transparent; --dark-color: #0e0f0e; --accent-color: #437540; --background-color: transparent; --gray-color: #bfbebc; --pie-color: #d9e1cf; --checkbox-background-color: #ffffff; --checkbox-hover-color: #ecf0e7; --warn-color: #c33030; --label-spacing: 0.5rem; font-size: 18px; min-width: 0;"
+                    data-styles="--border-radius: 2px; --border: 1px solid transparent; --dark-color: #0e0f0e; --accent-color: #437540; --background-color: transparent; --gray-color: #bfbebc; --pie-color: #d9e1cf; --checkbox-background-color: #ffffff; --checkbox-hover-color: #ecf0e7; --warn-color: #c33030; --label-spacing: clamp(0.25rem, 1.5vw, 0.5rem); font-size: clamp(14px, 4.2vw, 18px); min-width: 0;"
                     {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
                 </div>
             </div>

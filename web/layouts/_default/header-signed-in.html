@@ -21,15 +21,15 @@
                         <div class="ml-4 flex items-center md:ml-6">
                             <div class="relative ml-3">
                                 <div>
-                                    <button type="button" @click="profileMenuOpen = !profileMenuOpen" class="relative group flex max-w-xs items-center rounded-full bg-pc-bg text-sm focus:outline-none focus:ring-2 focus:ring-pc-green focus:ring-offset-2 focus:ring-offset-pc-bg" id="user-menu-button" aria-expanded="false" aria-haspopup="true">
+                                    <button type="button" @click="profileMenuOpen = !profileMenuOpen" class="pc-user-menu-button" id="user-menu-button" :aria-expanded="profileMenuOpen" aria-haspopup="true">
                                         <span class="absolute -inset-1.5"></span>
                                         <span class="sr-only">Open user menu</span>
-                                        <span class="inline-block h-8 w-8 overflow-hidden rounded-full bg-white">
+                                        <span class="pc-user-menu-avatar">
                                             <svg class="h-full w-full text-pc-grey-950" fill="currentColor" viewBox="0 0 24 24">
                                                 <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                                             </svg>
                                         </span>
-                                        <span class="ml-3 text-sm font-medium text-pc-grey-950 group-hover:text-pc-green-hover">{{.Ctx.UserName}}</span>
+                                        <span class="pc-user-menu-name">{{.Ctx.UserName}}</span>
                                     </button>
                                 </div>
                                 <div

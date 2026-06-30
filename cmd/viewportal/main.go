@@ -48,8 +48,9 @@ func (s *stubSessionStore) RollbackRenew(ctx context.Context, oldSID string) {}
 func (s *stubSessionStore) Destroy(_ context.Context, _ string) error        { return nil }
 
 var (
-	srv   *portal.Server
-	pages []portal.ViewPortalPage
+	srv          *portal.Server
+	pages        []portal.ViewPortalPage
+	assetVersion string
 )
 
 func alertFromQuery(r *http.Request) portal.AlertRenderContext {
@@ -97,7 +98,7 @@ func servePage(p portal.ViewPortalPage) http.HandlerFunc {
 		}
 
 		platformCtx := &portal.PlatformRenderContext{
-			GitCommit:  "viewportal",
+			GitCommit:  assetVersion,
 			Enterprise: enterpriseFromQuery(r),
 		}
 
@@ -228,6 +229,7 @@ func stubAccountStatsHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	ctx := context.Background()
+	assetVersion = web.AssetVersion()
 
 	dataCtx, err := web.LoadData()
 	if err != nil {
@@ -248,7 +250,7 @@ func main() {
 		log.Fatalf("Failed to add template FS: %v", err)
 	}
 
-	if err := srv.Init(ctx, builder, "viewportal", 1*time.Hour); err != nil {
+	if err := srv.Init(ctx, builder, assetVersion, 1*time.Hour); err != nil {
 		log.Fatalf("Failed to init portal server: %v", err)
 	}
 
@@ -259,7 +261,7 @@ func main() {
 	})
 
 	router := http.NewServeMux()
-	router.Handle("/portal/", http.StripPrefix("/portal/", web.Static("")))
+	router.Handle("/portal/", http.StripPrefix("/portal/", web.StaticDev()))
 	router.Handle("GET /widget/", http.StripPrefix("/widget/", widget.Static("")))
 
 	puzzleSalt := puzzle.NewSalt([]byte("viewportal-salt"))

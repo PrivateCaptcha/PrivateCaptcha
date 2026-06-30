@@ -33,6 +33,7 @@ module.exports = {
                     DEFAULT: '#709ecc',
                     200: '#b3cae1',
                 },
+                'pc-coral': '#de6565',
                 'pcteal': {
                     50: "#E5FBFB",
                     100: "#CFF7F7",

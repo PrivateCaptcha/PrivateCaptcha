@@ -653,12 +653,14 @@ func (s *Server) BuildViewPortalPages() []ViewPortalPage {
 			Path:     p(common.OrgEndpoint, orgArg, common.PropertyEndpoint, propArg, common.TabEndpoint, common.SettingsEndpoint),
 			Template: propertyDashboardSettingsTemplate,
 			ModelFunc: func(a AlertRenderContext) interface{} {
-				return &propertySettingsRenderContext{
+				ctx := &propertySettingsRenderContext{
 					propertyDashboardRenderContext: propDash(propertySettingsTabIndex, a),
 					difficultyLevelsRenderContext:  createDifficultyLevelsRenderContext(),
 					Orgs:                           orgs, MinLevel: int(common.MinDifficultyLevel), MaxLevel: int(common.MaxDifficultyLevel),
 					CanMove: true,
 				}
+				ctx.UpdateLevels()
+				return ctx
 			},
 		},
 		{

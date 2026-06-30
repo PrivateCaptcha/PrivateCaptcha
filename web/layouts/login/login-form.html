@@ -14,16 +14,7 @@
 </div>
 <input type="hidden" name="{{ .Const.Token }}" value="{{ .Params.Token }}" />
 
-<div class="private-captcha mt-8"
-    data-sitekey="{{.Params.CaptchaSitekey}}"
-    data-solution-field="{{.Params.CaptchaSolutionField}}"
-    data-start-mode="auto"
-    data-started-callback="onCaptchaStarted"
-    data-finished-callback="onCaptchaSolved"
-    data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
-    data-styles="--border-radius: .75rem;"
-    {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
-</div>
+{{template "login-captcha-widget.html" .}}
 {{- if .Params.CaptchaError -}}
 <p class="pc-form-error-text">{{ .Params.CaptchaError }}</p>
 {{- end -}}

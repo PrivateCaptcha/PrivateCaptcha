@@ -55,9 +55,9 @@
         {{ end }}
     </div>
     {{ if $.Platform.Enterprise }}
-    <div class="relative z-10" x-cloak x-show="moveOpen" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="pc-modal-root" x-cloak x-show="moveOpen" aria-labelledby="modal-title" role="dialog" aria-modal="true">
         <div class="pc-modal-overlay" aria-hidden="true"></div>
-        <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="pc-modal-layer">
             <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
                 <div class="pc-modal-panel sm:my-8 sm:w-full sm:max-w-lg" @click.away="moveOpen = false">
                     <form x-bind:hx-post="'{{ if $.Params.Property }}{{ partsURL $.Const.OrgEndpoint $.Params.Property.OrgID $.Const.PropertyEndpoint $.Params.Property.ID $.Const.RulesEndpoint }}{{ else }}{{ partsURL $.Const.OrgEndpoint $.Params.CurrentOrg.ID $.Const.RulesEndpoint }}{{ end }}/' + moveRuleID + '/{{ $.Const.MoveEndpoint }}'"

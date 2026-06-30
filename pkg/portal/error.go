@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/common"
+	"github.com/PrivateCaptcha/PrivateCaptcha/pkg/session"
 )
 
 const (
@@ -24,7 +25,7 @@ type errorRenderContext struct {
 	Detail       string
 }
 
-func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code int) {
+func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, r *http.Request, code int) {
 	slog.DebugContext(ctx, "Rendering error page", "code", code)
 
 	data := &errorRenderContext{
@@ -38,6 +39,21 @@ func (s *Server) renderError(ctx context.Context, w http.ResponseWriter, code in
 		LoggedIn:    ok && loggedIn,
 		CurrentYear: time.Now().Year(),
 		CDN:         s.CDNURL,
+		API:         s.APIURL,
+	}
+
+	if r != nil {
+		if sess, found := s.Sessions.SessionGet(r); found {
+			if username, ok := sess.Get(ctx, session.KeyUserName).(string); ok {
+				reqCtx.UserName = username
+			}
+
+			if reqCtx.LoggedIn {
+				if _, ok := sess.Get(ctx, session.KeyFirstSession).(bool); ok {
+					reqCtx.FirstSession = true
+				}
+			}
+		}
 	}
 
 	actualData := struct {
@@ -88,7 +104,7 @@ func (s *Server) error(w http.ResponseWriter, r *http.Request) {
 		code = http.StatusInternalServerError
 	}
 
-	s.renderError(r.Context(), w, code)
+	s.renderError(r.Context(), w, r, code)
 }
 
 func (s *Server) RedirectError(code int, w http.ResponseWriter, r *http.Request) {
@@ -98,7 +114,7 @@ func (s *Server) RedirectError(code int, w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) notFound(w http.ResponseWriter, r *http.Request) {
-	s.renderError(r.Context(), w, http.StatusNotFound)
+	s.renderError(r.Context(), w, r, http.StatusNotFound)
 }
 
 func (s *Server) expired(w http.ResponseWriter, r *http.Request) {

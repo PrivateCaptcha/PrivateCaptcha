@@ -25,27 +25,23 @@
         {{- end -}}
     </div>
 
-    <div class="relative flex items-center mt-4">
-        <div class="flex items-center h-5">
-            <input type="checkbox" name="{{ .Const.Terms }}" id="termsInput" class="pc-form-checkbox" required />
+    <div class="mt-4 flex gap-3">
+        <div class="flex h-5 shrink-0 items-center">
+            <div class="group grid size-5 grid-cols-1">
+                <input type="checkbox" name="{{ .Const.Terms }}" id="termsInput" class="col-start-1 row-start-1 pc-form-checkbox" required />
+                <svg class="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path class="opacity-0 group-has-[:checked]:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </div>
         </div>
 
-        <div class="ml-3 text-base">
+        <div class="text-base">
             <label for="termsInput" class="pc-form-checkbox-label"> I agree with <a href="https://privatecaptcha.com/legal/terms-and-conditions" target="_blank" title="" class="pc-form-link">Terms & Conditions</a> and <a href="https://privatecaptcha.com/legal/dpa" target="_blank" title="" class="pc-form-link">DPA</a> </label>
         </div>
     </div>
 
     <div>
-        <div class="private-captcha mt-8"
-            data-sitekey="{{.Params.CaptchaSitekey}}"
-            data-solution-field="{{.Params.CaptchaSolutionField}}"
-            data-start-mode="auto"
-            data-started-callback="onCaptchaStarted"
-            data-finished-callback="onCaptchaSolved"
-            data-puzzle-endpoint="{{.Params.CaptchaEndpoint}}"
-            data-styles="--border-radius: .75rem;"
-            {{ if .Params.CaptchaDebug }}data-debug="true"{{ end }}>
-        </div>
+        {{template "login-captcha-widget.html" .}}
         {{- if .Params.CaptchaError -}}
         <p class="pc-form-error-text">{{ .Params.CaptchaError }}</p>
         {{- end -}}

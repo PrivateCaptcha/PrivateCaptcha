@@ -29,16 +29,16 @@
             </div>
         </div>
         <div class="text-sm/6">
-            <label for="{{ .Const.Enabled }}" class="font-medium text-gray-900">Enable</label>
-            <span id="{{ .Const.Enabled }}-description" class="text-gray-500"><span class="sr-only">Enable </span>this rule</span>
+            <label for="{{ .Const.Enabled }}" class="font-medium text-pc-grey-950">Enable</label>
+            <span id="{{ .Const.Enabled }}-description" class="text-pc-grey-800"><span class="sr-only">Enable </span>this rule</span>
         </div>
     </div>
 
-    <div class="space-y-4 bg-pcteal-50 p-4 rounded-md">
+    <div class="space-y-4 bg-pc-pastel-50 p-4 rounded-pc border border-dashed border-pc-grey-250">
         <div>
             <label for="{{ .Const.ConditionProperty }}" class="pc-internal-form-label">Condition</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
+                <select name="{{ .Const.ConditionProperty }}" id="{{ .Const.ConditionProperty }}" x-model="conditionProperty" class="w-full pc-internal-form-select">
                     {{ with .Const.ConditionPropertyUserAgent }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>User Agent</option>{{ end }}
                     {{ with .Const.ConditionPropertyIPAddress }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>IP Address</option>{{ end }}
                     {{ with .Const.ConditionPropertyCountryCode }}<option value="{{ . }}" {{ if eq $.Params.ConditionProperty . }}selected{{ end }}>Country</option>{{ end }}
@@ -53,7 +53,7 @@
         <div x-cloak x-show="showConditionOperator">
             <label for="{{ .Const.ConditionOperator }}" class="pc-internal-form-label tooltip" data-tooltip="How to evaluate Condition">Operator</label>
             <div class="mt-2">
-                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="!showConditionOperator" class="w-full pc-internal-form-select focus:border-pcteal-600 focus:ring-pcteal-600">
+                <select name="{{ .Const.ConditionOperator }}" id="{{ .Const.ConditionOperator }}" x-model="conditionOperator" :disabled="!showConditionOperator" class="w-full pc-internal-form-select">
                     <template x-for="op in availableOperators" :key="op.value">
                         <option :value="op.value" x-text="op.label"></option>
                     </template>
@@ -64,28 +64,28 @@
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyUserAgent }}' && showConditionValue">
             <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">Value</label>
             <div class="mt-2">
-                <input type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+                <input type="text" x-model="conditionValueUserAgent" placeholder="Enter user agent..." class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyDomain }}' && showConditionValue">
             <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">Domain</label>
             <div class="mt-2">
-                <input type="text" x-model="conditionValueDomain" placeholder="example.com" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+                <input type="text" x-model="conditionValueDomain" placeholder="example.com" class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyIPAddress }}' && showConditionValue">
             <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">IP Address Prefix (CIDR)</label>
             <div class="mt-2">
-                <input type="text" x-model="conditionValueIPAddress" placeholder="Enter IP address..." class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+                <input type="text" x-model="conditionValueIPAddress" placeholder="Enter IP address..." class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
         <div x-cloak x-show="conditionProperty === '{{ .Const.ConditionPropertyHTTPHeaderName }}' && showConditionValue">
             <label class="pc-internal-form-label tooltip" :data-tooltip="conditionValueTooltip">HTTP Header Name</label>
             <div class="mt-2">
-                <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal focus:border-pcteal-600 focus:ring-pcteal-600" />
+                <input type="text" x-model="conditionValueHTTPHeaderName" placeholder="X-Custom-Header" class="w-full pc-internal-form-input-base pc-form-input-normal" />
             </div>
         </div>
 
@@ -106,21 +106,21 @@
                         </div>
                     </div>
                     <div class="text-sm/6">
-                        <label for="{{.Const.ConditionNegated}}" class="font-medium text-gray-900">Invert condition</label>
-                        <span id="{{.Const.ConditionNegated}}-description" class="text-gray-500"><span class="sr-only">Inverted condition </span>(<strong>not</strong> in selected countries)</span>
+                        <label for="{{.Const.ConditionNegated}}" class="font-medium text-pc-grey-950">Invert condition</label>
+                        <span id="{{.Const.ConditionNegated}}-description" class="text-pc-grey-800"><span class="sr-only">Inverted condition </span>(<strong>not</strong> in selected countries)</span>
                     </div>
                 </div>
             </div>
 
             <div class="mt-2">
-                <div class="border border-gray-300 bg-white rounded-md max-h-48 overflow-y-auto p-2 space-y-1">
+                <div class="border border-pc-grey-250 bg-white rounded-pc max-h-48 overflow-y-auto p-2 space-y-1">
                     {{ range .Params.Countries }}
-                    <div class="group select-none px-3 py-2 text-gray-900 cursor-pointer aria-selected:bg-gray-100 hover:bg-gray-200 rounded-md [&:not([hidden])]:block"
+                    <div class="group select-none px-3 py-2 text-pc-grey-950 cursor-pointer aria-selected:bg-pc-pastel-50 hover:bg-pc-pastel-80 rounded-pc [&:not([hidden])]:block"
                         :aria-selected="isCountrySelected('{{ .Code }}')"
                         @click="toggleCountry('{{ .Code }}')">
                         <div class="flex gap-3 items-center">
-                            <svg class="pointer-events-none size-3.5 self-center justify-self-center group-has-[:disabled]:stroke-gray-950/25"
-                                :class="isCountrySelected('{{ .Code }}') ? 'stroke-green-600' : 'stroke-gray-400'"
+                            <svg class="pointer-events-none size-3.5 self-center justify-self-center group-has-[:disabled]:stroke-pc-grey-950/25"
+                                :class="isCountrySelected('{{ .Code }}') ? 'stroke-pc-green' : 'stroke-pc-grey-250'"
                                 viewBox="0 0 14 14" fill="none">
                                 <path class="opacity-0 group-hover:opacity-100 group-aria-selected:opacity-100" d="M3 8L6 11L11 3.5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
@@ -132,7 +132,7 @@
                     {{ end }}
                 </div>
 
-                <p class="mt-1 text-xs text-gray-500 truncate" x-cloak x-show="selectedCountries.length > 0">Selected countries: <code class="px-1 py-0.5 bg-gray-100" x-text="selectedCountries.join(',')"></code></p>
+                <p class="mt-1 text-xs text-pc-grey-800 truncate" x-cloak x-show="selectedCountries.length > 0">Selected countries: <code class="pc-chip" x-text="selectedCountries.join(',')"></code></p>
 
                 <input type="hidden" name="{{ .Const.ConditionOperator }}" :value="conditionNegated ? '{{ .Const.OperatorIn }}_negated' : '{{ .Const.OperatorIn }}'" :disabled="conditionProperty !== '{{ .Const.ConditionPropertyCountryCode }}'" />
             </div>
@@ -143,11 +143,11 @@
         {{ block "rule-condition-value-extension" . }}{{ end }}
     </div>
 
-    <div class="space-y-4 bg-pcred-50 p-4 rounded-md">
+    <div class="space-y-4 bg-pc-coral/10 p-4 rounded-pc border border-dashed border-pc-grey-250">
         <div>
             <label for="{{ .Const.ActionProperty }}" class="pc-internal-form-label">Action</label>
             <div class="mt-2">
-                <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
+                <select name="{{ .Const.ActionProperty }}" id="{{ .Const.ActionProperty }}" x-model="actionProperty" class="w-full pc-internal-form-select">
                     {{ with .Const.ActionPropertyDifficultyLevel }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Adjust Difficulty Level</option>{{end}}
                     {{ with .Const.ActionPropertyDifficultyGrowth }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Change Difficulty Growth</option>{{end}}
                     {{ with .Const.ActionPropertyHTTPRequest }}<option value="{{ . }}" {{ if eq $.Params.ActionProperty . }}selected{{ end }}>Block HTTP Request</option>{{end}}
@@ -160,13 +160,13 @@
             <label for="difficulty_level_input" class="pc-internal-form-label tooltip" data-tooltip="Change initial difficulty for any captcha request, before automatic difficulty scaling">Difficulty Change (<span x-text="difficultyLevelLabel"></span>)</label>
             <div class="mt-2">
                 <div class="flex flex-col space-y-1 py-2">
-                    <input type="range" x-model="actionValueDifficultyLevel" id="difficulty_level_input" min="-300" max="300" step="25" class="w-full" :class="difficultyLevelAccent" />
+                    <input type="range" x-model="actionValueDifficultyLevel" id="difficulty_level_input" min="-300" max="300" step="25" class="pc-difficulty-range w-full" :class="difficultyLevelAccent" :style="{ '--range-progress': difficultyLevelProgress }" />
                     <div class="relative w-full h-4 text-xs">
-                        <span class="absolute left-0 text-pclime-600 font-medium">-300%</span>
-                        <span class="absolute left-[25%] -translate-x-1/2 text-pclime-600">-150%</span>
-                        <span class="absolute left-[50%] -translate-x-1/2 text-gray-400">0</span>
-                        <span class="absolute left-[75%] -translate-x-1/2 text-pcred-500">+150%</span>
-                        <span class="absolute right-0 text-pcred-500 font-medium">+300%</span>
+                        <span class="absolute left-0 text-pc-green font-medium">-300%</span>
+                        <span class="absolute left-[25%] -translate-x-1/2 text-pc-green">-150%</span>
+                        <span class="absolute left-[50%] -translate-x-1/2 text-pc-grey-600">0</span>
+                        <span class="absolute left-[75%] -translate-x-1/2 text-pc-coral">+150%</span>
+                        <span class="absolute right-0 text-pc-coral font-medium">+300%</span>
                     </div>
                 </div>
             </div>
@@ -175,7 +175,7 @@
         <div x-cloak x-show="actionProperty === '{{ .Const.ActionPropertyDifficultyGrowth }}'">
             <label for="growth_select" class="pc-internal-form-label tooltip" data-tooltip="How fast captcha difficulty grows for subsequent requests">Difficulty Growth</label>
             <div class="mt-2">
-                <select x-model="actionValueDifficultyGrowth" id="growth_select" class="w-full pc-internal-form-select focus:border-red-600 focus:ring-red-600">
+                <select x-model="actionValueDifficultyGrowth" id="growth_select" class="w-full pc-internal-form-select">
                     {{ with .Const.GrowthTypeConstant }}<option value="0">Constant (no growth)</option>{{end}}
                     {{ with .Const.GrowthTypeSlow }}<option value="1">Slow</option>{{end}}
                     {{ with .Const.GrowthTypeMedium }}<option value="2">Normal</option>{{end}}
@@ -198,8 +198,8 @@
                     </div>
                 </div>
                 <div class="text-sm/6">
-                    <label for="{{ .Const.Terminal }}" class="font-medium text-gray-900">Stop processing following rules</label>
-                    <span id="{{ .Const.Terminal }}-description" class="text-gray-500"><span class="sr-only">Stop processing following rules</span> after this one</span>
+                    <label for="{{ .Const.Terminal }}" class="font-medium text-pc-grey-950">Stop processing following rules</label>
+                    <span id="{{ .Const.Terminal }}-description" class="text-pc-grey-800"><span class="sr-only">Stop processing following rules</span> after this one</span>
                 </div>
             </div>
         </div>
@@ -219,13 +219,13 @@
     </button>
     {{ else }}
     <div>
-        <a href="https://docs.privatecaptcha.com/docs/reference/rules/" target="_blank" class="text-sm/6 font-semibold text-pclime-600 hover:text-pclime-500">Docs <span aria-hidden="true">&rarr;</span></a>
+        <a href="https://docs.privatecaptcha.com/docs/reference/rules/" target="_blank" class="pc-docs-link">Docs</a>
     </div>
     {{ end }}
 
     <div class="flex items-center space-x-6">
         <a
-            href="{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}{{ end }}"
+            href="{{ if .Params.Property }}{{ partsURL .Const.OrgEndpoint .Params.Property.OrgID .Const.PropertyEndpoint .Params.Property.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}{{ else }}{{ partsURL .Const.OrgEndpoint .Params.CurrentOrg.ID }}?{{ $.Const.Tab }}={{$.Const.RulesEndpoint}}{{ end }}"
             class="pc-internal-form-button pc-internal-form-button-secondary">
             Cancel
         </a>

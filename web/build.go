@@ -1,7 +1,9 @@
 package web
 
 import (
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -16,6 +18,16 @@ var staticFiles embed.FS
 
 func StaticFiles() *embed.FS {
 	return &staticFiles
+}
+
+// AssetVersion returns a short hash of the built CSS so dev HTML can bust browser cache.
+func AssetVersion() string {
+	data, err := staticFiles.ReadFile("static/css/style.css")
+	if err != nil {
+		return "dev"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:6])
 }
 
 func Static(gitHash string) http.HandlerFunc {
@@ -39,6 +51,21 @@ func Static(gitHash string) http.HandlerFunc {
 		common.WriteHeaders(w, common.SecurityHeaders)
 		common.WriteHeaders(w, common.CorsAllowAllHeaders)
 		common.WriteHeaders(w, etagHeaders)
+		srv.ServeHTTP(w, r)
+	}
+}
+
+// StaticDev serves embedded assets without long-lived browser caching (viewportal local dev).
+func StaticDev() http.HandlerFunc {
+	sub, _ := fs.Sub(staticFiles, "static")
+	srv := http.FileServer(http.FS(sub))
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		slog.DebugContext(r.Context(), "Static request", "path", r.URL.Path)
+
+		common.WriteHeaders(w, common.NoCacheHeaders)
+		common.WriteHeaders(w, common.SecurityHeaders)
+		common.WriteHeaders(w, common.CorsAllowAllHeaders)
 		srv.ServeHTTP(w, r)
 	}
 }
